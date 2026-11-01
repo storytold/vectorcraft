@@ -135,6 +135,16 @@ struct Linearised {
     encrypted: bool,
 }
 
+/// The main cross-reference table at `main`, covering the objects before the first page's `first`.
+fn check_main_table(pdf: &[u8], lin: &Indirect, main: usize, first: u32) {
+    // /T: the white space before the main table's first entry.
+    let entries = main + format!("xref\n0 {first}\n").len();
+    assert!(pdf[main..].starts_with(format!("xref\n0 {first}\n").as_bytes()), "the main table covers 0..{first}");
+    assert_eq!(int(&lin.value, b"T"), entries - 1);
+    let main_trailer = Lexer::at(pdf, crate::lab_spot::find(pdf, b"trailer", main).unwrap() + 7).object(0).unwrap();
+    assert_eq!(int(&main_trailer, b"Size") as u32, first);
+}
+
 /// Check `pdf` is linearised as ISO 32000-1 Annex F says, as a linearisation checker does: the
 /// linearization dictionary, both cross-reference tables and their trailers, and (unless the file
 /// is encrypted) the hint tables against where every page's objects are and what each page uses.
@@ -160,12 +170,7 @@ fn check_linearised(pdf: &[u8]) -> Linearised {
     assert_eq!(all.len() as u32, size - 1, "the tables cover every object");
     let first = lin.num;
     assert!(first_part.iter().all(|n| (first..size).contains(n)) && first_part.len() as u32 == size - first);
-    // /T: the white space before the main table's first entry.
-    let entries = main + format!("xref\n0 {first}\n").len();
-    assert!(pdf[main..].starts_with(format!("xref\n0 {first}\n").as_bytes()), "the main table covers 0..{first}");
-    assert_eq!(int(&lin.value, b"T"), entries - 1);
-    let main_trailer = Lexer::at(pdf, crate::lab_spot::find(pdf, b"trailer", main).unwrap() + 7).object(0).unwrap();
-    assert_eq!(int(&main_trailer, b"Size") as u32, first);
+    check_main_table(pdf, &lin, main, first);
 
     // Every object where its table says, read as the file's objects.
     let objects: HashMap<u32, Indirect> = all.iter().map(|(n, off)| (*n, indirect(pdf, *off).unwrap())).collect();
@@ -205,7 +210,41 @@ fn check_linearised(pdf: &[u8]) -> Linearised {
     let data = &pdf[data_at..data_at + int(&hint.value, b"Length")];
     let mut r = BitReader { data, at: 0 };
 
-    // The page offset hint table.
+    let (counts, ids) = check_page_hints(&mut r, &pages, &adjusted, &span, first_page_objects);
+
+    // The shared object hint table.
+    let s = int(&hint.value, b"S");
+    let mut r = BitReader { data, at: 8 * s };
+    let (first_shared, first_shared_at, nfirst, ntotal) = read_shared_header(&mut r);
+    let shared_object = |id: u64| if id < nfirst { pages[0] + id as u32 } else { first_shared + (id - nfirst) as u32 };
+    if ntotal > nfirst {
+        assert_eq!(first_shared_at, adjusted(first_shared), "the shared objects' location");
+    }
+    check_shared_hints(&mut r, ntotal, nfirst, first_page_objects, &shared_object, &span);
+
+    // What each page uses lies in its own objects, the first part or its shared objects.
+    let page_set: HashSet<u32> = pages.iter().copied().collect();
+    let references = PageReferenceHints {
+        pages: &pages,
+        page_set: &page_set,
+        first_part: &first_part,
+        objects: &objects,
+        nodes: &nodes,
+        shared_object: &shared_object,
+    };
+    for (i, &page) in pages.iter().enumerate() {
+        check_page_references(&references, i, page, counts[i], &ids[i]);
+    }
+    Linearised { pages, first_part, encrypted }
+}
+
+fn check_page_hints(
+    r: &mut BitReader<'_>,
+    pages: &[u32],
+    adjusted: &impl Fn(u32) -> usize,
+    span: &impl Fn(u32) -> usize,
+    first_page_objects: u32,
+) -> (Vec<u64>, Vec<Vec<u64>>) {
     let (min_objects, first_page_at, objects_bits) = (r.get(32), r.get(32) as usize, r.get(16));
     let (min_len, len_bits) = (r.get(32), r.get(16));
     let (_content_at, content_at_bits, _content_len, content_len_bits) = (r.get(32), r.get(16), r.get(32), r.get(16));
@@ -230,42 +269,58 @@ fn check_linearised(pdf: &[u8]) -> Linearised {
         assert_eq!(len as u64, lengths[i], "page {i}'s length");
         at += len;
     }
+    (counts, ids)
+}
 
-    // The shared object hint table.
-    let s = int(&hint.value, b"S");
-    let mut r = BitReader { data, at: 8 * s };
-    let (first_shared, first_shared_at, nfirst, ntotal) = (r.get(32) as u32, r.get(32) as usize, r.get(32), r.get(32));
-    let (group_bits, min_group, group_len_bits) = (r.get(16), r.get(32), r.get(16));
+fn read_shared_header(r: &mut BitReader<'_>) -> (u32, usize, u64, u64) {
+    let first_shared = r.get(32) as u32;
+    let first_shared_at = r.get(32) as usize;
+    let nfirst = r.get(32);
+    let ntotal = r.get(32);
+    let group_bits = r.get(16);
     assert_eq!(group_bits, 0, "one object a group");
+    (first_shared, first_shared_at, nfirst, ntotal)
+}
+
+fn check_shared_hints(
+    r: &mut BitReader<'_>,
+    ntotal: u64,
+    nfirst: u64,
+    first_page_objects: u32,
+    shared_object: &impl Fn(u64) -> u32,
+    span: &impl Fn(u32) -> usize,
+) {
     assert_eq!(nfirst as u32, first_page_objects);
-    let shared_object = |id: u64| if id < nfirst { pages[0] + id as u32 } else { first_shared + (id - nfirst) as u32 };
-    if ntotal > nfirst {
-        assert_eq!(first_shared_at, adjusted(first_shared), "the shared objects' location");
-    }
-    let groups = r.column(ntotal as usize, group_len_bits);
-    for (id, g) in groups.iter().enumerate() {
+    let (min_group, group_len_bits) = (r.get(32), r.get(16));
+    for (id, g) in r.column(ntotal as usize, group_len_bits).iter().enumerate() {
         assert_eq!((g + min_group) as usize, span(shared_object(id as u64)), "shared object {id}'s length");
     }
     assert!(r.column(ntotal as usize, 1).iter().all(|s| *s == 0), "no signatures");
+}
 
-    // What each page uses lies in its own objects, the first part or its shared objects.
-    let page_set: HashSet<u32> = pages.iter().copied().collect();
-    for (i, &page) in pages.iter().enumerate() {
-        let own: HashSet<u32> = (page..page + counts[i] as u32).collect();
-        let listed: HashSet<u32> = ids[i].iter().map(|id| shared_object(*id)).collect();
-        let (mut seen, mut queue) = (HashSet::from([page]), vec![page]);
-        while let Some(o) = queue.pop() {
-            assert!(
-                own.contains(&o) || first_part.contains(&o) && (i == 0 || o < pages[0] || listed.contains(&o)) || listed.contains(&o),
-                "page {i} uses object {o}, which isn't among its objects or listed"
-            );
-            let mut links = vec![];
-            objects[&o].value.refs(&[b"Parent", b"Thumb"], &mut links);
-            queue.extend(links.into_iter().filter(|m| !page_set.contains(m) && !nodes.contains(m) && seen.insert(*m)));
-        }
-        assert!(listed.iter().all(|o| seen.contains(o)), "page {i} lists only objects it uses");
+struct PageReferenceHints<'a> {
+    pages: &'a [u32],
+    page_set: &'a HashSet<u32>,
+    first_part: &'a HashSet<u32>,
+    objects: &'a HashMap<u32, Indirect<'a>>,
+    nodes: &'a HashSet<u32>,
+    shared_object: &'a dyn Fn(u64) -> u32,
+}
+
+fn check_page_references(hints: &PageReferenceHints<'_>, i: usize, page: u32, count: u64, ids: &[u64]) {
+    let own: HashSet<u32> = (page..page + count as u32).collect();
+    let listed: HashSet<u32> = ids.iter().map(|id| (hints.shared_object)(*id)).collect();
+    let (mut seen, mut queue) = (HashSet::from([page]), vec![page]);
+    while let Some(o) = queue.pop() {
+        assert!(
+            own.contains(&o) || hints.first_part.contains(&o) && (i == 0 || o < hints.pages[0] || listed.contains(&o)) || listed.contains(&o),
+            "page {i} uses object {o}, which isn't among its objects or listed"
+        );
+        let mut links = vec![];
+        hints.objects[&o].value.refs(&[&b"Parent"[..], &b"Thumb"[..]], &mut links);
+        queue.extend(links.into_iter().filter(|m| !hints.page_set.contains(m) && !hints.nodes.contains(m) && seen.insert(*m)));
     }
-    Linearised { pages, first_part, encrypted }
+    assert!(listed.iter().all(|o| seen.contains(o)), "page {i} lists only objects it uses");
 }
 
 #[test]

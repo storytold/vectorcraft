@@ -10,7 +10,7 @@ use vectorcraft_geom::FillRule;
 
 use super::overprint::{AttributesInfo, apply_overprint, edit_counted, overprint_jobs};
 use super::path::paths_in;
-use super::*;
+use super::{CommandSpec, NodeId, Result, Session, bad, cmd, has_doc, str_param, targets};
 
 /// How many URLs the Attributes panel's recent list keeps.
 const RECENT_URLS: usize = 10;

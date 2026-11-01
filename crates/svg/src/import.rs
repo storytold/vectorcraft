@@ -20,7 +20,12 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
+pub use files::MAX_NESTED_SVG_IMAGES;
 pub(crate) use fx::BLEND;
+
+/// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image
+/// expansion bombs (#3564).
+pub const MAX_NODES: usize = if cfg!(target_arch = "wasm32") { 500_000 } else { 2_000_000 };
 
 mod convert;
 mod importer;
@@ -57,8 +62,46 @@ fn parse(svg: &str) -> Result<roxmltree::Document<'_>, SvgError> {
         .map_err(|e| SvgError::Parse(e.to_string()))
 }
 
+const SVG_NS: &str = "http://www.w3.org/2000/svg";
+
+/// Refuse the one `feConvolveMatrix` usvg cannot handle: an `order` whose two sides overflow the
+/// `order_x * order_y` u32 multiply its parser makes (`usvg-0.48.1/src/parser/filter.rs:673`, and
+/// `tree/filter.rs:458` through `ConvolveMatrixData::new`). usvg parses `order` through f64 and
+/// `as i32`, so a large finite value like `1066570220609` saturates to i32::MAX — positive, so it
+/// passes the positivity guard — and the multiply overflows: a debug or overflow-checks build
+/// panics while opening the file. A release build wraps instead, and with a one-entry
+/// `kernelMatrix` the wrapped product passes usvg's length check, leaving a filter that claims a
+/// 2147483647×2147483647 kernel (which VectorCraft then drops as an unsupported filter primitive,
+/// so nothing reaches the document). Any order usvg can multiply — however large — keeps
+/// importing exactly as before: a missing, unparseable or non-positive `order` falls back to 3,
+/// and a `kernelMatrix` that fails to parse or match the order leaves the filter empty, which
+/// usvg drops. The attribute read here is the one usvg reads: unprefixed (XML keeps unprefixed
+/// attributes outside any namespace), on an element in the SVG namespace, with entities resolved
+/// by the parse above.
+fn convolve_matrices_ok(xml: &roxmltree::Document) -> Result<(), SvgError> {
+    for fe in xml.descendants() {
+        if !fe.has_tag_name((SVG_NS, "feConvolveMatrix")) {
+            continue;
+        }
+        if let Some(value) = fe.attribute("order") {
+            // The parse usvg does: svgtypes numbers, `as i32` (saturation included), the first
+            // side defaulting the second, and both positive or both back to the 3×3 default.
+            let side = |n: Option<Result<f64, svgtypes::Error>>, default: i32| n.and_then(|v| v.ok()).map(|v| v as i32).unwrap_or(default);
+            let mut numbers = svgtypes::NumberListParser::from(value);
+            let x = side(numbers.next(), 3);
+            let y = side(numbers.next(), x);
+            if x > 0 && y > 0 && (x as u32).checked_mul(y as u32).is_none() {
+                return Err(SvgError::Parse(format!(
+                    "a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
-pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
+pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
     // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by
     // recursion.
     let too_deep = || SvgError::TooDeep(depth::MAX_ELEMENT_DEPTH);
@@ -76,6 +119,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         Cow::Borrowed(_) => xml,
         Cow::Owned(edited) => parse(edited)?,
     };
+    // Before usvg sees the XML: its parser overflows a hostile feConvolveMatrix's order
+    // (`convolve_matrices_ok` below), and there is no panic guard to fall back on.
+    convolve_matrices_ok(&xml)?;
     let svg = svg.as_ref();
     let units = RootUnits::of(xml.root_element());
     let root_name = root_layer_name(xml.root_element());
@@ -116,6 +162,10 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
         screen: k,
+        converted_nodes: 1,
+        max_nodes,
+        error: None,
+        nested_svg_images: 0,
     };
     im.doc.svg_scripts = found.scripts;
     if im.files.nested_text() {
@@ -183,7 +233,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
                 }
                 None => false,
             };
-            let id = im.doc.alloc_id();
+            let Some(id) = im.alloc_id() else {
+                return Err(im.error.unwrap_or(SvgError::TooLarge(im.max_nodes)));
+            };
             let preset = (im.doc.layers.len() % vectorcraft_doc::LAYER_COLORS.len()) as u8;
             let mut l = Node::layer(id, &name, LayerColor::Preset(preset));
             l.set_clips(clip);
@@ -197,10 +249,16 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
             im.keep_foreign(g.id(), &mut l);
             im.doc.layers.push(Arc::new(l));
         }
+        if let Some(err) = im.error.clone() {
+            return Err(err);
+        }
     } else {
         // An export of a one-layer document names the layer on the root element, its art (groups
         // among it) loose inside: the one layer takes that name.
         let children = im.children(top, base);
+        if let Some(err) = im.error.clone() {
+            return Err(err);
+        }
         if let Some(l) = im.doc.layers.first_mut() {
             let l = Arc::make_mut(l);
             if let Some(ch) = l.children_mut() {
@@ -210,6 +268,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
                 l.name = root_name;
             }
         }
+    }
+    if let Some(err) = im.error {
+        return Err(err);
     }
     if !im.sublayer_groups.is_empty() {
         for l in &mut im.doc.layers {
@@ -260,4 +321,12 @@ struct Importer {
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,
+    /// How many objects were converted so far.
+    converted_nodes: usize,
+    /// Most objects the document may expand to.
+    max_nodes: usize,
+    /// An error encountered while converting objects (e.g. [`SvgError::TooLarge`]).
+    error: Option<SvgError>,
+    /// How many nested SVG images were converted so far.
+    nested_svg_images: usize,
 }

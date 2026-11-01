@@ -1,4 +1,4 @@
-use super::*;
+use super::{Palette, Raster, TraceParams, oklab};
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct Bin {

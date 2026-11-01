@@ -1,4 +1,4 @@
-use super::*;
+use super::{Arc, Deserialize, Node, NodeId, Point, Serialize};
 
 /// New art on a locked artboard ([`Document::new_art`]). Setting it changes the document in
 /// place, so a selection change that sets it doesn't replace the document.
@@ -108,6 +108,10 @@ impl SavedSelection {
 pub struct Symbol {
     pub name: String,
     pub art: Arc<Node>,
+    /// Symbol Options › Symbol Type › Dynamic Symbol: each instance may change the appearance of
+    /// objects in the art and stay linked (see [`crate::symbol_overrides`]). Static by default.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub dynamic: bool,
 }
 
 /// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects.

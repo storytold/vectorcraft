@@ -1,6 +1,6 @@
 use super::expand::{Hooks, Outliner, Warper, map_node};
 use super::mesh::{GradientMesh, MeshPoint, grid_len, grid_points, nodes_bounds, surface_of};
-use super::*;
+use super::{Affine, Arc, Color, Deserialize, Node, NodeId, NodeKind, PathData, Point, Rect, Serialize, Vec2, yes};
 
 /// How an envelope distorts its content.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

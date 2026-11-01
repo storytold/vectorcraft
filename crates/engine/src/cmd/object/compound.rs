@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    Appearance, Arc, Document, EngineError, FillRule, Node, NodeId, NodeKind, Paint, PathData, Result, Session, Value, json, ok, selected_roots,
+};
+
+/// A closed contour smaller than this (in square document units) has no usable winding direction,
+/// so Make Compound Path leaves its orientation alone rather than flipping it on noise.
+const MIN_WINDING_AREA: f64 = 1e-6;
 
 pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
@@ -21,7 +27,12 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         // The paths in front run against the backmost one, so where they overlap it they cut holes
         // under the non-zero fill rule (#1197). A compound path's paths turn together, by its
         // first: its own holes (a letter's counters) stay holes.
-        let direction = |n: &Node| n.path_data().and_then(|pd| pd.subpaths.first()).map_or(0.0, |sp| sp.signed_area().signum());
+        let direction = |n: &Node| {
+            n.path_data()
+                .and_then(|pd| pd.subpaths.first())
+                .filter(|sp| sp.closed && sp.signed_area().abs() > MIN_WINDING_AREA)
+                .map_or(0.0, |sp| sp.signed_area().signum())
+        };
         let first = |unit: &[Arc<Node>]| unit.first().map_or(0.0, |p| direction(p));
         let back = units.first().map_or(0.0, |u| first(u));
         for (i, unit) in units.into_iter().enumerate() {

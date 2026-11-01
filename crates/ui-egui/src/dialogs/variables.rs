@@ -225,7 +225,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// A text field for `key`, written back as it is typed.
 fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Response {
     let mut s = d.str(key);
-    let r = ui.add(egui::TextEdit::singleline(&mut s).desired_width(width));
+    let r = ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(width));
     if r.changed() {
         d.fields.insert(key.into(), json!(s));
     }

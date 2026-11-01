@@ -1,4 +1,4 @@
-use super::*;
+use super::{Arc, Color32, Document, HashMap, Node, NodeId, Settle, ThumbWorker, Ui, VectorcraftApp, Weak, vec2};
 
 /// Where row thumbnails come from: document `uid` at `revision`, and whether a drag is in
 /// progress (the thumbnails shown then stay until it ends).

@@ -3,7 +3,9 @@ use super::on_path::on_path;
 use super::region::Region;
 use super::ruby::ruby_layout;
 use super::vertical::{EM_CENTER, QUARTER_TURN, align_vertically, finish_bounds};
-use super::*;
+use super::{
+    Affine, BezPath, CharStyle, Ctx, FontDb, LayoutOptions, OtFeatures, Point, Rect, Shape, TextKind, TextLayout, TextObject, VerticalAlign,
+};
 
 /// Lay out a text object into text-space glyph outlines (default [`LayoutOptions`]).
 pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
@@ -16,6 +18,7 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
         vertical_align: a.vertical_align,
+        flow: a.flow,
         fit: a.fit,
         ..LayoutOptions::default()
     };
@@ -225,6 +228,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         vertical,
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
+        upright_cluster: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next

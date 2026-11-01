@@ -244,6 +244,62 @@ fn curvature_smooth_uses_the_tool_rule() {
     assert_eq!(fold, before);
 }
 
+/// Removing a point of a path the tool drew leaves the path it draws through the remaining points,
+/// open or closed, and two points left are a straight line.
+#[test]
+fn curvature_remove_curves_through_the_remaining_points() {
+    let at = |corners: &[usize]| -> Vec<(Point, bool)> {
+        [(0.0, 0.0), (100.0, -80.0), (220.0, 30.0), (300.0, -60.0), (420.0, 10.0), (500.0, -40.0)]
+            .iter()
+            .enumerate()
+            .map(|(j, &(x, y))| (pt(x, y), corners.contains(&j)))
+            .collect()
+    };
+    // A corner in the middle, and corners next to both ends (the ends then have no handle).
+    for pts in [at(&[2]), at(&[1, 4]), at(&[])] {
+        for closed in [false, true] {
+            for i in 0..pts.len() {
+                let mut sp = curvature_spline(&pts, closed);
+                assert!(curvature_remove(&mut sp, i));
+                let rest: Vec<(Point, bool)> = pts.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, &q)| q).collect();
+                let want = curvature_spline(&rest, closed);
+                assert_eq!(sp.closed, want.closed);
+                for (a, b) in sp.anchors.iter().zip(&want.anchors) {
+                    assert!(a.h_in.distance(b.h_in) < 1e-6 && a.h_out.distance(b.h_out) < 1e-6, "{pts:?} closed {closed}, point {i}: {a:?} != {b:?}");
+                }
+            }
+        }
+    }
+    let pts = at(&[2]);
+    for closed in [false, true] {
+        let mut sp = curvature_spline(&pts[..3], closed);
+        assert!(curvature_remove(&mut sp, 1));
+        assert!(!sp.closed && sp.segment_is_line(0), "two points are a line: {sp:?}");
+    }
+    let mut sp = curvature_spline(&pts, false);
+    let before = sp.clone();
+    assert!(!curvature_remove(&mut sp, 9));
+    assert_eq!(sp, before);
+}
+
+/// A corner neighbor with handles keeps their directions; its handle on the new segment scales
+/// with the segment's chord.
+#[test]
+fn curvature_remove_keeps_a_corner_neighbors_handle_direction() {
+    let corner = Anchor { p: pt(100.0, 0.0), h_in: pt(80.0, -20.0), h_out: pt(120.0, -30.0), kind: AnchorKind::Corner };
+    let mut sp = SubPath::new(vec![Anchor::corner(pt(0.0, 0.0)), corner, Anchor::corner(pt(200.0, 0.0)), Anchor::corner(pt(300.0, 0.0))], false);
+    assert!(curvature_remove(&mut sp, 2));
+    let c = sp.anchors[1];
+    assert_eq!(c.h_in, corner.h_in);
+    let (old, new) = (corner.h_out - corner.p, c.h_out - c.p);
+    assert!(old.cross(new).abs() < 1e-9 && old.dot(new) > 0.0, "{c:?}");
+    assert!((new.hypot() / old.hypot() - 2.0).abs() < 1e-9, "the chord doubled: {c:?}");
+    // Two anchors left: the corner keeps its handle on the segment that stays.
+    let mut sp = SubPath::new(vec![Anchor::corner(pt(0.0, 0.0)), corner, Anchor::corner(pt(200.0, 0.0))], false);
+    assert!(curvature_remove(&mut sp, 2));
+    assert_eq!((sp.anchors[1].h_in, sp.anchors[1].h_out), (corner.h_in, corner.p));
+}
+
 /// A curved end counts as smooth for the toggle: Alt-click turns it into a corner.
 #[test]
 fn alt_click_on_a_curved_end_makes_it_a_corner() {
@@ -345,7 +401,7 @@ fn alt_click_or_double_click_toggles_and_delete_removes() {
     let s = selected(id, Some(2));
     let cx = quiet(&d, &s, &p);
     assert!(t.claims_key(&cx, ToolKey::Backspace));
-    assert_eq!(t.key(&cx, ToolKey::Delete, Mods::default()), vec![remove_anchor((id, 0, 2))]);
+    assert_eq!(t.key(&cx, ToolKey::Delete, Mods::default()), vec![delete_point((id, 0, 2))]);
     // Esc lets go of the point.
     assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
 }

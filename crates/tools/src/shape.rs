@@ -75,12 +75,15 @@ impl ShapeTool {
         }
     }
 
-    /// Ctrl/Cmd in a star drag from `start` to `p`: the inner radius stays as it was when the key
-    /// went down, so the ratio follows the outer radius (and stays so once the key is let go).
-    fn hold_inner(&mut self, start: Point, p: Point, m: Mods) {
+    /// Ctrl/Cmd in a star drag from `start` to `p`, where the last drag showed a star with the inner
+    /// radius `shown`: once the star has begun, the inner radius stays as the star showed it when
+    /// the key went down, so the ratio follows the outer radius (and stays so once the key is let
+    /// go). When the key goes down before the star has begun, the inner radius stays as the first
+    /// star the drag shows has it.
+    fn hold_inner(&mut self, shown: f64, start: Point, p: Point, m: Mods) {
         let outer = (p - start).hypot();
         match (m.cmd, self.inner) {
-            (true, None) => self.inner = Some(outer * self.star_ratio),
+            (true, None) if self.began => self.inner = Some(shown),
             (false, Some(_)) => self.inner = None,
             _ => {}
         }
@@ -224,17 +227,23 @@ impl Tool for ShapeTool {
                 self.start = Some(p);
                 self.last = ev.pos;
                 self.began = false;
+                self.inner = None;
                 vec![]
             }
             PointerKind::Drag => {
                 let Some(mut s) = self.start else { return vec![] };
                 let pos = self.snap.drag(cx, ev.pos, self.leave(cx, s, ev.mods).as_ref());
                 let ev = &PointerEvent { pos, ..*ev };
+                // The inner radius of the star the last drag showed, with the ratio it drew with:
+                // the canvas sends a drag only once the pointer moves, so a key pressed in between
+                // first arrives with the next position.
+                let ratio = if self.mods.alt { straight_ratio(self.points).unwrap_or(self.star_ratio) } else { self.star_ratio };
+                let shown = (self.last - s).hypot() * ratio;
                 space_moves(&mut s, &mut self.last, ev, self.began);
                 self.start = Some(s);
                 self.mods = ev.mods;
                 if self.id == "star" {
-                    self.hold_inner(s, ev.pos, ev.mods);
+                    self.hold_inner(shown, s, ev.pos, ev.mods);
                 }
                 let mut out = vec![];
                 if !self.began {
@@ -299,6 +308,7 @@ impl Tool for ShapeTool {
         } else if key == ToolKey::Escape {
             self.start = None;
             self.began = false;
+            self.inner = None;
             self.snap.clear();
             vec![Action::Cancel]
         } else {

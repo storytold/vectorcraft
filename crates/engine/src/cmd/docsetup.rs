@@ -7,7 +7,7 @@ use vectorcraft_doc::{Background, CharPosition, CharStyle, DocSetup, Document, E
 
 use super::flatten::{FlattenOptions, FlattenerPreset};
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, color_value, has_doc};
 
 const C: &str = "document.setup";
 
@@ -127,8 +127,8 @@ fn apply(s: &mut DocSetup, units: &mut vectorcraft_doc::Unit, k: &str, v: &Value
         "discardWhiteOverprint" => s.discard_white_overprint = flag(k, v)?,
         "language" => {
             let l = v.as_str().unwrap_or("");
-            let (name, quotes) = LANGUAGES.iter().find(|(n, _)| n.eq_ignore_ascii_case(l)).ok_or_else(|| {
-                bad(C, format!("unknown language `{l}` (one of {})", LANGUAGES.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")))
+            let (name, _, quotes) = LANGUAGES.iter().find(|(n, _, _)| n.eq_ignore_ascii_case(l)).ok_or_else(|| {
+                bad(C, format!("unknown language `{l}` (one of {})", LANGUAGES.iter().map(|(n, _, _)| *n).collect::<Vec<_>>().join(", ")))
             })?;
             s.language = name.to_string();
             s.quotes = *quotes;

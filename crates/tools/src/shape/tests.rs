@@ -106,8 +106,10 @@ fn star_measure_label_matches_the_preview_with_modifiers_and_shrink() {
     assert_eq!(label(&t), cx.star_radii_label(r1, r2));
 }
 
-/// During a star drag, Ctrl/Cmd keeps the inner radius while the outer one follows the pointer
-/// (the new ratio stays once the key is let go), and Alt keeps the shoulders straight (#812).
+/// During a star drag, Ctrl/Cmd keeps the inner radius the star showed when the key went down
+/// while the outer one follows the pointer (the new ratio stays once the key is let go), and Alt
+/// keeps the shoulders straight (#812). The canvas sends a drag only once the pointer moves, so
+/// the key first arrives with a new position.
 #[test]
 fn a_star_drag_holds_its_inner_radius_with_ctrl_and_straightens_with_alt() {
     let (d, _) = doc_with_rect();
@@ -123,8 +125,7 @@ fn a_star_drag_holds_its_inner_radius_with_ctrl_and_straightens_with_alt() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
     let (r1, r2) = radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0)));
     assert_eq!((r1, r2), (40.0, 20.0));
-    // Ctrl: the inner radius stays 20 as the outer one grows to 80.
-    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0).with_mods(ctrl));
+    // Ctrl, pressed with the pointer still: the inner radius stays 20 as the outer one grows to 80.
     let (r1, r2) = radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl)));
     assert!((r1 - 80.0).abs() < 1e-9 && (r2 - 20.0).abs() < 1e-9, "{r1} {r2}");
     // Let go: the ratio (a quarter) stays.
@@ -136,6 +137,54 @@ fn a_star_drag_holds_its_inner_radius_with_ctrl_and_straightens_with_alt() {
     assert!((r2 / r1 - 0.381_966).abs() < 1e-5, "{}", r2 / r1);
     assert_eq!(straight_ratio(4), None, "four points can't line up");
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 50.0)), vec![Action::Commit]);
+}
+
+/// Ctrl/Cmd pressed while Alt straightens the shoulders keeps the straightened inner radius, a drag
+/// canceled with Escape leaves no held radius for the next star, and Ctrl/Cmd pressed inside the
+/// drag threshold keeps the inner radius of the first star the drag shows. The canvas lends a
+/// selection tool to a press with Ctrl/Cmd held, so every press here is without it.
+#[test]
+fn a_star_drag_holds_the_inner_radius_it_shows_when_ctrl_goes_down() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let radii = |a: &[Action]| match a.last() {
+        Some(Action::Preview(_, v)) => (v["radius1"].as_f64().unwrap(), v["radius2"].as_f64().unwrap()),
+        other => panic!("{other:?}"),
+    };
+    let close = |(r1, r2): (f64, f64), (w1, w2): (f64, f64)| assert!((r1 - w1).abs() < 1e-9 && (r2 - w2).abs() < 1e-9, "{r1} {r2}, not {w1} {w2}");
+    let ctrl = Mods { cmd: true, ..Default::default() };
+    let alt = Mods { alt: true, ..Default::default() };
+    let ctrl_alt = Mods { cmd: true, alt: true, ..Default::default() };
+    // Alt shows straight shoulders; Ctrl/Cmd pressed then keeps that inner radius.
+    let mut t = ShapeTool::new("star");
+    let straight = straight_ratio(5).unwrap_or(0.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0).with_mods(alt))), (40.0, 40.0 * straight));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl_alt));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 170.0, 50.0).with_mods(ctrl))), (120.0, 40.0 * straight));
+
+    // Escape with the key held, then a new press and the key before the first move: the next star
+    // holds what it shows, not the canceled radius.
+    let mut t = ShapeTool::new("star");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl));
+    assert_eq!(t.key(&cx, ToolKey::Escape, ctrl), vec![Action::Cancel]);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 50.0).with_mods(ctrl))), (10.0, 2.5));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 50.0).with_mods(ctrl))), (20.0, 2.5));
+
+    // Ctrl/Cmd pressed inside the drag threshold, where no star is shown yet.
+    let mut t = ShapeTool::new("star");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 51.0, 50.0)), vec![]);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0).with_mods(ctrl));
+    assert_eq!(a[0], Action::Begin("Star".into()));
+    close(radii(&a), (40.0, 20.0));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl))), (80.0, 20.0));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 130.0, 50.0).with_mods(ctrl)), vec![Action::Commit]);
 }
 
 #[test]

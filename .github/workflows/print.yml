@@ -32,4 +32,8 @@ jobs:
       - run: cargo clippy --locked -p vectorcraft --all-targets -- -D warnings
       - run: cargo test --locked -p vectorcraft
       - name: Check pending submission and queue refusal feedback
-        run: cargo test --locked -p vectorcraft-ui-egui tests_printps
+        shell: bash
+        # A filter that matches nothing still passes, so fail unless some test ran.
+        run: |
+          cargo test --locked -p vectorcraft-ui-egui --lib -- tests::printps | tee printps.log
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed' printps.log || { echo "::error::tests::printps matched no tests"; exit 1; }

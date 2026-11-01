@@ -1,11 +1,12 @@
 //! Character panel: font family / style, size, leading, kerning, tracking, vertical and horizontal
 //! scale, baseline shift, character rotation and the All Caps, Small Caps, Superscript, Subscript,
-//! Underline and Strikethrough toggles.
+//! Underline and Strikethrough toggles and the Language menu.
 
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
+use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -222,7 +223,7 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     range_style(app, p);
 }
 
-/// Set the Kerning field's `value` (a number or "auto"). At a caret in text the Type tool edits
+/// Set the Kerning field's `value` (a number, "auto", or "optical"). At a caret in text the Type tool edits
 /// it is the pair kerning after the character before the caret, as Alt+←/→ steps it
 /// (`type.step`); nowhere to set at the start of the text. Else it is a character attribute like
 /// the others: the selected range, or all the text.
@@ -242,6 +243,37 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     }
     end_typing(app);
     app.run("text.setRangeStyle", json!({"id": id.0, "start": start, "end": a, "kerning": value})).ok();
+}
+
+/// The pair before the caret, in 1/1000 em, using the layout the canvas draws.
+fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
+    let (id, a, b) = text_editing(app)?;
+    if a != b {
+        return None;
+    }
+    let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
+    let text = t.plain_text();
+    let start = vectorcraft_text::edit::prev_char(&text, a);
+    if start >= a {
+        return None;
+    }
+    let style = vectorcraft_text::edit::style_at(&t.runs, start + 1);
+    if let Some(v) = style.kerning {
+        return Some((v, false));
+    }
+    let state = app.session.active()?;
+    let key = (state.uid, state.revision, id, a);
+    let slot = ui.scope_id().with("caret-kerning");
+    if let Some((cached_key, value)) = ui.ctx().data(|d| d.get_temp::<((u64, u64, NodeId, usize), f64)>(slot))
+        && cached_key == key
+    {
+        return Some((value, true));
+    }
+    let original = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let value = vectorcraft_engine::cmd::effective_kerning(vectorcraft_text::FontDb::global(), t, &original, start, a);
+    let value = value.round();
+    ui.ctx().data_mut(|d| d.insert_temp(slot, (key, value)));
+    Some((value, true))
 }
 
 /// The faces Type › Bold and Type › Italic switch to.
@@ -328,6 +360,63 @@ pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value,
     Ok(json!({ "style": name }))
 }
 
+/// The Character panel fields that the Highlight Font Name, Highlight Kerning and Highlight
+/// Tracking commands give the keyboard focus ([`highlight`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Field {
+    /// The font family menu: it opens, and its search field takes the focus.
+    FontName,
+    Kerning,
+    Tracking,
+}
+
+impl Field {
+    /// The id the panel draws the field with ([`show`], [`metrics_grid`]).
+    fn salt(self) -> &'static str {
+        match self {
+            Field::FontName => "ch-font",
+            Field::Kerning => "ch-kern",
+            Field::Tracking => "ch-track",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Field::FontName => "fontName",
+            Field::Kerning => "kerning",
+            Field::Tracking => "tracking",
+        }
+    }
+}
+
+/// `type.highlightFontName`, `type.highlightKerning` and `type.highlightTracking`: show the
+/// Character panel if it is hidden (a shown one is activated, so its floating window comes
+/// forward), and give `field` the keyboard focus when the panel next draws it, a number field with
+/// its value selected (typing replaces it, Enter applies it). Without selected type or text the
+/// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
+pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
+    // `window.panel` would hide a floating panel in front of its window, or an open flyout.
+    if crate::panel_docking::showing(&app.ui, "character") {
+        app.run("window.panel.activate", json!({"panel": "character"}))?;
+    } else {
+        app.run("window.panel", json!({"panel": "character"}))?;
+    }
+    if text_style(app).is_none() {
+        app.character_focus = None;
+        return Err("select some type first".into());
+    }
+    app.character_focus = Some(field);
+    Ok(json!({ "field": field.name() }))
+}
+
+/// `type.underline` (Cmd+Shift+U): what the Underline button does, on the text the panels act on.
+/// Returns whether the text is now underlined.
+pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let (s, _) = text_style(app).ok_or("select some type first")?;
+    format(app, json!({"underline": !s.underline}));
+    Ok(json!(!s.underline))
+}
+
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
@@ -369,6 +458,7 @@ static CTX: OnceLock<egui::Context> = OnceLock::new();
 /// Plain text of the last text copied inside the Type tool (paste from the native menu, which
 /// can't read the system clipboard).
 static CLIP: Mutex<String> = Mutex::new(String::new());
+static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
 fn text_copy(app: &mut VectorcraftApp) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
@@ -376,12 +466,22 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         return false;
     }
     let Ok(r) = app.session.execute("text.getRange", &json!({"id": id.0, "start": a, "end": b})) else { return false };
-    app.session.set_tool_option("copy", &r["runs"]);
+    let runs = r["runs"].clone();
+    app.session.set_tool_option("copy", &runs);
+    *CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()) = Some(runs.clone());
     let text = r["text"].as_str().unwrap_or("").to_string();
     if let Some(ctx) = CTX.get() {
         ctx.copy_text(text.clone());
     }
-    *CLIP.lock().unwrap_or_else(|e| e.into_inner()) = text;
+    *CLIP.lock().unwrap_or_else(|e| e.into_inner()) = text.clone();
+    if let Ok(parsed_runs) = serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs)
+        && !parsed_runs.is_empty()
+    {
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "", vectorcraft_doc::CharStyle::default());
+        t.runs = parsed_runs;
+        let node = vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(1), vectorcraft_doc::NodeKind::Text(Box::new(t)));
+        app.session.clipboard.nodes = vec![node];
+    }
     true
 }
 
@@ -400,9 +500,19 @@ fn text_key(app: &mut VectorcraftApp, k: ToolKey, m: Mods) {
     }
 }
 
-fn text_paste(app: &mut VectorcraftApp, s: Option<String>) {
-    let s = s.unwrap_or_else(|| CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone());
+fn text_paste(app: &mut VectorcraftApp, s: Option<String>, plain: bool) {
+    let text_from_clip = CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let s = s.unwrap_or(text_from_clip);
     if !s.is_empty() {
+        if plain {
+            app.session.set_tool_option("copy", &json!([]));
+        } else if let Some(runs) = CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            let clip_text: String =
+                serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs.clone()).unwrap_or_default().into_iter().map(|r| r.text).collect();
+            if clip_text == s {
+                app.session.set_tool_option("copy", &runs);
+            }
+        }
         let v = app.view_info();
         let target_before = crate::ime::target(&mut app.session, v);
         let before = crate::ime::stamp(&mut app.session, v);
@@ -433,7 +543,8 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
-        "edit.paste" | "edit.pasteWithoutFormatting" => text_paste(app, None),
+        "edit.paste" => text_paste(app, None, false),
+        "edit.pasteWithoutFormatting" => text_paste(app, None, true),
         "edit.clear" => text_key(app, ToolKey::Delete, Mods::default()),
         _ => return None,
     }
@@ -521,7 +632,7 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     text_key(app, ToolKey::Delete, Mods::default());
                 }
             }
-            TextInput::Paste(s) => text_paste(app, s),
+            TextInput::Paste(s) => text_paste(app, s, false),
             TextInput::Face(f) => {
                 if let Err(e) = toggle_face(app, f) {
                     app.status(e);
@@ -558,14 +669,33 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             match widgets::spin_field_auto(ui, "ch-lead", leading, Some(auto), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
                 Some(SpinPick::Value(v)) => style(app, json!({"leading": v})),
                 Some(SpinPick::Auto) => style(app, json!({"leading": "auto"})),
+                Some(SpinPick::Optical) => {}
                 None => {}
             }
         });
         ui.end_row();
-        cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
-            let kerning = shared(app, |s| s.kerning.unwrap_or(0.0));
-            if let Some(v) = widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
-                set_kerning(app, if v == 0.0 { json!("auto") } else { json!(v) });
+        cell(ui, "VA", tl!("Kerning"), |ui| {
+            let mode = shared(app, |s| (s.optical_kerning, s.kerning));
+            let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
+            let at_caret = if caret { caret_kerning(app, ui) } else { None };
+            let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
+            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
+            let optical = mode.map(|(optical, _)| optical);
+            match widgets::spin_kerning(
+                ui,
+                "ch-kern",
+                kerning,
+                automatic,
+                optical,
+                tl!("Optical"),
+                at_caret.is_some_and(|(_, auto)| auto),
+                fw,
+                &TRACKING_PRESETS,
+            ) {
+                Some(SpinPick::Value(v)) => set_kerning(app, json!(v)),
+                Some(SpinPick::Auto) => set_kerning(app, json!("auto")),
+                Some(SpinPick::Optical) => set_kerning(app, json!("optical")),
+                None => {}
             }
         });
         cell(ui, "VA↔", tl!("Tracking"), |ui| {
@@ -711,17 +841,68 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
 }
 
+/// The panel state key of the panel menu's Show Snap to Glyph Options.
+const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    attributes(app, ui);
+    // Drawing over type needs no type selected, so the options show without one too.
+    if pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS) {
+        snap_to_glyph_options(app, ui);
+    }
+}
+
+/// The Snap to Glyph options (Show Snap to Glyph Options): which guides View › Snap to Glyph gives,
+/// each a checkbox running `view.snapToGlyph.options`. Dimmed while Snap to Glyph is off.
+fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.add_space(4.0);
+    ui.separator();
+    widgets::section_header(ui, "Snap to Glyph");
+    let (o, enabled) = (app.session.prefs.glyph_snap, app.ui.view.snap_to_glyph);
+    egui::Grid::new("ch-snap-to-glyph").num_columns(2).show(ui, |ui| {
+        for (i, (label, key, on)) in [
+            ("Baseline", "baseline", o.baseline),
+            ("x-height", "xHeight", o.x_height),
+            ("Glyph Bounds", "bounds", o.bounds),
+            ("Proximity Guides", "proximity", o.proximity),
+            ("Angular Guides", "angular", o.angular),
+            ("Anchor Point", "anchors", o.anchors),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            // A known key and a bool: the command can't refuse it.
+            if widgets::check(ui, label, on, enabled) {
+                app.run("view.snapToGlyph.options", json!({ key: !on })).ok();
+            }
+            if i % 2 == 1 {
+                ui.end_row();
+            }
+        }
+    });
+}
+
+/// The character attributes of the type selected (an empty state without any).
+fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((s, _)) = text_style(app) else {
+        app.character_focus = None;
         super::empty_state(ui, "type", tl!("No text selected"), tl!("Select a text object to edit its character attributes."));
         return;
     };
     let w = ui.available_width();
+    // The field a Highlight command asked for takes the focus as it is drawn. If no field took it
+    // (a sizing pass), the next frame tries again.
+    if let Some(f) = app.character_focus {
+        widgets::arm_field_focus(ui.ctx(), f.salt());
+    }
     font_pickers(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");
     metrics_grid(app, ui, "ch-grid", &s, w, !hidden);
+    if app.character_focus.is_some() && !widgets::disarm_field_focus(ui.ctx()) {
+        app.character_focus = None;
+    }
     if hidden {
         return;
     }
@@ -740,6 +921,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if style_toggle(ui, kind, tip, on) {
                 format(app, change);
             }
+        }
+    });
+    // Language: the characters are shaped in it, so that the font uses that language's forms.
+    ui.add_space(4.0);
+    let names: Vec<&str> = LANGUAGES.iter().map(|(n, _, _)| *n).collect();
+    // Mixed: blank; a tag from a file that is not in the list: as it is.
+    let current = shared(app, |s| s.language.clone())
+        .map_or_else(String::new, |l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
+    widgets::label_row(ui, tl!("Language:"), 64.0, |ui| {
+        if let Some(name) = widgets::dropdown(ui, "ch-language", &current, &names, w - 72.0).and_then(|i| names.get(i)) {
+            format(app, json!({"language": name}));
         }
     });
 }
@@ -824,12 +1016,54 @@ fn char_direction_items(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The numeral systems Character panel menu › Digits lists after Default, with their English
+/// labels, translated in the `digits` context (Hindi, Bengali, Tamil… are also languages): the
+/// Arabic-script ones, then the Indic scripts' own digits from Devanagari on.
+pub(crate) const DIGITS: [(&str, vectorcraft_doc::Digits); 12] = {
+    use vectorcraft_doc::Digits;
+    [
+        ("Arabic", Digits::Arabic),
+        ("Hindi", Digits::Hindi),
+        ("Farsi", Digits::Farsi),
+        ("Devanagari", Digits::Devanagari),
+        ("Bengali", Digits::Bengali),
+        ("Gurmukhi", Digits::Gurmukhi),
+        ("Gujarati", Digits::Gujarati),
+        ("Odia", Digits::Odia),
+        ("Tamil", Digits::Tamil),
+        ("Telugu", Digits::Telugu),
+        ("Kannada", Digits::Kannada),
+        ("Malayalam", Digits::Malayalam),
+    ]
+};
+
+/// Character panel menu › Digits; `digits`: the selected characters' (`None` when they differ).
+fn digits_items(app: &mut VectorcraftApp, ui: &mut Ui, digits: Option<vectorcraft_doc::Digits>) {
+    use vectorcraft_doc::Digits;
+    let mut item = |ui: &mut Ui, label: &str, d: Digits| {
+        if menu_item(ui, label, true, digits == Some(d)) {
+            format(app, json!({"digits": d.id()}));
+        }
+    };
+    item(ui, tl!("Default"), Digits::Default);
+    for (label, d) in DIGITS {
+        if d == Digits::Devanagari {
+            ui.separator();
+        }
+        item(ui, crate::i18n::tr_ctx(crate::i18n::current(), "digits", label), d);
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = text_style(app);
     let has = st.is_some();
     let hidden: bool = pstate(ui.ctx(), "ch-hide-options");
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "ch-hide-options", !hidden);
+    }
+    let glyph = pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS);
+    if menu_item(ui, if glyph { tl!("Hide Snap to Glyph Options") } else { tl!("Show Snap to Glyph Options") }, true, false) {
+        set_pstate(ui.ctx(), SNAP_TO_GLYPH_OPTIONS, !glyph);
     }
     ui.separator();
     let s = st.map(|x| x.0);
@@ -886,6 +1120,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!("Tate-chu-yoko"), has, tcy) {
             format(app, json!({"tateChuYoko": !tcy}));
         }
+        // Standard Vertical Roman Alignment: the selected half-width characters stand upright in
+        // vertical type instead of being rotated. Checked when every selected character has it; a
+        // mixed selection turns it on.
+        let roman = shared(app, |s| s.standard_vertical_roman) == Some(true);
+        if menu_item(ui, tl!("Standard Vertical Roman Alignment"), has, roman) {
+            format(app, json!({"standardVerticalRoman": !roman}));
+        }
         ui.separator();
     }
     // Digits: the numeral system the selected characters' digits are drawn in, with the Middle
@@ -893,19 +1134,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_indic_options {
         let digits = s.as_ref().map(|s| s.digits);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Digits")), |ui| {
-                use vectorcraft_doc::Digits;
-                for (label, d, key) in [
-                    (tl!("Default"), Digits::Default, "default"),
-                    (tl!("Arabic"), Digits::Arabic, "arabic"),
-                    (tl!("Hindi"), Digits::Hindi, "hindi"),
-                    (tl!("Farsi"), Digits::Farsi, "farsi"),
-                ] {
-                    if menu_item(ui, label, true, digits == Some(d)) {
-                        format(app, json!({"digits": key}));
-                    }
-                }
-            });
+            ui.menu_button(format!("   {}", tl!("Digits")), |ui| digits_items(app, ui, digits));
         });
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
@@ -934,7 +1163,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("System Layout"), open, system) {
         app.run("type.systemLayout", json!({})).ok();
     }
-    menu_item(ui, tl!("Standard Vertical Roman Alignment"), false, false);
     ui.separator();
     // The installed fonts are always listed; this picks up fonts installed since the app started.
     #[cfg(not(target_arch = "wasm32"))]
@@ -962,9 +1190,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
-/// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off, the Default character
-/// direction and the Default digits, whether or not Show East Asian Options and Show Indic Options
-/// are on.
+/// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
+/// No Break off, the Default character direction and the Default digits, whether or not Show East
+/// Asian Options and Show Indic Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -973,7 +1201,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
         json!({
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
-            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko, "noBreak": d.no_break, "charDirection": "default",
+            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
+            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
             "digits": d.digits
         }),
     );

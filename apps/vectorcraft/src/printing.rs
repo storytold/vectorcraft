@@ -1,14 +1,7 @@
 //! Desktop printer transport. VectorCraft composes every page and copy before submission;
-//! craft-print owns discovery and spooling. Windows 7 keeps its viewer-based transport because
-//! Windows.Data.Pdf is unavailable there.
-#[cfg(not(all(windows, any(feature = "windows7", target_vendor = "win7"))))]
+//! craft-print owns discovery and spooling.
 use std::process::Command;
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
-
-#[cfg(all(windows, any(feature = "windows7", target_vendor = "win7")))]
-mod windows7;
-#[cfg(all(windows, any(feature = "windows7", target_vendor = "win7")))]
-use windows7 as system;
 
 pub struct SystemPrint;
 impl PrintService for SystemPrint {
@@ -36,9 +29,8 @@ impl PrintService for SystemPrint {
     }
 }
 
-#[cfg(not(all(windows, any(feature = "windows7", target_vendor = "win7"))))]
 mod system {
-    use super::*;
+    use super::{Command, PrintJob, Printer};
     pub fn printers() -> Vec<Printer> {
         craft_print::printers().into_iter().map(|p| Printer { name: p.name, default: p.default }).collect()
     }
@@ -95,7 +87,7 @@ mod system {
     }
 }
 
-#[cfg(all(test, windows, not(any(feature = "windows7", target_vendor = "win7"))))]
+#[cfg(all(test, windows))]
 mod tests {
     use super::system::setup_command;
     use std::ffi::OsStr;

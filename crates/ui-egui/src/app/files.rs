@@ -1,4 +1,4 @@
-use super::*;
+use super::{VectorcraftApp, io, place};
 
 impl VectorcraftApp {
     /// A file dialog is open off the UI thread (a sheet on macOS, [`picks`]): what asked for it runs

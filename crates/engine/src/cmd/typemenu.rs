@@ -7,7 +7,9 @@ use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, Te
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, find_command, has_clipboard, has_doc, has_selection, ids_param, str_param, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

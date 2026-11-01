@@ -17,7 +17,7 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok, str_param};
 
 mod axis;
 mod columns;

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::{Document, ImageObject, LinkInfo, Node, NodeKind};
 use vectorcraft_geom::Rect;
-use vectorcraft_svg::{ImportOptions, import_with, import_with_report};
+use vectorcraft_svg::{ImportOptions, MAX_NESTED_SVG_IMAGES, SvgError, import_with, import_with_report, import_within};
 use vectorcraft_testkit::raster::{Image, assert_similar, render_artboard};
 
 fn svg(body: &str) -> String {
@@ -371,4 +371,55 @@ fn inkscape_pages_become_artboards() {
 
 fn svg_doc() -> String {
     svg(r#"<rect x="10" y="10" width="20" height="20"/>"#)
+}
+
+/// An ordinary nested SVG image imports within budget, while `<use>`-of-nested-image fan-out
+/// past the node budget is refused with `SvgError::TooLarge` (#3564).
+#[test]
+fn nested_image_within_budget_imports_and_use_fan_out_is_refused() {
+    let inner = r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="10" height="10" fill="red"/></svg>"#;
+    let nested = format!("data:image/svg+xml;base64,{}", vectorcraft_svg::base64_encode(inner.as_bytes()));
+    let single = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><image href="{nested}" width="20" height="20"/></svg>"#);
+    // An ordinary nested image imports within a small budget (3 objects: Layer 1, Group, Rect).
+    let (d, _) = import_within(&single, &ImportOptions::default(), 10).unwrap();
+    assert!(!d.layers[0].children().unwrap().is_empty());
+
+    // Fan-out duplicating the nested image via <use> exceeds the budget and is refused.
+    let uses = "<use href=\"#item\"/>".repeat(20);
+    let fanout = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+            <defs><g id="item"><image href="{nested}" width="20" height="20"/></g></defs>
+            {uses}
+        </svg>"#
+    );
+    let err = import_within(&fanout, &ImportOptions::default(), 5).unwrap_err();
+    assert!(matches!(err, SvgError::TooLarge(5)), "{err:?}");
+    assert_eq!(err.to_string(), "the SVG expands to more than 5 objects");
+
+    // Highly amplified multi-level <use> tree is refused without exploding memory.
+    let multi_level = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+            <defs>
+                <g id="g0"><image href="{nested}" width="20" height="20"/></g>
+                <g id="g1"><use href="#g0"/><use href="#g0"/></g>
+                <g id="g2"><use href="#g1"/><use href="#g1"/></g>
+                <g id="g3"><use href="#g2"/><use href="#g2"/></g>
+                <g id="g4"><use href="#g3"/><use href="#g3"/></g>
+            </defs>
+            <use href="#g4"/>
+        </svg>"##
+    );
+    let err = import_within(&multi_level, &ImportOptions::default(), 15).unwrap_err();
+    assert!(matches!(err, SvgError::TooLarge(15)), "{err:?}");
+}
+
+/// Nested SVG images exceeding `MAX_NESTED_SVG_IMAGES` are left out with a warning note (#3564).
+#[test]
+fn nested_svg_images_past_count_cap_are_left_out() {
+    let inner = r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="5" height="5"/></svg>"#;
+    let nested = format!("data:image/svg+xml;base64,{}", vectorcraft_svg::base64_encode(inner.as_bytes()));
+    let images = format!(r#"<image href="{nested}" width="10" height="10"/>"#).repeat(MAX_NESTED_SVG_IMAGES + 10);
+    let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">{images}</svg>"#);
+    let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
+    assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
 }

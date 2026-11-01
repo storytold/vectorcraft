@@ -45,7 +45,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(10.0);
     // Preview: the base colour's row of variations.
     let o = options(app, d);
-    let base = base_color(app, ui.ctx());
+    let base = base_color(app);
     let n = o.steps as i32;
     let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     let w = row.width() / (2 * n + 1) as f32;

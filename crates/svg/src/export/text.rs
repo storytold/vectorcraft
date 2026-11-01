@@ -1,5 +1,9 @@
 use super::output::xml_text;
-use super::*;
+use super::{
+    Affine, AppearanceItem, Arc, BTreeSet, BezPath, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId,
+    NodeKind, Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num,
+    font_descriptor, xml_escape,
+};
 
 /// `chars` (sorted) as a CSS `unicode-range` (`U+41-5A,U+61`).
 fn unicode_range(chars: &BTreeSet<char>) -> String {
@@ -32,7 +36,10 @@ impl Writer<'_> {
     /// (as on the canvas).
     fn char_props(&mut self, st: &CharStyle, space: (Rect, Affine)) -> Props {
         let decimals = self.opts.decimals;
-        let len = |v: f64| fmt_num(v, decimals);
+        // Only presentation attributes take a bare number (in user units). Written as CSS, a
+        // length needs its unit, a user unit being a `px`: a browser drops `font-size:8.6` (#3209).
+        let unit = if self.styling() == Styling::PresentationAttributes { "" } else { "px" };
+        let len = |v: f64| format!("{}{unit}", fmt_num(v, decimals));
         let mut p = css::font_props(st, &len);
         // Character paints resolve in the text's space (`to_user` maps it into user space).
         let (bounds, to_user) = space;
@@ -103,7 +110,7 @@ impl Writer<'_> {
         let glyphs = |w: &mut Self, items: &[AppearanceItem]| {
             if !items.is_empty() {
                 let ap = vectorcraft_doc::Appearance { items: items.to_vec(), ..Default::default() };
-                w.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, &[&pd], FillRule::NonZero, tb);
+                w.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, tb);
             }
         };
         glyphs(self, below);
@@ -185,7 +192,7 @@ impl Writer<'_> {
             // An unnamed id: the pieces carry no id attribute (the group has it).
             let glyphs = Node::path(NodeId(u64::MAX), pd.clone(), run.style.appearance());
             let d = self.path_d(&pd, self.xf);
-            self.shape(&glyphs, &d, &[&pd], FillRule::NonZero, Some(lay.bounds));
+            self.shape(&glyphs, &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
         }
         self.xf = saved;
         self.depth -= 1;
@@ -328,7 +335,7 @@ impl Writer<'_> {
             let pd = PathData::from_bezpath(&bp);
             let ap = vectorcraft_doc::Appearance { items: vec![AppearanceItem::Stroke(run.style.stroke_layer())], ..Default::default() };
             let d = self.path_d(&pd, self.xf);
-            self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, &[&pd], FillRule::NonZero, Some(lay.bounds));
+            self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
         }
         self.xf = saved;
     }
