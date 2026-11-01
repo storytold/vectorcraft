@@ -560,6 +560,15 @@ fn move_reports_the_index_in_the_object_whose_row_it_names() {
     let r = run(&mut s, "effect.move", json!({"from": 1, "to": 0}));
     assert_eq!(r["ids"], json!([b.0]), "only b has a second effect in row 0");
     assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "b's effect moved to the start of its row 0");
+    // From the active row to an explicit destination (here the object's effects, where b already
+    // has one), the reply names the first target, a.
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": null}));
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.move", json!({"from": 0, "to": 9, "toItem": null}));
+    assert_eq!((node(&s, a).appearance.effects.len(), node(&s, b).appearance.effects.len()), (1, 2));
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(null), json!(0)), "a's effects hold one effect");
 }
 
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
