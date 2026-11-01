@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use vectorcraft_doc::symbol_overrides::SymbolOverride;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection, SymbolEdit, SymbolRegistration};
 use vectorcraft_geom::{Affine, Point};
 
@@ -363,34 +364,81 @@ fn path_of(nodes: &[Arc<Node>], id: NodeId, depth: usize) -> Option<Vec<u32>> {
     None
 }
 
-/// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
-/// through an edit of the editing layer: `old` and `new` are the layer's objects before and after
-/// with whether the symbol's art is a group of them (else it is the one object). A change to an
-/// object the edit removed names no object afterwards.
-fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
+/// Appearance changes to objects of a symbol's art follow those objects through an edit of the
+/// editing layer: `old` and `new` are the layer's objects before and after with whether the
+/// symbol's art is a group of them (else it is the one object). A change to an object the edit
+/// removed is dropped.
+fn follow_paths(overrides: &mut Vec<SymbolOverride>, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
     let depth = vectorcraft_doc::symbol_overrides::MAX_PATH_DEPTH + 1;
+    overrides.retain_mut(|o| {
+        // The art's own group stays the art's root.
+        if old.1 && o.path.is_empty() {
+            return true;
+        }
+        let on_layer: Vec<u32> = if old.1 { o.path.clone() } else { std::iter::once(0).chain(o.path.iter().copied()).collect() };
+        let moved = at_path(old.0, &on_layer).and_then(|obj| path_of(new.0, obj.id, depth)).and_then(|p| match new.1 {
+            true => Some(p),
+            false => p.split_first().filter(|(first, _)| **first == 0).map(|(_, rest)| rest.to_vec()),
+        });
+        match moved {
+            Some(p) => {
+                o.path = p;
+                true
+            }
+            None => false,
+        }
+    });
+}
+
+/// Whether `n` or its subtree (opacity masks included) holds an instance of symbol `name` with
+/// appearance changes.
+fn holds_changed_instance(n: &Node, name: &str) -> bool {
+    let mut found = false;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        found |= matches!(&m.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name) && !m.extras().symbol_overrides.is_empty();
+    });
+    found
+}
+
+/// Apply `f` to the appearance changes of each instance of symbol `name` in `n` and its subtree
+/// (opacity masks included), copying only the shared nodes on the way to one.
+fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<SymbolOverride>)) {
+    if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name) && !n.extras().symbol_overrides.is_empty() {
+        f(&mut n.extras_mut().symbol_overrides);
+    }
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut())
+        && holds_changed_instance(&mask.art, name)
+    {
+        each_changed_instance(Arc::make_mut(&mut mask.art), name, f);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        if holds_changed_instance(c, name) {
+            each_changed_instance(Arc::make_mut(c), name, f);
+        }
+    }
+}
+
+/// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
+/// through an edit of the editing layer (see [`follow_paths`]). The instances in the art of the
+/// document's other symbols follow too, and keep only the changes to objects the art still has.
+fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
     for id in super::brushsym::instances_of(d, Some(name)) {
         let Some(n) = d.node_mut(id) else { continue };
         if n.extras().symbol_overrides.is_empty() {
             continue;
         }
-        let mut e = n.extras_mut();
-        e.symbol_overrides.retain_mut(|o| {
-            // The art's own group stays the art's root.
-            if old.1 && o.path.is_empty() {
-                return true;
-            }
-            let on_layer: Vec<u32> = if old.1 { o.path.clone() } else { std::iter::once(0).chain(o.path.iter().copied()).collect() };
-            let moved = at_path(old.0, &on_layer).and_then(|obj| path_of(new.0, obj.id, depth)).and_then(|p| match new.1 {
-                true => Some(p),
-                false => p.split_first().filter(|(first, _)| **first == 0).map(|(_, rest)| rest.to_vec()),
-            });
-            match moved {
-                Some(p) => {
-                    o.path = p;
-                    true
-                }
-                None => false,
+        follow_paths(&mut n.extras_mut().symbol_overrides, old, new);
+    }
+    let art = d.symbols.iter().find(|s| s.name == name).filter(|s| s.dynamic).map(|s| s.art.clone());
+    for sym in d.symbols.iter_mut().filter(|s| s.name != name) {
+        if !holds_changed_instance(&sym.art, name) {
+            continue;
+        }
+        each_changed_instance(Arc::make_mut(&mut sym.art), name, &mut |o| {
+            follow_paths(o, old, new);
+            match &art {
+                Some(art) => vectorcraft_doc::symbol_overrides::retain_parts(o, art),
+                None => o.clear(),
             }
         });
     }
