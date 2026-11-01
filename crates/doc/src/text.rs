@@ -13,9 +13,9 @@ mod para_style;
 mod runs;
 mod tabs_lists;
 
-pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextWrap, VerticalAlign, WrapShape};
+pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
-pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, ScriptMetrics};
+pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, ScriptMetrics};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,
     ParaStyle, SingleWordJustify,

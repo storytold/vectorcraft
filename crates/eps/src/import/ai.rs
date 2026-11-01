@@ -18,6 +18,7 @@
 //! did before (the printed page, or the PDF), with a warning saying why.
 
 mod blend;
+mod envelope;
 mod frames;
 mod lex;
 mod mesh;
@@ -32,9 +33,10 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
+pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
 pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
-pub(crate) use read::{slot_frame, slot_of};
+pub(crate) use read::{join_and, slot_frame, slot_of};
 
 #[cfg(test)]
 mod tests;
@@ -158,11 +160,11 @@ impl Codec {
                 flate2::read::ZlibDecoder::new(data).take(max + 1).read_to_end(&mut out).map_err(|_| damaged("its zlib compression"))?;
             }
             Codec::Zstd => {
-                // The data may be several frames one after the other, padded with zeros.
-                let end = data.iter().rposition(|b| *b != 0).map_or(0, |i| i + 1);
-                let mut src = data.get(..end).unwrap_or_default();
+                // The data may be several frames one after the other, padded with zeros. A frame
+                // can itself end in a zero byte, so the padding is what is left after the last frame.
+                let mut src = data;
                 let mut frames = 0usize;
-                while !src.is_empty() {
+                while src.iter().any(|b| *b != 0) {
                     frames += 1;
                     if frames > MAX_FRAMES {
                         return Err(damaged("its Zstandard compression"));

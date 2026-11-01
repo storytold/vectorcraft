@@ -194,7 +194,7 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     // the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc(200.0, 100.0);
     let red = rect_node(Rect::new(100.0, 50.0, 140.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
-    let far = vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(red) };
+    let far = vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(red) };
     d.symbols.push(far.clone());
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) });
     add(&mut d, instance.clone());
@@ -228,7 +228,7 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
     stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
     let line = Node::path(NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(line) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(line) });
     add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-5.0, 0.0)) }));
     let out = roundtrip(&d);
     let l = leaves(&out);

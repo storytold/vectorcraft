@@ -619,6 +619,133 @@ fn a_stop_dragged_past_another_stays_selected() {
     assert!(texts.iter().any(|(t, _)| *t == shown), "{shown} in {texts:?}");
 }
 
+/// Press on the stop at `from` (points), move to `to` and release there with Ctrl (Command on
+/// macOS) held → the stems' x positions painted in the frame before the release.
+fn command_drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64) -> Vec<f32> {
+    let labels = ruler_frame(ctx, app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let y = a.y + 15.0;
+    let command = egui::Event::ModifiersChanged(egui::Modifiers::COMMAND);
+    let button =
+        |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::COMMAND };
+    let (press, end) = (egui::pos2(x(from), y), egui::pos2(x(to), y));
+    ruler_frame(ctx, app, vec![command.clone(), egui::Event::PointerMoved(press), button(press, true)], false);
+    for f in [0.25, 0.5] {
+        ruler_frame(ctx, app, vec![command.clone(), egui::Event::PointerMoved(press.lerp(end, f))], false);
+    }
+    let stems = stems_frame(ctx, app, vec![command.clone(), egui::Event::PointerMoved(end)]);
+    ruler_frame(ctx, app, vec![command, button(end, false)], false);
+    ruler_frame(ctx, app, vec![], false);
+    stems.into_iter().map(|(x, _)| x).collect()
+}
+
+/// Ctrl-dragging a stop (Command on macOS) moves every stop by the same distance in one
+/// `text.tabs.set`, one undo step, keeping each stop's alignment and leader, and the ruler shows
+/// them moving during the drag. A plain drag still moves one stop.
+#[test]
+fn command_drag_moves_all_the_stops_together() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b	c", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session
+        .execute(
+            "text.tabs.set",
+            &json!({"stops": [{"position": 30, "leader": "."}, {"position": 50, "align": "right"}, {"position": 80, "align": "decimal", "alignOn": ","}]}),
+        )
+        .unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    let before = app.session.active().unwrap().history.undo.len();
+    let during = command_drag_on_ruler(&ctx, &mut app, 50.0, 70.0);
+    assert_eq!(positions(&app), [50.0, 70.0, 100.0]);
+    let stops = current(&app).unwrap().1;
+    assert_eq!(stops.iter().map(|s| s.align).collect::<Vec<_>>(), [TabAlign::Left, TabAlign::Right, TabAlign::Decimal]);
+    assert_eq!((stops[0].leader.as_str(), stops[2].align_on), (".", ','));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 1);
+    let after: Vec<f32> = stems_frame(&ctx, &mut app, vec![]).into_iter().map(|(x, _)| x).collect();
+    assert_eq!(during.len(), 3, "{during:?}");
+    assert!(during.iter().zip(&after).all(|(d, a)| (d - a).abs() < 0.5), "during the drag {during:?}, after it {after:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(positions(&app), [30.0, 50.0, 80.0]);
+    drag_on_ruler(&ctx, &mut app, 50.0, 70.0, false);
+    assert_eq!(positions(&app), [30.0, 70.0, 80.0]);
+}
+
+/// A Ctrl-drag (Command on macOS) that would put a stop below 0 stops when the leftmost stop
+/// reaches 0, so the stops keep their spacing.
+#[test]
+fn command_drag_stops_at_zero_and_keeps_the_spacing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}]})).unwrap();
+    let ctx = egui::Context::default();
+    command_drag_on_ruler(&ctx, &mut app, 50.0, 5.0);
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [0.0, 20.0]);
+    assert_eq!(moved_all(&current(&app).unwrap().1, 1, 0.0).unwrap().iter().map(|s| s.position).collect::<Vec<_>>(), [0.0, 20.0]);
+    assert!(moved_all(&[], 0, 10.0).is_none());
+}
+
+/// A Ctrl-drag (Command on macOS) that would put a stop past 100,000 pt stops when the rightmost
+/// stop reaches 100,000 pt, so the stops move and keep their spacing.
+#[test]
+fn command_drag_stops_at_the_largest_position_and_keeps_the_spacing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}, {"position": 99_990}]})).unwrap();
+    let ctx = egui::Context::default();
+    command_drag_on_ruler(&ctx, &mut app, 50.0, 70.0);
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [60.0, 100_000.0]);
+}
+
+/// Press on the stop at `from` (points), move to `to` and `below` px under the ruler, and release
+/// there in the same frame as Escape, Ctrl (Command on macOS) held when `command`.
+fn escaped_drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64, below: f32, command: bool) {
+    let labels = ruler_frame(ctx, app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let y = a.y + 15.0;
+    let modifiers = if command { egui::Modifiers::COMMAND } else { egui::Modifiers::NONE };
+    let held = egui::Event::ModifiersChanged(modifiers);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers };
+    let (press, end) = (egui::pos2(x(from), y), egui::pos2(x(to), y + below));
+    ruler_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(press), button(press, true)], false);
+    for f in [0.25, 0.5, 1.0] {
+        ruler_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(press.lerp(end, f))], false);
+    }
+    ruler_frame(ctx, app, vec![held, escape, button(end, false)], false);
+    ruler_frame(ctx, app, vec![], false);
+}
+
+/// Escape pressed in the frame a stop is released cancels the drag: a plain drag, a Ctrl-drag
+/// (Command on macOS) and a drag off the ruler all leave the stops where they were.
+#[test]
+fn escape_in_the_release_frame_cancels_a_stop_drag() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}]})).unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    let before = app.session.active().unwrap().history.undo.len();
+    for (below, command) in [(0.0, false), (0.0, true), (60.0, false), (60.0, true)] {
+        escaped_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, below, command);
+        assert_eq!(positions(&app), [30.0, 50.0], "{below} px below, command {command}");
+    }
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before);
+    // The next drag without Escape still moves the stop.
+    drag_on_ruler(&ctx, &mut app, 50.0, 70.0, false);
+    assert_eq!(positions(&app), [30.0, 70.0]);
+}
+
 /// A stop placed by a click on the ruler or dragged on it lands on the nearest whole point, and
 /// the moved stop stays selected. A position typed in the X field keeps its hundredths of a point.
 #[test]

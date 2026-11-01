@@ -263,10 +263,13 @@ pub(crate) fn comments(s: &mut String, title: &str, created: Option<i64>, level:
     }
     let _ = writeln!(s, "%%LanguageLevel: {}", level.id());
     s.push_str("%%DocumentData: Clean7Bit\n");
-    for (i, (name, cmyk)) in custom.iter().enumerate() {
+    // Each `%%+` line continues the comment right above it.
+    for (i, (name, _)) in custom.iter().enumerate() {
         let _ = writeln!(s, "{}{}", if i == 0 { "%%DocumentCustomColors: " } else { "%%+ " }, ps::string(name));
+    }
+    for (i, (name, cmyk)) in custom.iter().enumerate() {
         let [c, m, y, k] = cmyk.map(|v| ps::num(f64::from(v)));
-        let _ = writeln!(s, "%%CMYKCustomColor: {c} {m} {y} {k} {}", ps::string(name));
+        let _ = writeln!(s, "{}{c} {m} {y} {k} {}", if i == 0 { "%%CMYKCustomColor: " } else { "%%+ " }, ps::string(name));
     }
 }
 

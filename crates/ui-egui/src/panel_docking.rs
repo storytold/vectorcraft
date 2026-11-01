@@ -1187,6 +1187,14 @@ fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui:
     ctx.request_repaint();
 }
 
+/// A field of a floating panel's window that ends its editing on Enter or Escape lets go of the
+/// keyboard in that frame, so craft-ui would forward the key to the main window's shortcuts: Enter
+/// in the Transparency panel's Opacity field also opened the Move dialog (#4803). The key was the
+/// field's, so it stays in the window.
+fn keep_field_ending_keys(ui: &egui::Ui) {
+    ui.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: egui::Key::Enter | egui::Key::Escape, pressed: true, .. })));
+}
+
 /// VectorCraft's look and wording of craft-ui's docking.
 fn dock_style(ui: &egui::Ui) -> craft_ui::docking::DockStyle {
     let t = crate::theme::Tokens::get(ui.ctx());
@@ -1244,9 +1252,11 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
             self.app.canvas_area(ui);
             return;
         }
-        if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+        let floating = ui.ctx().viewport_id() != egui::ViewportId::ROOT;
+        if floating {
             crate::canvas::release_art_in_window(self.app, ui.ctx());
         }
+        let field_had_keyboard = floating && ui.memory(|m| m.focused().is_some());
         let t = crate::theme::Tokens::get(ui.ctx());
         let back = ui.max_rect();
         if back.is_positive() {
@@ -1262,6 +1272,9 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
                 let width = ui.available_width();
                 crate::dock::panel_body(self.app, ui, id, width, height)
             });
+        }
+        if field_had_keyboard {
+            keep_field_ending_keys(ui);
         }
     }
 

@@ -331,11 +331,21 @@ fn library_tab_name(file: &str, lib_name: &str) -> String {
 }
 
 /// The file name of library `name` with extension `ext`: characters file systems reject become
-/// `-`, and dots and spaces at either end are dropped. A name with nothing left is `Library`.
+/// `-`, and dots and spaces at either end are dropped. A name with nothing left is `Library`, and
+/// one that is a Windows device name (`CON`, `NUL`, `COM1`…, also with an extension) gets a `-`
+/// after its first part (`CON-.json`, `CON-.txt.json`).
 pub fn library_file_name(name: &str, ext: &str) -> String {
     let base: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
     let base = base.trim_matches(['.', ' ']);
-    format!("{}.{ext}", if base.is_empty() { "Library" } else { base })
+    if base.is_empty() {
+        format!("Library.{ext}")
+    } else if crate::file_access::is_device_name(base) {
+        // The part before the first dot is what makes it a device, so the `-` goes there.
+        let (stem, rest) = base.split_once('.').map_or((base, String::new()), |(stem, rest)| (stem, format!(".{rest}")));
+        format!("{stem}-{rest}.{ext}")
+    } else {
+        format!("{base}.{ext}")
+    }
 }
 
 /// The library files with extensions `exts` in folder `dir`, sorted by name.

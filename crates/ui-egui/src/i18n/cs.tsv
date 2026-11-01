@@ -277,6 +277,9 @@
 	Hide Live Paint Gaps	Skrýt mezery živé malby
 	Select Fills	Vybírat výplně
 	Select Strokes	Vybírat tahy
+	Paint Fills	Malovat výplně
+	Paint Strokes	Malovat tahy
+	Highlight	Zvýraznění
 	Image Trace	Vektorizace obrazu
 	Image Trace (Make and Expand)	Vektorizace obrazu (vytvořit a rozložit)
 	Release Image Trace	Uvolnit vektorizaci obrazu
@@ -672,9 +675,8 @@
 	1 Layer	1 vrstva
 	Libraries	Knihovny
 	Links	Propojení
-	{count} linked image(s) changed on disk. Show the new versions?	Počet propojených obrázků změněných na disku: {count}. Zobrazit nové verze?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	Na disku se změnil {n} propojený obrázek. Zobrazit novou verzi?|Na disku se změnily {n} propojené obrázky. Zobrazit nové verze?|Na disku se změnilo {n} propojených obrázků. Zobrazit nové verze?
 	Update Changed Links	Aktualizovat změněná propojení
-@msg	Updated {_1} linked file(s) changed on disk	Aktualizováno propojených souborů změněných na disku: {_1}
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
 	Pattern Options	Možnosti vzorku
@@ -1209,12 +1211,12 @@ lighting	Light	Světlo
 	 to set spacing and orientation	 nastaví rozestupy a orientaci
 	Apply	Použít
 	Change Screen Mode (F)	Změnit režim obrazovky (F)
-	Color (, or <)	Barva (, nebo <)
+	Color (, or Shift+,)	Barva (, nebo Shift+,)
 	Draw Behind	Kreslit za
 	Draw Inside	Kreslit dovnitř
 	Draw Normal	Kreslit normálně
 	Expand:	Rozložit:
-	Gradient (. or >)	Přechod (. nebo >)
+	Gradient (. or Shift+.)	Přechod (. nebo Shift+.)
 	H:	V:
 	Modify	Úpravy
 	Navigate	Pohled
@@ -1436,15 +1438,24 @@ lighting	Light	Světlo
 	Fractional Widths	Zlomkové šířky
 	Hide Options	Skrýt možnosti
 	Horizontal Scale %	Vodorovná změna velikosti %
-	Kerning (0 = Auto)	Vyrovnání párů (0 = automaticky)
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
 	Character Direction	Směr znaků
 	Digits	Číslice
 	Arabic	Arabské
-	Hindi	Hindské
+	Hindi	Hindština
+digits	Hindi	Hindské
 	Farsi	Perské
+digits	Devanagari	Dévanágarské
+digits	Bengali	Bengálské
+digits	Gurmukhi	Gurmukhské
+digits	Gujarati	Gudžarátské
+digits	Odia	Urijské
+digits	Tamil	Tamilské
+digits	Telugu	Telugské
+digits	Kannada	Kannadské
+digits	Malayalam	Malajálamské
 	Reset Panel	Obnovit panel
 	Roman Baseline	Latinková účaří
 	Select a text object to edit its character attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho znaků.
@@ -1467,6 +1478,12 @@ lighting	Light	Světlo
 	Axis	Osa
 	ICF Top/Right	ICF horní/pravý
 	ICF Bottom/Left	ICF dolní/levý
+	Show Font Height Options	Zobrazit možnosti výšky písma
+	Hide Font Height Options	Skrýt možnosti výšky písma
+	Set Font Height Reference	Nastavit referenční výšku písma
+	Em Box	Čtverčík
+	x-Height	Výška x
+	ICF Box	Rámeček ICF
 	Copy Color Value (Hex)	Kopírovat hodnotu barvy (hex)
 	Create New Swatch…	Vytvořit novou položku vzorníku…
 	Name 40%	Název 40 %
@@ -1506,8 +1523,8 @@ lighting	Light	Světlo
 	Select objects to see their CSS, or Generate CSS for the whole document.	Vyberte objekty, abyste viděli jejich CSS, nebo vygenerujte CSS pro celý dokument.
 	The selected objects have no CSS of their own (see below).	Vybrané objekty nemají vlastní CSS (viz níže).
 	Units: {units}	Jednotky: {units}
-	{count} more rules: Export writes every one.	Další pravidla ({count}): Export zapíše všechna.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Vynecháno nepojmenovaných objektů: {count}. Pojmenujte je, nebo v nabídce panelu zapněte Nepojmenované objekty.
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	Další {n} pravidlo: Export ho zapíše.|Další {n} pravidla: Export zapíše všechna.|Dalších {n} pravidel: Export zapíše všechna.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Vynechán {n} nepojmenovaný objekt. Pojmenujte ho, nebo v nabídce panelu zapněte Nepojmenované objekty.|Vynechány {n} nepojmenované objekty. Pojmenujte je, nebo v nabídce panelu zapněte Nepojmenované objekty.|Vynecháno {n} nepojmenovaných objektů. Pojmenujte je, nebo v nabídce panelu zapněte Nepojmenované objekty.
 	All Categories	Všechny kategorie
 	Repeat Objects	Objekty opakování
 	Save…	Uložit…
@@ -1540,7 +1557,7 @@ lighting	Light	Světlo
 	Color:	Barva:
 	Delete Stop	Odstranit zarážku
 	Edit Gradient	Upravit přechod
-	Edit the selected point's colour in the Color panel	Upravit barvu vybraného bodu v panelu Barva
+	Edit the point	Upravit bod
 	Edit the stop	Upravit zarážku
 	Eyedropper: click the art to sample the stop's colour	Kapátko: kliknutím na kresbu naberete barvu zarážky
 	Eyedropper: click the art to sample the key color	Kapátko: kliknutím na kresbu naberete klíčovou barvu
@@ -1559,6 +1576,9 @@ lighting	Light	Světlo
 	Save to Swatches	Uložit do vzorníku
 	Delete Graphic Style (Alt-click: without asking)	Odstranit grafický styl (Alt+kliknutí: bez dotazu)
 	Delete the graphic style “{name}”?	Odstranit grafický styl „{name}“?
+	Delete Action Sets	Odstranit sady akcí
+	Delete the action set “{name}” and its actions?	Odstranit sadu akcí „{name}“ a její akce?
+	Delete the selected action sets and their actions?	Odstranit vybrané sady akcí a jejich akce?
 	Delete these {n} graphic styles?	Odstranit tyto grafické styly ({n})?
 	Delete this {n} graphic style?	Odstranit tento grafický styl ({n})?
 	Graphic Style Libraries Menu	Nabídka knihoven grafických stylů
@@ -1626,6 +1646,8 @@ lighting	Light	Světlo
 	Objects on Path	Objekty na cestě
 	Attach	Připojit
 	Objects on Path Options	Možnosti objektů na cestě
+	Pivot:	Otočný bod:
+	Rotate:	Otočení:
 	Objects on Path Tool	Nástroj Objekty na cestě
 	Attach Objects on Path	Připojit objekty na cestu
 	Expand Objects on Path	Rozložit objekty na cestě
@@ -1792,13 +1814,16 @@ lighting	Light	Světlo
 	Fractions	Zlomky
 	Ligatures are off while the text is tracked.	Ligatury jsou vypnuté, když má text prostrkání.
 	Ordinals	Řadové číslovky
+	Proportional Lining	Proporcionální verzálkové
 	Proportional Oldstyle	Proporcionální minuskové
 	Reset OpenType Features	Obnovit funkce OpenType
 	Select text to set its OpenType features.	Vyberte text, abyste mohli nastavit jeho funkce OpenType.
 	Standard Ligatures	Standardní ligatury
+	Stylistic Alternates	Stylistické alternativy
 	Swash	Ozdobné tvary
 	Tabular Lining	Tabulkové verzálkové
 	Tabular Oldstyle	Tabulkové minuskové
+	Titling Alternates	Titulkové alternativy
 	Every-line Composer	Sazba všech řádků
 	First-line Left Indent	Odsazení prvního řádku zleva
 	Hyphenation…	Dělení slov…
@@ -1944,7 +1969,6 @@ lighting	Light	Světlo
 	Weight:	Tloušťka:
 	Art using a deleted global swatch keeps its colour.	Kresba, která používá odstraněnou globální položku vzorníku, si barvu ponechá.
 	Color Group: {name}	Skupina barev: {name}
-	Delete these {count} swatches and groups?	Odstranit tyto položky vzorníku a skupiny ({count})?
 	Delete “{name}”?	Odstranit „{name}“?
 	Document Swatches	Vzorník dokumentu
 	Edit or Apply Color Group	Upravit nebo použít skupinu barev
@@ -2042,6 +2066,7 @@ lighting	Light	Světlo
 	Polygon Properties:	Vlastnosti mnohoúhelníku:
 	Rectangle Properties:	Vlastnosti obdélníku:
 	Shape Properties:	Vlastnosti tvaru:
+	Shape Properties	Vlastnosti tvaru
 	Sides:	Strany:
 	Transform options	Možnosti transformace
 	Transform Both	Transformovat obojí
@@ -2240,6 +2265,7 @@ lighting	Light	Světlo
 	Compatible Gradient and Gradient Mesh Printing	Kompatibilní tisk přechodů a přechodových sítí
 	Embed Fonts (for other applications)	Vložit písma (pro jiné aplikace)
 	EPS Options	Možnosti EPS
+	Include Artboard Fill	Zahrnout výplň pracovní plochy
 	Include CMYK PostScript in RGB Files	Zahrnout CMYK PostScript do souborů RGB
 	Include Document Thumbnails	Zahrnout miniatury dokumentu
 	Include Linked Files	Zahrnout propojené soubory
@@ -2258,6 +2284,13 @@ lighting	Light	Světlo
 	Use Artboards	Použít pracovní plochy
 	Choose a folder	Vyberte složku
 	Create Sub-folders	Vytvořit podsložky
+	Clear Selection	Vymazat výběr
+	Export PDFs As:	Exportovat PDF jako:
+	Single File	Jeden soubor
+	Multiple Files	Více souborů
+	Format Presets	Přednastavení formátů
+	Grid View	Zobrazení mřížky
+	Selected: {n}, Total number of files to export: {m}	Vybráno: {n}, celkový počet souborů k exportu: {m}
 	Export Asset	Exportovat prvek
 	Export to:	Exportovat do:
 	Format Settings	Nastavení formátu
@@ -2397,19 +2430,21 @@ lighting	Light	Světlo
 	Stop	Zastavit
 	Searching…	Hledání…
 	Not found	Nenalezeno
-	{folders} folder(s) and {files} file(s) searched	Prohledáno složek: {folders}, souborů: {files}
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Přeskočeno složek: {count} (např. složky jiných aplikací, systému a skryté složky)
-	{count} folder(s) or file(s) couldn't be read	Nepodařilo se přečíst složek nebo souborů: {count}
+	{folders} and {files} searched	Prohledáno: {folders}, {files}
+@plural	{n} folder|{n} folders	{n} složka|{n} složky|{n} složek
+@plural	{n} file|{n} files	{n} soubor|{n} soubory|{n} souborů
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Přeskočena {n} složka (např. složky jiných aplikací, systému a skryté složky)|Přeskočeny {n} složky (např. složky jiných aplikací, systému a skryté složky)|Přeskočeno {n} složek (např. složky jiných aplikací, systému a skryté složky)
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nepodařilo se přečíst {n} složku nebo soubor|Nepodařilo se přečíst {n} složky nebo soubory|Nepodařilo se přečíst {n} složek nebo souborů
 	The search stopped at its limit: search a smaller folder.	Hledání se zastavilo na limitu: prohledejte menší složku.
 	Copy only fonts you own or are licensed to install.	Kopírujte jen písma, která vlastníte nebo máte licenci instalovat.
 	VectorCraft copies the fonts to {folder}.	VectorCraft zkopíruje písma do {folder}.
-	Apply to All ({count} more missing)	Použít na všechny (chybí ještě {count})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Použít na všechny (chybí ještě {n})|Použít na všechny (chybí ještě {n})|Použít na všechny (chybí ještě {n})
 	Ignore	Ignorovat
 	Linked File Not Found	Propojený soubor nebyl nalezen
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Nahraďte jej jiným souborem, nebo jej ignorujte: jeho obrázky dál zobrazují náhled uložený s dokumentem.
 	Replace…	Nahradit…
 	Update Modified Links	Aktualizovat upravená propojení
-	{count} linked image(s) changed since this document was saved. Show the new versions?	Počet propojených obrázků změněných od uložení dokumentu: {count}. Zobrazit nové verze?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	Od uložení dokumentu se změnil {n} propojený obrázek. Zobrazit novou verzi?|Od uložení dokumentu se změnily {n} propojené obrázky. Zobrazit nové verze?|Od uložení dokumentu se změnilo {n} propojených obrázků. Zobrazit nové verze?
 	Dialog	Dialogové okno
 	Convert Process to Global	Převést procesní na globální
 	Create From:	Vytvořit z:
@@ -2448,12 +2483,12 @@ lighting	Light	Světlo
 	Fonts whose licence doesn't allow embedding are not copied.	Písma, jejichž licence nepovoluje vkládání, se nekopírují.
 	Package collects a saved document with its linked files and fonts.	Sbalení shromáždí uložený dokument s jeho propojenými soubory a písmy.
 	Package created	Balíček vytvořen
-	Packaged {n} file(s) in {folder} {note}	Zabaleno souborů: {n} do {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Zabalen {n} soubor do {folder} {note}|Zabaleny {n} soubory do {folder} {note}|Zabaleno {n} souborů do {folder} {note}
 	Packaged {n} file(s){note}	Zabaleno souborů: {n}{note}
 	Relink Linked Files to the Document	Znovu propojit propojené soubory s dokumentem
 	Save the document first?	Nejprve uložit dokument?
-	{count} file(s) in {folder} {note}. Show the package folder?	Souborů: {count} v {folder}{note}. Zobrazit složku balíčku?
-	{count} linked file(s) not found	Nenalezeno propojených souborů: {count}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} soubor v {folder} {note}. Zobrazit složku balíčku?|{n} soubory v {folder} {note}. Zobrazit složku balíčku?|{n} souborů v {folder} {note}. Zobrazit složku balíčku?
+@plural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
 	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Vestavěná přednastavení jsou jen pro čtení: Nový… vytvoří kopii, kterou lze upravit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na pracovní ploše odpovídá {real} {unit} ve scéně.
@@ -3072,9 +3107,19 @@ theme	Appearance	Motiv
 	Current Symbol	Aktuální symbol
 	Delete Brush	Odstranit štětec
 	Delete Symbol	Odstranit symbol
+	Delete the selected symbol?	Odstranit vybraný symbol?
+	Delete the selected symbols?	Odstranit vybrané symboly?
+	No unused symbols	Žádné nepoužité symboly
+	Delete Symbols	Odstranit symboly
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Jeden nebo více symbolů se používá a nelze je odstranit, dokud jejich instance nerozložíte nebo neodstraníte.
+	Expand Instances	Rozložit instance
+	Delete Instances	Odstranit instance
+	Yes	Ano
+	No	Ne
 	Duplicate Brush	Duplikovat štětec
 	Duplicate Symbol	Duplikovat symbol
 	Edit Symbol	Upravit symbol
+	Exit Symbol Editing Mode	Ukončit režim úprav symbolu
 	Expand Brush Strokes	Rozložit tahy štětcem
 	New Brush…	Nový štětec…
 	New Brush	Nový štětec
@@ -3501,6 +3546,7 @@ theme	Appearance	Motiv
 	Identify Objects By	Identifikovat objekty podle
 	Include SVG Code	Zahrnout kód SVG
 	Italian	Italština
+	Kerning	Vyrovnání párů
 	Keyboard Increment	Krok klávesnice
 	Language Options	Možnosti jazyka
 	Large	Velké
@@ -3543,6 +3589,7 @@ theme	Appearance	Motiv
 	On Paste	Při vložení
 	On Screen	Na obrazovce
 	Open Documents As Tabs	Otevírat dokumenty jako karty
+	Optical	Optické
 	Options	Možnosti
 	Output All Blacks Accurately	Ve výstupu všechny černé přesně
 	Output All Blacks as Rich Black	Ve výstupu všechny černé jako sytou černou
@@ -4122,6 +4169,8 @@ imageTrace	Outline	Obrys
 @plural	{n} item|{n} items	{n} položka|{n} položky|{n} položek
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tabulka barev ({n} barva)|Tabulka barev ({n} barvy)|Tabulka barev ({n} barev)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Odstranit {n} grafický styl?|Odstranit {n} grafické styly?|Odstranit {n} grafických stylů?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Odstranit {n} štětec?|Odstranit {n} štětce?|Odstranit {n} štětců?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Odstranit {n} položku vzorníku nebo skupinu?|Odstranit {n} položky vzorníku a skupiny?|Odstranit {n} položek vzorníku a skupin?
 @plural	{n} Layer|{n} Layers	{n} vrstva|{n} vrstvy|{n} vrstev
 @plural	{n} Object|{n} Objects	{n} objekt|{n} objekty|{n} objektů
 @plural	{n} area highlighted|{n} areas highlighted	Zvýrazněna {n} oblast|Zvýrazněny {n} oblasti|Zvýrazněno {n} oblastí
@@ -4136,6 +4185,7 @@ imageTrace	Outline	Obrys
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
 @msg	select some type first	nejprve vyberte text
+@msg	kerning must be a number, "auto", or "optical"	Vyrovnání párů musí být číslo, „auto“ nebo „optical“
 @msg	the selection has no gradient fill	výběr nemá přechodovou výplň
 @msg	the selection has no gradient stroke	výběr nemá přechodový tah
 @msg	the selection has no pattern fill	výběr nemá vzorkovou výplň
@@ -4166,12 +4216,12 @@ imageTrace	Outline	Obrys
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	vrstvy souboru nebyly načteny ({_1}): soubor se otevře jako jeho stránka v jedné vrstvě
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	vrstvy souboru nebyly načteny z jeho dat pro úpravy ({_1}): pocházejí z jeho části PDF
 @msg	`to` must be "corner" or "smooth"	`to` musí být "corner" nebo "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` musí být "emBox", "capHeight", "xHeight" nebo "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	soubory BMP jsou RGB nebo ve stupních šedi: colorModel rgb nebo gray
 @msg	Blend colors: select at least three objects with filled colours	Prolnout barvy: vyberte alespoň tři objekty s barevnou výplní
 @msg	Combine Slices: the slices have no bounds	Spojit řezy: řezy nemají hranice
 @msg	Convert to Artboards: selection has no area	Převést na pracovní plochy: výběr nemá žádnou plochu
 @msg	Convert to Shape: no rectangles or ellipses selected	Převést na tvar: nejsou vybrány žádné obdélníky ani elipsy
-@msg	Copied the CSS of {rules} object(s)	Zkopírováno CSS objektů: {rules}
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
@@ -4188,13 +4238,11 @@ imageTrace	Outline	Obrys
 @msg	direct-select anchor points to cut at (not the end points of open paths)	nástrojem Přímý výběr vyberte kotevní body, kde se má cesta rozdělit (ne koncové body otevřených cest)
 @msg	Divide Objects Below: select a path	Rozdělit objekty pod: vyberte cestu
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
-@msg	Downloaded {_1} file(s)	Staženo souborů: {_1}
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
 @msg	Expand: no brush strokes selected	Rozložit: nejsou vybrány žádné tahy štětcem
 @msg	Expand: no gradient fills	Rozložit: žádné přechodové výplně
 @msg	Expand: nothing to expand	Rozložit: není co rozložit
-@msg	Exported {count} file(s) to {folder}	Exportováno souborů: {count} do {folder}
 @msg	Exported {path}	Exportováno: {path}
 @msg	Flatten Transparency: select objects to flatten	Sloučit průhlednost: vyberte objekty ke sloučení
 @msg	Flatten Transparency: {e}	Sloučit průhlednost: {e}
@@ -4217,7 +4265,7 @@ imageTrace	Outline	Obrys
 @msg	PDF settings are not an object	nastavení PDF nejsou objekt
 @msg	PDF security settings are not an object	nastavení zabezpečení PDF nejsou objekt
 @msg	PDF writer error: {0}	chyba zápisu PDF: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Zabaleno souborů: {n} do {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Zabalen {n} soubor do {folder} ({note})|Zabaleny {n} soubory do {folder} ({note})|Zabaleno {n} souborů do {folder} ({note})
 @msg	Packaged {n} file(s){note}	Zabaleno souborů: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Náhled v prohlížeči vyžaduje desktopovou aplikaci (webová verze místo toho stahuje soubory)
 @msg	Release Guides: no guides	Uvolnit vodítka: žádná vodítka
@@ -4375,6 +4423,7 @@ imageTrace	Outline	Obrys
 @msg	cannot split an open path at its end point	otevřenou cestu nelze rozdělit v jejím koncovém bodu
 @msg	closing needs three anchors	uzavření vyžaduje tři kotevní body
 @msg	check an asset to export	zaškrtněte prvek k exportu
+@msg	check an artboard to export	zaškrtněte kreslicí plátno k exportu
 @msg	check a layer to export	zaškrtněte vrstvu k exportu
 @msg	select the art to export first	nejprve vyberte kresbu k exportu
 @msg	choice must be "merge" or "add", not `{choice}`	volba musí být "merge" nebo "add", ne `{choice}`
@@ -4517,6 +4566,7 @@ imageTrace	Outline	Obrys
 @msg	no such perspective grid preset	takové přednastavení perspektivní mřížky neexistuje
 @msg	no such recent file	takový nedávný soubor neexistuje
 @msg	no such recent font	takové nedávné písmo neexistuje
+@msg	some text is hidden or locked, so its font wasn't replaced	některý text je skrytý nebo zamčený, a proto jeho písmo nebylo nahrazeno
 @msg	no such saved selection	takový uložený výběr neexistuje
 @msg	no such segment	takový segment neexistuje
 @msg	no such spine point	takový bod páteře neexistuje
@@ -4610,6 +4660,8 @@ imageTrace	Outline	Obrys
 @msg	a clipping path can't be attached to a path	ořezovou cestu nelze připojit na cestu
 @msg	select a stroke with a variable width	vyberte tah s proměnnou šířkou
 @msg	select a symbol instance	vyberte instanci symbolu
+@msg	select instances of one symbol	vyberte instance jediného symbolu
+@msg	a symbol can't hold an instance of itself	symbol nemůže obsahovat instanci sebe sama
 @msg	select an Image Trace object	vyberte objekt vektorizace obrazu
 @msg	could not decode image: {0}	obraz nelze dekódovat: {0}
 @msg	image is empty	obraz je prázdný
@@ -4750,9 +4802,6 @@ imageTrace	Outline	Obrys
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` má {size} bajtů (limit {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} už používá {_2}
 @msg	{_1} is reserved by the system	Zkratku {_1} si vyhrazuje systém
-@msg	{_1} linked file(s) can't be read here: their previews show	propojené soubory ({_1}) zde nelze přečíst: zobrazují se jejich náhledy
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	obrázky ({undecoded}) nelze dekódovat: zobrazují se jako přeškrtnuté rámečky
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	propojené obrázky ({_1}) se na disku změnily: nové verze zobrazí Aktualizovat propojení
 @msg	{_1}: not saved, so not closed	{_1}: neuloženo, proto nezavřeno
 @msg	{bpp}-bit bitmaps can't be read	{bpp}bitové bitmapy nelze přečíst
 @msg	{command} didn't create an object	{command} nevytvořil žádný objekt
@@ -4772,7 +4821,6 @@ imageTrace	Outline	Obrys
 @msg	Couldn't place {name}: {e}	{name} nelze umístit: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Uloženo: {path}, poznámky ({_1}): {first}
-@msg	Exported {what} with {_1} note(s): {first}	Exportováno: {what}, poznámky ({_1}): {first}
 @msg	Exported {what}	Exportováno: {what}
 @msg	Saved {n} files beside {path}	Uloženo souborů: {n} vedle {path}
 @msg	Saving	Ukládání
@@ -4783,12 +4831,26 @@ imageTrace	Outline	Obrys
 @msg	Saving recovery data for {_1}	Ukládání dat pro obnovení pro {_1}
 @msg	Discarded {_1} recovered document(s)	Zahozeno obnovených dokumentů: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Obnoveno dokumentů: {_1}; pokud je chcete zachovat, uložte je
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Vloženo obrázků: {n}; chybí {missing}: nejprve je znovu propojte
-@msg	Embedded {n} image(s)	Vloženo obrázků: {n}
-@msg	Relinked {_1} image(s)	Znovu propojeno obrázků: {_1}
-@msg	Relinked {n} image(s)	Znovu propojeno obrázků: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	Znovu propojeno obrázků: {n}; nejsou v dané složce: {_1}
-@msg	Updated {_1} image(s)	Aktualizováno obrázků: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Vložen {n} obrázek; chybí {missing}: nejprve je znovu propojte|Vloženy {n} obrázky; chybí {missing}: nejprve je znovu propojte|Vloženo {n} obrázků; chybí {missing}: nejprve je znovu propojte
+@msgplural	Embedded {n} image|Embedded {n} images	Vložen {n} obrázek|Vloženy {n} obrázky|Vloženo {n} obrázků
+@msgplural	Relinked {n} image|Relinked {n} images	Znovu propojen {n} obrázek|Znovu propojeny {n} obrázky|Znovu propojeno {n} obrázků
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Znovu propojen {n} obrázek; nejsou v dané složce: {names}|Znovu propojeny {n} obrázky; nejsou v dané složce: {names}|Znovu propojeno {n} obrázků; nejsou v dané složce: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Znovu propojen {n} obrázek; nepodařilo se znovu propojit {name}: {reason}|Znovu propojeny {n} obrázky; nepodařilo se znovu propojit {name}: {reason}|Znovu propojeno {n} obrázků; nepodařilo se znovu propojit {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Aktualizován {n} obrázek|Aktualizovány {n} obrázky|Aktualizováno {n} obrázků
+@msgplural	Replaced {n} image|Replaced {n} images	Nahrazen {n} obrázek|Nahrazeny {n} obrázky|Nahrazeno {n} obrázků
+@msgplural	Broke {n} link|Broke {n} links	Zrušeno {n} propojení|Zrušena {n} propojení|Zrušeno {n} propojení
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Zrušeno {n} propojení; {missing} nelze přečíst: nejprve je znovu propojte nebo aktualizujte|Zrušena {n} propojení; {missing} nelze přečíst: nejprve je znovu propojte nebo aktualizujte|Zrušeno {n} propojení; {missing} nelze přečíst: nejprve je znovu propojte nebo aktualizujte
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} propojený soubor zde nelze přečíst: zobrazuje se jeho náhled|{n} propojené soubory zde nelze přečíst: zobrazují se jejich náhledy|{n} propojených souborů zde nelze přečíst: zobrazují se jejich náhledy
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} obrázek nelze dekódovat: zobrazuje se jako přeškrtnutý rámeček|{n} obrázky nelze dekódovat: zobrazují se jako přeškrtnuté rámečky|{n} obrázků nelze dekódovat: zobrazují se jako přeškrtnuté rámečky
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	Na disku se změnil {n} propojený obrázek: novou verzi zobrazí Aktualizovat propojení|Na disku se změnily {n} propojené obrázky: nové verze zobrazí Aktualizovat propojení|Na disku se změnilo {n} propojených obrázků: nové verze zobrazí Aktualizovat propojení
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aktualizován {n} propojený soubor změněný na disku|Aktualizovány {n} propojené soubory změněné na disku|Aktualizováno {n} propojených souborů změněných na disku
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportováno: {what}, {n} poznámka: {first}|Exportováno: {what}, {n} poznámky: {first}|Exportováno: {what}, {n} poznámek: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} soubor písma je nyní ve složce {folder}|{n} soubory písem jsou nyní ve složce {folder}|{n} souborů písem je nyní ve složce {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} soubor písma je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} soubory písem jsou nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} souborů písem je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} písmo zde není k dispozici: jeho text se zobrazuje jiným písmem|{n} písma zde nejsou k dispozici: jejich text se zobrazuje jiným písmem|{n} písem zde není k dispozici: jejich text se zobrazuje jiným písmem
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Zkopírováno CSS {n} objektu|Zkopírováno CSS {n} objektů|Zkopírováno CSS {n} objektů
+@msgplural	Downloaded {n} file|Downloaded {n} files	Stažen {n} soubor|Staženy {n} soubory|Staženo {n} souborů
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportován {n} soubor do {folder}|Exportovány {n} soubory do {folder}|Exportováno {n} souborů do {folder}
 @msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}
@@ -4840,9 +4902,6 @@ imageTrace	Outline	Obrys
 @msg	every search thread stopped on an internal error (please report this bug)	všechna vlákna hledání se zastavila na vnitřní chybě (nahlaste prosím tuto chybu)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	složka Fonts VectorCraftu zde není nastavena: nastavuje ji desktopová aplikace a vectorcraft-cli
 @msg	choose the font files to add	vyberte soubory písem, které chcete přidat
-@msg	{n} font file(s) are now in {folder}	soubory písem ({n}) jsou nyní ve složce {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	soubory písem ({n}) jsou nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	písma ({n}) zde nejsou k dispozici: jejich text se zobrazuje jiným písmem
 @msg	not a file	nejde o soubor
 @msg	not a font file	nejde o soubor písma
 @msg	that document is no longer open	tento dokument už není otevřen
@@ -4851,7 +4910,6 @@ imageTrace	Outline	Obrys
 @msg	every numbered name for it is taken in the Fonts folder	ve složce Fonts jsou obsazena všechna číslovaná jména pro tento soubor
 @msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Znovu propojeno obrázků: {n}; nepodařilo se znovu propojit {name}: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` musí být pole indexů kotevních bodů, ne {v}
@@ -4881,6 +4939,8 @@ imageTrace	Outline	Obrys
 @msg	the PCX file is cut short	soubor PCX je useknutý
 @msg	the PCX file's header is damaged	hlavička souboru PCX je poškozená
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	soubory PCX s {bits}bitovými obrazovými body v {planes} rovinách nelze přečíst
+@msg	the JPEG 2000 file can't be read	soubor JPEG 2000 nelze přečíst
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	soubor JPEG 2000 obsahuje nepodporovaný barevný prostor nebo obsah JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
@@ -5570,13 +5630,13 @@ mark-style	Japanese	Japonské
 	Slope:	Sklon:
 axis	X Axis	osa X
 axis	Y Axis	osa Y
-@msg	Packaged {n} file(s) in {folder}	Zabaleno souborů: {n} do {folder}
-@msg	Packaged {n} file(s) {note}	Zabaleno souborů: {n} {note}
-@msg	Packaged {n} file(s)	Zabaleno souborů: {n}
-	Packaged {n} file(s)	Zabaleno souborů: {n}
-	Packaged {n} file(s) in {folder}	Zabaleno souborů: {n} do {folder}
-	Packaged {n} file(s) {note}	Zabaleno souborů: {n} {note}
-	{count} file(s) in {folder}. Show the package folder?	Souborů: {count} v {folder}. Zobrazit složku balíčku?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Zabalen {n} soubor do {folder}|Zabaleny {n} soubory do {folder}|Zabaleno {n} souborů do {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Zabalen {n} soubor {note}|Zabaleny {n} soubory {note}|Zabaleno {n} souborů {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Zabalen {n} soubor|Zabaleny {n} soubory|Zabaleno {n} souborů
+@plural	Packaged {n} file|Packaged {n} files	Zabalen {n} soubor|Zabaleny {n} soubory|Zabaleno {n} souborů
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Zabalen {n} soubor do {folder}|Zabaleny {n} soubory do {folder}|Zabaleno {n} souborů do {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Zabalen {n} soubor {note}|Zabaleny {n} soubory {note}|Zabaleno {n} souborů {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} soubor v {folder}. Zobrazit složku balíčku?|{n} soubory v {folder}. Zobrazit složku balíčku?|{n} souborů v {folder}. Zobrazit složku balíčku?
 	Clockwise	Ve směru hodinových ručiček
 	Dither	Rozptýlení
 	Fine noise hides banding in the gradient fill	Jemný šum skryje pruhy ve výplni přechodem
@@ -5610,7 +5670,7 @@ axis	Y Axis	osa Y
 	Include Objects On Canvas	Zahrnout objekty na plátně
 	Result(s): {count}	Výsledky: {count}
 @msg	select one object	vyberte jeden objekt
-@msg	Global Edit works on paths, compound paths and symbol instances	Globální úpravy pracují s cestami, složenými cestami a instancemi symbolů
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all nebo rozsah, například 1, 3-5, ne {v}
 	Add to Symbols	Přidat do symbolů
@@ -5859,6 +5919,11 @@ anchor	Points:	Body:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Barva bodů podle kresby
+	Basic Character Formats	Základní formáty znaků
+	Case	Velikost písmen
+@msg	{label} must be a number	{label} musí být číslo
+@msg	{label} must be a number of at least 0.1	{label} musí být číslo alespoň 0,1
+@msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Dvoutón…
@@ -5882,6 +5947,13 @@ anchor	Points:	Body:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	zadejte `inkLimit`, `removeWhiteOverprint` nebo `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Opravy tiskových barev fungují v dokumentech CMYK: nejprve zvolte Soubor › Barevný režim dokumentu › Barvy CMYK
 @msg	`{key}` must be 0..{max}	`{key}` musí být 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Najít nejbližší položku vzorníku…
+	Find Nearest Swatch	Najít nejbližší položku vzorníku
+	Apply Nearest Swatch	Použít nejbližší položku vzorníku
+	Select objects to find the swatches nearest their colors.	Vyberte objekty, k jejichž barvám chcete najít nejbližší položky vzorníku.
+@msg	select objects or give `color`	vyberte objekty nebo zadejte `color`
+@msg	`color` is not a colour	`color` není barva
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Nástroj Rohy
 	Slide Anchor Along Path	Posunout kotevní bod po cestě
@@ -5909,6 +5981,7 @@ anchor	Points:	Body:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Rozdělit text
 	Combine Point Text	Sloučit bodový text
+	Join Point Text	Spojit bodový text
 	Remove Breaks	Odstranit zalomení
 	Split Text at Cursor	Rozdělit text u kurzoru
 	Set Alignment, Keep Position	Nastavit zarovnání, zachovat polohu
@@ -5937,6 +6010,7 @@ breakText	Glyphs	Glyfy
 @msg	Select horizontal point or area type whose text fits	Vyberte vodorovný bodový text nebo text v oblasti, jehož text se vejde
 @msg	Nothing to split at the cursor	U kurzoru není co rozdělit
 @msg	Select two or more one-line point type objects on one baseline to combine	Vyberte dva nebo více jednořádkových objektů bodového textu na jednom účaří, abyste je sloučili
+@msg	Select two or more one-line point type objects to join	Vyberte dva nebo více jednořádkových objektů bodového textu, abyste je spojili
 @msg	No line breaks to remove	Žádná zalomení řádků k odstranění
 @msg	No paragraph breaks to remove	Žádná zalomení odstavců k odstranění
 @msg	Too many breaks to remove at once	Příliš mnoho zalomení k odstranění najednou
@@ -5949,6 +6023,11 @@ breakText	Glyphs	Glyfy
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` musí být lines, paragraphs, words nebo glyphs, ne {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` musí být "line" nebo "paragraph", ne {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` musí být "left", "center" nebo "right", ne {other}
+	File + Number	Soubor + číslo
+	File + Data Set Name	Soubor + název sady dat
+	Data Set Name	Název sady dat
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` musí být `fileNumber`, `fileDataSetName` nebo `dataSetName`
+@msg	no free data set file name in destination folder	V cílové složce není volný název souboru sady dat
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Efekty cesty
@@ -5989,3 +6068,100 @@ breakText	Glyphs	Glyfy
 	Gap 4	Mezera 4
 	Dash 5	Čárka 5
 	Gap 5	Mezera 5
+
+@msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+
+@msg	You must choose a side pattern.	Musíte zvolit boční vzorek.
+@msg	invalid pattern tile choice	neplatná volba dlaždice vzorku
+@msg	no pattern named `{choice}`	vzorek s názvem `{choice}` neexistuje
+	Delete the selected brushes?	Odstranit vybrané štětce?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
+	Remove Strokes	Odebrat tahy
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Nástroje uspořádání
+	Arrange in Grid…	Uspořádat do mřížky…
+	Arrange in Grid	Uspořádat do mřížky
+	Swap Objects	Prohodit objekty
+	Swap Objects and Sizes	Prohodit objekty a velikosti
+	Replace with Top Object…	Nahradit horním objektem…
+	Replace with Top Object	Nahradit horním objektem
+	Set Size of Each…	Nastavit velikost jednotlivě…
+	Set Size of Each	Nastavit velikost jednotlivě
+@msg	select exactly two objects	vyberte právě dva objekty
+@msg	give `width` or `height`	zadejte `width` nebo `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Seskupit překrývající se objekty
+@msg	too many objects selected (at most 20000)	vybráno příliš mnoho objektů (nejvýše 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Rozdělit na čárky…
+	Divide into Dashes	Rozdělit na čárky
+	Dash:	Pomlčka:
+	Gap:	Mezera:
+	Fit to Corners and Ends	Přizpůsobit rohům a koncům
+	Remove Gaps	Odstranit mezery
+@msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
+@msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Rozložit čárky na cesty
+@msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Nástroje dokumentu
+	Save a Timestamped Copy	Uložit kopii s datem a časem
+@msg	there is no clock here	nejsou k dispozici hodiny
+@msg	there is no clock here: give `time` (Unix seconds)	nejsou k dispozici hodiny: zadejte `time` (sekundy Unix)
+@msg	the document has never been saved: give `folder`	dokument nebyl nikdy uložen: zadejte `folder`
+@msg	every numbered name for the copy is taken	všechny číslované názvy kopie jsou obsazené
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Nové symboly z vrstev
+	Convert Layers to Symbols	Převést vrstvy na symboly
+@msg	{id} is no top-level layer	{id} není vrstva nejvyšší úrovně
+	Marathi	Maráthština
+	Gujarati	Gudžarátština
+	Bengali	Bengálština
+	Punjabi	Paňdžábština
+	Tamil	Tamilština
+	Telugu	Telugština
+	Kannada	Kannadština
+	Malayalam	Malajálamština
+	Odia	Urijština
+	Urdu	Urdština
+	VectorCraft {release} and later (version {n})	VectorCraft {release} a novější (verze {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportovat všechny otevřené dokumenty jako PDF
+	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
+@msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Typ symbolu:
+	Dynamic Symbol	Dynamický symbol
+	Static Symbol	Statický symbol
+	Symbol Instance Appearance	Vzhled instance symbolu
+	Reset Symbol Instance	Obnovit instanci symbolu
+@msg	type must be static or dynamic, not {v}	type musí být static nebo dynamic, ne {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` je statický symbol: nejprve nastavte jeho typ symbolu na Dynamický
+@msg	path must be a list of child indices	path musí být seznam indexů potomků
+@msg	no object at path {shown} in the symbol's art	v kresbě symbolu není na cestě {shown} žádný objekt
+@msg	give fill, stroke, opacity and/or blend	zadejte fill, stroke, opacity a/nebo blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
+	Text Flow	Tok textu
+	By Rows	Po řádcích
+	By Columns	Po sloupcích
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Náhodné krytí…
+	Randomize Opacity	Náhodné krytí
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Počáteční hodnota:
+@msg	`min` is greater than `max`	`min` je větší než `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Seřadit objekty…
+	Sort Objects	Seřadit objekty
+	Sort By:	Seřadit podle:
+	Apply To:	Použít na:
+	Area	Plocha
+	X Position	Poloha X
+	Y Position	Poloha Y
+	Stacking Order	Pořadí vrstvení
+	Small to Large	Od nejmenšího po největší
+	Large to Small	Od největšího po nejmenší
+	Distribute Evenly	Rozmístit rovnoměrně

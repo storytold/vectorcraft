@@ -15,6 +15,21 @@ fn select(s: &mut Session, tool: &str) {
 }
 
 #[test]
+fn blob_tip_options_report_and_persist() {
+    let mut s = session();
+    select(&mut s, "blobBrush");
+    assert_eq!((s.tool_options()["angle"].as_f64(), s.tool_options()["roundness"].as_f64()), (Some(0.0), Some(100.0)));
+    s.set_tool_option("angle", &json!(45));
+    s.set_tool_option("roundness", &json!(0));
+    select(&mut s, "selection");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "blobBrush");
+    assert_eq!((next.tool_options()["angle"].as_f64(), next.tool_options()["roundness"].as_f64()), (Some(45.0), Some(0.0)));
+}
+
+#[test]
 fn options_survive_a_tool_switch() {
     let mut s = session();
     select(&mut s, "mirrorCut");

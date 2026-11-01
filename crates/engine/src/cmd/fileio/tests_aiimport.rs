@@ -82,6 +82,28 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+#[test]
+fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
+    let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
+    let unread = format!("u\n0 0 1 0 k\n{}f\nZZ\nU\n{}", ai::rect(50.0, 10.0, 54.0, 14.0), ai::named("Unread"));
+    let data = ai::editing_data(200.0, 100.0, &(ai::layer("Live", &live) + &ai::layer("Mixed", &unread)));
+    let page = "0 0 1 0 k 10 10 4 4 re f 1 0 0 0 k 50 10 4 4 re f";
+    let mut session = Session::new();
+    let result = open(&mut session, "unread.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    let doc = &session.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Live", "Mixed"], "{result}");
+    assert!(matches!(doc.layers[0].children().unwrap()[0].kind, NodeKind::Path { .. }), "{result}");
+    assert!(matches!(doc.layers[1].children().unwrap()[0].kind, NodeKind::Group { .. }), "{result}");
+    assert_eq!(doc.layers[1].children().unwrap()[0].name.as_deref(), Some("Unread"), "{result}");
+    let replacement = &doc.layers[1].children().unwrap()[0].children().unwrap()[0];
+    assert!(
+        matches!(replacement.appearance.items.first(), Some(vectorcraft_doc::AppearanceItem::Fill(fill))
+        if fill.paint == vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0))),
+        "{result}"
+    );
+    assert!(result["warnings"].to_string().contains("`ZZ` (1)"), "{result}");
+}
+
 /// A palette of three swatches and a color group `Inks` holding a fourth.
 const INKS_PALETTE: &str = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n0.04 0.3 0 0 81.96 21 -8 (Pink ink) 0 2 Xx\n(Pink ink)\nPc\n\
                             0.06 0.98 1 0 (Red ink) 0 x\n(Red ink)\nPc\n1 (Inks) 1 Pg\n0.02 0.1 1 0 (Yellow ink) 0 x\n(Yellow ink)\nPc\nPB\n%AI5_EndPalette\n";
@@ -386,6 +408,33 @@ fn an_ai_file_with_a_variable_library_says_its_variables_werent_read() {
     let plain = ai::editing_data(200.0, 100.0, &ai::layer("Art", &square));
     let r = open(&mut s, "plain.ai", &ai::ai(&compressed(plain.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
     assert!(notes(&r).is_empty(), "{r}");
+}
+
+/// An Objects on Path group in a `.ai` file opens as one: its record names the group's children by
+/// their ids in the opened document.
+#[test]
+fn an_ai_file_opens_its_objects_on_path_group_live() {
+    let ids = ["9b1c0e7a-0000-4000-8000-000000000001", "9b1c0e7a-0000-4000-8000-000000000002", "9b1c0e7a-0000-4000-8000-000000000003"];
+    let options = ai::on_path_options(2, 4, std::f64::consts::FRAC_PI_2, "");
+    let record = ai::on_path_record("Adobe Align On Path", &ids, &options); // brand-ok: the record's name in the files
+    let group = format!(
+        "0 Ae\nu\n/ConstraintGroup :\n128 /GroupType ,\n;\n0 0 1 0 0 0 1 XA\n10 50 m\n190 50 L\nS\n{}0 1 1 0 1 0 0 Xa\n{}f\n{}{}f\n{}U\n",
+        ai::on_path_member(ids[0], None, 0.0),
+        ai::rect(5.0, 45.0, 15.0, 55.0),
+        ai::on_path_member(ids[1], Some(0), 0.0),
+        ai::rect(185.0, 45.0, 195.0, 55.0),
+        ai::on_path_member(ids[2], Some(1), 0.0),
+    );
+    let data = ai::editing_data(200.0, 100.0, &format!("{record}{}", ai::layer("Art", &group)));
+    let mut s = Session::new();
+    let r = open(&mut s, "on-path.ai", &ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 5 45 10 10 re f 185 45 10 10 re f"), json!({})).unwrap();
+    assert_eq!(r["format"], json!("ai"), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let g = &doc.layers[0].children().unwrap()[0];
+    let rec = g.extras().objects_on_path.as_deref().expect("an Objects on Path group");
+    let kids: Vec<NodeId> = g.children().unwrap().iter().map(|c| c.id).collect();
+    assert!(kids.contains(&rec.path) && rec.members.iter().all(|m| kids.contains(&m.id)), "{rec:?} {kids:?}");
+    assert_eq!((rec.members.len(), rec.pivot, rec.rotate.round()), (2, 4, 90.0));
 }
 
 /// A page showing only a placeholder line, as a `.ai` saved without PDF compatibility has.

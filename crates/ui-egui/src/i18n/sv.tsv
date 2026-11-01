@@ -205,7 +205,7 @@ font-technology	Variable	Variabla
 	Apply Paragraph Style	Använd styckestil
 	Apply SVG Filter…	Använd SVG-filter…
 	Apply to All	Använd på alla
-	Apply to All ({count} more missing)	Använd på alla ({count} till saknas)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Använd på alla ({n} till saknas)|Använd på alla ({n} till saknas)
 	Arc	Båge
 	Arc Lower…	Nedre båge…
 	Arc Tool	Bågverktyg
@@ -497,7 +497,7 @@ font-technology	Variable	Variabla
 	Collect in New Layer	Samla i nytt lager
 	Collect Links in a Separate Folder	Samla länkar i en separat mapp
 	Color	Färg
-	Color (, or <)	Färg (, eller <)
+	Color (, or Shift+,)	Färg (, eller Shift+,)
 	Color Adjustments	Färgjusteringar
 	Color bars	Färgstaplar
 	Color blindness – Deuteranopia-type	Färgblindhet – deuteranopi
@@ -651,6 +651,13 @@ font-technology	Variable	Variabla
 	Create Report	Skapa rapport
 	Create Slice	Skapa skiva
 	Create Sub-folders	Skapa undermappar
+	Clear Selection	Rensa markering
+	Export PDFs As:	Exportera PDF-filer som:
+	Single File	En fil
+	Multiple Files	Flera filer
+	Format Presets	Formatförinställningar
+	Grid View	Rutnätsvy
+	Selected: {n}, Total number of files to export: {m}	Markerade: {n}, totalt antal filer att exportera: {m}
 	Create Text	Skapa text
 	Create Trim Marks	Skapa skärmärken
 	Created	Skapad
@@ -730,11 +737,22 @@ font-technology	Variable	Variabla
 	Delete Stop	Radera stopp
 	Delete Swatch	Radera färgruta
 	Delete Symbol	Radera symbol
+	Delete the selected symbol?	Vill du radera den markerade symbolen?
+	Delete the selected symbols?	Vill du radera de markerade symbolerna?
+	No unused symbols	Inga oanvända symboler
+	Delete Symbols	Radera symboler
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	En eller flera av symbolerna används och kan inte raderas förrän deras instanser har expanderats eller raderats.
+	Expand Instances	Expandera instanser
+	Delete Instances	Radera instanser
+	Yes	Ja
+	No	Nej
 	Delete Tab	Radera tabb
 	Delete the graphic style “{name}”?	Radera grafikstilen ”{name}”?
+	Delete Action Sets	Radera åtgärdsuppsättningar
+	Delete the action set “{name}” and its actions?	Radera åtgärdsuppsättningen ”{name}” och dess åtgärder?
+	Delete the selected action sets and their actions?	Radera de markerade åtgärdsuppsättningarna och deras åtgärder?
 	Delete Theme	Radera tema
 	Delete theme	Radera tema
-	Delete these {count} swatches and groups?	Radera dessa {count} färgrutor och grupper?
 	Delete these {n} graphic styles?	Radera dessa {n} grafikstilar?
 	Delete this saved preset	Radera den här sparade förinställningen
 	Delete this {n} graphic style?	Radera denna {n} grafikstil?
@@ -894,9 +912,10 @@ font-technology	Variable	Variabla
 	Edit Selection	Redigera markering
 	Edit Selection…	Redigera markering…
 	Edit Symbol	Redigera symbol
+	Exit Symbol Editing Mode	Avsluta symbolredigeringsläge
 	Edit Text	Redigera text
 	Edit the applied effect, or add another one?	Vill du redigera den använda effekten eller lägga till en till?
-	Edit the selected point's colour in the Color panel	Redigera den markerade punktens färg i panelen Färg
+	Edit the point	Redigera punkten
 	Edit the stop	Redigera stoppet
 	Edit Theme	Redigera tema
 	Edit theme	Redigera tema
@@ -1214,6 +1233,9 @@ font-technology	Variable	Variabla
 	Hide Live Paint Gaps	Dölj mellanrum i direktmålning
 	Select Fills	Markera fyllningar
 	Select Strokes	Markera konturer
+	Paint Fills	Måla fyllningar
+	Paint Strokes	Måla konturer
+	Highlight	Framhävning
 	Gaussian Blur…	Gaussisk oskärpa…
 	General	Allmänt
 	General › Placement › X	Allmänt › Placering › X
@@ -1238,7 +1260,7 @@ font-technology	Variable	Variabla
 	GPL palettes keep solid colours only, as RGB.	GPL-paletter sparar bara enfärgade färger, som RGB.
 	GPU Performance	GPU-prestanda
 	Gradient	Gradient
-	Gradient (. or >)	Gradient (. eller >)
+	Gradient (. or Shift+.)	Gradient (. eller Shift+.)
 	Gradient across stroke	Gradient tvärs över konturen
 	Gradient along stroke	Gradient längs konturen
 	Gradient and Mesh Resolution:	Upplösning för gradienter och nät:
@@ -1415,6 +1437,8 @@ font-technology	Variable	Variabla
 	Objects on Path	Objekt på bana
 	Attach	Fäst
 	Objects on Path Options	Alternativ för objekt på bana
+	Pivot:	Pivotpunkt:
+	Rotate:	Rotation:
 	Objects on Path Tool	Verktyg för objekt på bana
 	Attach Objects on Path	Fäst objekt på bana
 	Expand Objects on Path	Expandera objekt på bana
@@ -1514,6 +1538,7 @@ font-technology	Variable	Variabla
 	In Tangent Handles	Inkommande tangenthandtag
 	In the selected objects	I de markerade objekten
 	Inches	Tum
+	Include Artboard Fill	Inkludera ritytans fyllning
 	Include Blacks with CMY:	Inkludera svart med CMY:
 	Include Bleed	Inkludera utfall
 	Include Cmy Blacks	Inkludera CMY-svarta
@@ -1575,7 +1600,7 @@ font-technology	Variable	Variabla
 	Keep the pasted color as a new swatch with a numbered name.	Behåll den inklistrade färgen som en ny färgruta med numrerat namn.
 	Keep this row's colors (exclude)	Behåll radens färger (undanta)
 	Keep:	Behåll:
-	Kerning (0 = Auto)	Kerning (0 = auto)
+	Kerning	Kerning
 	Keyboard Increment	Tangentbordssteg
 	Keyboard Shortcut Conflicts	Konflikter mellan kortkommandon
 	Keyboard Shortcut Set	Uppsättning kortkommandon
@@ -2147,6 +2172,7 @@ font-technology	Variable	Variabla
 	Open the URL in the web browser	Öppna URL:en i webbläsaren
 	Opened with {} note(s): {}	Öppnad med {} anteckning(ar): {}
 	Open…	Öppna…
+	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
@@ -2204,7 +2230,7 @@ font-technology	Variable	Variabla
 	Package	Paketera
 	Package collects a saved document with its linked files and fonts.	Paketera samlar ett sparat dokument med dess länkade filer och typsnitt.
 	Package created	Paketet har skapats
-	Packaged {n} file(s) in {folder} {note}	Paketerade {n} fil(er) i {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Paketerade {n} fil i {folder} {note}|Paketerade {n} filer i {folder} {note}
 	Packaged {n} file(s){note}	Paketerade {n} fil(er){note}
 	Package…	Paketera…
 	Page	Sida
@@ -2388,6 +2414,16 @@ font-technology	Variable	Variabla
 	Arabic	Arabiska
 	Hindi	Hindi
 	Farsi	Farsi
+digits	Devanagari	Devanagari
+digits	Bengali	Bengali
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gujarati
+digits	Odia	Oriya
+digits	Tamil	Tamil
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malayalam
+	Proportional Lining	Proportionella versalsiffror
 	Proportional Oldstyle	Proportionella medievalsiffror
 	Pucker & Bloat…	Dra ihop och svullna…
 	Pucker Tool	Verktyget Dra ihop
@@ -2521,9 +2557,11 @@ font-technology	Variable	Variabla
 	Stop	Stoppa
 	Searching…	Söker…
 	Not found	Hittades inte
-	{folders} folder(s) and {files} file(s) searched	{folders} mapp(ar) och {files} fil(er) genomsökta
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} mapp(ar) överhoppade, t.ex. andra appars och systemets mappar samt dolda mappar
-	{count} folder(s) or file(s) couldn't be read	{count} mapp(ar) eller fil(er) kunde inte läsas
+	{folders} and {files} searched	{folders} och {files} genomsökta
+@plural	{n} folder|{n} folders	{n} mapp|{n} mappar
+@plural	{n} file|{n} files	{n} fil|{n} filer
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	{n} mapp överhoppad, t.ex. andra appars och systemets mappar samt dolda mappar|{n} mappar överhoppade, t.ex. andra appars och systemets mappar samt dolda mappar
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} mapp eller fil kunde inte läsas|{n} mappar eller filer kunde inte läsas
 	The search stopped at its limit: search a smaller folder.	Sökningen stoppades vid sin gräns: sök i en mindre mapp.
 	Copy only fonts you own or are licensed to install.	Kopiera bara typsnitt som du äger eller har licens att installera.
 	VectorCraft copies the fonts to {folder}.	VectorCraft kopierar typsnitten till {folder}.
@@ -2910,6 +2948,7 @@ font-technology	Variable	Variabla
 	Shape Mode	Formläge
 	Shape Modes:	Formlägen:
 	Shape Properties:	Formegenskaper:
+	Shape Properties	Formegenskaper
 	Shaper Tool	Formningsverktyg
 	Shapes	Former
 	Shear	Skjuva
@@ -3172,6 +3211,7 @@ font-technology	Variable	Variabla
 	Swap Fill and Stroke (Shift+X)	Byt plats på fyllning och kontur (Shift+X)
 	Swap start and end arrowheads	Byt plats på start- och slutpilspets
 	Swap the selected object for the file, keeping its place and transform	Ersätt det markerade objektet med filen och behåll dess placering och transformering
+	Stylistic Alternates	Stilistiska alternativ
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
 	Swatch Conflicts	Färgrutekonflikter
@@ -3241,6 +3281,7 @@ font-technology	Variable	Variabla
 	Tabs	Tabbstopp
 	Tabular Lining	Tabellsiffror, versala
 	Tabular Oldstyle	Medievalsiffror i tabellbredd
+	Titling Alternates	Rubrikalternativ
 	Target	Mål
 	Target Contents	Målets innehåll
 	Target:	Mål:
@@ -3590,13 +3631,13 @@ font-technology	Variable	Variabla
 	Zoom Tool	Zoomverktyg
 	Zoom with Mouse Wheel	Zooma med mushjulet
 	Scrub Numeric Fields by Dragging	Ändra numeriska fält genom att dra
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} fil(er) i {folder}{note}. Visa paketmappen?
-	{count} linked file(s) not found	{count} länkad(e) fil(er) hittades inte
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fil i {folder} {note}. Visa paketmappen?|{n} filer i {folder} {note}. Visa paketmappen?
+@plural	{n} linked file not found|{n} linked files not found	{n} länkad fil hittades inte|{n} länkade filer hittades inte
 	fonts not copied: {fonts}	typsnitt som inte kopierats: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} länkad(e) bild(er) har ändrats sedan dokumentet sparades. Visa de nya versionerna?
-	{count} linked image(s) changed on disk. Show the new versions?	{count} länkad(e) bild(er) har ändrats på disken. Visa de nya versionerna?
-	{count} more rules: Export writes every one.	{count} regler till: Exportera skriver alla.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} namnlösa objekt utelämnade: namnge dem eller aktivera Namnlösa objekt i panelmenyn.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} länkad bild har ändrats sedan dokumentet sparades. Visa den nya versionen?|{n} länkade bilder har ändrats sedan dokumentet sparades. Visa de nya versionerna?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} länkad bild har ändrats på disken. Visa den nya versionen?|{n} länkade bilder har ändrats på disken. Visa de nya versionerna?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} regel till: Exportera skriver den.|{n} regler till: Exportera skriver alla.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} namnlöst objekt utelämnat: namnge det eller aktivera Namnlösa objekt i panelmenyn.|{n} namnlösa objekt utelämnade: namnge dem eller aktivera Namnlösa objekt i panelmenyn.
 	{effect} is already applied	{effect} används redan
 	{format} Options	{format}-alternativ
 	{kind} Gradient	{kind} gradient
@@ -3618,6 +3659,8 @@ imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} objekt|{n} objekt
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Färgtabell ({n} färg)|Färgtabell ({n} färger)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Radera {n} grafisk stil?|Radera de här {n} grafiska stilarna?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Radera {n} pensel?|Radera dessa {n} penslar?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Radera {n} färgruta eller grupp?|Radera dessa {n} färgrutor och grupper?
 @plural	{n} Layer|{n} Layers	{n} lager|{n} lager
 @plural	{n} Object|{n} Objects	{n} objekt|{n} objekt
 @plural	{n} area highlighted|{n} areas highlighted	{n} område framhävt|{n} områden framhävda
@@ -3746,6 +3789,7 @@ axis	Both	Båda
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
+@msg	kerning must be a number, "auto", or "optical"	Kerning måste vara ett tal, ”auto” eller ”optical”
 @msg	the selection has no gradient fill	markeringen har ingen fyllnadsgradient
 @msg	the selection has no gradient stroke	markeringen har ingen konturgradient
 @msg	the selection has no pattern fill	markeringen har inget fyllnadsmönster
@@ -3775,12 +3819,12 @@ axis	Both	Båda
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	grafiken på dem skiljer sig från sidans i {_1} % av ytan: de hämtas ändå från dess redigeringsdata
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` står för ändrade inställningar: spara förinställningen med ett annat namn
 @msg	`to` must be "corner" or "smooth"	`to` måste vara "corner" eller "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` måste vara "emBox", "capHeight", "xHeight" eller "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-filer är RGB eller gråskala: colorModel rgb eller gray
 @msg	Blend colors: select at least three objects with filled colours	Blanda färger: markera minst tre objekt med färgfyllning
 @msg	Combine Slices: the slices have no bounds	Kombinera skivor: skivorna har inga gränser
 @msg	Convert to Artboards: selection has no area	Konvertera till ritytor: markeringen har ingen area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertera till form: inga rektanglar eller ellipser är markerade
-@msg	Copied the CSS of {rules} object(s)	Kopierade CSS för {rules} objekt
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
@@ -3797,13 +3841,11 @@ axis	Both	Båda
 @msg	direct-select anchor points to cut at (not the end points of open paths)	direktmarkera ankarpunkter att klippa vid (inte slutpunkterna på öppna banor)
 @msg	Divide Objects Below: select a path	Dela objekt under: markera en bana
 @msg	Divide Objects Below: select exactly one path	Dela objekt under: markera exakt en bana
-@msg	Downloaded {_1} file(s)	Hämtade {_1} fil(er)
 @msg	Downloaded {what}	Hämtade {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandera utseende: markeringen har ett grundläggande utseende
 @msg	Expand: no brush strokes selected	Expandera: inga penseldrag är markerade
 @msg	Expand: no gradient fills	Expandera: inga gradientfyllningar
 @msg	Expand: nothing to expand	Expandera: ingenting att expandera
-@msg	Exported {count} file(s) to {folder}	Exporterade {count} fil(er) till {folder}
 @msg	Exported {path}	Exporterade {path}
 @msg	Flatten Transparency: select objects to flatten	Platta till transparens: markera objekt att platta till
 @msg	Flatten Transparency: {e}	Platta till transparens: {e}
@@ -3826,7 +3868,7 @@ axis	Both	Båda
 @msg	PDF settings are not an object	PDF-inställningarna är inte ett objekt
 @msg	PDF security settings are not an object	PDF-säkerhetsinställningarna är inte ett objekt
 @msg	PDF writer error: {0}	fel i PDF-skrivaren: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Paketerade {n} fil(er) i {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketerade {n} fil i {folder} ({note})|Paketerade {n} filer i {folder} ({note})
 @msg	Packaged {n} file(s){note}	Paketerade {n} fil(er){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filer i stället)
 @msg	Release Guides: no guides	Släpp stödlinjer: inga stödlinjer
@@ -3979,6 +4021,7 @@ axis	Both	Båda
 @msg	cannot split an open path at its end point	kan inte dela en öppen bana vid dess slutpunkt
 @msg	closing needs three anchors	att sluta banan kräver tre ankarpunkter
 @msg	check an asset to export	kryssa för en resurs att exportera
+@msg	check an artboard to export	kryssa för en rityta att exportera
 @msg	check a layer to export	markera ett lager att exportera
 @msg	select the art to export first	markera först teckningen som ska exporteras
 @msg	choice must be "merge" or "add", not `{choice}`	choice måste vara "merge" eller "add", inte `{choice}`
@@ -4121,6 +4164,7 @@ axis	Both	Båda
 @msg	no such perspective grid preset	förinställningen för perspektivrutnät finns inte
 @msg	no such recent file	den senaste filen finns inte
 @msg	no such recent font	det senaste typsnittet finns inte
+@msg	some text is hidden or locked, so its font wasn't replaced	en del text är dold eller låst, så dess typsnitt ersattes inte
 @msg	no such saved selection	den sparade markeringen finns inte
 @msg	no such segment	segmentet finns inte
 @msg	no such spine point	ryggradspunkten finns inte
@@ -4209,6 +4253,8 @@ axis	Both	Båda
 @msg	select a repeat	markera en upprepning
 @msg	select a stroke with a variable width	markera en kontur med variabel bredd
 @msg	select a symbol instance	markera en symbolinstans
+@msg	select instances of one symbol	markera instanser av en och samma symbol
+@msg	a symbol can't hold an instance of itself	en symbol kan inte innehålla en instans av sig själv
 @msg	select an Image Trace object	markera ett bildspårningsobjekt
 @msg	could not decode image: {0}	kunde inte avkoda bilden: {0}
 @msg	image is empty	bilden är tom
@@ -4349,10 +4395,6 @@ axis	Both	Båda
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` är {size} byte (gräns {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} används redan av {_2}
 @msg	{_1} is reserved by the system	{_1} är reserverat av systemet
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} länkade fil(er) kan inte läsas här: deras förhandsgranskningar visas
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} bild(er) kunde inte avkodas och visas som överkryssade rutor
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} länkade bild(er) har ändrats på disken: Uppdatera länkar visar de nya versionerna
-@msg	Updated {_1} linked file(s) changed on disk	Uppdaterade {_1} länkade fil(er) som ändrats på disken
 @msg	{_1}: not saved, so not closed	{_1}: inte sparat, så inte stängt
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bitars bitmappar kan inte läsas
 @msg	{command} didn't create an object	{command} skapade inget objekt
@@ -4372,7 +4414,6 @@ axis	Both	Båda
 @msg	Couldn't place {name}: {e}	Kunde inte placera {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunde inte klistra in från urklippet: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Sparade {path} med {_1} anteckning(ar): {first}
-@msg	Exported {what} with {_1} note(s): {first}	Exporterade {what} med {_1} anteckning(ar): {first}
 @msg	Exported {what}	Exporterade {what}
 @msg	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
 @msg	Saving	Sparar
@@ -4383,12 +4424,26 @@ axis	Both	Båda
 @msg	Saving recovery data for {_1}	Sparar återställningsdata för {_1}
 @msg	Discarded {_1} recovered document(s)	Kastade {_1} återställda dokument
 @msg	Restored {_1} recovered document(s): save them to keep them	Återställde {_1} återskapade dokument: spara dem för att behålla dem
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Bäddade in {n} bild(er); {missing} saknas: länka om dem först
-@msg	Embedded {n} image(s)	Bäddade in {n} bild(er)
-@msg	Relinked {_1} image(s)	Omlänkade {_1} bild(er)
-@msg	Relinked {n} image(s)	Omlänkade {n} bild(er)
-@msg	Relinked {n} image(s); not in that folder: {_1}	Omlänkade {n} bild(er); finns inte i mappen: {_1}
-@msg	Updated {_1} image(s)	Uppdaterade {_1} bild(er)
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Bäddade in {n} bild; {missing} saknas: länka om dem först|Bäddade in {n} bilder; {missing} saknas: länka om dem först
+@msgplural	Embedded {n} image|Embedded {n} images	Bäddade in {n} bild|Bäddade in {n} bilder
+@msgplural	Relinked {n} image|Relinked {n} images	Omlänkade {n} bild|Omlänkade {n} bilder
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Omlänkade {n} bild; finns inte i mappen: {names}|Omlänkade {n} bilder; finns inte i mappen: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Omlänkade {n} bild; {name} kunde inte omlänkas: {reason}|Omlänkade {n} bilder; {name} kunde inte omlänkas: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Uppdaterade {n} bild|Uppdaterade {n} bilder
+@msgplural	Replaced {n} image|Replaced {n} images	Ersatte {n} bild|Ersatte {n} bilder
+@msgplural	Broke {n} link|Broke {n} links	Bröt {n} länk|Bröt {n} länkar
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Bröt {n} länk; {missing} kan inte läsas: länka om eller uppdatera dem först|Bröt {n} länkar; {missing} kan inte läsas: länka om eller uppdatera dem först
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} länkad fil kan inte läsas här: dess förhandsgranskning visas|{n} länkade filer kan inte läsas här: deras förhandsgranskningar visas
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} bild kunde inte avkodas och visas som en överkryssad ruta|{n} bilder kunde inte avkodas och visas som överkryssade rutor
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} länkad bild har ändrats på disken: Uppdatera länkar visar den nya versionen|{n} länkade bilder har ändrats på disken: Uppdatera länkar visar de nya versionerna
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Uppdaterade {n} länkad fil som ändrats på disken|Uppdaterade {n} länkade filer som ändrats på disken
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exporterade {what} med {n} anteckning: {first}|Exporterade {what} med {n} anteckningar: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} typsnittsfil finns nu i {folder}|{n} typsnittsfiler finns nu i {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} typsnittsfil finns nu i {folder}; {failed} kunde inte läggas till: {reason}|{n} typsnittsfiler finns nu i {folder}; {failed} kunde inte läggas till: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} typsnitt är inte tillgängligt här: dess text visas med ett annat typsnitt|{n} typsnitt är inte tillgängliga här: deras text visas med ett annat typsnitt
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopierade CSS för {n} objekt|Kopierade CSS för {n} objekt
+@msgplural	Downloaded {n} file|Downloaded {n} files	Hämtade {n} fil|Hämtade {n} filer
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exporterade {n} fil till {folder}|Exporterade {n} filer till {folder}
 @msg	Unembedded to {_1}	Extraherad till {_1}
 @msg	Reset {_1}	Återställ {_1}
 @msg	Sent to {_1}	Skickat till {_1}
@@ -4440,9 +4495,6 @@ axis	Both	Båda
 @msg	every search thread stopped on an internal error (please report this bug)	alla söktrådar stoppades av ett internt fel (rapportera gärna felet)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCrafts mapp Fonts anges inte här: den anges av skrivbordsappen och vectorcraft-cli
 @msg	choose the font files to add	välj de typsnittsfiler som ska läggas till
-@msg	{n} font file(s) are now in {folder}	{n} typsnittsfil(er) finns nu i {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} typsnittsfil(er) finns nu i {folder}; {failed} kunde inte läggas till: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} typsnitt är inte tillgängliga här: deras text visas med ett annat typsnitt
 @msg	not a file	inte en fil
 @msg	not a font file	inte en typsnittsfil
 @msg	that document is no longer open	det dokumentet är inte längre öppet
@@ -4451,7 +4503,6 @@ axis	Both	Båda
 @msg	every numbered name for it is taken in the Fonts folder	alla numrerade namn för den är upptagna i mappen Typsnitt
 @msg	every numbered name for {name} is taken in the document's folder	alla numrerade namn för {name} är upptagna i dokumentets mapp
 @msg	No linked files to look for	Inga länkade filer att leta efter
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Omlänkade {n} bild(er); {name} kunde inte omlänkas: {reason}
 	Services	Tjänster
 	Hide VectorCraft	Göm VectorCraft
 	Zoom	Zoom
@@ -4490,6 +4541,12 @@ axis	Both	Båda
 	Insert Inline Symbol	Infoga symbol i texten
 	ICF Top/Right	ICF överkant/höger
 	ICF Bottom/Left	ICF nederkant/vänster
+	Show Font Height Options	Visa alternativ för teckenhöjd
+	Hide Font Height Options	Dölj alternativ för teckenhöjd
+	Set Font Height Reference	Ange referens för teckenhöjd
+	Em Box	Em-ruta
+	x-Height	x-höjd
+	ICF Box	ICF-ruta
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` är stegreferensen {r}, som bara `run` och `command_batch` löser upp
 @msg	`ids` must be an array of object ids, not {v}	`ids` måste vara en array med objekt-id:n, inte {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` måste vara en array med index för ankarpunkter, inte {v}
@@ -4519,6 +4576,8 @@ axis	Both	Båda
 @msg	the PCX file is cut short	PCX-filen är avkortad
 @msg	the PCX file's header is damaged	PCX-filens huvud är skadat
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bitars pixlar i {planes} plan kan inte läsas
+@msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan inte läsas
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har en färgrymd eller ett JPX-innehåll som inte stöds
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zippad 32-bitars PSD-bilddata med prediktion kan inte läsas
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
@@ -5594,13 +5653,13 @@ font-script	Japanese	Japanska
 	Slope:	Lutning:
 axis	X Axis	X-axel
 axis	Y Axis	Y-axel
-@msg	Packaged {n} file(s) in {folder}	Paketerade {n} fil(er) i {folder}
-@msg	Packaged {n} file(s) {note}	Paketerade {n} fil(er) {note}
-@msg	Packaged {n} file(s)	Paketerade {n} fil(er)
-	Packaged {n} file(s)	Paketerade {n} fil(er)
-	Packaged {n} file(s) in {folder}	Paketerade {n} fil(er) i {folder}
-	Packaged {n} file(s) {note}	Paketerade {n} fil(er) {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} fil(er) i {folder}. Visa paketmappen?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Paketerade {n} fil i {folder}|Paketerade {n} filer i {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Paketerade {n} fil {note}|Paketerade {n} filer {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Paketerade {n} fil|Paketerade {n} filer
+@plural	Packaged {n} file|Packaged {n} files	Paketerade {n} fil|Paketerade {n} filer
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Paketerade {n} fil i {folder}|Paketerade {n} filer i {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Paketerade {n} fil {note}|Paketerade {n} filer {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} fil i {folder}. Visa paketmappen?|{n} filer i {folder}. Visa paketmappen?
 	Clockwise	Medurs
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Fint brus döljer bandningen i gradientfyllningen
@@ -5634,7 +5693,7 @@ axis	Y Axis	Y-axel
 	Include Objects On Canvas	Ta med objekt på arbetsytan
 	Result(s): {count}	Resultat: {count}
 @msg	select one object	markera ett objekt
-@msg	Global Edit works on paths, compound paths and symbol instances	Global redigering fungerar på banor, sammansatta banor och symbolinstanser
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
 	Add to Symbols	Lägg till i symboler
@@ -5912,6 +5971,11 @@ shape	Open	Öppen
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Punktfärg från objekt
+	Basic Character Formats	Grundläggande teckenformat
+	Case	Skiftläge
+@msg	{label} must be a number	{label} måste vara ett tal
+@msg	{label} must be a number of at least 0.1	{label} måste vara ett tal på minst 0,1
+@msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Duoton…
@@ -5935,6 +5999,13 @@ shape	Open	Öppen
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	ange `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Tryckfärgskorrigeringar fungerar i CMYK-dokument: välj först Fil › Dokumentets färgläge › CMYK-färg
 @msg	`{key}` must be 0..{max}	`{key}` måste vara 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Sök närmaste färgruta…
+	Find Nearest Swatch	Sök närmaste färgruta
+	Apply Nearest Swatch	Använd närmaste färgruta
+	Select objects to find the swatches nearest their colors.	Markera objekt för att hitta de färgrutor som ligger närmast deras färger.
+@msg	select objects or give `color`	markera objekt eller ange `color`
+@msg	`color` is not a colour	`color` är ingen färg
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hörnverktyget
 	Slide Anchor Along Path	Skjut ankarpunkt längs bana
@@ -5962,6 +6033,7 @@ shape	Open	Öppen
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Dela upp text
 	Combine Point Text	Kombinera punkttext
+	Join Point Text	Sammanfoga punkttext
 	Remove Breaks	Ta bort brytningar
 	Split Text at Cursor	Dela text vid markören
 	Set Alignment, Keep Position	Ställ in justering, behåll position
@@ -5990,6 +6062,7 @@ breakText	Glyphs	Glyfer
 @msg	Select horizontal point or area type whose text fits	Markera vågrät punkt- eller områdestext vars text får plats
 @msg	Nothing to split at the cursor	Inget att dela vid markören
 @msg	Select two or more one-line point type objects on one baseline to combine	Markera två eller fler enradiga punkttextobjekt på samma baslinje för att kombinera dem
+@msg	Select two or more one-line point type objects to join	Markera två eller fler enradiga punkttextobjekt för att sammanfoga dem
 @msg	No line breaks to remove	Inga radbrytningar att ta bort
 @msg	No paragraph breaks to remove	Inga styckebrytningar att ta bort
 @msg	Too many breaks to remove at once	För många brytningar att ta bort på en gång
@@ -6002,6 +6075,11 @@ breakText	Glyphs	Glyfer
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` måste vara lines, paragraphs, words eller glyphs, inte {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` måste vara "line" eller "paragraph", inte {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` måste vara "left", "center" eller "right", inte {other}
+	File + Number	Fil + nummer
+	File + Data Set Name	Fil + datauppsättningens namn
+	Data Set Name	Datauppsättningens namn
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` måste vara `fileNumber`, `fileDataSetName` eller `dataSetName`
+@msg	no free data set file name in destination folder	Inget ledigt filnamn för datauppsättningen i målmappen
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Baneffekter
@@ -6042,3 +6120,100 @@ breakText	Glyphs	Glyfer
 	Gap 4	Mellanrum 4
 	Dash 5	Streck 5
 	Gap 5	Mellanrum 5
+
+@msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+
+@msg	You must choose a side pattern.	Du måste välja ett sidomönster.
+@msg	invalid pattern tile choice	ogiltigt val av mönsterplatta
+@msg	no pattern named `{choice}`	inget mönster med namnet `{choice}`
+	Delete the selected brushes?	Radera de valda penslarna?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturer använder en eller flera av de här penslarna. Ta bort penslarna från konturerna och radera penslarna?
+	Remove Strokes	Ta bort konturer
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Ordningsverktyg
+	Arrange in Grid…	Ordna i rutnät…
+	Arrange in Grid	Ordna i rutnät
+	Swap Objects	Byt plats på objekt
+	Swap Objects and Sizes	Byt plats och storlek på objekt
+	Replace with Top Object…	Ersätt med översta objektet…
+	Replace with Top Object	Ersätt med översta objektet
+	Set Size of Each…	Ange storlek för vart och ett…
+	Set Size of Each	Ange storlek för vart och ett
+@msg	select exactly two objects	markera exakt två objekt
+@msg	give `width` or `height`	ange `width` eller `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Gruppera överlappande objekt
+@msg	too many objects selected (at most 20000)	för många objekt markerade (högst 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Dela upp i streck…
+	Divide into Dashes	Dela upp i streck
+	Dash:	Tankstreck:
+	Gap:	Mellanrum:
+	Fit to Corners and Ends	Anpassa till hörn och ändar
+	Remove Gaps	Ta bort mellanrum
+@msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
+@msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandera streck till banor
+@msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Dokumentverktyg
+	Save a Timestamped Copy	Spara en kopia med tidsstämpel
+@msg	there is no clock here	det finns ingen klocka här
+@msg	there is no clock here: give `time` (Unix seconds)	det finns ingen klocka här: ange `time` (Unix-sekunder)
+@msg	the document has never been saved: give `folder`	dokumentet har aldrig sparats: ange `folder`
+@msg	every numbered name for the copy is taken	alla numrerade namn för kopian är upptagna
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Nya symboler från lager
+	Convert Layers to Symbols	Konvertera lager till symboler
+@msg	{id} is no top-level layer	{id} är inget lager på översta nivån
+	Marathi	Marathi
+	Gujarati	Gujarati
+	Bengali	Bengali
+	Punjabi	Punjabi
+	Tamil	Tamil
+	Telugu	Telugu
+	Kannada	Kannada
+	Malayalam	Malayalam
+	Odia	Oriya
+	Urdu	Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} och senare (version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportera alla öppna dokument som PDF
+	Export All Open Documents as SVG	Exportera alla öppna dokument som SVG
+@msgplural	Exported {n} document|Exported {n} documents	Exporterade {n} dokument|Exporterade {n} dokument
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exporterade {n} dokument; {title} skrevs inte: {error}|Exporterade {n} dokument; {title} skrevs inte: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Symboltyp:
+	Dynamic Symbol	Dynamisk symbol
+	Static Symbol	Statisk symbol
+	Symbol Instance Appearance	Symbolinstansens utseende
+	Reset Symbol Instance	Återställ symbolinstans
+@msg	type must be static or dynamic, not {v}	type måste vara static eller dynamic, inte {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` är en statisk symbol: ställ först in symboltypen på Dynamisk
+@msg	path must be a list of child indices	path måste vara en lista med underordnade index
+@msg	no object at path {shown} in the symbol's art	inget objekt vid sökvägen {shown} i symbolens bild
+@msg	give fill, stroke, opacity and/or blend	ange fill, stroke, opacity och/eller blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	ange newName, registration, exportType, nineSlice och/eller type
+	Text Flow	Textflöde
+	By Rows	Radvis
+	By Columns	Kolumnvis
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Slumpmässig opacitet…
+	Randomize Opacity	Slumpmässig opacitet
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Startvärde:
+@msg	`min` is greater than `max`	`min` är större än `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Sortera objekt…
+	Sort Objects	Sortera objekt
+	Sort By:	Sortera efter:
+	Apply To:	Tillämpa på:
+	Area	Area
+	X Position	X-position
+	Y Position	Y-position
+	Stacking Order	Staplingsordning
+	Small to Large	Från liten till stor
+	Large to Small	Från stor till liten
+	Distribute Evenly	Fördela jämnt

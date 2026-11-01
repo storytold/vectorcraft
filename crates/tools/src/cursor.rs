@@ -125,9 +125,11 @@ pub enum Cursor {
     /// the path. Also while a stroke is drawn back near its start, where releasing the mouse button
     /// closes the path. A crosshair with a ring.
     PaintbrushClose,
-    /// The Blob Brush tool.
+    /// The Blob Brush tool: a dot at the brush's centre, the tool drawing the tip's outline round
+    /// it on the canvas.
     BlobBrush,
-    /// The Eraser tool.
+    /// The Eraser tool: a dot at the tip's centre, the tool drawing the tip's outline round it on
+    /// the canvas.
     Eraser,
     /// The Smooth tool.
     Smooth,
@@ -305,8 +307,6 @@ impl Cursor {
             | Cursor::MagicWand
             | Cursor::Pencil
             | Cursor::Paintbrush
-            | Cursor::BlobBrush
-            | Cursor::Eraser
             | Cursor::Smooth
             | Cursor::PathEraser
             | Cursor::Join

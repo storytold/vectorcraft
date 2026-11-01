@@ -42,12 +42,29 @@ font-technology	Variable	バリアブル
 	Em Box Top/Right	仮想ボディの上 / 右
 	ICF Top/Right	平均字面の上 / 右
 	ICF Bottom/Left	平均字面の下 / 左
+	Show Font Height Options	フォントの高さオプションを表示
+	Hide Font Height Options	フォントの高さオプションを隠す
+	Set Font Height Reference	フォントの高さの基準を設定
+	Em Box	仮想ボディ
+	Cap Height	キャップハイト
+	x-Height	x ハイト
+	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
-	Hindi	ヒンディー数字
+	Hindi	ヒンディー語
+digits	Hindi	ヒンディー数字
 	Farsi	ペルシャ数字
+digits	Devanagari	デーヴァナーガリー数字
+digits	Bengali	ベンガル数字
+digits	Gurmukhi	グルムキー数字
+digits	Gujarati	グジャラート数字
+digits	Odia	オディア数字
+digits	Tamil	タミル数字
+digits	Telugu	テルグ数字
+digits	Kannada	カンナダ数字
+digits	Malayalam	マラヤーラム数字
 	Favorites	お気に入り
 	Flip	反転
 	Japanese	日本語
@@ -282,6 +299,9 @@ font-technology	Variable	バリアブル
 	Hide Live Paint Gaps	ライブペイントの間隔を隠す
 	Select Fills	塗りを選択
 	Select Strokes	線を選択
+	Paint Fills	塗りをペイント
+	Paint Strokes	線をペイント
+	Highlight	ハイライト
 	Image Trace	画像トレース
 	Image Tracing	画像トレースオブジェクト
 	Tracing Presets	トレースプリセット
@@ -954,7 +974,7 @@ font-technology	Variable	バリアブル
 	Apply Last Gradient	最後のグラデーションを適用
 	Apply Paragraph Style	段落スタイルを適用
 	Apply to All	すべてに適用
-	Apply to All ({count} more missing)	すべてに適用 (ほかに {count} 個が見つかりません)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	すべてに適用 (ほかに {n} 個が見つかりません)
 	Arc	円弧
 	Arc Tool	円弧ツール
 	Area / Path Type	エリア内文字／パス上文字
@@ -1231,6 +1251,13 @@ font-technology	Variable	バリアブル
 	Create Path	パスを作成
 	Create Slice	スライスを作成
 	Create Sub-folders	サブフォルダーを作成
+	Clear Selection	選択を解除
+	Export PDFs As:	PDF の書き出し形式：
+	Single File	単一ファイル
+	Multiple Files	複数ファイル
+	Format Presets	形式プリセット
+	Grid View	グリッド表示
+	Selected: {n}, Total number of files to export: {m}	選択済み：{n}、書き出すファイルの合計数：{m}
 	Create Text	テキストを作成
 	Created	作成日
 	Created:	作成日:
@@ -1290,14 +1317,25 @@ font-technology	Variable	バリアブル
 	Delete Stop	分岐点を削除
 	Delete Swatch	スウォッチを削除
 	Delete Symbol	シンボルを削除
+	Delete the selected symbol?	選択したシンボルを削除しますか？
+	Delete the selected symbols?	選択したシンボルを削除しますか？
+	No unused symbols	未使用のシンボルはありません
+	Delete Symbols	シンボルを削除
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	1 つ以上のシンボルが使用中のため、インスタンスを拡張または削除するまで削除できません。
+	Expand Instances	インスタンスを拡張
+	Delete Instances	インスタンスを削除
+	Yes	はい
+	No	いいえ
 	Delete Tab	タブを削除
 	Delete Theme	テーマを削除
 	Delete Transparency Flattener Preset	透明の分割・統合プリセットを削除
 	Delete Width Point	幅ポイントを削除
 	Delete Workspace	ワークスペースを削除
 	Delete the graphic style “{name}”?	グラフィックスタイル「{name}」を削除しますか？
+	Delete Action Sets	アクションセットを削除
+	Delete the action set “{name}” and its actions?	アクションセット「{name}」とそのアクションを削除しますか？
+	Delete the selected action sets and their actions?	選択したアクションセットとそのアクションを削除しますか？
 	Delete theme	テーマを削除
-	Delete these {count} swatches and groups?	これら {count} 個のスウォッチとグループを削除しますか？
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
 	Delete “{name}”?	「{name}」を削除しますか？
@@ -1402,13 +1440,14 @@ font-technology	Variable	バリアブル
 	Edit PDF Preset	PDF プリセットを編集
 	Edit Print Preset	プリントプリセットを編集
 	Edit Symbol	シンボルを編集
+	Exit Symbol Editing Mode	シンボル編集モードを終了
 	Edit Theme	テーマを編集
 	Edit selected paths within:	選択したパスを次の距離以内で編集：
 	Edit or Apply Color Group	カラーグループを編集または適用
 	Edit or Apply Color Group…	カラーグループを編集または適用…
 	Edit or Apply Colors	カラーを編集／適用
 	Edit the applied effect, or add another one?	適用済みの効果を編集しますか？ それとも別の効果を追加しますか？
-	Edit the selected point's colour in the Color panel	選択したポイントのカラーをカラーパネルで編集
+	Edit the point	ポイントを編集
 	Edit the stop	分岐点を編集
 	Edit theme	テーマを編集
 	Edit…	編集…
@@ -1751,6 +1790,8 @@ font-technology	Variable	バリアブル
 	Objects on Path	パス上のオブジェクト
 	Attach	アタッチ
 	Objects on Path Options	パス上のオブジェクトオプション
+	Pivot:	ピボット:
+	Rotate:	回転:
 	Objects on Path Tool	パス上のオブジェクトツール
 	Attach Objects on Path	パス上のオブジェクトをアタッチ
 	Expand Objects on Path	パス上のオブジェクトを拡張
@@ -1834,6 +1875,7 @@ font-technology	Variable	バリアブル
 	In Tangent Handles	入る側のハンドル
 	In the selected objects	選択したオブジェクト内
 	Inches	インチ
+	Include Artboard Fill	アートボードの塗りを含める
 	Include Bleed	裁ち落としを含める
 	Include CMYK PostScript in RGB Files	RGB ファイルに CMYK PostScript を含める
 	Include Document Thumbnails	ドキュメントのサムネールを含める
@@ -1868,7 +1910,7 @@ font-technology	Variable	バリアブル
 	Keep Plain Text	テキストのみを保持
 	Keep both sides the same width	両側を同じ幅に保つ
 	Keep this row's colors (exclude)	この行のカラーを保持 (除外)
-	Kerning (0 = Auto)	カーニング (0 = 自動)
+	Kerning	カーニング
 	Keyboard Increment	キー入力
 	Keyboard Shortcut Conflicts	キーボードショートカットの競合
 	Keyboard Shortcut Set	キーボードショートカットセット
@@ -2334,6 +2376,7 @@ font-technology	Variable	バリアブル
 	Open the URL in the web browser	URL を Web ブラウザーで開く
 	Optimize for fast web view	Web ビュー用に最適化
 	Optimized	最適化
+	Optical	オプティカル
 	Options	オプション
 	Options for Selection…	選択項目のオプション…
 	Options:	オプション:
@@ -2605,9 +2648,11 @@ mark-style	Japanese	日本式
 	Stop	停止
 	Searching…	検索中…
 	Not found	見つかりません
-	{folders} folder(s) and {files} file(s) searched	{folders} 個のフォルダーと {files} 個のファイルを検索しました
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} 個のフォルダーをスキップしました（他のアプリやシステムのフォルダー、隠しフォルダーなど）
-	{count} folder(s) or file(s) couldn't be read	{count} 個のフォルダーまたはファイルを読み込めませんでした
+	{folders} and {files} searched	{folders} と {files} を検索しました
+@plural	{n} folder|{n} folders	{n} 個のフォルダー
+@plural	{n} file|{n} files	{n} 個のファイル
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	{n} 個のフォルダーをスキップしました（他のアプリやシステムのフォルダー、隠しフォルダーなど）
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} 個のフォルダーまたはファイルを読み込めませんでした
 	The search stopped at its limit: search a smaller folder.	検索は上限で停止しました。より小さなフォルダーを検索してください。
 	Copy only fonts you own or are licensed to install.	所有しているフォント、またはインストールするライセンスがあるフォントだけをコピーしてください。
 	VectorCraft copies the fonts to {folder}.	VectorCraft はフォントを {folder} にコピーします。
@@ -2856,6 +2901,7 @@ mark-style	Japanese	日本式
 	Shape Mode	シェイプモード
 	Shape Modes:	シェイプモード:
 	Shape Properties:	シェイプのプロパティ:
+	Shape Properties	シェイプのプロパティ
 	Shaper Tool	Shaper ツール
 	Shapes	シェイプ
 	Shear	シアー
@@ -3009,6 +3055,7 @@ mark-style	Japanese	日本式
 	Superscript:	上付き文字:
 	Swap Fill and Stroke	塗りと線を入れ替え
 	Swap start and end arrowheads	始点と終点の矢印を入れ替え
+	Stylistic Alternates	スタイル代替字
 	Swash	スワッシュ
 	Swatch Conflict	スウォッチの競合
 	Swatch Conflicts	スウォッチの競合
@@ -3291,13 +3338,13 @@ mark-style	Japanese	日本式
 	the preset	プリセット
 	tile {number}	タイル {number}
 	to	→
-	{count} file(s) in {folder} {note}. Show the package folder?	{folder} に {count} 個のファイル{note}。パッケージフォルダーを表示しますか？
-	{count} linked file(s) not found	リンクファイルが {count} 個見つかりません
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} に {n} 個のファイル{note}。パッケージフォルダーを表示しますか？
+@plural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	保存後に {count} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
-	{count} linked image(s) changed on disk. Show the new versions?	{count} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？
-	{count} more rules: Export writes every one.	ほかに {count} 個のルールがあります。書き出しにはすべて含まれます。
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	名前のないオブジェクト {count} 個を除外しました。名前を付けるか、パネルメニューで「名前のないオブジェクト」をオンにしてください。
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	保存後に {n} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	ほかに {n} 個のルールがあります。書き出しにはすべて含まれます。
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	名前のないオブジェクト {n} 個を除外しました。名前を付けるか、パネルメニューで「名前のないオブジェクト」をオンにしてください。
 	{effect} is already applied	{effect} はすでに適用されています
 	{format} Options	{format} オプション
 	{kind} Gradient	{kind}グラデーション
@@ -3365,7 +3412,7 @@ gradient-kind	Radial	円形
 	Client-side (.html)	クライアントサイド (.html)
 	Cmd	Cmd
 	Collect Links in a Separate Folder	リンクを別フォルダーに収集
-	Color (, or <)	カラー (, または <)
+	Color (, or Shift+,)	カラー (, または Shift+,)
 	Color Group	カラーグループ
 	Color Library	カラーライブラリ
 	Color Management	カラーマネジメント
@@ -3460,7 +3507,7 @@ file-filter	Templates	テンプレート
 	General › Placement › X	一般 › 位置 › X
 	General › Thumbnails	一般 › サムネール
 	Global Process Color, CMYK	グローバルプロセスカラー、CMYK
-	Gradient (. or >)	グラデーション (. または >)
+	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
 	Graph Design	グラフのデザイン
@@ -3569,7 +3616,7 @@ file-filter	Templates	テンプレート
 	Output Black	出力ブラック
 	Output White	出力ホワイト
 	Output › Mode	出力 › モード
-	Packaged {n} file(s) in {folder} {note}	{folder} に {n} 個のファイルをパッケージしました{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{folder} に {n} 個のファイルをパッケージしました{note}
 	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 	Page information	ページ情報
 	Paragraph Style	段落スタイル
@@ -3583,6 +3630,7 @@ file-filter	Templates	テンプレート
 	Preset {}	プリセット {}
 	Preview in Browser needs the desktop app (the web downloads files instead)	ブラウザーでプレビューにはデスクトップアプリが必要です (Web アプリではファイルがダウンロードされます)
 	Print presets	プリントプリセット
+	Proportional Lining	プロポーショナルライニング
 	Proportional Oldstyle	プロポーショナルオールドスタイル
 	Punctuation	句読点
 	Radius 1	半径 1
@@ -3664,6 +3712,7 @@ file-filter	Templates	テンプレート
 	System Layout	システムレイアウト
 	Tabular Lining	等幅ライニング
 	Tabular Oldstyle	等幅オールドスタイル
+	Titling Alternates	タイトル代替字
 	Tate-chu-yoko	縦中横
 	Temperature	色温度
 	Template	テンプレート
@@ -3709,6 +3758,8 @@ file-filter	Templates	テンプレート
 imageTrace	Outline	アウトライン
 @plural	Color Table ({n} color)|Color Table ({n} colors)	カラーテーブル ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} 個のグラフィックスタイルを削除しますか？
+@plural	Delete this {n} brush?|Delete these {n} brushes?	{n} 個のブラシを削除しますか？
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	これら {n} 個のスウォッチとグループを削除しますか？
 @plural	{n} Layer|{n} Layers	{n} レイヤー
 @plural	{n} Object|{n} Objects	{n} オブジェクト
 @plural	{n} area highlighted|{n} areas highlighted	{n} 個の範囲を強調表示
@@ -3940,6 +3991,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Saving {_1}	{_1} を保存中
 @msg	Sent to {_1}	{_1} に送信しました
 @msg	`to` must be "corner" or "smooth"	`to` には "corner" または "smooth" を指定してください
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` には "emBox"、"capHeight"、"xHeight"、"icfBox" のいずれかを指定してください
 @msg	a layer couldn't be read	読み込めなかったレイヤーがあります
 @msg	it has more than one artboard	アートボードが複数あります
 @msg	its editing data has no layers	編集データにレイヤーがありません
@@ -3969,7 +4021,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the drawing is too large to open	図面が大きすぎて開けません
 @msg	scale must be a number from {_1} to {_2}, not {_3}	縮尺は {_1} から {_2} までの数値にしてください ({_3} は指定できません)
 @msg	an image has no pixels and was left out	ピクセルがない画像を省略しました
-@msg	Embedded {n} image(s)	画像を {n} 枚埋め込みました
 @msg	object {0} cannot have children	オブジェクト {0} には子オブジェクトを含められません
 @msg	range `{s}` is empty	範囲 `{s}` が空です
 @msg	range `{s}`: `{part}` names no number	範囲 `{s}`: `{part}` に番号が指定されていません
@@ -3984,6 +4035,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	brushes move only within their type	ブラシは同じ種類の中でのみ移動できます
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
+@msg	select instances of one symbol	1 つのシンボルのインスタンスを選択してください
+@msg	a symbol can't hold an instance of itself	シンボルにそれ自体のインスタンスを含めることはできません
 @msg	the art has no bounds	アートに境界がありません
 @msg	Image Trace: the traced image is missing	画像トレース: トレース元の画像が見つかりません
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ライブペイントの結合: ライブペイントグループと、追加するパスを選択してください
@@ -4425,6 +4478,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	書き出すものがありません: ドキュメントに表示されているアートがありません (または「アートボードを使用」をオンにしてください)
 @msg	add a format to export	書き出す形式を追加してください
 @msg	check an asset to export	書き出すアセットにチェックを入れてください
+@msg	check an artboard to export	書き出すアートボードにチェックを入れてください
 @msg	check a layer to export	書き出すレイヤーにチェックを入れてください
 @msg	select the art to export first	先に書き出すアートを選択してください
 @msg	`{tool}` isn't a freehand tool	`{tool}` はフリーハンドツールではありません
@@ -4435,12 +4489,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PDF is no longer loaded	PDF はもう読み込まれていません
 @msg	no such layer or object	指定されたレイヤーまたはオブジェクトが見つかりません
 @msg	`{tool}` isn't a Liquify tool	`{tool}` はゆがみツールではありません
-@msg	{_1} linked file(s) can't be read here: their previews show	この環境では {_1} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
-@msg	Updated {_1} linked file(s) changed on disk	ディスク上で変更された {_1} 個のリンクファイルを更新しました
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
-@msg	Packaged {n} file(s) in {folder} {note}	{n} 個のファイルを {folder} にパッケージしました{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} 個のファイルを {folder} にパッケージしました({note})
 @msg	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 @msg	choose a location for the package	パッケージの保存場所を選択してください
 @msg	missing `folder`	`folder` が指定されていません
@@ -4466,7 +4516,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	print settings are not an object	プリント設定がオブジェクト形式ではありません
 @msg	no colour group `{g}`	カラーグループ `{g}` が見つかりません
 @msg	select artwork (or a colour group) to recolor	再配色するアートワーク (またはカラーグループ) を選択してください
-@msg	Downloaded {_1} file(s)	{_1} 個のファイルをダウンロードしました
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
@@ -4494,7 +4543,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
-@msg	Exported {count} file(s) to {folder}	{count} 個のファイルを {folder} に書き出しました
 @msg	Imported {what}: {_1}	{what} を読み込みました: {_1}
 @msg	Installed plug-in {_1}	プラグイン {_1} をインストールしました
 @msg	Opened with {_1} note(s): {_2}	ドキュメントを開きました (注意 {_1} 件): {_2}
@@ -4508,7 +4556,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the document has never been saved	ドキュメントはまだ一度も保存されていません
 @msg	the export returned unreadable data	書き出し処理から読み取れないデータが返されました
 @msg	{status} ({e})	{status} ({e})
-@msg	Exported {what} with {_1} note(s): {first}	{what} を書き出しましたが、注意事項が {_1} 件あります: {first}
 @msg	Saved {path} with {_1} note(s): {first}	{path} を保存しましたが、注意事項が {_1} 件あります: {first}
 @msg	Couldn't open {name}: {e}	{name} を開けませんでした: {e}
 @msg	Couldn't read {name}: {e}	{name} を読み込めませんでした: {e}
@@ -4544,6 +4591,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such perspective grid preset	指定された遠近グリッドプリセットが見つかりません
 @msg	no such recent file	指定された最近使ったファイルが見つかりません
 @msg	no such recent font	指定された最近使ったフォントが見つかりません
+@msg	some text is hidden or locked, so its font wasn't replaced	一部のテキストが非表示またはロックされているため、そのフォントは置換されませんでした
 @msg	no such saved selection	指定された選択範囲は保存されていません
 @msg	no such user library	指定されたユーザーライブラリが見つかりません
 @msg	no such view	指定された表示が見つかりません
@@ -4556,6 +4604,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	choose a folder to export to	書き出し先のフォルダーを選択してください
 @msg	the selection has no URL (or they differ)	選択したオブジェクトに URL がありません (または URL がそれぞれ異なります)
 @msg	select some type first	先にテキストを選択してください
+@msg	kerning must be a number, "auto", or "optical"	カーニングは数値、「auto」または「optical」にしてください
 @msg	the selection has no gradient fill	選択したオブジェクトに塗りのグラデーションがありません
 @msg	the selection has no gradient stroke	選択したオブジェクトに線のグラデーションがありません
 @msg	the selection has no pattern fill	選択したオブジェクトに塗りのパターンがありません
@@ -4565,7 +4614,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the library item is damaged	ライブラリの項目が破損しています
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
-@msg	Copied the CSS of {rules} object(s)	{rules} 個のオブジェクトの CSS をコピーしました
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -4578,12 +4626,27 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no library `{key}` (see {list})	ライブラリ `{key}` が見つかりません ({list} を参照)
 @msg	select a linked image: an embedded one has no file	リンク画像を選択してください: 埋め込み画像にはファイルがありません
 @msg	{path} can't be found: relink it first	{path} が見つかりません: 先に再リンクしてください
-@msg	Embedded {n} image(s); {missing} missing: relink them first	画像を {n} 枚埋め込みましたが、{missing} 枚は見つかりません: 先に再リンクしてください
-@msg	Relinked {_1} image(s)	画像を {_1} 枚再リンクしました
-@msg	Relinked {n} image(s)	画像を {n} 枚再リンクしました
-@msg	Relinked {n} image(s); not in that folder: {_1}	画像を {n} 枚再リンクしましたが、次の画像はそのフォルダーにありません: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	画像を {n} 枚埋め込みましたが、{missing} 枚は見つかりません: 先に再リンクしてください
+@msgplural	Embedded {n} image|Embedded {n} images	画像を {n} 枚埋め込みました
+@msgplural	Relinked {n} image|Relinked {n} images	画像を {n} 枚再リンクしました
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	画像を {n} 枚再リンクしましたが、次の画像はそのフォルダーにありません: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	画像を {n} 枚再リンクしましたが、{name} は再リンクできませんでした: {reason}
+@msgplural	Updated {n} image|Updated {n} images	画像を {n} 枚更新しました
+@msgplural	Replaced {n} image|Replaced {n} images	画像を {n} 枚置換しました
+@msgplural	Broke {n} link|Broke {n} links	{n} 個のリンクを解除しました
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} 個のリンクを解除しましたが、{missing} 個は読み込めません: 先に再リンクするか更新してください
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	この環境では {n} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} 個のフォントはこの環境では使用できません: テキストは別のフォントで表示されます
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	{n} 個のオブジェクトの CSS をコピーしました
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} 個のファイルをダウンロードしました
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} 個のファイルを {folder} に書き出しました
 @msg	Unembedded to {_1}	埋め込みを解除して {_1} に保存しました
-@msg	Updated {_1} image(s)	画像を {_1} 枚更新しました
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
@@ -4643,9 +4706,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every search thread stopped on an internal error (please report this bug)	すべての検索スレッドが内部エラーで停止しました (このバグを報告してください)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では VectorCraft の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
 @msg	choose the font files to add	追加するフォントファイルを選択してください
-@msg	{n} font file(s) are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} 個のフォントはこの環境では使用できません: テキストは別のフォントで表示されます
 @msg	not a file	ファイルではありません
 @msg	not a font file	フォントファイルではありません
 @msg	that document is no longer open	そのドキュメントはもう開かれていません
@@ -4654,7 +4714,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	画像を {n} 枚再リンクしましたが、{name} は再リンクできませんでした: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
@@ -4684,6 +4743,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PCX file is cut short	PCX ファイルが途中で切れています
 @msg	the PCX file's header is damaged	PCX ファイルのヘッダーが壊れています
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} プレーンに {bits} bit のピクセルを持つ PCX ファイルは読み込めません
+@msg	the JPEG 2000 file can't be read	JPEG 2000 ファイルを読み込めません
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ファイルには未対応の色空間または JPX コンテンツがあります
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
 @msg	zipped 32-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 32 bit PSD 画像データは読み込めません
 @msg	{depth}-bit PSD files in this colour mode can't be read	このカラーモードの {depth} bit PSD ファイルは読み込めません
@@ -5251,13 +5312,13 @@ lighting	Light	ライト
 	Slope:	勾配:
 axis	X Axis	X 軸
 axis	Y Axis	Y 軸
-@msg	Packaged {n} file(s) in {folder}	{n} 個のファイルを {folder} にパッケージしました
-@msg	Packaged {n} file(s) {note}	{n} 個のファイルをパッケージしました {note}
-@msg	Packaged {n} file(s)	{n} 個のファイルをパッケージしました
-	Packaged {n} file(s)	{n} 個のファイルをパッケージしました
-	Packaged {n} file(s) in {folder}	{n} 個のファイルを {folder} にパッケージしました
-	Packaged {n} file(s) {note}	{n} 個のファイルをパッケージしました {note}
-	{count} file(s) in {folder}. Show the package folder?	{folder} に {count} 個のファイル。パッケージフォルダーを表示しますか？
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} 個のファイルを {folder} にパッケージしました
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} 個のファイルをパッケージしました {note}
+@msgplural	Packaged {n} file|Packaged {n} files	{n} 個のファイルをパッケージしました
+@plural	Packaged {n} file|Packaged {n} files	{n} 個のファイルをパッケージしました
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} 個のファイルを {folder} にパッケージしました
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} 個のファイルをパッケージしました {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} に {n} 個のファイル。パッケージフォルダーを表示しますか？
 	Clockwise	時計回り
 	Dither	ディザ
 	Fine noise hides banding in the gradient fill	細かいノイズでグラデーションの塗りの縞を目立たなくします
@@ -5292,7 +5353,7 @@ axis	Y Axis	Y 軸
 	Include Objects On Canvas	カンバス上のオブジェクトを含める
 	Result(s): {count}	結果: {count}
 @msg	select one object	オブジェクトを 1 つ選択してください
-@msg	Global Edit works on paths, compound paths and symbol instances	グローバル編集はパス、複合パス、シンボルインスタンスに使用できます
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	グローバル編集はパス、複合パス、シンボルインスタンスとそれらのグループに使用できます
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（回転または反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
 	Add to Symbols	シンボルに追加
@@ -5544,6 +5605,11 @@ anchor	Points:	ポイント:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	ドットの色をアートから取得
+	Basic Character Formats	基本文字形式
+	Case	大文字と小文字
+@msg	{label} must be a number	{label} には数値を指定してください
+@msg	{label} must be a number of at least 0.1	{label} には 0.1 以上の数値を指定してください
+@msg	no character style `{name}`	文字スタイル `{name}` が見つかりません
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	ダブルトーン…
@@ -5567,6 +5633,13 @@ anchor	Points:	ポイント:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`、`removeWhiteOverprint` または `overprintBlack` を指定してください
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷インキの修正は CMYK ドキュメントで使用できます。先にファイル › ドキュメントのカラーモード › CMYK カラーを選択してください
 @msg	`{key}` must be 0..{max}	`{key}` は 0..{max} にしてください
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	最も近いスウォッチを検索…
+	Find Nearest Swatch	最も近いスウォッチを検索
+	Apply Nearest Swatch	最も近いスウォッチを適用
+	Select objects to find the swatches nearest their colors.	カラーに最も近いスウォッチを探すオブジェクトを選択してください。
+@msg	select objects or give `color`	オブジェクトを選択するか `color` を指定してください
+@msg	`color` is not a colour	`color` はカラーではありません
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	コーナーツール
 	Slide Anchor Along Path	パスに沿ってアンカーポイントをスライド
@@ -5594,6 +5667,7 @@ anchor	Points:	ポイント:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	テキストを分割
 	Combine Point Text	ポイント文字を結合
+	Join Point Text	ポイント文字を連結
 	Remove Breaks	改行を削除
 	Split Text at Cursor	カーソル位置でテキストを分割
 	Set Alignment, Keep Position	位置を保って行揃えを設定
@@ -5622,6 +5696,7 @@ breakText	Glyphs	字形
 @msg	Select horizontal point or area type whose text fits	テキストが収まっている横組みのポイント文字またはエリア内文字を選択してください
 @msg	Nothing to split at the cursor	カーソル位置で分割するものがありません
 @msg	Select two or more one-line point type objects on one baseline to combine	結合するには、同じベースライン上にある 1 行のポイント文字オブジェクトを 2 つ以上選択してください
+@msg	Select two or more one-line point type objects to join	連結するには、1 行のポイント文字オブジェクトを 2 つ以上選択してください
 @msg	No line breaks to remove	削除する強制改行がありません
 @msg	No paragraph breaks to remove	削除する段落の区切りがありません
 @msg	Too many breaks to remove at once	一度に削除する改行が多すぎます
@@ -5634,6 +5709,11 @@ breakText	Glyphs	字形
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` は lines、paragraphs、words、glyphs のいずれかにしてください({other} は使用できません)
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` は "line" または "paragraph" にしてください({other} は使用できません)
 @msg	`align` must be "left", "center" or "right", not {other}	`align` は "left"、"center"、"right" のいずれかにしてください({other} は使用できません)
+	File + Number	ファイル名 + 番号
+	File + Data Set Name	ファイル名 + データセット名
+	Data Set Name	データセット名
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` は `fileNumber`、`fileDataSetName`、`dataSetName` のいずれかである必要があります
+@msg	no free data set file name in destination folder	保存先フォルダーに使用可能なデータセットのファイル名がありません
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	パス効果
@@ -5675,3 +5755,100 @@ breakText	Glyphs	字形
 	Gap 4	間隔 4
 	Dash 5	線分 5
 	Gap 5	間隔 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+
+@msg	You must choose a side pattern.	側面パターンを選択してください。
+@msg	invalid pattern tile choice	パターンタイルの選択が無効です
+@msg	no pattern named `{choice}`	`{choice}` というパターンはありません
+	Delete the selected brushes?	選択したブラシを削除しますか？
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	これらのブラシの 1 つ以上が線で使われています。それらの線からブラシを外して、ブラシを削除しますか？
+	Remove Strokes	線を削除
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	配置ツール
+	Arrange in Grid…	グリッドに配置…
+	Arrange in Grid	グリッドに配置
+	Swap Objects	オブジェクトを入れ替え
+	Swap Objects and Sizes	オブジェクトとサイズを入れ替え
+	Replace with Top Object…	最前面のオブジェクトで置き換え…
+	Replace with Top Object	最前面のオブジェクトで置き換え
+	Set Size of Each…	個別にサイズを設定…
+	Set Size of Each	個別にサイズを設定
+@msg	select exactly two objects	オブジェクトをちょうど 2 つ選択してください
+@msg	give `width` or `height`	`width` または `height` を指定してください
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	重なり合うオブジェクトをグループ化
+@msg	too many objects selected (at most 20000)	選択されたオブジェクトが多すぎます（最大 20000）
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	ダッシュに分割…
+	Divide into Dashes	ダッシュに分割
+	Dash:	ダッシュ:
+	Gap:	間隔:
+	Fit to Corners and Ends	コーナーと端に合わせる
+	Remove Gaps	間隔を削除
+@msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
+@msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	破線をパスに拡張
+@msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	ドキュメントツール
+	Save a Timestamped Copy	日時付きのコピーを保存
+@msg	there is no clock here	ここには時計がありません
+@msg	there is no clock here: give `time` (Unix seconds)	ここには時計がありません：`time`（Unix 秒）を指定してください
+@msg	the document has never been saved: give `folder`	ドキュメントは一度も保存されていません：`folder` を指定してください
+@msg	every numbered name for the copy is taken	コピー用の番号付きの名前はすべて使用されています
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	レイヤーから新規シンボル
+	Convert Layers to Symbols	レイヤーをシンボルに変換
+@msg	{id} is no top-level layer	{id} は最上位のレイヤーではありません
+	Marathi	マラーティー語
+	Gujarati	グジャラート語
+	Bengali	ベンガル語
+	Punjabi	パンジャブ語
+	Tamil	タミル語
+	Telugu	テルグ語
+	Kannada	カンナダ語
+	Malayalam	マラヤーラム語
+	Odia	オディア語
+	Urdu	ウルドゥー語
+	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
+	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
+@msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	シンボルの種類:
+	Dynamic Symbol	ダイナミックシンボル
+	Static Symbol	スタティックシンボル
+	Symbol Instance Appearance	シンボルインスタンスのアピアランス
+	Reset Symbol Instance	シンボルインスタンスをリセット
+@msg	type must be static or dynamic, not {v}	type は static または dynamic にしてください({v} は無効です)
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` はスタティックシンボルです。先にシンボルの種類をダイナミックに設定してください
+@msg	path must be a list of child indices	path は子のインデックスのリストにしてください
+@msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
+@msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください
+@msg	pass newName, registration, exportType, nineSlice and/or type	newName、registration、exportType、nineSlice、type のいずれかを指定してください
+	Text Flow	テキストの流れ
+	By Rows	行方向
+	By Columns	列方向
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	不透明度をランダム化…
+	Randomize Opacity	不透明度をランダム化
+	Minimum:	最小:
+	Maximum:	最大:
+	Seed:	シード:
+@msg	`min` is greater than `max`	`min` が `max` より大きくなっています
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	オブジェクトを並べ替え…
+	Sort Objects	オブジェクトを並べ替え
+	Sort By:	並べ替えの基準:
+	Apply To:	適用先:
+	Area	面積
+	X Position	X 位置
+	Y Position	Y 位置
+	Stacking Order	重ね順
+	Small to Large	小さい順
+	Large to Small	大きい順
+	Distribute Evenly	均等に分布

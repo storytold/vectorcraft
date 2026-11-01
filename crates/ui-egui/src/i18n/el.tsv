@@ -196,7 +196,7 @@ font-technology	Variable	Μεταβλητές
 	Apply Paragraph Style	Εφαρμογή στυλ παραγράφου
 	Apply SVG Filter…	Εφαρμογή φίλτρου SVG…
 	Apply to All	Εφαρμογή σε όλα
-	Apply to All ({count} more missing)	Εφαρμογή σε όλα (λείπουν ακόμη {count})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Εφαρμογή σε όλα (λείπει ακόμη {n})|Εφαρμογή σε όλα (λείπουν ακόμη {n})
 	Arc	Τόξο
 	Arc Lower…	Κάτω τόξο…
 	Arc Tool	Τόξο (Arc Tool)
@@ -470,7 +470,7 @@ font-technology	Variable	Μεταβλητές
 	Collect in New Layer	Συγκέντρωση σε νέο επίπεδο
 	Collect Links in a Separate Folder	Συγκέντρωση συνδεδεμένων αρχείων σε ξεχωριστό φάκελο
 	Color	Χρώμα
-	Color (, or <)	Χρώμα (, ή <)
+	Color (, or Shift+,)	Χρώμα (, ή Shift+,)
 	Color Adjustments	Ρυθμίσεις χρώματος
 	Color bars	Χρωματικές μπάρες
 	Color blindness – Deuteranopia-type	Αχρωματοψία – τύπου δευτερανοπίας
@@ -623,6 +623,13 @@ font-technology	Variable	Μεταβλητές
 	Create Report	Δημιουργία αναφοράς
 	Create Slice	Δημιουργία τομής
 	Create Sub-folders	Δημιουργία υποφακέλων
+	Clear Selection	Απαλοιφή επιλογής
+	Export PDFs As:	Εξαγωγή PDF ως:
+	Single File	Ένα αρχείο
+	Multiple Files	Πολλά αρχεία
+	Format Presets	Προεπιλογές μορφής
+	Grid View	Προβολή πλέγματος
+	Selected: {n}, Total number of files to export: {m}	Επιλεγμένα: {n}, συνολικός αριθμός αρχείων για εξαγωγή: {m}
 	Create Text	Δημιουργία κειμένου
 	Create Trim Marks	Δημιουργία σημαδιών ξακρίσματος
 	Created	Δημιουργήθηκε
@@ -702,11 +709,22 @@ font-technology	Variable	Μεταβλητές
 	Delete Stop	Διαγραφή στάσης ντεγκραντέ
 	Delete Swatch	Διαγραφή δείγματος χρώματος
 	Delete Symbol	Διαγραφή συμβόλου
+	Delete the selected symbol?	Να διαγραφεί το επιλεγμένο σύμβολο;
+	Delete the selected symbols?	Να διαγραφούν τα επιλεγμένα σύμβολα;
+	No unused symbols	Δεν υπάρχουν αχρησιμοποίητα σύμβολα
+	Delete Symbols	Διαγραφή συμβόλων
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Ένα ή περισσότερα από τα σύμβολα χρησιμοποιούνται και δεν μπορούν να διαγραφούν μέχρι να επεκταθούν ή να διαγραφούν τα στιγμιότυπά τους.
+	Expand Instances	Επέκταση στιγμιοτύπων
+	Delete Instances	Διαγραφή στιγμιοτύπων
+	Yes	Ναι
+	No	Όχι
 	Delete Tab	Διαγραφή στηλοθέτη
 	Delete the graphic style “{name}”?	Να διαγραφεί το στυλ γραφικών «{name}»;
+	Delete Action Sets	Διαγραφή συνόλων ενεργειών
+	Delete the action set “{name}” and its actions?	Να διαγραφεί το σύνολο ενεργειών «{name}» και οι ενέργειές του;
+	Delete the selected action sets and their actions?	Να διαγραφούν τα επιλεγμένα σύνολα ενεργειών και οι ενέργειές τους;
 	Delete Theme	Διαγραφή θέματος
 	Delete theme	Διαγραφή θέματος
-	Delete these {count} swatches and groups?	Να διαγραφούν αυτά τα {count} δείγματα χρωμάτων και οι ομάδες;
 	Delete these {n} graphic styles?	Να διαγραφούν αυτά τα {n} στυλ γραφικών;
 	Delete this saved preset	Διαγραφή αυτής της αποθηκευμένης προεπιλογής
 	Delete this {n} graphic style?	Να διαγραφεί αυτό το {n} στυλ γραφικών;
@@ -862,9 +880,10 @@ font-technology	Variable	Μεταβλητές
 	Edit Selection	Επεξεργασία επιλογής
 	Edit Selection…	Επεξεργασία επιλογής…
 	Edit Symbol	Επεξεργασία συμβόλου
+	Exit Symbol Editing Mode	Έξοδος από τη λειτουργία επεξεργασίας συμβόλου
 	Edit Text	Επεξεργασία κειμένου
 	Edit the applied effect, or add another one?	Επεξεργασία του εφαρμοσμένου εφέ ή προσθήκη άλλου;
-	Edit the selected point's colour in the Color panel	Επεξεργασία του χρώματος επιλεγμένου σημείου στον πίνακα Χρώμα
+	Edit the point	Επεξεργασία σημείου
 	Edit the stop	Επεξεργασία σημείου ντεγκραντέ
 	Edit Theme	Επεξεργασία θέματος
 	Edit theme	Επεξεργασία θέματος
@@ -1178,6 +1197,9 @@ font-technology	Variable	Μεταβλητές
 	Hide Live Paint Gaps	Απόκρυψη διακένων δυναμικής βαφής
 	Select Fills	Επιλογή γεμισμάτων
 	Select Strokes	Επιλογή περιγραμμάτων
+	Paint Fills	Βαφή γεμισμάτων
+	Paint Strokes	Βαφή περιγραμμάτων
+	Highlight	Επισήμανση
 	Gaussian Blur…	Θόλωση Γκάους…
 	General	Γενικά
 	General › Placement › X	Γενικά › Τοποθέτηση › X
@@ -1200,7 +1222,7 @@ font-technology	Variable	Μεταβλητές
 	GPL palettes keep solid colours only, as RGB.	Οι παλέτες GPL διατηρούν μόνο συμπαγή χρώματα σε RGB.
 	GPU Performance	Απόδοση GPU
 	Gradient	Ντεγκραντέ
-	Gradient (. or >)	Ντεγκραντέ (. ή >)
+	Gradient (. or Shift+.)	Ντεγκραντέ (. ή Shift+.)
 	Gradient across stroke	Ντεγκραντέ εγκάρσια στο περίγραμμα
 	Gradient along stroke	Ντεγκραντέ κατά μήκος του περιγράμματος
 	Gradient and Mesh Resolution:	Ανάλυση ντεγκραντέ και πλέγματος:
@@ -1377,6 +1399,8 @@ font-technology	Variable	Μεταβλητές
 	Objects on Path	Αντικείμενα σε διαδρομή
 	Attach	Προσάρτηση
 	Objects on Path Options	Επιλογές αντικειμένων σε διαδρομή
+	Pivot:	Σημείο περιστροφής:
+	Rotate:	Περιστροφή:
 	Objects on Path Tool	Αντικείμενα σε διαδρομή (Objects on Path Tool)
 	Attach Objects on Path	Προσάρτηση αντικειμένων σε διαδρομή
 	Expand Objects on Path	Επέκταση αντικειμένων σε διαδρομή
@@ -1475,6 +1499,7 @@ font-technology	Variable	Μεταβλητές
 	In Tangent Handles	Λαβές εφαπτομένης εισόδου
 	In the selected objects	Στα επιλεγμένα αντικείμενα
 	Inches	Ίντσες
+	Include Artboard Fill	Συμπερίληψη γεμίσματος πίνακα σχεδίασης
 	Include Blacks with CMY:	Συμπερίληψη μαύρων με CMY:
 	Include Bleed	Συμπερίληψη ξακρίσματος
 	Include Cmy Blacks	Συμπερίληψη μαύρων CMY
@@ -1531,7 +1556,7 @@ font-technology	Variable	Μεταβλητές
 	Keep Plain Text	Διατήρηση απλού κειμένου
 	Keep this row's colors (exclude)	Διατήρηση των χρωμάτων αυτής της γραμμής (εξαίρεση)
 	Keep:	Διατήρηση:
-	Kerning (0 = Auto)	Διαγραμμάτωση (0 = Αυτόματο)
+	Kerning	Διαγραμμάτωση
 	Keyboard Increment	Βήμα πληκτρολογίου
 	Keyboard Shortcut Conflicts	Διενέξεις συντομεύσεων πληκτρολογίου
 	Keyboard Shortcut Set	Σύνολο συντομεύσεων πληκτρολογίου
@@ -1936,6 +1961,7 @@ font-technology	Variable	Μεταβλητές
 	Subtract	Αφαίρεση
 	Superscript	Εκθέτης
 	Superscript:	Εκθέτης:
+	Stylistic Alternates	Εναλλακτικοί χαρακτήρες στυλ
 	Swash	Διακοσμητικά τελειώματα
 	Swatches	Δείγματα χρωμάτων
 	New Group	Νέα ομάδα
@@ -2017,6 +2043,8 @@ imageTrace	Outline	Περίγραμμα
 @plural	{n} item|{n} items	{n} στοιχείο|{n} στοιχεία
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Πίνακας χρωμάτων ({n} χρώμα)|Πίνακας χρωμάτων ({n} χρώματα)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Να διαγραφεί αυτό το {n} στυλ γραφικών;|Να διαγραφούν αυτά τα {n} στυλ γραφικών;
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Να διαγραφεί αυτό το {n} πινέλο;|Να διαγραφούν αυτά τα {n} πινέλα;
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Να διαγραφεί αυτό το {n} δείγμα χρώματος ή ομάδα;|Να διαγραφούν αυτά τα {n} δείγματα χρωμάτων και οι ομάδες;
 @plural	{n} Layer|{n} Layers	{n} επίπεδο|{n} επίπεδα
 @plural	{n} Object|{n} Objects	{n} αντικείμενο|{n} αντικείμενα
 @plural	{n} area highlighted|{n} areas highlighted	{n} περιοχή επισημάνθηκε|{n} περιοχές επισημάνθηκαν
@@ -2066,6 +2094,7 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
+@msg	kerning must be a number, "auto", or "optical"	Η διαγραμμάτωση πρέπει να είναι αριθμός, «auto» ή «optical»
 @msg	the selection has no gradient fill	η επιλογή δεν έχει ντεγκραντέ γεμίσματος
 @msg	the selection has no gradient stroke	η επιλογή δεν έχει ντεγκραντέ περιγράμματος
 @msg	the selection has no pattern fill	η επιλογή δεν έχει μοτίβο γεμίσματος
@@ -2095,12 +2124,12 @@ axis	Both	Και τα δύο
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%, αλλά θα χρησιμοποιηθούν τα δεδομένα επεξεργασίας
 @msg	`Custom` stands for changed settings: save the preset under another name	Το `Custom` αντιστοιχεί σε αλλαγμένες ρυθμίσεις: αποθηκεύστε την προεπιλογή με άλλο όνομα
 @msg	`to` must be "corner" or "smooth"	Το `to` πρέπει να είναι "corner" ή "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	Το `fontHeightReference` πρέπει να είναι "emBox", "capHeight", "xHeight" ή "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Τα αρχεία BMP πρέπει να είναι RGB ή σε κλίμακα του γκρι: colorModel rgb ή gray
 @msg	Blend colors: select at least three objects with filled colours	Ανάμειξη χρωμάτων: επιλέξτε τουλάχιστον τρία αντικείμενα με χρώμα γεμίσματος
 @msg	Combine Slices: the slices have no bounds	Συνδυασμός τομών: οι τομές δεν έχουν όρια
 @msg	Convert to Artboards: selection has no area	Μετατροπή σε πίνακες σχεδίασης: η επιλογή δεν έχει επιφάνεια
 @msg	Convert to Shape: no rectangles or ellipses selected	Μετατροπή σε σχήμα: δεν έχουν επιλεγεί ορθογώνια ή ελλείψεις
-@msg	Copied the CSS of {rules} object(s)	Αντιγράφηκαν οι κανόνες CSS από {rules} αντικείμενα
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}
@@ -2117,13 +2146,11 @@ axis	Both	Και τα δύο
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
-@msg	Downloaded {_1} file(s)	Έγινε λήψη {_1} αρχείων
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
 @msg	Expand: no brush strokes selected	Επέκταση: δεν επιλέχθηκαν πινελιές
 @msg	Expand: no gradient fills	Επέκταση: δεν υπάρχουν γεμίσματα ντεγκραντέ
 @msg	Expand: nothing to expand	Επέκταση: δεν υπάρχει περιεχόμενο προς επέκταση
-@msg	Exported {count} file(s) to {folder}	Εξήχθησαν {count} αρχεία στον φάκελο {folder}
 @msg	Exported {path}	Εξήχθη το {path}
 @msg	Flatten Transparency: select objects to flatten	Ισοπέδωση διαφάνειας: επιλέξτε αντικείμενα προς ισοπέδωση
 @msg	Flatten Transparency: {e}	Ισοπέδωση διαφάνειας: {e}
@@ -2146,7 +2173,7 @@ axis	Both	Και τα δύο
 @msg	PDF settings are not an object	Οι ρυθμίσεις PDF δεν είναι αντικείμενο
 @msg	PDF security settings are not an object	Οι ρυθμίσεις ασφαλείας PDF δεν είναι αντικείμενο
 @msg	PDF writer error: {0}	Σφάλμα εγγραφής PDF: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder} ({note})|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder} ({note})
 @msg	Packaged {n} file(s){note}	Συσκευάστηκαν {n} αρχεία{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση σε πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (η έκδοση ιστού πραγματοποιεί λήψη αρχείων)
 @msg	Release Guides: no guides	Αποδέσμευση οδηγών: δεν υπάρχουν οδηγοί
@@ -2872,6 +2899,7 @@ theme	Appearance	Εμφάνιση
 	Open Swatch Library	Άνοιγμα βιβλιοθήκης δειγμάτων χρωμάτων
 	Open the URL in the web browser	Άνοιγμα της διεύθυνσης στο πρόγραμμα περιήγησης
 	Opened with {} note(s): {}	Άνοιξε με {} σημειώσεις: {}
+	Optical	Οπτική
 	Optical Margin Alignment	Οπτική στοίχιση περιθωρίου
 	Optimize for fast web view	Βελτιστοποίηση για γρήγορη προβολή στον ιστό
 	Options for Selection…	Επιλογές για την επιλογή…
@@ -2912,7 +2940,7 @@ theme	Appearance	Εμφάνιση
 	Override Character Color	Παράκαμψη χρώματος χαρακτήρων
 	Package collects a saved document with its linked files and fonts.	Η συσκευασία συγκεντρώνει ένα αποθηκευμένο έγγραφο μαζί με συνδεδεμένα αρχεία και γραμματοσειρές.
 	Package created	Η συσκευασία δημιουργήθηκε
-	Packaged {n} file(s) in {folder} {note}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder} {note}|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder} {note}
 	Packaged {n} file(s){note}	Συσκευάστηκαν {n} αρχεία{note}
 	Page	Σελίδα
 	Page information	Πληροφορίες σελίδας
@@ -3043,6 +3071,16 @@ theme	Appearance	Εμφάνιση
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
+digits	Devanagari	Ντεβαναγκάρι
+digits	Bengali	Βεγγαλικά
+digits	Gurmukhi	Γκουρμούκι
+digits	Gujarati	Γκουγιαράτι
+digits	Odia	Όντια
+digits	Tamil	Ταμιλικά
+digits	Telugu	Τελούγκου
+digits	Kannada	Κανάντα
+digits	Malayalam	Μαλαγιάλαμ
+	Proportional Lining	Ισοϋψείς αναλογικοί αριθμοί
 	Proportional Oldstyle	Αναλογικοί παλαιοτυπικοί αριθμοί
 	Pucker & Bloat…	Συρρίκνωση και διόγκωση…
 	Pucker Tool	Συρρίκνωση (Pucker Tool)
@@ -3141,9 +3179,11 @@ theme	Appearance	Εμφάνιση
 	Find Fonts	Εύρεση γραμματοσειρών
 	Searching…	Αναζήτηση…
 	Not found	Δεν βρέθηκε
-	{folders} folder(s) and {files} file(s) searched	Έγινε αναζήτηση σε {folders} φακέλους και {files} αρχεία
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Παραλείφθηκαν {count} φάκελοι, όπως φάκελοι άλλων εφαρμογών, του συστήματος και κρυφοί φάκελοι
-	{count} folder(s) or file(s) couldn't be read	Δεν ήταν δυνατή η ανάγνωση {count} φακέλων ή αρχείων
+	{folders} and {files} searched	Έγινε αναζήτηση: {folders}, {files}
+@plural	{n} folder|{n} folders	{n} φάκελος|{n} φάκελοι
+@plural	{n} file|{n} files	{n} αρχείο|{n} αρχεία
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Παραλείφθηκε {n} φάκελος, όπως φάκελοι άλλων εφαρμογών, του συστήματος και κρυφοί φάκελοι|Παραλείφθηκαν {n} φάκελοι, όπως φάκελοι άλλων εφαρμογών, του συστήματος και κρυφοί φάκελοι
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Δεν ήταν δυνατή η ανάγνωση {n} φακέλου ή αρχείου|Δεν ήταν δυνατή η ανάγνωση {n} φακέλων ή αρχείων
 	The search stopped at its limit: search a smaller folder.	Η αναζήτηση έφτασε στο όριό της: επιλέξτε μικρότερο φάκελο.
 	Copy only fonts you own or are licensed to install.	Αντιγράψτε μόνο γραμματοσειρές που σας ανήκουν ή έχετε άδεια να εγκαταστήσετε.
 	VectorCraft copies the fonts to {folder}.	Το VectorCraft αντιγράφει τις γραμματοσειρές στον φάκελο {folder}.
@@ -3415,6 +3455,7 @@ theme	Appearance	Εμφάνιση
 	Shape Mode	Λειτουργία σχήματος
 	Shape Modes:	Λειτουργίες σχημάτων:
 	Shape Properties:	Ιδιότητες σχήματος:
+	Shape Properties	Ιδιότητες σχήματος
 	Shaper Tool	Διαμορφωτής σχημάτων (Shaper Tool)
 	Shear Tool	Διάτμηση (Shear Tool)
 	Shift to Color…	Μετατόπιση προς χρώμα…
@@ -3660,6 +3701,7 @@ theme	Appearance	Εμφάνιση
 	Tabs	Στηλοθέτες
 	Tabular Lining	Ισοϋψείς αριθμοί σταθερού πλάτους
 	Tabular Oldstyle	Παλαιοτυπικοί αριθμοί σταθερού πλάτους
+	Titling Alternates	Εναλλακτικοί χαρακτήρες τίτλων
 	Target	Στόχος
 	Target Contents	Περιεχόμενα στόχου
 	Tate-chu-yoko	Tate-chu-yoko
@@ -3905,13 +3947,13 @@ theme	Appearance	Εμφάνιση
 	Zoom to Selection	Ζουμ στην επιλογή
 	Zoom with Mouse Wheel	Ζουμ με τον τροχό του ποντικιού
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} αρχεία στον φάκελο {folder}{note}. Να εμφανιστεί ο φάκελος συσκευασίας;
-	{count} linked file(s) not found	Δεν βρέθηκαν {count} συνδεδεμένα αρχεία
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} αρχείο στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;
+@plural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
 	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} συνδεδεμένες εικόνες άλλαξαν μετά την αποθήκευση του εγγράφου. Να εμφανιστούν οι νέες εκδόσεις;
-	{count} linked image(s) changed on disk. Show the new versions?	{count} συνδεδεμένες εικόνες άλλαξαν στον δίσκο. Να εμφανιστούν οι νέες εκδόσεις;
-	{count} more rules: Export writes every one.	{count} ακόμη κανόνες: η εξαγωγή περιλαμβάνει όλους.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Παραλείφθηκαν {count} αντικείμενα χωρίς όνομα: ονομάστε τα ή ενεργοποιήστε τα Αντικείμενα χωρίς όνομα από το μενού του πίνακα.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε μετά την αποθήκευση του εγγράφου. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν μετά την αποθήκευση του εγγράφου. Να εμφανιστούν οι νέες εκδόσεις;
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο. Να εμφανιστούν οι νέες εκδόσεις;
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} ακόμη κανόνας: η εξαγωγή τον περιλαμβάνει.|{n} ακόμη κανόνες: η εξαγωγή περιλαμβάνει όλους.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Παραλείφθηκε {n} αντικείμενο χωρίς όνομα: ονομάστε το ή ενεργοποιήστε τα Αντικείμενα χωρίς όνομα από το μενού του πίνακα.|Παραλείφθηκαν {n} αντικείμενα χωρίς όνομα: ονομάστε τα ή ενεργοποιήστε τα Αντικείμενα χωρίς όνομα από το μενού του πίνακα.
 	{effect} is already applied	Το εφέ {effect} έχει ήδη εφαρμοστεί
 	{format} Options	Επιλογές {format}
 	{kind} Gradient	Ντεγκραντέ {kind}
@@ -4028,6 +4070,7 @@ theme	Appearance	Εμφάνιση
 @msg	cannot split an open path at its end point	δεν είναι δυνατή η διαίρεση ανοιχτής διαδρομής στο τελικό σημείο της
 @msg	closing needs three anchors	το κλείσιμο απαιτεί τρία σημεία αγκύρωσης
 @msg	check an asset to export	επιλέξτε στοιχείο για εξαγωγή
+@msg	check an artboard to export	επιλέξτε πινακίδα σχεδίασης για εξαγωγή
 @msg	check a layer to export	επιλέξτε ένα επίπεδο για εξαγωγή
 @msg	select the art to export first	επιλέξτε πρώτα το γραφικό για εξαγωγή
 @msg	choice must be "merge" or "add", not `{choice}`	η επιλογή πρέπει να είναι "merge" ή "add", όχι `{choice}`
@@ -4170,6 +4213,7 @@ theme	Appearance	Εμφάνιση
 @msg	no such perspective grid preset	δεν υπάρχει τέτοια προεπιλογή πλέγματος προοπτικής
 @msg	no such recent file	δεν υπάρχει τέτοιο πρόσφατο αρχείο
 @msg	no such recent font	δεν υπάρχει τέτοια πρόσφατη γραμματοσειρά
+@msg	some text is hidden or locked, so its font wasn't replaced	κάποιο κείμενο είναι κρυφό ή κλειδωμένο, οπότε η γραμματοσειρά του δεν αντικαταστάθηκε
 @msg	no such saved selection	δεν υπάρχει τέτοια αποθηκευμένη επιλογή
 @msg	no such segment	δεν υπάρχει τέτοιο τμήμα
 @msg	no such spine point	δεν υπάρχει τέτοιο σημείο κεντρικής καμπύλης
@@ -4258,6 +4302,8 @@ theme	Appearance	Εμφάνιση
 @msg	select a repeat	επιλέξτε επανάληψη
 @msg	select a stroke with a variable width	επιλέξτε περίγραμμα μεταβλητού πλάτους
 @msg	select a symbol instance	επιλέξτε στιγμιότυπο συμβόλου
+@msg	select instances of one symbol	επιλέξτε στιγμιότυπα ενός μόνο συμβόλου
+@msg	a symbol can't hold an instance of itself	ένα σύμβολο δεν μπορεί να περιέχει στιγμιότυπο του εαυτού του
 @msg	select an Image Trace object	επιλέξτε αντικείμενο διανυσματοποίησης εικόνας
 @msg	could not decode image: {0}	δεν ήταν δυνατή η αποκωδικοποίηση εικόνας: {0}
 @msg	image is empty	η εικόνα είναι κενή
@@ -4398,10 +4444,6 @@ theme	Appearance	Εμφάνιση
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	το `documentData` έχει {size} byte (όριο {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	το {_1} χρησιμοποιείται ήδη από το {_2}
 @msg	{_1} is reserved by the system	Το {_1} είναι δεσμευμένο από το σύστημα
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} συνδεδεμένα αρχεία δεν μπορούν να διαβαστούν εδώ: εμφανίζονται οι προεπισκοπήσεις τους
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} εικόνες δεν ήταν δυνατό να αποκωδικοποιηθούν: εμφανίζονται ως πλαίσια με σταυρό
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
-@msg	Updated {_1} linked file(s) changed on disk	Ενημερώθηκαν {_1} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
 @msg	{_1}: not saved, so not closed	{_1}: δεν αποθηκεύτηκε και επομένως δεν έκλεισε
 @msg	{bpp}-bit bitmaps can't be read	δεν μπορούν να διαβαστούν bitmap {bpp} bit
 @msg	{command} didn't create an object	η εντολή {command} δεν δημιούργησε αντικείμενο
@@ -4421,7 +4463,6 @@ theme	Appearance	Εμφάνιση
 @msg	Couldn't place {name}: {e}	Δεν ήταν δυνατή η τοποθέτηση του {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Δεν ήταν δυνατή η επικόλληση από το πρόχειρο: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Αποθηκεύτηκε το {path} με {_1} σημειώσεις: {first}
-@msg	Exported {what} with {_1} note(s): {first}	Εξήχθη το {what} με {_1} σημειώσεις: {first}
 @msg	Exported {what}	Εξήχθη: {what}
 @msg	Saved {n} files beside {path}	Αποθηκεύτηκαν {n} αρχεία δίπλα στο {path}
 @msg	Saving	Αποθήκευση σε εξέλιξη
@@ -4432,12 +4473,26 @@ theme	Appearance	Εμφάνιση
 @msg	Saving recovery data for {_1}	Αποθήκευση δεδομένων ανάκτησης για {_1}
 @msg	Discarded {_1} recovered document(s)	Απορρίφθηκαν {_1} ανακτημένα έγγραφα
 @msg	Restored {_1} recovered document(s): save them to keep them	Επαναφέρθηκαν {_1} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Ενσωματώθηκαν {n} εικόνες· λείπουν {missing}: επανασυνδέστε τις πρώτα
-@msg	Embedded {n} image(s)	Ενσωματώθηκαν {n} εικόνες
-@msg	Relinked {_1} image(s)	Επανασυνδέθηκαν {_1} εικόνες
-@msg	Relinked {n} image(s)	Επανασυνδέθηκαν {n} εικόνες
-@msg	Relinked {n} image(s); not in that folder: {_1}	Επανασυνδέθηκαν {n} εικόνες· δεν βρέθηκαν στον φάκελο: {_1}
-@msg	Updated {_1} image(s)	Ενημερώθηκαν {_1} εικόνες
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ενσωματώθηκε {n} εικόνα· λείπουν {missing}: επανασυνδέστε τις πρώτα|Ενσωματώθηκαν {n} εικόνες· λείπουν {missing}: επανασυνδέστε τις πρώτα
+@msgplural	Embedded {n} image|Embedded {n} images	Ενσωματώθηκε {n} εικόνα|Ενσωματώθηκαν {n} εικόνες
+@msgplural	Relinked {n} image|Relinked {n} images	Επανασυνδέθηκε {n} εικόνα|Επανασυνδέθηκαν {n} εικόνες
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Επανασυνδέθηκε {n} εικόνα· δεν βρέθηκαν στον φάκελο: {names}|Επανασυνδέθηκαν {n} εικόνες· δεν βρέθηκαν στον φάκελο: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Επανασυνδέθηκε {n} εικόνα· δεν ήταν δυνατή η επανασύνδεση της {name}: {reason}|Επανασυνδέθηκαν {n} εικόνες· δεν ήταν δυνατή η επανασύνδεση της {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Ενημερώθηκε {n} εικόνα|Ενημερώθηκαν {n} εικόνες
+@msgplural	Replaced {n} image|Replaced {n} images	Αντικαταστάθηκε {n} εικόνα|Αντικαταστάθηκαν {n} εικόνες
+@msgplural	Broke {n} link|Broke {n} links	Καταργήθηκε {n} σύνδεση|Καταργήθηκαν {n} συνδέσεις
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Καταργήθηκε {n} σύνδεση· δεν είναι δυνατή η ανάγνωση {missing}: επανασυνδέστε ή ενημερώστε τες πρώτα|Καταργήθηκαν {n} συνδέσεις· δεν είναι δυνατή η ανάγνωση {missing}: επανασυνδέστε ή ενημερώστε τες πρώτα
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} συνδεδεμένο αρχείο δεν μπορεί να διαβαστεί εδώ: εμφανίζεται η προεπισκόπησή του|{n} συνδεδεμένα αρχεία δεν μπορούν να διαβαστούν εδώ: εμφανίζονται οι προεπισκοπήσεις τους
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} εικόνα δεν ήταν δυνατό να αποκωδικοποιηθεί: εμφανίζεται ως πλαίσιο με σταυρό|{n} εικόνες δεν ήταν δυνατό να αποκωδικοποιηθούν: εμφανίζονται ως πλαίσια με σταυρό
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τη νέα έκδοση|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ενημερώθηκε {n} συνδεδεμένο αρχείο που άλλαξε στον δίσκο|Ενημερώθηκαν {n} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Εξήχθη το {what} με {n} σημείωση: {first}|Εξήχθη το {what} με {n} σημειώσεις: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} γραμματοσειρά δεν είναι διαθέσιμη εδώ: το κείμενό της εμφανίζεται με άλλη γραμματοσειρά|{n} γραμματοσειρές δεν είναι διαθέσιμες εδώ: το κείμενό τους εμφανίζεται με άλλη γραμματοσειρά
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Αντιγράφηκαν οι κανόνες CSS από {n} αντικείμενο|Αντιγράφηκαν οι κανόνες CSS από {n} αντικείμενα
+@msgplural	Downloaded {n} file|Downloaded {n} files	Έγινε λήψη {n} αρχείου|Έγινε λήψη {n} αρχείων
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Εξήχθη {n} αρχείο στον φάκελο {folder}|Εξήχθησαν {n} αρχεία στον φάκελο {folder}
 @msg	Unembedded to {_1}	Καταργήθηκε η ενσωμάτωση στο {_1}
 @msg	Reset {_1}	Επαναφορά {_1}
 @msg	Sent to {_1}	Στάλθηκε στο {_1}
@@ -4489,9 +4544,6 @@ theme	Appearance	Εμφάνιση
 @msg	every search thread stopped on an internal error (please report this bug)	όλα τα νήματα αναζήτησης σταμάτησαν λόγω εσωτερικού σφάλματος (αναφέρετε το πρόβλημα)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	ο φάκελος γραμματοσειρών του VectorCraft δεν έχει καθοριστεί εδώ: τον ορίζουν η εφαρμογή υπολογιστή και το vectorcraft-cli
 @msg	choose the font files to add	επιλέξτε τα αρχεία γραμματοσειρών που θέλετε να προσθέσετε
-@msg	{n} font file(s) are now in {folder}	{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} γραμματοσειρές δεν είναι διαθέσιμες εδώ: το κείμενό τους εμφανίζεται με άλλη γραμματοσειρά
 @msg	not a file	δεν είναι αρχείο
 @msg	not a font file	δεν είναι αρχείο γραμματοσειράς
 @msg	that document is no longer open	αυτό το έγγραφο δεν είναι πλέον ανοιχτό
@@ -4500,7 +4552,6 @@ theme	Appearance	Εμφάνιση
 @msg	every numbered name for it is taken in the Fonts folder	όλα τα αριθμημένα ονόματά του χρησιμοποιούνται ήδη στον φάκελο γραμματοσειρών
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Επανασυνδέθηκαν {n} εικόνες· δεν ήταν δυνατή η επανασύνδεση της {name}: {reason}
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -4533,6 +4584,12 @@ theme	Appearance	Εμφάνιση
 	Insert Inline Symbol	Εισαγωγή ενσωματωμένου συμβόλου
 	ICF Top/Right	ICF επάνω/δεξιά
 	ICF Bottom/Left	ICF κάτω/αριστερά
+	Show Font Height Options	Εμφάνιση επιλογών ύψους γραμματοσειράς
+	Hide Font Height Options	Απόκρυψη επιλογών ύψους γραμματοσειράς
+	Set Font Height Reference	Ορισμός αναφοράς ύψους γραμματοσειράς
+	Em Box	Τετράγωνο em
+	x-Height	Ύψος x
+	ICF Box	Πλαίσιο ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
 @msg	`corners` must be an array of anchor indices, not {v}	το `corners` πρέπει να είναι πίνακας δεικτών αγκύρωσης, όχι {v}
@@ -4562,6 +4619,8 @@ theme	Appearance	Εμφάνιση
 @msg	the PCX file is cut short	το αρχείο PCX είναι περικομμένο
 @msg	the PCX file's header is damaged	η κεφαλίδα του αρχείου PCX είναι κατεστραμμένη
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	τα αρχεία PCX με εικονοστοιχεία {bits} bit σε {planes} επίπεδα δεν διαβάζονται
+@msg	the JPEG 2000 file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου JPEG 2000
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	το αρχείο JPEG 2000 έχει μη υποστηριζόμενο χρωματικό χώρο ή περιεχόμενο JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
 @msg	zipped 32-bit PSD image data with prediction can't be read	τα συμπιεσμένα δεδομένα εικόνας PSD 32 bit με πρόβλεψη δεν διαβάζονται
 @msg	{depth}-bit PSD files in this colour mode can't be read	τα αρχεία PSD {depth} bit δεν διαβάζονται σε αυτήν τη λειτουργία χρώματος
@@ -5522,13 +5581,13 @@ effect	Points	Σημεία
 	Slope:	Κλίση:
 axis	X Axis	Άξονας X
 axis	Y Axis	Άξονας Y
-@msg	Packaged {n} file(s) in {folder}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
-@msg	Packaged {n} file(s) {note}	Συσκευάστηκαν {n} αρχεία {note}
-@msg	Packaged {n} file(s)	Συσκευάστηκαν {n} αρχεία
-	Packaged {n} file(s)	Συσκευάστηκαν {n} αρχεία
-	Packaged {n} file(s) in {folder}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
-	Packaged {n} file(s) {note}	Συσκευάστηκαν {n} αρχεία {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} αρχεία στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder}|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Συσκευάστηκε {n} αρχείο {note}|Συσκευάστηκαν {n} αρχεία {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Συσκευάστηκε {n} αρχείο|Συσκευάστηκαν {n} αρχεία
+@plural	Packaged {n} file|Packaged {n} files	Συσκευάστηκε {n} αρχείο|Συσκευάστηκαν {n} αρχεία
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder}|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Συσκευάστηκε {n} αρχείο {note}|Συσκευάστηκαν {n} αρχεία {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} αρχείο στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;
 	Clockwise	Δεξιόστροφα
 	Dither	Πρόσθεση θορύβου
 	Fine noise hides banding in the gradient fill	Ο λεπτός θόρυβος κρύβει τις λωρίδες στο γέμισμα ντεγκραντέ
@@ -5562,7 +5621,7 @@ axis	Y Axis	Άξονας Y
 	Include Objects On Canvas	Συμπερίληψη αντικειμένων στον καμβά
 	Result(s): {count}	Αποτέλεσμα(τα): {count}
 @msg	select one object	επιλέξτε ένα αντικείμενο
-@msg	Global Edit works on paths, compound paths and symbol instances	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές και παρουσίες συμβόλων
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές, παρουσίες συμβόλων και ομάδες τους
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
 	Add to Symbols	Προσθήκη στα σύμβολα
@@ -5811,6 +5870,11 @@ anchor	Points:	Σημεία:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Χρώμα κουκκίδων από το γραφικό
+	Basic Character Formats	Βασικές μορφές χαρακτήρων
+	Case	Πεζά και κεφαλαία
+@msg	{label} must be a number	Το {label} πρέπει να είναι αριθμός
+@msg	{label} must be a number of at least 0.1	Το {label} πρέπει να είναι αριθμός τουλάχιστον 0,1
+@msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Δίτονο…
@@ -5834,6 +5898,13 @@ anchor	Points:	Σημεία:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	δώστε `inkLimit`, `removeWhiteOverprint` ή `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Οι διορθώσεις μελανιών εκτύπωσης ισχύουν σε έγγραφα CMYK: επιλέξτε πρώτα Αρχείο › Λειτουργία χρώματος εγγράφου › Χρώμα CMYK
 @msg	`{key}` must be 0..{max}	το `{key}` πρέπει να είναι 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Εύρεση πλησιέστερου δείγματος χρώματος…
+	Find Nearest Swatch	Εύρεση πλησιέστερου δείγματος χρώματος
+	Apply Nearest Swatch	Εφαρμογή πλησιέστερου δείγματος χρώματος
+	Select objects to find the swatches nearest their colors.	Επιλέξτε αντικείμενα για να βρείτε τα δείγματα χρωμάτων που πλησιάζουν περισσότερο τα χρώματά τους.
+@msg	select objects or give `color`	επιλέξτε αντικείμενα ή δώστε `color`
+@msg	`color` is not a colour	το `color` δεν είναι χρώμα
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Γωνίες (Corner Tool)
 	Slide Anchor Along Path	Ολίσθηση σημείου αγκύρωσης κατά μήκος διαδρομής
@@ -5861,6 +5932,7 @@ anchor	Points:	Σημεία:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Διαίρεση κειμένου
 	Combine Point Text	Συνδυασμός κειμένου σημείου
+	Join Point Text	Ένωση κειμένου σημείου
 	Remove Breaks	Αφαίρεση αλλαγών
 	Split Text at Cursor	Διαίρεση κειμένου στον δρομέα
 	Set Alignment, Keep Position	Ορισμός στοίχισης με διατήρηση θέσης
@@ -5889,6 +5961,7 @@ breakText	Glyphs	Γλύφοι
 @msg	Select horizontal point or area type whose text fits	Επιλέξτε οριζόντιο κείμενο σημείου ή περιοχής του οποίου το κείμενο χωράει
 @msg	Nothing to split at the cursor	Δεν υπάρχει τίποτα για διαίρεση στον δρομέα
 @msg	Select two or more one-line point type objects on one baseline to combine	Επιλέξτε δύο ή περισσότερα μονογραμμικά αντικείμενα κειμένου σημείου στην ίδια γραμμή βάσης για να τα συνδυάσετε
+@msg	Select two or more one-line point type objects to join	Επιλέξτε δύο ή περισσότερα μονογραμμικά αντικείμενα κειμένου σημείου για να τα ενώσετε
 @msg	No line breaks to remove	Δεν υπάρχουν αλλαγές γραμμής για αφαίρεση
 @msg	No paragraph breaks to remove	Δεν υπάρχουν αλλαγές παραγράφου για αφαίρεση
 @msg	Too many breaks to remove at once	Πάρα πολλές αλλαγές για αφαίρεση ταυτόχρονα
@@ -5901,6 +5974,11 @@ breakText	Glyphs	Γλύφοι
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	το `by` πρέπει να είναι lines, paragraphs, words ή glyphs, όχι {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	το `kind` πρέπει να είναι "line" ή "paragraph", όχι {other}
 @msg	`align` must be "left", "center" or "right", not {other}	το `align` πρέπει να είναι "left", "center" ή "right", όχι {other}
+	File + Number	Αρχείο + αριθμός
+	File + Data Set Name	Αρχείο + όνομα συνόλου δεδομένων
+	Data Set Name	Όνομα συνόλου δεδομένων
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	Το `datasetFileNaming` πρέπει να είναι `fileNumber`, `fileDataSetName` ή `dataSetName`
+@msg	no free data set file name in destination folder	Δεν υπάρχει διαθέσιμο όνομα αρχείου συνόλου δεδομένων στον φάκελο προορισμού
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Mode	Λειτουργία
@@ -5942,3 +6020,100 @@ breakText	Glyphs	Γλύφοι
 	Gap 4	Διάκενο 4
 	Dash 5	Παύλα 5
 	Gap 5	Διάκενο 5
+
+@msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+
+@msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.
+@msg	invalid pattern tile choice	μη έγκυρη επιλογή πλακιδίου μοτίβου
+@msg	no pattern named `{choice}`	δεν υπάρχει μοτίβο με όνομα `{choice}`
+	Delete the selected brushes?	Να διαγραφούν τα επιλεγμένα πινέλα;
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Περιγράμματα χρησιμοποιούν ένα ή περισσότερα από αυτά τα πινέλα. Να αφαιρεθούν τα πινέλα από αυτά τα περιγράμματα και να διαγραφούν τα πινέλα;
+	Remove Strokes	Αφαίρεση περιγραμμάτων
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Εργαλεία διάταξης
+	Arrange in Grid…	Διάταξη σε πλέγμα…
+	Arrange in Grid	Διάταξη σε πλέγμα
+	Swap Objects	Εναλλαγή αντικειμένων
+	Swap Objects and Sizes	Εναλλαγή αντικειμένων και μεγεθών
+	Replace with Top Object…	Αντικατάσταση με το επάνω αντικείμενο…
+	Replace with Top Object	Αντικατάσταση με το επάνω αντικείμενο
+	Set Size of Each…	Ορισμός μεγέθους καθενός…
+	Set Size of Each	Ορισμός μεγέθους καθενός
+@msg	select exactly two objects	επιλέξτε ακριβώς δύο αντικείμενα
+@msg	give `width` or `height`	δώστε `width` ή `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Ομαδοποίηση επικαλυπτόμενων αντικειμένων
+@msg	too many objects selected (at most 20000)	επιλέχθηκαν πάρα πολλά αντικείμενα (το πολύ 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Διαίρεση σε παύλες…
+	Divide into Dashes	Διαίρεση σε παύλες
+	Dash:	Παύλα:
+	Gap:	Απόσταση:
+	Fit to Corners and Ends	Προσαρμογή σε γωνίες και άκρα
+	Remove Gaps	Αφαίρεση κενών
+@msg	that makes too many pieces (at most 100000): make the dashes longer	αυτό δίνει πάρα πολλά κομμάτια (το πολύ 100000): κάντε τις παύλες μεγαλύτερες
+@msg	select paths, or segments, to divide	επιλέξτε διαδρομές ή τμήματα για διαίρεση
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
+@msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Εργαλεία εγγράφου
+	Save a Timestamped Copy	Αποθήκευση αντιγράφου με ημερομηνία και ώρα
+@msg	there is no clock here	δεν υπάρχει ρολόι εδώ
+@msg	there is no clock here: give `time` (Unix seconds)	δεν υπάρχει ρολόι εδώ: δώστε `time` (δευτερόλεπτα Unix)
+@msg	the document has never been saved: give `folder`	το έγγραφο δεν έχει αποθηκευτεί ποτέ: δώστε `folder`
+@msg	every numbered name for the copy is taken	όλα τα αριθμημένα ονόματα για το αντίγραφο είναι πιασμένα
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Νέα σύμβολα από επίπεδα
+	Convert Layers to Symbols	Μετατροπή επιπέδων σε σύμβολα
+@msg	{id} is no top-level layer	το {id} δεν είναι επίπεδο ανώτατου επιπέδου
+	Marathi	Μαραθικά
+	Gujarati	Γκουγιαράτι
+	Bengali	Βεγγαλικά
+	Punjabi	Παντζαπικά
+	Tamil	Ταμιλικά
+	Telugu	Τελούγκου
+	Kannada	Κανάντα
+	Malayalam	Μαλαγιάλαμ
+	Odia	Όντια
+	Urdu	Ούρντου
+	VectorCraft {release} and later (version {n})	VectorCraft {release} και νεότερες (έκδοση {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Εξαγωγή όλων των ανοιχτών εγγράφων ως PDF
+	Export All Open Documents as SVG	Εξαγωγή όλων των ανοιχτών εγγράφων ως SVG
+@msgplural	Exported {n} document|Exported {n} documents	Εξήχθη {n} έγγραφο|Εξήχθησαν {n} έγγραφα
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Εξήχθη {n} έγγραφο; το {title} δεν γράφτηκε: {error}|Εξήχθησαν {n} έγγραφα; το {title} δεν γράφτηκε: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Τύπος συμβόλου:
+	Dynamic Symbol	Δυναμικό σύμβολο
+	Static Symbol	Στατικό σύμβολο
+	Symbol Instance Appearance	Εμφάνιση στιγμιότυπου συμβόλου
+	Reset Symbol Instance	Επαναφορά στιγμιότυπου συμβόλου
+@msg	type must be static or dynamic, not {v}	το type πρέπει να είναι static ή dynamic, όχι {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	το `{name}` είναι στατικό σύμβολο: ορίστε πρώτα τον τύπο συμβόλου σε Δυναμικό
+@msg	path must be a list of child indices	το path πρέπει να είναι λίστα δεικτών θυγατρικών αντικειμένων
+@msg	no object at path {shown} in the symbol's art	δεν υπάρχει αντικείμενο στη διαδρομή {shown} στο γραφικό του συμβόλου
+@msg	give fill, stroke, opacity and/or blend	δώστε fill, stroke, opacity ή/και blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	δώστε newName, registration, exportType, nineSlice ή/και type
+	Text Flow	Ροή κειμένου
+	By Rows	Κατά γραμμές
+	By Columns	Κατά στήλες
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Τυχαία αδιαφάνεια…
+	Randomize Opacity	Τυχαία αδιαφάνεια
+	Minimum:	Ελάχιστο:
+	Maximum:	Μέγιστο:
+	Seed:	Αρχική τιμή:
+@msg	`min` is greater than `max`	Το `min` είναι μεγαλύτερο από το `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Ταξινόμηση αντικειμένων…
+	Sort Objects	Ταξινόμηση αντικειμένων
+	Sort By:	Ταξινόμηση κατά:
+	Apply To:	Εφαρμογή σε:
+	Area	Εμβαδόν
+	X Position	Θέση X
+	Y Position	Θέση Y
+	Stacking Order	Σειρά στοίβαξης
+	Small to Large	Από μικρό σε μεγάλο
+	Large to Small	Από μεγάλο σε μικρό
+	Distribute Evenly	Ομοιόμορφη κατανομή

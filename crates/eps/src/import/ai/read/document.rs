@@ -1,8 +1,11 @@
 use super::art::{element_name, elements, join_and, sane};
 use super::containers::drop_commented_copies;
 use super::types::{FLIP, Kind, MAX_DEPTH};
-use super::{Affine, Artboard, ColorMode, Document, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure, Swatch, Unit, V, obj};
-use vectorcraft_doc::{ImageBlob, PatternDef};
+use super::{
+    Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure,
+    Swatch, Unit, V, obj,
+};
+use vectorcraft_doc::{Guide, ImageBlob, PatternDef};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -221,6 +224,7 @@ impl<'a> Reader<'a> {
     /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
     /// opacity mask it may carry.
     pub(super) fn art_dictionary(&mut self, o: &Obj) {
+        self.constraint_art(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
             && let Some(id) = self.last_object().map(|n| n.id)
@@ -229,9 +233,10 @@ impl<'a> Reader<'a> {
             self.blend_roles.insert(id, (kind, o.text("ShapeBlendPathID")));
         }
         // An envelope (a distortion, `AIDeformStyle` / `DeformValue`) is written on `%_` lines as
-        // a group holding the mesh that shapes it; the distorted art the file's PDF part draws
-        // follows on plain lines. That mesh isn't art, so it goes (#2405).
-        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_mesh() {
+        // a group holding the mesh that shapes it (or its contents, while they are being edited);
+        // the distorted art the file's PDF part draws follows on plain lines. That group isn't
+        // art, so it goes (#2405), kept aside for the live envelope ([`Reader::end_envelope`]).
+        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_art() {
             return;
         }
         if let Some(mask) = o.obj("AI9_Mask").or_else(|| o.obj("Mask")) {
@@ -242,10 +247,20 @@ impl<'a> Reader<'a> {
                 if let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })) {
                     n.extras_mut().mask = Some(Box::new(value));
                 } else if !on("Disabled") {
-                    self.unreadable("opacity masks without an owning object");
+                    self.unreadable("opacity masks without an owning object", false);
+                }
+                // What the art doesn't read matters only when the mask shapes what shows.
+                for what in &mask.unread {
+                    if on("Disabled") {
+                        self.hidden_unread.insert(what.clone());
+                    } else if let Some(op) = what.strip_prefix('`').and_then(|w| w.strip_suffix('`')) {
+                        self.note_unknown(op, false);
+                    } else {
+                        self.unreadable(what, false);
+                    }
                 }
             } else if mask.nums("Disabled").first().copied() != Some(1.0) {
-                self.unreadable("opacity masks without readable art");
+                self.unreadable("opacity masks without readable art", false);
             }
         }
         let name = match o.text("AIArtName") {
@@ -264,10 +279,11 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// The `/Document` dictionary: the artboards, and how many variables and data sets its variable
-    /// library has.
+    /// The `/Document` dictionary: the artboards, how many variables and data sets its variable
+    /// library has, and its Objects on Path records.
     pub(super) fn document(&mut self, o: &Obj) {
         variable_library(o, 0, &mut self.variables);
+        self.constraint_data(o);
         let Some(list) = find_entry(o, "ArtboardArray", 0) else { return };
         for (i, ab) in list.items().enumerate().take(1000) {
             let (p1, p2) = (ab.nums("PositionPoint1"), ab.nums("PositionPoint2"));
@@ -299,6 +315,12 @@ impl<'a> Reader<'a> {
     /// The first artboard: the `/Document`'s first, else the crop marks, else [`Self::sized_board`].
     fn first_board(&self) -> Option<Rect> {
         self.artboards.first().map(|(_, r)| *r).or(self.cropmarks).or_else(|| self.sized_board())
+    }
+
+    /// The page the art is compared with in the document's space, once the art has started.
+    pub(super) fn page_in_doc(&self) -> Option<Rect> {
+        let board = self.first_board().or_else(|| self.bbox_board())?;
+        Some(self.to_doc?.transform_rect_bbox(board))
     }
 
     /// The page of a file that says nothing of its artboard (the legacy format as other apps write
@@ -364,6 +386,11 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn finish(mut self) -> Result<Structure, String> {
+        // Envelopes whose plugin never closed them keep their drawn art.
+        if !self.envelopes.is_empty() {
+            self.envelopes.clear();
+            self.warn(crate::import::ai::envelope::DRAWN);
+        }
         if !self.unknown.is_empty() {
             let ops: Vec<String> = self.unknown.iter().map(|o| format!("`{o}`")).collect();
             self.unsupported.insert(format!("operators VectorCraft doesn't know ({})", ops.join(", ")));
@@ -378,12 +405,14 @@ impl<'a> Reader<'a> {
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
+        super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
         let boards: Vec<(String, Rect)> = if self.artboards.is_empty() {
             artboard.or_else(|| self.bbox_board()).map(|r| vec![("Artboard 1".to_string(), r)]).unwrap_or_default()
         } else {
             self.artboards.clone()
         };
+        let board_rects: Vec<Rect> = boards.iter().map(|(_, r)| *r).collect();
         doc.artboards = boards
             .into_iter()
             .enumerate()
@@ -412,6 +441,22 @@ impl<'a> Reader<'a> {
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
             }];
+        }
+        if !self.ruler_guides.is_empty() {
+            let ids: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
+            let (candidates, centre) = (std::mem::take(&mut self.ruler_guides), self.template_center);
+            let pick = |id: NodeId| -> Option<Guide> {
+                let (a, b) = candidates.get(&id)?;
+                let (vertical, board) = ruler_guide(*a, *b, centre, &board_rects)?;
+                let p = to_doc * *a;
+                let artboard = match board {
+                    Some(i) => Some(*ids.get(i)?),
+                    None => None,
+                };
+                let pos = if vertical { p.x } else { p.y };
+                pos.is_finite().then_some(Guide { vertical, pos, artboard, layer: None })
+            };
+            take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
         }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
@@ -452,16 +497,74 @@ impl<'a> Reader<'a> {
             artboard,
             template: self.template,
             hidden_unread: self.hidden_unread,
+            unread: self.unread,
+            unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
             restyled: self.restyled,
             placed_elsewhere: self.placed_elsewhere,
+            envelopes_drawn: self.envelopes_drawn,
             warnings,
         })
     }
 }
 
 /// The dictionary of entry `key` in `o` or the dictionaries it holds.
-fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o Obj> {
+/// How far (points) a ruler guide's ends may lie from the canvas's or an artboard's edges.
+const GUIDE_TOLERANCE: f64 = 0.01;
+
+/// Whether the straight guide path from `a` to `b` (art space) is a ruler guide → whether it is
+/// vertical, and the index in `boards` of the artboard it belongs to (`None`: a canvas guide). A
+/// canvas guide runs across the whole canvas, 16,383 points centred on the template box's
+/// centre `centre`; an artboard guide runs from edge to edge of one artboard of `boards`, inside it.
+fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) -> Option<(bool, Option<usize>)> {
+    let near = |u: f64, v: f64| (u - v).abs() <= GUIDE_TOLERANCE;
+    let vertical = match (near(a.x, b.x), near(a.y, b.y)) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => return None,
+    };
+    let (along, across) = if vertical { ((a.y.min(b.y), a.y.max(b.y)), a.x) } else { ((a.x.min(b.x), a.x.max(b.x)), a.y) };
+    if let Some((cx, cy)) = centre {
+        let c = if vertical { cy } else { cx };
+        if near(along.0, c - CANVAS_CENTRE) && near(along.1, c + CANVAS_CENTRE) {
+            return Some((vertical, None));
+        }
+    }
+    let mut on = boards.iter().enumerate().filter(|(_, r)| {
+        let (ends, sides) =
+            if vertical { ((r.min_y(), r.max_y()), (r.min_x(), r.max_x())) } else { ((r.min_x(), r.max_x()), (r.min_y(), r.max_y())) };
+        near(along.0, ends.0) && near(along.1, ends.1) && (sides.0..=sides.1).contains(&across)
+    });
+    match (on.next(), on.next()) {
+        (Some((i, _)), None) => Some((vertical, Some(i))),
+        _ => None,
+    }
+}
+
+/// Moves the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
+/// `guides`, each on its layer.
+fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, guides: &mut Vec<Guide>, depth: usize) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    for n in nodes {
+        if !matches!(n.kind, NodeKind::Layer { .. }) {
+            continue;
+        }
+        let id = n.id;
+        let Some(kids) = Arc::make_mut(n).children_mut() else { continue };
+        kids.retain(|k| match pick(k.id) {
+            Some(g) => {
+                guides.push(Guide { layer: Some(id), ..g });
+                false
+            }
+            None => true,
+        });
+        take_ruler_guides(kids, pick, guides, depth + 1);
+    }
+}
+
+pub(super) fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o Obj> {
     if depth > 8 {
         return None;
     }

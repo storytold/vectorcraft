@@ -176,6 +176,40 @@ fn combine_joins_only_pieces_on_one_line_turned_alike() {
     assert!(other(s.execute("addon.cleanup.combineText", &json!({}))).contains("combine"));
 }
 
+/// Join Point Text makes one object of stacked one-line pieces: lines top to bottom as paragraphs,
+/// pieces on a line left to right, each line's baseline where it was (its leading is the distance
+/// from the line above), in one undo step. A piece turned unlike the top-left one stays.
+#[test]
+fn join_stacks_lines_into_one_object_with_their_spacing() {
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "First", "size": 20}));
+    let b = text(&mut s, json!({"x": 120, "y": 101, "text": "line", "size": 20}));
+    let c = text(&mut s, json!({"x": 50, "y": 130, "text": "Second", "size": 20}));
+    let d = text(&mut s, json!({"x": 50, "y": 166, "text": "Third", "size": 20}));
+    let turned = text(&mut s, json!({"x": 300, "y": 300, "text": "Turned", "size": 20, "rotation": 45}));
+    let was = glyphs(&s, &[a, c, d]);
+    select(&mut s, &[d, b, turned, c, a]);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.joinText", &json!({})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!((r["id"].as_u64(), r["joined"].as_u64(), r["lines"].as_u64()), (Some(a.0), Some(4), Some(3)));
+    let t = obj(&s, a);
+    assert_eq!(t.plain_text(), "First line\nSecond\nThird");
+    assert_eq!(t.runs.iter().filter(|r| r.text.contains("Third")).map(|r| r.style.leading).collect::<Vec<_>>(), [Some(36.0)]);
+    // Each line's first glyph is where it was.
+    let now = glyphs(&s, &[a]);
+    for ch in ['F', 'S', 'T'] {
+        let (p, q) = (was.iter().find(|g| g.0 == ch).unwrap().1, now.iter().find(|g| g.0 == ch).unwrap().1);
+        assert!((p - q).hypot() < 0.05, "{ch}: {p:?} moved to {q:?}");
+    }
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.node(b).is_none() && doc.node(c).is_none() && doc.node(d).is_none() && doc.node(turned).is_some());
+    select(&mut s, &[turned]);
+    assert!(other(s.execute("addon.cleanup.joinText", &json!({}))).contains("join"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(c).is_some(), "undo brings the pieces back");
+}
+
 #[test]
 fn remove_line_and_paragraph_breaks() {
     let mut s = session();

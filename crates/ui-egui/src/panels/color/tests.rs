@@ -673,4 +673,6 @@ fn spectrum_and_hex() {
     assert_eq!(parse_hex("#fff").unwrap().to_hex(), "#ffffff");
     assert!(parse_hex("zz").is_none());
     assert!(parse_hex("12345").is_none());
+    assert!(parse_hex("##e67828").is_none());
+    assert!(parse_hex("###fff").is_none());
 }
