@@ -215,7 +215,7 @@ impl Exporter<'_> {
                 // instances multiply.
                 let sym = self.doc.symbols.iter().find(|x| &x.name == symbol);
                 let total = sym.map_or(0, |sym| self.symbol_nodes.saturating_add(sym.art.count() as u64));
-                if let Some(sym) = sym.filter(|_| total <= vectorcraft_doc::MAX_SYMBOL_NODES) {
+                if let Some(sym) = sym.filter(|_| total <= self.symbol_limit) {
                     self.symbol_nodes = total;
                     let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
                     art.transform(*xf, false);

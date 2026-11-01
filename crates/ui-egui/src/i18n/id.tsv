@@ -2390,6 +2390,7 @@ digits	Malayalam	Malayalam
 	Tile Range:	Rentang ubin:
 	tile {number}	ubin {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Ubin dinomori menyamping lalu ke bawah; biarkan rentang kosong untuk semua ubin.
+	Copies per Sheet (as many as fit, in a grid)	Salinan per lembar (sebanyak yang muat, dalam kisi)
 	Transverse (the page a quarter turn on the paper)	Melintang (halaman diputar seperempat putaran pada kertas)
 	Unprintable margin:	Margin yang tidak dapat dicetak:
 	{pages} in all, {count} per copy	{pages} total, {count} per salinan

@@ -4187,6 +4187,12 @@ documents every field:
   visiblePrintable|visible|all` (template layers never print); `placement: {origin, x, y}` places the printed area
   (artboard, bleed and marks) on the imageable area (the paper inside `margin`); `scaling: none|fit|custom|tileFull|
   tileImageable` with `scale: {width, height}` (%), `overlap` and `tileRange` (tiles numbered across then down).
+- Copies per sheet: with `copiesPerSheet: true` (off by default; not with tiling) each sheet holds as many copies of
+  the artboard as fit the imageable area, each with its bleed and marks, across then down, `gutter` pt apart (0–720,
+  default 0). The copies are not turned, and the placement places the whole grid. An artboard that doesn't fit prints
+  one copy per sheet, with a warning; more than 1,000 copies on a sheet is an error. `print.preview` lists each
+  copy's artboard on the page as `copies: [[x0, y0, x1, y1]…]`, across then down, and `trim` (the TrimBox) holds
+  them all.
 - `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
   drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
 - `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, inks: [{name,
@@ -4432,10 +4438,11 @@ again when it changes); Multichannel files are refused.
 ## Printing
 
 `print.setup {settings?}` keeps print settings with the document (one undo step; without `settings` it answers the
-current ones): the copies, artboards, paper, orientation, placement, scaling and tiling, marks and bleed, composite or
-separations output, graphics and colour management options of File › Print. `print.preview {settings?}` lays the job
-out without printing: `pages`, then one copy's `sheets`, each with its page size, scale, the `transform` from the
-document onto the page (pt, y down), the document `area` it prints and its `trim` box on the page, plus `tiles`, the
+current ones): the copies, artboards, paper, orientation, placement, scaling and tiling, copies per sheet, marks and
+bleed, composite or separations output, graphics and colour management options of File › Print. `print.preview
+{settings?}` lays the job out without printing: `pages`, then one copy's `sheets`, each with its page size, scale, the
+`transform` from the document onto the page (pt, y down), the document `area` it prints, its `trim` box on the page
+and, with copies per sheet, each copy's artboard on the page (`copies`), plus `tiles`, the
 `inks` of a separation and `warnings`. `file.print {settings?, path?}` writes the job as a print-ready PDF (one page per
 sheet, tile, ink and copy); headless it answers `dataBase64`. In the app, `file.print` with no params opens the Print
 dialog, and with params it prints through the system (`printer`: a name from `print.printers`, default the system's

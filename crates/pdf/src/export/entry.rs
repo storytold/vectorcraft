@@ -102,6 +102,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
             view,
             window: None,
             place: Affine::IDENTITY,
+            copies: &[],
             area: r,
             // Art reaches as far as the bleed: the marks lie outside it.
             clip: m != r,

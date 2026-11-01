@@ -212,6 +212,147 @@ fn placement_and_custom_scale() {
     assert!(job(&big, json!({"autoRotate": false})).warnings.iter().any(|w| w.contains("larger than the imageable area")));
 }
 
+/// The top-left corners of the copies on the first page of `pv`.
+fn corners(pv: &PrintPreview) -> Vec<(f64, f64)> {
+    pv.sheets[0].copies.iter().map(|c| (c[0], c[1])).collect()
+}
+
+/// Every `(x, y)` of `xs` and `ys`, across then down.
+fn grid(xs: &[f64], ys: &[f64]) -> Vec<(f64, f64)> {
+    ys.iter().flat_map(|y| xs.iter().map(move |x| (*x, *y))).collect()
+}
+
+#[test]
+fn copies_per_sheet_fill_the_page_in_a_grid() {
+    // A 2 × 3.5 in card (144 × 252 pt) on Letter (612 × 792 pt): 4 across and 3 down, the
+    // 576 × 756 pt grid centered.
+    let d = doc(144.0, 252.0, &[(Rect::new(0.0, 0.0, 144.0, 252.0), rgb(1.0, 0.0, 0.0))]);
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true}))).unwrap();
+    assert_eq!((pv.pages, pv.sheets.len(), pv.sheets[0].orientation), (1, 1, Orientation::Portrait));
+    assert_eq!(corners(&pv), grid(&[18.0, 162.0, 306.0, 450.0], &[18.0, 270.0, 522.0]));
+    assert!(pv.sheets[0].copies.iter().all(|c| (c[2] - c[0], c[3] - c[1]) == (144.0, 252.0)), "{:?}", pv.sheets[0].copies);
+    assert_eq!(pv.sheets[0].trim, [18.0, 18.0, 594.0, 774.0], "the TrimBox holds every copy");
+    assert!(pv.warnings.is_empty(), "{:?}", pv.warnings);
+    // The printed page holds the twelve cards there.
+    let p = pages(&job(&d, json!({"copiesPerSheet": true})).bytes);
+    assert_eq!(p.len(), 1);
+    let mut printed: Vec<(f64, f64)> = p[0].1.iter().map(|(r, _)| (r.x0.round(), r.y0.round())).collect();
+    printed.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.total_cmp(&b.0)));
+    assert_eq!(printed, grid(&[18.0, 162.0, 306.0, 450.0], &[18.0, 270.0, 522.0]), "{:?}", p[0].1);
+    assert!(p[0].1.iter().all(|(r, paint)| rgb8(paint) == [255, 0, 0] && near(*r, Rect::new(r.x0, r.y0, r.x0 + 144.0, r.y0 + 252.0))));
+    // An 18 pt gutter: 3 across and 3 down, the 468 × 792 pt grid centered.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "gutter": 18}))).unwrap();
+    assert_eq!(corners(&pv), grid(&[72.0, 234.0, 396.0], &[0.0, 270.0, 540.0]));
+    // The placement places the grid, inside the margin.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "margin": 9, "placement": {"origin": "topLeft"}}))).unwrap();
+    assert_eq!(corners(&pv), grid(&[9.0, 153.0, 297.0, 441.0], &[9.0, 261.0, 513.0]));
+    // Moved 400 pt right, two columns leave the paper: the TrimBox holds the copies still on it.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "placement": {"origin": "topLeft", "x": 400}}))).unwrap();
+    assert_eq!(pv.sheets[0].trim, [400.0, 0.0, 612.0, 756.0]);
+}
+
+#[test]
+fn copies_per_sheet_is_off_by_default_and_off_prints_as_before() {
+    let s = PrintSettings::default();
+    assert_eq!((s.copies_per_sheet, s.gutter), (false, 0.0));
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!((&v["copiesPerSheet"], &v["gutter"]), (&json!(false), &json!(0.0)));
+    assert!(settings(json!({"gutter": -1})).check().is_err() && settings(json!({"gutter": 721})).check().is_err());
+    // Off, the job is the same file whatever the gutter, and its pages list no copies.
+    let d = doc(144.0, 252.0, &[(Rect::new(0.0, 0.0, 144.0, 252.0), rgb(1.0, 0.0, 0.0))]);
+    assert_eq!(job(&d, json!({})).bytes, job(&d, json!({"copiesPerSheet": false, "gutter": 36})).bytes);
+    let pv = serde_json::to_value(preview(&d, &settings(json!({}))).unwrap()).unwrap();
+    assert!(pv["sheets"][0].get("copies").is_none(), "{pv}");
+    // Tiles print one artboard across pages: copies per sheet is left out.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "scaling": "tileFull"}))).unwrap();
+    assert!(pv.sheets[0].copies.is_empty() && pv.sheets[0].tile.is_some());
+}
+
+#[test]
+fn an_artboard_that_does_not_fit_prints_one_copy_per_sheet() {
+    // 700 × 900 pt is larger than Letter either way round.
+    let d = doc(700.0, 900.0, &[(Rect::new(0.0, 0.0, 700.0, 900.0), rgb(0.0, 0.0, 1.0))]);
+    let r = job(&d, json!({"copiesPerSheet": true}));
+    assert_eq!(r.pages, 1);
+    assert!(
+        r.warnings.iter().any(|w| w == "Artboard 1 with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"),
+        "{:?}",
+        r.warnings
+    );
+    assert!(r.warnings.iter().any(|w| w.contains("larger than the imageable area")), "{:?}", r.warnings);
+    assert_eq!(r.bytes, job(&d, json!({})).bytes, "printed as without copies per sheet");
+    assert!(preview(&d, &settings(json!({"copiesPerSheet": true}))).unwrap().sheets[0].copies.is_empty());
+    // When one copy fits, it prints alone, centered, whatever the gutter.
+    let d = doc(400.0, 500.0, &[]);
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "gutter": 300}))).unwrap();
+    assert_eq!(corners(&pv), [(106.0, 146.0)]);
+    // More copies than a sheet takes are refused.
+    let tiny = doc(1.0, 1.0, &[]);
+    assert!(preview(&tiny, &settings(json!({"copiesPerSheet": true}))).is_err_and(|e| e.to_string().contains("more than 1000 copies")));
+}
+
+#[test]
+fn each_copy_prints_with_its_marks() {
+    let d = doc(100.0, 100.0, &[(Rect::new(0.0, 0.0, 100.0, 100.0), rgb(1.0, 0.0, 0.0))]);
+    let set = json!({"copiesPerSheet": true, "marks": {"trim": true}});
+    let pv = preview(&d, &settings(set.clone())).unwrap();
+    let copies = pv.sheets[0].copies.len();
+    assert!(copies > 1, "{pv:?}");
+    let back = import(&job(&d, set).bytes).unwrap();
+    let mut marks = 0;
+    back.walk(|n| marks += usize::from(n.appearance.stroke().is_some_and(|s| s.paint.is_registration())));
+    assert_eq!(marks, 8 * copies, "8 trim marks around each copy");
+}
+
+#[test]
+fn every_copy_on_a_sheet_draws_the_same_symbol_instances() {
+    // A symbol of three squares (4 objects with its group), placed twice.
+    let mut d = doc(100.0, 100.0, &[]);
+    let squares = (0..3)
+        .map(|i| {
+            let r = Rect::new(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 5.0, 5.0);
+            Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0)))
+        })
+        .collect();
+    let art = Node::group(d.alloc_id(), squares);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Squares".into(), art: Arc::new(art) });
+    let layer = d.default_layer().unwrap();
+    for y in [10.0, 50.0] {
+        let instance = NodeKind::SymbolInstance { symbol: "Squares".into(), xf: vectorcraft_geom::Affine::translate((10.0, y)) };
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::new(id, instance)).unwrap();
+    }
+    let set = PdfSettings { compression: CompressionSettings { compress_text: false, ..Default::default() }, ..Default::default() };
+    let mut w = crate::export::Writer::new(&d, &set, "Copies", None, false).unwrap();
+    let mut ex = crate::export::Exporter::new(&d, &set);
+    // Room for 10 symbol objects: the first copy could write both instances (8) and leave the
+    // second copy none.
+    ex.symbol_limit = 10;
+    let copies = [vectorcraft_geom::Vec2::ZERO, vectorcraft_geom::Vec2::new(200.0, 0.0)];
+    let page = Rect::new(0.0, 0.0, 300.0, 100.0);
+    let sheet = crate::export::Sheet {
+        size: (300.0, 100.0),
+        unit: 1.0,
+        trim: page,
+        bleed: page,
+        view: vectorcraft_geom::Affine::IDENTITY,
+        window: None,
+        place: vectorcraft_geom::Affine::IDENTITY,
+        copies: &copies,
+        area: Rect::new(0.0, 0.0, 100.0, 100.0),
+        clip: false,
+        marks: None,
+        negative: false,
+    };
+    w.page(&mut ex, &sheet).unwrap();
+    assert_eq!(ex.symbol_limit, 10, "the limit is the export's again after the sheet");
+    w.absorb(ex);
+    let (bytes, _) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
+    let p = pages(&bytes);
+    let left = p[0].1.iter().filter(|(r, _)| r.x0 < 200.0).count();
+    assert_eq!((left, p[0].1.len() - left), (3, 3), "one instance in each copy: {:?}", p[0].1);
+}
+
 #[test]
 fn tiles_cover_the_artboard_with_overlap() {
     // 1000 × 700 on Letter tiles (612 × 792), 36 pt overlap: 2 × 1.
