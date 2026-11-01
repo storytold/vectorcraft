@@ -209,6 +209,33 @@ fn a_legacy_file_with_its_prolog_comes_in_through_its_layers() {
     assert_eq!(page.document.layers[0].name.as_deref(), Some("Layer 1"));
 }
 
+/// A placed EPS in the legacy format (version 7 specification §16, no `%AI5_BeginPlace`), its file
+/// included whole: the layers come in, the placed file as the art the page draws in its box.
+#[test]
+fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
+    // `` ` `` takes the file's user space into the page's (`concat`); `~` restores it.
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
+                  /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor\n\
+               newpath 10 20 moveto 50 20 lineto 50 50 lineto 10 50 lineto closepath fill\n%%EOF\n";
+    let placed = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n0 0 0 1 k\n{} {placed}LB\n%AI5_EndLayer--\n", tri(10));
+    let file = String::from_utf8(ai(AI8, "", &body)).unwrap().replace("%%EndProlog", &format!("{prolog}\n%%EndProlog"));
+    let r = import(file.as_bytes()).unwrap();
+    assert!(!r.preview);
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Back"], "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    assert_eq!(tree(art), "p g[p]", "{:?}", r.warnings);
+    // The file's box, moved by the matrix: 20 40 60 70 on the page, y up.
+    let bounds = art[1].geometric_bounds().unwrap();
+    assert!(
+        (bounds.x0 - 20.0).abs() < 0.01 && (bounds.y0 - 30.0).abs() < 0.01 && (bounds.x1 - 60.0).abs() < 0.01 && (bounds.y1 - 60.0).abs() < 0.01,
+        "{bounds:?}"
+    );
+    assert!(r.warnings.iter().any(|w| w.contains("placed files")), "{:?}", r.warnings);
+}
+
 #[test]
 fn unbalanced_and_runaway_groups_are_read_safely() {
     // Ends without a beginning end nothing; groups left open hold the rest.

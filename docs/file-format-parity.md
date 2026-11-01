@@ -77,7 +77,9 @@ private editing data. VectorCraft:
   14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
   brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
-  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868.
+  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, and its placed EPS files
+  in the version 7 form (`` ` `` … `~` with no `%AI5_BeginPlace`) are read like other placed files without a
+  preview: as the page's art in their box.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy
   version 7 with layers and groups; not yet tested by users who hand files back).
   Closing the open-side issues: 10–20 h with users' files.

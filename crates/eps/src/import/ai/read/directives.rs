@@ -109,7 +109,11 @@ impl<'a> Reader<'a> {
                 return self.image_from(vals, &hex);
             }
         } else if line.starts_with("AI5_BeginPlace") {
-            self.place = Some(Place::default());
+            // One that is still open (no `~` ended it) isn't read.
+            let unseen = hidden || self.gs.hidden || !self.shown();
+            if let Some(open) = self.place.replace(Place { hidden: unseen, ..Place::default() }) {
+                self.unreadable("placed files", open.hidden);
+            }
         } else if line.starts_with("AI5_EndPlace") {
             // One that `~` didn't end isn't read.
             if self.place.is_some() {

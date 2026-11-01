@@ -212,6 +212,13 @@ pub(super) struct Place {
     pub(super) path: String,
     /// The preview as a PNG, and its size in pixels.
     pub(super) preview: Option<(Vec<u8>, u32, u32)>,
+    /// Its `` ` `` was read.
+    pub(super) ticked: bool,
+    /// It began on a `%_` line, in a hidden object or on a layer that doesn't show.
+    pub(super) hidden: bool,
+    /// What it holds can't be read: operands of another shape, a second `` ` ``, or a document
+    /// included in it that doesn't end.
+    pub(super) broken: bool,
 }
 
 /// What the open result says of placed files: they show the preview the file keeps of them.
@@ -246,7 +253,6 @@ pub(super) const IGNORED: &[&str] = &[
     "XD",
     "Xi",
     "XI",
-    "`",
     "LB2",
     "Lc",
     "Xv",
