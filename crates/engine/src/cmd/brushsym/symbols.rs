@@ -107,6 +107,37 @@ fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
     v
 }
 
+/// The symbols an instance in `n` (its opacity masks included) places, pushed onto `out`.
+fn art_symbols(n: &Node, out: &mut Vec<String>) {
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &m.kind {
+            out.push(symbol.clone());
+        }
+    });
+}
+
+/// Select All Unused (#4918): the symbols nothing places. Instances in the art (opacity masks
+/// included), graph designs, pattern tiles and the tiles that pattern editing's Cancel puts back,
+/// and the art of the document's brushes count, and so do the instances in the art of every symbol
+/// a counted instance places. A symbol placed only inside an unused symbol is unused too.
+pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let mut todo = vec![];
+    let lib = brush::library(d);
+    let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
+    let trees = d.layers.iter().map(|l| &**l).chain(d.graph_designs.iter().map(|g| &*g.art));
+    trees.chain(patterns.flat_map(|p| p.art.iter().map(|n| &**n))).chain(lib.iter().flat_map(|b| b.art())).for_each(|n| art_symbols(n, &mut todo));
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(name) = todo.pop() {
+        if !used.contains(&name) {
+            d.symbols.iter().filter(|sym| sym.name == name).for_each(|sym| art_symbols(&sym.art, &mut todo));
+            used.insert(name);
+        }
+    }
+    let names: Vec<&str> = d.symbols.iter().map(|sym| sym.name.as_str()).filter(|n| !used.contains(*n)).collect();
+    Ok(json!({ "names": names }))
+}
+
 fn symbol_names(d: &Document) -> Vec<String> {
     d.symbols.iter().map(|s| s.name.clone()).collect()
 }
@@ -417,27 +448,74 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": name, "id": id.0 }))
 }
 
+/// How many levels of nested instances Delete Symbol expands before it gives up.
+const MAX_DELETE_ROUNDS: usize = 256;
+
 pub(super) fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "symbol.delete";
-    let name = name_param(p, C)?.to_string();
-    if !s.doc()?.doc.symbols.iter().any(|x| x.name == name) {
+    // `names` deletes several symbols in one undo step (the Symbols panel's Select All Unused, #4918).
+    let names: Vec<String> = match p.get("names") {
+        Some(v) => {
+            let a = v.as_array().ok_or_else(|| bad(C, "names must be an array of symbol names"))?;
+            let mut names = Vec::with_capacity(a.len());
+            for n in a {
+                let n = n.as_str().ok_or_else(|| bad(C, "names must be an array of symbol names"))?;
+                if !names.iter().any(|x: &String| x == n) {
+                    names.push(n.to_string());
+                }
+            }
+            if names.is_empty() {
+                return Err(bad(C, "names is empty"));
+            }
+            names
+        }
+        None => vec![name_param(p, C)?.to_string()],
+    };
+    let d = &s.doc()?.doc;
+    if let Some(name) = names.iter().find(|n| !d.symbols.iter().any(|x| &x.name == *n)) {
         return Err(bad(C, format!("no symbol named `{name}`")));
     }
     let expand = switch_or(p, "expandInstances", true, C)?;
-    s.edit("Delete Symbol", |d, _| {
-        let inst = instances_of(d, Some(&name));
-        if expand {
-            break_links(d, &inst, true)?;
-        } else {
-            remove_each(d, &inst)?;
+    let label = if names.len() == 1 { "Delete Symbol" } else { "Delete Symbols" };
+    s.edit(label, |d, _| {
+        // Every instance goes before any definition, whatever the order of `names`: expanding an
+        // instance of one symbol can bring out instances of another being deleted (nested in its
+        // art), which expand in turn while their definitions are still there. Each round expands
+        // one level of nesting, so the rounds are capped.
+        let of_names = |d: &Document| {
+            let mut v = vec![];
+            d.walk(|n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                    && names.contains(symbol)
+                {
+                    v.push(n.id);
+                }
+            });
+            v
+        };
+        for _ in 0..=MAX_DELETE_ROUNDS {
+            let inst = of_names(d);
+            if inst.is_empty() {
+                break;
+            }
+            if expand {
+                break_links(d, &inst, true)?;
+            } else {
+                remove_each(d, &inst)?;
+            }
         }
-        d.symbols.retain(|x| x.name != name);
-        set_natural_size(d, &name, None);
-        d.set_symbol_registration(&name, SymbolRegistration::CENTER);
-        d.clear_symbol_export_type(&name);
-        d.set_symbol_nine_slice(&name, None);
-        if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
-            d.unknown.remove(CURRENT_SYMBOL);
+        if !of_names(d).is_empty() {
+            return Err(EngineError::Other("the symbols are nested too deeply to expand their instances".into()));
+        }
+        for name in &names {
+            d.symbols.retain(|x| &x.name != name);
+            set_natural_size(d, name, None);
+            d.set_symbol_registration(name, SymbolRegistration::CENTER);
+            d.clear_symbol_export_type(name);
+            d.set_symbol_nine_slice(name, None);
+            if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
+                d.unknown.remove(CURRENT_SYMBOL);
+            }
         }
         Ok(())
     })?;

@@ -1053,6 +1053,9 @@
 	Delete Swatch	Suprimeix la mostra
 	Delete Symbol	Suprimeix el símbol
 	Delete the selected symbol?	Voleu suprimir el símbol seleccionat?
+	Delete the selected symbols?	Voleu suprimir els símbols seleccionats?
+	No unused symbols	No hi ha símbols sense utilitzar
+	Delete Symbols	Suprimeix els símbols
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Un o més dels símbols estan en ús i no es poden suprimir fins que se n’expandeixin o se’n suprimeixin les instàncies.
 	Expand Instances	Expandeix les instàncies
 	Delete Instances	Suprimeix les instàncies
@@ -1856,6 +1859,7 @@ digits	Malayalam	Malaiàlam
 	High Quality Print	Impressió d’alta qualitat
 	High Resolution	Alta resolució
 	High resolution	Alta resolució
+	Highlight	Ressaltat
 	Highlight Alternate Glyphs	Ressalta els glifs alternatius
 	Highlight anchors on mouse over	Ressalta els punts d’ancoratge en passar el ratolí
 	Highlight Area	Ressalta l’àrea
@@ -2841,8 +2845,10 @@ digits	Malayalam	Malaiàlam
 	Pages	Pàgines
 	Paint Daubs	Taques de pintura
 	Paint Daubs…	Taques de pintura…
+	Paint Fills	Pinta els farciments
 	Paint Opacity:	Opacitat de pintura:
 	Paint Stops At:	La pintura s’atura a:
+	Paint Strokes	Pinta els traços
 	Paintbrush	Pinzell
 	Paintbrush Tool	Eina de pinzell
 	Palette Knife	Espàtula
@@ -3098,6 +3104,7 @@ digits	Malayalam	Malaiàlam
 	Proof Setup	Configuració de prova
 	Properties	Propietats
 	Proportional Metrics	Mètriques proporcionals
+	Proportional Lining	Xifres proporcionals alineades
 	Proportional Oldstyle	Oldstyle proporcional
 	PRs	PRs
 	Public Domain	Domini públic
@@ -4118,6 +4125,7 @@ digits	Malayalam	Malaiàlam
 	Swap Fill and Stroke (Shift+X)	Intercanvia el farciment i el traç (Maj+X)
 	Swap start and end arrowheads	Intercanvia les puntes de fletxa inicial i final
 	Swap the selected object for the file, keeping its place and transform	Substitueix l’objecte seleccionat pel fitxer, mantenint-ne la posició i la transformació
+	Stylistic Alternates	Alternatives estilístiques
 	Swash	Volada
 	Swatch Conflict	Conflicte de mostres
 	Swatch Conflicts	Conflictes de mostres
@@ -4175,6 +4183,7 @@ digits	Malayalam	Malaiàlam
 	Tabs	Tabulacions
 	Tabular Lining	Xifres tabulars alineades
 	Tabular Oldstyle	Xifres tabulars antigues
+	Titling Alternates	Alternatives de titulars
 	Tag	Etiqueta
 	Tag (open)	Etiqueta (oberta)
 	Taper	Afusament
@@ -4944,7 +4953,6 @@ digits	Malayalam	Malaiàlam
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode
 @msg	Convert to Artboards: selection has no area	Converteix en taulers: la selecció no té àrea
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteix en forma: no s’ha seleccionat cap rectangle ni el·lipse
-@msg	Copied the CSS of {rules} object(s)	S’ha copiat el CSS de {rules} objecte(s)
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
@@ -4972,12 +4980,9 @@ digits	Malayalam	Malaiàlam
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
 @msg	docking action contains an unknown panel or an excessive split path	l’acció d’acoblament conté un panell desconegut o un camí de divisió excessiu
-@msg	Downloaded {_1} file(s)	S’han baixat {_1} fitxer(s)
 @msg	Downloaded {what}	S’ha baixat {what}
 @msg	Edit Original opens image and document files only; “{name}” is not one	Edita l’original només obre fitxers d’imatge i de document; “{name}” no ho és
 @msg	effect {k} is `{_1}`, not `{id}`	l’efecte {k} és `{_1}`, no `{id}`
-@msg	Embedded {n} image(s)	S’han incrustat {n} imatge(s)
-@msg	Embedded {n} image(s); {missing} missing: relink them first	S’han incrustat {n} imatge(s); en falten {missing}: torneu-los a enllaçar primer
 @msg	empty brush stroke	traç de pinzell buit
 @msg	empty cutter	tallador buit
 @msg	empty path	traçat buit
@@ -4989,10 +4994,8 @@ digits	Malayalam	Malaiàlam
 @msg	Expand: no gradient fills	Expandeix: no hi ha farciments de degradat
 @msg	Expand: nothing to expand	Expandeix: no hi ha res per expandir
 @msg	Export cancelled	Exportació cancel·lada
-@msg	Exported {count} file(s) to {folder}	S’han exportat {count} fitxer(s) a {folder}
 @msg	Exported {path}	S’ha exportat {path}
 @msg	Exported {what}	S’ha exportat {what}
-@msg	Exported {what} with {_1} note(s): {first}	S’ha exportat {what} amb {_1} nota(es): {first}
 @msg	Exporting {_1}	S’està exportant {_1}
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	la versió de fitxer {0} és més nova que la que admet aquest VectorCraft ({VERSION})
 @msg	First measured segment no longer exists	El primer segment mesurat ja no existeix
@@ -5317,10 +5320,26 @@ digits	Malayalam	Malaiàlam
 @msg	recovery copy `{file}`: {e}	còpia de recuperació `{file}`: {e}
 @msg	Release Guides: no guides	Allibera les guies: no hi ha guies
 @msg	Release: no layer to put the rectangle in	Allibera: no hi ha capa on posar el rectangle
-@msg	Relinked {_1} image(s)	S’han tornat a enllaçar {_1} imatge(s)
-@msg	Relinked {n} image(s)	S’han tornat a enllaçar {n} imatge(s)
-@msg	Relinked {n} image(s); not in that folder: {_1}	S’han tornat a enllaçar {n} imatge(s); no són en aquesta carpeta: {_1}
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	S’han tornat a enllaçar {n} imatge(s); no s’ha pogut tornar a enllaçar {name}: {reason}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	S’ha incrustat {n} imatge; en falten {missing}: torneu-los a enllaçar primer|S’han incrustat {n} imatges; en falten {missing}: torneu-los a enllaçar primer
+@msgplural	Embedded {n} image|Embedded {n} images	S’ha incrustat {n} imatge|S’han incrustat {n} imatges
+@msgplural	Relinked {n} image|Relinked {n} images	S’ha tornat a enllaçar {n} imatge|S’han tornat a enllaçar {n} imatges
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	S’ha tornat a enllaçar {n} imatge; no són en aquesta carpeta: {names}|S’han tornat a enllaçar {n} imatges; no són en aquesta carpeta: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	S’ha tornat a enllaçar {n} imatge; no s’ha pogut tornar a enllaçar {name}: {reason}|S’han tornat a enllaçar {n} imatges; no s’ha pogut tornar a enllaçar {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	S’ha actualitzat {n} imatge|S’han actualitzat {n} imatges
+@msgplural	Replaced {n} image|Replaced {n} images	S’ha reemplaçat {n} imatge|S’han reemplaçat {n} imatges
+@msgplural	Broke {n} link|Broke {n} links	S’ha trencat {n} enllaç|S’han trencat {n} enllaços
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	S’ha trencat {n} enllaç; no es poden llegir {missing}: torneu-los a enllaçar o actualitzeu-los primer|S’han trencat {n} enllaços; no es poden llegir {missing}: torneu-los a enllaçar o actualitzeu-los primer
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	aquí no es pot llegir {n} fitxer enllaçat: es mostra la seva previsualització|aquí no es poden llegir {n} fitxers enllaçats: es mostren les seves previsualitzacions
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	no s’ha pogut descodificar {n} imatge i es mostra com a caixa creuada|no s’han pogut descodificar {n} imatges i es mostren com a caixes creuades
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imatge enllaçada ha canviat al disc: Actualitza els enllaços mostra la versió nova|{n} imatges enllaçades han canviat al disc: Actualitza els enllaços mostra les versions noves
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	S’ha actualitzat {n} fitxer enllaçat que ha canviat al disc|S’han actualitzat {n} fitxers enllaçats que han canviat al disc
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	S’ha exportat {what} amb {n} nota: {first}|S’ha exportat {what} amb {n} notes: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fitxer de tipus de lletra ja és a {folder}|{n} fitxers de tipus de lletra ja són a {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fitxer de tipus de lletra ja és a {folder}; {failed} no s’han pogut afegir: {reason}|{n} fitxers de tipus de lletra ja són a {folder}; {failed} no s’han pogut afegir: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	aquí no hi ha disponible {n} tipus de lletra: el seu text es mostra amb un altre tipus de lletra|aquí no hi ha disponibles {n} tipus de lletra: el seu text es mostra amb un altre tipus de lletra
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	S’ha copiat el CSS de {n} objecte|S’ha copiat el CSS de {n} objectes
+@msgplural	Downloaded {n} file|Downloaded {n} files	S’ha baixat {n} fitxer|S’han baixat {n} fitxers
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	S’ha exportat {n} fitxer a {folder}|S’han exportat {n} fitxers a {folder}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
@@ -5573,8 +5592,6 @@ digits	Malayalam	Malaiàlam
 @msg	unknown workspace (one of {_1})	espai de treball desconegut (un de {_1})
 @msg	unsupported native docking operation	operació d’acoblament nadiua no compatible
 @msg	unsupported: {0}	no compatible: {0}
-@msg	Updated {_1} image(s)	S’han actualitzat {_1} imatge(s)
-@msg	Updated {_1} linked file(s) changed on disk	S’han actualitzat {_1} fitxer(s) enllaçat(s) que han canviat al disc
 @msg	variables are locked	les variables estan blocades
 @msg	variables that aren't text were left out: {kinds}	les variables que no són text s’han omès: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no cerca a les carpetes d’altres aplicacions ni del sistema: {path}
@@ -5603,8 +5620,6 @@ digits	Malayalam	Malaiàlam
 @msg	{_1} is already used by {_2}	{_1} ja el fa servir {_2}
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} és un exportador (Fitxer › Exporta › Exporta com a…)
 @msg	{_1} is reserved by the system	{_1} està reservat pel sistema
-@msg	{_1} linked file(s) can't be read here: their previews show	aquí no es poden llegir {_1} fitxer(s) enllaçat(s): es mostren les seves previsualitzacions
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imatge(s) enllaçada(es) han canviat al disc: Actualitza els enllaços mostra les versions noves
 @msg	{_1}: not saved, so not closed	{_1}: no s’ha desat, així que no s’ha tancat
 @msg	{bpp}-bit bitmaps can't be read	els mapes de bits de {bpp} bits no es poden llegir
 @msg	{command} didn't create an object	{command} no ha creat cap objecte
@@ -5626,9 +5641,6 @@ digits	Malayalam	Malaiàlam
 @msg	{name}: CRC mismatch	{name}: CRC no coincideix
 @msg	{name}: no local header	{name}: no hi ha capçalera local
 @msg	{name}: no such recovery entry	{name}: no hi ha cap entrada de recuperació d’aquest tipus
-@msg	{n} font file(s) are now in {folder}	{n} fitxer(s) de tipus de lletra ja són a {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} fitxer(s) de tipus de lletra ja són a {folder}; {failed} no s’han pogut afegir: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	aquí no hi ha disponibles {n} tipus de lletra: el seu text es mostra amb un altre tipus de lletra
 @msg	{path} can't be found: relink it first	no es pot trobar {path}: torna a enllaçar-lo primer
 @msg	{path} is not a folder	{path} no és una carpeta
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: aquí no hi ha cap sistema de fitxers (passa dataBase64 per obrir; omet el camí per obtenir dataBase64)
@@ -5636,7 +5648,6 @@ digits	Malayalam	Malaiàlam
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	no s’han pogut descodificar {undecoded} imatge(s) i es mostren com a caixes creuades
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): instal·la’l amb `allowHeavy: true` quan l’usuari hi estigui d’acord
 @msg	“{name}” is not a file	«{name}» no és un fitxer
 axis	Both	Tots dos
@@ -6028,6 +6039,9 @@ breakText	Glyphs	Glifs
 	Gap 4	Separació 4
 	Dash 5	Guió 5
 	Gap 5	Separació 5
+
+@msg	{_1}: they came in as the page's art	{_1}: han entrat com a art de la pàgina
+
 @msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el fitxer JPEG 2000 té un espai de color o contingut JPX no compatible
 @msg	You must choose a side pattern.	Heu de triar un patró lateral.
@@ -6060,6 +6074,9 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandeix els guions en camins
+@msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Eines del document
 	Save a Timestamped Copy	Desa una còpia amb data i hora
@@ -6082,6 +6099,11 @@ breakText	Glyphs	Glifs
 	Odia	Oriya
 	Urdu	Urdú
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i posteriors (versió {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exporta tots els documents oberts com a PDF
+	Export All Open Documents as SVG	Exporta tots els documents oberts com a SVG
+@msgplural	Exported {n} document|Exported {n} documents	S’ha exportat {n} document|S’han exportat {n} documents
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	S’ha exportat {n} document; no s’ha escrit {title}: {error}|S’han exportat {n} documents; no s’ha escrit {title}: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipus de símbol:
 	Dynamic Symbol	Símbol dinàmic
@@ -6097,3 +6119,22 @@ breakText	Glyphs	Glifs
 	Text Flow	Flux del text
 	By Rows	Per files
 	By Columns	Per columnes
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Opacitat aleatòria…
+	Randomize Opacity	Opacitat aleatòria
+	Minimum:	Mínim:
+	Maximum:	Màxim:
+	Seed:	Llavor:
+@msg	`min` is greater than `max`	`min` és més gran que `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Ordena els objectes…
+	Sort Objects	Ordena els objectes
+	Sort By:	Ordena per:
+	Apply To:	Aplica a:
+	Area	Àrea
+	X Position	Posició X
+	Y Position	Posició Y
+	Stacking Order	Ordre d’apilament
+	Small to Large	De petit a gran
+	Large to Small	De gran a petit
+	Distribute Evenly	Distribueix uniformement

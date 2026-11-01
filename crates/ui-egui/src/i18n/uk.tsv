@@ -745,6 +745,9 @@ font-technology	Variable	Варіативні
 	Delete Swatch	Видалити зразок
 	Delete Symbol	Видалити символ
 	Delete the selected symbol?	Видалити вибраний символ?
+	Delete the selected symbols?	Видалити вибрані символи?
+	No unused symbols	Немає невикористаних символів
+	Delete Symbols	Видалити символи
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Один або кілька символів використовуються, і їх не можна видалити, доки їхні екземпляри не буде розібрано або видалено.
 	Expand Instances	Розібрати екземпляри
 	Delete Instances	Видалити екземпляри
@@ -1268,6 +1271,9 @@ file-filter	Templates	Шаблони
 	Hide Live Paint Gaps	Приховати проміжки швидкої заливки
 	Select Fills	Виділяти заливки
 	Select Strokes	Виділяти обведення
+	Paint Fills	Фарбувати заливки
+	Paint Strokes	Фарбувати обведення
+	Highlight	Підсвічування
 	Gaussian Blur…	Розмиття за Гауссом…
 	General	Загальні
 	General › Placement › X	Загальні › Розміщення › X
@@ -2496,6 +2502,7 @@ digits	Tamil	Тамільські
 digits	Telugu	Телугу
 digits	Kannada	Каннада
 digits	Malayalam	Малаялам
+	Proportional Lining	Пропорційні цифри
 	Proportional Oldstyle	Пропорційні цифри старого стилю
 	Pucker & Bloat…	Зморщування та роздування …
 	Pucker Tool	Інструмент «Зморщування»
@@ -3302,6 +3309,7 @@ effect	Points	Точки
 	Swap Fill and Stroke (Shift+X)	Змінити заливку та обведення (Shift+X)
 	Swap start and end arrowheads	Поміняти початкову та кінцеву стрілки
 	Swap the selected object for the file, keeping its place and transform	Замінити виділений об’єкт файлом, зберігши його положення та перетворення
+	Stylistic Alternates	Стилістичні альтернативи
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
 	Swatch Conflicts	Конфлікти зразків
@@ -3371,6 +3379,7 @@ effect	Points	Точки
 	Tabs	Табуляції
 	Tabular Lining	Табличні цифри
 	Tabular Oldstyle	Табличні цифри старого стилю
+	Titling Alternates	Альтернативи для заголовків
 	Target	Об’єкт
 	Target Contents	Вміст об’єкта
 	Target:	Об’єкт:
@@ -3921,7 +3930,6 @@ axis	Both	Обидві
 @msg	Combine Slices: the slices have no bounds	Об’єднання фрагментів: фрагменти не мають кордонів
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
-@msg	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
 @msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
@@ -3938,13 +3946,11 @@ axis	Both	Обидві
 @msg	direct-select anchor points to cut at (not the end points of open paths)	виділіть прямим виділенням опорні точки для розрізу (не кінцеві точки відкритих контурів)
 @msg	Divide Objects Below: select a path	Поділ об’єктів нижче: виділіть контур
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
-@msg	Downloaded {_1} file(s)	Завантажено файли: {_1}
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
 @msg	Expand: no brush strokes selected	Розбір: не виділено мазки пензлі
 @msg	Expand: no gradient fills	Розбір: немає градієнтних заливок
 @msg	Expand: nothing to expand	Розбір: нема чого розбирати
-@msg	Exported {count} file(s) to {folder}	Експортовано файли: {count} до {folder}
 @msg	Exported {path}	Експортовано: {path}
 @msg	Flatten Transparency: select objects to flatten	Зведення прозорості: виділіть об’єкти для зведення
 @msg	Flatten Transparency: {e}	Зведення прозорості: {e}
@@ -4504,10 +4510,6 @@ axis	Both	Обидві
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` займає {size} байт (межа {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} вже використовується {_2}
 @msg	{_1} is reserved by the system	Сполучення {_1} зарезервоване системою
-@msg	{_1} linked file(s) can't be read here: their previews show	тут неможливо прочитати пов’язані файли: {_1}: відображаються їх попередні перегляди
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	не вдалося декодувати зображення ({undecoded}): вони показані як перекреслені рамки
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	пов’язаних зображень ({_1}) змінилися на диску: «Оновити зв’язки» покаже нові версії
-@msg	Updated {_1} linked file(s) changed on disk	Оновлено пов’язаних файлів, змінених на диску: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: не збережено, тому не закрито
 @msg	{bpp}-bit bitmaps can't be read	растрові зображення з глибиною {bpp} біт не читаються
 @msg	{command} didn't create an object	{command} не створив об’єкт
@@ -4527,7 +4529,6 @@ axis	Both	Обидві
 @msg	Couldn't place {name}: {e}	Не вдалося помістити {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не вдалося вставити з буфера обміну: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Збережено: {path} з примітками ({_1}) : {first}
-@msg	Exported {what} with {_1} note(s): {first}	Експортовано: {what} з примітками ({_1}) : {first}
 @msg	Exported {what}	Експортовано: {what}
 @msg	Saved {n} files beside {path}	Збережено файлів: {n} поруч із {path}
 @msg	Saving	Збереження
@@ -4538,12 +4539,26 @@ axis	Both	Обидві
 @msg	Saving recovery data for {_1}	Збереження даних відновлення для {_1}
 @msg	Discarded {_1} recovered document(s)	Скасовано відновлених документів: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Відновлено документів: {_1}: збережіть їх, щоб залишити
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Вбудовано зображень: {n}; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
-@msg	Embedded {n} image(s)	Вбудовано зображення: {n}
-@msg	Relinked {_1} image(s)	Відновлено зв’язок із зображеннями: {_1}
-@msg	Relinked {n} image(s)	Відновлено зв’язок із зображеннями: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	Відновлено зв’язок із зображеннями: {n}; немає в цій папці: {_1}
-@msg	Updated {_1} image(s)	Оновлено зображень: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
+@msgplural	Embedded {n} image|Embedded {n} images	Вбудовано {n} зображення|Вбудовано {n} зображення|Вбудовано {n} зображень
+@msgplural	Relinked {n} image|Relinked {n} images	Відновлено зв’язок із {n} зображенням|Відновлено зв’язок із {n} зображеннями|Відновлено зв’язок із {n} зображеннями
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Відновлено зв’язок із {n} зображенням; немає в цій папці: {names}|Відновлено зв’язок із {n} зображеннями; немає в цій папці: {names}|Відновлено зв’язок із {n} зображеннями; немає в цій папці: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Відновлено зв’язок із {n} зображенням; не вдалося відновити зв’язок із {name}: {reason}|Відновлено зв’язок із {n} зображеннями; не вдалося відновити зв’язок із {name}: {reason}|Відновлено зв’язок із {n} зображеннями; не вдалося відновити зв’язок із {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Оновлено {n} зображення|Оновлено {n} зображення|Оновлено {n} зображень
+@msgplural	Replaced {n} image|Replaced {n} images	Замінено {n} зображення|Замінено {n} зображення|Замінено {n} зображень
+@msgplural	Broke {n} link|Broke {n} links	Розірвано {n} зв’язок|Розірвано {n} зв’язки|Розірвано {n} зв’язків
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Розірвано {n} зв’язок; не вдається прочитати {missing}: спочатку відновіть або оновіть їхні зв’язки|Розірвано {n} зв’язки; не вдається прочитати {missing}: спочатку відновіть або оновіть їхні зв’язки|Розірвано {n} зв’язків; не вдається прочитати {missing}: спочатку відновіть або оновіть їхні зв’язки
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	тут неможливо прочитати {n} пов’язаний файл: відображається його попередній перегляд|тут неможливо прочитати {n} пов’язані файли: відображаються їх попередні перегляди|тут неможливо прочитати {n} пов’язаних файлів: відображаються їх попередні перегляди
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	не вдалося декодувати {n} зображення: воно показане як перекреслена рамка|не вдалося декодувати {n} зображення: вони показані як перекреслені рамки|не вдалося декодувати {n} зображень: вони показані як перекреслені рамки
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} пов’язане зображення змінилося на диску: «Оновити зв’язки» покаже нову версію|{n} пов’язані зображення змінилися на диску: «Оновити зв’язки» покаже нові версії|{n} пов’язаних зображень змінилися на диску: «Оновити зв’язки» покаже нові версії
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Оновлено {n} пов’язаний файл, змінений на диску|Оновлено {n} пов’язані файли, змінені на диску|Оновлено {n} пов’язаних файлів, змінених на диску
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Експортовано: {what} з {n} приміткою: {first}|Експортовано: {what} з {n} примітками: {first}|Експортовано: {what} з {n} примітками: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифту тепер у {folder}|{n} файли шрифтів тепер у {folder}|{n} файлів шрифтів тепер у {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифту тепер у {folder}; не вдалося додати {failed}: {reason}|{n} файли шрифтів тепер у {folder}; не вдалося додати {failed}: {reason}|{n} файлів шрифтів тепер у {folder}; не вдалося додати {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	тут недоступний {n} шрифт: його текст показано іншим шрифтом|тут недоступні {n} шрифти: їхній текст показано іншим шрифтом|тут недоступно {n} шрифтів: їхній текст показано іншим шрифтом
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Скопійовано CSS {n} об’єкта|Скопійовано CSS {n} об’єктів|Скопійовано CSS {n} об’єктів
+@msgplural	Downloaded {n} file|Downloaded {n} files	Завантажено {n} файл|Завантажено {n} файли|Завантажено {n} файлів
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортовано {n} файл до {folder}|Експортовано {n} файли до {folder}|Експортовано {n} файлів до {folder}
 @msg	Unembedded to {_1}	Вилучено у {_1}
 @msg	Reset {_1}	Скинуто: {_1}
 @msg	Sent to {_1}	Відправлено до {_1}
@@ -4595,9 +4610,6 @@ axis	Both	Обидві
 @msg	every search thread stopped on an internal error (please report this bug)	усі потоки пошуку зупинилися через внутрішню помилку (повідомте про цю помилку)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts VectorCraft тут не задано: її задають настільна програма та vectorcraft-cli
 @msg	choose the font files to add	виберіть файли шрифтів для додавання
-@msg	{n} font file(s) are now in {folder}	Файлів шрифтів тепер у {folder}: {n}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлів шрифтів тепер у {folder}: {n}; не вдалося додати {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	тут недоступно шрифтів: {n}; їхній текст показано іншим шрифтом
 @msg	not a file	не файл
 @msg	not a font file	не файл шрифту
 @msg	that document is no longer open	цей документ більше не відкрито
@@ -4606,7 +4618,6 @@ axis	Both	Обидві
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 @msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
 @msg	No linked files to look for	Немає пов’язаних файлів для пошуку
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Відновлено зв’язок із зображеннями: {n}; не вдалося відновити зв’язок із {name}: {reason}
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -5639,6 +5650,9 @@ breakText	Glyphs	Гліфи
 	Gap 4	Проміжок 4
 	Dash 5	Штрих 5
 	Gap 5	Проміжок 5
+
+@msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+
 @msg	You must choose a side pattern.	Виберіть бічний візерунок.
 @msg	invalid pattern tile choice	недійсний вибір плитки візерунка
 @msg	no pattern named `{choice}`	візерунка з назвою `{choice}` немає
@@ -5669,6 +5683,9 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Розібрати штрихи на контури
+@msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Інструменти документа
 	Save a Timestamped Copy	Зберегти копію з датою і часом
@@ -5691,6 +5708,11 @@ breakText	Glyphs	Гліфи
 	Odia	Одія
 	Urdu	Урду
 	VectorCraft {release} and later (version {n})	VectorCraft {release} і новіші (версія {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Експортувати всі відкриті документи як PDF
+	Export All Open Documents as SVG	Експортувати всі відкриті документи як SVG
+@msgplural	Exported {n} document|Exported {n} documents	Експортовано {n} документ|Експортовано {n} документи|Експортовано {n} документів
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Експортовано {n} документ; {title} не записано: {error}|Експортовано {n} документи; {title} не записано: {error}|Експортовано {n} документів; {title} не записано: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Тип символу:
 	Dynamic Symbol	Динамічний символ
@@ -5706,3 +5728,22 @@ breakText	Glyphs	Гліфи
 	Text Flow	Потік тексту
 	By Rows	За рядками
 	By Columns	За стовпцями
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Випадкова непрозорість…
+	Randomize Opacity	Випадкова непрозорість
+	Minimum:	Мінімум:
+	Maximum:	Максимум:
+	Seed:	Початкове число:
+@msg	`min` is greater than `max`	`min` більше за `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Сортувати об’єкти…
+	Sort Objects	Сортувати об’єкти
+	Sort By:	Сортувати за:
+	Apply To:	Застосувати до:
+	Area	Площа
+	X Position	Положення за X
+	Y Position	Положення за Y
+	Stacking Order	Порядок накладання
+	Small to Large	Від меншого до більшого
+	Large to Small	Від більшого до меншого
+	Distribute Evenly	Розподілити рівномірно

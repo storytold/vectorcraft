@@ -120,13 +120,13 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
         Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
         Cursor::TypeVertical => C::VerticalText,
+        // The system has no tip outline to go round: its crosshair aims as well.
+        Cursor::BlobBrush | Cursor::Eraser => C::Crosshair,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
         | Cursor::MagicWand
         | Cursor::Pencil
         | Cursor::Paintbrush
-        | Cursor::BlobBrush
-        | Cursor::Eraser
         | Cursor::Smooth
         | Cursor::PathEraser
         | Cursor::Join

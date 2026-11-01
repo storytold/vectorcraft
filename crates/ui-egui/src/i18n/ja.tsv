@@ -292,6 +292,9 @@ digits	Malayalam	マラヤーラム数字
 	Hide Live Paint Gaps	ライブペイントの間隔を隠す
 	Select Fills	塗りを選択
 	Select Strokes	線を選択
+	Paint Fills	塗りをペイント
+	Paint Strokes	線をペイント
+	Highlight	ハイライト
 	Image Trace	画像トレース
 	Image Tracing	画像トレースオブジェクト
 	Tracing Presets	トレースプリセット
@@ -1308,6 +1311,9 @@ digits	Malayalam	マラヤーラム数字
 	Delete Swatch	スウォッチを削除
 	Delete Symbol	シンボルを削除
 	Delete the selected symbol?	選択したシンボルを削除しますか？
+	Delete the selected symbols?	選択したシンボルを削除しますか？
+	No unused symbols	未使用のシンボルはありません
+	Delete Symbols	シンボルを削除
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	1 つ以上のシンボルが使用中のため、インスタンスを拡張または削除するまで削除できません。
 	Expand Instances	インスタンスを拡張
 	Delete Instances	インスタンスを削除
@@ -3041,6 +3047,7 @@ mark-style	Japanese	日本式
 	Superscript:	上付き文字:
 	Swap Fill and Stroke	塗りと線を入れ替え
 	Swap start and end arrowheads	始点と終点の矢印を入れ替え
+	Stylistic Alternates	スタイル代替字
 	Swash	スワッシュ
 	Swatch Conflict	スウォッチの競合
 	Swatch Conflicts	スウォッチの競合
@@ -3615,6 +3622,7 @@ file-filter	Templates	テンプレート
 	Preset {}	プリセット {}
 	Preview in Browser needs the desktop app (the web downloads files instead)	ブラウザーでプレビューにはデスクトップアプリが必要です (Web アプリではファイルがダウンロードされます)
 	Print presets	プリントプリセット
+	Proportional Lining	プロポーショナルライニング
 	Proportional Oldstyle	プロポーショナルオールドスタイル
 	Punctuation	句読点
 	Radius 1	半径 1
@@ -3696,6 +3704,7 @@ file-filter	Templates	テンプレート
 	System Layout	システムレイアウト
 	Tabular Lining	等幅ライニング
 	Tabular Oldstyle	等幅オールドスタイル
+	Titling Alternates	タイトル代替字
 	Tate-chu-yoko	縦中横
 	Temperature	色温度
 	Template	テンプレート
@@ -4003,7 +4012,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the drawing is too large to open	図面が大きすぎて開けません
 @msg	scale must be a number from {_1} to {_2}, not {_3}	縮尺は {_1} から {_2} までの数値にしてください ({_3} は指定できません)
 @msg	an image has no pixels and was left out	ピクセルがない画像を省略しました
-@msg	Embedded {n} image(s)	画像を {n} 枚埋め込みました
 @msg	object {0} cannot have children	オブジェクト {0} には子オブジェクトを含められません
 @msg	range `{s}` is empty	範囲 `{s}` が空です
 @msg	range `{s}`: `{part}` names no number	範囲 `{s}`: `{part}` に番号が指定されていません
@@ -4470,10 +4478,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PDF is no longer loaded	PDF はもう読み込まれていません
 @msg	no such layer or object	指定されたレイヤーまたはオブジェクトが見つかりません
 @msg	`{tool}` isn't a Liquify tool	`{tool}` はゆがみツールではありません
-@msg	{_1} linked file(s) can't be read here: their previews show	この環境では {_1} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
-@msg	Updated {_1} linked file(s) changed on disk	ディスク上で変更された {_1} 個のリンクファイルを更新しました
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} 個のファイルを {folder} にパッケージしました({note})
 @msg	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
@@ -4501,7 +4505,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	print settings are not an object	プリント設定がオブジェクト形式ではありません
 @msg	no colour group `{g}`	カラーグループ `{g}` が見つかりません
 @msg	select artwork (or a colour group) to recolor	再配色するアートワーク (またはカラーグループ) を選択してください
-@msg	Downloaded {_1} file(s)	{_1} 個のファイルをダウンロードしました
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
@@ -4529,7 +4532,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
-@msg	Exported {count} file(s) to {folder}	{count} 個のファイルを {folder} に書き出しました
 @msg	Imported {what}: {_1}	{what} を読み込みました: {_1}
 @msg	Installed plug-in {_1}	プラグイン {_1} をインストールしました
 @msg	Opened with {_1} note(s): {_2}	ドキュメントを開きました (注意 {_1} 件): {_2}
@@ -4543,7 +4545,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the document has never been saved	ドキュメントはまだ一度も保存されていません
 @msg	the export returned unreadable data	書き出し処理から読み取れないデータが返されました
 @msg	{status} ({e})	{status} ({e})
-@msg	Exported {what} with {_1} note(s): {first}	{what} を書き出しましたが、注意事項が {_1} 件あります: {first}
 @msg	Saved {path} with {_1} note(s): {first}	{path} を保存しましたが、注意事項が {_1} 件あります: {first}
 @msg	Couldn't open {name}: {e}	{name} を開けませんでした: {e}
 @msg	Couldn't read {name}: {e}	{name} を読み込めませんでした: {e}
@@ -4602,7 +4603,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the library item is damaged	ライブラリの項目が破損しています
 @msg	{_1} font families available	{_1} 個のフォントファミリーを使用できます
 @msg	{_1} has no {_2} style	{_1} には {_2} スタイルがありません
-@msg	Copied the CSS of {rules} object(s)	{rules} 個のオブジェクトの CSS をコピーしました
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -4615,12 +4615,27 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no library `{key}` (see {list})	ライブラリ `{key}` が見つかりません ({list} を参照)
 @msg	select a linked image: an embedded one has no file	リンク画像を選択してください: 埋め込み画像にはファイルがありません
 @msg	{path} can't be found: relink it first	{path} が見つかりません: 先に再リンクしてください
-@msg	Embedded {n} image(s); {missing} missing: relink them first	画像を {n} 枚埋め込みましたが、{missing} 枚は見つかりません: 先に再リンクしてください
-@msg	Relinked {_1} image(s)	画像を {_1} 枚再リンクしました
-@msg	Relinked {n} image(s)	画像を {n} 枚再リンクしました
-@msg	Relinked {n} image(s); not in that folder: {_1}	画像を {n} 枚再リンクしましたが、次の画像はそのフォルダーにありません: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	画像を {n} 枚埋め込みましたが、{missing} 枚は見つかりません: 先に再リンクしてください
+@msgplural	Embedded {n} image|Embedded {n} images	画像を {n} 枚埋め込みました
+@msgplural	Relinked {n} image|Relinked {n} images	画像を {n} 枚再リンクしました
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	画像を {n} 枚再リンクしましたが、次の画像はそのフォルダーにありません: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	画像を {n} 枚再リンクしましたが、{name} は再リンクできませんでした: {reason}
+@msgplural	Updated {n} image|Updated {n} images	画像を {n} 枚更新しました
+@msgplural	Replaced {n} image|Replaced {n} images	画像を {n} 枚置換しました
+@msgplural	Broke {n} link|Broke {n} links	{n} 個のリンクを解除しました
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} 個のリンクを解除しましたが、{missing} 個は読み込めません: 先に再リンクするか更新してください
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	この環境では {n} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} 個のフォントはこの環境では使用できません: テキストは別のフォントで表示されます
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	{n} 個のオブジェクトの CSS をコピーしました
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} 個のファイルをダウンロードしました
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} 個のファイルを {folder} に書き出しました
 @msg	Unembedded to {_1}	埋め込みを解除して {_1} に保存しました
-@msg	Updated {_1} image(s)	画像を {_1} 枚更新しました
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
@@ -4680,9 +4695,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every search thread stopped on an internal error (please report this bug)	すべての検索スレッドが内部エラーで停止しました (このバグを報告してください)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	この環境では VectorCraft の Fonts フォルダーが設定されていません: デスクトップアプリと vectorcraft-cli が設定します
 @msg	choose the font files to add	追加するフォントファイルを選択してください
-@msg	{n} font file(s) are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} 個のフォントはこの環境では使用できません: テキストは別のフォントで表示されます
 @msg	not a file	ファイルではありません
 @msg	not a font file	フォントファイルではありません
 @msg	that document is no longer open	そのドキュメントはもう開かれていません
@@ -4691,7 +4703,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	画像を {n} 枚再リンクしましたが、{name} は再リンクできませんでした: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
@@ -5726,6 +5737,9 @@ breakText	Glyphs	字形
 	Gap 4	間隔 4
 	Dash 5	線分 5
 	Gap 5	間隔 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+
 @msg	You must choose a side pattern.	側面パターンを選択してください。
 @msg	invalid pattern tile choice	パターンタイルの選択が無効です
 @msg	no pattern named `{choice}`	`{choice}` というパターンはありません
@@ -5756,6 +5770,9 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	破線をパスに拡張
+@msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	ドキュメントツール
 	Save a Timestamped Copy	日時付きのコピーを保存
@@ -5778,6 +5795,11 @@ breakText	Glyphs	字形
 	Odia	オディア語
 	Urdu	ウルドゥー語
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
+	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
+@msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	シンボルの種類:
 	Dynamic Symbol	ダイナミックシンボル
@@ -5793,3 +5815,22 @@ breakText	Glyphs	字形
 	Text Flow	テキストの流れ
 	By Rows	行方向
 	By Columns	列方向
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	不透明度をランダム化…
+	Randomize Opacity	不透明度をランダム化
+	Minimum:	最小:
+	Maximum:	最大:
+	Seed:	シード:
+@msg	`min` is greater than `max`	`min` が `max` より大きくなっています
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	オブジェクトを並べ替え…
+	Sort Objects	オブジェクトを並べ替え
+	Sort By:	並べ替えの基準:
+	Apply To:	適用先:
+	Area	面積
+	X Position	X 位置
+	Y Position	Y 位置
+	Stacking Order	重ね順
+	Small to Large	小さい順
+	Large to Small	大きい順
+	Distribute Evenly	均等に分布
