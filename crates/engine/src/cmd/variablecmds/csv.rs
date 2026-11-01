@@ -341,11 +341,19 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Export every dataset as CSV (`name` then variables). With `path`, write the file; else return `{csv}`.
+/// A document with more data sets or variables than [`dataset_import`] reads is refused.
 pub(super) fn dataset_export(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.export";
     let st = s.doc()?;
     if st.doc.variables.variables.is_empty() {
         return Err(bad(C, "define a variable first"));
+    }
+    if st.doc.variables.datasets.len() > MAX_CSV_ROWS {
+        return Err(bad(C, format!("more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}")));
+    }
+    // The name column comes first, so the import's column cap leaves room for this many variables.
+    if st.doc.variables.variables.len() > MAX_CSV_COLS {
+        return Err(bad(C, format!("more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}")));
     }
     let csv = datasets_to_csv(&st.doc.variables);
     if csv.len() > MAX_CSV_BYTES {

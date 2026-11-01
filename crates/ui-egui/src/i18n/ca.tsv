@@ -5597,6 +5597,8 @@ digits	Malayalam	Malaiàlam
 @msg	unsupported native docking operation	operació d’acoblament nadiua no compatible
 @msg	unsupported: {0}	no compatible: {0}
 @msg	variables are locked	les variables estan blocades
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	més de {MAX_CSV_ROWS} conjunts de dades: Importa conjunts de dades en llegeix com a màxim {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	més de {MAX_CSV_COLS} variables: Importa conjunts de dades en llegeix com a màxim {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	les variables que no són text s’han omès: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no cerca a les carpetes d’altres aplicacions ni del sistema: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft no cerca a la carpeta Shared o Public d’Usuaris: {path}

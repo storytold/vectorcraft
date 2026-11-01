@@ -5250,6 +5250,8 @@ imageTrace	Outline	Körvonal
 @msg	unsupported native docking operation	nem támogatott natív dokkolási művelet
 @msg	unsupported: {0}	nem támogatott: {0}
 @msg	variables are locked	a változók zárolva vannak
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	több mint {MAX_CSV_ROWS} adatkészlet: az Adatkészletek importálása legfeljebb {MAX_CSV_ROWS} adatkészletet olvas be
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	több mint {MAX_CSV_COLS} változó: az Adatkészletek importálása legfeljebb {MAX_CSV_COLS} változót olvas be
 @msg	variables that aren't text were left out: {kinds}	a nem szöveges változók kimaradtak: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	a VectorCraft nem keres más alkalmazások és a rendszer mappáiban: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	a VectorCraft nem keres a Users alatti Shared és Public mappában: {path}
