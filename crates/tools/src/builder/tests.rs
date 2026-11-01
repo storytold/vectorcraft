@@ -866,6 +866,37 @@ fn bucket_options_set_the_highlight() {
 }
 
 #[test]
+fn bucket_highlights_an_edge_thinner_than_a_face() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let width = |t: &mut LivePaintBucketTool, x: f64, shift: bool| {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { shift, ..Default::default() }));
+        match t.overlays(&cx).as_slice() {
+            [Overlay::Path { width, .. }] => *width,
+            ov => panic!("{ov:?}"),
+        }
+    };
+    // The face at (75, 25) and, with Shift (Paint Strokes), the edge at x = 50.
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, true)), (4.0, 2.0));
+    t.set_option("width", &json!(9));
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, true)), (9.0, 4.5));
+    // With both on, the edge a click paints is drawn thin too.
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, false)), (9.0, 4.5));
+    // The Live Paint Selection tool outlines a face and an edge (Alt) at its one Width.
+    let mut sel = LivePaintSelectionTool::default();
+    for alt in [false, true] {
+        let x = if alt { 50.0 } else { 75.0 };
+        sel.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { alt, ..Default::default() }));
+        let ov = sel.overlays(&cx);
+        assert!(matches!(ov.as_slice(), [Overlay::Path { width: 4.0, .. }]), "{ov:?}");
+    }
+}
+
+#[test]
 fn bucket_alt_samples_face_edge_and_selected_region_without_painting() {
     let (mut d, _gid, face, edge) = live_group_doc();
     d.node_mut(face).unwrap().appearance.set_fill(vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE));
