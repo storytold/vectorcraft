@@ -680,6 +680,8 @@ fn select_nearest_to_fill_selects_the_closest_colour_of_the_library() {
     crate::panels::swatches::select_nearest(&mut app, &ctx, "brights");
     assert_eq!(selection(&ctx, "library:swatches:brights"), [first["name"].as_str().unwrap()]);
     assert_eq!(ctx.data(|d| d.get_temp::<String>(find)).unwrap_or_default(), "");
+    let anchor: String = crate::panels::pstate(&ctx, &key("library:swatches:brights", "anchor"));
+    assert_eq!(anchor, first["name"].as_str().unwrap(), "Shift-clicks extend from it");
     assert!(app.ui.status.starts_with("Nearest to the fill: "), "{}", app.ui.status);
     // Nothing with a fill selected: nothing selected in the panel, the reason in the status bar.
     app.run("select.none", json!({})).unwrap();

@@ -615,10 +615,13 @@ pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// Select items `names` in library `id`'s panel (of kind `kind`), as a click on them does. The
-/// Find field is cleared, so a selected item it would hide shows.
+/// Find field is cleared, so a selected item it would hide shows, and Shift-clicks extend from the
+/// last item selected.
 pub(crate) fn select_items(ctx: &egui::Context, kind: &str, id: &str, names: Vec<String>) {
     let panel = panel_id(kind, id);
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(key(&panel, "find")), String::new()));
+    // A Shift-click then extends from the last item selected, as after a click on it.
+    set_pstate(ctx, &key(&panel, "anchor"), names.last().cloned().unwrap_or_default());
     set_pstate(ctx, &key(&panel, "selected"), names);
 }
 
