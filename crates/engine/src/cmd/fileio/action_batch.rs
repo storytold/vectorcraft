@@ -102,7 +102,6 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run: &Run<'_>) -> Result<Value> {
-    use super::screens::safe_file_name;
     use super::{absolute_path, may_read};
 
     let folder = str_param(p, "folder").map(absolute_path).ok_or_else(|| bad(cmd, "missing `folder`"))?;
@@ -115,9 +114,9 @@ fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run:
     if files.is_empty() {
         return Err(bad(cmd, "no readable files in the folder"));
     }
-    // Each file's name without its extension, through `safe_file_name` (`a..svg` gives `a`, the
-    // folder Windows makes for `a.`), with `-2`, `-3`… after a name an earlier file used (`a.svg` and
-    // `sub/a.svg`, or `a.svg` and `a.ai`) or after a name whose files or folder an earlier file
+    // Each file's name without its extension, through [`source_stem`] (`a..svg` gives `a`, the
+    // folder Windows makes for `a.`, and `a\b.svg` keeps `a\b` where `\` is not a separator), with
+    // `-2`, `-3`… after a name an earlier file used (`a.svg` and `sub/a.svg`, or `a.svg` and `a.ai`) or after a name whose files or folder an earlier file
     // wrote ([`distinct_stems`]), as data set names are numbered. No output takes the name of a
     // source file in the destination folder, other than that file's own output, or of a subfolder
     // of the destination folder that holds source files.
@@ -127,10 +126,10 @@ fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run:
     let reserved = in_dest.iter().flatten().map(|(name, _)| name.clone()).collect();
     let stems = distinct_stems(
         files.iter().zip(&in_dest).map(|(path, place)| {
-            let stem = safe_file_name(std::path::Path::new(path).file_stem().and_then(|s| s.to_str()).unwrap_or(""));
+            let stem = source_stem(std::path::Path::new(path).file_stem().and_then(|s| s.to_str()).unwrap_or(""));
             let (exts, makes_folder) = outputs(&run, &super::extension(path));
             let own = place.as_ref().filter(|(_, own)| *own).map(|(name, _)| name.clone());
-            (if stem.is_empty() { "file".to_string() } else { stem }, exts, makes_folder, own)
+            (stem, exts, makes_folder, own)
         }),
         reserved,
     );
@@ -181,6 +180,16 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
         }
     }
     Ok(json!({"processed": processed, "count": processed.len(), "failed": failed, "stopped": false}))
+}
+
+/// The output stem for a source file's name without its extension: without trailing periods and
+/// spaces and with `-` after a Windows device name ([`super::screens::name_without_device`]), and
+/// "file" when nothing is left. Other characters stay, so `a\b` and `a:b` keep their names on Linux
+/// and macOS.
+#[cfg(not(target_arch = "wasm32"))]
+fn source_stem(stem: &str) -> String {
+    let stem = super::screens::name_without_device(stem);
+    if stem.is_empty() { "file".to_string() } else { stem }
 }
 
 /// What one source writes into the destination folder: the extension of each file a Save or
@@ -746,6 +755,15 @@ mod tests {
         assert_eq!(r["failed"], 0, "{r}");
         assert_eq!(r["stopped"], false, "{r}");
         assert_eq!(file_names(&dest), ["a\\b.svg"], "{r}");
+    }
+
+    /// A source stem keeps `\`, `:` and the other characters Windows does not allow in a name, which
+    /// only reach the batch where the file system allows them, and loses trailing periods and spaces.
+    #[test]
+    fn source_stem_keeps_characters_the_file_system_allowed() {
+        for (stem, want) in [("a\\b", "a\\b"), ("a:b", "a:b"), ("a.", "a"), ("a. ", "a"), ("CON", "CON-"), ("...", "file"), ("", "file")] {
+            assert_eq!(source_stem(stem), want, "{stem:?}");
+        }
     }
 
     #[test]

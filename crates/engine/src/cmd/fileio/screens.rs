@@ -174,7 +174,13 @@ pub(super) fn file_part(s: &str) -> String {
 /// every platform. Spaces between the device name and the period are dropped (`CON .png` becomes
 /// `CON-.png`).
 pub(crate) fn safe_file_name(s: &str) -> String {
-    let name = file_part(s);
+    name_without_device(&file_part(s))
+}
+
+/// [`safe_file_name`] without [`file_part`]: drops trailing periods and spaces and puts `-` after a
+/// Windows device name, and keeps every other character, so a source file name with `\` or `:` keeps
+/// it where the file system allows it.
+pub(super) fn name_without_device(name: &str) -> String {
     let name = name.trim_end_matches(['.', ' ']);
     let (base, rest) = name.split_at(name.find('.').unwrap_or(name.len()));
     // Windows ignores spaces before the extension, so `CON .png` is the CON device too.
