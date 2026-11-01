@@ -116,6 +116,16 @@ pub(super) fn pen_pose(app: &VectorcraftApp, xf: &Xf) -> Option<PenPose> {
     app.services.stylus.as_ref().and_then(StylusFeed::pose).map(|q| pose_on_page(q, xf))
 }
 
+/// The tilt and rotation for one move: the pose the host's feed kept for that move
+/// ([`frame_moves`]), turned onto the page and `None` when the pen read neither, else the latest
+/// ([`pen_pose`]).
+pub(super) fn move_pose(app: &VectorcraftApp, xf: &Xf, kept: Option<PenPose>) -> Option<PenPose> {
+    match kept {
+        Some(q) => (q != PenPose::default()).then(|| pose_on_page(q, xf)),
+        None => pen_pose(app, xf),
+    }
+}
+
 /// `pose` with its tilt, given in screen axes, turned into the document's (the view rotated by
 /// Rotate View): the pen leans the same way on the page as on the screen. The rotation is kept.
 pub(crate) fn pose_on_page(pose: PenPose, xf: &Xf) -> PenPose {
@@ -132,10 +142,11 @@ pub(crate) fn pose_on_page(pose: PenPose, xf: &Xf) -> PenPose {
 /// The positions this frame's pointer moves passed through before its last one, each with the
 /// pen force a touch event gave just before it, or the pressure the host's feed kept for that move
 /// ([`StylusFeed::take_moves`], macOS), if any, and the tilt and rotation the feed kept for that
-/// move (empty when the pen read neither), if any. The last move is the pointer's position. A
-/// mouse's moves count too, with no pressure: a fast mouse stroke otherwise keeps one position a
-/// frame, a sample every few pixels, too few for a low Fidelity to follow the hand (#3328).
-pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Option<f32>, Option<PenPose>)> {
+/// move (empty when the pen read neither), if any. The last move is the pointer's position; the
+/// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
+/// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
+/// too few for a low Fidelity to follow the hand (#3328).
+pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<(Pos2, Option<f32>, Option<PenPose>)>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
         let mut moves = vec![];
@@ -158,24 +169,25 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Op
         } else {
             moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None, None)) } else { None }).collect();
         }
-        moves.pop();
+        let last_pose = moves.pop().and_then(|(_, _, q)| q);
         // A burst of events (a stalled frame) is thinned to a bounded count.
         const MAX: usize = 64;
         if moves.len() > MAX {
             let step = moves.len().div_ceil(MAX);
             moves = moves.into_iter().step_by(step).collect();
         }
-        moves
+        (moves, last_pose)
     })
 }
 
 /// The moves of this frame ([`frame_moves`]) the active tool gets before the pointer's position:
 /// all of them for a tool that builds a stroke from them ([`vectorcraft_engine::Session::tool_wants_samples`]), none
 /// for the others, which get one drag a frame. The moves are read either way, so the host's feed
-/// pairs the next frame's with its own.
-pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> Vec<(Pos2, Option<f32>, Option<PenPose>)> {
-    let moves = frame_moves(ui, app.services.stylus.as_ref());
-    if app.session.tool_wants_samples() { moves } else { vec![] }
+/// pairs the next frame's with its own. The tilt and rotation the feed kept for the pointer's
+/// position come second, for every tool.
+pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> (Vec<(Pos2, Option<f32>, Option<PenPose>)>, Option<PenPose>) {
+    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref());
+    (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
 }
 
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {

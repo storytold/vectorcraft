@@ -6329,7 +6329,7 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let c = pos2(30.0, 40.0);
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
     let mut mouse = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None).0);
     out.textures_delta.clear();
     // A mouse keeps its moves too, without a pressure or a pose.
     assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
@@ -6339,24 +6339,26 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
-    let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
+    let (mut samples, mut last) = (vec![], None);
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
     out.textures_delta.clear();
     assert_eq!(
         samples,
         [(a, Some(0.3), Some(leaning)), (b, None, Some(PenPose::default()))],
         "paired from the end, each with its own pose; a lift's 0 is no pressure"
     );
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
+    assert_eq!(last, Some(leaning), "the last move's pose comes with the moves");
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
     out.textures_delta.clear();
     assert_eq!(samples, [(a, None, None), (b, None, None)], "the moves were taken: a mouse's moves again");
+    assert_eq!(last, None);
     let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
     let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
     out.textures_delta.clear();
     assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
     let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
     out.textures_delta.clear();
     assert!(samples.len() <= 64, "a stalled frame stays bounded");
 }
@@ -6794,6 +6796,72 @@ fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
     assert!(!points.is_empty() && points.iter().all(|p| *p == [None; 3]), "a mouse: {points:?}");
 }
 
+/// The moves that come in the frame of the release reach the Paintbrush before it lifts, each
+/// with the tilt the host's feed kept for that move.
+#[test]
+fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let moved = |tilt: f32| feed.set_move(crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() });
+    moved(10.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
+    moved(20.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(340.0))]);
+    for tilt in [30.0, 40.0, 50.0] {
+        moved(tilt);
+    }
+    frame(
+        &mut app,
+        &ctx,
+        vec![egui::Event::PointerMoved(at(380.0)), egui::Event::PointerMoved(at(420.0)), egui::Event::PointerMoved(at(460.0)), button(at(460.0), false)],
+    );
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let tilts: Vec<f64> = p["points"].as_array().unwrap().iter().filter_map(|s| s.get(3).and_then(serde_json::Value::as_f64)).collect();
+    for tilt in [30.0, 40.0] {
+        assert!(tilts.iter().any(|t| (t - tilt).abs() < 0.01), "{tilt}: {tilts:?}");
+    }
+}
+
+/// The last move of a frame reaches the Paintbrush with the tilt the host's feed kept for that
+/// move, not with a later pen sample that came without a move.
+#[test]
+fn the_last_move_of_a_frame_keeps_its_own_tilt() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let sample = |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
+    feed.set_move(sample(10.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
+    feed.set_move(sample(20.0));
+    feed.set_move(sample(30.0));
+    // A pen sample with no pointer move of its own, after the frame's last move.
+    feed.set_sample(Some(sample(70.0)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(340.0)), egui::Event::PointerMoved(at(380.0))]);
+    frame(&mut app, &ctx, vec![button(at(380.0), false)]);
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let points: Vec<(f64, f64)> =
+        p["points"].as_array().unwrap().iter().filter_map(|s| Some((s.get(0)?.as_f64()?, s.get(3)?.as_f64()?))).collect();
+    let last_move = points.iter().find(|(x, _)| (x - 380.0).abs() < 0.5);
+    assert!(last_move.is_some_and(|(_, t)| (t - 30.0).abs() < 0.01), "{points:?}");
+}
+
 /// #3328: every position a mouse reports within one frame reaches the Pencil, not only the
 /// frame's last one, so a fast stroke keeps the hand's movement.
 #[test]
@@ -6864,7 +6932,7 @@ fn only_the_freehand_tools_get_every_move_of_a_frame() {
     {
         app.select_tool(tool);
         let mut moves = vec![];
-        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app));
+        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app).0);
         out.textures_delta.clear();
         assert_eq!(moves.len(), if every { 19 } else { 0 }, "{tool}");
     }

@@ -176,9 +176,12 @@ struct Pens {
 
 impl Pens {
     /// Replace the device list (at the start, and when devices come and go or change).
+    /// A device keeps its last values only while it is listed unchanged: another device under the
+    /// same id starts without them.
     fn set_devices(&mut self, devices: impl IntoIterator<Item = Device>) {
-        self.devices = devices.into_iter().take(MAX_DEVICES).map(|d| (d.id, d)).collect();
-        self.last.retain(|id, _| self.devices.contains_key(id));
+        let devices: HashMap<u16, Device> = devices.into_iter().take(MAX_DEVICES).map(|d| (d.id, d)).collect();
+        self.last.retain(|id, _| devices.get(id).is_some_and(|d| self.devices.get(id) == Some(d)));
+        self.devices = devices;
     }
 
     /// A raw motion or button event of device `id`, with the valuators that changed.
@@ -476,6 +479,22 @@ mod tests {
         fresh.set_devices([pen(9)]);
         let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0) };
         assert_eq!(fresh.handle(9, [(2, 0.0)]), Update::Set(Some(PenSample { pressure: 0.0, eraser: false, pose: upright })));
+    }
+
+    /// A device listed again unchanged keeps its last tilt and rotation; another device listed
+    /// under the same id starts upright and unturned.
+    #[test]
+    fn a_device_replaced_under_the_same_id_starts_without_the_old_pose() {
+        let mut pens = Pens::default();
+        pens.set_devices([pen(9)]);
+        pens.handle(9, [(3, -30.0), (4, 45.0), (5, -450.0)]);
+        pens.set_devices([pen(9)]);
+        let Update::Set(Some(PenSample { pose, .. })) = pens.handle(9, [(2, 0.0)]) else { panic!("no pen") };
+        assert_eq!(pose.tilt, Some([-30.0, 45.0]));
+        let other = Device::new(9, "HUION Kamvas Pen Pen (0x1)", Some("STYLUS"), pen_valuators());
+        pens.set_devices([other]);
+        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0) };
+        assert_eq!(pens.handle(9, [(2, 0.0)]), Update::Set(Some(PenSample { pressure: 0.0, eraser: false, pose: upright })));
     }
 
     /// Tilt valuators whose range does not fit in ±90 are scaled to ±60°.
