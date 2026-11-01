@@ -136,6 +136,17 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let r = import(src.as_bytes()).unwrap();
     assert!(!r.preview, "read through the layers, not a fallback preview");
     assert!(!r.warnings.iter().any(|w| w.contains("doesn't know") || w.contains("couldn't be read")), "{:?}", r.warnings);
+    // `Th` sets the paragraph's hyphenation: off, 2 letters before and after a hyphen, and the
+    // limit of 99 hyphens in a row kept to the 25 `text.setFormat` takes.
+    let mut texts = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.para_at(0).clone());
+        }
+    });
+    let [p] = texts.as_slice() else { panic!("{texts:?}") };
+    assert!(!p.hyphenate);
+    assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
 }
 
 /// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):

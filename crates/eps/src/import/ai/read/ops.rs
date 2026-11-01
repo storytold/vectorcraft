@@ -276,15 +276,13 @@ impl<'a> Reader<'a> {
             "TP" => self.end_text_path(),
             "TO" => self.end_text(hidden)?,
             "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
-            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" => self.text_attr(w, &vals),
-            // Attributes the reader doesn't keep (kerning pairs, spacing, hanging punctuation,
-            // Far-Eastern type) and final-form positions (§15.3).
-            "Tk" | "TK" | "TC" | "TW" | "Tq" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg"
-            | "Tu" | "Xu" => {}
-            // Hyphenation and tab-ruler attributes the reader doesn't keep either (§22): `Th`
-            // hyphen control, `XL` hyphenation language, `Xb`/`XB` a tab definition (and the `Xe`
-            // tab descriptions between them).
-            "Th" | "XL" | "Xb" | "XB" | "Xe" => {}
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" => self.text_attr(w, &vals),
+            // Attributes the reader doesn't keep (kerning pairs, Far-Eastern type) and final-form
+            // positions (§15.3).
+            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg" | "Tu" | "Xu" => {}
+            // The hyphenation language and tab rulers, which the reader doesn't keep either (§22): `XL`,
+            // `Xb`/`XB` a tab definition (and the `Xe` tab descriptions between them).
+            "XL" | "Xb" | "XB" | "Xe" => {}
             "TE" => self.te(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
