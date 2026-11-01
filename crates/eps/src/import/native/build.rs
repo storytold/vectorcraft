@@ -15,6 +15,10 @@ pub(super) enum Page {
     Artboard,
 }
 
+/// How art moved from a page to its place in the layers' document transforms: its pattern tiles
+/// move with it.
+pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
 pub(super) struct Frame<'a> {
@@ -177,7 +181,7 @@ pub(super) fn build_from(
                 None => shift,
             };
             for n in object.iter_mut() {
-                Arc::make_mut(n).transform(shift, false);
+                Arc::make_mut(n).transform(shift, PAGE_MOVE);
             }
         }
         // An EPS saved as its artboard has the art outside it left out of its page.
@@ -681,7 +685,7 @@ fn replace_unread(
         for &i in &selected {
             let mut copy = Node::clone(&art[i].node);
             if let Some(shift) = moves.get(page) {
-                copy.transform(*shift, false);
+                copy.transform(*shift, PAGE_MOVE);
             }
             found.push(Arc::new(reid_page_art(doc, &copy)));
             claimed.insert(i, art[i].end);
