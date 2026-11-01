@@ -167,9 +167,9 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
-/// Objects are selected, or the Artboard tool is chosen (Copy and Cut take its artboard).
-pub fn has_selection_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
-    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection(s) }
+/// Objects or ruler guides are selected, or the Artboard tool is chosen (what Copy and Cut take).
+pub fn has_selection_guides_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
+    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection_or_guides(s) }
 }
 /// Objects or ruler guides are selected (what Delete and the arrow keys act on).
 pub fn has_selection_or_guides(s: &Session) -> std::result::Result<(), String> {

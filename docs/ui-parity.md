@@ -395,6 +395,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Edit › Copy and Cut take the selected ruler guides, with the objects or alone; pasting puts them on the layer new art goes to, moved as the objects are (alone: where they were), Paste in Place onto the active artboard and Paste on All Artboards onto each (#3226); scores and estimates unchanged |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |

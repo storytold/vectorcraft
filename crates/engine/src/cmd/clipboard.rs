@@ -92,11 +92,14 @@ pub struct Clipboard {
     /// The artboards copied with the Artboard tool (`artboard.copy`); `nodes` are then their art.
     /// Pasting adds a copy of each with the art.
     pub artboards: Vec<vectorcraft_doc::Artboard>,
+    /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
+    /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
+    pub guides: Vec<vectorcraft_doc::Guide>,
 }
 
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty() && self.artboards.is_empty()
+        self.nodes.is_empty() && self.artboards.is_empty() && self.guides.is_empty()
     }
 
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
