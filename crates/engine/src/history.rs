@@ -146,9 +146,9 @@ impl History {
     }
 }
 
-/// The default [`History::byte_budget`]: a quarter of the installed memory
-/// ([`vectorcraft_render::physical_memory`], see [`history_budget_for`]); 1 GiB where the installed
-/// memory can't be read, and 256 MiB on the web.
+/// The default [`History::byte_budget`]: a quarter of the installed memory, or on Linux of the
+/// process's cgroup memory limit where that is lower ([`vectorcraft_render::physical_memory`], see
+/// [`history_budget_for`]); 1 GiB where the installed memory can't be read, and 256 MiB on the web.
 pub fn default_history_budget() -> usize {
     if cfg!(target_arch = "wasm32") {
         return 256 << 20;
