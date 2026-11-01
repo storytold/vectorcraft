@@ -572,7 +572,7 @@ fn a_browser_preview_skips_a_folder_an_earlier_process_left() {
 
 #[test]
 fn saving_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
-    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))

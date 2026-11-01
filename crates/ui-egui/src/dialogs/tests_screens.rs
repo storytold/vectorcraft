@@ -477,7 +477,7 @@ fn include_artboard_fill_reaches_the_files_and_is_remembered() {
 
 #[test]
 fn the_status_bar_says_when_an_image_could_not_be_decoded() {
-    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
