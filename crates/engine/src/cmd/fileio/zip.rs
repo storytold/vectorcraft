@@ -21,10 +21,10 @@ const VERSION: u16 = 20;
 pub const DEFLATE_CHUNK: usize = 1 << 20;
 
 /// The archive of `files` (`(name, bytes)`; `/` separates folders in a name), stored without
-/// compression. Fails past the limits of a ZIP without its 64-bit extension (65535 files, 4 GB).
+/// compression. Fails past the limits of a ZIP without its 64-bit extension (65534 files, 4 GB; 65535 is the ZIP64 marker).
 pub fn store<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)]) -> Result<Vec<u8>, String> {
-    let too_big = || "too much to zip: at most 65535 files and 4 GB".to_string();
-    let count = u16::try_from(files.len()).map_err(|_| too_big())?;
+    let too_big = || "too much to zip: at most 65534 files and 4 GB".to_string();
+    let count = u16::try_from(files.len()).ok().filter(|&c| c != u16::MAX).ok_or_else(too_big)?;
     let mut out = Vec::with_capacity(files.iter().map(|(n, b)| 76 + 2 * n.as_ref().len() + b.as_ref().len()).sum::<usize>() + 22);
     let mut central = Vec::new();
     for (name, bytes) in files {
@@ -79,7 +79,7 @@ pub fn store<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)]) -> Result<Vec<u8>,
 /// Fails past the same limits as [`store`]. `stop` is asked before each [`DEFLATE_CHUNK`] bytes are
 /// deflated; when it answers true, the archive is dropped and an error returned.
 pub fn deflate<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)], (time, date): (u16, u16), stop: impl Fn() -> bool) -> Result<Vec<u8>, String> {
-    let too_big = || "too much to zip: at most 65535 files and 4 GB".to_string();
+    let too_big = || "too much to zip: at most 65534 files and 4 GB".to_string();
     let (mut out, mut central) = (Vec::new(), Vec::new());
     for (name, bytes) in files {
         let (name, bytes) = (name.as_ref(), bytes.as_ref());
@@ -118,7 +118,7 @@ pub fn deflate<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)], (time, date): (u
         central.extend_from_slice(&offset.to_le_bytes());
         central.extend_from_slice(name.as_bytes());
     }
-    let count = u16::try_from(files.len()).map_err(|_| too_big())?;
+    let count = u16::try_from(files.len()).ok().filter(|&c| c != u16::MAX).ok_or_else(too_big)?;
     let (start, len) = (u32::try_from(out.len()).map_err(|_| too_big())?, u32::try_from(central.len()).map_err(|_| too_big())?);
     out.extend_from_slice(&central);
     out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
@@ -314,4 +314,20 @@ pub fn entries(zip: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
         at += 46 + name_len + extra;
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod limit_tests {
+    use super::*;
+
+    #[test]
+    fn max_files_round_trip_through_the_reader() {
+        let at_limit: Vec<(String, &[u8])> = (0..65534).map(|i| (format!("{i}"), &[][..])).collect();
+        assert!(Archive::open(&store(&at_limit).unwrap(), usize::MAX).is_ok());
+        let deflated = deflate(&at_limit, FIXED_TIME, || false).unwrap();
+        assert!(Archive::open(&deflated, usize::MAX).is_ok());
+        let over: Vec<(String, &[u8])> = (0..65535).map(|i| (format!("{i}"), &[][..])).collect();
+        assert!(store(&over).is_err());
+        assert!(deflate(&over, FIXED_TIME, || false).is_err());
+    }
 }
