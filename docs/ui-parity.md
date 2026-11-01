@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Artboards panel: drag a row to reorder the artboards, #4687) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Color Effects add-on: Find Nearest Swatch, #4923) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -352,6 +352,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Artwork Cleanup add-on (VectorCraft addition): Object › Plug-ins › Artwork Cleanup opens its panel, which checks the selection or the document for 16 kinds of issue, lists them with counts, and shows or fixes the picked rows or all of them, each fix one undo step; Simplify Anchors (Keep Shape), Rejoin Path Pieces and Deep Ungroup open their options first | done | `addon.cleanup.*`, `crates/ui-egui/src/addons/cleanup.rs` and its tests; not a feature of the reference app, so it is not scored |
 | Artwork Cleanup add-on text tools (VectorCraft addition): the panel's Text row, which the panel can hide, and Object › Plug-ins › Artwork Cleanup set the alignment of point type keeping its place, break type into lines (Shift-click: paragraphs), words or glyphs, split type at the cursor, reset a text transform (Alt-click: and its horizontal scale), combine point type, remove line or paragraph breaks and replace missing fonts, each one undo step | done | `addon.cleanup.*` text commands, `crates/ui-egui/src/addons/cleanup.rs` and its tests; a VectorCraft addition, so it is not scored |
 | Color Effects add-on (VectorCraft addition): live Exposure, Desaturate and Invert Colors in Effect › Color Effects and Object › Plug-ins › Color Effects; its panel picks a colour adjustment and its values and adds it as a live effect or applies it as a filter, into the colours, as one undo step; Select by Color Kind selects the objects that use spot colours, carry colour effects, or are RGB, CMYK or grayscale images; Vector Halftone draws an object as halftone dots live (the dots Object › Vector Halftone makes), which Expand Appearance and the exporters write as paths; Duotone prints each colour's tone with one to four inks (a tint of a spot tone's swatch, or the CMYK mix of several), live or as a filter, its dialog a row per tone and the picked tone's curve; Print Ink Fixes (a CMYK document's ink limit, white overprint removed, black overprint set) opens its options from the submenu and the panel's Inks | done | `addon.color.*`, `crates/ui-egui/src/addons/color.rs` and its tests; not a feature of the reference app, so it is not scored |
+| Color Effects add-on (VectorCraft addition): Object › Plug-ins › Color Effects › Find Nearest Swatch… picks a Library (Document Swatches, a built-in library, or a library or colour book the user saved or loaded) and Fill and Stroke, lists each colour of the selection with its three closest swatches (chip, name, ΔE 2000), and Apply gives each colour its nearest swatch (global and spot swatches linked; a library's swatches added to the document first), one undo step | done | #4923; `addon.color.nearestSwatch`, `addon.color.applyNearestSwatch`, `crates/engine/src/cmd/addons/color/nearest.rs`, `crates/ui-egui/src/addons/color/nearest.rs` and their tests; not a feature of the reference app, so it is not scored |
 
 ## Look and feel
 
@@ -394,6 +395,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); scores and estimates unchanged |

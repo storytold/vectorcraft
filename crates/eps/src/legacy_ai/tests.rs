@@ -1017,6 +1017,39 @@ fn variable_font_settings_are_warned_as_left_out() {
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
 }
 
+/// Type whose font size measures the cap height is written at the em size it is drawn at, with
+/// no warning: 14 pt measuring a 0.7 em cap height reads back as 20 pt type.
+#[test]
+fn a_font_height_reference_is_written_as_the_size_drawn() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut doc = typed();
+    let id = texts(&doc)[0].0.id;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        let st = &mut t.runs[0].style;
+        (st.font_family, st.size) = (HEIGHT_FAMILY.into(), 14.0);
+        st.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    }
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES || w == TYPE), "{:?}", out.warnings);
+    let imported = crate::import(&out.bytes).unwrap();
+    let size = texts(&imported.document)[0].1.runs[0].style.size;
+    assert!((size - 20.0).abs() < 1e-6, "{size}");
+}
+
+/// Characters with Auto leading are written with their paragraph's Auto Leading share of the
+/// size: 18 pt type in paragraphs at 150% is written with 27 pt leading.
+#[test]
+fn auto_leading_is_written_at_the_paragraphs_share() {
+    let mut doc = typed();
+    let id = texts(&doc)[0].0.id;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.edit_paras(None, |p| p.justification.auto_leading = 150.0);
+    }
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    assert!(text.contains("\n27 0 Tl\n"), "{text}");
+}
+
 /// A legacy `.ai` paragraph has no list: type with a bulleted or numbered list is written as its
 /// text, with the warning that the bullets and numbers are left out.
 #[test]

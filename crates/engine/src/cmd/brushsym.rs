@@ -35,10 +35,10 @@ use brushes::{
 };
 use dynamic::{symbol_instance_reset, symbol_instance_set_appearance};
 use symbols::selected_instances;
-pub(crate) use symbols::{instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol};
+pub(crate) use symbols::{fit_instances_of, instance_in_place, instances_of, natural_size, normalize, place_xf, set_natural_size, store_symbol};
 use symbols::{
-    symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_edit, symbol_list, symbol_new, symbol_options, symbol_place,
-    symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
+    symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_list, symbol_new, symbol_options, symbol_place, symbol_replace,
+    symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
 };
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
@@ -210,9 +210,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Symbol",
             [],
             None,
-            "{id?, ids?: [id…] (instead of id)} break the link of the selected instance so the symbol's art can be edited (without the instance's own appearance changes to a dynamic symbol); finish with symbol.update → {name, ids}",
-            has_selection,
-            symbol_edit
+            "{id?, ids?: [id…] (instead of id), name?, x?, y?, artboard?: index=0 (the active artboard; the app passes it), viewCenter?: [x, y] (the app passes the view's center)} edit a symbol's art in symbol editing mode: the instance `id` (default: the selected instances, which must share one symbol) where it shows the art, else the symbol `name` (default: the current symbol) centered on (x, y) (default: the center of artboard `artboard`, or of the first artboard when there is no such artboard; in a document without artboards, viewCenter, else (0, 0)); every instance follows each edit and the instance stays linked (symbol.breakLink expands one); refused while a pattern or an opacity mask is edited → {name, layer, id?}",
+            has_doc,
+            super::symboledit::enter
+        ),
+        cmd!(
+            "symbol.exitEditing",
+            "Exit Symbol Editing Mode",
+            [],
+            None,
+            "{} leave symbol editing mode; after an edit, select the instance it was entered from; leaving without having changed the art adds no undo step and restores the selection from before entry (object.exitIsolation also leaves it) → {name?}",
+            has_doc,
+            super::symboledit::leave
         ),
         cmd!(
             "symbol.update",

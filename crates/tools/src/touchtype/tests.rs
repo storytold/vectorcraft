@@ -140,6 +140,89 @@ fn dragging_the_box_moves_the_character_along_its_line_and_up() {
     assert!(close(p3.get("dx").and_then(|v| v.as_f64()).unwrap_or(0.0), 0.0) && close(p3["dy"].as_f64().unwrap(), 4.0), "{p3}");
 }
 
+/// 40 pt point type "Type" at (100, 200) whose "y" is rotated by `rotation` degrees, selected.
+fn doc_with_rotated_y(rotation: f64) -> (Document, NodeId, Selection) {
+    let (mut d, id, s) = doc_with_type();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        edit::style_range(&mut t.runs, 1, 2, |st| st.rotation = rotation);
+    }
+    (d, id, s)
+}
+
+/// Near and at a quarter turn, a drag still splits into kerning along the line and baseline shift
+/// across it: right 10 pt and up 4 pt is `dx` 10 and `dy` 4 at every rotation, and a drag straight
+/// across the line is all `dy`. Arrow keys nudge the same way.
+#[test]
+fn a_character_rotated_near_a_quarter_turn_moves_across_its_line() {
+    for rotation in [45.0, 85.0, 90.0, 95.0, -90.0] {
+        let (d, id, s) = doc_with_rotated_y(rotation);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+        let q = quad(&t, &cx);
+        let at = q[0].midpoint(q[2]);
+        let acts = drag(&mut t, &cx, at, at + Vec2::new(10.0, -4.0));
+        let p1 = preview(&acts[1]);
+        assert!(close(p1["dx"].as_f64().unwrap(), 10.0) && close(p1["dy"].as_f64().unwrap(), 4.0), "{rotation}°: {p1}");
+        let acts = drag(&mut t, &cx, at, at + Vec2::new(0.0, -6.0));
+        let p2 = preview(&acts[1]);
+        assert!(p2.get("dx").is_none_or(|v| close(v.as_f64().unwrap(), 0.0)) && close(p2["dy"].as_f64().unwrap(), 6.0), "{rotation}°: {p2}");
+        let acts = t.key(&cx, ToolKey::Up, Mods::default());
+        let p3 = match &acts[0] {
+            Action::Exec(c, v) if c == "text.touchType" => v,
+            other => panic!("{other:?}"),
+        };
+        assert!(close(p3["dy"].as_f64().unwrap(), 1.0) && p3.get("dx").is_none_or(|v| close(v.as_f64().unwrap(), 0.0)), "{rotation}°: {p3}");
+    }
+}
+
+/// In type scaled unevenly, a drag's parts are measured in document points: right 10 pt and up 4
+/// pt of a quarter-turned character is `dx` 10 and `dy` 4.
+#[test]
+fn a_quarter_turned_character_in_unevenly_scaled_type_follows_the_pointer() {
+    let (mut d, id, s) = doc_with_rotated_y(90.0);
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.xf = Affine::scale_non_uniform(2.0, 0.5) * t.xf;
+    }
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+    let q = quad(&t, &cx);
+    let at = q[0].midpoint(q[2]);
+    let acts = drag(&mut t, &cx, at, at + Vec2::new(10.0, -4.0));
+    let p1 = preview(&acts[1]);
+    assert!(close(p1["dx"].as_f64().unwrap(), 10.0) && close(p1["dy"].as_f64().unwrap(), 4.0), "{p1}");
+}
+
+/// A character with a baseline shift turns about its pen position moved up by the shift, rotated
+/// or not, and the rotate handle measures its turn about that point.
+#[test]
+fn a_shifted_character_turns_about_its_shifted_pen_position() {
+    for rotation in [0.0, 30.0, 90.0] {
+        let (mut d, id, s) = doc_with_rotated_y(rotation);
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            edit::style_range(&mut t.runs, 1, 2, |st| st.baseline_shift = 10.0);
+        }
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+        let (_, text, b) = t.current(&cx).expect("a character is selected");
+        let lay = vectorcraft_text::layout(FontDb::global(), text);
+        let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+        let want = y.origin + Vec2::new(0.0, -10.0);
+        assert!((b.pivot - want).hypot() < 1e-6, "{rotation}°: {:?}, want {want:?}", b.pivot);
+        // The rotate handle turned a quarter turn about that point is a quarter turn more.
+        let mut t = t;
+        let top = text.xf * b.handle(Part::Rotate);
+        let centre = text.xf * want;
+        let r = top - centre;
+        let acts = drag(&mut t, &cx, top, centre + Vec2::new(r.y, -r.x));
+        let ps = preview(&acts[1]);
+        let turned = (ps["rotation"].as_f64().unwrap() - rotation - 90.0).rem_euclid(360.0);
+        assert!(turned.min(360.0 - turned) < 1e-6, "{rotation}°: {ps}");
+    }
+}
+
 #[test]
 fn arrow_keys_nudge_the_selected_character() {
     let (d, id, s) = doc_with_type();

@@ -481,6 +481,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let label = e.label.clone();
     let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
+    let editing_symbol = st.doc.symbol_edit.clone();
     let doc = std::mem::replace(&mut st.doc, e.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.redo.last());
@@ -494,6 +495,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
+    super::symboledit::follow_history(st, editing_symbol.as_ref());
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
     Ok(json!({ "undone": label }))
@@ -507,6 +509,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let label = e.label.clone();
     let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
+    let editing_symbol = st.doc.symbol_edit.clone();
     let doc = std::mem::replace(&mut st.doc, e.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.undo.last());
@@ -519,6 +522,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
+    super::symboledit::follow_history(st, editing_symbol.as_ref());
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
     Ok(json!({ "redone": label }))

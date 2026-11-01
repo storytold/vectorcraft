@@ -865,6 +865,7 @@
 	Edit selected paths within:	在以下范围内编辑所选路径：
 	Edit Selection…	编辑所选对象…
 	Edit Symbol	编辑符号
+	Exit Symbol Editing Mode	退出符号编辑模式
 	Edit Text	编辑文字
 	Edit the applied effect, or add another one?	编辑已应用的效果，还是再添加一个？
 	Edit the point	编辑点
@@ -889,6 +890,13 @@
 	Em Box Top/Right	全角字框上 / 右
 	ICF Top/Right	ICF 上 / 右
 	ICF Bottom/Left	ICF 下 / 左
+	Show Font Height Options	显示字体高度选项
+	Hide Font Height Options	隐藏字体高度选项
+	Set Font Height Reference	设置字体高度参考
+	Em Box	全角字框
+	Cap Height	大写字母高度
+	x-Height	x 字高
+	ICF Box	ICF 框
 	Em Dash	长破折号
 	Em Space	全角空格
 	Embed	嵌入
@@ -3720,6 +3728,7 @@ imageTrace	Outline	轮廓
 @msg	Saving {_1}	正在保存 {_1}
 @msg	Sent to {_1}	已发送到 {_1}
 @msg	`to` must be "corner" or "smooth"	`to` 必须是 "corner" 或 "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` 必须是 "emBox"、"capHeight"、"xHeight" 或 "icfBox"
 @msg	a layer couldn't be read	无法读取某个图层
 @msg	it has more than one artboard	它有多个画板
 @msg	its editing data has no layers	其编辑数据中没有图层
@@ -3763,6 +3772,8 @@ imageTrace	Outline	轮廓
 @msg	brushes move only within their type	画笔只能在同一类型内移动
 @msg	no symbol instances selected	未选择符号实例
 @msg	select a symbol instance	请选择一个符号实例
+@msg	select instances of one symbol	请选择同一符号的实例
+@msg	a symbol can't hold an instance of itself	符号不能包含自身的实例
 @msg	the art has no bounds	图稿没有边界
 @msg	Image Trace: the traced image is missing	图像描摹：缺少所描摹的图像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	实时上色合并：请选择一个实时上色组以及要添加的路径
@@ -5779,6 +5790,13 @@ anchor	Points:	点：
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	请指定 `inkLimit`、`removeWhiteOverprint` 或 `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷油墨修正适用于 CMYK 文档：请先选择 文件 › 文档颜色模式 › CMYK 颜色
 @msg	`{key}` must be 0..{max}	`{key}` 必须为 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	查找最接近的色板…
+	Find Nearest Swatch	查找最接近的色板
+	Apply Nearest Swatch	应用最接近的色板
+	Select objects to find the swatches nearest their colors.	选择对象以查找与其颜色最接近的色板。
+@msg	select objects or give `color`	请选择对象或提供 `color`
+@msg	`color` is not a colour	`color` 不是颜色
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	转角工具
 	Slide Anchor Along Path	沿路径滑动锚点
