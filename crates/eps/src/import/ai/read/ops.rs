@@ -657,9 +657,12 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
     let slot = slot_of(object.name.as_deref()).is_some();
+    // A 3D effect draws from the outline of a path (neither a guide nor a clipping path) or a compound path.
+    let three_d = st.effects.iter().any(|e| vectorcraft_effects::is_three_d(&e.id));
     if !st.plain
         || (!slot && !st.simple)
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
+        || (three_d && !matches!(object.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. }))
     {
         return None;
     }
@@ -721,7 +724,21 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     } else {
         object.appearance.contents_index
     };
-    Some(Appearance { items, effects: st.effects.clone(), contents_index })
+    let appearance = Appearance { items, effects: st.effects.clone(), contents_index };
+    // A 3D effect keeps the drawn look unless each fill and stroke that paints draws as a solid (a
+    // stroke's outline can have more points than a solid takes). `simple` allows one of each.
+    if three_d && st.effects.iter().any(|e| e.visible && vectorcraft_effects::is_three_d(&e.id)) {
+        let painted: Vec<&AppearanceItem> = appearance.items.iter().filter(|i| vectorcraft_effects::paints(i)).collect();
+        if painted.is_empty() {
+            return None;
+        }
+        for item in painted {
+            let mut solid = object.clone();
+            solid.appearance = Appearance { items: vec![item.clone()], ..appearance.clone() }.into();
+            vectorcraft_effects::solid_art(&solid)?.children().filter(|c| !c.is_empty())?;
+        }
+    }
+    Some(appearance)
 }
 
 /// Remove from `n` the children read from `%_` lines (`hidden`: the object itself, not its look).

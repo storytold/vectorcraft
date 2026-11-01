@@ -1869,6 +1869,99 @@ fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The style `name`: a 3D effect with `dict` over a black fill (or, `fill` false, over the object's
+/// contents alone), and a 2 pt black stroke above it when `stroke` is true.
+fn style_3d(name: &str, dict: &str, fill: bool, stroke: bool) -> String {
+    let stroke = if stroke {
+        "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+         /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n"
+    } else {
+        ""
+    };
+    let stack = if fill {
+        format!(
+            "/CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{stroke}\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 1 0 0 0 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+             /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n"
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Adobe Geometry3D) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{dict}; /Dict ;\n /Part ,\n{stack};\n%AI9_EndArtStyles\n"
+    )
+}
+
+#[test]
+fn a_path_with_a_3d_extrude_comes_in_as_itself_with_a_live_effect() {
+    // GUARDS: the 3D effect wasn't read, and the path came in as its drawn look.
+    let styles = style_3d("Solid", &vectorcraft_testkit::ai::geometry_3d(&[("Geometry3DkExtrudeDepthKey", "30 /Real")], ""), true, true);
+    // A stroke of no width paints nothing, and the fill's solid draws alone.
+    for styles in [styles.clone(), styles.replace(" 2 w ", " 0 w ")] {
+        let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+        let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Solid) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+        let r = read_ok(&format!("{styles}{}", layer(&art_)));
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+        let [solid] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance) };
+        let read = (solid.id.as_str(), solid.params["depth"].as_f64(), solid.params["rotationZ"].as_f64());
+        assert_eq!(read, ("threeD.extrude", Some(30.0), Some(-8.1)));
+    }
+}
+
+#[test]
+fn a_path_past_the_3d_limits_keeps_its_drawn_look() {
+    // GUARDS: the 3D effect replaced the drawn look of a path with more points than a solid takes,
+    // and the path then drew flat; with fewer, a stroke whose outline had too many drew without it.
+    for (corners, stroke) in [(3000, false), (1500, true)] {
+        let styles = style_3d("Solid", &vectorcraft_testkit::ai::geometry_3d(&[], ""), true, stroke);
+        let ring: String = (0..corners)
+            .map(|k| {
+                let (s, c) = (f64::from(k) * std::f64::consts::TAU / f64::from(corners)).sin_cos();
+                let r = if k % 2 == 0 { 100.0 } else { 96.0 };
+                format!("%_{} {} {}\n", 200.0 + r * c, 200.0 + r * s, if k == 0 { "m" } else { "L" })
+            })
+            .collect();
+        let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n{ring}%_b\n1 (Solid) XW\n", rect_path(100.0, 100.0, 300.0, 300.0));
+        let r = read_ok(&format!("{styles}{}", layer(&art_)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{corners}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }) && a[0].appearance.effects.is_empty(), "{corners}: {a:#?}");
+    }
+}
+
+#[test]
+fn a_path_with_a_3d_effect_and_nothing_that_paints_keeps_its_drawn_look() {
+    // A fill that doesn't paint and a stroke of no width: the 3D effect has nothing to draw.
+    let styles = style_3d("Bare", &vectorcraft_testkit::ai::geometry_3d(&[], ""), true, true).replace(" 2 w ", " 0 w ").replace("0 1 Xd", "0 0 Xd");
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Bare) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let a = art(&read_ok(&format!("{styles}{}", layer(&art_))).doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }) && a[0].appearance.effects.is_empty(), "{a:#?}");
+}
+
+#[test]
+fn a_group_or_guide_with_a_3d_effect_keeps_its_drawn_look() {
+    // A 3D effect draws from the outline of a path that is not a guide: a group or a guide with one
+    // stays as the file draws it.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    for (style, fill, object) in
+        [("Turn", false, format!("%_0 Ae\n%_u\n%_{hidden_rect}f\n%_U\n")), ("Guide", true, format!("%_{hidden_rect}(N) *\n"))]
+    {
+        let styles = style_3d(style, &vectorcraft_testkit::ai::geometry_3d(&[], ""), fill, false);
+        let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n{object}1 ({style}) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+        let r = read_ok(&format!("{styles}{}", layer(&art_)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{style}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty() && matches!(a[0].kind, NodeKind::Group { .. }), "{style}: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{style}: {:?}", r.warnings);
+    }
+}
+
 #[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.

@@ -34,7 +34,7 @@
 //!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
 //! with a pattern or gradient too), each with its own transparency and effects, and the effects of
-//! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
+//! [`effect`] and [`geometry_3d_effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
 //! effects; others keep their drawn look.
 
 use std::collections::HashMap;
@@ -55,6 +55,7 @@ const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the 
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
+const GEOMETRY_3D: &str = "Adobe Geometry3D"; // brand-ok: the filter's name in the files
 
 const CHAIN: &str = "Chain Style Filter";
 const STACK: &str = "Stack Style Filter";
@@ -94,8 +95,8 @@ pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
-    /// no transparency or effects of their own, and only Outer Glow, Feather and Drop Shadow on the
-    /// object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// no transparency or effects of their own, and only Outer Glow, Feather, Drop Shadow and the 3D
+    /// Extrude and Plane on the object: what any object is read with (3D on paths and compound paths only). Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -148,6 +149,48 @@ impl Default for ItemLook {
     }
 }
 
+/// What a basic filter's dictionary entry holds.
+#[derive(Clone, Debug, PartialEq)]
+enum Value {
+    Int(f64),
+    Real(f64),
+    Bool(f64),
+    /// `(text) /UnicodeString (key) ,`.
+    Text(String),
+    /// `/Dictionary : … ; (key) ,`, and whether it holds nothing.
+    Dict {
+        empty: bool,
+    },
+    /// A paint (`/FillStyle : … /Def ; (key) ,`).
+    Style,
+    /// `/Array : … ; (key) ,`.
+    Array,
+    /// An entry of a kind not read here, or a typed one without a number.
+    Other,
+}
+
+/// A basic filter's dictionary entry: `depth` 1 for the dictionary's own, more for a nested one's.
+#[derive(Clone, Debug, PartialEq)]
+struct Entry {
+    key: String,
+    value: Value,
+    depth: usize,
+}
+
+/// The `: … ;` blocks open inside a basic filter.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Block {
+    /// A dictionary, opened when the filter had this many entries.
+    Dict(usize),
+    Style,
+    Array,
+    Other,
+}
+
+/// Most entries kept, and blocks open, in one basic filter.
+const MAX_ENTRIES: usize = 256;
+const MAX_BLOCKS: usize = 64;
+
 #[derive(Debug)]
 struct Filter {
     name: String,
@@ -156,6 +199,10 @@ struct Filter {
     parent: Option<usize>,
     compound: bool,
     params: HashMap<String, f64>,
+    /// Its dictionary's entries in the order they come, nested ones too.
+    entries: Vec<Entry>,
+    /// It had more entries or nested blocks than are kept.
+    truncated: bool,
     /// Its dictionary's arrays (`/Array : v /Real , … ; (key) ,`), by key.
     arrays: HashMap<String, Vec<f64>>,
     fill: Option<Paint>,
@@ -184,6 +231,8 @@ impl Default for Filter {
             parent: None,
             compound: false,
             params: HashMap::new(),
+            entries: vec![],
+            truncated: false,
             arrays: HashMap::new(),
             fill: None,
             stroke: None,
@@ -198,6 +247,58 @@ impl Default for Filter {
             pattern: None,
             xy: None,
         }
+    }
+}
+
+impl Filter {
+    fn entry(&mut self, key: Vec<u8>, value: Value, depth: usize) {
+        if self.entries.len() < MAX_ENTRIES {
+            self.entries.push(Entry { key: String::from_utf8_lossy(&key).into_owned(), value, depth });
+        } else {
+            self.truncated = true;
+        }
+    }
+}
+
+/// The key a dictionary entry's `(key) ,` gives next, taken from `lex`; `lex` stays put without one.
+fn next_key(lex: &mut Lexer) -> Option<Vec<u8>> {
+    let at = lex.offset();
+    match lex.next_token().map(|t| t.tok) {
+        Some(Tok::Str(key)) => Some(key),
+        _ => {
+            lex.seek(at);
+            None
+        }
+    }
+}
+
+/// Basic filter `f`'s blocks and entries at operator `op`: a `:` opens the block `opening`, a `;`
+/// ends the last one (a block in a dictionary is an entry, its key next), and a string before `,`
+/// that no typed entry took is an entry of a kind not read here.
+fn block_op(f: &mut Filter, op: &str, blocks: &mut Vec<Block>, opening: Block, operands: &[V], lex: &mut Lexer) {
+    match op {
+        ":" if blocks.len() >= MAX_BLOCKS => f.truncated = true,
+        ":" => blocks.push(opening),
+        "," => {
+            if let (false, Some(V::Str(key))) = (blocks.is_empty(), operands.last()) {
+                f.entry(key.clone(), Value::Other, blocks.len());
+            }
+        }
+        ";" => {
+            if let Some(block) = blocks.pop()
+                && !blocks.is_empty()
+                && let Some(key) = next_key(lex)
+            {
+                let value = match block {
+                    Block::Dict(start) => Value::Dict { empty: f.entries.len() == start && !f.truncated },
+                    Block::Style => Value::Style,
+                    Block::Array => Value::Array,
+                    Block::Other => Value::Other,
+                };
+                f.entry(key, value, blocks.len());
+            }
+        }
+        _ => {}
     }
 }
 
@@ -223,11 +324,22 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     };
     let mut array: Option<Vec<V>> = None;
     let mut dict_array: Option<Vec<f64>> = None;
+    // A basic filter's open blocks, and the one the next `:` opens.
+    let mut blocks: Vec<Block> = vec![];
+    let mut opening = Block::Other;
     let mut lex = Lexer::new(data);
     while let Some(t) = lex.next_token() {
         if let (Some(a), Tok::Num(v)) = (array.as_mut(), &t.tok) {
             a.push(V::Num(*v));
             continue;
+        }
+        if let Tok::Name(n) = t.tok {
+            opening = match n {
+                b"Dictionary" => Block::Dict(filters.last().map_or(0, |f| f.entries.len())),
+                b"Array" => Block::Array,
+                b"FillStyle" | b"StrokeStyle" | b"BlendStyle" => Block::Style,
+                _ => Block::Other,
+            };
         }
         match t.tok {
             Tok::Num(v) => operands.push(V::Num(v)),
@@ -237,13 +349,18 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     finish(name.take(), &mut filters);
                     operands.clear();
                     open.clear();
+                    blocks.clear();
                     (pending, in_basic) = (None, false);
                 }
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
-                b"Part" => in_basic = false,
+                b"Part" => {
+                    in_basic = false;
+                    blocks.clear();
+                }
                 b"Filter" => {
+                    blocks.clear();
                     let compound = pending.take().unwrap_or(false);
                     if filters.len() < MAX_FILTERS {
                         filters.push(Filter {
@@ -272,10 +389,29 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                         continue;
                     }
                     // The key follows: `value /Real (key) ,`.
-                    if let (Some(value), Some(Tok::Str(key))) = (value, lex.next_token().map(|t| t.tok))
-                        && let Some(f) = filters.last_mut()
-                    {
-                        f.params.insert(String::from_utf8_lossy(&key).into_owned(), value);
+                    let key = lex.next_token().map(|t| t.tok);
+                    if let (Some(Tok::Str(key)), Some(f)) = (key, filters.last_mut()) {
+                        if in_basic {
+                            let entry = match (n, value) {
+                                (b"Int", Some(v)) => Value::Int(v),
+                                (b"Real", Some(v)) => Value::Real(v),
+                                (b"Bool", Some(v)) => Value::Bool(v),
+                                _ => Value::Other,
+                            };
+                            f.entry(key.clone(), entry, blocks.len());
+                        }
+                        if let Some(value) = value {
+                            f.params.insert(String::from_utf8_lossy(&key).into_owned(), value);
+                        }
+                    }
+                    continue;
+                }
+                // `(text) /UnicodeString (key) ,`.
+                b"UnicodeString" if in_basic => {
+                    let text = operands.iter().rev().find_map(V::text);
+                    operands.clear();
+                    if let (Some(key), Some(f)) = (next_key(&mut lex), filters.last_mut()) {
+                        f.entry(key, text.map_or(Value::Other, Value::Text), blocks.len());
                     }
                     continue;
                 }
@@ -295,11 +431,20 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 if op == ";"
                     && let Some(values) = dict_array.take()
                 {
+                    if in_basic && blocks.last() == Some(&Block::Array) {
+                        blocks.pop();
+                    }
                     if let (Some(Tok::Str(key)), Some(f)) = (lex.next_token().map(|t| t.tok), filters.last_mut()) {
+                        if in_basic {
+                            f.entry(key.clone(), Value::Array, blocks.len());
+                        }
                         f.arrays.insert(String::from_utf8_lossy(&key).into_owned(), values);
                     }
                     operands.clear();
                     continue;
+                }
+                if in_basic && let Some(f) = filters.last_mut() {
+                    block_op(f, op, &mut blocks, opening, &operands, &mut lex);
                 }
                 if op == ";" && !in_basic {
                     open.pop();
@@ -510,6 +655,131 @@ fn effect(f: &Filter) -> Option<Effect> {
     Some(Effect { id: id.into(), params, visible: f.visible })
 }
 
+/// The kind of a 3D dictionary's numeric entry.
+#[derive(Clone, Copy, PartialEq)]
+enum Kind {
+    Int,
+    Real,
+    Bool,
+}
+
+/// The 3D settings read only at the values a new 3D effect starts with: lighting, materials, ray
+/// tracing, shadows, perspective, twist and the output's quality. Anything else keeps the drawn look.
+const GEOMETRY_3D_FIXED: [(&str, Kind, f64); 27] = [
+    ("Geometry3DkExtrudeTwistBeginKey", Kind::Real, 0.0),
+    ("Geometry3DkExtrudeTwistEndKey", Kind::Real, 0.0),
+    ("Geometry3DkEngineProfileKey", Kind::Int, 0.0),
+    ("Geometry3DkOutputProfileKey", Kind::Int, 0.0),
+    ("Geometry3DkQualityProfileKey", Kind::Int, 1.0),
+    ("Geometry3DkShadowProfileKey", Kind::Int, 0.0),
+    ("Geometry3DkReduceNoiseKey", Kind::Bool, 1.0),
+    ("Geometry3DkRenderAsWireframe", Kind::Bool, 0.0),
+    ("Geometry3DkUseDynamicShadowBoundsKey", Kind::Bool, 1.0),
+    ("Geometry3DkShadowGroundDistanceKey", Kind::Real, 0.0),
+    ("Geometry3DkShadowSpreadKey", Kind::Real, 50.0),
+    ("Geometry3DkFOVKey", Kind::Real, 0.0),
+    ("Geometry3DkGlobalLightKey", Kind::Bool, 1.0),
+    ("Geometry3DkGlobalLightIntensityKey", Kind::Real, 50.0),
+    ("Geometry3DkSunlightVisibilityKey", Kind::Bool, 1.0),
+    ("Geometry3DkSunlightIntensityKey", Kind::Real, 70.0),
+    ("Geometry3DkSunlightRotationKey", Kind::Real, 145.0),
+    ("Geometry3DkSunlightElevationKey", Kind::Real, 45.0),
+    ("Geometry3DkSunlightCloudinessKey", Kind::Real, 40.0),
+    ("Geometry3DkSunlightNameCounterKey", Kind::Real, 1.0),
+    ("MaterialDensity", Kind::Real, 100.0),
+    ("MaterialMetallic", Kind::Real, 0.0),
+    ("MaterialOffsetX", Kind::Real, 0.0),
+    ("MaterialOffsetY", Kind::Real, 0.0),
+    ("MaterialResolutionKey", Kind::Int, 10.0),
+    ("MaterialRotation", Kind::Real, 0.0),
+    ("MaterialRoughness", Kind::Real, 40.0),
+];
+
+/// The shape and turn of a 3D effect, read for Extrude and Plane.
+const GEOMETRY_3D_SHAPE: [(&str, Kind); 9] = [
+    ("Geometry3DkOperationTypeKey", Kind::Int),
+    ("Geometry3DkContainKeys", Kind::Int),
+    ("Geometry3DkExtrudeDepthKey", Kind::Real),
+    ("Geometry3DkExtrudeCapKey", Kind::Bool),
+    ("Geometry3DkExtrudeTaperBeginKey", Kind::Real),
+    ("Geometry3DkExtrudeTaperEndKey", Kind::Real),
+    ("Geometry3DkRotationXKey", Kind::Real),
+    ("Geometry3DkRotationYKey", Kind::Real),
+    ("Geometry3DkRotationZKey", Kind::Real),
+];
+
+/// Effect › 3D and Materials as a live effect (the `Adobe Geometry3D` filter on the whole object):
+/// Extrude & Bevel as `threeD.extrude` and Plane as `threeD.rotate`, with their Depth, Taper, Cap
+/// and X, Y and Z rotation and a new effect's light
+/// (https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html).
+/// `None`, keeping the drawn look, for Revolve and Inflate, for settings this doesn't map (twist, a
+/// bevel, perspective, other lighting, materials, ray tracing), and for a dictionary with an entry
+/// missing, repeated, nested, of another kind or out of range.
+fn geometry_3d_effect(f: &Filter) -> Option<Effect> {
+    if f.truncated {
+        return None;
+    }
+    let mut seen = std::collections::HashSet::new();
+    for e in &f.entries {
+        if e.depth != 1 || !seen.insert(e.key.as_str()) {
+            return None;
+        }
+        let known = GEOMETRY_3D_FIXED.iter().any(|(k, ..)| *k == e.key) || GEOMETRY_3D_SHAPE.iter().any(|(k, _)| *k == e.key);
+        // What a new effect writes besides: its light's color (white) and name, no material file, no material overrides.
+        let extra = match (e.key.as_str(), &e.value) {
+            ("Geometry3DkSunlightColorKey", Value::Style) => f.fill.as_ref().and_then(Paint::color).is_some_and(|c| {
+                let [r, g, b] = c.to_rgb_uncalibrated();
+                r.min(g).min(b) >= 0.999
+            }),
+            ("Geometry3DkSunlightNameKey", Value::Text(_)) => true,
+            ("MaterialFilePathKey", Value::Text(t)) => t.is_empty(),
+            ("MaterialOverridenParams", Value::Dict { empty }) => *empty,
+            _ => false,
+        };
+        if !known && !extra {
+            return None;
+        }
+    }
+    let value = |key: &str, kind: Kind| {
+        let e = f.entries.iter().find(|e| e.key == key)?;
+        let v = match (&e.value, kind) {
+            (Value::Int(v), Kind::Int) | (Value::Real(v), Kind::Real) | (Value::Bool(v), Kind::Bool) => *v,
+            _ => return None,
+        };
+        v.is_finite().then_some(v)
+    };
+    for (key, kind, want) in GEOMETRY_3D_FIXED {
+        if value(key, kind).is_none_or(|v| (v - want).abs() > 1e-6) {
+            return None;
+        }
+    }
+    let shape: Vec<f64> = GEOMETRY_3D_SHAPE.iter().map(|(k, kind)| value(k, *kind)).collect::<Option<_>>()?;
+    let [op, contains, depth, cap, taper_begin, taper, x, y, z] = shape.as_slice() else { return None };
+    // The rotations are in radians, and Y is stored turning the other way from `rotationY`.
+    let degrees = |r: f64, sign: f64| {
+        let d = (sign * r.to_degrees() * 1000.0).round() / 1000.0;
+        (-180.0..=180.0).contains(&d).then_some(d)
+    };
+    let (x, y, z) = (degrees(*x, 1.0)?, degrees(*y, -1.0)?, degrees(*z, 1.0)?);
+    if *contains != 1.0 || !(*cap == 0.0 || *cap == 1.0) {
+        return None;
+    }
+    let mut params = match *op {
+        // Depth 0 to 2000 and Taper 100% to 1%, from the front's own size.
+        0.0 if (0.0..=2000.0).contains(depth) && *taper_begin == 100.0 && (1.0..=100.0).contains(taper) => {
+            json!({"depth": depth, "taper": taper, "cap": *cap != 0.0, "rotationX": x, "rotationY": y, "rotationZ": z})
+        }
+        4.0 => json!({"rotationX": x, "rotationY": y, "rotationZ": z}),
+        _ => return None,
+    };
+    // A new effect's light, its rotation turned with Y (145° is VectorCraft's 35°).
+    for (key, value) in [("lightIntensity", 70.0), ("lightRotation", 35.0), ("lightHeight", 45.0), ("lightSoftness", 40.0), ("ambient", 50.0)] {
+        params[key] = json!(value);
+    }
+    let id = if *op == 0.0 { "threeD.extrude" } else { "threeD.rotate" };
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
 /// The fill or stroke basic filter `f` paints, `Ok(None)` when it paints nothing, `Err` when it
 /// paints in a way this doesn't read.
 fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
@@ -644,6 +914,10 @@ fn style(filters: &[Filter]) -> ArtStyle {
             CONDUIT => {}
             // The object's own transparency, which its look carries too.
             BLEND => {}
+            GEOMETRY_3D if !f.compound => match geometry_3d_effect(f) {
+                Some(e) => st.effects.push(e),
+                None => b.plain = false,
+            },
             _ => match effect(f) {
                 Some(e) => st.effects.push(e),
                 None => b.plain = false,
@@ -657,7 +931,13 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(|e| matches!(e.id.as_str(), "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow"));
+        && st.effects.iter().enumerate().all(|(i, e)| match e.id.as_str() {
+            "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow" => true,
+            // A 3D effect draws the fills and strokes, so it needs one, and comes first: the effects
+            // after it apply to what it draws.
+            "threeD.extrude" | "threeD.rotate" => i == 0 && !st.items.is_empty(),
+            _ => false,
+        });
     st
 }
 

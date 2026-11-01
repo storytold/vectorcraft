@@ -76,7 +76,8 @@ private editing data. VectorCraft:
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
   14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
-  brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
+  brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025, and 3D Extrude &
+  Bevel and Plane on a path as live effects); legacy `.ai`
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy
   version 7 with layers and groups; not yet tested by users who hand files back).
