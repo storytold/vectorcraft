@@ -1571,6 +1571,10 @@ Symbols area (#4938), from the public symbol documentation ([create and place sy
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Document Tools › Export All Open Documents as PDF (or as SVG) asks for a folder and writes a copy of every open document there, each named after its document with `-2`, `-3`… added when a name is taken, so no file is replaced (`addon.document.exportAllOpen {folder, format?}`, #4920). Each copy is written as Save a Copy writes it: the documents keep their paths, titles and modified state, and the active one stays active. A document that can't be written is named in the status bar and the others are still written. Tests: `addons::document::tests::export_all_open_documents_writes_each_to_the_folder_picked` (ui-egui), `cmd::addons::document::tests::export_all_open_documents_writes_each_and_reports_failures` (engine).
 
+## Batch Trace Folder (2026-11-01)
+
+A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Image Trace › Batch Trace Folder (`imageTrace.batchFolder`) asks for a folder of images and a destination folder, traces each image with a preset (optionally expanded) and saves it there under its own name as `.vectorcraft`, `.svg`, `.pdf`, `.ai` or `.eps`, without replacing files, closing each image's document again and reporting the images it couldn't trace (#4921). Tests: `cmd::fileio::trace_batch::tests::batch_trace_folder_traces_and_saves_each_image` (engine), `io::batch_trace_tests::batch_trace_folder_asks_for_both_folders` (ui-egui).
+
 ## Color Effects add-on: Find Nearest Swatch (2026-11-01)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Color Effects › Find Nearest Swatch… lists each colour of the selection (fills and strokes, as ticked; solid colours and gradient stops, inside groups and type) with the three swatches of the chosen library closest to it by CIEDE2000 difference, with that difference (`addon.color.nearestSwatch`, #4923). The library is the document's swatches, a built-in library, or a library or colour book the user saved or loaded (no colour book data ships with VectorCraft). Apply gives each colour its nearest swatch as one undo step (`addon.color.applyNearestSwatch`): global and spot swatches link, and a library's swatches the colours take are added to the document first, so a spot colour stays spot. Remaining: typing a colour to look up in the dialog (the command takes `color`), and applying a match other than the nearest. Tests: `cmd::addons::color::nearest::tests` (engine), `addons::color::nearest::tests::find_nearest_swatch_lists_the_matches_and_applies_the_nearest` (ui-egui).
@@ -1602,6 +1606,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Batch Trace Folder (`imageTrace.batchFolder`, #4921); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Copy and paste ruler guides (#3226); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Area type vertical alignment buttons in the Properties panel's Paragraph section and the Control panel, off for columns, rows and threaded frames (#3759); evidence added; scores unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso is an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |

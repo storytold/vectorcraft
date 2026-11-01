@@ -420,6 +420,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Object › Image Trace › Batch Trace Folder asks for a source and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
 | 2026-11-01 | minor | Edit › Copy and Cut take the selected ruler guides, with the objects or alone; pasting puts them on the layer new art goes to, moved as the objects are (alone: where they were), Paste in Place onto the active artboard and Paste on All Artboards onto each (#3226); scores and estimates unchanged |
 | 2026-11-04 | minor | Area type: Align Top / Center / Bottom / Justify Vertically buttons in the Properties panel (Paragraph section) and the Control panel set its vertical alignment in the frame, as Area Type Options does; turned off for frames with rows or columns and threaded frames (#3759); scores and estimates unchanged |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |

@@ -32,6 +32,7 @@ mod export;
 pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
+mod trace_batch;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod jp2read;
 mod metafile;
