@@ -40,7 +40,7 @@ use super::ai::{self, Structure, slot_of};
 use super::ate::{Story, Texts};
 
 mod build;
-mod compare;
+pub(super) mod compare;
 mod layers;
 mod plan;
 mod slots;

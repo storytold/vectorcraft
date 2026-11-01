@@ -1,6 +1,6 @@
 use super::document::slot_of;
 use super::ops::{paints_apart, path_rule};
-use super::types::{Frame, GState, Kind, MAX_DEPTH, MAX_NODES};
+use super::types::{Frame, GState, Kind, MAX_DEPTH, MAX_NODES, PendingEnvelope};
 use super::{AppearanceItem, Arc, BezPath, BlendMode, FillRule, HashSet, LayerColor, Node, NodeId, NodeKind, Obj, Paint, PathEl, Rc, Reader, V, obj};
 
 impl<'a> Reader<'a> {
@@ -222,7 +222,7 @@ impl<'a> Reader<'a> {
         let color = a.color.unwrap_or(LayerColor::Preset(0));
         let mut layer = Node::new(
             self.doc.alloc_id(),
-            NodeKind::Layer { color, template: false, printable: a.printable, children, clip, preview: a.preview, dim_images: a.dim },
+            NodeKind::Layer { color, template: a.template, printable: a.printable, children, clip, preview: a.preview, dim_images: a.dim },
         );
         layer.name = Some(a.name.clone());
         layer.visible = a.visible;
@@ -324,16 +324,29 @@ impl<'a> Reader<'a> {
             "ArtDictionary" => {
                 let envelope = o.get("AIDeformOptionsKey").is_some();
                 self.art_dictionary(&o);
+                let before = self.envelope_art.take();
                 if envelope {
                     let mut slots = vec![];
                     for child in &children {
                         envelope_text_slots(child, &mut slots);
                     }
+                    let typed = !slots.is_empty() || before.as_ref().is_some_and(has_text_slot);
                     for mut slot in slots {
                         // The editing data keeps the source text inside the envelope's options;
                         // its visible result is the outlined art the PDF page carries.
                         slot.visible = false;
                         self.add(slot, false)?;
+                    }
+                    // An envelope of type keeps its drawn art and its type, hidden, as above: the
+                    // type is filled in after reading, which the envelope can't wait for.
+                    if typed {
+                        return Ok(());
+                    }
+                    if self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
+                        self.warn(crate::import::ai::envelope::DRAWN);
+                    } else {
+                        let siblings = self.frames.last().map_or(0, |f| f.children.len());
+                        self.envelopes.push(PendingEnvelope { obj: *o, before, inner: children, depth: self.frames.len(), siblings });
                     }
                 }
             }
@@ -467,7 +480,8 @@ impl<'a> Reader<'a> {
     /// envelope's dictionary. It holds the mesh that shapes the envelope, or, while the envelope's
     /// contents are being edited, those contents (the mesh then is in the dictionary); either way the
     /// distorted art follows on plain lines. The source text in the contents stays, hidden, as the
-    /// dictionary's does. Whether it was dropped.
+    /// dictionary's does. The group is kept in [`Reader::envelope_art`] for the envelope to be made
+    /// of. Whether it was dropped.
     pub(super) fn drop_envelope_art(&mut self) -> bool {
         let Some(n) = self.last_object() else { return false };
         let id = n.id;
@@ -483,6 +497,7 @@ impl<'a> Reader<'a> {
                 slot.visible = false;
                 f.children.push(slot);
             }
+            self.envelope_art = Some(group);
         }
         self.hidden_ids.remove(&id);
         self.after_object = false;
@@ -543,6 +558,87 @@ impl<'a> Reader<'a> {
         // The blend's own state block follows its record, as a group's follows its end.
         self.after_object = true;
     }
+
+    /// An envelope's plugin `XP`: the envelope whose dictionary was read last in this container
+    /// and its drawn art, the one object read since, become one live envelope, or, where they
+    /// can't, the drawn art stays (see [`crate::import::ai::envelope`]). Envelopes left waiting
+    /// in containers that closed keep their drawn art.
+    pub(super) fn end_envelope(&mut self) {
+        let depth = self.frames.len();
+        while self.envelopes.last().is_some_and(|p| p.depth > depth) {
+            self.envelopes.pop();
+            self.warn(crate::import::ai::envelope::DRAWN);
+        }
+        if self.envelopes.last().is_none_or(|p| p.depth != depth) {
+            return;
+        }
+        let Some(p) = self.envelopes.pop() else { return };
+        let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
+        let Some(drawn) = drawn else {
+            self.warn(crate::import::ai::envelope::DRAWN);
+            return;
+        };
+        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner)).flatten();
+        let Some(kind) = live else {
+            self.warn(crate::import::ai::envelope::DRAWN);
+            return;
+        };
+        // Objects the reader couldn't read come in as the page's art in their place: the envelope's
+        // drawn art stays round them.
+        let mut ids = HashSet::new();
+        fn collect(n: &Node, ids: &mut HashSet<NodeId>) {
+            ids.insert(n.id);
+            for c in n.children().into_iter().flatten() {
+                collect(c, ids);
+            }
+        }
+        collect(drawn, &mut ids);
+        if let NodeKind::Envelope { content, .. } = &kind {
+            content.iter().for_each(|c| collect(c, &mut ids));
+        }
+        if self.unread.iter().any(|(id, _)| ids.contains(id)) {
+            self.warn(crate::import::ai::envelope::DRAWN);
+            return;
+        }
+        self.envelope_checks -= 1;
+        // The drawn art's own properties (name, visibility, lock, transparency, appearance, mask,
+        // attributes) become the envelope's.
+        let mut envelope = drawn.clone();
+        (envelope.id, envelope.kind) = (self.doc.alloc_id(), kind);
+        let layer = self.doc.alloc_id();
+        let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
+        let mut shown = envelope.clone();
+        (shown.visible, shown.opacity) = (true, 1.0);
+        let mut plain = drawn.clone();
+        (plain.visible, plain.opacity) = (true, 1.0);
+        let page = self.page_in_doc();
+        if !crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent) {
+            self.warn(crate::import::ai::envelope::DRAWN);
+            return;
+        }
+        // The contents are the envelope's own now, not a copy on `%_` lines.
+        fn forget(n: &Node, hidden: &mut HashSet<NodeId>) {
+            hidden.remove(&n.id);
+            for c in n.children().into_iter().flatten() {
+                forget(c, hidden);
+            }
+        }
+        forget(&envelope, &mut self.hidden_ids);
+        if let Some(f) = self.frames.last_mut()
+            && let Some(slot) = f.children.last_mut()
+        {
+            let id = envelope.id;
+            let drawn = std::mem::replace(slot, envelope);
+            self.envelopes_drawn.push((id, drawn));
+        }
+    }
+}
+
+/// Does `node` hold a text slot?
+fn has_text_slot(node: &Node) -> bool {
+    let mut slots = vec![];
+    envelope_text_slots(node, &mut slots);
+    !slots.is_empty()
 }
 
 /// The source text inside an envelope options dictionary, carried through its containing metadata.

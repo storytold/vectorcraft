@@ -37,6 +37,10 @@ impl Session {
                     if shaper_changed || dim_changed {
                         cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
                     }
+                    // Symbol editing: the symbol follows its art on the editing layer, before
+                    // inline graphics follow their symbols.
+                    let symbol_synced =
+                        if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
                     cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Text Wrap: area type follows its wrap objects; then threads re-flow.
@@ -60,7 +64,9 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
-                    if st.doc.too_deep(Some(&before)) {
+                    if let Err(e) = symbol_synced {
+                        Err(e)
+                    } else if st.doc.too_deep(Some(&before)) {
                         // Deeper trees overflow the stack of what walks them.
                         Err(EngineError::Other(TOO_DEEP.into()))
                     } else if doc_sane(&st.doc, &st.selection) && objects_in_range(&st.doc, &spread) {
@@ -82,6 +88,21 @@ impl Session {
                 // The art on a locked artboard can't stay selected, however it got there, except
                 // the new art this edit made and new art still selected.
                 st.protect_locked_artboards(&before_sel.objects, &before_sel.new_art, Some(&*before));
+                // Symbol or opacity mask editing ended because the edit deleted its layer:
+                // isolation on the layer or inside it leaves too, out of symbol editing to what it
+                // was before.
+                let mode_layer = before.symbol_edit.as_ref().map(|e| e.layer).or(before.mask_edit.map(|m| m.layer));
+                if let Some(layer) = mode_layer
+                    && st.doc.node(layer).is_none()
+                    && st.isolation.is_some_and(|i| i == layer || st.doc.node(i).is_none())
+                {
+                    if let Some(se) = &before.symbol_edit {
+                        cmd::symboledit::go_back(st, se);
+                    } else {
+                        st.isolation = None;
+                        st.active_layer = st.doc.default_layer();
+                    }
+                }
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {

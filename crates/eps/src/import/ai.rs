@@ -18,6 +18,7 @@
 //! did before (the printed page, or the PDF), with a warning saying why.
 
 mod blend;
+mod envelope;
 mod frames;
 mod lex;
 mod mesh;
@@ -32,6 +33,7 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
+pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
 pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
 pub(crate) use read::{join_and, slot_frame, slot_of};

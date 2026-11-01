@@ -184,6 +184,13 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let names: Vec<String> = st.doc.symbols.iter().map(|s| s.name.clone()).collect();
     let shared = symbols.first().filter(|first| symbols.iter().all(|s| s == *first)).cloned().unwrap_or_default();
+    // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
+    if !shared.is_empty()
+        && widgets::icon_button(ui, "dc-place-symbol", tl!("Edit Symbol"), false, 24.0).clicked()
+        && let Err(e) = app.run("symbol.edit", json!({}))
+    {
+        app.status(e);
+    }
     ui.label(egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text));
     let options: Vec<&str> = names.iter().map(String::as_str).collect();
     if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
@@ -261,12 +268,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
-    if let Some((n, place)) = clicked {
+    // A double-click edits the symbol in symbol editing mode.
+    if let Some((n, edit)) = clicked {
         // A click picks one symbol again.
         set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
         app.run("symbol.setCurrent", json!({"name": n})).ok();
-        if place {
-            app.run("symbol.place", json!({"name": n})).ok();
+        if edit && let Err(e) = app.run("symbol.edit", json!({"name": n})) {
+            app.status(e);
         }
     }
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
@@ -322,7 +330,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let items: [(&str, bool, &str, Value); 7] = [
         (tl!("Symbol Options…"), sel.is_some(), "ui.symbolOptions", json!({"edit": true, "name": sel})),
-        (tl!("Edit Symbol"), inst, "symbol.edit", json!({})),
+        // The selected instance, else the symbol selected in the panel.
+        (tl!("Edit Symbol"), inst || sel.is_some(), "symbol.edit", if inst { json!({}) } else { name.clone() }),
         (tl!("Place Symbol Instance"), sel.is_some(), "symbol.place", name.clone()),
         (tl!("Replace Symbol"), inst && sel.is_some(), "symbol.replace", name.clone()),
         (tl!("Break Link to Symbol"), inst, "symbol.breakLink", json!({})),
@@ -923,6 +932,51 @@ mod tests {
             });
         }
         (instances, paths)
+    }
+
+    /// The bounds of the art on the symbol editing layer, rounded to 0.001 pt.
+    fn editing_art(app: &VectorcraftApp) -> Option<[f64; 4]> {
+        let d = &app.session.active()?.doc;
+        let layer = d.node(d.symbol_edit.as_ref()?.layer)?;
+        let ids: Vec<NodeId> = layer.children()?.iter().map(|n| n.id).collect();
+        let r = d.bounds_of(&ids, false)?;
+        Some([r.x0, r.y0, r.x1, r.y1].map(|v| (v * 1000.0).round() / 1000.0))
+    }
+
+    /// Edit Symbol without an instance centers the symbol's art on the active artboard, and in a
+    /// document without artboards on the view's center, in a batch too.
+    #[test]
+    fn edit_symbol_from_the_panel_centers_the_art_on_the_active_artboard_or_the_view() {
+        let mut app = leaf_and_dot();
+        app.run("artboard.new", json!({"x": 500, "y": 0, "width": 200, "height": 100})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        crate::panels::artboards::select(&mut app, 1);
+        app.run("symbol.edit", json!({"name": "Dot"})).unwrap();
+        assert_eq!(editing_art(&app), Some([585.0, 35.0, 615.0, 65.0]));
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).artboards.clear();
+        // A view with no artboard to fit to is never fitted.
+        if let Some(v) = app.view_mut() {
+            (v.fitted, v.center) = (false, vectorcraft_geom::Point::new(1000.0, 1000.0));
+        }
+        app.run("symbol.edit", json!({"name": "Dot"})).unwrap();
+        assert_eq!(editing_art(&app), Some([985.0, 985.0, 1015.0, 1015.0]));
+        // A coordinate the call gives stays; the other is the view's.
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        app.run("symbol.edit", json!({"name": "Dot", "x": 2000})).unwrap();
+        assert_eq!(editing_art(&app), Some([1985.0, 985.0, 2015.0, 1015.0]));
+        // A batch's symbol.edit step gets the view's center as well.
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        app.run("command.batch", json!({"commands": [{"command": "symbol.edit", "params": {"name": "Dot"}}]})).unwrap();
+        assert_eq!(editing_art(&app), Some([985.0, 985.0, 1015.0, 1015.0]));
+        // An artboard an earlier step makes is there when the symbol.edit step runs.
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        let steps = json!([
+            {"command": "artboard.new", "params": {"x": 500, "y": 0, "width": 200, "height": 100}},
+            {"command": "symbol.edit", "params": {"name": "Dot"}},
+        ]);
+        app.run("command.batch", json!({ "commands": steps })).unwrap();
+        assert_eq!(editing_art(&app), Some([585.0, 35.0, 615.0, 65.0]));
     }
 
     fn dialog_kind(app: &VectorcraftApp) -> Option<&str> {

@@ -178,6 +178,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("standardVerticalRoman", json!(v.standard_vertical_roman)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
+        ("fontHeightReference", json!(v.font_height_reference)),
         ("language", json!(v.language)),
     ] {
         m.insert(k.into(), x);

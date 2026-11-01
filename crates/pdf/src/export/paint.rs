@@ -100,9 +100,10 @@ impl Exporter<'_> {
     /// The stops of a gradient that mixes spot inks with process colors or with each other, in
     /// a DeviceN space of the process inks the stops use (in CMYK order) and the spot inks (in
     /// the order the stops name them), with midpoints as explicit stops (the tints and opacity
-    /// there are halfway). Paper white adds no ink. `None`, with a warning, when a stop is
-    /// written in RGB or Lab or the spot inks can't share a DeviceN space; the gradient is then
-    /// written in the colors of its stops.
+    /// there are halfway), or for a Perceptual gradient the stops on its curve
+    /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink. `None`, with a
+    /// warning, when a stop is written in RGB or Lab or the spot inks can't share a DeviceN space;
+    /// the gradient is then written in the colors of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         use krilla::color::device_n::{Color as DnColor, Colorant, DeviceNSpace, Process};
         let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
@@ -151,6 +152,17 @@ impl Exporter<'_> {
             let tints = process.iter().map(|&i| q(v[i])).chain(v[4..].iter().map(|&t| q(t))).collect();
             Some(DnColor::new(tints, space.clone())?.into())
         };
+        // A Perceptual gradient: the stops on its curve, each a mix of two stops' inks.
+        if let Some(curve) = g.ink_mixes() {
+            return curve
+                .into_iter()
+                .map(|(o, i, w, opacity)| {
+                    let next = inks.get(i + 1).unwrap_or(&inks[i]);
+                    let mixed: Vec<f32> = inks[i].iter().zip(next).map(|(a, b)| a + (b - a) * w).collect();
+                    Some((o, color(&mixed)?, opacity))
+                })
+                .collect();
+        }
         let mut out = vec![];
         for (i, s) in g.stops.iter().enumerate() {
             out.push((s.offset, color(&inks[i])?, s.opacity));
@@ -345,13 +357,32 @@ impl Exporter<'_> {
         g.stops.iter().all(|s| spot(s) == Some(ink) || paper(s)).then_some(ink)
     }
 
-    /// Is `g` a Perceptual linear or radial gradient of tints of one spot ink that paints a fill
-    /// (`fill`) without dither or a stroke, with a curve short enough for
-    /// [`vectorcraft_color::Gradient::fits_ink_tints`], which [`Self::perceptual_spot_stops`]
-    /// writes as a Separation shading rather than an image?
+    /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop
+    /// linked to a spot swatch, and is every other stop paper white, unlinked, or written in CMYK
+    /// or gray?
+    fn device_n_inks_only(&self, g: &vectorcraft_color::Gradient) -> bool {
+        let doc = self.doc;
+        let cmyk_doc = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+        let spot = |s: &vectorcraft_color::GradientStop| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot));
+        let inks = |s: &vectorcraft_color::GradientStop| {
+            (s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3])
+                || matches!(self.out.color(&s.color, self.intent, cmyk_doc, self.convert), Color::Cmyk { .. } | Color::Gray { .. })
+        };
+        g.stops.iter().any(spot) && g.stops.iter().all(|s| spot(s) || inks(s))
+    }
+
+    /// Is `g` a Perceptual linear or radial gradient of spot inks, alone or mixed with process
+    /// inks, that paints a fill (`fill`) without dither or a stroke, with a curve short enough for
+    /// [`vectorcraft_color::Gradient::fits_ink_tints`]: one that [`Self::perceptual_spot_stops`]
+    /// writes as a Separation shading, or [`Self::device_n_stops`] as a DeviceN shading, rather
+    /// than an image?
     pub(super) fn perceptual_spot(&self, g: &vectorcraft_color::GradientPaint, fill: bool) -> bool {
         let gr = &g.gradient;
-        !gr.method.is_classic() && gr.kind != GradientKind::Freeform && !(fill && gr.dither) && self.one_spot_ink(gr).is_some() && gr.fits_ink_tints()
+        !gr.method.is_classic()
+            && gr.kind != GradientKind::Freeform
+            && !(fill && gr.dither)
+            && (self.one_spot_ink(gr).is_some() || self.device_n_inks_only(gr))
+            && gr.fits_ink_tints()
     }
 
     /// The stops of a Perceptual gradient of tints of one spot ink (or paper white, 0% of it) as
@@ -376,7 +407,9 @@ impl Exporter<'_> {
         let doc = self.doc;
         let from_stops = g.gradient.kind != GradientKind::Freeform || g.freeform.is_none();
         if from_stops && g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
-            self.warn("spot colors in gradients exported as images (freeform, dithered or Perceptual gradients that mix inks) are written in process colors");
+            self.warn(
+                "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
+            );
         }
     }
 
