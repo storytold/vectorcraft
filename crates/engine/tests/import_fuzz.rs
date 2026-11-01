@@ -2752,6 +2752,48 @@ fn frames_document_text() -> String {
     )
 }
 
+/// The text document of vertical type (key 1 of what each frame carries at 2) as an editing copy
+/// keeps it: point type in two columns with a Tate-chu-yoko run (key 35 at 3), area type and type
+/// on a path.
+fn vertical_document_text() -> String {
+    let area = "<< /0 << /0 [ 0 0 ] /1 << /0 [ 8151.5 8171.5 8151.5 8171.5 8201.5 8171.5 8201.5 8171.5 8201.5 8171.5 8201.5 8171.5 8201.5 8221.5 8201.5 8221.5 8201.5 8221.5 8201.5 8221.5 8151.5 8221.5 8151.5 8221.5 8151.5 8221.5 8151.5 8221.5 8151.5 8171.5 8151.5 8171.5 ] >> /2 << /0 1 /1 2 >> >> >>";
+    let path = "<< /0 << /0 [ 0 0 ] /1 << /0 [ 8151.5 8171.5 8151.5 8171.5 8191.5 8161.5 8191.5 8171.5 8191.5 8171.5 8211.5 8181.5 8231.5 8171.5 8231.5 8171.5 ] >> /2 << /0 2 /1 2 /6 [ 0.5 2.0 ] >> >> >>";
+    let point = "<< /0 << /0 [ 0 0 ] /2 << /1 2 /2 [ 1 0 0 1 3 4 ] >> >> >>";
+    let run = |n: usize, own: &str| format!("<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 12.0 {own}>> >> >> /1 {n} >>");
+    let story = |text: &str, frame: usize, runs: &str, layout: &str| {
+        format!("<< /0 << /0 ({text}) /6 << /0 [ {runs} ] >> >> /1 << /0 [ << /0 {frame} >> ] {layout}>> >>")
+    };
+    let columns = "/2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8200.0 8180.0 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ \
+                   << /99 /L /6 [ << /99 /S /0 << /0 [ 0.0 0.0 ] >> >> ] >> << /99 /L /0 << /0 [ -6.0 14.4 ] >> /6 [ << /99 /S /0 << /0 [ 0.0 0.0 ] >> >> ] >> \
+                   ] >> ] >> ] >> ] >> ] ";
+    format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ {point} {area} {path} ] >> >>\n\
+         /1 << /1 [ {} {} {} ] /2 << /1 12.0 /35 1 /47 0 /48 0 >> >>\n",
+        story("Day 12\\rnext\\r", 0, &format!("{} {} {}", run(4, ""), run(2, "/35 3 /47 -2 /48 3 "), run(6, "/35 2 ")), columns),
+        story("Vertical area type wraps\\r", 1, &run(25, ""), ""),
+        story("On a path\\r", 2, &run(10, "/35 3 "), ""),
+    )
+}
+
+/// The text objects of [`vertical_document_text`]: one per story.
+const VERTICAL_OBJECTS: &str = "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n0 /FrameIndex ,\n1 /StoryIndex ,\n;\n/AI11Text :\n0 /FrameIndex ,\n2 /StoryIndex ,\n;\n";
+
+/// The fuzzed vertical fixture, as it is, reads as vertical point, area and path type, with the
+/// Tate-chu-yoko run marked.
+#[test]
+fn the_vertical_fixture_reads_as_vertical_type() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.eps", &text_eps_of(&vertical_document_text(), VERTICAL_OBJECTS)).unwrap();
+    let mut found = vec![];
+    l.doc.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            let tcy: Vec<&str> = t.runs.iter().filter(|r| r.style.tate_chu_yoko).map(|r| r.text.as_str()).collect();
+            found.push((t.plain_text(), t.vertical, tcy.join("|")));
+        }
+    });
+    let want = [("Day 12\nnext", true, "12"), ("Vertical area type wraps", true, ""), ("On a path", true, "On a path")];
+    assert_eq!(found, want.map(|(a, b, c)| (a.to_string(), b, c.to_string())), "{:?}", l.warnings);
+}
+
 /// The text objects of [`frames_document_text`]: story 0 in its two frames, story 1 in its one (a
 /// text object names its frame among its story's).
 const FRAME_OBJECTS: &str = "/AI11Text :\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n1 /FrameIndex ,\n0 /StoryIndex ,\n;\n/AI11Text :\n0 /FrameIndex ,\n1 /StoryIndex ,\n;\n";
@@ -2944,6 +2986,15 @@ proptest! {
         let text = mutate_text(&frames_document_text(), cut, &edits);
         let bytes = text_eps_of(&text, FRAME_OBJECTS);
         survive("mutated EPS text frames", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    /// The same for vertical type and Tate-chu-yoko runs: orientations and baseline directions of
+    /// any value, type or size.
+    #[test]
+    fn eps_vertical_text_never_panics(cut in 0usize..2_000, edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '<', '>', '\\', 'e', '1', '2', '3'])), 0..12)) {
+        let text = mutate_text(&vertical_document_text(), cut, &edits);
+        let bytes = text_eps_of(&text, VERTICAL_OBJECTS);
+        survive("mutated EPS vertical text", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
     }
 
     /// An Illustrator EPS whose editing data is damaged or hostile: read as its layers, or as its page.

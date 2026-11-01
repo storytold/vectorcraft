@@ -1628,6 +1628,149 @@ fn type_from_the_text_document_keeps_its_case_setting() {
     assert_eq!(case(2), [(false, None)]);
 }
 
+/// `doc` (from [`text_document`]) with its frames vertical (key 1 of what a frame carries at 2) and
+/// its first story's layout given a second line one pitch on, `line` from its start.
+fn vertical_text_document(doc: &str, line: f64) -> String {
+    doc.replace("/2 << /2 [", "/2 << /1 2 /2 [").replacen(
+        "] >> ] >> ] >> ] >> ] >>",
+        &format!("] >> << /99 /L /0 << /0 [ {line} 16.8 ] >> /6 [ << /99 /S /0 << /0 [ 0.0 0.0 ] >> >> ] >> ] >> ] >> ] >> ] >>"),
+        1,
+    )
+}
+
+/// `doc` with the text of its stories `from` set to `to` (a string of the text document: `\247` is
+/// `§`, which stands upright in a column in the bundled fonts).
+fn with_text(doc: &str, from: &str, to: &str) -> String {
+    let (from, to) = (format!("({from})"), format!("({to})"));
+    assert!(doc.contains(&from));
+    doc.replace(&from, &to)
+}
+
+/// The centres of `t`'s glyphs that draw, as it is laid out.
+fn glyph_centres(t: &vectorcraft_doc::TextObject) -> Vec<kurbo::Point> {
+    use kurbo::Shape;
+    let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    l.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| g.outline.bounding_box().center()).collect()
+}
+
+#[test]
+fn vertical_point_type_reads_as_columns_from_right_to_left() {
+    let doc = vertical_text_document(&text_document(&[("SS\rS\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0);
+    let doc = with_text(&doc, "SS\rS\r", "\\247\\247\r\\247\r");
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    assert!(t.vertical, "vertical type");
+    assert_eq!(t.plain_text(), "§§\n§");
+    // The anchor is the top of the first column, where horizontal type would start its line.
+    let [.., e, f] = t.xf.as_coeffs();
+    assert!((e - 58.5).abs() < 1e-6 && (f - 38.5).abs() < 1e-6, "{:?}", t.xf);
+    let c = glyph_centres(t);
+    assert_eq!(c.len(), 3);
+    assert!(c[1].y > c[0].y + 5.0 && (c[0].x - c[1].x).abs() < 0.5, "down the first column: {c:?}");
+    assert!(c[2].x < c[0].x - 5.0, "the second column is left of the first: {c:?}");
+}
+
+#[test]
+fn vertical_area_type_keeps_its_orientation() {
+    let doc = vertical_text_document(&text_document(&[("SSS SSS SSS SSS\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0);
+    let doc = with_text(&doc, "SSS SSS SSS SSS\r", &format!("{}\r", ["\\247\\247\\247"; 4].join(" ")))
+        // An area frame 60 points wide and 35 tall (its top right at the anchor): two of the
+        // 14-point `§` fit in a column, not three.
+        .replace("/0 << /0 [ 0 0 ] /2 << /1 2", "/0 << /0 [ 0 0 ] /1 << /0 [ 8140 8180 8140 8180 8200 8180 8200 8180 8200 8180 8200 8180 8200 8215 8200 8215 8200 8215 8200 8215 8140 8215 8140 8215 8140 8215 8140 8215 8140 8180 8140 8180 ] >> /2 << /0 1 /1 2")
+        // The file's first column 8 points in from the frame's right edge, the next 16.8 further.
+        .replacen("/99 /L /6 [", "/99 /L /0 << /0 [ 0.0 8.0 ] >> /6 [", 1)
+        .replacen("/0 << /0 [ 0 16.8 ] >>", "/0 << /0 [ 0 24.8 ] >>", 1);
+    assert!(doc.contains("[ 0.0 8.0 ]") && doc.contains("[ 0 24.8 ]"));
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }), "{:?}", t.kind);
+    assert!(t.vertical);
+    let vectorcraft_doc::TextKind::Area { frame } = &t.kind else { panic!("area") };
+    let frame = frame.bounds().unwrap();
+    let c = glyph_centres(t);
+    assert!(!c.is_empty());
+    let columns: std::collections::BTreeSet<i64> = c.iter().map(|p| (p.x * 2.0).round() as i64).collect();
+    assert!(columns.len() >= 2, "the text wraps into more than one column: {c:?}");
+    assert!(c.first().unwrap().x > c.last().unwrap().x, "the first column is the rightmost: {c:?}");
+    assert!(c.iter().all(|p| p.x > frame.x0 - 1.0 && p.x < frame.x1 + 1.0), "inside the frame {frame:?}: {c:?}");
+    // The first column where the file has it: its centre line 8 points left of the right edge.
+    let first = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).baselines()[0].0.x;
+    assert!((first - (frame.x1 - 8.0)).abs() < 1e-6, "{first} in {frame:?}");
+}
+
+#[test]
+fn a_tate_chu_yoko_run_is_marked() {
+    // Three runs over "§12§": the middle one, the two digits, has key 35 at 3.
+    let doc = vertical_text_document(&text_document(&[("S12S\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0);
+    let doc = with_text(&doc, "S12S\r", "\\24712\\247\r");
+    let run = |n: u32, own: &str| {
+        format!(
+            "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own}/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 {n} >>"
+        )
+    };
+    let one = run(5, "");
+    assert!(doc.contains(&one));
+    let doc = doc.replacen(&one, &format!("{} {} {}", run(1, ""), run(2, "/35 3 "), run(2, "")), 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let marked: Vec<(String, bool)> = texts[0].runs.iter().map(|r| (r.text.clone(), r.style.tate_chu_yoko)).collect();
+    assert_eq!(marked, [("§".to_string(), false), ("12".to_string(), true), ("§".to_string(), false)]);
+}
+
+#[test]
+fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
+    for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
+        let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
+            .replace("/2 << /1 2 /2 [", &format!("/2 << /1 {bad} /2 ["))
+            .replace("/1 14.0 /53", &format!("/1 14.0 /35 {bad} /53"));
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts = text_of(&r.document.layers[1]);
+        assert_eq!(texts.len(), 1, "{bad}: {:?}", r.warnings);
+        assert!(!texts[0].vertical, "{bad}");
+        assert!(texts[0].runs.iter().all(|r| !r.style.tate_chu_yoko), "{bad}");
+    }
+}
+
+#[test]
+fn threaded_frames_of_different_orientations_are_not_read() {
+    // The story flows through two point frames, the second horizontal.
+    let doc = vertical_text_document(&text_document(&[("xx\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
+        .replacen(
+            "/8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /1 2 /2 [ 1 0 0 1 0 0 ] >> >> >> ]",
+            "/8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /1 2 /2 [ 1 0 0 1 0 0 ] >> >> >> << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ]",
+            1,
+        )
+        .replacen("/1 << /0 [ << /0 0 >> ]", "/1 << /0 [ << /0 0 >> << /0 1 >> ]", 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert!(text_of(&r.document.layers[1]).is_empty(), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
+#[test]
+fn horizontal_type_stays_horizontal() {
+    let doc = with_text(&text_document(&[("SS\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), "SS\r", "\\247\\247\r");
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    assert!(!texts[0].vertical);
+    assert_eq!(texts[0].plain_text(), "§§");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 58.5).abs() < 1e-6 && (f - 38.5).abs() < 1e-6, "{:?}", texts[0].xf);
+    let c = glyph_centres(texts[0]);
+    assert!(c[1].x > c[0].x + 5.0 && (c[0].y - c[1].y).abs() < 0.5, "along a line: {c:?}");
+}
+
 #[test]
 fn type_with_a_frame_it_cant_read_is_left_out_with_a_note() {
     // A story whose frame is of a kind this doesn't know isn't guessed at.

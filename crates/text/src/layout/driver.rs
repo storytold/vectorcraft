@@ -27,22 +27,30 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
 
 /// Area type in a frame too short for its first line draws nothing (type that doesn't fit its frame
 /// isn't drawn). For importers whose source shows that line: the frame is made taller, from its
-/// top, by what the first line needs. Whether it was.
+/// top, by what the first line needs (vertical type's frame wider, from its right edge, where its
+/// first column is). Whether it was.
 pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
     let TextKind::Area { frame } = &t.kind else { return false };
-    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6) else { return false };
+    let across = |b: &Rect| if t.vertical { b.width() } else { b.height() };
+    let Some(b) = frame.bounds().filter(|b| across(b) > 1e-6) else { return false };
     if !layout(db, t).lines.is_empty() {
         return false;
     }
-    // The height of its first line: the line's as point type.
+    // The height of its first line (a column's width): the line's as point type, its baseline at
+    // least Area Type Options › First Baseline's Min from the frame's top.
     let point = TextObject { kind: TextKind::Point, ..t.clone() };
-    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent + l.descent) else { return false };
+    let min = if t.area.first_baseline_min.is_finite() { t.area.first_baseline_min.max(0.0) } else { 0.0 };
+    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent.max(min) + l.descent) else { return false };
     // (A little more than it, for the rounding of the layout.)
-    let by = (need + 0.05) / b.height();
+    let by = (need + 0.05) / across(&b);
     if !(by.is_finite() && by > 1.0) {
         return false;
     }
-    let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
+    let taller = if t.vertical {
+        frame.transformed(Affine::translate((b.x1, 0.0)) * Affine::scale_non_uniform(by, 1.0) * Affine::translate((-b.x1, 0.0)))
+    } else {
+        frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)))
+    };
     let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
     // Something else keeps the line out (a frame narrower than a letter): as the source has it.
     if layout(db, t).lines.is_empty() {
