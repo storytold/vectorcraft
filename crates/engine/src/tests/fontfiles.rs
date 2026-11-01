@@ -94,7 +94,7 @@ fn missing_fonts_are_listed_symbols_included() {
     assert_eq!((r["count"].as_u64(), r["fonts"][1]["resolved"]["family"].as_str()), (Some(3), Some("Source Sans 3")));
     assert!(r.get("fontsNextToDocument").is_none(), "an unsaved document has no folder");
     let listed = s.execute("text.fonts", &json!({})).unwrap();
-    assert!(!listed.as_array().unwrap().iter().any(|f| f["family"] == "Symbol Only Family"), "Find Font lists the layers' type only");
+    assert!(listed.as_array().unwrap().iter().any(|f| f["family"] == "Symbol Only Family" && f["status"] == "missing"), "{listed}");
     assert!(listed.as_array().unwrap().iter().any(|f| f["family"] == "sans-serif" && f["status"] == "missing"), "{listed}");
     assert!(matches!(Session::new().execute("text.missingFonts", &json!({})), Err(EngineError::Disabled(..))));
 }
