@@ -452,6 +452,9 @@ fn pattern_options_set_each_corner_tile_to_original_none_or_an_automatic_tile() 
     app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.str("outerCornerTile"), d.str("innerCornerTile")), ("none".into(), "none".into()), "Diamonds has no corner art");
+    for corner in ["outer_corner", "inner_corner"] {
+        assert!(!crate::dialogs::brush_art_options::original_available(d, corner), "{corner}: no Original without corner art");
+    }
     let shown_tree = tree(|ui| super::super::show(&mut app, ui.ctx()));
     for name in ["Outer Corner Tile", "Inner Corner Tile"] {
         let roles: Vec<_> = shown_tree.iter().filter(|n| n.label() == Some(name)).map(|n| n.role()).collect();
@@ -471,6 +474,12 @@ fn pattern_options_set_each_corner_tile_to_original_none_or_an_automatic_tile() 
     app.run("ui.brushOptions", json!({"name": "Chain"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.str("outerCornerTile"), d.str("innerCornerTile")), ("original".into(), "original".into()));
+    // Original stays in a corner's menu after another choice, and goes back to the corner art.
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::brush_art_options::choose_corner(d, "outerCornerTile", "autoBetween");
+    assert!(crate::dialogs::brush_art_options::original_available(d, "outer_corner"));
+    crate::dialogs::brush_art_options::choose_corner(d, "outerCornerTile", "original");
+    assert_eq!(d.str("outerCornerTile"), "original");
     super::super::confirm(&mut app).unwrap();
     let def = app.run("brush.get", json!({"name": "Chain"})).unwrap();
     assert!(def["outer_corner"].is_object() && def["inner_corner"].is_object() && def.get("outer_source").is_none(), "{def}");
