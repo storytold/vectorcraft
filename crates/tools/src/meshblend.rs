@@ -4,7 +4,7 @@
 //!   point of a path blends from that point (`starts`). Each further click adds the object as one
 //!   more key of the new blend (as does clicking a blend first). Double-click or Alt-click opens
 //!   Blend Options (dialog `blendOptions`). Clicking empty canvas starts over. A selected blend
-//!   shows its step-count, Ease, Ramp and Colour handles on the canvas: dragging them previews
+//!   shows its step-count, Ease and Colour handles on the canvas: dragging them previews
 //!   `object.blend.options` (Steps, Type/Ramp and Shift), one undo step; Escape cancels a drag.
 //! - Mesh: click inside a filled path → `object.mesh.create {ids, at}` (1×1 mesh plus lines through
 //!   the click); click inside a mesh or a mesh envelope → `object.mesh.addLine` (a gradient mesh's
@@ -130,7 +130,16 @@ impl Tool for BlendTool {
                 }
                 None => vec![],
             },
-            PointerKind::Up => self.drag.take().map_or_else(Vec::new, |d| d.finish()),
+            PointerKind::Up => match self.drag.take() {
+                Some(mut d) => {
+                    // The release can land past the last drag event: apply it before committing,
+                    // as the Selection tool does. A click that never dragged changes nothing.
+                    let mut out = if d.adjusting() { d.drag(ev.pos) } else { vec![] };
+                    out.extend(d.finish());
+                    out
+                }
+                None => vec![],
+            },
             _ => vec![],
         }
     }
@@ -371,6 +380,27 @@ mod tests {
         assert!(t.blend_handle().is_some());
         assert!(t.claims_key(&c, ToolKey::Escape));
         assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+        assert!(t.blend_handle().is_none());
+    }
+
+    #[test]
+    fn blend_tool_commits_the_release_position() {
+        let (d, b) = doc_with_blend(BlendSpineMode::Always);
+        let (mut s, p) = (Selection::default(), paint());
+        s.set([b]);
+        let c = cx(&d, &s, &p);
+        let rest = crate::blendhandles::BlendHandles::for_blend(&d, b, None, 1.0).unwrap().steps_at;
+        let mut t = create("blend").unwrap();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, rest.x, rest.y));
+        // Drag partway, then release at the box's middle without another Drag event: the release
+        // position is what commits, not the last drag position.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, rest.x, 15.0));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Up, rest.x, 10.0));
+        assert!(
+            matches!(&acts[..], [Action::Preview(id, p), Action::Commit]
+                if id == "object.blend.options" && p["steps"] == json!(32)),
+            "{acts:?}"
+        );
         assert!(t.blend_handle().is_none());
     }
 
