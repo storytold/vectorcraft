@@ -935,27 +935,89 @@ fn in_points(mut d: Document, k: f64) -> Document {
     d
 }
 
-/// #1479: an image larger than the editing data's reader takes would be missing from the layers,
-/// while the PDF part has it (it reads larger images): the file comes in as its PDF part, with a
-/// note saying why, rather than without the image.
+/// A 1-bit gray image of `w` × `h` pixels in the format's operators, its samples `rows` (binary,
+/// rows padded to whole bytes, a set bit white), placed by the matrix `m`.
+fn raster_1bit(m: &str, (w, h): (u32, u32), rows: &str) -> String {
+    format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ {m} ] {w} {h} 0 Xh\n\
+         [ {m} ] 0 0 {w} {h} {w} {h} 1 1 0 0 1 0 4 4 0 0\n%%BeginData: {}\rXI\n{rows}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN",
+        rows.len()
+    )
+}
+
+/// #1479: an image past 2^25 pixels keeps the layers, at full size; a 1-bit one is a 1-bit PNG of
+/// its rows.
 #[test]
-fn an_ai_file_with_an_image_too_large_for_its_editing_data_comes_in_as_its_pdf_part() {
-    let raster = |w: u32, h: u32| {
-        format!(
-            "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n\
-             [ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN"
-        )
-    };
-    // 6,000 × 6,000 pixels: past the reader's 2^25.
-    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(6000, 6000))));
+fn an_ai_file_with_an_image_past_2_25_pixels_keeps_its_layers() {
+    // 6,000 × 6,000 pixels, each row black and white in turn ('U' is 01010101).
+    let image = raster_1bit("0.0005 0 0 0.0005 50 14", (6000, 6000), &"U".repeat(750 * 6000));
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Texture", true, &image)));
     let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
-    assert!(!read, "the PDF part is used: {warnings:?}");
-    assert!(warnings.iter().any(|w| w.contains("an image is too large to read from them")), "{warnings:?}");
-    assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the PDF part's art");
-    // An image the reader takes keeps the layers.
-    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(1, 1))));
-    let (_, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
     assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert_eq!(kinds(&d.layers[0]), ["path"]);
+    let [image] = d.layers[1].children().unwrap().as_slice() else { panic!("{:?}", d.layers[1]) };
+    let NodeKind::Image(im) = &image.kind else { panic!("{image:?}") };
+    assert_eq!((im.width, im.height), (6000, 6000));
+    let png = &d.images[&im.key].bytes;
+    // Bit depth 1, colour type 0 (gray).
+    assert_eq!(png.get(24..26), Some([1, 0].as_slice()));
+    let gray = image::load_from_memory(png).unwrap().to_luma8();
+    assert_eq!((gray.get_pixel(0, 0)[0], gray.get_pixel(1, 0)[0], gray.get_pixel(5999, 5999)[0]), (0, 255, 255));
+    assert!(warnings.iter().all(|w| !w.contains("image")), "{warnings:?}");
+}
+
+/// An image past the target size is averaged down by the smallest whole step that fits, a 1-bit
+/// one into gray coverage, the blocks at its edges over the pixels they have; it covers the box
+/// the full size would.
+#[test]
+fn an_ai_image_past_the_target_size_is_reduced_and_keeps_the_layers() {
+    // 17 × 13 pixels: rows black, and in turn (the first one) white but for columns 0, 8 and 16.
+    let rows: String = (0..13).map(|y| if y % 2 == 0 { "\u{7f}\u{7f}\0" } else { "\0\0\0" }).collect();
+    let image = raster_1bit("1 0 0 1 50 14", (17, 13), &rows);
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Texture", true, &image)));
+    let (d, warnings, read) = crate::import::ai::with_image_limits(20, 1 << 31, 512 << 20, || {
+        crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0)
+    });
+    assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert!(warnings.contains(&"an embedded image of 17 × 13 pixels was reduced to 5 × 4 pixels to keep the layers".to_string()), "{warnings:?}");
+    let [image] = d.layers[1].children().unwrap().as_slice() else { panic!("{:?}", d.layers[1]) };
+    let NodeKind::Image(im) = &image.kind else { panic!("{image:?}") };
+    assert_eq!((im.width, im.height), (5, 4));
+    let full = im.xf.transform_rect_bbox(vectorcraft_geom::Rect::new(0.0, 0.0, 5.0, 4.0));
+    assert!(
+        (full.x0 - 50.0).abs() < 1e-9 && (full.x1 - 67.0).abs() < 1e-9 && (full.y0 - 86.0).abs() < 1e-9 && (full.y1 - 99.0).abs() < 1e-9,
+        "{full:?}"
+    );
+    let gray = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_luma8();
+    // Steps of 4: blocks of rows 0–11 are half white rows, the last block row 12 alone; blocks of
+    // columns 0–3 and 8–11 have 3 white columns of 4, and the last block column 16 alone.
+    let rows: Vec<Vec<u8>> = (0..4).map(|y| (0..5).map(|x| gray.get_pixel(x, y)[0]).collect()).collect();
+    assert_eq!(rows, [vec![96, 128, 96, 128, 0], vec![96, 128, 96, 128, 0], vec![96, 128, 96, 128, 0], vec![191, 255, 191, 255, 0]]);
+}
+
+/// An image past the hard limits is a box that the page's art inside it replaces, and the
+/// layers stay; without page art (the editing data alone), it is left out with a note.
+#[test]
+fn an_ai_image_past_the_hard_limits_comes_in_as_the_pages_art() {
+    let image = raster_1bit("1 0 0 1 50 14", (4, 4), &"\0".repeat(4));
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Texture", true, &image)));
+    let (d, notes, read) =
+        crate::import::ai::with_image_limits(20, 15, 512 << 20, || crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, false, 1.0));
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert_eq!(kinds(&d.layers[1]), ["group[1]"]);
+    replacement_is_cyan(&d, 1, 0);
+    assert!(notes.iter().any(|n| n.contains("very large images") && n.contains("they came in as the page's art")), "{notes:?}");
+    // Past the bytes the samples may take, too.
+    let (_, notes, read) =
+        crate::import::ai::with_image_limits(20, 1 << 31, 1, || crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, false, 1.0));
+    assert!(read && notes.iter().any(|n| n.contains("very large images")), "{notes:?}");
+    let (d, notes) = crate::import::ai::with_image_limits(20, 15, 512 << 20, || crate::ai_alone(&private(&art))).unwrap();
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert!(d.layers[1].children().unwrap().is_empty());
+    assert!(notes.iter().any(|n| n == "an image too large to read from the editing data was left out"), "{notes:?}");
 }
 
 /// A `.ai` whose layers hold a placed PDF and no text object: its PDF part draws the placed file,
@@ -1042,7 +1104,9 @@ fn an_ai_file_that_comes_in_as_its_pdf_part_keeps_the_swatches_of_its_palette() 
     let mut part = pdf_part(10.0, 86.0);
     let gold = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.2, 0.9, 0.1));
     part.swatches.push(vectorcraft_color::swatch::Swatch { name: "Gold ink".into(), paint: gold, global: true, spot: true });
-    let (d, warnings, read) = crate::layered_ai(&private(&art), part, vec![], false, true, 1.0);
+    // An image past 2^25 pixels isn't read here, and the page has no art of its own in its box.
+    let (d, warnings, read) =
+        crate::import::ai::with_image_limits(1 << 26, 1 << 25, 512 << 20, || crate::layered_ai(&private(&art), part, vec![], false, true, 1.0));
     assert!(!read, "the PDF part is used: {warnings:?}");
     let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(swatches, ["[None]", "White", "Gold ink"], "{warnings:?}");

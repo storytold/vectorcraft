@@ -4277,6 +4277,7 @@ theme	Appearance	Giao diện
 @msg	already editing a pattern	đang chỉnh sửa họa tiết
 @msg	an image VectorCraft can't read was left out	một ảnh VectorCraft không đọc được đã bị bỏ qua
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	một ảnh nhúng {_1} × {_2} điểm ảnh đã được thu nhỏ còn {_3} × {_4} điểm ảnh để giữ các lớp
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Một đối tượng chỉ nhận một hiệu ứng 3D. Hãy chỉnh sửa tùy chọn của hiệu ứng hiện có hoặc xóa nó trước.

@@ -14,7 +14,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
     // The layer tree is kept from the structure read, for the page to come in on when the layers
     // can't be used.
     let (tree, result) = match data.as_deref() {
-        Ok(d) => match ai::read(d, true) {
+        Ok(d) => match ai::read_over_page(d, true) {
             Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },
@@ -112,11 +112,6 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         (visible, all, false)
     };
     match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
-        // An image too large for the editing data's reader would be missing from the layers, while
-        // the PDF part has it: the file comes in as its PDF part instead (#1479).
-        Ok((_, notes)) if notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => {
-            from_pdf_part(visible, warnings, "an image is too large to read from them")
-        }
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;

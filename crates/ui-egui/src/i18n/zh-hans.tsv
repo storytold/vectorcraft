@@ -4049,6 +4049,7 @@ imageTrace	Outline	轮廓
 @msg	its section ending with `%{end}` doesn't end	其以 `%{end}` 结束的部分没有结束
 @msg	an image VectorCraft can't read was left out	已略去 VectorCraft 无法读取的图像
 @msg	an image whose data is cut short was left out	已略去数据不完整的图像
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	为保留图层，{_1} × {_2} 像素的嵌入图像已缩小为 {_3} × {_4} 像素
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
 @msg	patterns nested too deeply are filled with mid-grey	嵌套过深的图案以中灰色填充

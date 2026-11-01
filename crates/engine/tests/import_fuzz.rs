@@ -3320,6 +3320,16 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI5_BeginRaster\n",
             "\n%AI5_EndRaster\n",
             "\n%%BeginData: 12\rXI\n",
+            // Image operands past 2^25 pixels, of odd 1-bit rows, and past the hard limits: as
+            // many pixels as a u32 side allows, more samples than the bytes allowed, sizes that
+            // overflow when multiplied out, and a matrix that maps the box to nothing.
+            "[1 0 0 1 0 0] 0 0 6000 6000 6000 6000 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 17 13 17 13 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 65536 32769 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 23171 23171 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 4294967295 4294967295 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 1e308 1e308 8 3 1 0 0 0 4 4 0 0 ",
+            "[0 0 0 0 0 0] 0 0 9 9 46341 46341 1 1 0 0 1 0 4 4 0 0 ",
             "\n%%EndData\n",
             "\n%AI5_BeginGradient: (G)\n",
             "\n%AI14_BeginSymbol\n",
