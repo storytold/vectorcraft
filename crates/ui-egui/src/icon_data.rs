@@ -208,6 +208,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("git-branch", include_bytes!("../../../assets/icons/git-branch.svg")),
     ("globe", include_bytes!("../../../assets/icons/globe.svg")),
     ("message-circle", include_bytes!("../../../assets/icons/message-circle.svg")),
+    ("message-square", include_bytes!("../../../assets/icons/message-square.svg")),
     ("link-2-off", include_bytes!("../../../assets/icons/link-2-off.svg")),
     ("lock", include_bytes!("../../../assets/icons/lock.svg")),
     ("lock-open", include_bytes!("../../../assets/icons/lock-open.svg")),
