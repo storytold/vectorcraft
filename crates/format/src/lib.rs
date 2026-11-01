@@ -37,9 +37,8 @@ mod legacy;
 mod stream;
 mod unpack;
 
-use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
-use std::io::{Read as _, Write};
+use std::io::Write;
 use std::sync::Arc;
 
 use craft_vectorcraft_format::{Head, Image, Tail};
@@ -51,6 +50,7 @@ pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
 pub use craft_vectorcraft_format::base64::{decode as base64_decode, encode as base64_encode};
 pub use craft_vectorcraft_format::{
     BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
+    sniff,
 };
 use stream::{Gz, Indent, KeyScan, Out};
 
@@ -106,7 +106,8 @@ impl From<craft_vectorcraft_format::Error> for FormatError {
         match e {
             craft_vectorcraft_format::Error::Format(format) => FormatError::NotVectorcraft(format!("format is `{format}`")),
             craft_vectorcraft_format::Error::TooNew(version) => FormatError::TooNew(version),
-            _ => FormatError::TooBig,
+            // The crate's other errors (`TooBig`: entries past the data after the JSON) keep their message.
+            e => FormatError::NotVectorcraft(e.to_string()),
         }
     }
 }
@@ -585,22 +586,6 @@ pub fn pdf_content(bytes: &[u8]) -> Option<Vec<u8>> {
     head_member(bytes, |h| h.pdf)
 }
 
-/// Does this look like a `.vectorcraft` file (compressed or not)?
-pub fn sniff(bytes: &[u8]) -> bool {
-    const HEAD: usize = 256;
-    let head: Cow<'_, [u8]> = if is_compressed(bytes) {
-        let mut head = Vec::with_capacity(HEAD);
-        // A damaged stream may still unpack its start: judge what came out.
-        let _ = flate2::read::GzDecoder::new(bytes).take(HEAD as u64).read_to_end(&mut head);
-        Cow::Owned(head)
-    } else {
-        Cow::Borrowed(bytes.get(..HEAD).unwrap_or(bytes))
-    };
-    // The cut may split a character.
-    let s = String::from_utf8_lossy(&head);
-    s.trim_start().starts_with('{') && (s.contains("\"vectorcraft\"") || s.contains("\"drawcraft\""))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -628,6 +613,28 @@ mod tests {
         let v1 = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":1", 1);
         assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false });
         assert!(load_info(v1.as_bytes()).unwrap().1.is_old());
+    }
+
+    /// A file is native when its top-level `format` member names VectorCraft, read as JSON reads
+    /// it; the word elsewhere in the head does not count.
+    #[test]
+    fn sniff_reads_the_format_member() {
+        // `vectorcraft` with its second `c` written as a JSON escape.
+        let escaped = [br#"{"format":"vector\"#.as_slice(), br#"u0063raft","version":4,"document":{}}"#].concat();
+        assert!(sniff(&escaped));
+        assert!(!sniff(br#"{"format":"other","generator":"vectorcraft"}"#));
+        assert!(!sniff(br#"{"names":["vectorcraft"],"format":"svg"}"#));
+    }
+
+    /// An envelope error other than the format and version keeps the crate's message.
+    #[test]
+    fn envelope_errors_keep_their_message() {
+        let e = FormatError::from(craft_vectorcraft_format::Error::TooBig);
+        assert!(matches!(e, FormatError::NotVectorcraft(_)), "{e}");
+        assert!(e.to_string().contains(&craft_vectorcraft_format::Error::TooBig.to_string()), "{e}");
+        let e = FormatError::from(craft_vectorcraft_format::Error::Format("x".into()));
+        assert_eq!(e.to_string(), "not a VectorCraft file: format is `x`");
+        assert!(matches!(FormatError::from(craft_vectorcraft_format::Error::TooNew(9)), FormatError::TooNew(9)));
     }
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};

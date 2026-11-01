@@ -102,6 +102,28 @@ fn a_damaged_preview_leaves_the_pdf_readable() {
     assert!(load_file(&damaged).is_ok());
 }
 
+/// A repeated `generator`, `preview` or `pdf` opens, of any shape; any other repeated member is
+/// refused. The crate's `Contents` accepts and refuses the same files.
+#[test]
+fn repeated_members_open_only_when_skipped() {
+    let o = SaveOptions { version: 3, ..SaveOptions::default() };
+    let text = String::from_utf8(save_with(&doc_with_image("small", 100), &o).unwrap()).unwrap();
+    let document = serde_json::from_str::<Value>(&text).unwrap()["document"].to_string();
+    let with = |members: &str| text.replacen('{', &format!("{{{members},"), 1);
+    let contents_reads = |s: &str| serde_json::from_str::<craft_vectorcraft_format::Contents<serde::de::IgnoredAny>>(s).is_ok();
+    let skipped = with(r#""preview":5,"preview":{"mime":"image/png","data":"AA=="},"generator":[],"generator":"x","pdf":{},"pdf":null"#);
+    let back = load_file(skipped.as_bytes()).unwrap();
+    assert_eq!(back.doc.images["small"].bytes.len(), 100);
+    assert!(contents_reads(&skipped));
+    let document = format!(r#""document":{document}"#);
+    for member in [document.as_str(), r#""format":"vectorcraft""#, r#""version":3"#, r#""images":{}"#, r#""profiles":{}"#] {
+        let repeated = with(&format!("{member},{member}"));
+        let err = load_file(repeated.as_bytes()).err().unwrap_or_else(|| panic!("{member}: a repeated member opened"));
+        assert!(err.to_string().contains("duplicate field"), "{member}: {err}");
+        assert!(!contents_reads(&repeated), "{member}: the crate's Contents read a repeated member");
+    }
+}
+
 /// A file read back and saved again with the same options gives the same bytes, in every version,
 /// compressed or not, with a preview, profiles and a PDF inline and after the JSON.
 #[test]
