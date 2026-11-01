@@ -839,6 +839,8 @@ digits	Malayalam	マラヤーラム数字
 	 to apply the selection's to it  |  	：選択中の属性を適用  |  
 	 to blend from it  |  	：そこからブレンド  |  
 	 to change one side  |  	：片側だけ変更  |  
+	 a point to move the profile, a handle to scale it  |  	 ポイントでプロファイルを移動、ハンドルで拡大縮小  |  
+	 to scale one side of the profile  |  	 プロファイルの片側だけを拡大縮小  |  
 	 to close  |  	：パスを閉じる  |  
 	 to constrain proportions  |  	：縦横比を固定  |  
 	 to copy  |  	：コピー  |  

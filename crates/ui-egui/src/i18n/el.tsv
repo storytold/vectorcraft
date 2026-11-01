@@ -5055,6 +5055,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	 selects several, or draws one inside an artboard)	 επιλέγει πολλούς ή δημιουργεί νέο μέσα σε πίνακα σχεδίασης)
 	 a stroke to add a width point  |  	 περίγραμμα για προσθήκη σημείου πλάτους  |  
 	 to change one side  |  	 για αλλαγή μίας πλευράς  |  
+	 a point to move the profile, a handle to scale it  |  	 ένα σημείο για μετακίνηση του προφίλ, μια λαβή για αλλαγή μεγέθους του  |  
+	 to scale one side of the profile  |  	 για αλλαγή μεγέθους της μίας πλευράς του προφίλ  |  
 	 to select more points  |  	 για επιλογή περισσότερων σημείων  |  
 	 a point to edit it  |  	 σημείο για επεξεργασία  |  
 	 to remove points	 για αφαίρεση σημείων

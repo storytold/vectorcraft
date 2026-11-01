@@ -3663,6 +3663,8 @@ imageTrace	Outline	轮廓
 	 selects several, or draws one inside an artboard)	可选择多个，或在画板内创建画板)
 	 a stroke to add a width point  |  	描边可添加宽度点  |  
 	 to change one side  |  	可只更改单侧  |  
+	 a point to move the profile, a handle to scale it  |  	 拖拽点以移动轮廓，拖拽手柄以缩放  |  
+	 to scale one side of the profile  |  	 缩放轮廓的一侧  |  
 	 to select more points  |  	可选择更多点  |  
 	 a point to edit it  |  	宽度点可编辑  |  
 	 to remove points	可移除点

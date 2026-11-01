@@ -1189,6 +1189,8 @@ lighting	Light	Světlo
 	 selects several, or draws one inside an artboard)	 vybere více nebo vytvoří novou uvnitř pracovní plochy)
 	 a stroke to add a width point  |  	 tahu přidá bod šířky  |  
 	 to change one side  |  	 změní jednu stranu  |  
+	 a point to move the profile, a handle to scale it  |  	 bod pro posun profilu, úchyt pro změnu jeho měřítka  |  
+	 to scale one side of the profile  |  	 pro změnu měřítka jedné strany profilu  |  
 	 to select more points  |  	 vybere další body  |  
 	 a point to edit it  |  	 na bod jej upraví  |  
 	 to remove points	 odstraní body

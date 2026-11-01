@@ -3824,6 +3824,8 @@ imageTrace	Outline	Contorno
 	 selects several, or draws one inside an artboard)	 ne seleziona più d'una o ne crea una dentro una tavola da disegno)
 	 a stroke to add a width point  |  	 su una traccia per aggiungere un punto di larghezza  |  
 	 to change one side  |  	 per modificare un solo lato  |  
+	 a point to move the profile, a handle to scale it  |  	 un punto per spostare il profilo, una maniglia per ridimensionarlo  |  
+	 to scale one side of the profile  |  	 per ridimensionare un solo lato del profilo  |  
 	 to select more points  |  	 per selezionare altri punti  |  
 	 a point to edit it  |  	 su un punto per modificarlo  |  
 	 to remove points	 per rimuovere punti
