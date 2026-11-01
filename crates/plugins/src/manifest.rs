@@ -38,6 +38,15 @@ pub enum Kind {
     Panel,
 }
 
+/// An event a panel asks for in its manifest (`events`), besides those of its own fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelEvent {
+    /// The selection changed: another document came to the front, or other objects were selected
+    /// ([`crate::panel::Event::Selection`]).
+    Selection,
+}
+
 impl Kind {
     pub fn name(self) -> &'static str {
         match self {
@@ -216,6 +225,9 @@ pub struct Manifest {
     /// files get. Only exporters declare them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
+    /// The events a panel asks for besides those of its own fields. Only panels declare them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<PanelEvent>,
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
     #[serde(default, skip_serializing_if = "Budget::is_light")]
     pub budget: Budget,
@@ -244,12 +256,14 @@ impl Manifest {
             author: String::new(),
             params: Vec::new(),
             extensions: Vec::new(),
+            events: Vec::new(),
             budget: Budget::Light,
         }
     }
 
-    /// Checks what the module declared: its id, name and text lengths, its extensions, a budget its
-    /// kind may have (only a filter may be heavy), and each parameter and its dialog layout.
+    /// Checks what the module declared: its id, name and text lengths, its extensions, the events
+    /// it asks for, a budget its kind may have (only a filter may be heavy), and each parameter and
+    /// its dialog layout.
     fn validate(&self) -> Result<()> {
         if !valid_id(&self.id) {
             return Err(Error::Manifest(format!("invalid id {:?}: use 1-64 characters from A-Z a-z 0-9 . _ -", self.id)));
@@ -262,6 +276,7 @@ impl Manifest {
             return Err(Error::Manifest("`version`, `description` or `author` is too long".into()));
         }
         self.validate_extensions()?;
+        self.validate_events()?;
         match (self.budget, self.kind) {
             (Budget::Light, _) | (Budget::Heavy, Kind::Filter) => {}
             (Budget::Heavy, Kind::Effect) => {
@@ -283,6 +298,22 @@ impl Manifest {
         }
         if self.params.iter().filter(|(_, p)| p.ui.group.is_none()).count() > MAX_UNGROUPED {
             return Err(Error::Manifest(format!("at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`")));
+        }
+        Ok(())
+    }
+
+    /// A panel lists the events it asks for once each; other kinds list none.
+    fn validate_events(&self) -> Result<()> {
+        if self.events.is_empty() {
+            return Ok(());
+        }
+        if self.kind != Kind::Panel {
+            return Err(Error::Manifest("only a panel declares `events`".into()));
+        }
+        for (i, e) in self.events.iter().enumerate() {
+            if self.events.get(..i).is_some_and(|before| before.contains(e)) {
+                return Err(Error::Manifest(format!("event {e:?} is listed twice")));
+            }
         }
         Ok(())
     }
@@ -550,6 +581,25 @@ mod tests {
         let m = Manifest::parse(br#"{"id":"org.example.shapes","name":"Shapes","kind":"panel"}"#).unwrap();
         assert_eq!(m.kind, Kind::Panel);
         assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("panel"));
+    }
+
+    /// A panel may ask for selection events; other kinds ask for none, and no event is listed
+    /// twice or unknown. None asked for isn't written back.
+    #[test]
+    fn a_panel_asks_for_the_events_it_wants() {
+        let m = Manifest::parse(br#"{"id":"a","name":"x","kind":"panel","events":["selection"]}"#).unwrap();
+        assert_eq!(m.events, [PanelEvent::Selection]);
+        assert_eq!(serde_json::to_value(&m).unwrap()["events"], json!(["selection"]));
+        let quiet = Manifest::parse(br#"{"id":"a","name":"x","kind":"panel"}"#).unwrap();
+        assert!(quiet.events.is_empty() && serde_json::to_value(&quiet).unwrap().get("events").is_none());
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"filter","events":["selection"]}"#,
+            r#"{"id":"a","name":"x","kind":"panel","events":["selection","selection"]}"#,
+            r#"{"id":"a","name":"x","kind":"panel","events":["tick"]}"#,
+            r#"{"id":"a","name":"x","kind":"panel","events":"selection"}"#,
+        ] {
+            assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
     }
 
     /// A filter may ask for a heavy budget; a live effect runs while the document is drawn and an

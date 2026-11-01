@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, panel, registry};
+use vectorcraft_plugins::{Budget, Kind, PanelEvent, Plugin, effect, export, objects, panel, registry};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param};
 
@@ -240,8 +240,9 @@ fn panel_may_run(id: &str) -> bool {
 /// one undo step, all rolled back when one fails, journaled as the batch (the event itself isn't).
 /// The batch runs with no file access ([`crate::file_access::AutomationRoots::none`]): a command
 /// that reads or writes a path fails, and with it the batch. One command a panel may not run
-/// ([`panel_may_run`]) refuses them all before any runs. What it keeps changes only once its
-/// commands ran. → `{plugin, panel, results}`.
+/// ([`panel_may_run`]) refuses them all before any runs, and so does any command in answer to a
+/// `selection` event, which only a panel that asks for it is sent. What it keeps changes only once
+/// its commands ran. → `{plugin, panel, results}`.
 fn panel_event(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.panel.event";
     let plugin = plugin_by_id(C, p)?;
@@ -259,6 +260,10 @@ fn panel_event(s: &mut Session, p: &Value) -> Result<Value> {
             Some(_) => return Err(bad(C, format!("the file is larger than {} bytes", panel::MAX_FILE))),
             None => return Err(bad(C, "`event.dataBase64` is not base64")),
         },
+        // Only to a panel that asked for it.
+        panel::Event::Selection if !m.events.contains(&PanelEvent::Selection) => {
+            return Err(bad(C, format!("{} doesn't ask for selection events (`events` in its manifest)", m.name)));
+        }
         event => event,
     };
     let values = match p.get("values") {
@@ -275,6 +280,10 @@ fn panel_event(s: &mut Session, p: &Value) -> Result<Value> {
         None => (vec![], Value::Null),
     };
     let answer = panel::run(&plugin, panel::Given { event: &event, state: &state, values: &values, objects, document_data }).map_err(err)?;
+    // Commands that select would send the panel another selection event, and so on.
+    if event == panel::Event::Selection && !answer.commands.is_empty() {
+        return Err(bad(C, format!("{} may not run commands in answer to a selection event: they could change the selection again", m.name)));
+    }
     if let Some(c) = answer.commands.iter().find(|c| !panel_may_run(&c.command)) {
         return Err(bad(
             C,
@@ -542,7 +551,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Plug-in Panel Event",
             [],
             None,
-            "{id: a panel plug-in (kind \"panel\"), event: {type: \"open\"|\"click\"|\"change\"|\"file\", target?: the field's id (click, change, file), value?: its new value (change), name?: the picked file's name, without its folder, and dataBase64?: its bytes, at most 4 MiB (file)}, values?: {field id: value} (the panel's fields as they are)} run the panel's answer to the event: it is given the event, what it kept at its last event, the values and the selected paths and compound paths, and returns what its panel shows, what it keeps and commands to run, which run as one command.batch (one undo step; one that fails rolls them all back, and the panel then keeps what it kept) with no file access. A panel runs only commands whose ids start with shape., path., object., select., paint., stroke., text., variable. or dataset. (not stroke.widthProfile.*, object.pathfinder.options, text.findFontFiles, text.addFontFiles, text.rescanFonts or text.missingFonts): one other refuses them all → {plugin, panel: what it shows, results: the batch's results}",
+            "{id: a panel plug-in (kind \"panel\"), event: {type: \"open\"|\"click\"|\"change\"|\"file\"|\"selection\" (only to a panel whose manifest asks for it in `events`, and its answer runs no commands), target?: the field's id (click, change, file), value?: its new value (change), name?: the picked file's name, without its folder, and dataBase64?: its bytes, at most 4 MiB (file)}, values?: {field id: value} (the panel's fields as they are)} run the panel's answer to the event: it is given the event, what it kept at its last event, the values and the selected paths and compound paths, and returns what its panel shows, what it keeps and commands to run, which run as one command.batch (one undo step; one that fails rolls them all back, and the panel then keeps what it kept) with no file access. A panel runs only commands whose ids start with shape., path., object., select., paint., stroke., text., variable. or dataset. (not stroke.widthProfile.*, object.pathfinder.options, text.findFontFiles, text.addFontFiles, text.rescanFonts or text.missingFonts): one other refuses them all → {plugin, panel: what it shows, results: the batch's results}",
             always,
             panel_event
         ),

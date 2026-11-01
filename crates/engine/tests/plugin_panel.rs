@@ -116,6 +116,28 @@ fn a_panel_is_given_the_file_picked() {
     assert!(e.unwrap_err().to_string().contains("without its folder"));
 }
 
+/// Only a panel that asks for selection events is sent one, and its answer runs no commands: they
+/// could change the selection, and so send it again. Refused, the panel keeps what it kept.
+#[test]
+fn a_selection_event_goes_only_to_a_panel_that_asks_and_runs_no_commands() {
+    let mut s = session();
+    let selection = json!({"type": "selection"});
+    answering(&mut s, "test.quiet", &json!({"panel": {}}));
+    let e = event(&mut s, "test.quiet", selection.clone(), Value::Null).unwrap_err();
+    assert!(e.to_string().contains("doesn't ask for selection events"), "{e}");
+
+    let asks = tpl::panel_asking("test.selection", r#"["selection"]"#);
+    install(&mut s, &tpl::when_given(&asks, Given::Input, r#""type":"selection""#, r#"{"panel":{},"state":{"seen":1}}"#));
+    event(&mut s, "test.selection", selection.clone(), Value::Null).unwrap();
+    install(&mut s, &tpl::returning(&asks, &json!({"panel": {}, "state": {"seen": 2}, "commands": [rectangle(150)]}).to_string()));
+    let before = paths(&s);
+    let e = event(&mut s, "test.selection", selection, Value::Null).unwrap_err();
+    assert!(e.to_string().contains("in answer to a selection event"), "{e}");
+    assert_eq!(paths(&s), before);
+    expecting(&mut s, "test.selection", Given::Input, r#""state":{"seen":1}"#);
+    click(&mut s, "test.selection").unwrap();
+}
+
 /// What a panel keeps comes back with its next event; `null` forgets it, and so does removing the
 /// plug-in.
 #[test]

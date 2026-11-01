@@ -5,7 +5,7 @@
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat as tpl;
 
-use super::tests_appearance::{app_with_rect, click, frame_events, text_rect};
+use super::tests_appearance::{app_with_rect, click, frame_events, frame_raw, text_rect};
 use super::*;
 
 const ID: &str = "test.ui.panel";
@@ -157,4 +157,52 @@ fn a_file_field_sends_the_file_picked_with_its_name_and_bytes() {
     click(&ctx, &mut app, text_rect(&texts, "Choose Data…").center(), draw);
     let error = app.ui.plugin_panels[id].error.clone().unwrap_or_default();
     assert!(error.contains("larger than 4 MiB"), "{error}");
+}
+
+#[test]
+fn a_panel_that_asks_is_sent_a_selection_event_when_the_selection_changes() {
+    let mut app = app_with_rect();
+    let id = "test.ui.selection";
+    let asks = tpl::panel_asking(id, r#"["selection"]"#);
+    let put = |app: &mut VectorcraftApp, src: String| {
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+    };
+    put(&mut app, tpl::returning(&asks, r#"{"panel":{"items":[{"type":"text","text":"Selection"}]}}"#));
+    app.run("window.pluginPanel", json!({"id": id})).unwrap();
+    let ctx = egui::Context::default();
+    // How many events panel `panel` is sent in a frame at `time` (seconds): each runs a command.
+    let events = |app: &mut VectorcraftApp, panel: &str, time: f64| {
+        let before = app.run_count;
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        frame_raw(&ctx, app, raw, |app, ui| plugin_panel::show(app, ui, &plugin_panel::panel_id(panel)));
+        app.run_count - before
+    };
+    assert_eq!(events(&mut app, id, 1.0), 1, "open");
+    assert_eq!(events(&mut app, id, 1.1), 0, "nothing changed");
+    // Other objects selected: an event. Again at once: none until a quarter of a second passed.
+    app.run("select.none", json!({})).unwrap();
+    assert_eq!(events(&mut app, id, 1.2), 1);
+    app.run("select.all", json!({})).unwrap();
+    assert_eq!(events(&mut app, id, 1.3), 0, "too soon");
+    assert_eq!(events(&mut app, id, 1.46), 1);
+    assert_eq!(events(&mut app, id, 2.0), 0);
+    // An edit to the selected art is no change of the selection.
+    app.run("object.move", json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!(events(&mut app, id, 3.0), 0);
+
+    // An answer with commands is refused and says why; the same selection isn't sent again.
+    put(&mut app, tpl::returning(&asks, r#"{"panel":{},"commands":[{"command":"select.all"}]}"#));
+    app.run("select.none", json!({})).unwrap();
+    assert_eq!(events(&mut app, id, 4.0), 1);
+    let error = app.ui.plugin_panels[id].error.clone().unwrap_or_default();
+    assert!(error.contains("in answer to a selection event"), "{error}");
+    assert_eq!(events(&mut app, id, 5.0), 0);
+
+    // A panel that doesn't ask is sent none.
+    let quiet = "test.ui.quiet";
+    install(&mut app, quiet, &json!({"panel": {"items": []}}));
+    app.run("window.pluginPanel", json!({"id": quiet})).unwrap();
+    assert_eq!(events(&mut app, quiet, 6.0), 1, "open");
+    app.run("select.all", json!({})).unwrap();
+    assert_eq!(events(&mut app, quiet, 7.0), 0);
 }

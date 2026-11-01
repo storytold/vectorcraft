@@ -1,7 +1,7 @@
 //! Panel plug-ins: a plug-in of kind `panel` has a panel of its own. It declares what the panel
 //! shows, and answers each event of the panel (it opened, a button was clicked, a field was set, a
-//! file was picked) with what the panel shows now, what it keeps until its next event and the host
-//! commands to run.
+//! file was picked, the selection changed) with what the panel shows now, what it keeps until its
+//! next event and the host commands to run.
 //!
 //! A plug-in still keeps nothing between runs: each event runs a fresh instance, as a filter's run
 //! does. The host keeps the panel's `state` (at most [`MAX_STATE`] bytes of JSON) and hands it back
@@ -43,11 +43,17 @@ pub enum Event {
     /// base64 encoded. The host reads the file and checks the base64 (this crate has no base64 of
     /// its own); the plug-in never learns where the file is.
     File { target: String, name: String, data_base64: String },
+    /// The selection changed: another document came to the front, or other objects were selected.
+    /// Only a panel that asks for it in its manifest ([`crate::PanelEvent::Selection`]) is sent it,
+    /// and its answer runs no commands (the host refuses them): commands that select would send it
+    /// again.
+    Selection,
 }
 
 impl Event {
     /// The event `v` describes: `{"type": "open"}`, `{"type": "click", "target"}`,
-    /// `{"type": "change", "target", "value"}` or `{"type": "file", "target", "name", "dataBase64"}`.
+    /// `{"type": "change", "target", "value"}`, `{"type": "file", "target", "name", "dataBase64"}`
+    /// or `{"type": "selection"}`.
     pub fn parse(v: &Value) -> std::result::Result<Event, String> {
         let target = || match v.get("target").and_then(Value::as_str) {
             Some(t) if !t.is_empty() && t.len() <= MAX_TARGET => Ok(t.to_string()),
@@ -71,7 +77,8 @@ impl Event {
                 };
                 Ok(Event::File { target, name, data_base64 })
             }
-            _ => Err("`event.type` must be \"open\", \"click\", \"change\" or \"file\"".into()),
+            Some("selection") => Ok(Event::Selection),
+            _ => Err("`event.type` must be \"open\", \"click\", \"change\", \"file\" or \"selection\"".into()),
         }
     }
 
@@ -82,6 +89,7 @@ impl Event {
             Event::Click { target } => json!({"type": "click", "target": target}),
             Event::Change { target, value } => json!({"type": "change", "target": target, "value": value}),
             Event::File { target, name, data_base64 } => json!({"type": "file", "target": target, "name": name, "dataBase64": data_base64}),
+            Event::Selection => json!({"type": "selection"}),
         }
     }
 }
@@ -176,6 +184,8 @@ mod tests {
     #[test]
     fn events_are_open_click_or_change() {
         assert_eq!(Event::parse(&json!({"type": "open"})), Ok(Event::Open));
+        assert_eq!(Event::parse(&json!({"type": "selection"})), Ok(Event::Selection));
+        assert_eq!(Event::Selection.to_json(), json!({"type": "selection"}));
         assert_eq!(Event::parse(&json!({"type": "click", "target": "add"})), Ok(Event::Click { target: "add".into() }));
         let change = Event::parse(&json!({"type": "change", "target": "width", "value": 40})).unwrap();
         assert_eq!(change, Event::Change { target: "width".into(), value: json!(40) });

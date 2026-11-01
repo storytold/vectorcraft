@@ -37,7 +37,7 @@ mod runtime;
 pub mod wat;
 
 pub use dialog::ParamUi;
-pub use manifest::{Budget, Kind, Manifest, Param, ParamSpec};
+pub use manifest::{Budget, Kind, Manifest, PanelEvent, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect

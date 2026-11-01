@@ -93,6 +93,13 @@ dialog sends nothing, and a file that can't be read or is larger sends nothing a
 field is off where the app shows no open dialog for a path, as in the web app. The plug-in reads the bytes as it
 likes: a CSV, say, can go straight to `dataset.import {csv}`.
 
+A panel whose manifest asks for them (`"events": ["selection"]`) is also sent `{"type": "selection"}`, with the
+selected objects as every event has them, when the selection changed since its last event: another document came to
+the front, or other objects were selected (not edits to them). It is sent while the panel shows (a panel behind another
+tab is sent one when it shows again), once a drag or typing ends, and at most every quarter of a second, the last
+change always. Its answer runs no commands: one with commands is refused, as they could change the selection again.
+A click whose commands select is followed by a selection event, as the answer to the click was made before they ran.
+
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
 parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text and lists
@@ -216,6 +223,8 @@ pointers are offsets into the module's memory.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
   (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
   `document.export` then writes the exporter's format only when asked for by its format id.
+- `events` (panels only): the events a panel asks for besides those of its fields, each once: `["selection"]`
+  ([panels](#panels)). An event this host doesn't know refuses the plug-in.
 - `params`: in dialog order. Names are `[A-Za-z0-9_]`, not starting with `_`, and not `id`, `ids`, `params` or
   `preview`. The host validates the user's values before calling: missing values take the default, numbers are
   clamped to `min..max` (ints rounded), a wrong type or an unknown choice is an error. Numeric defaults
@@ -359,11 +368,11 @@ is, and what the export left out or changed, for the user (at most 100 warnings 
 with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
 
 A **panel** is given something else as its input: `{"event": {"type": "click", "target": "add"}, "state": …, "values":
-{"width": 40}, "objects": [...]}` (the event `open`, `click`, `change` or `file`, [above](#panels); the objects as a
-filter gets them). It returns `{"panel": {…}, "state"?: …, "commands"?: [{"command": "shape.rectangle", "params"?:
-{…}}]}`: `panel` is what the panel shows (`{"items": [...]}`, [above](#panels)), `state` what it keeps until its next
-event (left out: what it kept; `null`: nothing), and at most 256 commands, in order ([panels](#panels)). A decline or
-an invalid output runs nothing and keeps the state as it was.
+{"width": 40}, "objects": [...]}` (the event `open`, `click`, `change`, `file` or `selection`, [above](#panels); the
+objects as a filter gets them). It returns `{"panel": {…}, "state"?: …, "commands"?: [{"command": "shape.rectangle",
+"params"?: {…}}]}`: `panel` is what the panel shows (`{"items": [...]}`, [above](#panels)), `state` what it keeps
+until its next event (left out: what it kept; `null`: nothing), and at most 256 commands, in order
+([panels](#panels)). A decline or an invalid output runs nothing and keeps the state as it was.
 
 ## Writing a plug-in in Rust
 

@@ -8,15 +8,17 @@
 //! since it opened, the panel asks the plug-in what it shows (an `open` event); a button clicked, a
 //! checkbox or dropdown changed, a field's text or number committed and a file picked with a file
 //! field ([`pick_file`]) are events too, sent with the values of all the panel's fields, and the
-//! answer is drawn from then on. A failed event leaves the panel as it was and says why under it.
-//! Plug-in text is shown as it is, never translated.
+//! answer is drawn from then on. A plug-in that asks for selection events is also sent one when the
+//! selection changed while its panel shows ([`selection_event`]). A failed event leaves the panel as
+//! it was and says why under it. Plug-in text is shown as it is, never translated.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use egui::{RichText, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_plugins::panel::MAX_FILE;
-use vectorcraft_plugins::{Kind, Plugin, registry};
+use vectorcraft_plugins::{Kind, PanelEvent, Plugin, registry};
 
 use crate::VectorcraftApp;
 use crate::menus::Item;
@@ -39,6 +41,9 @@ const MAX_ITEMS: usize = 500;
 /// How deep rows and groups nest.
 const MAX_DEPTH: usize = 6;
 
+/// The shortest time between two selection events to one panel, in seconds.
+const SELECTION_INTERVAL: f64 = 0.25;
+
 /// What a plug-in's panel shows.
 #[derive(Clone, Debug, Default)]
 pub struct PluginPanel {
@@ -48,6 +53,10 @@ pub struct PluginPanel {
     pub values: Map<String, Value>,
     /// Why the last event failed.
     pub error: Option<String>,
+    /// The selection the plug-in was given with its last event ([`selection_key`]).
+    pub seen: Option<u64>,
+    /// When it was last sent a selection event (egui's input time, in seconds).
+    pub selection_at: Option<f64>,
 }
 
 /// The id of plug-in `plugin`'s panel (`plugin:org.example.shapes`).
@@ -166,11 +175,15 @@ pub fn tidy(app: &mut VectorcraftApp) {
 }
 
 /// Sends `event` to panel plug-in `id` with its fields' values, and keeps the answer, or why it
-/// failed.
+/// failed. The plug-in was given the selection as it was before the commands it answered with ran,
+/// which it is then sent a selection event for, when it asks for them and they changed it.
 fn send(app: &mut VectorcraftApp, id: &str, event: Value) {
     let values = app.ui.plugin_panels.get(id).map_or_else(|| json!({}), |p| Value::Object(p.values.clone()));
+    let seen = selection_key(app);
     let r = app.run("plugin.panel.event", json!({ "id": id, "event": event, "values": values }));
     let view = app.ui.plugin_panels.entry(id.to_string()).or_default();
+    // Also when it failed: the same selection isn't sent again and again.
+    view.seen = Some(seen);
     match r {
         Ok(v) => {
             view.panel = v.get("panel").cloned().unwrap_or(Value::Null);
@@ -179,6 +192,40 @@ fn send(app: &mut VectorcraftApp, id: &str, event: Value) {
         }
         Err(e) => view.error = Some(e),
     }
+}
+
+/// What a selection event tells apart: the active document and the objects selected in it, in
+/// order (not their anchors, nor edits to them).
+fn selection_key(app: &VectorcraftApp) -> u64 {
+    let mut h = DefaultHasher::new();
+    match app.session.active() {
+        Some(d) => (d.uid, &d.selection.objects).hash(&mut h),
+        None => 0u8.hash(&mut h),
+    }
+    h.finish()
+}
+
+/// Panel plug-in `id`, which asks for selection events, while its panel shows: sent one when the
+/// selection changed since its last event ([`selection_key`]). Not while a drag or typing goes on
+/// (once it ends), and at most every [`SELECTION_INTERVAL`] seconds: a change within that is sent
+/// once it has passed, a frame being asked for then.
+fn selection_event(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str) {
+    if app.session.in_interaction() {
+        return;
+    }
+    let Some(view) = app.ui.plugin_panels.get(id) else { return };
+    if view.seen == Some(selection_key(app)) {
+        return;
+    }
+    let now = ctx.input(|i| i.time);
+    if let Some(wait) = view.selection_at.map(|at| at + SELECTION_INTERVAL - now).filter(|w| *w > 0.0) {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        return;
+    }
+    if let Some(v) = app.ui.plugin_panels.get_mut(id) {
+        v.selection_at = Some(now);
+    }
+    send(app, id, json!({ "type": "selection" }));
 }
 
 /// Takes the values the fields of `panel` (an answer, or a row or group in it) are given.
@@ -197,10 +244,10 @@ fn given_values(panel: &Value, values: &mut Map<String, Value>, depth: usize) {
 /// Plug-in panel `panel`'s contents (the dock or its floating group draws its tab).
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, panel: &str) {
     let Some(id) = parse(panel).map(str::to_string) else { return };
-    if installed(&id).is_none() {
+    let Some(plugin) = installed(&id) else {
         widgets::dim_label(ui, tl!("This plug-in is no longer installed."));
         return;
-    }
+    };
     if !app.ui.plugin_panels.contains_key(&id) {
         send(app, &id, json!({ "type": "open" }));
     }
@@ -227,6 +274,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, panel: &str) {
     }
     if let Some((target, extensions)) = pick {
         pick_file(app, &id, target, extensions);
+    }
+    if plugin.manifest().events.contains(&PanelEvent::Selection) {
+        selection_event(app, ui.ctx(), &id);
     }
 }
 
