@@ -1,5 +1,6 @@
 //! Brush definitions (not publicly documented): plug-in objects in the setup, as written in files
-//! users sent and in brush libraries.
+//! that users own and sent us, brush library files among them (not presets installed with any
+//! other app).
 //!
 //! - Each object is a `%AI8_BeginPluginObject` section of strings: the plug-in's name, the brush's
 //!   name, then its parameters, split into strings that `-` continues and `.` ends.
