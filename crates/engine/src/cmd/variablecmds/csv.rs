@@ -250,8 +250,8 @@ fn header_variable(
 /// names; the other headers name variables, as [`header_variable`] reads them, and the
 /// variables the document doesn't define yet are defined, unbound. Without the `name` column,
 /// every header names a variable and the rows take the first free names "Data Set 1", "Data
-/// Set 2" and so on. Existing rows of the same name are replaced; new names are appended. One
-/// undo step.
+/// Set 2" and so on. Two headers that name one variable are refused. Existing rows of the same
+/// name are replaced; new names are appended. One undo step.
 pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
     let bytes = datasets_csv_bytes(p, C)?;
@@ -275,6 +275,10 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("empty header in column {}", i + 1)));
         }
         let (name, kind) = header_variable(cell, i + 1, &kinds, &mut defined, C)?;
+        if let Some(&(first, ..)) = columns.iter().find(|(_, n, _)| *n == name) {
+            let (first, column) = (first + 1, i + 1);
+            return Err(bad(C, format!("columns {first} and {column} both name the variable `{name}`")));
+        }
         columns.push((i, name, kind));
     }
     // Lock Variables refuses New Variable, so the import is refused when a header would define one.

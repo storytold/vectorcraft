@@ -5343,6 +5343,7 @@ mark-style	Japanese	Japonesas
 @msg	Batch: {count} processed, {failed} failed	Lote: {count} processados, {failed} com falha
 @msg	choose a destination folder	escolha uma pasta de destino
 @msg	choose a source folder	escolha uma pasta de origem
+@msg	columns {first} and {column} both name the variable `{name}`	as colunas {first} e {column} nomeiam a mesma variável `{name}`
 @msg	open a document with data sets	abra um documento com conjuntos de dados
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	nada do conjunto de dados {name} foi aplicado: nenhum objeto está vinculado a uma variável para a qual ele tem um valor
 @msg	the action has no steps	a ação não tem etapas

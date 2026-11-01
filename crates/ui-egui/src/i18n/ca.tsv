@@ -5246,6 +5246,7 @@ digits	Malayalam	Malaiàlam
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
 @msg	finish editing the pattern first	acabeu primer l’edició del motiu
+@msg	columns {first} and {column} both name the variable `{name}`	les columnes {first} i {column} anomenen totes dues la variable `{name}`
 @msg	nothing encoded	no s’ha codificat res
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no s’ha aplicat res del conjunt de dades {name}: cap objecte està vinculat a una variable per a la qual tingui un valor
 @msg	nothing selected	no hi ha res seleccionat

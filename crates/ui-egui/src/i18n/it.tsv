@@ -5081,6 +5081,7 @@ lighting	Light	Luce
 @msg	Batch: {count} processed, {failed} failed	Elaborazione batch: {count} elaborati, {failed} non riusciti
 @msg	choose a destination folder	scegli una cartella di destinazione
 @msg	choose a source folder	scegli una cartella di origine
+@msg	columns {first} and {column} both name the variable `{name}`	le colonne {first} e {column} indicano entrambe la variabile `{name}`
 @msg	open a document with data sets	apri un documento con set di dati
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	non è stato applicato nulla del set di dati {name}: nessun oggetto è associato a una variabile per cui ha un valore
 @msg	the action has no steps	l'azione non ha passaggi

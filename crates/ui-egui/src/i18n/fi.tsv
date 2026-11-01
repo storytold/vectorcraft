@@ -5412,6 +5412,7 @@ mark-style	Japanese	Japanilainen
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
+@msg	columns {first} and {column} both name the variable `{name}`	sarakkeet {first} ja {column} nimeävät molemmat muuttujan `{name}`
 @msg	open a document with data sets	avaa asiakirja, jossa on tietojoukkoja
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	tietojoukosta {name} ei käytetty mitään: mitään objektia ei ole sidottu muuttujaan, jolle siinä on arvo
 @msg	select an Intertwine group	valitse lomitusryhmä

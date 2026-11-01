@@ -5404,6 +5404,7 @@ theme	Appearance	Utseende
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp
+@msg	columns {first} and {column} both name the variable `{name}`	kolumnerna {first} och {column} anger båda variabeln `{name}`
 @msg	open a document with data sets	öppna ett dokument med datauppsättningar
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	inget i datauppsättningen {name} användes: inget objekt är bundet till en variabel som den har ett värde för
 @msg	select an Intertwine group	markera en sammanflätningsgrupp

@@ -1644,7 +1644,8 @@ already walks Image Trace. Short agent entry points:
   rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
   a prefix defines a text variable. A prefixed cell whose name is already a variable of the prefix's kind names it;
   one whose name is a variable of another kind fails the import. A `%` cell that isn't a variable's exact name (graph
-  data files) is refused. The reply's `defined` lists the variables the import defined. While the variables are
+  data files) is refused, and so are two cells that name one variable (`City` twice, or `Shown` and `#Shown`). The
+  reply's `defined` lists the variables the import defined. While the variables are
   locked, an import whose header would define a variable fails with "variables are locked".
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
   Library…) replaces the document's variables and data sets with a variable library's in one undo step. The library

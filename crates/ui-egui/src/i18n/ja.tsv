@@ -5126,6 +5126,7 @@ lighting	Light	ライト
 @msg	Batch: {count} processed, {failed} failed	バッチ: {count} 件を処理、{failed} 件が失敗しました
 @msg	choose a destination folder	出力先フォルダーを選択してください
 @msg	choose a source folder	ソースフォルダーを選択してください
+@msg	columns {first} and {column} both name the variable `{name}`	列 {first} と列 {column} が同じ変数 `{name}` を指定しています
 @msg	open a document with data sets	データセットのあるドキュメントを開いてください
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	データセット {name} から何も適用されませんでした: 値のある変数にバインドされたオブジェクトがありません
 @msg	the action has no steps	アクションにステップがありません

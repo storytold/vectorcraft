@@ -4528,6 +4528,7 @@ imageTrace	Outline	轮廓
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
 @msg	choose a destination folder	请选择目标文件夹
 @msg	choose a source folder	请选择源文件夹
+@msg	columns {first} and {column} both name the variable `{name}`	第 {first} 列和第 {column} 列都指定了变量 `{name}`
 @msg	open a document with data sets	请打开包含数据集的文档
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	数据集 {name} 未应用任何内容：没有对象绑定到该数据集中有值的变量
 @msg	the action has no steps	该动作没有步骤

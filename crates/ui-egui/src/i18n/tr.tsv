@@ -5355,6 +5355,7 @@ theme	Appearance	Görünüm
 @msg	its zlib compression is damaged	zlib sıkıştırması hasarlı
 @msg	its Zstandard compression is damaged	Zstandard sıkıştırması hasarlı
 @msg	it decompresses to more than {_1} MB	açıldığında {_1} MB'tan fazla alan kaplıyor
+@msg	columns {first} and {column} both name the variable `{name}`	{first} ve {column} numaralı sütunların ikisi de `{name}` değişkenini adlandırıyor
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	dosyanın değişkenleri ve veri kümeleri okunmadı (değişkenler: {variables}, veri kümeleri: {data_sets}): Değişkenler paneli bunları listelemiyor
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin

@@ -5046,6 +5046,7 @@ effect	Soft	Weich
 @msg	Batch: {count} processed, {failed} failed	Stapelverarbeitung: {count} verarbeitet, {failed} fehlgeschlagen
 @msg	choose a destination folder	wählen Sie einen Zielordner
 @msg	choose a source folder	wählen Sie einen Quellordner
+@msg	columns {first} and {column} both name the variable `{name}`	die Spalten {first} und {column} nennen beide die Variable `{name}`
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
 @msg	the action has no steps	die Aktion hat keine Schritte
