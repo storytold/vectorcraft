@@ -389,10 +389,11 @@ fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
 }
 
 /// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
-/// art's ids. Fails before any edit when one of them would make more than [`MAX_EXPAND_NODES`]
-/// objects.
+/// art's ids. Fails before any edit when the instances together would make more than
+/// [`MAX_EXPAND_NODES`] objects.
 fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId>> {
-    if ids.iter().filter_map(|id| d.node(*id)).any(|n| expanded_bound(d, n, own) > MAX_EXPAND_NODES as u64) {
+    let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, own)));
+    if total > MAX_EXPAND_NODES as u64 {
         return Err(EngineError::Other("Too many pieces to make at once".into()));
     }
     let mut out = vec![];

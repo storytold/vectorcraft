@@ -165,6 +165,37 @@ fn an_instance_that_slices_into_too_many_objects_stays_an_instance() {
     assert!(is_instance(&s), "Break Link leaves it an instance");
 }
 
+/// Break Link to Symbol on two instances, each of which would make fewer than a million objects
+/// but which together would make more, reports an error without an edit.
+#[test]
+fn break_link_counts_the_pieces_of_every_selected_instance_together() {
+    let (mut s, id) = panel();
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let art = doc.symbols.iter().find(|s| s.name == "Panel").unwrap().art.clone();
+    let frame = art.geometric_bounds().unwrap();
+    let gradient = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    let mut kids = art.children().unwrap().to_vec();
+    for _ in 0..20_000 {
+        let look = vectorcraft_doc::Appearance::basic(gradient.clone(), vectorcraft_color::Paint::None, 0.0);
+        kids.push(std::sync::Arc::new(Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(frame), look)));
+    }
+    let big = std::sync::Arc::new(Node::group(doc.alloc_id(), kids));
+    doc.symbols.iter_mut().find(|s| s.name == "Panel").unwrap().art = big.clone();
+    let mut second = doc.node(id).unwrap().clone();
+    second.id = doc.alloc_id();
+    let id2 = second.id;
+    let (par, idx, _) = doc.position(id).unwrap();
+    doc.insert(par, idx + 1, second).unwrap();
+    let NodeKind::SymbolInstance { symbol, xf } = &doc.node(id).unwrap().kind else { panic!("an instance") };
+    let each = doc.symbol_slice_map(symbol, *xf).unwrap().most_placed(&big, doc);
+    assert!(each < 1_000_000 && 2 * each > 1_000_000, "{each}");
+    s.select(|_, sel| sel.set([id, id2])).unwrap();
+    assert!(s.execute("symbol.breakLink", &json!({})).is_err());
+    for i in [id, id2] {
+        assert!(matches!(s.doc().unwrap().doc.node(i).unwrap().kind, NodeKind::SymbolInstance { .. }), "no edit");
+    }
+}
+
 /// An instance of a symbol without guides whose opacity masks hold more than a million objects
 /// stays an instance under Object › Expand, and Break Link to Symbol reports an error without an
 /// edit, though the art outside the masks holds about a thousand.
