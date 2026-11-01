@@ -1012,6 +1012,51 @@ fn a_placed_file_on_commented_lines_is_read() {
     assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([255, 0, 0, 255], [0, 127, 0, 128]), "its preview");
 }
 
+/// [`placed`]'s file whose relative folder section holds `folder` (written as it is, parentheses
+/// included) instead of `()`.
+fn placed_in(folder: &str, path: &str, preview: &[u8]) -> Vec<u8> {
+    let data = placed(true, "[5 0 0 -5 0 200]", path, Some(preview), "");
+    let (at, len) = (data.windows(4).position(|w| w == b"\r()\r").unwrap(), 4);
+    let mut out = data[..at].to_vec();
+    out.extend_from_slice(format!("\r{folder}\r").as_bytes());
+    out.extend_from_slice(&data[at + len..]);
+    out
+}
+
+/// The relative path of the one linked image of `data`.
+fn relative_of(data: &[u8]) -> Option<String> {
+    let r = read(data).unwrap();
+    let a = art(&r.doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some("/old/place/src/photo.png"));
+    im.link.as_ref().and_then(|l| l.relative.clone())
+}
+
+#[test]
+fn a_placed_file_keeps_its_folder_relative_to_the_document() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let path = "/old/place/src/photo.png";
+    assert_eq!(relative_of(&placed_in("(src/)", path, &preview)).as_deref(), Some("src/photo.png"));
+    assert_eq!(relative_of(&placed_in("(../art)", path, &preview)).as_deref(), Some("../art/photo.png"));
+    assert_eq!(relative_of(&placed_in(r"(..\\art\\)", path, &preview)).as_deref(), Some("../art/photo.png"));
+    assert_eq!(relative_of(&placed_in("( art /)", path, &preview)).as_deref(), Some(" art /photo.png"), "spaces are part of names");
+    // On `%_` lines too.
+    assert_eq!(relative_of(&hide_placed(&placed_in("(src/)", path, &preview))).as_deref(), Some("src/photo.png"));
+    // No folder, an absolute one, one too long or not a string: the path alone, and the file still
+    // opens.
+    let long = format!("({})", "a/".repeat(3000));
+    for folder in ["()", "(/elsewhere/)", "(C:\\\\art\\\\)", long.as_str(), "12", "/src"] {
+        assert_eq!(relative_of(&placed_in(folder, path, &preview)), None, "{folder}");
+    }
+    // A section that doesn't end leaves the folder unread.
+    let data = placed_in("(src/)", path, &preview);
+    let end = data.windows(27).position(|w| w == b"%AI28_EndPlacedRelativePath").unwrap();
+    let mut cut = data[..end].to_vec();
+    cut.extend_from_slice(b"%AI28_Other");
+    cut.extend_from_slice(&data[end + 27..]);
+    assert_eq!(relative_of(&cut), None);
+}
+
 #[test]
 fn hidden_placed_file_ended_by_comment_stays_hidden() {
     let mut data = hide_placed(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", None, ""));
