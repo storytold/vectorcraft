@@ -511,11 +511,44 @@ pub fn color_value(v: &Value) -> Option<Color> {
     }
 }
 
+/// `v` as an object id: an error unless it is a non-negative integer.
+fn object_id(v: &Value) -> Result<NodeId> {
+    v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")))
+}
+
+/// The error for `id` given as step reference `r`, which only a batch resolves.
+fn unresolved_reference(r: &str) -> EngineError {
+    EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve"))
+}
+
+/// The objects `p` names for a command whose `id` can only be an object id: its `ids`, else its
+/// `id` as `ids` of one. A value that isn't an object id is an error, never the selection (#785).
+/// `None` when `p` gives neither (or gives them as `null`). The ids are not looked up in the
+/// document.
+pub(crate) fn named_ids(p: &Value) -> Result<Option<Vec<NodeId>>> {
+    match p.get("ids").filter(|v| !v.is_null()) {
+        Some(Value::Array(a)) => return a.iter().map(object_id).collect::<Result<Vec<_>>>().map(Some),
+        Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
+        None => {}
+    }
+    Ok(named_id(p)?.map(|id| vec![id]))
+}
+
+/// The object `p`'s `id` names, for a command whose `id` can only be an object id: a value that
+/// isn't an object id is an error, never the selection (#785). `None` when `p` leaves `id` out (or
+/// gives it as `null`). The id is not looked up in the document.
+pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
+    match p.get("id").filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
+        Some(v) => object_id(v).map(Some),
+    }
+}
+
 /// Objects a command targets: explicit `ids` param or the selection.
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     // Objects given are used as given: a value that isn't an object id fails rather than the
     // command acting on the selection instead (#785).
-    let object_id = |v: &Value| v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")));
     match p.get("ids").filter(|v| !v.is_null()) {
         Some(Value::Array(a)) => return a.iter().map(object_id).collect(),
         Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
@@ -525,9 +558,7 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         Some(v @ Value::Number(_)) => Ok(vec![object_id(v)?]),
         // A step reference a batch couldn't resolve (other strings are other ids, such as an
         // effect's).
-        Some(Value::String(r)) if r.starts_with('$') => {
-            Err(EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
-        }
+        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
         _ => Ok(s.doc()?.selection.objects.clone()),
     }
 }
