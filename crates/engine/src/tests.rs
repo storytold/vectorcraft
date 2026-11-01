@@ -41,6 +41,7 @@ mod dashalign;
 mod distort;
 mod docsetup;
 mod draw2;
+mod dynamic_symbols;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -62,6 +63,7 @@ mod globaledit;
 mod glyphbounds;
 mod gradient;
 mod gradpanel;
+mod gradpresets;
 mod gradspan;
 mod halftone;
 mod history_mem;
@@ -3518,6 +3520,46 @@ fn a_panicking_command_rolls_back_instead_of_crashing() {
     let b = rect(&mut s, 200.0, 10.0, 50.0, 50.0);
     assert!(s.doc().unwrap().doc.node(b).is_some());
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
+}
+
+/// A command that recorded an undo step and then panicked leaves Undo and Redo as they were.
+#[test]
+fn a_panic_after_an_edit_leaves_undo_and_redo_as_they_were() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!((undo, redo), (1, 1));
+    let r = s.run_guarded("test.panic", |s| {
+        s.execute("edit.clear", &json!({"ids": [a.0]}))?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, redo));
+    assert!(st.doc.node(a).is_some());
+}
+
+/// A panic rolls back every document the command touched, and the active one stays the same.
+#[test]
+fn a_panic_rolls_back_other_documents_and_keeps_the_active_one() {
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let second = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let first_uid = s.doc().unwrap().uid;
+    let second_before = s.docs[1].doc.clone();
+    let steps = s.docs[1].history.undo.len();
+    let r = s.run_guarded("test.panic", |s| {
+        s.docs[1].history.undo.clear();
+        Arc::make_mut(&mut s.docs[1].doc).remove(second)?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    assert!(Arc::ptr_eq(&s.docs[1].doc, &second_before));
+    assert_eq!(s.docs[1].history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().uid, first_uid);
 }
 
 /// New layers and sublayers share one "Layer N" numbering, whatever art the document holds, and

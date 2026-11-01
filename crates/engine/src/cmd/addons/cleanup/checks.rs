@@ -235,15 +235,44 @@ fn is_plain(n: &Node) -> bool {
         && *n.extras() == NodeExtras::default()
 }
 
-/// Is `n` a plain path (full opacity, normal blending) identical to the object just below it?
+/// Is `n` a plain path or type object (full opacity, normal blending) that doubles the object just
+/// below it?
 fn duplicates_the_one_below(d: &Document, n: &Node) -> bool {
-    if !matches!(n.kind, NodeKind::Path { .. }) || n.opacity < 1.0 || n.blend != BlendMode::Normal {
+    if n.opacity < 1.0 || n.blend != BlendMode::Normal {
         return false;
     }
     let below = d.position(n.id).and_then(|(parent, i, _)| d.children(parent)?.get(i.checked_sub(1)?).cloned());
     below.is_some_and(|b| {
-        b.visible && b.kind == n.kind && b.appearance == n.appearance && b.opacity == n.opacity && b.blend == n.blend && b.extras() == n.extras()
+        b.visible
+            && same_art(&b.kind, &n.kind)
+            && b.appearance == n.appearance
+            && b.opacity == n.opacity
+            && b.blend == n.blend
+            && b.extras() == n.extras()
     })
+}
+
+/// Distance (pt) within which doubled type counts as stacked: text set twice from a PDF or an old
+/// file, or for a fake bold, is often a fraction of a point off.
+const DOUBLED_TYPE: f64 = 1.0;
+
+/// The same path, or the same type (text, styles, size and turn) within [`DOUBLED_TYPE`] of it.
+fn same_art(a: &NodeKind, b: &NodeKind) -> bool {
+    match (a, b) {
+        (NodeKind::Path { .. }, NodeKind::Path { .. }) => a == b,
+        (NodeKind::Text(a), NodeKind::Text(b)) => {
+            let ([a0, a1, a2, a3, ax, ay], [b0, b1, b2, b3, bx, by]) = (a.xf.as_coeffs(), b.xf.as_coeffs());
+            [a0, a1, a2, a3] == [b0, b1, b2, b3] && (ax - bx).hypot(ay - by) <= DOUBLED_TYPE && {
+                // `b` placed on `a`, with `a`'s layout caches (they are in document space).
+                let mut moved = (**b).clone();
+                moved.xf = a.xf;
+                moved.cached_bounds = a.cached_bounds;
+                moved.cached_baselines.clone_from(&a.cached_baselines);
+                **a == moved
+            }
+        }
+        _ => false,
+    }
 }
 
 fn inside(a: Rect, b: Rect) -> bool {

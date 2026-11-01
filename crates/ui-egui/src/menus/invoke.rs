@@ -37,6 +37,9 @@ fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
 
 /// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
 pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
+    if let Some(found) = crate::addons::arrange::dialog(app, id) {
+        return Some(found);
+    }
     Some(match id {
         // Move opens on the offset moved last and the checkboxes it was last confirmed with.
         "object.move" => ("move", crate::dialogs::transform::move_fields(app)),
@@ -65,6 +68,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
         }
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
+        crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })
@@ -256,8 +260,8 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     false
 }
 
-/// The dialogs the selection, raster, wrap, blend and Expand commands open when called without params; whether `id`
-/// was one of them.
+/// The dialogs the selection, raster, wrap, blend and Expand commands open, and the panel the Asset Export commands
+/// open, when called without params; whether `id` was one of them.
 fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -311,6 +315,15 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Expand…: its dialog.
     if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::expand::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Export Assets, Remove, Rename and Asset Export Settings with no params, as the command
+    // palette runs them (#4864): the Asset Export panel, where each one is done. A panel that already
+    // shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set") && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }
         return true;

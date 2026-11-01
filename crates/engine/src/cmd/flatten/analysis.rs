@@ -51,7 +51,7 @@ impl Scratch {
 }
 
 /// Type as outlines painted like it ([`effects::outline_text`]), keeping its transparency.
-pub(super) fn outlined_text(n: &Node) -> Option<Node> {
+pub(crate) fn outlined_text(n: &Node) -> Option<Node> {
     effects::outline_text(n).map(|g| Node { knockout: Knockout::Off, ..carry(n, g) })
 }
 

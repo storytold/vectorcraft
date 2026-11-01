@@ -209,7 +209,7 @@ fn the_rows_are_the_shared_export_settings() {
     // A preset set by an agent shows as its rows.
     app.run("assets.settings.set", json!({"preset": "mobile"})).unwrap();
     let texts = frame(&ctx, &mut app, vec![], false);
-    assert!(has(&texts, "Mobile 1x/2x/3x") && has(&texts, "@3x"));
+    assert!(has(&texts, "iOS") && has(&texts, "@3x"));
     // Export (nothing selected: every asset) downloads one zip on the web.
     let texts = frame(&ctx, &mut app, vec![], false);
     frame(&ctx, &mut app, click(at(&texts, "Export")), false);

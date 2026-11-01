@@ -49,7 +49,7 @@ use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
+pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
 
 /// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
 pub use vectorcraft_doc::Composer;
@@ -58,7 +58,7 @@ pub use vectorcraft_doc::Composer;
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LayoutOptions {
-    /// Area type rows and columns (text flows down each column, then across). Layout clamps each
+    /// Area type rows and columns (text fills them in [`LayoutOptions::flow`] order). Layout clamps each
     /// count to 1..=[`vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS`].
     pub rows: usize,
     pub columns: usize,
@@ -71,6 +71,8 @@ pub struct LayoutOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
     pub vertical_align: VerticalAlign,
+    /// Area Type Options "Text Flow": by columns (down each column, then across) or by rows.
+    pub flow: TextFlow,
     /// Area type only: Shrink Text to Fit scales overflowing text down at layout time (see
     /// [`TextLayout::fit_scale`]); the other fits are the engine's business and lay out as `None`.
     pub fit: AreaFit,
@@ -89,6 +91,7 @@ impl Default for LayoutOptions {
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            flow: TextFlow::Columns,
             fit: AreaFit::None,
             composer: None,
             features: OtFeatures::default(),

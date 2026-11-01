@@ -142,9 +142,13 @@ impl Region {
         let cw = ((bbox.width() - gutter * (cols - 1) as f64) / cols as f64).max(0.0);
         let rh = ((bbox.height() - gutter * (rows - 1) as f64) / rows as f64).max(0.0);
         let mut out = Vec::with_capacity(rows * cols);
-        // Text flows down each column, then across (Illustrator's default "by columns").
-        for c in 0..cols {
-            for r in 0..rows {
+        // Text Flow: down each column, then across (by columns, the default), or across each row,
+        // then down (by rows).
+        let by_rows = opts.flow == vectorcraft_doc::TextFlow::Rows;
+        let (outer, inner) = if by_rows { (rows, cols) } else { (cols, rows) };
+        for o in 0..outer {
+            for i in 0..inner {
+                let (r, c) = if by_rows { (o, i) } else { (i, o) };
                 let x0 = bbox.x0 + c as f64 * (cw + gutter);
                 let y0 = bbox.y0 + r as f64 * (rh + gutter);
                 let cell = if rows * cols == 1 { bbox } else { Rect::new(x0, y0, x0 + cw, y0 + rh) };

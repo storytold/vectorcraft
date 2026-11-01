@@ -230,6 +230,14 @@ impl Leave {
         self
     }
 
+    /// The straight segment from the anchor `at` to a point being dragged (an open path's end
+    /// moved with Direct Selection): the point may land square to a segment or grazing a curve,
+    /// but is not held to Shift's angles or the construction guides, which a moved anchor
+    /// does not follow.
+    pub fn contact(at: Point) -> Self {
+        Self { at, shift: None, angles: &[], contact: true }
+    }
+
     /// A box dragged from its corner or centre `at` (Rectangle, Ellipse, Arc, the grids, and
     /// Artboard, which passes no Shift): Shift keeps the dragged corner on a diagonal, the box a
     /// square.

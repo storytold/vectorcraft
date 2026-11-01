@@ -391,6 +391,53 @@ fn a_layer_keeps_its_own_transparency() {
     let doc = read_ok(&layer(&art_)).doc;
     assert_eq!(doc.layers[0].opacity, 1.0, "no layer state written: the layer stays opaque");
     assert_eq!(art(&doc)[0].opacity, 0.5, "the group's own state");
+    // A layer whose last object is a gradient mesh: an `Xy` right after the mesh's end is the
+    // layer's when `LB` follows (directly or after the layer's `Xd` and `7 () XW`), and the mesh's
+    // when its own `6 () XW` follows.
+    let corner =
+        |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| format!("%_[1 1 1 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1);
+    let mesh = format!(
+        "0 0.8 0 0 0 Xy\n/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n/End X!\n",
+        corner(0, 0, (0, 10), (10, 0)),
+        corner(0, 40, (10, 40), (0, 30)),
+        corner(40, 40, (40, 30), (30, 40)),
+        corner(40, 0, (30, 0), (40, 10)),
+    );
+    for (after, layer_state, mesh_state) in [
+        ("1 0.35 0 0 0 Xy\n", (0.35, BlendMode::Multiply), (0.8, BlendMode::Normal)),
+        ("1 0.35 0 0 0 Xy\n0 0 Xd\n7 () XW\n", (0.35, BlendMode::Multiply), (0.8, BlendMode::Normal)),
+        ("1 0.35 0 0 0 Xy\n0 0 Xd\n6 () XW\n", (1.0, BlendMode::Normal), (0.35, BlendMode::Multiply)),
+        // The stroke style in the layer's state block.
+        ("1 0.35 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 0 Xd\n7 () XW\n", (0.35, BlendMode::Multiply), (0.8, BlendMode::Normal)),
+    ] {
+        let doc = read_ok(&layer(&format!("{mesh}{after}"))).doc;
+        let l = &doc.layers[0];
+        assert!(matches!(art(&doc)[0].kind, NodeKind::Mesh(_)), "{after:?}");
+        assert_eq!((l.opacity, l.blend), layer_state, "the layer's state after {after:?}");
+        assert_eq!((art(&doc)[0].opacity, art(&doc)[0].blend), mesh_state, "the mesh's state after {after:?}");
+    }
+}
+
+#[test]
+fn a_layers_state_keeps_through_the_stroke_style_written_in_it() {
+    // GUARDS: a layer's state block can have the stroke style between its `Xy` and `Xd`; read as
+    // the art moving on, it lost the layer's opacity and the layer drew opaque.
+    let state = "0 0.25 0 2 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 0 Xd\n7 () XW\n";
+    let clip_group = format!(
+        "q\n{}h\nW\nn\n0 Ae\nu\n{RED}{}f\nU\n9 () XW\nQ\n9 () XW\n{state}",
+        rect_path(10.0, 10.0, 90.0, 90.0),
+        rect_path(0.0, 0.0, 100.0, 100.0)
+    );
+    let path = format!("{RED}{}f\n{state}", rect_path(0.0, 0.0, 10.0, 10.0));
+    for body in [clip_group, path] {
+        let doc = read_ok(&layer(&body)).doc;
+        let l = &doc.layers[0];
+        assert_eq!((l.opacity, l.knockout), (0.25, Knockout::Neutral), "{body}");
+        assert_eq!(art(&doc)[0].opacity, 1.0, "{body}");
+    }
+    // An object's own state block (`6 () XW`) isn't the layer's.
+    let note = format!("{RED}{}f\n{}", rect_path(0.0, 0.0, 10.0, 10.0), state.replace("7 () XW", "6 () XW"));
+    assert_eq!(read_ok(&layer(&note)).doc.layers[0].opacity, 1.0);
 }
 
 #[test]
@@ -408,6 +455,72 @@ fn transparency_of_objects_and_groups() {
     let inner = &a[1].children().unwrap()[0];
     assert_eq!(inner.opacity, 1.0);
     assert_eq!((a[2].opacity, a[2].blend), (1.0, BlendMode::Normal), "the next object's state isn't the group's");
+}
+
+#[test]
+fn a_gradient_mesh_takes_the_transparency_written_after_it() {
+    // GUARDS: a mesh's own state (`Xy`) comes right after its `/End X!`, before `Xd` and `XW`, as a
+    // group's does after `U`; read as the next object's, a Multiply shadow mesh painted opaque.
+    let corner =
+        |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| format!("%_[1 1 1 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1);
+    let mesh = |x: i32| {
+        format!(
+            "/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n/End X!\n",
+            corner(x, 0, (x, 10), (x + 10, 0)),
+            corner(x, 40, (x + 10, 40), (x, 30)),
+            corner(x + 40, 40, (x + 40, 30), (x + 30, 40)),
+            corner(x + 40, 0, (x + 30, 0), (x + 40, 10)),
+        )
+    };
+    let art_ = format!(
+        "0 1 0 0 0 Xy\n{}1 0.8 0 0 0 Xy\n0 0 Xd\n6 () XW\n{}0 0 Xd\n6 () XW\n2 0.7 0 0 0 Xy\n{RED}{}f\n",
+        mesh(0),
+        mesh(50),
+        rect_path(100.0, 0.0, 110.0, 10.0)
+    );
+    let doc = read_ok(&layer(&art_)).doc;
+    let a = art(&doc);
+    assert!(matches!(a[0].kind, NodeKind::Mesh(_)) && matches!(a[1].kind, NodeKind::Mesh(_)), "{a:#?}");
+    assert_eq!((a[0].opacity, a[0].blend), (0.8, BlendMode::Multiply), "the state after the mesh is its own");
+    assert_eq!((a[1].opacity, a[1].blend), (0.8, BlendMode::Multiply), "the next mesh keeps the current state");
+    assert_eq!((a[2].opacity, a[2].blend), (0.7, BlendMode::Screen), "a state after the mesh's `Xd` and `XW` is the next object's");
+}
+
+#[test]
+fn a_masked_gradient_mesh_takes_the_transparency_written_after_its_mask() {
+    // GUARDS: a mesh with an opacity mask has its state after the mask's dictionary, whose art (on
+    // `%_` lines) has operators of its own; read as the next object's, each masked mesh in a run
+    // drew with the blend mode of the one before it.
+    let corners: String = ["10 20 10 25 1 15 20 1", "10 50 15 50 1 10 45 1", "40 50 40 45 1 35 50 1", "40 20 35 20 1 40 25 1"]
+        .iter()
+        .map(|g| format!("%_[0.5 1 {g}] /N X#\n"))
+        .collect();
+    let mesh = format!("/Mesh X!\n%_/DeviceGray /CS X#\n{corners}%_/E X#\n/End X!\n");
+    let mask = "%_/ArtDictionary :\n%_/Mask :\n%_X=\n%_u\n%_1 g\n%_10 20 m\n%_10 50 L\n%_40 50 L\n%_40 20 L\n%_f\n%_U\n%_X+\n\
+                %_(Art) ,\n%_1 /Bool (Clipping) ,\n%_1 /Bool (Linked) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let next = format!("0 1 0 0 0 Xy\n{RED}{}f\n", rect_path(60.0, 20.0, 80.0, 40.0));
+    for (state, expected) in [("1 0.5 0 0 0 Xy\n", (0.5, BlendMode::Multiply)), ("", (1.0, BlendMode::Overlay))] {
+        let a = art(&read_ok(&layer(&format!("3 1 0 0 0 Xy\n{mesh}{mask}{state}0 0 Xd\n6 () XW\n{next}"))).doc);
+        assert_eq!(a.len(), 2, "{a:?}");
+        assert!(matches!(a[0].kind, NodeKind::Mesh(_)) && a[0].extras().mask.is_some(), "{:?}", a[0]);
+        assert_eq!((a[0].opacity, a[0].blend), expected, "{state:?}: the state after the mask is the mesh's");
+        assert_eq!((a[1].opacity, a[1].blend), (1.0, BlendMode::Normal), "the next object's own state");
+    }
+}
+
+#[test]
+fn a_transparency_set_in_a_dictionary_s_art_stays_after_it() {
+    // GUARDS: an area text's frame (its `/ConfiningPath` art) sets its own transparency; the objects
+    // after the text, with no `Xy` of their own, draw with it. Read as the dictionary's alone, they
+    // drew with the Lighten of the path before the text and vanished on a light background.
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n/Art :\nX=\n0 Ap\n0 1 0 0 0 Xy\n0 w\n100 0 m\n100 10 L\nn\nX+\n\
+                ; /ConfiningPath ,\n2 /TextAntialiasing ,\n;\n";
+    let body = format!("9 0.5 0 0 0 Xy\n{RED}{}f\n{text}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let a = art(&read_ok(&layer(&body)).doc);
+    let paths: Vec<_> = a.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).collect();
+    assert_eq!(paths.len(), 2, "{a:#?}");
+    assert_eq!((paths[0].opacity, paths[0].blend), (0.5, BlendMode::Lighten), "the state before the text");
+    assert_eq!((paths[1].opacity, paths[1].blend), (1.0, BlendMode::Normal), "the state the text's art set");
 }
 
 #[test]
@@ -1359,6 +1472,19 @@ fn many_zstandard_frames_are_read_in_one_pass_and_capped() {
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
 }
 
+/// A Zstandard frame that ends in a zero byte keeps it: only the zeros after the last frame are
+/// padding.
+#[test]
+fn a_zstandard_frame_ending_in_a_zero_byte_is_read_whole() {
+    // Magic number, a single-segment header with a 1-byte content size of 3, and one raw block
+    // (last, 3 bytes) holding `ab` and a zero byte.
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    for padding in [0, 64] {
+        let raw = [&b"%AI24_ZStandard_Data"[..], &frame, &frame, &vec![0; padding]].concat();
+        assert_eq!(decode_private(&raw).unwrap(), b"ab\0ab\0");
+    }
+}
+
 #[test]
 fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let n = 200_000;
@@ -1572,6 +1698,33 @@ fn an_envelope_mesh_is_not_read_as_art() {
     // A mesh in a group with no distortion is still art.
     let doc = read_ok(&layer(&envelope(""))).doc;
     assert!(art(&doc).iter().any(|n| has_mesh(n)), "{:#?}", art(&doc));
+}
+
+/// An envelope whose contents are being edited is written the other way round: its contents, a
+/// group on `%_` lines, then its dictionary, which holds the mesh that shapes them. The contents
+/// aren't drawn as they are, only the distorted art on the plain lines after them.
+#[test]
+fn an_envelope_s_contents_being_edited_are_not_read_as_art() {
+    let corner = |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
+        format!("%_[0.82 0.83 0.83 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1)
+    };
+    let mesh = format!(
+        "%_/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n%_/End X!\n%_0 0 Xd\n%_6 () XW\n",
+        corner(0, 0, (0, 10), (10, 0)),
+        corner(0, 40, (10, 40), (0, 30)),
+        corner(40, 40, (40, 30), (30, 40)),
+        corner(40, 0, (30, 0), (40, 10)),
+    );
+    let contents: String = rect_path(0.0, 0.0, 80.0, 20.0).lines().map(|l| format!("%_{l}\n")).collect();
+    let body = format!(
+        "%_u\n%_u\n%_0 0 1 0 0 0 1 Xa\n{contents}%_f\n%_U\n%_9 () XW\n%_U\n%_/ArtDictionary :\n%_1 /Bool (AIDeformEditModeKey) ,\n\
+         %_3 /Int (AIDeformStyle) ,\n%_X=\n{mesh}%_X+\n%_ (AIDeformArtKey) ,\n%_;\n%_\n%_9 () XW\n{RED}{}f\n",
+        rect_path(0.0, 0.0, 40.0, 40.0)
+    );
+    let doc = read_ok(&layer(&body)).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
 #[test]
@@ -1871,6 +2024,33 @@ fn a_blend_it_cant_read_keeps_its_drawn_steps() {
     }
 }
 
+/// A blend's transparency (here knockout on, as blends are written) is the state block after its
+/// record, as a group's follows its end: the live blend's, or its drawn steps' where they stay. It
+/// is the blend's own, not the next object's.
+#[test]
+fn a_blends_transparency_follows_its_record() {
+    let state = "0 0.6 0 1 0 Xy\n0 0 Xd\n6 () XW\n";
+    let next = format!("0 1 0 0 0 Xy\n{RED}{}f\n", rect_path(150.0, 40.0, 170.0, 60.0));
+    let straight = "%_10 50 m\n%_110 50 L\n";
+    let garbled = "(Adobe Path Blends) 1 0 16 XP\n%00112233445566778899AABBCCDDEEFF\n".to_string();
+    for (record, live) in [(blend_record(&['A', 'B']), true), (garbled, false)] {
+        let body = format!("{}{state}{next}", blend_file(straight, [Some("A"), Some("B")], &record));
+        let a = art(&read_ok(&layer(&body)).doc);
+        assert_eq!(a.len(), 2, "{a:?}");
+        assert_eq!(matches!(a[0].kind, NodeKind::Blend { .. }), live, "{:?}", a[0].kind);
+        assert_eq!((a[0].opacity, a[0].knockout), (0.6, Knockout::On), "live: {live}");
+        assert_eq!(a[1].opacity, 1.0, "the next object's own state");
+    }
+    // A layer whose last object is a blend: a state block that ends `7 () XW` before `LB` is the
+    // layer's, and the blend keeps the state it had.
+    let body = format!("{}1 0.35 0 0 0 Xy\n0 0 Xd\n7 () XW\n", blend_file(straight, [Some("A"), Some("B")], &blend_record(&['A', 'B'])));
+    let doc = read_ok(&layer(&body)).doc;
+    assert_eq!((doc.layers[0].opacity, doc.layers[0].blend), (0.35, BlendMode::Multiply), "the layer's state");
+    let a = art(&doc);
+    assert!(matches!(a[0].kind, NodeKind::Blend { .. }), "{:?}", a[0].kind);
+    assert_eq!((a[0].opacity, a[0].blend), (1.0, BlendMode::Normal), "the blend's own state");
+}
+
 /// The blend is live: moving a key moves the steps between it and the other key with it.
 #[test]
 fn moving_a_blends_key_moves_its_steps() {
@@ -1899,4 +2079,16 @@ fn a_blend_record_is_read_to_its_length() {
     let longer = record.trim_end().to_string() + "DEADBEEF\n";
     let (blend, warnings) = read_blend(&blend_file("%_10 50 m\n%_110 50 L\n", [Some("A"), Some("B")], &longer));
     assert!(matches!(blend.kind, NodeKind::Blend { .. }), "{warnings:?}");
+}
+
+/// The printer's crop marks Illustrator draws after the last layer (`%AI3_BeginCrops`, inside
+/// `userdict /AI3_noCropMarks known not { … } if`) aren't art outside the layers: the file reads
+/// from its layers, without them (the crop area is `%AI3_Cropmarks`).
+#[test]
+fn crop_marks_after_the_layers_are_not_art() {
+    let crops = "%AI3_BeginCrops\nuserdict /AI3_noCropMarks known not {\n0 A\nu\n0 R\n1 1 1 1 ([Registration]) 0 XS\n\
+                 0 J 0 j 0.5 w 4 M []0 d\n0 XR\n-9 -400 m\n-36 -400 L\nS\nU\n} if\n%AI3_EndCrops\n";
+    let r = read_ok(&format!("{}{crops}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
+    assert_eq!(art(&r.doc).len(), 1);
+    assert_eq!(r.doc.layers.len(), 1);
 }

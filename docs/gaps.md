@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (G1: Average & Join with a corner or smooth choice, Cmd+Alt+Shift+J, done; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -57,7 +57,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 1–2 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 13–23 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 4–10 | Wayland pressure | [hardware-parity.md](hardware-parity.md) |
-| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 16–27 | no | [target-app-parity.md](target-app-parity.md) |
+| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 15–25 | no | [target-app-parity.md](target-app-parity.md) |
 | 12 | [G3 3D and Materials](#g3-3d-and-materials) | 25–45 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 4–8 | no | [target-app-parity.md](target-app-parity.md) |
@@ -94,6 +94,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done:** the Properties panel has the additional contextual controls of the public Properties panel overview: Blend Options in Quick Actions for one blend with the Blend tool, Merge Live Paint for a Live Paint group selected with more paths to merge (Live Paint Make and Merge refuse type, images and other objects that aren't paths, which used to vanish among the group's sources), the Width Profile list in Appearance with the Width tool or a variable-width stroke, an applied effect's Delete icon beside fx (with several effects it opens the Appearance panel), and Corner and Corner Radius for corners selected with Direct Selection (public doc cited in target-app-parity.md). Broader G1 estimates unchanged.
 - **Done (#2691):** a selected Grid Repeat ([public page](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-grid-repeat-options.html)) shows a handle below the grid, one right of it and one past its bottom-right corner: dragging them adds or removes rows, columns or both (1 to 500). A slider between the first two columns and one between the first two rows set the horizontal and vertical spacing, staying halfway across the gap under the pointer. Each drag is one undo step through `object.repeat.options` and Escape cancels it; the controls hide with the edges or the bounding box, and bounding-box handles keep priority where they meet. Radial Repeat handles remain. Estimates unchanged.
 
+- **Done (#2651):** Object › Repeat › Options… for a Grid Repeat has a Preview checkbox ([public page](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-grid-repeat-options.html)): while it is on the repeat on the canvas follows the fields, Cancel puts the original back without a history step and OK keeps the previewed values as one undo step. Radial and Mirror Repeat Options have none, as their public pages list none. Estimate unchanged.
 - **Done (#2877):** a selected Mirror Repeat shows its axis: drag the line or the center handle to move it, an end handle to rotate it (Shift: 45°); each drag is one undo step and Escape cancels it. Bounding-box handles take priority over the axis line; the center and end handles keep their actions. Broader G1 estimates unchanged.
 
 - **Existing-guide Escape cancellation:** Selection and Direct/Group Selection clear pending presses and cancel begun guide previews. App-input regressions cover preselected-guide document and interaction-start selection restoration, Undo/Redo and saved state, and later on-canvas motion/release. All eight app-input checks and the Direct Selection Escape control passed in current full CI; [Validation evidence](target-app-parity.md#evidence-what-ships-today-by-area). The broader G1 scope and estimate remain unchanged.
@@ -152,6 +153,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G9 Illustrator `.ai` and EPS files from real users
 
+- **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out; EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
+
 - **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged.
 
 - **Done (2026-10-16):** EPS legacy mesh corners and vector opacity masks retained; winding-declared compound member groups keep shared paint. Raster print-page minification no longer causes a false editing-data fallback; comparison limits remain unchanged. Synthetic regressions cover damage and missing artwork. This narrows G9; scores and estimates unchanged.
@@ -178,8 +181,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Unconfirmed (2026-10-14):** Tool cursors are painted into the window on Wayland (#1652; not run on Linux, #1645 stays open until confirmed). On Windows the custom title bar's window stays truly borderless, so the pointer lines up with what is drawn on systems where the hidden caption offset it (#1791, #1758; awaiting the reporter's confirmation).
 - **Done:** RPM required dependencies use 64-bit library capabilities and declare glibc 2.35, libm and libgcc_s (#1275); generated metadata and isolated synthetic-provider checks cover x86_64/aarch64. Real-distribution install/start-up QA is still missing.
-- **Done (2026-10-29):** the Linux Flatpak on GNOME no longer reconnects to the compositor and logs a warning every 250 ms when arboard has neither data-control nor X11 (267k warnings in 18 h filled the 16 MB log in 3 h): a clipboard that can't be opened is retried with a wait growing to a minute and logged once. Copy and Paste with other apps still don't work there.
-- **Missing:** the app not starting or staying in the background on some Windows 11 machines (#858, #964 fixed
+- **Done (2026-10-29):** the Linux Flatpak on GNOME no longer reconnects to the compositor and logs a warning every 250 ms when arboard has neither data-control nor X11 (267k warnings in 18 h filled the 16 MB log in 3 h): a clipboard that can't be opened is retried with a wait growing to a minute and logged once. Copy and Paste of text with other apps work there through the core Wayland protocol.
+- **Missing:** pictures (`image/png`) and SVG as `image/svg+xml` on the clipboard of the Flatpak on GNOME, where only text travels (smithay-clipboard 0.7 carries text only); the app not starting or staying in the background on some Windows 11 machines (#858, #964 fixed
   2026-10-10, #620, #818), slow pointer on a Linux AppImage (#575), macOS paste from other apps (#954), a
   web-free crash/hang reporter, a field record.
 - **Evidence:** open issues; the never-crash lints and `guard` stop panics, not driver, windowing or packaging
@@ -222,6 +225,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   taken whole or not at all, and the walk that counts an art tile's anchors charges the whole budget for a tree it
   cannot finish, so nesting buys no room (#3594). The budget is per brushed stroke, not per document: many strokes
   that each reach it still add up, and a brush inside a symbol is bounded per stroke rather than per instantiation.
+- **Done (2026-10-31):** a gradient mesh is budgeted (#3592). One tessellation makes at most 1,048,576 quads, and a
+  mesh with more patches than that (rows times columns) is malformed, like a point count that doesn't fit, so it draws
+  nothing instead of exhausting memory: a 150 x 150 mesh from a 3 MB file exported at 20x asked for about 23 million
+  quads (2 GB). Below the budget the subdivision per patch gives way a step at a time (a 60 x 60 mesh draws at 16 x 16
+  quads a patch instead of 32 x 32); a small mesh is drawn as finely as before. The command's own cap of 50 rows and
+  columns is unchanged.
 - **Done (2026-10-29):** a blend makes at most 100,000 steps in all, counting the steps of the blends inside its keys
   and steps. Each step between keys that are blends is a copy of one, which makes its own steps when drawn, so step
   counts capped at 1,000 a pair multiplied by nesting: five levels of 15 steps were 1.3 million steps from a 23 KB
@@ -252,7 +261,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** Numeric fields keep a text drag's start when the pointer gains focus and movement exceeds the click threshold (#1326, in part). A completed focus click selects the whole value; keyboard focus, double-click and numeric stepping remain regression-tested. Short movements still classified as clicks can select all; that case remains open.
 
-- **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE, and a non-circular ellipse keeps the existing fallback. CNC preset and VCarve QA remain open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
+- **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE, and a non-circular ellipse keeps the existing fallback. Alter Paths for Appearance outlines only the strokes a CAD line can't draw (aligned, profiled, offset dashes, wider than 2.11 mm, or in R13 and R14), so a 1 pt circle or arc stays a CIRCLE or ARC. CNC preset and VCarve QA remain open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
+- **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE. A closed four-cubic ellipse, or a circle scaled out of proportion, is written as a native ELLIPSE in R13 and later; R12 keeps the existing fallback. CNC preset and VCarve QA remain open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
 
 - **Done:** Simplify and Add Anchor Points clear stale component selections on rewritten paths; Simplify previews and reports original/new point counts (#1272).
 - **Done:** Object › Path › Simplify opens its slider at the Auto-Simplify level for the selection and previews that result, as the [manual-simplify page](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/manually-simplify-paths.html) describes; simplifying only a Direct Selection part of a path is done too (G1).
@@ -320,6 +330,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Improved:** mixed paragraph alignments leave the existing Paragraph/Properties alignment buttons unselected; choosing an alignment still uses the range-aware command. Headless regressions, full integration CI and visual review pass. Other mixed paragraph fields remain; estimate unchanged.
 - **Improved:** Paragraph panel left/right/first-line indents and space before/after show blank when paragraphs in scope differ; uniform values still display and edits apply through `text.setFormat`. Headless regression in `panels/paragraph.rs`; estimate unchanged.
 - **Improved (#1258):** full font names (name ID 4) resolve the face instead of falling back, and Missing Fonts searches recognize the same aliases. Synthetic regressions cover loaded/cataloged fonts, localized names, real-family precedence and variable default faces. Windows font-service activation still needs reporter QA; estimate unchanged.
+- **Improved:** PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold`, `Noto-Sans-CJK-JP`) or a composite font's CMap (`SomeFont-Italic-Identity-H`; ISO 32000-1 §9.7.6.1), and names a missing one by the whole name unless a style part follows (`MS-PGothic` is MS PGothic). Synthetic regressions in `crates/pdf/src/tests/import_fidelity.rs`; estimate unchanged.
 - **Done:** Paragraph panel menu › Roman Hanging Punctuation (#2756), per paragraph; estimate unchanged.
 - **Improved:** hanging punctuation (Roman Hanging Punctuation and Optical Margin Alignment) keeps its published amounts when justification scales glyphs, and Standard burasagari counts a hung line start as room; paragraph-level tests with both composers; estimate unchanged.
 - **Done:** Paragraph panel menu › Justification… (#2755): word and letter spacing, glyph scaling (Minimum, Desired,
@@ -424,13 +435,17 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** TIFF choices and format settings in Export for Screens and Asset Export (30.2), using the existing encoder; UI-to-file regressions cover selection, scaling, options and persistence.
 - **Done:** artboard background colors on the canvas (30.0): Properties › Artboards › Fill and Artboard Options set
-  each artboard's color, and the canvas draws its paper in it. Exports and print do not draw the color yet.
+  each artboard's color, and the canvas draws its paper in it. Exports (raster, PDF, SVG, EPS, `.ai` PDF pages,
+  Export for Screens with Include Artboard Fill) and print draw it behind the art (#4937). Left: the color isn't read
+  from or written to the reference app's own `.ai` data.
 
 - **Done:** Object › Intertwine (#1763): Make, Edit and Release; the Intertwine tool highlights the overlap area under
   the pointer, a click swaps which object is on top there, and a path (Shift: a rectangle) drawn around overlaps
-  arranges each one inside it; `object.intertwine.arrange` also brings an object to the front or sends it to the back
-  where three or more overlap. The group renders, saves and exports through its live expansion. Still missing: the
-  right-click Bring Forward / Send Backward menu where three or more objects overlap; adding objects to the group by
+  arranges each one inside it. Where three or more objects overlap, hovering highlights the object nearest to the
+  pointer, and a right-click offers Bring to Front, Bring Forward, Send Backward and Send to Back for it in that area
+  (`object.intertwine.arrange` with `order` front, forward, backward or back;
+  <https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/create-intertwined-objects.html>).
+  The group renders, saves and exports through its live expansion. Still missing: adding objects to the group by
   dragging them in the Layers panel is untested.
 - **Done (from users' reports):** Object › Create Gradient Mesh on an embedded image turns it into a mesh over its
   rectangle, with the image's transform kept; each point takes the average colour and opacity of the picture around it
@@ -455,11 +470,23 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   perceptual mix with dither's noise (an image with the noise in SVG and PDF); a stroke has no noise.
 - **Missing (asked for by users, from earlier versions):** radial gradients in Image Trace's
   Gradients option, which traces linear ones only (draft #1849). Inside the estimate below.
-- **Partial (#2530):** tangent snapping to curves and perpendicular snapping to straight target
-  segments for drawn lines. Controls are saved under Preferences › Smart Guides › Geometric Guides
-  and available from Control bar › Snapping; both default to on. Existing-line endpoint editing and
-  other tool cases remain unverified. [Public source](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/snap-to-perpendicular.html).
-- **Missing:** gradient presets (30.0); remaining tangent/perpendicular snapping cases and the consolidated
+- **Done (#2530):** tangent snapping to curves and perpendicular snapping to straight target
+  segments, as the public [perpendicular](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/snap-to-perpendicular.html)
+  and [tangent](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/snap-to-tangent.html)
+  pages describe, for the Line Segment and Pen tools' new lines and for existing lines: dragging the end
+  anchor of an open path's straight segment with Direct Selection lands it square to
+  another straight path (the foot of the perpendicular from the segment's other end) or grazing a curve, with
+  the "perpendicular" or "tangent" label (and the square-corner mark) Smart Guides show for drawn lines. As
+  the pages say, only line endpoints snap: the middle anchor of a path, the end of a curved segment, a closed
+  path's anchor, several anchors dragged together and Shift-constrained drags (which keep their angle step) do
+  not, and a curve is never a perpendicular target. Controls are saved under Preferences › Smart Guides ›
+  Geometric Guides and available from Control bar › Snapping; both default to on. Tests:
+  `dragged_line_ends_snap_perpendicular_to_segments_and_tangent_to_curves` in `crates/tools/src/direct/tests.rs`.
+- **Done (2026-10-30):** gradient presets (30.0): the Gradient panel's Presets menu applies one of the
+  built-in gradient libraries' presets (by theme) or a saved one to the gradient behind the active proxy, keeping
+  its placement, as one undo step; the panel menu saves the gradient as a preset (kept with the preferences) and
+  deletes saved ones; `gradient.presets.*` commands.
+- **Missing:** the consolidated
   snapping options (30.0); artboard colors in exports and print, and managing artboards from the canvas other
   than locking and unlocking them from the Artboard tool's right-click menu (30.0); the Blend panel with ease
   in/out and separate colour acceleration (30.7);
@@ -492,7 +519,15 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art); Select ›
   Start Global Edit (#3521) on paths, compound paths and symbol instances: the objects of the same shape at
   any place and size, narrowed by Appearance, Size and the artboards to search, take an edit of any one of
-  them in proportion, as one undo step ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html)).
+  them in proportion, as one undo step ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
+  on a group (#4939), the groups like it (the same objects at the same places, moved or scaled) take an edit
+  made to an object inside it at the object in the same place ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html));
+  dynamic symbols (#4938): Symbol Options › Symbol Type (Dynamic Symbol / Static Symbol; `type` on
+  `symbol.new` / `symbol.options` / `symbol.list`), an instance's own fill, stroke, opacity and blend for an
+  object of a dynamic symbol's art (`symbol.instance.setAppearance`, by child-index path), drawn and exported
+  with the instance; redefining the symbol keeps each change whose object remains, Break Link bakes them,
+  Reset (`symbol.instance.reset`, the Properties panel and the Symbols panel menu) drops them, and making the
+  symbol static drops them; stored in the native format.
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art);
   symbol libraries ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-or-import-symbol-libraries.html)): Window › Symbol Libraries and the Symbols panel's Symbol
   Libraries Menu open each library in a library panel of its own (one original library generated in code,
@@ -511,14 +546,13 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   dragging one onto the Brushes panel adds it; Save Brushes / Save Brush Library writes the document's brushes
   as a `.vectorcraft` library into the user library folder (listed under User Defined) or a file
   (`brush.libraries`, `brush.addFromLibrary`, `brush.saveLibrary`, `brush.loadLibrary`).
-- **Missing:** the Art brush's Overlap, auto-generated Pattern brush corners, new tile art in Pattern Brush
-  Options; more built-in brush, symbol and graphic-style libraries (original, generated in code, never
-  Adobe's); dynamic symbols; Global Edit of similar groups (edits to an object inside a group reaching the
-  matching objects of similar groups, [public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html)),
-  rotated copies as matches, Shift-click to leave a match out and highlighting matches before the start;
+- **Missing:** the Art brush's Overlap; more built-in brush, symbol and graphic-style libraries (original,
+  generated in code, never Adobe's); dynamic symbols' on-canvas editing (Direct Selection of an object inside a
+  dynamic instance, with the Fill/Stroke controls and Appearance panel then setting its change) and their `.ai`
+  read and write; Global Edit of groups holding type or
+  images, rotated copies as matches, Shift-click to leave a match out and highlighting matches before the start;
   drawing the 9-slice guides on the canvas in symbol edit mode and scaling by them.
-  Options; more built-in brush and symbol libraries (original, never Adobe's); dynamic symbols; Start Global Edit; drawing the 9-slice guides on the canvas in symbol edit mode and scaling by them.
-- **Estimate:** 15–26 h.
+- **Estimate:** 14–24 h.
 
 ## G3 3D and Materials
 
@@ -653,14 +687,23 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | G5: dynamic symbols (#4938): Symbol Options › Symbol Type, per-instance fill, stroke, opacity and blend for objects of a dynamic symbol's art that stay linked (redefining keeps them, Break Link bakes them, Reset and Static drop them; `symbol.instance.setAppearance`, `symbol.instance.reset`; `crates/engine/src/tests/dynamic_symbols.rs`); on-canvas Direct Selection of the parts and `.ai` round trip remain. Estimate 15–26 → 14–24 h. |
+| 2026-11-01 | minor | G13: Artboard background colors in output (#4937): raster exports (a transparent background too), PDF, SVG and EPS pages, `.ai` files' PDF pages, Export for Screens and print (and its preview) draw each artboard's color behind its art, inside the artboard and in the color's own model; Export for Screens has Include Artboard Fill beside Include Bleed (on by default, remembered; `includeArtboardFill`, also on `document.export` and `file.print`); editing data keeps the color as the artboard's, and Export for Screens' document rows keep it too; estimate unchanged. |
+| 2026-11-01 | minor | G5: Select › Start Global Edit on a group takes the groups like it (the same objects at the same places, moved or scaled; Appearance, Size and the artboard options apply) and gives an edit made to an object inside one to the object at its place in each of the others, in proportion, as one undo step (#4939); rotated copies and Shift-click exclusion remain. Estimate unchanged. |
+| 2026-10-31 | minor | G4: PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`. Estimate unchanged. |
+| 2026-10-31 | minor | G13: Direct Selection snaps the end of an existing straight line, dragged by its end anchor, square to straight paths and grazing curves (Smart Guides › Geometric Guides: Snap to Perpendicular and Snap to Tangent), the case the public Snap to Perpendicular and Snap to Tangent pages add to drawing with the Line Segment and Pen tools (#2530). Scores and estimates unchanged. |
+| 2026-10-31 | minor | G8: a gradient mesh read from a file is budgeted: at most about a million quads per tessellation, and a mesh with more patches than that is malformed (#3592); estimate unchanged. |
+| 2026-10-30 | minor | G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | G1: Object › Path › Average & Join… (`path.averageJoin`, Cmd+Alt+Shift+J) moves two open path ends to their midpoint and joins them there, the joined anchor a corner or a smooth point as its dialog's Points choice asks, in one undo step; the "Average and Join in one step" entry is done. Estimate unchanged |
 | 2026-10-30 | minor | G12: Preferences audit (#394): 5 options are stored but not acted on (Open Documents As Tabs, Units › East Asian Type, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard), each waiting on a subsystem; Highlight Alternate Glyphs, Real-time Drawing and the Devices options act. Estimate unchanged. |
+| 2026-10-29 | minor | G10: the Linux Flatpak on GNOME copies and pastes text through the core Wayland protocol; pictures and `image/svg+xml` there listed as missing. Estimate unchanged. |
 | 2026-10-29 | minor | G10: the Linux Flatpak on GNOME stops the clipboard retry storm (retried with a growing wait, logged once). Estimate unchanged. |
 | 2026-10-29 | minor | G12: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act. No entry closed, estimates unchanged. |
 | 2026-10-29 | minor | G8: a blend makes at most 100,000 steps in all, the steps of blends nested in its keys and steps included; past it each pair of keys keeps the same share of its steps (#3579). No entry closed, estimates unchanged. |
 | 2026-10-26 | minor | G9: EPS save-back: an opened EPS saves back to its own path as EPS, keeping the chosen artboard's page frame and transparent margins and the complete editable VectorCraft document; Save's TIFF preview is capped at 1024 px (Export keeps 2048); partly read, preview-only or damaged-editing-data sources still need confirmation before they are overwritten. This narrows G9's save-back workflow only; its import-fidelity items (layer and group structure, guides, open speed, live objects) and estimate are unchanged, and writing Illustrator's own editing data stays out of scope (#868) |
 | 2026-10-26 | minor | G7: View › New View… / Edit Views… ([public source](https://helpx.adobe.com/illustrator/using/viewing-artwork.html)): the View menu lists every one of a document's 25 saved views (it listed 10), Edit Views… lists them to rename or delete in one undo step (`view.saved.edit {edits}`), and a file's views are checked when it opens; New View/Edit Views leave G7's missing list; estimate unchanged |
 | 2026-10-25 | minor | G4: a double-click on a threaded port with the Selection tool breaks the thread there (`text.thread.break {id, port}`): the story flows into the frames before the break, the frames after it are left empty and stay threaded with each other when two or more; a double-click on a port with no thread does nothing; estimate unchanged |
+| 2026-10-31 | minor | G1: Grid Repeat Options has a Preview checkbox (#2651); estimate unchanged. |
 | 2026-10-25 | minor | G1: a selected Grid Repeat shows handles: the one below the grid adds or removes rows, the one right of it columns, the one past its bottom-right corner both, and the sliders between the first two columns and rows set the horizontal and vertical spacing; each drag is one undo step and Escape cancels it (#2691); bounding-box handles keep priority where they meet; Radial Repeat handles remain; estimates unchanged. |
 | 2026-10-25 | minor | Floating panels open in OS windows of their own on the desktop (inside the window on the web and on Wayland); saved layouts from earlier versions convert to the shared docking layout (#4135); scores and estimates unchanged (estimated) |
 | 2026-10-24 | minor | Recolor Artwork › Assign: double-clicking a row's new color opens the Color Picker over the dialog; its OK sets the row's new color in the model it was picked in (a CMYK mix stays CMYK, RGB becomes CMYK in a CMYK document), Cancel leaves the row as it was. A Lab new color is kept, but a Lab color can't be typed yet: the picker's Lab fields work in RGB, as for fill and stroke (part of #4028; Lab entry, swatch libraries and the row menu remain). Scores and estimates unchanged. |

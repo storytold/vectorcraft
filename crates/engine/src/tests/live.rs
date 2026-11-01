@@ -927,6 +927,32 @@ fn mesh_add_line_and_delete_point() {
     assert!(s.execute("object.mesh.deletePoint", &json!({"id": a.0, "index": 0})).is_err(), "corner lines can't go");
 }
 
+/// A Mesh tool click that hits a mesh's edge from just outside it adds a mesh line at the
+/// nearest point of the edge; `tolerance` gives `object.mesh.addLine` the same reach.
+#[test]
+fn mesh_add_line_on_the_edge_from_just_outside() {
+    use crate::tooling::ViewInfo;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("mesh", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 99.0, 160.0), v).unwrap();
+    }
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (2, 1), "a row through the left edge");
+    assert!(m.points.iter().any(|q| q.p.distance(Point::new(100.0, 160.0)) < 0.5), "{:?}", m.points.iter().map(|q| q.p).collect::<Vec<_>>());
+    let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202, "tolerance": 3})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (2, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(140.0, 200.0)) < 0.5);
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202})).is_err(), "no tolerance: outside");
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 210, "tolerance": 3})).is_err(), "past the tolerance");
+}
+
 /// A mesh point `index`, and `rows`, `cols` or `columns` for Create Gradient Mesh, that is not a
 /// whole number is an error that changes nothing; 4.0 names point 4.
 #[test]
@@ -1020,10 +1046,15 @@ fn mesh_expand_to_flat_pieces() {
     let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     sel(&mut s, &[a]);
     s.execute("object.mesh.create", &json!({"rows": 1, "cols": 2})).unwrap();
+    // The first patch shades from black to white; the second is one colour.
+    for (index, color) in [(0, "#000000"), (3, "#000000"), (1, "#ffffff"), (2, "#ffffff"), (4, "#ffffff"), (5, "#ffffff")] {
+        s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": index, "color": color})).unwrap();
+    }
     s.execute("object.mesh.expand", &json!({})).unwrap();
     let g = node(&s, a);
     assert!(matches!(g.kind, NodeKind::Group { .. }));
-    assert_eq!(g.children().unwrap().len(), 2 * 64);
+    // 8 × 8 pieces for the shaded patch, one for the flat one.
+    assert_eq!(g.children().unwrap().len(), 64 + 1);
     assert!(g.children().unwrap().iter().all(|c| c.id != NodeId(0)));
 }
 
@@ -1093,9 +1124,10 @@ fn live_objects_round_trip_through_native_format() {
 fn svg_export_expands_live_objects() {
     let s = live_doc();
     let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
-    // 4 blend objects + envelope content + 4 patches × 64 mesh pieces.
+    // 4 blend objects + envelope content + a piece for each of the 4 mesh patches (the mesh is
+    // white, which its highlight leaves white, so a patch is one piece rather than 64 alike).
     let paths = vectorcraft_testkit::svg_shapes(&svg);
-    assert!(paths >= 4 + 1 + 256, "{paths}");
+    assert!(paths >= 4 + 1 + 4, "{paths}");
     assert!(vectorcraft_svg::import(&svg).is_ok());
 }
 

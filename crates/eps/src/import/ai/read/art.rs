@@ -235,7 +235,9 @@ impl<'a> Reader<'a> {
                 let mut node = self.new_node(NodeKind::Mesh(one), &gs);
                 node.opacity = gs.opacity;
                 node.blend = gs.blend;
-                return self.add(node, hidden);
+                self.add(node, hidden)?;
+                self.mesh_ended = true;
+                return Ok(());
             }
             Err(crate::import::ai::mesh::NotOne::Unjoined) => {
                 self.warn("a gradient mesh whose patches don't join up comes in as a group of its patches")
@@ -249,7 +251,9 @@ impl<'a> Reader<'a> {
         };
         node.opacity = gs.opacity;
         node.blend = gs.blend;
-        self.add(node, hidden)
+        self.add(node, hidden)?;
+        self.mesh_ended = true;
+        Ok(())
     }
 
     /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.

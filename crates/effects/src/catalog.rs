@@ -791,6 +791,9 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             v.push(g(id, label, PATHFINDER, "{} (groups and layers: live Pathfinder over the members)", json!({})));
         }
     }
+    v.extend(crate::addons::color::catalog());
+    v.extend(crate::addons::halftone::catalog());
+    v.extend(crate::addons::path::catalog());
     v.push(g(TRAP, "Trap…", PATHFINDER, trap::EFFECT_PARAMS_DOC, trap::effect_defaults()));
     v.push(g(
         CROP_MARKS,

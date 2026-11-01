@@ -180,6 +180,10 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
+        crate::addons::color::ID => crate::addons::color::show(app, ui),
+        crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
+        crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
+        crate::addons::pen::ID => crate::addons::pen::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
         _ => {
             dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));

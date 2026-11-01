@@ -16,8 +16,9 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
         Some(a) => MeshAppearance::parse(a).ok_or_else(|| bad(C, "appearance must be flat|center|edge"))?,
         None => MeshAppearance::Flat,
     };
-    check_numbers(p, &["highlight"], C)?;
+    check_numbers(p, &["highlight", "tolerance"], C)?;
     let highlight = f64_or(p, "highlight", 100.0).clamp(0.0, 100.0);
+    let tol = f64_or(p, "tolerance", 0.0).max(0.0);
     let at = match p.get("at") {
         None | Some(Value::Null) => None,
         Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, "`at` must be [x, y]"))?),
@@ -58,7 +59,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
             };
             let Some(mut m) = m else { continue };
             if let Some(q) = at {
-                index = m.add_lines_at(q);
+                index = m.add_lines_at(q, tol);
             }
             let mut mn = Node::new(n.id, NodeKind::Mesh(m));
             mn.name = n.name.clone();
@@ -273,9 +274,11 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.addLine";
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     crate::cmd::paint::check_keep_model(p, C)?;
+    check_numbers(p, &["tolerance"], C)?;
+    let tol = f64_or(p, "tolerance", 0.0).max(0.0);
     let color = p.get("color").and_then(color_value).map(|c| crate::cmd::paint::new_color(s, p, c));
     let index = with_mesh(s, p, C, "Add Mesh Line", true, |m| {
-        let i = m.add_lines_at(q).ok_or_else(|| bad(C, "point is outside the mesh"))?;
+        let i = m.add_lines_at(q, tol).ok_or_else(|| bad(C, "point is outside the mesh"))?;
         if let Some(c) = color {
             m.points[i].color = c;
         }

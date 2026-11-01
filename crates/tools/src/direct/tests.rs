@@ -922,6 +922,61 @@ fn shift_marquee_toggles_anchors() {
     }
 }
 
+/// #4890: Alt held at the press makes a Direct Selection marquee Group Selection's for the drag:
+/// it selects each path it touches whole (with Shift, toggles it), not the anchors inside it, and
+/// leaves the paths it misses; the Group Selection cursor stays until the release.
+#[test]
+fn an_alt_marquee_selects_the_paths_it_touches_whole() {
+    let (d, a, _) = two_squares();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let alt_shift = Mods { shift: true, ..alt };
+    for (mods, cmd) in [(alt, "select.set"), (alt_shift, "select.toggle")] {
+        let mut t = DirectSelectionTool::new(false);
+        // Round A's top-right corner only; B (300..400) is left out.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0).with_mods(mods));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0).with_mods(mods));
+        assert_eq!(t.cursor(&cx, Point::new(250.0, 150.0), mods), Cursor::GroupSelection, "{mods:?}");
+        let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(mods));
+        assert_eq!(up, vec![Action::Exec(cmd.into(), json!({"ids": [a.0]}))], "{mods:?}");
+    }
+}
+
+/// #4891: a press on the centre point a selected object shows (Show Center) selects it whole, and
+/// a drag from there moves it by the drag as one Move; the square is unfilled, so the press finds
+/// no fill there.
+#[test]
+fn the_centre_point_selects_and_moves_the_object_whole() {
+    let (mut d, id) = doc_with_rect();
+    let n = d.node_mut(id).unwrap();
+    n.appearance.items.retain(|i| !matches!(i, vectorcraft_doc::AppearanceItem::Fill(_)));
+    n.edit_attrs(|a| a.show_center = Some(true));
+    let p = paint();
+    // One anchor selected: the square shows its centre, (150, 150).
+    let one = anchors_of(id, &[(0, 0)]);
+    let mut t = DirectSelectionTool::new(false);
+    let c = cx(&d, &one, &p);
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 151.0, 149.0)), vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 151.0, 149.0)).is_empty());
+    // Selected whole: the press keeps the selection and the drag moves the square.
+    let mut whole = Selection::default();
+    whole.set([id]);
+    let c = ToolContext { smart_guides: false, ..cx(&d, &whole, &p) };
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 140.0));
+    let moved = json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(Vec2::new(20.0, -10.0))), "copy": false});
+    assert_eq!(a, vec![Action::Begin("Move".into()), Action::Preview("object.transform".into(), moved)]);
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 140.0)), vec![Action::Commit]);
+    // Unselected, the centre isn't shown and a press there starts a marquee.
+    let none = Selection::default();
+    let mut t = DirectSelectionTool::new(false);
+    let c = cx(&d, &none, &p);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty());
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 140.0));
+    assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Marquee(_))));
+}
+
 /// Group Selection: E pressed during a marquee drag makes it select the objects entirely inside
 /// it whole, a group's member without its group. Direct Selection does not take E.
 #[test]
@@ -1475,6 +1530,101 @@ fn dragged_end_of_a_slanted_line_stays_on_its_direction() {
     let guides: Vec<(Point, Point)> =
         t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Line { a, b, .. } = o { Some((a, b)) } else { None }).collect();
     assert!(matches!(guides[..], [(a, b)] if a == Point::new(300.0, 400.0) && (b - Point::new(420.0, 310.0)).hypot() < 1e-9), "{guides:?}");
+}
+
+/// Drawn lines snap square to a straight path and grazing a curve (Smart Guides › Geometric
+/// Guides); so does an existing line whose end anchor is dragged with Direct Selection. Each
+/// option switches its own snap off. Only a line's end snaps so: the middle anchor of a
+/// polyline, an end of a curved segment, a closed path's anchor, several anchors dragged together,
+/// a Shift drag and an end out of reach do not, nor does Group Selection, which moves the path whole.
+#[test]
+fn dragged_line_ends_snap_perpendicular_to_segments_and_tangent_to_curves() {
+    use vectorcraft_geom::{BezPath, PathData, SubPath, shapes};
+    let near = |v: &serde_json::Value, (x, y): (f64, f64), eps: f64| (v["dx"].as_f64().unwrap() - x).hypot(v["dy"].as_f64().unwrap() - y) < eps;
+    // The rect's right side (x = 200) and a circle (centre (500, 500), radius 50), with one more
+    // path: its id, and the document.
+    let with = |path: PathData| {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (circle, id) = (d.alloc_id(), d.alloc_id());
+        let ring =
+            vectorcraft_doc::Node::path(circle, shapes::ellipse(Rect::new(450.0, 450.0, 550.0, 550.0)), vectorcraft_doc::Appearance::default_art());
+        d.insert(Some(l), 1, ring).unwrap();
+        d.insert(Some(l), 2, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        (d, id)
+    };
+    let p = paint();
+    let none = Mods::default();
+    let mut t = DirectSelectionTool::new(false);
+    // A line (300, 160)–(260, 170), its end dragged to 3.6 pt from the foot of the perpendicular
+    // from (300, 160) to the rect's right side: (200, 160).
+    let (d, id) = with(shapes::line(Point::new(300.0, 160.0), Point::new(260.0, 170.0)));
+    let end = anchors_of(id, &[(0, 1)]);
+    let c = cx(&d, &end, &p);
+    let (v, labels) = drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none);
+    assert!(near(&v, (-60.0, -10.0), 1e-6) && labels == ["perpendicular"], "{v} {labels:?}");
+    // The other end snaps the same way about this one: square to the side at (200, 170).
+    let start = anchors_of(id, &[(0, 0)]);
+    let c = cx(&d, &start, &p);
+    let (v, labels) = drag(&mut t, &c, (300.0, 160.0), (202.0, 172.0), none);
+    assert!(near(&v, (-100.0, 10.0), 1e-6) && labels == ["perpendicular"], "{v} {labels:?}");
+    // Perpendicular off: the end only lands on the path, where the pointer is; tangent off does
+    // not change that.
+    let c = ToolContext { snap_perpendicular: false, ..cx(&d, &end, &p) };
+    let (v, labels) = drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none);
+    assert!(near(&v, (-60.0, -7.0), 1e-6) && labels == ["path"], "{v} {labels:?}");
+    let c = ToolContext { snap_tangent: false, ..cx(&d, &end, &p) };
+    assert_eq!(drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none).1, ["perpendicular"]);
+    // With Smart Guides off, Snap to Point alone finds no contact.
+    let c = ToolContext { smart_guides: false, ..cx(&d, &end, &p) };
+    assert_eq!(drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none).1, Vec::<String>::new());
+    // Out of reach: left alone.
+    let c = cx(&d, &end, &p);
+    let (v, labels) = drag(&mut t, &c, (260.0, 170.0), (240.0, 140.0), none);
+    assert!(near(&v, (-20.0, -30.0), 1e-9) && labels.is_empty(), "{v} {labels:?}");
+    // Shift holds the move to its 45° step: no contact.
+    let shift = Mods { shift: true, ..none };
+    assert!(!drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), shift).1.contains(&"perpendicular".to_string()));
+    // Group Selection moves the path whole: no contact either.
+    let mut group = DirectSelectionTool::new(true);
+    assert!(!drag(&mut group, &c, (260.0, 170.0), (202.0, 163.0), none).1.contains(&"perpendicular".to_string()));
+
+    // A line (400, 500)–(420, 470) toward the circle: its end lands where the line from (400, 500)
+    // grazes it, at (475, 456.7).
+    let (d, id) = with(shapes::line(Point::new(400.0, 500.0), Point::new(420.0, 470.0)));
+    let end = anchors_of(id, &[(0, 1)]);
+    let c = cx(&d, &end, &p);
+    let (v, labels) = drag(&mut t, &c, (420.0, 470.0), (477.0, 459.0), none);
+    assert!(near(&v, (55.0, 500.0 - 1875f64.sqrt() - 470.0), 0.1) && labels == ["tangent"], "{v} {labels:?}");
+    let c = ToolContext { snap_tangent: false, ..cx(&d, &end, &p) };
+    let (v, labels) = drag(&mut t, &c, (420.0, 470.0), (477.0, 459.0), none);
+    assert!(near(&v, (55.53, -13.61), 0.01) && labels == ["path"], "the end only lands on the circle: {v} {labels:?}");
+    let c = ToolContext { snap_perpendicular: false, ..cx(&d, &end, &p) };
+    assert_eq!(drag(&mut t, &c, (420.0, 470.0), (477.0, 459.0), none).1, ["tangent"]);
+
+    // Not a line's end: the middle anchor of a polyline, and an anchor of a closed path.
+    let three = [Point::new(300.0, 160.0), Point::new(260.0, 170.0), Point::new(240.0, 230.0)];
+    let (d, id) = with(PathData::single(SubPath::polyline(&three, false)));
+    let mid = anchors_of(id, &[(0, 1)]);
+    let c = cx(&d, &mid, &p);
+    assert_eq!(drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none).1, ["path"]);
+    let (d, id) = with(PathData::single(SubPath::polyline(&three, true)));
+    let corner = anchors_of(id, &[(0, 1)]);
+    let c = cx(&d, &corner, &p);
+    assert_eq!(drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none).1, ["path"]);
+    // The end of a curved segment: no contact either.
+    let mut curve = BezPath::new();
+    curve.move_to(Point::new(300.0, 160.0));
+    curve.curve_to(Point::new(290.0, 150.0), Point::new(270.0, 160.0), Point::new(260.0, 170.0));
+    let (d, id) = with(PathData::from_bezpath(&curve));
+    let end = anchors_of(id, &[(0, 1)]);
+    let c = cx(&d, &end, &p);
+    assert_eq!(drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none).1, ["path"]);
+    // A line end dragged with another anchor selected: the pair moves rigidly, no contact.
+    let (d, id) = with(shapes::line(Point::new(300.0, 160.0), Point::new(260.0, 170.0)));
+    let both = anchors_of(id, &[(0, 0), (0, 1)]);
+    let c = cx(&d, &both, &p);
+    assert!(!drag(&mut t, &c, (260.0, 170.0), (202.0, 163.0), none).1.contains(&"perpendicular".to_string()));
 }
 
 /// Group Selection (and Direct Selection on a whole path) moves objects snapping as the

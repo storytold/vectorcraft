@@ -134,6 +134,8 @@ pub struct VectorcraftApp {
     pub titlebar_inset: f32,
     /// Last applied effect (Effect → Apply Last Effect).
     pub last_effect: Option<(String, serde_json::Value)>,
+    /// Last successful destructive Pathfinder operation, repeated on the current selection.
+    pub last_pathfinder: Option<String>,
     /// Last confirmed Warp Options (bend, distortion, orientation) for the next new warp dialog.
     pub last_warp: Option<serde_json::Value>,
     /// The Character panel field that takes the keyboard focus when the panel next draws it
@@ -185,6 +187,9 @@ pub struct VectorcraftApp {
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
+    /// Whether a screen mode put the window full screen (`chrome::sync_fullscreen`), so Normal
+    /// Screen Mode takes it back out, and leaves a window the user made full screen as it is.
+    pub(crate) fullscreen_for_mode: bool,
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,

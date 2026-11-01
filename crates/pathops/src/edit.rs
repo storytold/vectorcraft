@@ -16,13 +16,16 @@ pub struct SimplifyOptions {
     pub tolerance: f64,
     /// Anchors where the path turns by more than this many degrees stay corners.
     pub corner_angle_deg: f64,
-    /// Produce only straight segments (Illustrator's "Convert to Straight Lines").
+    /// Produce only straight segments ("Convert to Straight Lines").
     pub straight_lines: bool,
+    /// How far (points, the spread of a Gaussian along the path) the path is smoothed before it is
+    /// refitted, so that bumps and jags come out as one curve ([`smooth_level`]); 0 for none.
+    pub smooth: f64,
 }
 
 impl Default for SimplifyOptions {
     fn default() -> Self {
-        Self { tolerance: 0.5, corner_angle_deg: 30.0, straight_lines: false }
+        Self { tolerance: 0.5, corner_angle_deg: 30.0, straight_lines: false, smooth: 0.0 }
     }
 }
 
@@ -116,6 +119,9 @@ fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
             let m = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
             sample(&s.c, m, &mut pts, k == 0);
         }
+        if opts.smooth > 0.0 {
+            pts = smooth_points(&pts, opts.smooth);
+        }
         if opts.straight_lines {
             let keep = rdp(&pts, tol);
             result.extend(keep.windows(2).map(|p| Seg::line(p[0], p[1])));
@@ -129,6 +135,48 @@ fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
         }
     }
     result
+}
+
+/// `pts` (a run's samples, in order) smoothed along the path: each point becomes the Gaussian-weighted
+/// mean of the points around it, `sigma` points of arc length wide, the window narrowing towards the
+/// ends so that the first and last points stay where they are. Most points looked at per point is
+/// bounded by the samples within three spreads of it.
+fn smooth_points(pts: &[Point], sigma: f64) -> Vec<Point> {
+    if pts.len() < 3 || !(sigma.is_finite() && sigma > 0.0) {
+        return pts.to_vec();
+    }
+    let mut s = Vec::with_capacity(pts.len());
+    let mut total = 0.0;
+    for (i, p) in pts.iter().enumerate() {
+        if let Some(prev) = i.checked_sub(1).and_then(|j| pts.get(j)) {
+            total += prev.distance(*p);
+        }
+        s.push(total);
+    }
+    let (mut lo, mut hi) = (0usize, 0usize);
+    pts.iter()
+        .zip(&s)
+        .map(|(&p, &si)| {
+            let reach = (3.0 * sigma).min(si).min(total - si);
+            if reach <= 1e-9 {
+                return p;
+            }
+            let spread = reach / 3.0;
+            while s.get(lo).is_some_and(|&v| v < si - reach) {
+                lo += 1;
+            }
+            while s.get(hi + 1).is_some_and(|&v| v <= si + reach) {
+                hi += 1;
+            }
+            let (mut sum, mut weight) = (Vec2::ZERO, 0.0);
+            for (q, &sj) in pts.iter().zip(&s).take(hi + 1).skip(lo) {
+                let w = (-(sj - si) * (sj - si) / (2.0 * spread * spread)).exp();
+                sum += q.to_vec2() * w;
+                weight += w;
+            }
+            if weight > 0.0 { (sum / weight).to_point() } else { p }
+        })
+        .collect()
 }
 
 /// What [`simplify_part`] made of a path.
@@ -320,22 +368,36 @@ pub fn smooth(path: &PathData, amount: f64) -> PathData {
 /// [`smooth_level`] already scales with each path's size, so one level suits every path.
 pub const SMOOTH_AUTO_LEVEL: f64 = 50.0;
 
-/// Object › Path › Smooth at slider level `level`, from 0 (minimum smoothing: the path stays within
-/// 0.1 % of its longer side of where it was) to 100 (maximum). The help page names only the two
-/// ends; the rest is VectorCraft's own rule. Each subpath is refitted with curves as Simplify does,
-/// but keeping a corner only where the path turns back on itself (so jags and kinks become curves),
-/// within a tolerance from 0.1 % of the path's longer side at level 0 to 2.5 % at level 100. A refit
-/// never has more anchor points than the subpath had: a shape whose corners the tolerance can't
-/// round, such as a rectangle, stays as it is. Closed subpaths stay closed, with no kink left where
-/// they start unless rounding it would pass the tolerance, and open ones keep their end points. A level outside 0..=100 counts as the nearer end, and one that is not a number as
-/// [`SMOOTH_AUTO_LEVEL`].
-pub fn smooth_level(path: &PathData, level: f64) -> PathData {
+/// The refit Object › Path › Smooth makes of `path` at slider level `level` ([`smooth_level`]): a
+/// corner only where the path turns back on itself, the path smoothed along its length by up to 5 %
+/// of its longer side (none at level 0) and refitted within 0.1 % (level 0) to 2.5 % (level 100) of
+/// it. A level outside 0..=100 counts as the nearer end, and one that is not a number as
+/// [`SMOOTH_AUTO_LEVEL`]; a path of no finite size gets no smoothing.
+pub fn smooth_options(path: &PathData, level: f64) -> SimplifyOptions {
     let level = if level.is_finite() { level.clamp(0.0, 100.0) } else { SMOOTH_AUTO_LEVEL };
     let size = path.bounds().map_or(0.0, |b| b.width().max(b.height()));
-    if !size.is_finite() {
+    let size = if size.is_finite() { size } else { 0.0 };
+    SimplifyOptions {
+        tolerance: size * (0.001 + 0.024 * level / 100.0),
+        corner_angle_deg: SMOOTH_CORNER_DEG,
+        straight_lines: false,
+        smooth: size * 0.05 * level / 100.0,
+    }
+}
+
+/// Object › Path › Smooth at slider level `level`, from 0 (minimum smoothing: the path stays within
+/// 0.1 % of its longer side of where it was) to 100 (maximum). The help page names only the two
+/// ends; the rest is VectorCraft's own rule ([`smooth_options`]). Each subpath is smoothed along its
+/// length, so that bumps and jags give way to one curve, then refitted with curves as Simplify
+/// does, keeping a corner only where the path turns back on itself. A refit never has more anchor
+/// points than the subpath had: a shape whose corners it can't round, such as a rectangle, stays as
+/// it is. Closed subpaths stay closed, with no kink left where they start unless rounding it would
+/// pass the tolerance, and open ones keep their end points.
+pub fn smooth_level(path: &PathData, level: f64) -> PathData {
+    let opts = smooth_options(path, level);
+    if opts.tolerance <= 0.0 {
         return path.clone();
     }
-    let opts = SimplifyOptions { tolerance: size * (0.001 + 0.024 * level / 100.0), corner_angle_deg: SMOOTH_CORNER_DEG, straight_lines: false };
     let smoothed = |sp: &SubPath| {
         let Some(mut fit) = simplify_subpath(sp, &opts).filter(|f| f != sp) else { return sp.clone() };
         smooth_seam(&mut fit, sp, opts.tolerance);

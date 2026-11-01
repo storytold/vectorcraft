@@ -80,7 +80,7 @@ struct Place {
 
 /// The open path the pen is extending: the single selected open path, or the single open path of a
 /// single selected compound path.
-fn active_path(cx: &ToolContext) -> Option<(NodeId, usize, Point, Point, Point)> {
+pub(crate) fn active_path(cx: &ToolContext) -> Option<(NodeId, usize, Point, Point, Point)> {
     if cx.selection.objects.len() != 1 {
         return None;
     }
@@ -135,7 +135,7 @@ fn endpoint_on(cx: &ToolContext, id: NodeId, p: Point, tol: f64, except: Option<
 
 /// An end of an open path (any editable path, including inside groups and compound paths, not `except`)
 /// under `p`, within `tol`: the path the Pen continues or joins to, and whether it's the path's first anchor.
-fn open_end_at(cx: &ToolContext, p: Point, tol: f64, except: Option<(NodeId, usize)>) -> Option<(NodeId, usize, bool)> {
+pub(crate) fn open_end_at(cx: &ToolContext, p: Point, tol: f64, except: Option<(NodeId, usize)>) -> Option<(NodeId, usize, bool)> {
     let mut best: Option<((NodeId, usize, bool), f64)> = None;
     // 1. Shown paths (anchors visible because object, group, or compound path is selected).
     for id in shown_paths(cx) {
@@ -352,22 +352,7 @@ impl Tool for PenTool {
                     // Continue any other open path from the end clicked, selecting it.
                     if let Some((id, si, at_first)) = open_end_at(cx, at, tol, None) {
                         (self.drawing, self.path, self.subpath) = (true, Some(id), Some(si));
-                        let top = cx
-                            .doc
-                            .parent_of(id)
-                            .filter(|p| matches!(cx.doc.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))
-                            .unwrap_or(id);
-                        let mut out = vec![];
-                        if cx.selection.objects.as_slice() != [top] {
-                            out.push(Action::Exec("select.set".into(), json!({"ids": [top.0]})));
-                        }
-                        if at_first {
-                            // Name the path: the `select.set` above may have just put its compound
-                            // parent in the selection, and a reverse addressed through the
-                            // selection would flip this subpath of every member of it.
-                            out.push(Action::Exec("path.reverse".into(), json!({"ids": [id.0], "subpath": si})));
-                        }
-                        return out;
+                        return continue_from(cx, id, si, at_first);
                     }
                 }
                 if let Some(act) = auto_add_delete(cx, ev.pos, ev.mods, tol) {
@@ -592,6 +577,24 @@ impl PenTool {
         self.convert = Some(t);
         Some(acts)
     }
+}
+
+/// Go on drawing subpath `si` of open path `id` from its last anchor, or from its first
+/// (`at_first`, the subpath reversed so that it is the last): the path (its compound path) is
+/// selected.
+pub(crate) fn continue_from(cx: &ToolContext, id: NodeId, si: usize, at_first: bool) -> Vec<Action> {
+    let top = cx.doc.parent_of(id).filter(|p| matches!(cx.doc.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).unwrap_or(id);
+    let mut out = vec![];
+    if cx.selection.objects.as_slice() != [top] {
+        out.push(Action::Exec("select.set".into(), json!({"ids": [top.0]})));
+    }
+    if at_first {
+        // Name the path: the `select.set` above may have just put its compound parent in the
+        // selection, and a reverse addressed through the selection would flip this subpath of
+        // every member of it.
+        out.push(Action::Exec("path.reverse".into(), json!({"ids": [id.0], "subpath": si})));
+    }
+    out
 }
 
 /// Auto Add/Delete: what a click at `p` does to a selected path. On one of its anchors it deletes

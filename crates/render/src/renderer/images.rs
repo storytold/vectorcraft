@@ -121,6 +121,8 @@ impl Renderer {
             }
         } else if f.opts.mark_undecoded_images && !pending && (!outline || f.doc.setup.outline_images) {
             self.draw_undecoded_mark(ctx, f, im, area);
+        } else if !pending && !outline {
+            self.image_left_out = self.image_left_out.map(|_| true);
         }
         if outline {
             let mut p = rect.to_path(0.1);

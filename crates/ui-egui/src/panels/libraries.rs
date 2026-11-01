@@ -15,7 +15,10 @@
 //! bottom edge). An item dragged within it lands before or after another of its kind, in that one's
 //! group (`library.moveItem` with `before`/`after`), or, dropped elsewhere on a group or on the
 //! ungrouped items, goes into that group or out of its own; a group dragged by its header goes
-//! before or after another group (`library.moveGroup`).
+//! before or after another group (`library.moveGroup`). Art from the canvas and swatches from
+//! elsewhere are added where they are dropped in the same way (`library.add` with `group` and
+//! `before`/`after`): next to an item of their kind and in its group, or into a group; dropped
+//! away from the items, ungrouped.
 //!
 //! The buttons beside the library picker show the items as icons (colour chips and graphic tiles,
 //! the default) or in a list, one row each with its name (a colour's hex value too).
@@ -99,34 +102,44 @@ enum Act {
     RenameGroup(String),
 }
 
-/// What a drag in the panel holds of the library shown: one of its items, or one of its groups
-/// (by the group's header).
+/// What a drag in the panel holds for the library shown: one of its items, one of its groups (by
+/// the group's header), or something to add to it.
 #[derive(Clone, Debug, PartialEq)]
 enum Grab {
     Item(ItemKind, String),
     Group(String),
+    /// Art dragged off the canvas, or a swatch from elsewhere (a colour, also from another library,
+    /// or a gradient or pattern swatch): added where it is dropped, with these `library.add` params.
+    New(ItemKind, Value),
 }
 
-/// The item or group of library `library` that `drag` holds, if it holds one.
+/// The item or group of library `library` that `drag` holds, or what it would add, if anything.
 fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
     match drag {
         PanelDrag::Paint { library: Some((l, item)), .. } if l == library => Some(Grab::Item(ItemKind::Color, item.clone())),
         PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
         PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
         PanelDrag::LibraryGroup { library: l, group } if l == library => Some(Grab::Group(group.clone())),
+        PanelDrag::Art(ids) => {
+            let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+            Some(Grab::New(ItemKind::Graphic, json!({ "kind": "graphic", "ids": ids })))
+        }
+        PanelDrag::Paint { .. } => swatch_add(drag, library).map(|(kind, add)| Grab::New(kind, add)),
         _ => None,
     }
 }
 
-/// The `library.add` params that add what `drag` holds to library `library`: a color (not one of
-/// that library's own), or a gradient or pattern swatch, by its name.
-fn swatch_add(drag: &PanelDrag, library: &str) -> Option<Value> {
+/// The kind and `library.add` params of what `drag` holds, to add to library `library`: a color
+/// (not one of that library's own), or a gradient or pattern swatch, by its name.
+fn swatch_add(drag: &PanelDrag, library: &str) -> Option<(ItemKind, Value)> {
     let PanelDrag::Paint { paint, params, library: from, .. } = drag else { return None };
     let swatch = || params.get("swatch").and_then(Value::as_str);
     match paint {
-        Paint::Solid { color, .. } if from.as_ref().is_none_or(|(l, _)| l != library) => Some(json!({ "kind": "fillColor", "color": color })),
-        Paint::Gradient(_) => swatch().map(|s| json!({ "kind": "fillGradient", "swatch": s })),
-        Paint::Pattern { .. } => swatch().map(|s| json!({ "kind": "fillPattern", "swatch": s })),
+        Paint::Solid { color, .. } if from.as_ref().is_none_or(|(l, _)| l != library) => {
+            Some((ItemKind::Color, json!({ "kind": "fillColor", "color": color })))
+        }
+        Paint::Gradient(_) => swatch().map(|s| (ItemKind::Gradient, json!({ "kind": "fillGradient", "swatch": s }))),
+        Paint::Pattern { .. } => swatch().map(|s| (ItemKind::Pattern, json!({ "kind": "fillPattern", "swatch": s }))),
         _ => None,
     }
 }
@@ -294,23 +307,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         out.inner_rect
     });
-    if let Some(grab) = &items.grab
-        && !over_item
-    {
-        section_drop(ui, &items, grab, &sections, list_rect, &mut act);
-    }
-    // Art dragged off the canvas, or a swatch (not one of this library's colours), dropped on the
-    // list is added to the library.
+    let placed = over_item || items.grab.as_ref().is_some_and(|grab| section_drop(ui, &items, grab, &sections, list_rect, &mut act));
+    // Art dragged off the canvas, or a swatch from elsewhere, dropped on the list away from its
+    // items and sections (an empty library, the space below them) is added to it, ungrouped. The
+    // zone is there in every frame: egui finds the pointer's widget among the last frame's.
     let zone = ui.interact(list_rect, ui.scope_id().with("libraries-drop"), Sense::hover());
-    if let Some(ids) = widgets::art_drop(ui, &zone) {
-        act = Some(Act::Run("library.add", json!({ "kind": "graphic", "ids": ids })));
-    }
-    if let Some(drag) = zone.dnd_hover_payload::<PanelDrag>()
-        && let Some(add) = swatch_add(&drag, &lib_id)
+    if !placed
+        && let Some(Grab::New(_, add)) = &items.grab
+        && zone.dnd_hover_payload::<PanelDrag>().is_some()
     {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
         if zone.dnd_release_payload::<PanelDrag>().is_some() {
-            act = Some(Act::Run("library.add", add));
+            act = Some(Act::Run("library.add", add.clone()));
         }
     }
     let bar_top = ui.cursor().top();
@@ -534,17 +542,22 @@ impl Items<'_> {
         resp.context_menu(|ui| self.item_menu(ui, act, kind, name));
     }
 
-    /// An item of `kind` dragged over item `key`'s cell `resp` lands just before or after it, by
-    /// the pointer's half (`row`: rows stack downwards; else chips and tiles run across), in its
-    /// group: an accent line shows where, and `over` is set. Dropped on itself it stays.
+    /// An item of `kind` dragged over item `key`'s cell `resp`, or a new one of that kind, lands
+    /// just before or after it, by the pointer's half (`row`: rows stack downwards; else chips and
+    /// tiles run across), in its group: an accent line shows where, and `over` is set. Dropped on
+    /// itself an item stays.
     #[allow(clippy::too_many_arguments)]
     fn drop_next_to(&self, ui: &Ui, resp: &egui::Response, kind: ItemKind, key: &str, row: bool, act: &mut Option<Act>, over: &mut bool) {
-        let Some(Grab::Item(grabbed_kind, moving)) = &self.grab else { return };
+        let (grabbed_kind, moving) = match &self.grab {
+            Some(Grab::Item(k, item)) => (k, Some(item)),
+            Some(Grab::New(k, _)) => (k, None),
+            _ => return,
+        };
         if *grabbed_kind != kind || resp.dnd_hover_payload::<PanelDrag>().is_none() {
             return;
         }
         *over = true;
-        if moving == key {
+        if moving.is_some_and(|m| m == key) {
             resp.dnd_release_payload::<PanelDrag>();
             return;
         }
@@ -560,12 +573,15 @@ impl Items<'_> {
             ui.painter().line_segment([egui::pos2(x, r.top()), egui::pos2(x, r.bottom())], accent);
         }
         if resp.dnd_release_payload::<PanelDrag>().is_some() {
-            let mut p = json!({ "kind": kind_param(kind), "item": moving });
+            let (cmd, mut p) = match (&self.grab, moving) {
+                (Some(Grab::New(_, add)), _) => ("library.add", add.clone()),
+                (_, item) => ("library.moveItem", json!({ "kind": kind_param(kind), "item": item })),
+            };
             p[if after { "after" } else { "before" }] = json!(key);
             if let Some(g) = self.group_of(kind, key).and_then(|i| self.lib.groups.get(i)) {
                 p["group"] = json!(g.name);
             }
-            *act = Some(Act::Run("library.moveItem", p));
+            *act = Some(Act::Run(cmd, p));
         }
     }
 
@@ -649,21 +665,32 @@ fn scroll_at_edges(ui: &mut Ui) {
 
 /// The drag in progress held over a section of the list (`sections`, seen through `clip`), away
 /// from the items that take one: an item goes into that section's group (the ungrouped section:
-/// out of its group), the section outlined; a group goes before or after that group, by the
-/// pointer's half, an accent line showing where.
-fn section_drop(ui: &Ui, items: &Items, grab: &Grab, sections: &[(Option<usize>, Rect)], clip: Rect, act: &mut Option<Act>) {
+/// out of its group), and something new is added there, the section outlined; a group goes
+/// before or after that group, by the pointer's half, an accent line showing where. → whether
+/// the pointer is over a section.
+fn section_drop(ui: &Ui, items: &Items, grab: &Grab, sections: &[(Option<usize>, Rect)], clip: Rect, act: &mut Option<Act>) -> bool {
     // By the pointer, not by hover zones: the headers and items over the sections take the hover.
-    let Some(pos) = ui.ctx().pointer_latest_pos() else { return };
+    let Some(pos) = ui.ctx().pointer_latest_pos() else { return false };
     let released = ui.input(|i| i.pointer.any_released());
     let take = || egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some();
     let t = Tokens::get(ui.ctx());
-    let Some((group, rect)) = sections.iter().find(|(_, rect)| rect.intersect(clip).contains(pos)) else { return };
+    let Some((group, rect)) = sections.iter().find(|(_, rect)| rect.intersect(clip).contains(pos)) else { return false };
     let r = rect.intersect(clip);
     let name = |i: &usize| items.lib.groups.get(*i).map(|g| g.name.clone());
     match grab {
+        Grab::New(_, add) => {
+            ui.painter().rect_stroke(r, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            if released && take() {
+                let mut p = add.clone();
+                if let Some(g) = group.as_ref().and_then(name) {
+                    p["group"] = json!(g);
+                }
+                *act = Some(Act::Run("library.add", p));
+            }
+        }
         Grab::Item(kind, item) => {
             if items.group_of(*kind, item) == *group {
-                return;
+                return true;
             }
             ui.painter().rect_stroke(r, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
             if released && take() {
@@ -676,9 +703,9 @@ fn section_drop(ui: &Ui, items: &Items, grab: &Grab, sections: &[(Option<usize>,
         }
         Grab::Group(moving) => {
             // Groups only go among the groups; dropped on itself, one stays.
-            let (Some(to), Some(from)) = (*group, items.lib.groups.iter().position(|g| g.name == *moving)) else { return };
+            let (Some(to), Some(from)) = (*group, items.lib.groups.iter().position(|g| g.name == *moving)) else { return true };
             if from == to {
-                return;
+                return true;
             }
             let after = pos.y > rect.center().y;
             let y = if after { rect.bottom() } else { rect.top() };
@@ -690,6 +717,7 @@ fn section_drop(ui: &Ui, items: &Items, grab: &Grab, sections: &[(Option<usize>,
             }
         }
     }
+    true
 }
 
 /// An item's row `r` in the list (`resp`: its response): highlighted while hovered, `name` after

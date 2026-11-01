@@ -216,6 +216,22 @@ fn library_commands_refuse_params_of_the_wrong_form() {
 }
 
 #[test]
+fn library_loads_validate_name_before_reading_a_file_or_decoding_data() {
+    let mut s = session();
+    let missing = temp_dir("invalid-load-name").join("missing.vcswatches").to_string_lossy().to_string();
+    for cmd in ["swatch.library.load", "graphicStyle.loadLibrary", "symbol.loadLibrary", "brush.loadLibrary"] {
+        for name in [json!(5), json!([])] {
+            let p = json!({"path": missing, "name": name});
+            let e = s.execute(cmd, &p).unwrap_err().to_string();
+            assert!(e.contains("`name` must be a string"), "{cmd} {p}: {e}");
+        }
+        let p = json!({"dataBase64": "not base64!", "name": 5});
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("`name` must be a string"), "{cmd} {p}: {e}");
+    }
+}
+
+#[test]
 fn libraries_saved_in_the_user_folder_are_user_defined() {
     let dir = temp_dir("user");
     let mut s = session();
@@ -620,4 +636,23 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
     assert!(s.execute("swatch.edit", &json!({"name": "Early", "paint": {"color": "#00ff00"}})).is_err());
     run(&mut s, "swatch.edit", json!({"name": "Red", "paint": {"color": "#00ff00"}}));
     assert_eq!(doc(&s).swatch("Red").unwrap().paint.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+}
+
+/// #3602: a library titled with a Windows device name is saved under a name that is not one.
+#[test]
+fn a_library_file_name_is_never_a_windows_device_name() {
+    use crate::cmd::swatchlib::library_file_name;
+    for (title, ext) in
+        [("CON", "json"), ("nul", "json"), ("Com1", "acb"), ("LPT9", "ase"), ("aux.", "json"), ("CON.txt", "json"), ("nul.tar.gz", "acb")]
+    {
+        let file = library_file_name(title, ext);
+        assert!(!crate::file_access::is_device_name(&file), "{title}: {file}");
+        assert!(
+            file.ends_with(&format!(".{ext}"))
+                && file.to_ascii_lowercase().starts_with(&title.split('.').next().unwrap_or_default().to_ascii_lowercase()),
+            "{title}: {file}"
+        );
+    }
+    assert_eq!(library_file_name("Console", "json"), "Console.json");
+    assert_eq!(library_file_name("COM10", "json"), "COM10.json");
 }

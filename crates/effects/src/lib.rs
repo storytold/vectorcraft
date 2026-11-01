@@ -34,6 +34,7 @@
 //! anchored at the object's centre.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod adjust;
 mod bake;
 mod clip;

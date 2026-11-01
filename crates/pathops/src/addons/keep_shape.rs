@@ -13,6 +13,9 @@ use crate::fit::{end_tangent, start_tangent};
 /// The turn (degrees) at an anchor above which `protect_corners` keeps it.
 pub const SHARP_CORNER_DEG: f64 = 30.0;
 
+/// The drift (pt) each step of the tolerance the add-ons offer allows.
+pub const PT_PER_TOLERANCE: f64 = 0.02;
+
 /// Points sampled along each curve to measure how far two outlines are apart.
 const SAMPLES: usize = 8;
 
@@ -111,6 +114,18 @@ pub fn simplify_keep_shape(path: &PathData, tolerance: f64, protect_corners: boo
         return path.clone();
     }
     PathData::new(path.subpaths.iter().map(|sp| Reducer::new(sp, protect_corners).run(tolerance)).collect())
+}
+
+/// [`simplify_keep_shape`] on subpath `sp` where only the anchors `may_go` marks (one flag per
+/// anchor, by index) may go: what the Anchor Eraser Brush passes over. Open ends always stay. An
+/// infinite tolerance removes every marked anchor that can go.
+pub fn simplify_anchors_keep_shape(sp: &SubPath, tolerance: f64, may_go: &[bool]) -> SubPath {
+    if tolerance.is_nan() || tolerance <= 0.0 {
+        return sp.clone();
+    }
+    let mut r = Reducer::new(sp, false);
+    r.kept = (0..sp.anchors.len()).map(|i| !may_go.get(i).copied().unwrap_or(false)).collect();
+    r.run(tolerance)
 }
 
 /// One subpath being reduced: what is left of it, and where its anchors were in the original.

@@ -41,6 +41,12 @@ use vertical::{stands_upright, tate_chu_yoko, upright_cell, upright_centre, whol
 
 const EPS: f64 = 1e-6;
 
+/// Is glyph `g` a later glyph of the cluster of glyph `prev` before it (a combining mark the shaper
+/// set as a glyph of its own)? A list marker's glyphs stand for no character and are not.
+fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
+    prev.zip(g).is_some_and(|(a, b)| a.len > 0 && b.len > 0 && a.byte == b.byte)
+}
+
 struct Ctx<'a> {
     on_path: bool,
     db: &'a FontDb,
@@ -58,6 +64,10 @@ struct Ctx<'a> {
     system_layout: bool,
     /// Character panel menu › Fractional Widths. Off, positive advances are whole points.
     fractional_widths: bool,
+    /// Vertical type: the upright glyph [`Self::emit`] placed last, as (its byte, the index the
+    /// next glyph of its cluster would take, the turn it got, the line-space x that next glyph is
+    /// set after), so that a combining mark shaped into the same cluster turns with it.
+    upright_cluster: Option<(usize, usize, Affine, f64)>,
     out: TextLayout,
 }
 
@@ -108,8 +118,11 @@ impl Ctx<'_> {
             });
             // An upright glyph advances down the column by its vertical advance (the font's vertical
             // metrics; without them at least one em, as CJK fonts' is), centred across it: a narrow
-            // mark like § must not overlap its neighbours.
-            for g in v.iter_mut().filter(|g| g.adv > 0.0 && stands_upright(g)) {
+            // mark like § must not overlap its neighbours. A combining mark shaped into the cluster
+            // of the glyph before it takes no cell of its own: it turns with that glyph (`emit`).
+            for i in 0..v.len() {
+                let continues = continues_cluster(i.checked_sub(1).and_then(|p| v.get(p)), v.get(i));
+                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0 && !continues && stands_upright(g)) else { continue };
                 let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
                 g.adv += extra;
@@ -181,6 +194,8 @@ impl Ctx<'_> {
     }
 
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
+        // Only the glyph right after an upright glyph can continue its cluster.
+        let cluster = self.upright_cluster.take();
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}';
         // A colour glyph draws its art (COLR layers, an SVG document) or its image (a bitmap, or
@@ -235,16 +250,29 @@ impl Ctx<'_> {
             let squeeze = Affine::translate((centre.x, 0.0)) * Affine::scale_non_uniform(t.squeeze, 1.0) * Affine::translate((-centre.x, 0.0));
             m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze * across * m;
         } else if self.vertical && stands_upright(g) {
-            // Turned about the centre of its cell, which the column's centre line runs through: the
-            // middle of its own cell, not of its advance (tracking and justification add space
-            // after the cell, and must not push the glyph off the centre line).
-            let em = self.style_at(g.byte).size;
-            let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
-            // A leading space taken off moves it up the column after the turn (moving the
-            // turning point instead would move it across the column too).
-            m = Affine::translate((-g.lead, 0.0))
-                * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)))
-                * m;
+            let next = self.out.glyphs.len();
+            let after_base = self.out.glyphs.last().is_some_and(|p| p.byte == g.byte && p.line == line && p.len > 0);
+            if let Some((_, _, turn, after)) = cluster.filter(|c| c.0 == g.byte && c.1 == next && after_base && g.len > 0) {
+                // A later glyph of an upright glyph's cluster: set after it as the shaper placed
+                // it, and turned with it.
+                m = turn * Affine::translate((after - origin.x, 0.0)) * m;
+                self.upright_cluster = Some((g.byte, next + 1, turn, after));
+            } else {
+                // Turned about the centre of its cell, which the column's centre line runs through:
+                // the middle of its own cell, not of its advance (tracking and justification add
+                // space after the cell, and must not push the glyph off the centre line).
+                let em = self.style_at(g.byte).size;
+                let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
+                // A leading space taken off moves it up the column after the turn (moving the
+                // turning point instead would move it across the column too).
+                let turn = Affine::translate((-g.lead, 0.0))
+                    * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)));
+                m = turn * m;
+                // Its own advance across, from where the cell centres it: where the shaper set the
+                // next glyph of its cluster.
+                let across = g.face.advance(g.gid) * g.sx;
+                self.upright_cluster = (g.len > 0).then_some((g.byte, next + 1, turn, origin.x + (cell - across) * 0.5 + across));
+            }
         }
         let outline = if src.elements().is_empty() || blank {
             BezPath::new()

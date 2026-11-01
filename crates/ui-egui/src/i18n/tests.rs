@@ -44,9 +44,13 @@ fn tags_map_to_languages() {
     assert_eq!(lang_from_tag("_"), None);
 }
 
-/// The Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of
+/// The Bosnian, Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of
 /// [`tags_map_to_languages`].
 fn other_tags_map_to_languages() {
+    let bs = Lang::from_code("bs").expect("bs registered");
+    for tag in ["bs", "bs-BA", "bs_BA.UTF-8", "BS-ba", "bs-Latn-BA"] {
+        assert_eq!(lang_from_tag(tag), Some(bs), "{tag}");
+    }
     for tag in ["ka", "ka-GE", "ka_GE.UTF-8", "KA-ge"] {
         assert_eq!(lang_from_tag(tag), Some(ka()), "{tag}");
     }
@@ -149,7 +153,7 @@ fn each_language_counts_with_its_plural_rule() {
         (&["de", "es", "it", "pt-br", "fi", "ca"][..], [1, 0, 1, 1, 1, 1, 1, 1]),
         (&["fr"], [0, 0, 1, 1, 1, 1, 1, 1]),
         (&["ja", "ka", "hu", "ko", "vi", "tr"], [0; 8]),
-        (&["ru", "uk"], [2, 0, 1, 1, 2, 2, 0, 1]),
+        (&["ru", "uk", "bs"], [2, 0, 1, 1, 2, 2, 0, 1]),
         (&["cs"], [2, 0, 1, 1, 2, 2, 2, 2]),
         (&["pl"], [2, 0, 1, 1, 2, 2, 2, 1]),
     ] {
@@ -267,7 +271,7 @@ fn bundled_catalogs_are_consistent() {
         let mut seen = std::collections::HashSet::new();
         for (ctx, src, tr) in &entries {
             assert!(seen.insert((ctx.clone(), src.clone())), "{}: duplicate {ctx:?} {src:?}", l.code);
-            if ctx == "@plural" {
+            if ctx == "@plural" || ctx == "@msgplural" {
                 let one_other: Vec<&str> = src.split('|').collect();
                 assert_eq!(one_other.len(), 2, "{}: plural source must be `one|other`: {src:?}", l.code);
                 for form in tr.split('|') {
@@ -572,7 +576,7 @@ fn character_panel_terms_agree_within_each_catalog() {
     for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
         let (entries, _) = parse_entries(l.source);
         let row = |src: &str| entries.iter().find(|(ctx, s, _)| ctx.is_empty() && s == src).map(|(_, _, tr)| tr.to_lowercase());
-        let kerning = row("Kerning (0 = Auto)").map(|tr| tr.split(" (").next().unwrap_or_default().trim().to_string());
+        let kerning = row("Kerning");
         let leading = row("Leading");
         let tracking = row("Tracking");
         for (a, b) in [(&kerning, &leading), (&kerning, &tracking), (&leading, &tracking)] {
@@ -1496,6 +1500,80 @@ fn package_status_message_templates_parse() {
     assert!(Catalog::parse("@msg\tPackaged {n} file(s) in {folder}{note}\tbad\n").message("Packaged 1 file(s) in /a b").is_none());
 }
 
+/// A `@msgplural` row translates both English forms of a message with a count, and the count
+/// picks the language's form.
+#[test]
+fn messages_with_a_count_take_the_plural_form() {
+    let c = Catalog::parse("@msgplural\tSaved {n} file|Saved {n} files\tone {n}|few {n}|many {n}\n");
+    for s in ["Saved 1 file", "Saved 4 files"] {
+        let (forms, caps) = c.message_forms(s).unwrap();
+        assert_eq!(forms, ["one {n}", "few {n}", "many {n}"], "{s}");
+        assert_eq!(caps.len(), 1, "{s}");
+    }
+    assert!(c.message_forms("Saved 1 files!").is_none());
+    let cs = cs();
+    assert_eq!(message(cs, "Packaged 1 file"), "Zabalen 1 soubor");
+    assert_eq!(message(cs, "Packaged 4 files"), "Zabaleny 4 soubory");
+    assert_eq!(message(cs, "Packaged 21 files"), "Zabaleno 21 souborů");
+}
+
+/// The link, font and export status messages with a count, in English for a count of 1 and of 2.
+const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
+    ("1 linked file can't be read here: its preview shows", "2 linked files can't be read here: their previews show"),
+    ("1 image couldn't be decoded and shows as a crossed box", "2 images couldn't be decoded and show as crossed boxes"),
+    ("1 linked image changed on disk: Update Links shows the new version", "2 linked images changed on disk: Update Links shows the new versions"),
+    ("Updated 1 linked file changed on disk", "Updated 2 linked files changed on disk"),
+    ("Exported /out/a.svg with 1 note: a note", "Exported /out/a.svg with 2 notes: a note"),
+    ("Embedded 1 image; 1 missing: relink them first", "Embedded 2 images; 1 missing: relink them first"),
+    ("Embedded 1 image", "Embedded 2 images"),
+    ("Relinked 1 image", "Relinked 2 images"),
+    ("Relinked 1 image; not in that folder: a.png", "Relinked 2 images; not in that folder: a.png"),
+    ("Relinked 1 image; a.png couldn't be relinked: a reason", "Relinked 2 images; a.png couldn't be relinked: a reason"),
+    ("Updated 1 image", "Updated 2 images"),
+    ("Replaced 1 image", "Replaced 2 images"),
+    ("Broke 1 link", "Broke 2 links"),
+    ("Broke 1 link; 1 can't be read: relink or update them first", "Broke 2 links; 1 can't be read: relink or update them first"),
+    ("1 font file is now in /fonts", "2 font files are now in /fonts"),
+    ("1 font file is now in /fonts; 1 couldn't be added: a reason", "2 font files are now in /fonts; 1 couldn't be added: a reason"),
+    ("1 font isn't available here: its text shows in another font", "2 fonts aren't available here: their text shows in another font"),
+    ("Copied the CSS of 1 object", "Copied the CSS of 2 objects"),
+    ("Downloaded 1 file", "Downloaded 2 files"),
+    ("Exported 1 file to /out", "Exported 2 files to /out"),
+];
+
+/// The link, font and export status messages name a count of 1 in the singular and other counts in
+/// the plural, and every complete catalog translates both, in the form its plural rule picks.
+#[test]
+fn counted_status_messages_take_the_plural_form() {
+    use crate::panels::links::{relinked_status, updated_status};
+    assert_eq!((relinked_status(1), relinked_status(2)), ("Relinked 1 image".to_string(), "Relinked 2 images".to_string()));
+    assert_eq!((updated_status(1), updated_status(2)), ("Updated 1 image".to_string(), "Updated 2 images".to_string()));
+    assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(1), COUNTED_STATUS_MESSAGES[2].0);
+    assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(2), COUNTED_STATUS_MESSAGES[2].1);
+    assert_eq!(crate::io::exported_with_notes("/out/a.svg", 1, "a note"), COUNTED_STATUS_MESSAGES[4].0);
+    assert_eq!(crate::io::exported_with_notes("/out/a.svg", 2, "a note"), COUNTED_STATUS_MESSAGES[4].1);
+    // A value that holds placeholder text is not filled in again.
+    assert_eq!(crate::io::exported_with_notes("/out/{first}.svg", 1, "{n}"), "Exported /out/{first}.svg with 1 note: {n}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in COUNTED_STATUS_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
+            assert_ne!(message(lang, s), *s, "{code}: {s}");
+        }
+    }
+    let cs = cs();
+    assert_eq!(message(cs, &relinked_status(1)), "Znovu propojen 1 obrázek");
+    assert_eq!(message(cs, &relinked_status(3)), "Znovu propojeny 3 obrázky");
+    assert_eq!(message(cs, &relinked_status(5)), "Znovu propojeno 5 obrázků");
+    assert_eq!(message(de(), &updated_status(1)), "1 Bild aktualisiert");
+    assert_eq!(message(de(), &updated_status(2)), "2 Bilder aktualisiert");
+    let noted = crate::io::exported_with_notes("/out/{n}.svg", 1, "{what}");
+    assert_eq!(message(de(), &noted), "/out/{n}.svg mit 1 Hinweis exportiert: {what}");
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!(message(ru, COUNTED_STATUS_MESSAGES[19].0), "Экспортирован 1 файл в /out");
+    assert_eq!(message(ru, "Exported 3 files to /out"), "Экспортировано 3 файла в /out");
+    assert_eq!(message(ru, "Exported 5 files to /out"), "Экспортировано 5 файлов в /out");
+}
+
 /// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
 /// an error enum's variant, `EngineError::Disabled`'s reason included: a literal or a `format!`
 /// string, on the call's line or wrapped over several lines, in the same template form as the
@@ -1963,4 +2041,20 @@ fn polish_plurals_have_three_forms() {
         }
     }
     assert!(count >= 13, "Polish plural rows missing");
+}
+
+/// Every catalog names each numeral system of Character panel menu › Digits, in the `digits`
+/// context (where the language's name would read wrong) or with its plain row (#4942).
+#[test]
+fn every_catalog_names_the_digits_menus_numeral_systems() {
+    let mut missing = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let cat = l.catalog();
+        for (label, _) in crate::panels::character::DIGITS {
+            if cat.contextual("digits", label).is_none() && cat.plain(label).is_none() {
+                missing.push(format!("{}: {label}", l.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
 }
