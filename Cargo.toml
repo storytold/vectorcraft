@@ -11,14 +11,14 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
-craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", default-features = false, features = ["interpret", "write"] }
-craft-print = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", features = ["serde"] }
-craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92", default-features = false, features = ["interpret", "write"] }
+craft-print = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92", features = ["serde"] }
+craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
-craft-window = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", features = ["egui"] }
+craft-window = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92", features = ["egui"] }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "c5a1cbfb5f9049f9270955caffb5bee5997aebf7", features = ["egui"] }
 # internal
@@ -145,12 +145,12 @@ lto = "thin"
 codegen-units = 1
 
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
-krilla = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "fb08be5fa19eee8d37e624397fcdc96df6035e92" }
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
 epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
