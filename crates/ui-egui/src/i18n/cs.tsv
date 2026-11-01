@@ -1509,7 +1509,6 @@ digits	Malayalam	Malajálamské
 	Save changes to {name}	Uložit změny do {name}
 	Save theme to My Themes	Uložit motiv do Mých motivů
 	Set the selected color to the current color	Nastavit vybranou barvu jako aktuální barvu
-	Copied the CSS of {rules} object(s)	Zkopírováno CSS objektů: {rules}
 	Copy All Styles	Kopírovat všechny styly
 	Exported {path}	Exportováno: {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Generovat CSS: CSS celého dokumentu, když není nic vybráno
@@ -1755,8 +1754,6 @@ digits	Malayalam	Malajálamské
 	Color Space	Barevný prostor
 	Created	Vytvořeno
 	Dimensions	Rozměry
-	Embedded {n} image(s)	Vloženo obrázků: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Vloženo obrázků: {n}; chybí {missing}: nejprve je znovu propojte
 	File › Place… brings in an image, linked or embedded.	Soubor › Umístit… přidá obrázek, propojený nebo vložený.
 	Format	Formát
 	Medium Thumbnails	Střední miniatury
@@ -1766,9 +1763,6 @@ digits	Malayalam	Malajálamské
 	No Thumbnails	Bez miniatur
 	Nothing matches the Show filter.	Filtru Zobrazit nic neodpovídá.
 	PPI	PPI
-	Relinked {n} image(s)	Znovu propojeno obrázků: {n}
-	Relinked {n} image(s); not in that folder: {}	Znovu propojeno obrázků: {n}; nejsou v dané složce: {}
-	Relinked {} image(s)	Znovu propojeno obrázků: {}
 	Relink…	Znovu propojit…
 	Find Linked Files	Najít propojené soubory
 	Find Linked Files in Folder…	Najít propojené soubory ve složce…
@@ -1785,7 +1779,6 @@ digits	Malayalam	Malajálamské
 	Status	Stav
 	Unembedded to {}	Vložení zrušeno, uloženo do: {}
 	Update Link	Aktualizovat propojení
-	Updated {} image(s)	Aktualizováno obrázků: {}
 	Break Link	Zrušit propojení
 	Tolerance:	Tolerance:
 	Corner Point Angle Threshold:	Prahový úhel rohových bodů:
@@ -2478,7 +2471,6 @@ digits	Malayalam	Malajálamské
 	Package collects a saved document with its linked files and fonts.	Sbalení shromáždí uložený dokument s jeho propojenými soubory a písmy.
 	Package created	Balíček vytvořen
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Zabalen {n} soubor do {folder} {note}|Zabaleny {n} soubory do {folder} {note}|Zabaleno {n} souborů do {folder} {note}
-	Packaged {n} file(s){note}	Zabaleno souborů: {n}{note}
 	Relink Linked Files to the Document	Znovu propojit propojené soubory s dokumentem
 	Save the document first?	Nejprve uložit dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} soubor v {folder} {note}. Zobrazit složku balíčku?|{n} soubory v {folder} {note}. Zobrazit složku balíčku?|{n} souborů v {folder} {note}. Zobrazit složku balíčku?
@@ -2672,7 +2664,6 @@ digits	Malayalam	Malajálamské
 	Convert to sRGB	Převést na sRGB
 	Delete this saved preset	Odstranit toto uložené přednastavení
 	Dither:	Rozptýlení:
-	Downloaded {} file(s)	Staženo souborů: {}
 	Fit in View	Přizpůsobit zobrazení
 	Format:	Formát:
 	WebP	WebP
@@ -3945,20 +3936,16 @@ font-technology	Variable	Variabilní
 	Can't save “{name}”.	„{name}“ nelze uložit.
 	Can't export “{name}”.	„{name}“ nelze exportovat.
 	Downloaded {what}	Staženo: {what}
-	Exported {count} file(s) to {folder}	Exportováno souborů: {count} do {folder}
 	Exported {what}	Exportováno: {what}
-	Exported {what} with {} note(s): {first}	Exportováno: {what}, poznámky ({}): {first}
 	Exporting {}	Exportování {}
 	Imported {what}: {}	Importováno {what}: {}
 	Installed plug-in {}	Nainstalován zásuvný modul {}
-	Opened with {} note(s): {}	Otevřeno, poznámky ({}): {}
 	Revert to the saved version of “{name}”?	Vrátit se k uložené verzi dokumentu „{name}“?
 	Replace “{name}”, the file this document was opened from?	Nahradit „{name}“, soubor, ze kterého byl tento dokument otevřen?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Při otevírání bylo vynecháno, co VectorCraft zatím neumí přečíst ({what}), takže nahrazením se to nenávratně ztratí. Chcete-li to zachovat, uložte dokument pod jiným názvem.
 	“{name}” already exists. Replace it?	„{name}“ již existuje. Nahradit?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Název v panelu ukládání byl „{typed}“ a VectorCraft přidal příponu typu souboru. Nahrazením souboru se přepíše jeho obsah.
 	Saved {path}	Uloženo: {path}
-	Saved {path} with {} note(s): {first}	Uloženo: {path}, poznámky ({}): {first}
 	Saving	Ukládání
 	Saving {}	Ukládání {}
 	Search commands and tools…	Hledat příkazy a nástroje…
@@ -3975,8 +3962,6 @@ font-technology	Variable	Variabilní
 	Smaller ↔ Larger	Menší ↔ Větší
 	Smart Guides (View → Smart Guides)	Chytrá vodítka (Zobrazení → Chytrá vodítka)
 	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
-	Discarded {} recovered document(s)	Zahozeno obnovených dokumentů: {}
-	Restored {} recovered document(s): save them to keep them	Obnoveno dokumentů: {}; pokud je chcete zachovat, uložte je
 	Saved recovery data for {title}	Data pro obnovení uložena pro {title}
 	Saving recovery data for {}	Ukládání dat pro obnovení pro {}
 	Alt	Alt
@@ -4251,14 +4236,12 @@ imageTrace	Outline	Obrys
 @msg	No saved views (View → New View…)	Žádná uložená zobrazení (Zobrazení → Nové zobrazení…)
 @msg	Offset Path: select paths	Odsadit cestu: vyberte cesty
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Odsadit cestu: po odsazení z vybraných cest nic nezbude (odsazení dovnitř větší než tvary)
-@msg	Opened with {_1} note(s): {_2}	Otevřeno, poznámky ({_1}): {_2}
 @msg	Opened {url}	Otevřeno {url}
 @msg	Outline Stroke: no stroked paths selected	Převést tah na obrys: nejsou vybrány žádné cesty s tahem
 @msg	PDF settings are not an object	nastavení PDF nejsou objekt
 @msg	PDF security settings are not an object	nastavení zabezpečení PDF nejsou objekt
 @msg	PDF writer error: {0}	chyba zápisu PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Zabalen {n} soubor do {folder} ({note})|Zabaleny {n} soubory do {folder} ({note})|Zabaleno {n} souborů do {folder} ({note})
-@msg	Packaged {n} file(s){note}	Zabaleno souborů: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Náhled v prohlížeči vyžaduje desktopovou aplikaci (webová verze místo toho stahuje soubory)
 @msg	Release Guides: no guides	Uvolnit vodítka: žádná vodítka
 @msg	Release: no layer to put the rectangle in	Uvolnit: chybí vrstva, do které by šel obdélník umístit
@@ -4810,7 +4793,6 @@ imageTrace	Outline	Obrys
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} nelze umístit: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Uloženo: {path}, poznámky ({_1}): {first}
 @msg	Exported {what}	Exportováno: {what}
 @msg	Saved {n} files beside {path}	Uloženo souborů: {n} vedle {path}
 @msg	Saving	Ukládání
@@ -4819,8 +4801,10 @@ imageTrace	Outline	Obrys
 @msg	Packaging {_1}	Balení {_1}
 @msg	Placing {_1}	Umísťování {_1}
 @msg	Saving recovery data for {_1}	Ukládání dat pro obnovení pro {_1}
-@msg	Discarded {_1} recovered document(s)	Zahozeno obnovených dokumentů: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Obnoveno dokumentů: {_1}; pokud je chcete zachovat, uložte je
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Zahozen {n} obnovený dokument|Zahozeny {n} obnovené dokumenty|Zahozeno {n} obnovených dokumentů
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Obnoven {n} dokument; pokud ho chcete zachovat, uložte ho|Obnoveny {n} dokumenty; pokud je chcete zachovat, uložte je|Obnoveno {n} dokumentů; pokud je chcete zachovat, uložte je
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otevřeno, {n} poznámka: {first}|Otevřeno, {n} poznámky: {first}|Otevřeno, {n} poznámek: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Uloženo: {path}, {n} poznámka: {first}|Uloženo: {path}, {n} poznámky: {first}|Uloženo: {path}, {n} poznámek: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Vložen {n} obrázek; chybí {missing}: nejprve je znovu propojte|Vloženy {n} obrázky; chybí {missing}: nejprve je znovu propojte|Vloženo {n} obrázků; chybí {missing}: nejprve je znovu propojte
 @msgplural	Embedded {n} image|Embedded {n} images	Vložen {n} obrázek|Vloženy {n} obrázky|Vloženo {n} obrázků
 @msgplural	Relinked {n} image|Relinked {n} images	Znovu propojen {n} obrázek|Znovu propojeny {n} obrázky|Znovu propojeno {n} obrázků
@@ -5658,7 +5642,7 @@ axis	Y Axis	osa Y
 	On Artboards	Na pracovních plochách
 	All Artboards	Všechny pracovní plochy
 	Include Objects On Canvas	Zahrnout objekty na plátně
-	Result(s): {count}	Výsledky: {count}
+@plural	Result: {n}|Results: {n}	Výsledek: {n}|Výsledky: {n}|Výsledky: {n}
 @msg	select one object	vyberte jeden objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu

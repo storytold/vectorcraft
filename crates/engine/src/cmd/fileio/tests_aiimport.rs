@@ -504,7 +504,7 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert_eq!(size(1), Ok((Some(40.0), Some(40.0))));
     assert_eq!(size(2), Ok((Some(60.0), Some(40.0))));
     let third = size(3);
-    assert!(third.as_ref().is_err_and(|e| e.contains("has 2 page(s)")), "{third:?}");
+    assert!(third.as_ref().is_err_and(|e| e.contains("has 2 pages")), "{third:?}");
     let e = s.execute("file.place", &json!({"name": "damaged.ai", "dataBase64": damaged})).unwrap_err().to_string();
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();

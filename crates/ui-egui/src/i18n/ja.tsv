@@ -3417,7 +3417,6 @@ gradient-kind	Radial	円形
 	Compression › Color › Above Ppi	圧縮 › カラー › 解像度が次の値を超える場合
 	Contrast	コントラスト
 	Convert To Outlines	アウトラインに変換
-	Copied the CSS of {rules} object(s)	{rules} 個のオブジェクトの CSS をコピーしました
 	Copy All Objects	すべてのオブジェクトをコピー
 	Copy Fonts Used in the Document	ドキュメントで使用しているフォントをコピー
 	Copy Links	リンクをコピー
@@ -3437,14 +3436,12 @@ gradient-kind	Radial	円形
 	Default Printer	デフォルトのプリンター
 	Delete these {n} graphic styles?	これら {n} 個のグラフィックスタイルを削除しますか？
 	Delete this {n} graphic style?	この {n} 個のグラフィックスタイルを削除しますか？
-	Discarded {} recovered document(s)	復元したドキュメント {} 個を破棄しました
 	Discord	Discord
 	Do Not Move	移動しない
 	Document Swatches	ドキュメントのスウォッチ
 	Document profile	ドキュメントプロファイル
 	Download	ダウンロード
 	Downloaded {what}	{what} をダウンロードしました
-	Downloaded {} file(s)	{} 個のファイルをダウンロードしました
 	Draw Behind	背面描画
 	Draw Inside	内側描画
 	Draw Normal	標準描画
@@ -3452,15 +3449,11 @@ gradient-kind	Radial	円形
 	Duplicate and Offset 10 pt	複製して 10 pt ずらす
 	Edit Toolbar	ツールバーを編集
 	Edit Views	表示を編集
-	Embedded {n} image(s)	{n} 個の画像を埋め込みました
-	Embedded {n} image(s); {missing} missing: relink them first	{n} 個の画像を埋め込みました。{missing} 個が見つかりません：先に再リンクしてください
 	English	English
 	Entire Font	フォント全体
 	Export Asset	アセットを書き出し
-	Exported {count} file(s) to {folder}	{folder} に {count} 個のファイルを書き出しました
 	Exported {path}	{path} を書き出しました
 	Exported {what}	{what} を書き出しました
-	Exported {what} with {} note(s): {first}	{what} を書き出しました (注意 {} 件：{first})
 	Exporting {}	{} を書き出し中
 	File Dimensions	ファイルの寸法
 	Fill (X), double-click for the Color Picker	塗り (X)、ダブルクリックでカラーピッカー
@@ -3600,7 +3593,6 @@ file-filter	Templates	テンプレート
 	None (/)	なし (/)
 	None (keep transparency)	なし (透明を保持)
 	Offset X	X 軸オフセット
-	Opened with {} note(s): {}	開きました (注意 {} 件)：{}
 	Other Libraries	その他のライブラリ
 	Out of Gamut Warning	色域外警告
 	Out of Web Color Warning	Web カラー外警告
@@ -3609,7 +3601,6 @@ file-filter	Templates	テンプレート
 	Output White	出力ホワイト
 	Output › Mode	出力 › モード
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{folder} に {n} 個のファイルをパッケージしました{note}
-	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 	Page information	ページ情報
 	Paragraph Style	段落スタイル
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft の一員。MIT OR Apache-2.0。フォント：Source Sans 3、Inter、JetBrains Mono (OFL)。アイコン：Lucide (ISC) + VectorCraft。
@@ -3638,15 +3629,11 @@ file-filter	Templates	テンプレート
 	Registration marks	見当トンボ
 	Regular	標準
 	Relink Linked Files to the Document	リンクファイルをドキュメントに再リンク
-	Relinked {n} image(s)	{n} 個の画像を再リンクしました
-	Relinked {n} image(s); not in that folder: {}	{n} 個の画像を再リンクしました。そのフォルダーに無いもの：{}
-	Relinked {} image(s)	{} 個の画像を再リンクしました
 	Repeat Objects	リピートオブジェクト
 	Repeat Options	リピートオプション
 	Reset with Mesh	メッシュでリセット
 	Reset with Warp	ワープでリセット
 	Reset {}	{}をリセット
-	Restored {} recovered document(s): save them to keep them	復元したドキュメント {} 個を開きました：残すには保存してください
 	Right	右
 	Right in Front	右が前面
 	Right-Justified Tab	右揃えタブ
@@ -3657,7 +3644,6 @@ file-filter	Templates	テンプレート
 	Saved to User Defined: {}	ユーザー定義に保存しました：{}
 	Saved {n} files beside {path}	{path} の隣に {n} 個のファイルを保存しました
 	Saved {path}	{path} を保存しました
-	Saved {path} with {} note(s): {first}	{path} を保存しました (注意 {} 件：{first})
 	Saving	保存中
 	Saving recovery data for {}	{} の復帰用データを保存中
 	Saving {}	{} を保存中
@@ -3728,7 +3714,6 @@ file-filter	Templates	テンプレート
 	Unique	一意
 	Unite and Simplify	合体して単純化
 	Untitled	名称未設定
-	Updated {} image(s)	{} 個の画像を更新しました
 	Use the document's swatch: pasted colors take its color.	ドキュメントのスウォッチを使用: ペーストしたカラーはそのカラーになります。
 	User Library	ユーザーライブラリ
 	User Preset	ユーザープリセット
@@ -4480,7 +4465,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{tool}` isn't a Liquify tool	`{tool}` はゆがみツールではありません
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} 個のファイルを {folder} にパッケージしました({note})
-@msg	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 @msg	choose a location for the package	パッケージの保存場所を選択してください
 @msg	missing `folder`	`folder` が指定されていません
 @msg	the package came back damaged	返されたパッケージのデータが破損しています
@@ -4534,7 +4518,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Downloaded {what}	{what} をダウンロードしました
 @msg	Imported {what}: {_1}	{what} を読み込みました: {_1}
 @msg	Installed plug-in {_1}	プラグイン {_1} をインストールしました
-@msg	Opened with {_1} note(s): {_2}	ドキュメントを開きました (注意 {_1} 件): {_2}
 @msg	Saved {path}	{path} を保存しました
 @msg	no app to open files here	この環境にはファイルを開くアプリがありません
 @msg	no data	データがありません
@@ -4545,7 +4528,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the document has never been saved	ドキュメントはまだ一度も保存されていません
 @msg	the export returned unreadable data	書き出し処理から読み取れないデータが返されました
 @msg	{status} ({e})	{status} ({e})
-@msg	Saved {path} with {_1} note(s): {first}	{path} を保存しましたが、注意事項が {_1} 件あります: {first}
 @msg	Couldn't open {name}: {e}	{name} を開けませんでした: {e}
 @msg	Couldn't read {name}: {e}	{name} を読み込めませんでした: {e}
 @msg	Internal error: {msg} (please report this bug)	内部エラー: {msg} (このバグを報告してください)
@@ -4650,8 +4632,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	there are no printer settings to open here	この環境では開けるプリンター設定がありません
 @msg	Couldn't save recovery data: {e}	復帰用データを保存できませんでした: {e}
 @msg	Saved recovery data for {title}	{title} の復帰用データを保存しました
-@msg	Discarded {_1} recovered document(s)	復帰用データのドキュメントを {_1} 件破棄しました
-@msg	Restored {_1} recovered document(s): save them to keep them	復帰用データからドキュメントを {_1} 件復元しました: 残すには保存してください
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	復帰用データのドキュメントを {n} 件破棄しました
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	復帰用データからドキュメントを {n} 件復元しました: 残すには保存してください
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	ドキュメントを開きました (注意 {n} 件): {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} を保存しましたが、注意事項が {n} 件あります: {first}
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中
 @msg	This shortcut file is in a form VectorCraft can't read.	このショートカットファイルは VectorCraft で読み込めない形式です。
 @msg	bad shortcut	ショートカットが正しくありません
@@ -5340,7 +5324,7 @@ axis	Y Axis	Y 軸
 	On Artboards	アートボード上
 	All Artboards	すべてのアートボード
 	Include Objects On Canvas	カンバス上のオブジェクトを含める
-	Result(s): {count}	結果: {count}
+@plural	Result: {n}|Results: {n}	結果: {n}
 @msg	select one object	オブジェクトを 1 つ選択してください
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	グローバル編集はパス、複合パス、シンボルインスタンスとそれらのグループに使用できます
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（回転または反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください

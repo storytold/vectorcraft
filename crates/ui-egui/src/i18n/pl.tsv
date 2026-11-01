@@ -1422,7 +1422,6 @@ digits	Malayalam	Malajalam
 	Save changes to {name}	Zapisz zmiany w {name}
 	Save theme to My Themes	Zapisz motyw w Moich motywach
 	Set the selected color to the current color	Ustaw zaznaczony kolor na bieżący
-	Copied the CSS of {rules} object(s)	Skopiowano CSS obiektów: {rules}
 	Copy All Styles	Kopiuj wszystkie style
 	Exported {path}	Wyeksportowano {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Generuj CSS: CSS całego dokumentu, gdy nic nie jest zaznaczone
@@ -1674,8 +1673,6 @@ digits	Malayalam	Malajalam
 	Color Space	Przestrzeń kolorów
 	Created	Utworzono
 	Dimensions	Wymiary
-	Embedded {n} image(s)	Osadzone obrazy: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Osadzone obrazy: {n}; brakujące: {missing} — najpierw połącz je ponownie
 	File › Place… brings in an image, linked or embedded.	Plik › Umieść… wstawia obraz połączony lub osadzony.
 	Format	Format
 	Medium Thumbnails	Średnie miniatury
@@ -1685,9 +1682,6 @@ digits	Malayalam	Malajalam
 	No Thumbnails	Bez miniatur
 	Nothing matches the Show filter.	Nic nie pasuje do filtra Pokaż.
 	PPI	PPI
-	Relinked {n} image(s)	Ponownie połączone obrazy: {n}
-	Relinked {n} image(s); not in that folder: {}	Ponownie połączone obrazy: {n}; nie ma ich w tym folderze: {}
-	Relinked {} image(s)	Ponownie połączone obrazy: {}
 	Relink…	Połącz ponownie…
 	Find Linked Files	Znajdź połączone pliki
 	Find Linked Files in Folder…	Znajdź połączone pliki w folderze…
@@ -1704,7 +1698,6 @@ digits	Malayalam	Malajalam
 	Status	Stan
 	Unembedded to {}	Wyodrębniono do {}
 	Update Link	Aktualizuj łącze
-	Updated {} image(s)	Zaktualizowane obrazy: {}
 	Break Link	Zerwij łącze
 	Tolerance:	Tolerancja:
 	Corner Point Angle Threshold:	Próg kąta punktów narożnych:
@@ -2392,7 +2385,6 @@ digits	Malayalam	Malajalam
 	Package collects a saved document with its linked files and fonts.	Pakowanie zbiera zapisany dokument wraz z połączonymi plikami i czcionkami.
 	Package created	Utworzono pakiet
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Spakowane pliki: {n} w {folder} {note}|Spakowane pliki: {n} w {folder} {note}|Spakowane pliki: {n} w {folder} {note}
-	Packaged {n} file(s){note}	Spakowane pliki: {n}{note}
 	Relink Linked Files to the Document	Połącz ponownie połączone pliki z dokumentem
 	Save the document first?	Najpierw zapisać dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?
@@ -2580,7 +2572,6 @@ digits	Malayalam	Malajalam
 	Convert to sRGB	Konwertuj na sRGB
 	Delete this saved preset	Usuń to zapisane ustawienie
 	Dither:	Rozpraszanie:
-	Downloaded {} file(s)	Pobrane pliki: {}
 	Fit in View	Dopasuj do widoku
 	Format:	Format:
 	High	Wysoka
@@ -3785,20 +3776,16 @@ font-technology	Variable	Zmienne
 	Can't save “{name}”.	Nie można zapisać „{name}”.
 	Can't export “{name}”.	Nie można wyeksportować „{name}”.
 	Downloaded {what}	Pobrano {what}
-	Exported {count} file(s) to {folder}	Wyeksportowane pliki do {folder}: {count}
 	Exported {what}	Wyeksportowano {what}
-	Exported {what} with {} note(s): {first}	Wyeksportowano {what}, uwagi ({}): {first}
 	Exporting {}	Eksportowanie {}
 	Imported {what}: {}	Zaimportowano {what}: {}
 	Installed plug-in {}	Zainstalowano wtyczkę {}
-	Opened with {} note(s): {}	Otwarto, uwagi ({}): {}
 	Revert to the saved version of “{name}”?	Przywrócić zapisaną wersję „{name}”?
 	Replace “{name}”, the file this document was opened from?	Zastąpić „{name}”, plik, z którego otwarto ten dokument?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Przy otwieraniu pominięto to, czego VectorCraft jeszcze nie odczytuje ({what}), więc zastąpienie pliku utraci to bezpowrotnie. Zapisz pod inną nazwą, aby to zachować.
 	“{name}” already exists. Replace it?	„{name}” już istnieje. Zastąpić?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Nazwa w oknie zapisu to „{typed}”, a VectorCraft dodał rozszerzenie typu pliku. Zastąpienie pliku nadpisze jego zawartość.
 	Saved {path}	Zapisano {path}
-	Saved {path} with {} note(s): {first}	Zapisano {path}, uwagi ({}): {first}
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
 	Search commands and tools…	Szukaj poleceń i narzędzi…
@@ -3815,8 +3802,6 @@ font-technology	Variable	Zmienne
 	Smaller ↔ Larger	Mniejszy ↔ większy
 	Smart Guides (View → Smart Guides)	Inteligentne linie pomocnicze (Widok → Inteligentne linie pomocnicze)
 	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
-	Discarded {} recovered document(s)	Odrzucone odzyskane dokumenty: {}
-	Restored {} recovered document(s): save them to keep them	Przywrócone odzyskane dokumenty: {} — zapisz je, aby je zachować
 	Saved recovery data for {title}	Zapisano dane odzyskiwania dla {title}
 	Saving recovery data for {}	Zapisywanie danych odzyskiwania dla {}
 	Alt	Alt
@@ -4074,14 +4059,12 @@ imageTrace	Outline	Kontur
 @msg	No saved views (View → New View…)	Brak zapisanych widoków (Widok → Nowy widok…)
 @msg	Offset Path: select paths	Odsuń ścieżkę: zaznacz ścieżki
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Odsuń ścieżkę: po odsunięciu nic nie zostaje z zaznaczonych ścieżek (odsunięcie do wewnątrz większe niż kształty)
-@msg	Opened with {_1} note(s): {_2}	Otwarto, uwagi ({_1}): {_2}
 @msg	Opened {url}	Otwarto {url}
 @msg	Outline Stroke: no stroked paths selected	Obrys konturu: nie zaznaczono ścieżek z obrysem
 @msg	PDF settings are not an object	Ustawienia PDF nie są obiektem
 @msg	PDF security settings are not an object	Ustawienia zabezpieczeń PDF nie są obiektem
 @msg	PDF writer error: {0}	Błąd zapisu PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Spakowane pliki: {n} w {folder} ({note})
-@msg	Packaged {n} file(s){note}	Spakowane pliki: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Podgląd w przeglądarce wymaga aplikacji desktopowej (wersja webowa zamiast tego pobiera pliki)
 @msg	Release Guides: no guides	Uwolnij linie pomocnicze: brak linii pomocniczych
 @msg	Release: no layer to put the rectangle in	Uwolnij: brak warstwy, na której można umieścić prostokąt
@@ -4636,7 +4619,6 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nie udało się umieścić {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nie udało się wkleić ze schowka: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Zapisano {path}, uwagi ({_1}): {first}
 @msg	Exported {what}	Wyeksportowano {what}
 @msg	Saved {n} files beside {path}	Zapisane pliki obok {path}: {n}
 @msg	Saving	Zapisywanie
@@ -4645,8 +4627,10 @@ imageTrace	Outline	Kontur
 @msg	Packaging {_1}	Pakowanie {_1}
 @msg	Placing {_1}	Umieszczanie {_1}
 @msg	Saving recovery data for {_1}	Zapisywanie danych odzyskiwania dla {_1}
-@msg	Discarded {_1} recovered document(s)	Odrzucone odzyskane dokumenty: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Przywrócone odzyskane dokumenty: {_1} — zapisz je, aby je zachować
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odrzucono {n} odzyskany dokument|Odrzucono {n} odzyskane dokumenty|Odrzucono {n} odzyskanych dokumentów
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Przywrócono {n} odzyskany dokument: zapisz go, aby go zachować|Przywrócono {n} odzyskane dokumenty: zapisz je, aby je zachować|Przywrócono {n} odzyskanych dokumentów: zapisz je, aby je zachować
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otwarto z {n} uwagą: {first}|Otwarto z {n} uwagami: {first}|Otwarto z {n} uwagami: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Zapisano {path} z {n} uwagą: {first}|Zapisano {path} z {n} uwagami: {first}|Zapisano {path} z {n} uwagami: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Osadzono {n} obraz; brakuje {missing}: najpierw połącz je ponownie|Osadzono {n} obrazy; brakuje {missing}: najpierw połącz je ponownie|Osadzono {n} obrazów; brakuje {missing}: najpierw połącz je ponownie
 @msgplural	Embedded {n} image|Embedded {n} images	Osadzono {n} obraz|Osadzono {n} obrazy|Osadzono {n} obrazów
 @msgplural	Relinked {n} image|Relinked {n} images	Ponownie połączono {n} obraz|Ponownie połączono {n} obrazy|Ponownie połączono {n} obrazów
@@ -5511,7 +5495,7 @@ axis	Y Axis	Oś Y
 	On Artboards	Na obszarach kompozycji
 	All Artboards	Wszystkie obszary kompozycji
 	Include Objects On Canvas	Uwzględnij obiekty na płótnie
-	Result(s): {count}	Wyniki: {count}
+@plural	Result: {n}|Results: {n}	Wynik: {n}|Wyniki: {n}|Wyniki: {n}
 @msg	select one object	zaznacz jeden obiekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie

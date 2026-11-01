@@ -136,7 +136,8 @@ pub(crate) fn document_art(
     l.doc.drop_edit_modes();
     let n = l.doc.artboards.len();
     let board = (page as usize).checked_sub(1).and_then(|i| l.doc.artboards.get(i)).map(|a| a.rect);
-    let board = board.ok_or_else(|| bad(cmd, format!("page {page}: `{file}` has {n} artboard(s)")))?;
+    let artboards = if n == 1 { "artboard" } else { "artboards" };
+    let board = board.ok_or_else(|| bad(cmd, format!("page {page}: `{file}` has {n} {artboards}")))?;
     let layers = std::mem::take(&mut l.doc.layers);
     let symbols = l.doc.symbol_boxes();
     let nodes = super::on_artboard(&symbols, &layers, board);
@@ -360,10 +361,12 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         }
     }
     if !previews.is_empty() {
-        warnings.push(format!(
-            "{} placed document(s) output as their previews: their files can't be found, or changed since they were read (relink or update them)",
-            previews.len()
-        ));
+        warnings.push(match previews.len() {
+            1 => "1 placed document output as its preview: its file can't be found, or changed since it was read (relink or update it)".to_string(),
+            n => format!(
+                "{n} placed documents output as their previews: their files can't be found, or changed since they were read (relink or update them)"
+            ),
+        });
         out.placed_as_previews(&previews);
     }
     (Cow::Owned(out), warnings)

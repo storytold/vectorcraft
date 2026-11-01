@@ -610,7 +610,6 @@ font-technology	Variable	Variables
 	Convert to sRGB	Convertir en sRGB
 	Convert to Straight Lines	Convertir en lignes droites
 	Convert:	Convertir :
-	Copied the CSS of {rules} object(s)	CSS copié pour {rules} objet(s)
 	Copies:	Copies :
 	Copy	Copier
 	Copy (make a transformed copy)	Copier (créer une copie transformée)
@@ -800,7 +799,6 @@ font-technology	Variable	Variables
 	Discard Empty Type	Supprimer le texte vide
 	Discard Recovered Documents	Ignorer les documents récupérés
 	Discard White Overprint in Output	Ignorer la surimpression du blanc en sortie
-	Discarded {} recovered document(s)	{} document(s) récupéré(s) ignoré(s)
 	Discord	Discord
 	Discretionary Hyphen	Tiret conditionnel
 	Discretionary Ligatures	Ligatures conditionnelles
@@ -862,7 +860,6 @@ font-technology	Variable	Variables
 	Download	Télécharger
 	Download:	Téléchargement :
 	Downloaded {what}	{what} téléchargé
-	Downloaded {} file(s)	{} fichier(s) téléchargé(s)
 	Drag	Faire glisser
 	Drag a handle	Faites glisser une poignée
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Faites glisser l’illustration ici, ou sélectionnez-la et cliquez sur +. Maintenez Alt pour une seule ressource à partir de plusieurs objets.
@@ -962,8 +959,6 @@ font-technology	Variable	Variables
 	Embed page thumbnails	Incorporer les vignettes de page
 	Embedded	Incorporé
 	Embedded Image	Image incorporée
-	Embedded {n} image(s)	{n} image(s) incorporée(s)
-	Embedded {n} image(s); {missing} missing: relink them first	{n} image(s) incorporée(s) ; {missing} manquante(s) : rétablissez d’abord leurs liens
 	Emulsion:	Émulsion :
 	En Dash	Tiret demi-cadratin
 	En Space	Espace demi-cadratin
@@ -1081,10 +1076,8 @@ font-technology	Variable	Variables
 	Export Transparency Flattener Presets	Exporter les paramètres prédéfinis d’aplatissement des transparences
 	Export {count} Selected	Exporter la sélection ({count})
 	Export:	Exporter :
-	Exported {count} file(s) to {folder}	{count} fichier(s) exporté(s) vers {folder}
 	Exported {path}	{path} exporté
 	Exported {what}	{what} exporté
-	Exported {what} with {} note(s): {first}	{what} exporté avec {} remarque(s) : {first}
 	Exporting {}	Exportation de {}
 	Export…	Exporter…
 	Extrude & Bevel…	Extrusion et biseautage…
@@ -2222,7 +2215,6 @@ font-technology	Variable	Variables
 	Open Recent Files	Ouvrir les fichiers récents
 	Open Swatch Library	Ouvrir une bibliothèque de nuances
 	Open the URL in the web browser	Ouvrir l’URL dans le navigateur web
-	Opened with {} note(s): {}	Ouvert avec {} remarque(s) : {}
 	Open…	Ouvrir…
 	Optical	Optique
 	Optical Margin Alignment	Alignement optique des marges
@@ -2283,7 +2275,6 @@ font-technology	Variable	Variables
 	Package collects a saved document with its linked files and fonts.	Assembler rassemble un document enregistré avec ses fichiers liés et ses polices.
 	Package created	Assemblage créé
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} fichier assemblé dans {folder} {note}|{n} fichiers assemblés dans {folder} {note}
-	Packaged {n} file(s){note}	{n} fichier(s) assemblé(s){note}
 	Package…	Assembler…
 	Page	Page
 	Page information	Informations de page
@@ -2635,9 +2626,6 @@ digits	Malayalam	Malayalam
 	Relink	Lier à nouveau
 	Relink Linked Files to the Document	Lier à nouveau les fichiers liés au document
 	Relink to Folder…	Lier à nouveau à un dossier…
-	Relinked {n} image(s)	{n} image(s) liée(s) à nouveau
-	Relinked {n} image(s); not in that folder: {}	{n} image(s) liée(s) à nouveau ; absentes de ce dossier : {}
-	Relinked {} image(s)	{} image(s) liée(s) à nouveau
 	Relink…	Lier à nouveau…
 	Find Linked Files	Rechercher des fichiers liés
 	Find Linked Files in Folder…	Rechercher des fichiers liés dans un dossier…
@@ -2718,7 +2706,6 @@ digits	Malayalam	Malayalam
 	Restore every preference to its default (applied on OK)	Rétablir toutes les préférences à leur valeur par défaut (appliqué avec OK)
 	Restore Recovered Documents	Restaurer les documents récupérés
 	Restored documents open unsaved: save them to keep them.	Les documents restaurés s’ouvrent sans être enregistrés : enregistrez-les pour les conserver.
-	Restored {} recovered document(s): save them to keep them	{} document(s) récupéré(s) restauré(s) : enregistrez-les pour les conserver
 	Restrict printing, editing and other tasks	Restreindre l’impression, la modification et d’autres tâches
 	Reverse Front to Back	Inverser l’avant et l’arrière
 	Reverse Gradient	Inverser le dégradé
@@ -2884,7 +2871,6 @@ digits	Malayalam	Malayalam
 	Saved Views	Vues enregistrées
 	Saved {n} files beside {path}	{n} fichiers enregistrés à côté de {path}
 	Saved {path}	{path} enregistré
-	Saved {path} with {} note(s): {first}	{path} enregistré avec {} remarque(s) : {first}
 	Saves the current bars, toolbar and panel layout.	Enregistre la disposition actuelle des barres, de la barre d’outils et des panneaux.
 	Save…	Enregistrer…
 	Saving	Enregistrement
@@ -3535,7 +3521,6 @@ digits	Malayalam	Malayalam
 	Update Links	Mettre à jour les liens
 	Update Changed Links	Mettre à jour les liens modifiés
 	Update Modified Links	Mettre à jour les liens modifiés
-	Updated {} image(s)	{} image(s) mise(s) à jour
 	UPPERCASE	MAJUSCULES
 	URL:	URL :
 	Use 	Utilisez 
@@ -3939,14 +3924,12 @@ axis	Both	Les deux
 @msg	No saved views (View → New View…)	Aucune vue enregistrée (Affichage → Nouvelle vue…)
 @msg	Offset Path: select paths	Décalage : sélectionnez des tracés
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Décalage : le décalage ne laisse rien des tracés sélectionnés (un décalage vers l’intérieur plus grand que les formes)
-@msg	Opened with {_1} note(s): {_2}	Ouvert avec {_1} remarque(s) : {_2}
 @msg	Opened {url}	{url} ouvert
 @msg	Outline Stroke: no stroked paths selected	Vectoriser le contour : aucun tracé avec contour sélectionné
 @msg	PDF settings are not an object	Les paramètres PDF ne sont pas un objet
 @msg	PDF security settings are not an object	Les paramètres de sécurité PDF ne sont pas un objet
 @msg	PDF writer error: {0}	Erreur du générateur PDF : {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} fichier assemblé dans {folder} ({note})|{n} fichiers assemblés dans {folder} ({note})
-@msg	Packaged {n} file(s){note}	{n} fichier(s) assemblé(s){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
 @msg	Release Guides: no guides	Annuler les repères : aucun repère
 @msg	Release: no layer to put the rectangle in	Annuler : aucun calque où placer le rectangle
@@ -4500,7 +4483,6 @@ axis	Both	Les deux
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Impossible d’importer {name} : {e}
 @msg	Couldn't paste from the clipboard: {e}	Impossible de coller depuis le presse-papiers : {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path} enregistré avec {_1} remarque(s) : {first}
 @msg	Exported {what}	{what} exporté
 @msg	Saved {n} files beside {path}	{n} fichiers enregistrés à côté de {path}
 @msg	Saving	Enregistrement
@@ -4509,8 +4491,10 @@ axis	Both	Les deux
 @msg	Packaging {_1}	Assemblage de {_1}
 @msg	Placing {_1}	Importation de {_1}
 @msg	Saving recovery data for {_1}	Enregistrement des données de récupération de {_1}
-@msg	Discarded {_1} recovered document(s)	{_1} document(s) récupéré(s) supprimé(s)
-@msg	Restored {_1} recovered document(s): save them to keep them	{_1} document(s) récupéré(s) restauré(s) : enregistrez-les pour les conserver
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} document récupéré supprimé|{n} documents récupérés supprimés
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} document récupéré restauré : enregistrez-le pour le conserver|{n} documents récupérés restaurés : enregistrez-les pour les conserver
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Ouvert avec {n} remarque : {first}|Ouvert avec {n} remarques : {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} enregistré avec {n} remarque : {first}|{path} enregistré avec {n} remarques : {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} image incorporée ; il en manque {missing} : rétablissez d’abord leurs liens|{n} images incorporées ; il en manque {missing} : rétablissez d’abord leurs liens
 @msgplural	Embedded {n} image|Embedded {n} images	{n} image incorporée|{n} images incorporées
 @msgplural	Relinked {n} image|Relinked {n} images	Lien rétabli pour {n} image|Lien rétabli pour {n} images
@@ -5655,7 +5639,7 @@ axis	Y Axis	Axe Y
 	On Artboards	Sur les plans de travail
 	All Artboards	Tous les plans de travail
 	Include Objects On Canvas	Inclure les objets sur la toile
-	Result(s): {count}	Résultat(s) : {count}
+@plural	Result: {n}|Results: {n}	Résultat : {n}|Résultats : {n}
 @msg	select one object	sélectionnez un seul objet
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modification globale s’applique aux tracés, aux tracés transparents, aux occurrences de symboles et aux groupes de ces objets
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	aucun objet similaire trouvé (les copies pivotées ou symétriques ne sont pas reconnues) ; modifiez les options de modification globale et réessayez

@@ -698,7 +698,6 @@ font-technology	Variable	Biến thiên
 	Convert to sRGB	Chuyển sang sRGB
 	Convert to Straight Lines	Chuyển thành đường thẳng
 	Convert:	Chuyển đổi:
-	Copied the CSS of {rules} object(s)	Đã sao chép CSS của {rules} đối tượng
 	Copies:	Bản sao:
 	Copy	Sao chép
 	Copy (make a transformed copy)	Sao chép (tạo bản sao đã biến đổi)
@@ -928,7 +927,6 @@ font-technology	Variable	Biến thiên
 	Discard Empty Type	Loại bỏ chữ trống
 	Discard Recovered Documents	Loại bỏ tài liệu đã phục hồi
 	Discard White Overprint in Output	Loại bỏ in chồng màu trắng khi xuất
-	Discarded {} recovered document(s)	Đã loại bỏ {} tài liệu đã phục hồi
 	Discord	Discord
 	Discretionary Hyphen	Gạch nối tùy chọn
 	Discretionary Ligatures	Chữ ghép tùy chọn
@@ -993,7 +991,6 @@ font-technology	Variable	Biến thiên
 	Download	Tải xuống
 	Download:	Tải xuống:
 	Downloaded {what}	Đã tải xuống {what}
-	Downloaded {} file(s)	Đã tải xuống {} tệp
 	Draft	Nháp
 	Drag	Kéo
 	Drag a handle	Kéo một tay nắm
@@ -1111,8 +1108,6 @@ font-technology	Variable	Biến thiên
 	Embed page thumbnails	Nhúng hình thu nhỏ trang
 	Embedded	Đã nhúng
 	Embedded Image	Ảnh đã nhúng
-	Embedded {n} image(s)	Đã nhúng {n} ảnh
-	Embedded {n} image(s); {missing} missing: relink them first	Đã nhúng {n} ảnh; {missing} còn thiếu: hãy liên kết lại trước
 	Emulsion:	Nhũ tương:
 	En Dash	Gạch ngang ngắn
 	En Space	Khoảng trắng en
@@ -1240,10 +1235,8 @@ font-technology	Variable	Biến thiên
 	Export Transparency Flattener Presets	Xuất thiết lập sẵn làm phẳng độ trong suốt
 	Export {count} Selected	Xuất {count} đã chọn
 	Export:	Xuất:
-	Exported {count} file(s) to {folder}	Đã xuất {count} tệp đến {folder}
 	Exported {path}	Đã xuất {path}
 	Exported {what}	Đã xuất {what}
-	Exported {what} with {} note(s): {first}	Đã xuất {what} với {} ghi chú: {first}
 	Exporting {}	Đang xuất {}
 	Export…	Xuất…
 	Extrude & Bevel…	Kéo dài & vát…
@@ -2516,7 +2509,6 @@ digits	Hindi	Hindi
 	Open Recent Files	Mở tệp gần đây
 	Open Swatch Library	Mở thư viện mẫu màu
 	Open the URL in the web browser	Mở URL trong trình duyệt web
-	Opened with {} note(s): {}	Mở với {} ghi chú: {}
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Khi mở, những phần VectorCraft chưa đọc được ({what}) đã bị bỏ qua, nên thay thế sẽ mất chúng vĩnh viễn. Hãy lưu với tên khác để giữ lại.
 	“{name}” already exists. Replace it?	“{name}” đã tồn tại. Thay thế tệp này?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Tên trong bảng lưu là “{typed}”, và VectorCraft đã thêm phần mở rộng của loại tệp. Thay thế tệp sẽ ghi đè nội dung của tệp.
@@ -2585,7 +2577,6 @@ digits	Hindi	Hindi
 	Package collects a saved document with its linked files and fonts.	Gói thu thập tài liệu đã lưu cùng tệp liên kết và phông chữ.
 	Package created	Đã tạo gói
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Đã đóng gói {n} tệp trong {folder} {note}
-	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 	Package…	Gói…
 	Page	Trang
 	Page information	Thông tin trang
@@ -2930,9 +2921,6 @@ mark-style	Japanese	Kiểu Nhật
 	Relink	Liên kết lại
 	Relink Linked Files to the Document	Liên kết lại các tệp liên kết với tài liệu
 	Relink to Folder…	Liên kết lại vào thư mục…
-	Relinked {n} image(s)	Đã liên kết lại {n} ảnh
-	Relinked {n} image(s); not in that folder: {}	Đã liên kết lại {n} ảnh; không có trong thư mục đó: {}
-	Relinked {} image(s)	Đã liên kết lại {} ảnh
 	Relink…	Liên kết lại…
 	Reload Plug-ins	Tải lại plug-in
 	Remove	Gỡ
@@ -3030,7 +3018,6 @@ mark-style	Japanese	Kiểu Nhật
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
 	Restored documents open unsaved: save them to keep them.	Tài liệu đã khôi phục mở ở trạng thái chưa lưu: hãy lưu để giữ lại.
-	Restored {} recovered document(s): save them to keep them	Đã khôi phục {} tài liệu: hãy lưu để giữ lại
 	Restrict printing, editing and other tasks	Hạn chế in, chỉnh sửa và các tác vụ khác
 	Reverse Front to Back	Đảo ngược từ trước ra sau
 	Reverse Gradient	Đảo ngược chuyển sắc
@@ -3220,7 +3207,6 @@ mark-style	Japanese	Kiểu Nhật
 	Saved Views	Chế độ xem đã lưu
 	Saved {n} files beside {path}	Đã lưu {n} tệp bên cạnh {path}
 	Saved {path}	Đã lưu {path}
-	Saved {path} with {} note(s): {first}	Đã lưu {path} với {} ghi chú: {first}
 	Saves the current bars, toolbar and panel layout.	Lưu bố cục thanh, thanh công cụ và bảng hiện tại.
 	Save…	Lưu…
 	Saving	Đang lưu
@@ -3940,7 +3926,6 @@ mark-style	Japanese	Kiểu Nhật
 	Update Link	Cập nhật liên kết
 	Update Links	Cập nhật các liên kết
 	Update Modified Links	Cập nhật liên kết đã sửa đổi
-	Updated {} image(s)	Đã cập nhật {} ảnh
 	UPPERCASE	CHỮ HOA
 	URL:	URL:
 	Use 	Dùng 
@@ -4355,7 +4340,7 @@ theme	Appearance	Giao diện
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Phục hồi dữ liệu không có nơi lưu bản sao: đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	decimals must be {_1}–{_2} (got {_3})	số thập phân phải từ {_1}–{_2} (nhận được {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	chọn trực tiếp các điểm neo để cắt (không phải điểm cuối của đường dẫn mở)
-@msg	Discarded {_1} recovered document(s)	Đã loại bỏ {_1} tài liệu đã phục hồi
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
 @msg	Divide Objects Below: select a path	Chia đối tượng bên dưới: hãy chọn một đường dẫn
 @msg	Divide Objects Below: select exactly one path	Chia đối tượng bên dưới: chọn đúng một đường dẫn
@@ -4622,11 +4607,10 @@ theme	Appearance	Giao diện
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Đường dẫn độ lệch: độ lệch không để lại gì từ các đường dẫn đã chọn (độ lệch vào trong lớn hơn hình)
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi
 @msg	onto must name a panel floating in another group	onto phải đặt tên bảng đang thả nổi trong nhóm khác
-@msg	Opened with {_1} note(s): {_2}	Đã mở với {_1} ghi chú: {_2}
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Đã mở với {n} ghi chú: {first}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})
-@msg	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 @msg	page size {w} × {h}	kích thước trang {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	trang {0} không tồn tại (PDF có {1} trang)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: trang {n} không tồn tại (tệp có 1 trang)
@@ -4686,7 +4670,7 @@ theme	Appearance	Giao diện
 @msg	Replace Spine: select a blend and a path	Thay thế trục: chọn một đối tượng hòa trộn và một đường dẫn
 @msg	Reset {_1}	Đã đặt lại {_1}
 @msg	resolutions must be between 1 and 2400 ppi	độ phân giải phải nằm trong khoảng 1 đến 2400 ppi
-@msg	Restored {_1} recovered document(s): save them to keep them	Đã phục hồi {_1} tài liệu: hãy lưu để giữ lại
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Đã phục hồi {n} tài liệu: hãy lưu để giữ lại
 @msg	result would exceed the canvas (coordinates out of range)	kết quả sẽ vượt quá vùng vẽ (tọa độ ngoài phạm vi)
 @msg	objects can't be nested more than 32 deep	không thể lồng các đối tượng sâu quá 32 cấp
 @msg	the SVG's elements are nested more than {0} deep	các phần tử SVG lồng nhau sâu quá {0} cấp
@@ -4699,7 +4683,7 @@ theme	Appearance	Giao diện
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
 @msg	Saved {n} files beside {path}	Đã lưu {n} tệp bên cạnh {path}
 @msg	Saved {path}	Đã lưu {path}
-@msg	Saved {path} with {_1} note(s): {first}	Đã lưu {path} với {_1} ghi chú: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Đã lưu {path} với {n} ghi chú: {first}
 @msg	Saving	Đang lưu
 @msg	Saving recovery data for {_1}	Đang lưu dữ liệu phục hồi cho {_1}
 @msg	Saving {_1}	Đang lưu {_1}
@@ -5256,7 +5240,7 @@ axis	Y Axis	Trục Y
 	On Artboards	Trên các bảng vẽ
 	All Artboards	Tất cả bảng vẽ
 	Include Objects On Canvas	Bao gồm đối tượng trên vùng vẽ
-	Result(s): {count}	Kết quả: {count}
+@plural	Result: {n}|Results: {n}	Kết quả: {n}
 @msg	select one object	hãy chọn một đối tượng
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp, phiên bản biểu tượng và nhóm của chúng
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	không tìm thấy đối tượng tương tự (các bản sao đã xoay hoặc lật không được tính); hãy thay đổi tùy chọn chỉnh sửa toàn cục rồi thử lại

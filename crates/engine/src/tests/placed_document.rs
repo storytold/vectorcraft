@@ -191,7 +191,7 @@ fn the_preview_is_saved_so_the_document_shows_it_without_its_file() {
     assert_eq!(s.execute("links.check", &json!({})).unwrap()["missing"], 1);
     // Output with the file gone: the preview, with a warning.
     let png = s.execute("document.serialize", &json!({"format": "png"})).unwrap();
-    assert!(png["warnings"].to_string().contains("output as their previews"), "{png}");
+    assert!(png["warnings"].to_string().contains("1 placed document output as its preview"), "{png}");
     let [r, g, b, _] = image::load_from_memory(&decode(&png)).unwrap().to_rgba8().get_pixel(200, 150).0;
     assert!(near([r, g, b], RED), "{:?}", [r, g, b]);
     // Saved for older apps: the art it shows (here its preview), as plain objects.
@@ -233,7 +233,7 @@ fn ai_export_preserves_placed_links_while_drawing_full_art_or_previews() {
                     let (images, paths) = pdf_contents(&bytes);
                     if missing {
                         assert!(images > 0, "the missing file draws its preview");
-                        assert!(out["warnings"].to_string().contains("output as their previews"));
+                        assert!(out["warnings"].to_string().contains("1 placed document output as its preview"));
                     } else {
                         assert_eq!(images, 0, "the PDF uses the file's vectors");
                         assert!(paths > 0);
@@ -860,7 +860,7 @@ fn pdf_editing_keeps_placed_links_separate_from_drawn_previews() {
                 assert!(paths > 0);
             }
             assert_eq!(
-                out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 placed document output as its preview")),
                 missing,
                 "{out}"
             );
@@ -929,7 +929,7 @@ fn eps_editing_keeps_placed_links_and_requested_source_bytes() {
                     assert_eq!(blob.bytes.as_slice(), source_bytes.as_slice());
                 }
                 assert_eq!(
-                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 placed document output as its preview")),
                     missing,
                     "{out}"
                 );
@@ -999,7 +999,7 @@ fn svg_editing_keeps_placed_links_separate_from_drawn_previews() {
                 let text = vectorcraft_svg::text_of(&bytes).unwrap();
                 assert_eq!(text.contains("<image"), missing, "{format}/{command}: {text}");
                 assert_eq!(
-                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 placed document output as its preview")),
                     missing,
                     "{out}"
                 );

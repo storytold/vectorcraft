@@ -1433,7 +1433,6 @@ digits	Malayalam	Malayalam
 	Save changes to {name}	Wijzigingen opslaan in {name}
 	Save theme to My Themes	Thema opslaan in Mijn thema's
 	Set the selected color to the current color	De geselecteerde kleur op de huidige kleur instellen
-	Copied the CSS of {rules} object(s)	CSS van {rules} object(en) gekopieerd
 	Copy All Styles	Alle stijlen kopiëren
 	Exported {path}	{path} geëxporteerd
 	Generate CSS: the whole document's CSS while nothing is selected	CSS genereren: de CSS van het hele document wanneer er niets is geselecteerd
@@ -1588,8 +1587,6 @@ digits	Malayalam	Malayalam
 	Color Space	Kleurruimte
 	Created	Gemaakt
 	Dimensions	Afmetingen
-	Embedded {n} image(s)	{n} afbeelding(en) ingesloten
-	Embedded {n} image(s); {missing} missing: relink them first	{n} afbeelding(en) ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
 	File › Place… brings in an image, linked or embedded.	Bestand › Plaatsen… haalt een afbeelding binnen, gekoppeld of ingesloten.
 	Format	Formaat
 	Medium Thumbnails	Middelgrote miniaturen
@@ -1599,9 +1596,6 @@ digits	Malayalam	Malayalam
 	No Thumbnails	Geen miniaturen
 	Nothing matches the Show filter.	Niets komt overeen met het weergavefilter.
 	PPI	PPI
-	Relinked {n} image(s)	{n} afbeelding(en) opnieuw gekoppeld
-	Relinked {n} image(s); not in that folder: {}	{n} afbeelding(en) opnieuw gekoppeld; niet in die map: {}
-	Relinked {} image(s)	{} afbeelding(en) opnieuw gekoppeld
 	Relink…	Opnieuw koppelen…
 	Find Linked Files	Gekoppelde bestanden zoeken
 	Find Linked Files in Folder…	Gekoppelde bestanden in map zoeken…
@@ -1618,7 +1612,6 @@ digits	Malayalam	Malayalam
 	Status	Status
 	Unembedded to {}	Niet meer ingesloten: {}
 	Update Link	Koppeling bijwerken
-	Updated {} image(s)	{} afbeelding(en) bijgewerkt
 	Break Link	Koppeling verbreken
 	Tolerance:	Tolerantie:
 	Transparency Options	Transparantieopties
@@ -2279,7 +2272,6 @@ digits	Malayalam	Malayalam
 	Package collects a saved document with its linked files and fonts.	Verpakken verzamelt een opgeslagen document met zijn gekoppelde bestanden en lettertypen.
 	Package created	Pakket gemaakt
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} bestand verpakt in {folder} {note}|{n} bestanden verpakt in {folder} {note}
-	Packaged {n} file(s){note}	{n} bestand(en) verpakt{note}
 	Relink Linked Files to the Document	Gekoppelde bestanden opnieuw koppelen aan het document
 	Save the document first?	Wil je het document eerst opslaan?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} bestand in {folder} {note}. De pakketmap openen?|{n} bestanden in {folder} {note}. De pakketmap openen?
@@ -2473,7 +2465,6 @@ digits	Malayalam	Malayalam
 	Convert to sRGB	Converteren naar sRGB
 	Delete this saved preset	Deze opgeslagen voorinstelling verwijderen
 	Dither:	Dither:
-	Downloaded {} file(s)	{} bestand(en) gedownload
 	Fit in View	In beeld passen
 	Format:	Indeling:
 	WebP	WebP
@@ -3689,18 +3680,14 @@ font-technology	Variable	Variabel
 	Can't save “{name}”.	Kan „{name}” niet opslaan.
 	Can't export “{name}”.	Kan „{name}” niet exporteren.
 	Downloaded {what}	{what} gedownload
-	Exported {count} file(s) to {folder}	{count} bestand(en) geëxporteerd naar {folder}
 	Exported {what}	{what} geëxporteerd
-	Exported {what} with {} note(s): {first}	{what} geëxporteerd met {} opmerking(en): {first}
 	Exporting {}	{} wordt geëxporteerd
 	Imported {what}: {}	{what} geïmporteerd: {}
 	Installed plug-in {}	Plug-in {} geïnstalleerd
-	Opened with {} note(s): {}	Geopend met {} opmerking(en): {}
 	Revert to the saved version of “{name}”?	Teruggaan naar de opgeslagen versie van „{name}”?
 	Replace “{name}”, the file this document was opened from?	Vervang „{name}”, het bestand waarvan dit document is geopend?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Bij het openen is wat VectorCraft nog niet kan lezen ({what}) weggelaten, dus als je het vervangt, raak je dat definitief kwijt. Sla het onder een andere naam op om het te bewaren.
 	Saved {path}	{path} opgeslagen
-	Saved {path} with {} note(s): {first}	{path} opgeslagen met {} opmerking(en): {first}
 	Saving	Bezig met opslaan
 	Saving {}	{} wordt opgeslagen
 	Search commands and tools…	Opdrachten en gereedschappen zoeken…
@@ -3717,8 +3704,6 @@ font-technology	Variable	Variabel
 	Smaller ↔ Larger	Kleiner ↔ Groter
 	Smart Guides (View → Smart Guides)	Slimme hulplijnen (Beeld → Slimme hulplijnen)
 	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
-	Discarded {} recovered document(s)	{} teruggevonden document(en) genegeerd
-	Restored {} recovered document(s): save them to keep them	{} teruggevonden document(en) hersteld: sla ze op om ze te behouden
 	Saved recovery data for {title}	Herstelgegevens voor {title} opgeslagen
 	Saving recovery data for {}	Herstelgegevens voor {} worden opgeslagen
 	Alt	Alt
@@ -3976,14 +3961,12 @@ imageTrace	Outline	Contour
 @msg	No saved views (View → New View…)	Geen opgeslagen weergaven (Beeld → Nieuwe weergave…)
 @msg	Offset Path: select paths	Pad verschuiven: selecteer paden
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Pad verschuiven: de verschuiving laat van de geselecteerde paden niets over (een insprong groter dan de vormen)
-@msg	Opened with {_1} note(s): {_2}	Geopend met {_1} opmerking(en): {_2}
 @msg	Opened {url}	{url} geopend
 @msg	Outline Stroke: no stroked paths selected	Lijn omzetten in contouren: geen paden met een lijn geselecteerd
 @msg	PDF settings are not an object	PDF-instellingen zijn geen object
 @msg	PDF security settings are not an object	PDF-beveiligingsinstellingen zijn geen object
 @msg	PDF writer error: {0}	PDF-schrijffout: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} bestand verpakt in {folder} ({note})|{n} bestanden verpakt in {folder} ({note})
-@msg	Packaged {n} file(s){note}	{n} bestand(en) verpakt{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Voorvertoning in browser heeft de desktop-app nodig (het web downloadt in plaats daarvan bestanden)
 @msg	Release Guides: no guides	Hulplijnen vrijgeven: geen hulplijnen
 @msg	Release: no layer to put the rectangle in	Vrijgeven: geen laag om de rechthoek in te plaatsen
@@ -4477,7 +4460,6 @@ imageTrace	Outline	Contour
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kon {name} niet plaatsen: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kon niet van het klembord plakken: {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path} opgeslagen met {_1} opmerking(en): {first}
 @msg	Exported {what}	{what} geëxporteerd
 @msg	Saved {n} files beside {path}	{n} bestanden opgeslagen naast {path}
 @msg	Saving	Bezig met opslaan
@@ -4486,8 +4468,10 @@ imageTrace	Outline	Contour
 @msg	Packaging {_1}	Bezig met verpakken van {_1}
 @msg	Placing {_1}	Bezig met plaatsen van {_1}
 @msg	Saving recovery data for {_1}	Bezig met opslaan van herstelgegevens voor {_1}
-@msg	Discarded {_1} recovered document(s)	{_1} hersteld(e) document(en) verworpen
-@msg	Restored {_1} recovered document(s): save them to keep them	{_1} hersteld(e) document(en) teruggezet: sla ze op om ze te behouden
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} hersteld document verworpen|{n} herstelde documenten verworpen
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} hersteld document teruggezet: sla het op om het te behouden|{n} herstelde documenten teruggezet: sla ze op om ze te behouden
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Geopend met {n} opmerking: {first}|Geopend met {n} opmerkingen: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} opgeslagen met {n} opmerking: {first}|{path} opgeslagen met {n} opmerkingen: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
 @msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten
 @msgplural	Relinked {n} image|Relinked {n} images	{n} afbeelding opnieuw gekoppeld|{n} afbeeldingen opnieuw gekoppeld
@@ -5624,7 +5608,7 @@ axis	Y Axis	Y-as
 	On Artboards	Op tekengebieden
 	All Artboards	Alle tekengebieden
 	Include Objects On Canvas	Objecten op het canvas opnemen
-	Result(s): {count}	Resultaat/resultaten: {count}
+@plural	Result: {n}|Results: {n}	Resultaat: {n}|Resultaten: {n}
 	Add to Symbols	Aan symbolen toevoegen
 	Basic Shapes	Basisvormen
 	Open Symbol Library	Symboolbibliotheek openen

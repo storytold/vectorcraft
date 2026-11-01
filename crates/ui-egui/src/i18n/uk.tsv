@@ -603,7 +603,6 @@ font-technology	Variable	Варіативні
 	Convert to sRGB	Перетворити на sRGB
 	Convert to Straight Lines	Перетворити на прямі лінії
 	Convert:	Перетворити:
-	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
 	Copies:	Копії:
 	Copy	Копіювати
 	Copy (make a transformed copy)	Копіювати (створити перетворену копію)
@@ -791,7 +790,6 @@ font-technology	Variable	Варіативні
 	Discard Empty Type	Видалити порожній текст
 	Discard Recovered Documents	Відкинути відновлені документи
 	Discard White Overprint in Output	Скасувати накладення білого під час виведення
-	Discarded {} recovered document(s)	Скасовано відновлених документів: {}
 	Discord	Discord
 	Discretionary Hyphen	М’яке перенесення
 	Discretionary Ligatures	Дискреційні лігатури
@@ -853,7 +851,6 @@ font-technology	Variable	Варіативні
 	Download	Завантажити
 	Download:	Завантаження:
 	Downloaded {what}	Завантажено: {what}
-	Downloaded {} file(s)	Завантажено файлів: {}
 	Drag	Перетягніть
 	Drag a handle	Перетягніть маркер
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Перетягніть малюнок сюди або виділіть його та натисніть +. Утримуйте Alt для одного ресурсу з кількох об’єктів.
@@ -955,8 +952,6 @@ font-technology	Variable	Варіативні
 	Embed page thumbnails	Вбудувати мініатюри сторінок
 	Embedded	Вбудовано
 	Embedded Image	Впроваджене зображення
-	Embedded {n} image(s)	Вбудовано зображення: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Вбудовано зображень: {n}; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
 	Emulsion:	Емульсія:
 	En Dash	Середнє тире
 	En Space	Напівкругла шпація
@@ -1074,10 +1069,8 @@ font-technology	Variable	Варіативні
 	Export Transparency Flattener Presets	Експортувати набори зведення прозорості
 	Export {count} Selected	Експортувати вибрані ({count})
 	Export:	Експорт:
-	Exported {count} file(s) to {folder}	Експортовано файли: {count} до {folder}
 	Exported {path}	Експортовано: {path}
 	Exported {what}	Експортовано: {what}
-	Exported {what} with {} note(s): {first}	Експортовано: {what} з примітками ({}) : {first}
 	Exporting {}	Експорт {}
 	Export…	Експорт…
 	Extrude & Bevel…	Видавлювання та фаска…
@@ -2243,7 +2236,6 @@ file-filter	Templates	Шаблони
 	Open Recent Files	Відкрити останні файли
 	Open Swatch Library	Відкрити бібліотеку зразків
 	Open the URL in the web browser	Відкрити URL у веб-браузері
-	Opened with {} note(s): {}	Відкрито із примітками ({}) : {}
 	Open…	Відкрити…
 	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
@@ -2304,7 +2296,6 @@ file-filter	Templates	Шаблони
 	Package collects a saved document with its linked files and fonts.	Упаковка збирає збережений документ із його пов’язаними файлами та шрифтами.
 	Package created	Пакет створено
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Упаковано файли: {n} {folder} {note}|Упаковано файли: {n} {folder} {note}|Упаковано файли: {n} {folder} {note}
-	Packaged {n} file(s){note}	Упаковано файли: {n}{note}
 	Package…	Упакувати…
 	Page	Сторінка
 	Page information	Відомості про сторінку
@@ -2660,9 +2651,6 @@ digits	Malayalam	Малаялам
 	Relink	Відновити зв’язок
 	Relink Linked Files to the Document	Відновити зв’язані файли з документом
 	Relink to Folder…	Відновити зв’язок із папкою…
-	Relinked {n} image(s)	Відновлено зв’язок із зображеннями: {n}
-	Relinked {n} image(s); not in that folder: {}	Відновлено зв’язок із зображеннями: {n}; немає в цій папці: {}
-	Relinked {} image(s)	Відновлено зв’язок із зображеннями: {}
 	Relink…	Відновити зв’язок…
 	Find Linked Files	Знайти пов’язані файли
 	Find Linked Files in Folder…	Знайти пов’язані файли в папці…
@@ -2744,7 +2732,6 @@ digits	Malayalam	Малаялам
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
 	Restore Recovered Documents	Відновити відновлені документи
 	Restored documents open unsaved: save them to keep them.	Відновлені документи відкриваються незбереженими: збережіть їх, щоб залишити.
-	Restored {} recovered document(s): save them to keep them	Відновлено документів: {}: збережіть їх, щоб залишити
 	Restrict printing, editing and other tasks	Обмежити друк, редагування та інші завдання
 	Reverse Front to Back	Зворотний порядок спереду назад
 	Reverse Gradient	Змінити напрям градієнта
@@ -2912,7 +2899,6 @@ digits	Malayalam	Малаялам
 	Saved Views	Збережені вигляди
 	Saved {n} files beside {path}	Збережено файлів: {n} поруч із {path}
 	Saved {path}	Збережено: {path}
-	Saved {path} with {} note(s): {first}	Збережено: {path} з примітками ({}) : {first}
 	Saves the current bars, toolbar and panel layout.	Зберігає поточне розташування панелей, панелі інструментів та панелей.
 	Save…	Зберегти…
 	Saving	Збереження
@@ -3565,7 +3551,6 @@ effect	Points	Точки
 	Update Links	Оновити зв’язки
 	Update Changed Links	Оновити змінені зв’язки
 	Update Modified Links	Оновити змінені зв’язки
-	Updated {} image(s)	Оновлено зображень: {}
 	UPPERCASE	ВЕЛИКІ ЛІТЕРИ
 	URL:	URL:
 	Use 	Використати 
@@ -3967,14 +3952,12 @@ axis	Both	Обидві
 @msg	No saved views (View → New View…)	Немає збережених видів (Перегляд → Новий вид…)
 @msg	Offset Path: select paths	Зміщення контуру: виділіть контури
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Зміщення контуру: після зміщення від виділених контурів нічого не лишається (зміщення всередину більше за самі фігури)
-@msg	Opened with {_1} note(s): {_2}	Відкрито із примітками ({_1}) : {_2}
 @msg	Opened {url}	Відкрито {url}
 @msg	Outline Stroke: no stroked paths selected	Обведення контуру: не виділено контури з обведенням
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
 @msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
-@msg	Packaged {n} file(s){note}	Упаковано файли: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
 @msg	Release: no layer to put the rectangle in	Звільнення: немає шару для приміщення прямокутника
@@ -4528,7 +4511,6 @@ axis	Both	Обидві
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не вдалося помістити {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не вдалося вставити з буфера обміну: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Збережено: {path} з примітками ({_1}) : {first}
 @msg	Exported {what}	Експортовано: {what}
 @msg	Saved {n} files beside {path}	Збережено файлів: {n} поруч із {path}
 @msg	Saving	Збереження
@@ -4537,8 +4519,10 @@ axis	Both	Обидві
 @msg	Packaging {_1}	Пакування {_1}
 @msg	Placing {_1}	Розміщення {_1}
 @msg	Saving recovery data for {_1}	Збереження даних відновлення для {_1}
-@msg	Discarded {_1} recovered document(s)	Скасовано відновлених документів: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Відновлено документів: {_1}: збережіть їх, щоб залишити
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Скасовано {n} відновлений документ|Скасовано {n} відновлені документи|Скасовано {n} відновлених документів
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Відновлено {n} документ: збережіть його, щоб залишити|Відновлено {n} документи: збережіть їх, щоб залишити|Відновлено {n} документів: збережіть їх, щоб залишити
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Відкрито з {n} приміткою: {first}|Відкрито з {n} примітками: {first}|Відкрито з {n} примітками: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Збережено: {path} з {n} приміткою: {first}|Збережено: {path} з {n} примітками: {first}|Збережено: {path} з {n} примітками: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
 @msgplural	Embedded {n} image|Embedded {n} images	Вбудовано {n} зображення|Вбудовано {n} зображення|Вбудовано {n} зображень
 @msgplural	Relinked {n} image|Relinked {n} images	Відновлено зв’язок із {n} зображенням|Відновлено зв’язок із {n} зображеннями|Відновлено зв’язок із {n} зображеннями
@@ -5253,7 +5237,7 @@ axis	Y Axis	Вісь Y
 	On Artboards	На монтажних областях
 	All Artboards	Усі монтажні області
 	Include Objects On Canvas	Включати об’єкти на полотні
-	Result(s): {count}	Результати: {count}
+@plural	Result: {n}|Results: {n}	Результат: {n}|Результати: {n}|Результати: {n}
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз

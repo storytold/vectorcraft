@@ -3405,7 +3405,6 @@ gradient-kind	Radial	방사형
 	Compression › Color › Above Ppi	압축 › 색상 › 다음 PPI 초과
 	Contrast	대비
 	Convert To Outlines	윤곽선으로 변환
-	Copied the CSS of {rules} object(s)	개체 {rules}개의 CSS를 복사했습니다
 	Copy All Objects	모든 개체 복사
 	Copy Fonts Used in the Document	문서에 사용된 글꼴 복사
 	Copy Links	링크 복사
@@ -3425,14 +3424,12 @@ gradient-kind	Radial	방사형
 	Default Printer	기본 프린터
 	Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?
 	Delete this {n} graphic style?	그래픽 스타일 {n}개를 삭제하시겠습니까?
-	Discarded {} recovered document(s)	복구된 문서 {}개를 삭제했습니다
 	Discord	Discord
 	Do Not Move	이동 안 함
 	Document Swatches	문서 견본
 	Document profile	문서 프로파일
 	Download	다운로드
 	Downloaded {what}	{what}을(를) 다운로드했습니다
-	Downloaded {} file(s)	파일 {}개를 다운로드했습니다
 	Draw Behind	뒤에 그리기
 	Draw Inside	안쪽에 그리기
 	Draw Normal	표준 그리기
@@ -3440,15 +3437,11 @@ gradient-kind	Radial	방사형
 	Duplicate and Offset 10 pt	복제 후 10 pt 이동
 	Edit Toolbar	도구 막대 편집
 	Edit Views	보기 편집
-	Embedded {n} image(s)	이미지 {n}개를 포함했습니다
-	Embedded {n} image(s); {missing} missing: relink them first	이미지 {n}개를 포함했습니다. {missing}개 누락: 먼저 다시 연결하십시오
 	English	English
 	Entire Font	글꼴 전체
 	Export Asset	자산 내보내기
-	Exported {count} file(s) to {folder}	{folder}에 파일 {count}개를 내보냈습니다
 	Exported {path}	{path}을(를) 내보냈습니다
 	Exported {what}	{what}을(를) 내보냈습니다
-	Exported {what} with {} note(s): {first}	{what}을(를) 내보냈습니다(참고 {}건): {first}
 	Exporting {}	{} 내보내는 중
 	File Dimensions	파일 크기
 	Fill (X), double-click for the Color Picker	칠 (X), 더블 클릭하면 색상 선택기
@@ -3588,7 +3581,6 @@ file-filter	Templates	템플릿
 	None (/)	없음 (/)
 	None (keep transparency)	없음 (투명도 유지)
 	Offset X	X 오프셋
-	Opened with {} note(s): {}	열었습니다(참고 {}건): {}
 	Other Libraries	기타 라이브러리
 	Out of Gamut Warning	색상 범위 초과 경고
 	Out of Web Color Warning	웹 색상 초과 경고
@@ -3597,7 +3589,6 @@ file-filter	Templates	템플릿
 	Output White	출력 흰색
 	Output › Mode	출력 › 모드
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{folder}에 파일 {n}개를 패키지했습니다 {note}
-	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
 	Page information	페이지 정보
 	Paragraph Style	단락 스타일
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft의 일부입니다. MIT OR Apache-2.0. 글꼴: Source Sans 3, Inter, JetBrains Mono (OFL). 아이콘: Lucide (ISC) + VectorCraft.
@@ -3626,15 +3617,11 @@ file-filter	Templates	템플릿
 	Registration marks	등록 표시
 	Regular	보통
 	Relink Linked Files to the Document	연결된 파일을 문서에 다시 연결
-	Relinked {n} image(s)	이미지 {n}개를 다시 연결했습니다
-	Relinked {n} image(s); not in that folder: {}	이미지 {n}개를 다시 연결했습니다. 해당 폴더에 없음: {}
-	Relinked {} image(s)	이미지 {}개를 다시 연결했습니다
 	Repeat Objects	반복 개체
 	Repeat Options	반복 옵션
 	Reset with Mesh	메시로 재설정
 	Reset with Warp	왜곡으로 재설정
 	Reset {}	{} 재설정
-	Restored {} recovered document(s): save them to keep them	복구된 문서 {}개를 복원했습니다. 보관하려면 저장하십시오
 	Right	오른쪽
 	Right in Front	오른쪽이 앞
 	Right-Justified Tab	오른쪽 정렬 탭
@@ -3645,7 +3632,6 @@ file-filter	Templates	템플릿
 	Saved to User Defined: {}	사용자 정의에 저장했습니다: {}
 	Saved {n} files beside {path}	{path} 옆에 파일 {n}개를 저장했습니다
 	Saved {path}	{path} 저장됨
-	Saved {path} with {} note(s): {first}	{path} 저장됨, 메모 {}개: {first}
 	Saving	저장 중
 	Saving recovery data for {}	{} 복구 데이터 저장 중
 	Saving {}	{} 저장 중
@@ -3716,7 +3702,6 @@ file-filter	Templates	템플릿
 	Unique	고유
 	Unite and Simplify	합치기 및 단순화
 	Untitled	제목 없음
-	Updated {} image(s)	이미지 {}개 업데이트됨
 	Use the document's swatch: pasted colors take its color.	문서의 견본 사용: 붙여넣은 색상이 문서 견본의 색상을 따릅니다.
 	User Library	사용자 라이브러리
 	User Preset	사용자 프리셋
@@ -4407,7 +4392,6 @@ theme	Appearance	외관
 @msg	`{tool}` isn't a Liquify tool	`{tool}`은(는) 픽셀 유동화 도구가 아닙니다
 @msg	pick a colour, gradient or pattern to save as a swatch	견본으로 저장할 색상, 그레이디언트 또는 패턴을 선택하세요
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder}에 파일 {n}개를 패키지했습니다({note})
-@msg	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
 @msg	choose a location for the package	패키지 위치를 선택하세요
 @msg	missing `folder`	`folder`가 없습니다
 @msg	the package came back damaged	패키지가 손상된 채로 돌아왔습니다
@@ -4461,7 +4445,6 @@ theme	Appearance	외관
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
 @msg	Imported {what}: {_1}	{what}을(를) 가져왔습니다: {_1}
 @msg	Installed plug-in {_1}	플러그인 {_1}을(를) 설치했습니다
-@msg	Opened with {_1} note(s): {_2}	참고 {_1}건과 함께 열었습니다: {_2}
 @msg	Saved {path}	{path}을(를) 저장했습니다
 @msg	no app to open files here	여기에는 파일을 열 앱이 없습니다
 @msg	no data	데이터가 없습니다
@@ -4472,7 +4455,6 @@ theme	Appearance	외관
 @msg	the document has never been saved	문서가 저장된 적이 없습니다
 @msg	the export returned unreadable data	내보내기가 읽을 수 없는 데이터를 반환했습니다
 @msg	{status} ({e})	{status}({e})
-@msg	Saved {path} with {_1} note(s): {first}	참고 {_1}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Couldn't open {name}: {e}	{name}을(를) 열 수 없습니다: {e}
 @msg	Couldn't read {name}: {e}	{name}을(를) 읽을 수 없습니다: {e}
 @msg	Internal error: {msg} (please report this bug)	내부 오류: {msg}(이 버그를 신고해 주세요)
@@ -4577,8 +4559,10 @@ theme	Appearance	외관
 @msg	there are no printer settings to open here	여기에는 열 수 있는 프린터 설정이 없습니다
 @msg	Couldn't save recovery data: {e}	복구 데이터를 저장할 수 없습니다: {e}
 @msg	Saved recovery data for {title}	{title}의 복구 데이터를 저장했습니다
-@msg	Discarded {_1} recovered document(s)	복구된 문서 {_1}개를 삭제했습니다
-@msg	Restored {_1} recovered document(s): save them to keep them	복구된 문서 {_1}개를 복원했습니다: 보관하려면 저장하세요
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	복구된 문서 {n}개를 삭제했습니다
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	복구된 문서 {n}개를 복원했습니다: 보관하려면 저장하세요
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	참고 {n}건과 함께 열었습니다: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	참고 {n}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Saving recovery data for {_1}	{_1}의 복구 데이터를 저장하는 중
 @msg	bad shortcut	잘못된 단축키
 @msg	can't parse shortcut `{c}`	단축키 `{c}`을(를) 해석할 수 없습니다
@@ -5236,7 +5220,7 @@ axis	Y Axis	Y축
 	On Artboards	아트보드에서
 	All Artboards	모든 아트보드
 	Include Objects On Canvas	캔버스의 개체 포함
-	Result(s): {count}	결과: {count}
+@plural	Result: {n}|Results: {n}	결과: {n}
 @msg	select one object	개체 하나를 선택하십시오
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오

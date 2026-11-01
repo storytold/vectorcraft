@@ -594,7 +594,6 @@ font-technology	Variable	Променливи
 	Convert to sRGB	Конвертиране в sRGB
 	Convert to Straight Lines	Преобразуване в прави линии
 	Convert:	Конвертиране:
-	Copied the CSS of {rules} object(s)	Копиран е CSS кодът на {rules} обект(а)
 	Copies:	Копия:
 	Copy	Копиране
 	Copy (make a transformed copy)	Копиране (създаване на трансформирано копие)
@@ -782,7 +781,6 @@ font-technology	Variable	Променливи
 	Discard Empty Type	Отхвърляне на празен текст
 	Discard Recovered Documents	Отхвърляне на възстановени документи
 	Discard White Overprint in Output	Премахване на бял надпечат при изход
-	Discarded {} recovered document(s)	Отхвърлени възстановени документи: {}
 	Discord	Discord
 	Discretionary Hyphen	Избираемо сричкопренасяне
 	Discretionary Ligatures	Избираеми лигатури
@@ -844,7 +842,6 @@ font-technology	Variable	Променливи
 	Download	Изтегляне
 	Download:	Изтегляне:
 	Downloaded {what}	Изтеглено: {what}
-	Downloaded {} file(s)	Изтеглени файлове: {}
 	Drag	Провлачване
 	Drag a handle	Провлачване на дръжка
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Провлачете графичен елемент тук или го изберете и щракнете върху +. Задръжте Alt за един актив от няколко обекта.
@@ -944,8 +941,6 @@ font-technology	Variable	Променливи
 	Embed page thumbnails	Вграждане на миниатюри на страници
 	Embedded	Вградено
 	Embedded Image	Вградено изображение
-	Embedded {n} image(s)	Вградени са {n} изображения
-	Embedded {n} image(s); {missing} missing: relink them first	Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 	Emulsion:	Емулсия:
 	En Dash	Средно тире
 	En Space	Интервал „ен“
@@ -1063,10 +1058,8 @@ font-technology	Variable	Променливи
 	Export Transparency Flattener Presets	Експортиране на предварителни настройки за сплескване на прозрачност
 	Export {count} Selected	Експортиране на {count} избрани
 	Export:	Експортиране:
-	Exported {count} file(s) to {folder}	Експортирани са {count} файла в {folder}
 	Exported {path}	Експортирано: {path}
 	Exported {what}	Експортирано: {what}
-	Exported {what} with {} note(s): {first}	Експортирани са {what} с {} бележка/бележки: {first}
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
@@ -2169,7 +2162,6 @@ font-technology	Variable	Променливи
 	Open Recent Files	Скорошни файлове
 	Open Swatch Library	Отваряне на библиотека с образци
 	Open the URL in the web browser	Отваряне на URL адреса в уеб браузъра
-	Opened with {} note(s): {}	Отворено с {} бележка(и): {}
 	Open…	Отваряне…
 	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
@@ -2230,7 +2222,6 @@ font-technology	Variable	Променливи
 	Package collects a saved document with its linked files and fonts.	Пакетът събира запазен документ заедно с неговите свързани файлове и шрифтове.
 	Package created	Пакетът е създаден
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Пакетиран е {n} файл в {folder} {note}|Пакетирани са {n} файла в {folder} {note}
-	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
 	Package…	Пакет…
 	Page	Страница
 	Page information	Информация за страница
@@ -2579,9 +2570,6 @@ digits	Malayalam	Малаялам
 	Relink	Свързване наново
 	Relink Linked Files to the Document	Свързване наново на свързаните файлове към документа
 	Relink to Folder…	Свързване наново към папка…
-	Relinked {n} image(s)	Свързани наново {n} изображения
-	Relinked {n} image(s); not in that folder: {}	Свързани наново {n} изображения; липсващи в тази папка: {}
-	Relinked {} image(s)	Свързани наново {} изображения
 	Relink…	Свързване наново…
 	Find Linked Files	Търсене на свързани файлове
 	Find Linked Files in Folder…	Търсене на свързани файлове в папка…
@@ -2662,7 +2650,6 @@ digits	Malayalam	Малаялам
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
 	Restore Recovered Documents	Възстановяване на възстановените документи
 	Restored documents open unsaved: save them to keep them.	Възстановените документи се отварят незаписани: запазете ги, за да ги съхраните.
-	Restored {} recovered document(s): save them to keep them	Възстановени са {} възстановени документ(и): запазете ги, за да ги съхраните
 	Restrict printing, editing and other tasks	Ограничаване на печата, редактирането и други задачи
 	Reverse Front to Back	Обръщане от преден към заден
 	Reverse Gradient	Обръщане на градиент
@@ -2828,7 +2815,6 @@ digits	Malayalam	Малаялам
 	Saved Views	Запазени изгледи
 	Saved {n} files beside {path}	Записани са {n} файла до {path}
 	Saved {path}	Записано: {path}
-	Saved {path} with {} note(s): {first}	Запазено {path} с {} бележка(и): {first}
 	Saves the current bars, toolbar and panel layout.	Запазва текущите ленти, лентата с инструменти и подредбата на панелите.
 	Save…	Запази…
 	Saving	Запазване
@@ -3465,7 +3451,6 @@ digits	Malayalam	Малаялам
 	Update Links	Актуализиране на връзките
 	Update Changed Links	Актуализиране на променените връзки
 	Update Modified Links	Актуализиране на модифицираните връзки
-	Updated {} image(s)	Актуализирани са {} изображения
 	UPPERCASE	Главни букви
 	URL:	URL адрес:
 	Use 	Използване 
@@ -3848,14 +3833,12 @@ axis	Both	И двете
 @msg	No saved views (View → New View…)	Няма запазени изгледи (Изглед → Нов изглед…)
 @msg	Offset Path: select paths	Отместване на път: изберете пътища
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Отместване на път: отместването не оставя нищо от избраните пътища (вътрешно отместване, по-голямо от фигурите)
-@msg	Opened with {_1} note(s): {_2}	Отворено с {_1} бележка(и): {_2}
 @msg	Opened {url}	Отворено: {url}
 @msg	Outline Stroke: no stroked paths selected	Преобразуване на щрих в контур: няма избрани пътища с щрих
 @msg	PDF settings are not an object	Настройките за PDF не са обект
 @msg	PDF security settings are not an object	Настройките за сигурност на PDF не са обект
 @msg	PDF writer error: {0}	Грешка на PDF записа: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Пакетиран е {n} файл в {folder} ({note})|Пакетирани са {n} файла в {folder} ({note})
-@msg	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
 @msg	Release: no layer to put the rectangle in	Освобождаване: няма слой, в който да се постави правоъгълникът
@@ -4375,7 +4358,6 @@ axis	Both	И двете
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Неуспешно поставяне на {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Неуспешно поставяне от клипборда: {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path} е запазен с {_1} бележка/и: {first}
 @msg	Exported {what}	Експортирано: {what}
 @msg	Saved {n} files beside {path}	Записани са {n} файла до {path}
 @msg	Saving	Запазване
@@ -4384,8 +4366,10 @@ axis	Both	И двете
 @msg	Packaging {_1}	Пакетиране на {_1}
 @msg	Placing {_1}	Вмъкване на {_1}
 @msg	Saving recovery data for {_1}	Записване на данни за възстановяване на {_1}
-@msg	Discarded {_1} recovered document(s)	Изхвърлени са {_1} възстановени документ(и)
-@msg	Restored {_1} recovered document(s): save them to keep them	Възстановени са {_1} документ(и): запазете ги, за да ги съхраните
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 @msgplural	Embedded {n} image|Embedded {n} images	Вградено е {n} изображение|Вградени са {n} изображения
 @msgplural	Relinked {n} image|Relinked {n} images	Свързано наново е {n} изображение|Свързани наново са {n} изображения
@@ -5564,7 +5548,7 @@ axis	Y Axis	Y ос
 	On Artboards	В работните области
 	All Artboards	Всички работни области
 	Include Objects On Canvas	Включване на обекти от платното
-	Result(s): {count}	Резултат(и): {count}
+@plural	Result: {n}|Results: {n}	Резултат: {n}|Резултати: {n}
 	Add to Symbols	Добавяне към символи
 	Basic Shapes	Основни фигури
 	Open Symbol Library	Отваряне на библиотека със символи

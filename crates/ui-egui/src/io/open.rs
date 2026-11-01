@@ -122,9 +122,14 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
-        app.status(format!("Opened with {} note(s): {}", w.len(), w[0].as_str().unwrap_or_default()));
+        app.status(opened_with_notes(w.len(), w[0].as_str().unwrap_or_default()));
     }
     crate::dialogs::missing_links::after_open(app, r);
+}
+
+/// The status bar's line for a document opened with `n` notes, the first of them `first`.
+pub(crate) fn opened_with_notes(n: usize, first: &str) -> String {
+    crate::i18n::msg_n(n as u64, "Opened with {n} note: {first}", "Opened with {n} notes: {first}", &[("first", first)])
 }
 
 /// A path from the open dialog, or "cancelled".

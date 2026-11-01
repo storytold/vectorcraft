@@ -587,7 +587,6 @@ font-technology	Variable	Variabel
 	Convert to sRGB	In sRGB konvertieren
 	Convert to Straight Lines	In gerade Linien umwandeln
 	Convert:	Konvertieren:
-	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
 	Copies:	Kopien:
 	Copy	Kopieren
 	Copy (make a transformed copy)	Kopieren (transformierte Kopie erstellen)
@@ -776,7 +775,6 @@ font-technology	Variable	Variabel
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
-	Discarded {} recovered document(s)	{} wiederhergestellte(s) Dokument(e) verworfen
 	Discord	Discord
 	Discretionary Hyphen	Bedingter Trennstrich
 	Discretionary Ligatures	Bedingte Ligaturen
@@ -838,7 +836,6 @@ font-technology	Variable	Variabel
 	Download	Herunterladen
 	Download:	Download:
 	Downloaded {what}	{what} heruntergeladen
-	Downloaded {} file(s)	{} Datei(en) heruntergeladen
 	Drag	Ziehen
 	Drag a handle	An einem Griff ziehen
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Ziehen Sie Grafiken hierher oder wählen Sie sie aus und klicken Sie auf +. Halten Sie Alt gedrückt, um mehrere Objekte als ein Asset hinzuzufügen.
@@ -938,8 +935,6 @@ font-technology	Variable	Variabel
 	Embed page thumbnails	Seitenminiaturen einbetten
 	Embedded	Eingebettet
 	Embedded Image	Eingebettetes Bild
-	Embedded {n} image(s)	{n} Bild(er) eingebettet
-	Embedded {n} image(s); {missing} missing: relink them first	{n} Bild(er) eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
 	Emulsion:	Schichtseite:
 	En Dash	Halbgeviertstrich
 	En Space	Halbgeviert-Leerzeichen
@@ -1057,10 +1052,8 @@ font-technology	Variable	Variabel
 	Export Transparency Flattener Presets	Vorgaben für Transparenzreduzierung exportieren
 	Export {count} Selected	{count} ausgewählte exportieren
 	Export:	Exportieren:
-	Exported {count} file(s) to {folder}	{count} Datei(en) nach {folder} exportiert
 	Exported {path}	{path} exportiert
 	Exported {what}	{what} exportiert
-	Exported {what} with {} note(s): {first}	{what} mit {} Hinweis(en) exportiert: {first}
 	Exporting {}	{} wird exportiert
 	Export…	Exportieren…
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
@@ -2182,7 +2175,6 @@ file-filter	Templates	Vorlagen
 	Open Recent Files	Zuletzt geöffnete Dateien
 	Open Swatch Library	Farbfeldbibliothek öffnen
 	Open the URL in the web browser	Die URL im Webbrowser öffnen
-	Opened with {} note(s): {}	Mit {} Hinweis(en) geöffnet: {}
 	Open…	Öffnen…
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
@@ -2243,7 +2235,6 @@ file-filter	Templates	Vorlagen
 	Package collects a saved document with its linked files and fonts.	„Verpacken“ sammelt ein gespeichertes Dokument mit seinen verknüpften Dateien und Schriften.
 	Package created	Paket erstellt
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} Datei in {folder} verpackt {note}|{n} Dateien in {folder} verpackt {note}
-	Packaged {n} file(s){note}	{n} Datei(en) verpackt{note}
 	Package…	Verpacken…
 	Page	Seite
 	Page information	Seiteninformationen
@@ -2599,9 +2590,6 @@ digits	Malayalam	Malayalam
 	Relink	Neu verknüpfen
 	Relink Linked Files to the Document	Verknüpfte Dateien neu mit dem Dokument verknüpfen
 	Relink to Folder…	Mit Ordner neu verknüpfen…
-	Relinked {n} image(s)	{n} Bild(er) neu verknüpft
-	Relinked {n} image(s); not in that folder: {}	{n} Bild(er) neu verknüpft; nicht in diesem Ordner: {}
-	Relinked {} image(s)	{} Bild(er) neu verknüpft
 	Relink…	Neu verknüpfen…
 	Find Linked Files	Verknüpfte Dateien suchen
 	Find Linked Files in Folder…	Verknüpfte Dateien in Ordner suchen…
@@ -2683,7 +2671,6 @@ digits	Malayalam	Malayalam
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
 	Restored documents open unsaved: save them to keep them.	Wiederhergestellte Dokumente werden ungespeichert geöffnet: Speichern Sie sie, um sie zu behalten.
-	Restored {} recovered document(s): save them to keep them	{} wiederhergestellte(s) Dokument(e) geöffnet: Speichern Sie sie, um sie zu behalten
 	Restrict printing, editing and other tasks	Drucken, Bearbeiten und andere Aufgaben einschränken
 	Reverse Front to Back	Von vorne nach hinten umkehren
 	Reverse Gradient	Verlauf umkehren
@@ -2851,7 +2838,6 @@ digits	Malayalam	Malayalam
 	Saved Views	Gespeicherte Ansichten
 	Saved {n} files beside {path}	{n} Dateien neben {path} gespeichert
 	Saved {path}	{path} gespeichert
-	Saved {path} with {} note(s): {first}	{path} mit {} Hinweis(en) gespeichert: {first}
 	Saves the current bars, toolbar and panel layout.	Speichert das aktuelle Layout von Leisten, Werkzeugleiste und Bedienfeldern.
 	Save…	Speichern…
 	Saving	Wird gespeichert
@@ -3486,7 +3472,6 @@ effect	Points	Punkte
 	Update Link	Verknüpfung aktualisieren
 	Update Links	Verknüpfungen aktualisieren
 	Update Modified Links	Geänderte Verknüpfungen aktualisieren
-	Updated {} image(s)	{} Bild(er) aktualisiert
 	UPPERCASE	GROSSBUCHSTABEN
 	URL:	URL:
 	Use 	Über 
@@ -3863,14 +3848,12 @@ theme	Appearance	Erscheinungsbild
 @msg	No saved views (View → New View…)	Keine gespeicherten Ansichten (Ansicht → Neue Ansicht…)
 @msg	Offset Path: select paths	Pfad verschieben: Wählen Sie Pfade aus
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Pfad verschieben: Der Versatz lässt von den ausgewählten Pfaden nichts übrig (ein Versatz nach innen, der größer ist als die Formen)
-@msg	Opened with {_1} note(s): {_2}	Mit {_1} Hinweis(en) geöffnet: {_2}
 @msg	Opened {url}	{url} geöffnet
 @msg	Outline Stroke: no stroked paths selected	Konturlinie: keine Pfade mit Kontur ausgewählt
 @msg	PDF settings are not an object	die PDF-Einstellungen sind kein Objekt
 @msg	PDF security settings are not an object	die PDF-Sicherheitseinstellungen sind kein Objekt
 @msg	PDF writer error: {0}	Fehler beim Schreiben der PDF-Datei: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} Datei in {folder} verpackt ({note})|{n} Dateien in {folder} verpackt ({note})
-@msg	Packaged {n} file(s){note}	{n} Datei(en) verpackt{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
 @msg	Release Guides: no guides	Hilfslinien zurückwandeln: keine Hilfslinien
 @msg	Release: no layer to put the rectangle in	Zurückwandeln: keine Ebene, die das Rechteck aufnehmen könnte
@@ -4425,7 +4408,6 @@ theme	Appearance	Erscheinungsbild
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}
 @msg	Couldn't paste from the clipboard: {e}	Aus der Zwischenablage konnte nicht eingefügt werden: {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path} mit {_1} Hinweis(en) gespeichert: {first}
 @msg	Exported {what}	{what} exportiert
 @msg	Saved {n} files beside {path}	{n} Dateien neben {path} gespeichert
 @msg	Saving	Wird gespeichert
@@ -4434,8 +4416,10 @@ theme	Appearance	Erscheinungsbild
 @msg	Packaging {_1}	{_1} wird verpackt
 @msg	Placing {_1}	{_1} wird platziert
 @msg	Saving recovery data for {_1}	Wiederherstellungsdaten für {_1} werden gespeichert
-@msg	Discarded {_1} recovered document(s)	{_1} wiederhergestellte(s) Dokument(e) verworfen
-@msg	Restored {_1} recovered document(s): save them to keep them	{_1} wiederhergestellte(s) Dokument(e) geöffnet: Speichern Sie sie, um sie zu behalten
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Mit {n} Hinweis geöffnet: {first}|Mit {n} Hinweisen geöffnet: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} mit {n} Hinweis gespeichert: {first}|{path} mit {n} Hinweisen gespeichert: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} Bild eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu|{n} Bilder eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} Bild eingebettet|{n} Bilder eingebettet
 @msgplural	Relinked {n} image|Relinked {n} images	{n} Bild neu verknüpft|{n} Bilder neu verknüpft
@@ -5239,7 +5223,7 @@ axis	Y Axis	Y-Achse
 	On Artboards	Auf Zeichenflächen
 	All Artboards	Alle Zeichenflächen
 	Include Objects On Canvas	Objekte auf der Leinwand einschließen
-	Result(s): {count}	Ergebnis(se): {count}
+@plural	Result: {n}|Results: {n}	Ergebnis: {n}|Ergebnisse: {n}
 @msg	select one object	wählen Sie ein Objekt aus
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut

@@ -555,7 +555,6 @@
 	Convert to sRGB	转换为 sRGB
 	Convert to Straight Lines	转换为直线
 	Convert:	转换：
-	Copied the CSS of {rules} object(s)	已复制 {rules} 个对象的 CSS
 	Copies:	份数：
 	Copy	复制
 	Copy (make a transformed copy)	复制 (制作变换后的副本)
@@ -739,7 +738,6 @@
 	Discard Empty Type	丢弃空文字
 	Discard Recovered Documents	丢弃已恢复的文档
 	Discard White Overprint in Output	输出时放弃白色叠印
-	Discarded {} recovered document(s)	已放弃 {} 份恢复的文档
 	Discord	Discord
 	Discretionary Hyphen	选择性连字号
 	Discretionary Ligatures	任意连字
@@ -801,7 +799,6 @@
 	Download	下载
 	Download:	下载：
 	Downloaded {what}	已下载 {what}
-	Downloaded {} file(s)	已下载 {} 个文件
 	Drag	拖动
 	Drag a handle	拖动控制手柄
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	将图稿拖到此处，或选择图稿后单击 +。按住 Alt 可将多个对象合并为一个资源。
@@ -901,8 +898,6 @@
 	Embed page thumbnails	嵌入页面缩略图
 	Embedded	嵌入
 	Embedded Image	嵌入的图像
-	Embedded {n} image(s)	已嵌入 {n} 张图像
-	Embedded {n} image(s); {missing} missing: relink them first	已嵌入 {n} 张图像；{missing} 张缺失：请先重新链接
 	Emulsion:	药膜：
 	En Dash	短破折号
 	En Space	半角空格
@@ -1020,10 +1015,8 @@
 	Export Transparency Flattener Presets	导出透明度拼合器预设
 	Export {count} Selected	导出 {count} 个选择项目
 	Export:	导出：
-	Exported {count} file(s) to {folder}	已导出 {count} 个文件至 {folder}
 	Exported {path}	已导出 {path}
 	Exported {what}	已导出 {what}
-	Exported {what} with {} note(s): {first}	已导出 {what}，附 {} 条附注：{first}
 	Exporting {}	正在导出 {}
 	Export…	导出…
 	Extrude & Bevel…	突出与斜角…
@@ -2122,7 +2115,6 @@ file-filter	Templates	模板
 	Open Recent Files	打开最近文件
 	Open Swatch Library	打开色板库
 	Open the URL in the web browser	在 Web 浏览器中打开 URL
-	Opened with {} note(s): {}	已打开，附 {} 条附注：{}
 	OpenType	OpenType
 	Open…	打开…
 	Optical	视觉
@@ -2182,7 +2174,6 @@ file-filter	Templates	模板
 	Package collects a saved document with its linked files and fonts.	打包会将已存储的文件连同其链接文件与字体一并收集。
 	Package created	已创建打包
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	已将 {n} 个文件打包于 {folder}{note}
-	Packaged {n} file(s){note}	已打包 {n} 个文件{note}
 	Package…	打包…
 	Page	页面
 	Page information	页面信息
@@ -2538,9 +2529,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Relink	重新链接
 	Relink Linked Files to the Document	将链接文件重新链接到文档
 	Relink to Folder…	重新链接到文件夹…
-	Relinked {n} image(s)	已重新链接 {n} 张图像
-	Relinked {n} image(s); not in that folder: {}	已重新链接 {n} 张图像；不在该文件夹中：{}
-	Relinked {} image(s)	已重新链接 {} 张图像
 	Relink…	重新链接…
 	Find Linked Files	查找链接文件
 	Find Linked Files in Folder…	在文件夹中查找链接文件…
@@ -2621,7 +2609,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
 	Restore Recovered Documents	恢复已恢复的文档
 	Restored documents open unsaved: save them to keep them.	恢复的文档处于未存储状态：请存储以保留。
-	Restored {} recovered document(s): save them to keep them	已还原 {} 份恢复的文档：请存储以保留
 	Restrict printing, editing and other tasks	限制打印、编辑及其他操作
 	Reverse Front to Back	从前向后反转
 	Reverse Gradient	反转渐变
@@ -2760,7 +2747,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Saved Views	已存视图
 	Saved {n} files beside {path}	已将 {n} 个文件存储于 {path} 旁
 	Saved {path}	已存储 {path}
-	Saved {path} with {} note(s): {first}	已存储 {path}，附 {} 条附注：{first}
 	Saves the current bars, toolbar and panel layout.	保存当前的栏、工具栏和面板布局。
 	Save…	存储…
 	Saving	正在存储
@@ -3408,7 +3394,6 @@ digits	Malayalam	马拉雅拉姆数字
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示
 	Update Modified Links	更新已修改的链接
-	Updated {} image(s)	已更新 {} 张图像
 	UPPERCASE	大写
 	URL:	URL：
 	Use 	使用 
@@ -4200,7 +4185,6 @@ imageTrace	Outline	轮廓
 @msg	`{tool}` isn't a Liquify tool	`{tool}` 不是液化工具
 @msg	pick a colour, gradient or pattern to save as a swatch	请选取要保存为色板的颜色、渐变或图案
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	已将 {n} 个文件打包到 {folder}({note})
-@msg	Packaged {n} file(s){note}	已打包 {n} 个文件{note}
 @msg	choose a location for the package	请为打包选择位置
 @msg	missing `folder`	缺少 `folder`
 @msg	the package came back damaged	返回的打包文件已损坏
@@ -4254,7 +4238,6 @@ imageTrace	Outline	轮廓
 @msg	Downloaded {what}	已下载 {what}
 @msg	Imported {what}: {_1}	已导入 {what}：{_1}
 @msg	Installed plug-in {_1}	已安装增效工具 {_1}
-@msg	Opened with {_1} note(s): {_2}	已打开，有 {_1} 条注释：{_2}
 @msg	Saved {path}	已保存 {path}
 @msg	no app to open files here	此处没有可打开文件的应用
 @msg	no data	没有数据
@@ -4265,7 +4248,6 @@ imageTrace	Outline	轮廓
 @msg	the document has never been saved	该文档从未保存过
 @msg	the export returned unreadable data	导出返回了无法读取的数据
 @msg	{status} ({e})	{status} ({e})
-@msg	Saved {path} with {_1} note(s): {first}	已保存 {path}，有 {_1} 条注释：{first}
 @msg	Couldn't open {name}: {e}	无法打开 {name}：{e}
 @msg	Couldn't read {name}: {e}	无法读取 {name}：{e}
 @msg	Internal error: {msg} (please report this bug)	内部错误：{msg} (请报告此错误)
@@ -4367,8 +4349,10 @@ imageTrace	Outline	轮廓
 @msg	there are no printer settings to open here	此处没有可打开的打印机设置
 @msg	Couldn't save recovery data: {e}	无法保存恢复数据：{e}
 @msg	Saved recovery data for {title}	已保存 {title} 的恢复数据
-@msg	Discarded {_1} recovered document(s)	已丢弃 {_1} 个恢复的文档
-@msg	Restored {_1} recovered document(s): save them to keep them	已还原 {_1} 个恢复的文档：请保存以保留它们
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已打开，有 {n} 条注释：{first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
 @msg	This shortcut file is in a form VectorCraft can't read.	此快捷键文件的格式 VectorCraft 无法读取。
 @msg	bad shortcut	快捷键无效
@@ -5497,7 +5481,7 @@ axis	Y Axis	Y 轴
 	On Artboards	在画板上
 	All Artboards	所有画板
 	Include Objects On Canvas	包括画布上的对象
-	Result(s): {count}	结果：{count}
+@plural	Result: {n}|Results: {n}	结果：{n}
 @msg	select one object	请选择一个对象
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	全局编辑适用于路径、复合路径、符号实例及其编组
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（旋转或镜像的副本不会匹配）；请更改全局编辑选项后重试

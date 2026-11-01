@@ -596,7 +596,6 @@ font-technology	Variable	Variabla
 	Convert to sRGB	Konvertera till sRGB
 	Convert to Straight Lines	Konvertera till raka linjer
 	Convert:	Konvertera:
-	Copied the CSS of {rules} object(s)	Kopierade CSS för {rules} objekt
 	Copies:	Kopior:
 	Copy	Kopiera
 	Copy (make a transformed copy)	Kopiera (gör en transformerad kopia)
@@ -784,7 +783,6 @@ font-technology	Variable	Variabla
 	Discard Empty Type	Släng tom text
 	Discard Recovered Documents	Släng återställda dokument
 	Discard White Overprint in Output	Släng vit övertryckning i utdata
-	Discarded {} recovered document(s)	Slängde {} återställda dokument
 	Discord	Discord
 	Discretionary Hyphen	Mjukt bindestreck
 	Discretionary Ligatures	Valfria ligaturer
@@ -846,7 +844,6 @@ font-technology	Variable	Variabla
 	Download	Hämta
 	Download:	Hämta:
 	Downloaded {what}	Hämtade {what}
-	Downloaded {} file(s)	Hämtade {} fil(er)
 	Drag	Dra
 	Drag a handle	Dra i ett handtag
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Dra hit grafik, eller markera den och klicka på +. Håll ned Alt för att skapa en resurs av flera objekt.
@@ -946,8 +943,6 @@ font-technology	Variable	Variabla
 	Embed page thumbnails	Bädda in sidminiatyrer
 	Embedded	Inbäddad
 	Embedded Image	Inbäddad bild
-	Embedded {n} image(s)	Bäddade in {n} bild(er)
-	Embedded {n} image(s); {missing} missing: relink them first	Bäddade in {n} bild(er); {missing} saknas: länka om dem först
 	Emulsion:	Emulsion:
 	En Dash	Tankstreck
 	En Space	Halvfyrkant
@@ -1065,10 +1060,8 @@ font-technology	Variable	Variabla
 	Export Transparency Flattener Presets	Exportera förinställningar för transparensförenkling
 	Export {count} Selected	Exportera {count} markerade
 	Export:	Exportera:
-	Exported {count} file(s) to {folder}	Exporterade {count} fil(er) till {folder}
 	Exported {path}	Exporterade {path}
 	Exported {what}	Exporterade {what}
-	Exported {what} with {} note(s): {first}	Exporterade {what} med {} anmärkning(ar): {first}
 	Exporting {}	Exporterar {}
 	Export…	Exportera…
 	Extrude & Bevel…	Extrudera och fasa…
@@ -2169,7 +2162,6 @@ font-technology	Variable	Variabla
 	Open Recent Files	Öppna senaste filer
 	Open Swatch Library	Öppna färgrutebibliotek
 	Open the URL in the web browser	Öppna URL:en i webbläsaren
-	Opened with {} note(s): {}	Öppnad med {} anteckning(ar): {}
 	Open…	Öppna…
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
@@ -2230,7 +2222,6 @@ font-technology	Variable	Variabla
 	Package collects a saved document with its linked files and fonts.	Paketera samlar ett sparat dokument med dess länkade filer och typsnitt.
 	Package created	Paketet har skapats
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Paketerade {n} fil i {folder} {note}|Paketerade {n} filer i {folder} {note}
-	Packaged {n} file(s){note}	Paketerade {n} fil(er){note}
 	Package…	Paketera…
 	Page	Sida
 	Page information	Sidinformation
@@ -2579,9 +2570,6 @@ digits	Malayalam	Malayalam
 	Relink	Länka om
 	Relink Linked Files to the Document	Länka om länkade filer till dokumentet
 	Relink to Folder…	Länka om till mapp…
-	Relinked {n} image(s)	{n} bild(er) har länkats om
-	Relinked {n} image(s); not in that folder: {}	{n} bild(er) har länkats om; finns inte i mappen: {}
-	Relinked {} image(s)	{} bild(er) har länkats om
 	Relink…	Länka om…
 	Find Linked Files	Sök länkade filer
 	Find Linked Files in Folder…	Sök länkade filer i mapp…
@@ -2662,7 +2650,6 @@ digits	Malayalam	Malayalam
 	Restore every preference to its default (applied on OK)	Återställ alla inställningar till standard (verkställs vid OK)
 	Restore Recovered Documents	Återställ återskapade dokument
 	Restored documents open unsaved: save them to keep them.	Återställda dokument öppnas osparade: spara dem för att behålla dem.
-	Restored {} recovered document(s): save them to keep them	Återställde {} återskapade dokument: spara dem för att behålla dem
 	Restrict printing, editing and other tasks	Begränsa utskrift, redigering och andra åtgärder
 	Reverse Front to Back	Vänd ordningen fram och bak
 	Reverse Gradient	Vänd gradient
@@ -2828,7 +2815,6 @@ digits	Malayalam	Malayalam
 	Saved Views	Sparade vyer
 	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
 	Saved {path}	Sparade {path}
-	Saved {path} with {} note(s): {first}	Sparade {path} med {} anteckning(ar): {first}
 	Saves the current bars, toolbar and panel layout.	Sparar aktuella fält, verktygsfält och panellayout.
 	Save…	Spara…
 	Saving	Sparar
@@ -3465,7 +3451,6 @@ digits	Malayalam	Malayalam
 	Update Links	Uppdatera länkar
 	Update Changed Links	Uppdatera ändrade länkar
 	Update Modified Links	Uppdatera ändrade länkar
-	Updated {} image(s)	Uppdaterade {} bild(er)
 	UPPERCASE	VERSALER
 	URL:	URL:
 	Use 	Använd 
@@ -3860,14 +3845,12 @@ axis	Both	Båda
 @msg	No saved views (View → New View…)	Inga sparade vyer (Visa → Ny vy…)
 @msg	Offset Path: select paths	Förskjut bana: markera banor
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Förskjut bana: förskjutningen lämnar inget kvar av de markerade banorna (en infällning större än formerna)
-@msg	Opened with {_1} note(s): {_2}	Öppnad med {_1} anteckning(ar): {_2}
 @msg	Opened {url}	Öppnade {url}
 @msg	Outline Stroke: no stroked paths selected	Kontur till bana: inga banor med kontur markerade
 @msg	PDF settings are not an object	PDF-inställningarna är inte ett objekt
 @msg	PDF security settings are not an object	PDF-säkerhetsinställningarna är inte ett objekt
 @msg	PDF writer error: {0}	fel i PDF-skrivaren: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketerade {n} fil i {folder} ({note})|Paketerade {n} filer i {folder} ({note})
-@msg	Packaged {n} file(s){note}	Paketerade {n} fil(er){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filer i stället)
 @msg	Release Guides: no guides	Släpp stödlinjer: inga stödlinjer
 @msg	Release: no layer to put the rectangle in	Släpp: inget lager att placera rektangeln i
@@ -4409,7 +4392,6 @@ axis	Both	Båda
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunde inte placera {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunde inte klistra in från urklippet: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Sparade {path} med {_1} anteckning(ar): {first}
 @msg	Exported {what}	Exporterade {what}
 @msg	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
 @msg	Saving	Sparar
@@ -4418,8 +4400,10 @@ axis	Both	Båda
 @msg	Packaging {_1}	Paketerar {_1}
 @msg	Placing {_1}	Placerar {_1}
 @msg	Saving recovery data for {_1}	Sparar återställningsdata för {_1}
-@msg	Discarded {_1} recovered document(s)	Kastade {_1} återställda dokument
-@msg	Restored {_1} recovered document(s): save them to keep them	Återställde {_1} återskapade dokument: spara dem för att behålla dem
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kastade {n} återställt dokument|Kastade {n} återställda dokument
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Återställde {n} återskapat dokument: spara det för att behålla det|Återställde {n} återskapade dokument: spara dem för att behålla dem
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Öppnad med {n} anteckning: {first}|Öppnad med {n} anteckningar: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sparade {path} med {n} anteckning: {first}|Sparade {path} med {n} anteckningar: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Bäddade in {n} bild; {missing} saknas: länka om dem först|Bäddade in {n} bilder; {missing} saknas: länka om dem först
 @msgplural	Embedded {n} image|Embedded {n} images	Bäddade in {n} bild|Bäddade in {n} bilder
 @msgplural	Relinked {n} image|Relinked {n} images	Omlänkade {n} bild|Omlänkade {n} bilder
@@ -5681,7 +5665,7 @@ axis	Y Axis	Y-axel
 	On Artboards	På ritytor
 	All Artboards	Alla ritytor
 	Include Objects On Canvas	Ta med objekt på arbetsytan
-	Result(s): {count}	Resultat: {count}
+@plural	Result: {n}|Results: {n}	Resultat: {n}|Resultat: {n}
 @msg	select one object	markera ett objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
