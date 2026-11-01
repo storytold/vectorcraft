@@ -1869,6 +1869,103 @@ fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style section with style `PF`: an Effect › Pathfinder filter with `Command` `command`
+/// and `Mix` `mix` in the object's chain, over a fill and stroke that paint nothing.
+fn pathfinder_styles(command: u32, mix: f64) -> String {
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(PF) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Adobe Pathfinder) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         0 /Bool (RemovePoints) ,\n{mix} /Real (Mix) ,\n1 /Bool (ConvertCustom) ,\n{command} /Int (Command) ,\n1 /Real (TrapMaxTint) ,\n\
+         1 /Real (TrapAspect) ,\n0.4 /Real (TrapTint) ,\n0.25 /Real (TrapThickness) ,\n0 /Bool (TrapReverse) ,\n10 /Real (Precision) ,\n\
+         (Op) /UnicodeString (DisplayString) ,\n0 /Bool (TrapConvertCustom) ,\n0.05 /Real (TrapTintTolerance) ,\n1 /Bool (ExtractUnpainted) ,\n\
+         ; /Dict ;\n /Part ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    )
+}
+
+/// A group of a red and a blue square with style `PF`: its drawn look (one path of their area),
+/// then the group on `%_` lines.
+fn pathfinder_group() -> String {
+    let hidden = |color: &str, x: f64| format!("{color}{}f\n", rect_path(x, 0.0, x + 10.0, 10.0)).replace('\n', "\n%_");
+    format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}{}U\n1 (PF) XW\n",
+        rect_path(0.0, 0.0, 15.0, 10.0),
+        hidden(RED, 0.0),
+        hidden("0 0 1 0 0 0 1 Xa\n", 5.0)
+    )
+}
+
+#[test]
+fn a_group_with_a_pathfinder_effect_keeps_its_members_and_the_effect() {
+    // GUARDS: the style was not read, and the group came in as its drawn look: one path, with no effect.
+    let ids = [
+        "pathfinder.add",
+        "pathfinder.intersect",
+        "pathfinder.exclude",
+        "pathfinder.subtract",
+        "pathfinder.minusBack",
+        "pathfinder.divide",
+        "pathfinder.outline",
+        "pathfinder.trim",
+        "pathfinder.merge",
+        "pathfinder.crop",
+        "pathfinder.hardMix",
+        "pathfinder.softMix",
+    ];
+    for (command, id) in (0..).zip(ids) {
+        let r = read_ok(&format!("{}{}", pathfinder_styles(command, 0.5), layer(&pathfinder_group())));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{id}: {a:#?}");
+        let members = a[0].children().cloned().unwrap_or_default();
+        assert_eq!(members.len(), 2, "{id}: the squares, not the look: {a:#?}");
+        assert!(members.iter().all(|m| matches!(m.kind, NodeKind::Path { .. })), "{id}: {members:#?}");
+        assert_eq!((fill(&members[0]).color(), fill(&members[1]).color()), (Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))));
+        let effects: Vec<_> = a[0].appearance.effects.iter().map(|e| (e.id.as_str(), e.visible)).collect();
+        assert_eq!(effects, [(id, true)]);
+        assert!(a[0].appearance.items.is_empty(), "{id}: {:?}", a[0].appearance);
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{id}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn a_group_with_soft_mix_keeps_its_rate() {
+    let r = read_ok(&format!("{}{}", pathfinder_styles(11, 0.3), layer(&pathfinder_group())));
+    let a = art(&r.doc);
+    let [e] = a[0].appearance.effects.as_slice() else { panic!("{a:#?}") };
+    assert_eq!((e.id.as_str(), e.params["mixingRate"].as_f64()), ("pathfinder.softMix", Some(30.0)));
+}
+
+#[test]
+fn a_pathfinder_style_this_does_not_read_keeps_the_drawn_look() {
+    // Trap, and a Precision other than the one read.
+    for styles in [pathfinder_styles(12, 0.5), pathfinder_styles(0, 0.5).replace("10 /Real (Precision)", "5 /Real (Precision)")] {
+        let r = read_ok(&format!("{styles}{}", layer(&pathfinder_group())));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        let look = a[0].children().cloned().unwrap_or_default();
+        assert_eq!(look.len(), 1, "the look's one path: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{:?}", a[0].appearance);
+    }
+}
+
+#[test]
+fn a_path_with_a_pathfinder_effect_keeps_its_drawn_look() {
+    // Effect › Pathfinder doesn't apply to a lone path: its style stays the drawn look's.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (PF) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{}", pathfinder_styles(0, 0.5), layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "the look, not the path: {a:#?}");
+    let mut effects = 0;
+    r.doc.walk(|n| effects += n.appearance.effects.len());
+    assert_eq!(effects, 0);
+}
+
 #[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.

@@ -2956,6 +2956,59 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     check(&r.document, &r.warnings);
 }
 
+/// An art style section with style `Add`: Effect › Pathfinder › Add in the object's chain, over a
+/// fill and stroke that paint nothing.
+fn pathfinder_add_style() -> String {
+    let basic = |name: &str, body: &str| {
+        format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n")
+    };
+    let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+    let add = basic(
+        "Adobe Pathfinder",
+        "0 /Bool (RemovePoints) ,\n0.5 /Real (Mix) ,\n1 /Bool (ConvertCustom) ,\n0 /Int (Command) ,\n1 /Real (TrapMaxTint) ,\n1 /Real (TrapAspect) ,\n\
+         0.4 /Real (TrapTint) ,\n0.25 /Real (TrapThickness) ,\n0 /Bool (TrapReverse) ,\n10 /Real (Precision) ,\n0 /Bool (TrapConvertCustom) ,\n\
+         0.05 /Real (TrapTintTolerance) ,\n1 /Bool (ExtractUnpainted) ,\n",
+    );
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            basic("Stroke Style Filter", "/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (StrokeStyle) ,\n"),
+            basic("Conduit Filter", ""),
+            basic("Fill Style Filter", "/FillStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (FillStyle) ,\n"),
+        ],
+    );
+    format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Add) /Name ,\n/ActiveStyle :\n{}%AI9_EndArtStyles\n", compound("Chain Style Filter", &[add, stack]))
+}
+
+#[test]
+fn type_in_a_group_with_a_pathfinder_effect_stays_type() {
+    // GUARDS: the group's style was not read, and the group came in as its drawn look, the type's
+    // outlines and the square, which can't be retyped.
+    let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // The look: the square, and the area round where the type lies (its anchor is at (58.5, 61.5)),
+    // in the square's yellow.
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n{}\n{drawing}\nU\n9 () XW\n", square(10, 10));
+    let own: String = format!("0 Ae\nu\n{}{}\nU\n", text_object(0), square(10, 10)).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(pathfinder_add_style() + &layer("Art", true, &format!("{look}{own}1 (Add) XW\n"))), &doc);
+    let check = |d: &Document, notes: &[String]| {
+        assert_eq!(kinds(&d.layers[0]), ["group[2]"], "{notes:?}");
+        let group = &d.layers[0].children().unwrap()[0];
+        let mut kinds = kinds(group);
+        kinds.sort_unstable();
+        assert_eq!(kinds, ["path", "text"], "{notes:?}");
+        assert_eq!(text_of(group).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"]);
+        let effects: Vec<_> = group.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(effects, ["pathfinder.add"], "{notes:?}");
+        assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
+    };
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    check(&d, &notes);
+    let page = format!("{}\n0 0 1 0 setcmykcolor 54 56 moveto 100 56 lineto 100 80 lineto 54 80 lineto closepath fill", page_square(10, 10));
+    let r = import(&eps(&page, &art)).unwrap();
+    check(&r.document, &r.warnings);
+}
+
 #[test]
 fn point_type_without_a_matrix_is_placed_by_its_layout() {
     // GUARDS: Illustrator 24 leaves an unturned, unscaled point type's matrix out of its frame; such

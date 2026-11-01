@@ -315,6 +315,157 @@ fn an_effect_not_read_here_keeps_the_drawn_look() {
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
 }
 
+/// The dictionary of an Effect › Pathfinder filter with `Command` `command` and `Mix` `mix`, and
+/// the other options at the values the effect reads.
+fn pathfinder_keys(command: &str, mix: &str) -> String {
+    format!(
+        "0 /Bool (RemovePoints) ,\n{mix} /Real (Mix) ,\n1 /Bool (ConvertCustom) ,\n{command} /Int (Command) ,\n1 /Real (TrapMaxTint) ,\n\
+         1 /Real (TrapAspect) ,\n0.4 /Real (TrapTint) ,\n0.25 /Real (TrapThickness) ,\n0 /Bool (TrapReverse) ,\n10 /Real (Precision) ,\n\
+         (Op) /UnicodeString (DisplayString) ,\n0 /Bool (TrapConvertCustom) ,\n0.05 /Real (TrapTintTolerance) ,\n1 /Bool (ExtractUnpainted) ,\n"
+    )
+}
+
+/// The style `Group`: the object's chain holding `effects`, a stack whose fill and stroke paint
+/// nothing, and the object's transparency.
+fn group_style(effects: &[String]) -> ArtStyle {
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            basic("Stroke Style Filter", "/StrokeStyle : 0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 0 Xd\n/Def ;\n (StrokeStyle) ,\n"),
+            basic("Conduit Filter", ""),
+            basic(
+                "Fill Style Filter",
+                "/FillStyle : 0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 0 Xd\n/Def ;\n (FillStyle) ,\n0 /Bool (UseEvenOdd) ,\n",
+            ),
+        ],
+    );
+    let mut kids = effects.to_vec();
+    kids.extend([stack, blend(0, 1.0)]);
+    let data = format!("/KnownStyle :\n(Group) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &kids));
+    art_styles(data.as_bytes()).remove("Group").unwrap_or_default()
+}
+
+fn pathfinder(keys: &str) -> String {
+    basic("Adobe Pathfinder", keys)
+}
+
+#[test]
+fn every_pathfinder_command_is_read_as_its_effect() {
+    // GUARDS: an `Adobe Pathfinder` filter made the style not plain, so a group with it came in as its drawn look.
+    let ids = [
+        "pathfinder.add",
+        "pathfinder.intersect",
+        "pathfinder.exclude",
+        "pathfinder.subtract",
+        "pathfinder.minusBack",
+        "pathfinder.divide",
+        "pathfinder.outline",
+        "pathfinder.trim",
+        "pathfinder.merge",
+        "pathfinder.crop",
+        "pathfinder.hardMix",
+        "pathfinder.softMix",
+    ];
+    for (command, id) in ids.iter().enumerate() {
+        let st = group_style(&[pathfinder(&pathfinder_keys(&command.to_string(), "0.5"))]);
+        assert!(st.plain && st.simple && st.pathfinder, "{command}: {st:?}");
+        assert!(st.items.is_empty(), "{command}: {st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{command}: {st:?}") };
+        let want = if *id == "pathfinder.softMix" { json!({"mixingRate": 50.0}) } else { json!({}) };
+        assert_eq!((e.id.as_str(), &e.params, e.visible), (*id, &want, true), "{command}");
+    }
+}
+
+#[test]
+fn soft_mix_reads_its_mix_as_a_percent() {
+    let st = group_style(&[pathfinder(&pathfinder_keys("11", "0.3"))]);
+    let [e] = st.effects.as_slice() else { panic!("{st:?}") };
+    assert_eq!((e.id.as_str(), &e.params), ("pathfinder.softMix", &json!({"mixingRate": 30.0})));
+}
+
+#[test]
+fn a_hidden_pathfinder_effect_comes_in_hidden() {
+    let st = group_style(&[pathfinder(&pathfinder_keys("0", "0.5")).replacen("1 /Visible", "0 /Visible", 1)]);
+    assert!(st.simple, "{st:?}");
+    let [e] = st.effects.as_slice() else { panic!("{st:?}") };
+    assert_eq!((e.id.as_str(), e.visible), ("pathfinder.add", false));
+}
+
+#[test]
+fn pathfinder_effects_keep_their_order_among_the_objects_effects() {
+    let offset = basic("Adobe Offset Path", "3 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n");
+    let st = group_style(&[pathfinder(&pathfinder_keys("0", "0.5")), offset]);
+    assert!(st.plain, "{st:?}");
+    let ids: Vec<_> = st.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(ids, ["pathfinder.add", "path.offsetPath"]);
+    // Offset Path isn't one every object is read with: the group keeps its drawn look.
+    assert!(!st.simple);
+}
+
+#[test]
+fn pathfinder_settings_this_does_not_read_keep_the_drawn_look() {
+    let add = pathfinder_keys("0", "0.5");
+    let cases = [
+        ("no Command", add.replace("0 /Int (Command) ,\n", "")),
+        ("Trap", add.replace("0 /Int (Command)", "12 /Int (Command)")),
+        ("unknown Command", add.replace("0 /Int (Command)", "40 /Int (Command)")),
+        ("negative Command", add.replace("0 /Int (Command)", "-1 /Int (Command)")),
+        ("fractional Command", add.replace("0 /Int (Command)", "2.5 /Int (Command)")),
+        ("huge Command", add.replace("0 /Int (Command)", "1e999 /Int (Command)")),
+        ("Command as a real", add.replace("0 /Int (Command)", "0 /Real (Command)")),
+        ("Command without a number", add.replace("0 /Int (Command)", "(zero) /Int (Command)")),
+        // A number before the string isn't its value.
+        ("Command with a string after a number", add.replace("0 /Int (Command)", "3 (zero) /Int (Command)")),
+        ("Command twice", add.clone() + "1 /Int (Command) ,\n"),
+        ("an option twice", add.clone() + "10 /Real (Precision) ,\n"),
+        ("unknown key", add.clone() + "1 /Int (Extra) ,\n"),
+        ("unknown string", add.clone() + "(x) /String (Extra) ,\n"),
+        ("an array", add.clone() + "/Array :\n1 /Real ,\n; (Extra) ,\n"),
+        ("many strings", add.clone() + &(0..40).map(|i| format!("(x) /String (DisplayString{i}) ,\n")).collect::<String>()),
+        ("missing option", add.replace("0.25 /Real (TrapThickness) ,\n", "")),
+        ("missing Mix", add.replace("0.5 /Real (Mix) ,\n", "")),
+        ("option of the wrong type", add.replace("10 /Real (Precision)", "10 /Int (Precision)")),
+        ("other Precision", add.replace("10 /Real (Precision)", "5 /Real (Precision)")),
+        ("huge Precision", add.replace("10 /Real (Precision)", "1e999 /Real (Precision)")),
+        ("Remove Redundant Points", add.replace("0 /Bool (RemovePoints)", "1 /Bool (RemovePoints)")),
+        ("unpainted art kept", add.replace("1 /Bool (ExtractUnpainted)", "0 /Bool (ExtractUnpainted)")),
+        ("other trap tint", add.replace("0.4 /Real (TrapTint)", "0.25 /Real (TrapTint)")),
+        ("Mix on Add", add.replace("0.5 /Real (Mix)", "0.3 /Real (Mix)")),
+        ("Soft Mix of 0", pathfinder_keys("11", "0")),
+        ("Soft Mix over 1", pathfinder_keys("11", "1.5")),
+    ];
+    for (case, keys) in cases {
+        let st = group_style(&[pathfinder(&keys)]);
+        assert!(!st.plain && !st.pathfinder && st.effects.is_empty(), "{case}: {st:?}");
+    }
+}
+
+#[test]
+fn a_pathfinder_effect_outside_the_objects_chain_keeps_the_drawn_look() {
+    let pf = pathfinder(&pathfinder_keys("0", "0.5"));
+    // On a fill of its own.
+    let item = compound("Chain Style Filter", &[pf.clone(), fill("0 0 0 1 0 0 0 Xa")]);
+    let data =
+        format!("/KnownStyle :\n(Item) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+    let st = &art_styles(data.as_bytes())["Item"];
+    assert!(!st.plain, "{st:?}");
+    // In a style that isn't an object's chain.
+    let data = format!("/KnownStyle :\n(Bare) /Name ,\n/ActiveStyle :\n{pf}");
+    let st = &art_styles(data.as_bytes())["Bare"];
+    assert!(!st.plain && st.effects.is_empty(), "{st:?}");
+}
+
+#[test]
+fn a_pathfinder_effect_with_fills_of_its_own_keeps_the_drawn_look() {
+    let stack = compound("Stack Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Conduit Filter", "")]);
+    let data = format!(
+        "/KnownStyle :\n(Filled) /Name ,\n/ActiveStyle :\n{}",
+        compound("Chain Style Filter", &[pathfinder(&pathfinder_keys("0", "0.5")), stack])
+    );
+    let st = &art_styles(data.as_bytes())["Filled"];
+    assert!(st.pathfinder && !st.simple, "{st:?}");
+}
+
 #[test]
 fn a_hidden_fill_comes_in_hidden() {
     let hidden = fill("0 0 0 1 0 0 0 Xa").replacen("1 /Visible", "0 /Visible", 1);
