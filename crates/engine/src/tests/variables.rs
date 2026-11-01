@@ -338,6 +338,25 @@ fn make_text_dynamic_refuses_type_that_has_a_text_variable() {
     assert_eq!(v["ids"], json!([t.0]));
 }
 
+/// With unbound type selected before type that has a text variable, Make Text Dynamic is still
+/// refused: it defines no variable and binds neither object.
+#[test]
+fn make_text_dynamic_refuses_a_selection_where_a_later_object_has_a_text_variable() {
+    let mut s = session();
+    let u = text(&mut s, "Bob");
+    let t = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [u.0, t.0]})).unwrap();
+    let e = s.execute("variable.makeTextDynamic", &json!({})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} already has the text variable `Alice`", t.0)), "{e}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.variables.variables.len(), 1, "no variable was defined");
+    assert!(!doc.variables.bindings.contains_key(&u), "the unbound object stays unbound");
+    assert_eq!(doc.variables.bindings[&t].iter().collect::<Vec<_>>(), ["Alice"]);
+}
+
 /// A document saved with two text variables on one type object opens with both bindings, and
 /// applying a row still writes both, the later one defined last. Binding either again changes
 /// nothing, and binding a third is refused with the first one named.
