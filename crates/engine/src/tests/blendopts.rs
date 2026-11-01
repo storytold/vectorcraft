@@ -234,29 +234,48 @@ fn escape_drops_the_blend_tools_first_pick() {
 }
 
 #[test]
-fn an_edit_or_undo_made_outside_the_blend_tool_drops_its_first_pick() {
-    for undo in [false, true] {
+fn an_edit_undo_or_redo_made_outside_the_blend_tool_drops_its_first_pick() {
+    for case in ["edit", "undo", "redo"] {
+        let undo = case == "undo";
         let mut s = session();
         let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
+        if case == "redo" {
+            s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
         s.select_tool("blend", ViewInfo::default()).unwrap();
         let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
-        // Undo takes away c, the object picked first; an edit recolors c, which is not picked.
+        // Undo takes away c, the object picked first; an edit or a redo recolors c, which is not picked.
         click(&mut s, if undo { 420.0 } else { 20.0 }, 20.0);
         assert!(!s.overlays(ViewInfo::default()).is_empty());
-        if undo {
-            s.execute("edit.undo", &json!({})).unwrap();
-        } else {
-            s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap();
-        }
-        assert!(s.overlays(ViewInfo::default()).is_empty(), "undo {undo}: the pick is not marked");
+        match case {
+            "undo" => s.execute("edit.undo", &json!({})).unwrap(),
+            "redo" => s.execute("edit.redo", &json!({})).unwrap(),
+            _ => s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap(),
+        };
+        assert!(s.overlays(ViewInfo::default()).is_empty(), "{case}: the pick is not marked");
         let (layers, depth) = (s.doc().unwrap().doc.layers.clone(), s.doc().unwrap().history.undo.len());
         click(&mut s, 220.0, 20.0);
-        assert_eq!(s.doc().unwrap().selection.objects, vec![b], "undo {undo}: b is picked first");
-        assert_eq!((&s.doc().unwrap().doc.layers, s.doc().unwrap().history.undo.len()), (&layers, depth), "undo {undo}: the click changes no art");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![b], "{case}: b is picked first");
+        assert_eq!((&s.doc().unwrap().doc.layers, s.doc().unwrap().history.undo.len()), (&layers, depth), "{case}: the click changes no art");
         click(&mut s, if undo { 20.0 } else { 420.0 }, 20.0);
         let g = s.doc().unwrap().selection.objects[0];
-        assert_eq!(spec(&s, g).0, if undo { vec![a, b] } else { vec![b, c] }, "undo {undo}");
+        assert_eq!(spec(&s, g).0, if undo { vec![a, b] } else { vec![b, c] }, "{case}");
     }
+}
+
+#[test]
+fn two_picks_with_no_edit_between_them_blend() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0));
+    s.select_tool("blend", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
+    click(&mut s, 20.0, 20.0);
+    // Drawing the overlays between the picks does not drop the first one.
+    assert!(!s.overlays(ViewInfo::default()).is_empty());
+    click(&mut s, 220.0, 20.0);
+    let g = s.doc().unwrap().selection.objects[0];
+    assert_eq!(spec(&s, g).0, vec![a, b]);
 }
 
 #[test]
