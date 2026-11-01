@@ -410,6 +410,33 @@ fn an_ai_file_with_a_variable_library_says_its_variables_werent_read() {
     assert!(notes(&r).is_empty(), "{r}");
 }
 
+/// An Objects on Path group in a `.ai` file opens as one: its record names the group's children by
+/// their ids in the opened document.
+#[test]
+fn an_ai_file_opens_its_objects_on_path_group_live() {
+    let ids = ["9b1c0e7a-0000-4000-8000-000000000001", "9b1c0e7a-0000-4000-8000-000000000002", "9b1c0e7a-0000-4000-8000-000000000003"];
+    let options = ai::on_path_options(2, 4, std::f64::consts::FRAC_PI_2, "");
+    let record = ai::on_path_record("Adobe Align On Path", &ids, &options); // brand-ok: the record's name in the files
+    let group = format!(
+        "0 Ae\nu\n/ConstraintGroup :\n128 /GroupType ,\n;\n0 0 1 0 0 0 1 XA\n10 50 m\n190 50 L\nS\n{}0 1 1 0 1 0 0 Xa\n{}f\n{}{}f\n{}U\n",
+        ai::on_path_member(ids[0], None, 0.0),
+        ai::rect(5.0, 45.0, 15.0, 55.0),
+        ai::on_path_member(ids[1], Some(0), 0.0),
+        ai::rect(185.0, 45.0, 195.0, 55.0),
+        ai::on_path_member(ids[2], Some(1), 0.0),
+    );
+    let data = ai::editing_data(200.0, 100.0, &format!("{record}{}", ai::layer("Art", &group)));
+    let mut s = Session::new();
+    let r = open(&mut s, "on-path.ai", &ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 5 45 10 10 re f 185 45 10 10 re f"), json!({})).unwrap();
+    assert_eq!(r["format"], json!("ai"), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let g = &doc.layers[0].children().unwrap()[0];
+    let rec = g.extras().objects_on_path.as_deref().expect("an Objects on Path group");
+    let kids: Vec<NodeId> = g.children().unwrap().iter().map(|c| c.id).collect();
+    assert!(kids.contains(&rec.path) && rec.members.iter().all(|m| kids.contains(&m.id)), "{rec:?} {kids:?}");
+    assert_eq!((rec.members.len(), rec.pivot, rec.rotate.round()), (2, 4, 90.0));
+}
+
 /// A page showing only a placeholder line, as a `.ai` saved without PDF compatibility has.
 const PLACEHOLDER: &str = "BT /F1 12 Tf 10 50 Td (Saved without its PDF part) Tj ET";
 
