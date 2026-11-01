@@ -8237,7 +8237,9 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
         .unwrap();
 
     let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
     out.textures_delta.clear();
+    assert_eq!(set_count, 1, "intermediate frame 5 is uploaded to texture");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "intermediate frame 5 is uploaded");
     assert!(app.canvas.from_worker);
 
@@ -8257,7 +8259,9 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
         .unwrap();
 
     let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
     out.textures_delta.clear();
+    assert_eq!(set_count, 0, "older out-of-order frame 3 emits NO texture upload delta, leaving displayed texture intact");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "older out-of-order frame 3 is discarded");
 
     // Worker completes another intermediate revision 8. Newer than displayed 5, so uploaded.
@@ -8276,7 +8280,9 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
         .unwrap();
 
     let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
     out.textures_delta.clear();
+    assert_eq!(set_count, 1, "newer frame 8 is uploaded to texture");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 8, "newer frame 8 is uploaded");
 
     // Finally, the settling frame at revision 10 completes: it is accepted and uploaded.
@@ -8295,6 +8301,8 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
         .unwrap();
 
     let mut out = ctx.run_ui(raw, |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
     out.textures_delta.clear();
+    assert_eq!(set_count, 1, "settled frame 10 is uploaded to texture");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }
