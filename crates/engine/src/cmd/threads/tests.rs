@@ -1148,6 +1148,38 @@ fn a_restored_thread_in_one_direction_keeps_its_text_as_saved() {
     assert_eq!((text(&s, a), text(&s, b)), (story[..10].to_string(), story[10..].to_string()));
 }
 
+/// A threaded frame restored from a file with Auto Size on keeps its size when it turns from
+/// vertical to horizontal: as the file opens, when the first frame is horizontal, and with Type
+/// Orientation, when the whole thread is vertical.
+#[test]
+fn a_restored_threaded_frame_with_auto_size_keeps_its_size_when_it_turns_horizontal() {
+    for first_vertical in [false, true] {
+        let (mut s, a, b) = setup();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        for (id, on) in [(a, first_vertical), (b, true)] {
+            let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.vertical = on;
+            if id == b {
+                t.area.fit = vectorcraft_doc::AreaFit::AutoHeight;
+            }
+            refresh_bounds(t);
+        }
+        let saved = frame_box(&s, b);
+        let r = s.execute("document.exportEps", &json!({})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        let r = s.execute("document.open", &json!({"name": "saved.eps", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+        assert_eq!(r["restored"], true, "{r}");
+        if first_vertical {
+            s.execute("select.set", &json!({"ids": [a]})).unwrap();
+            s.execute("type.orientation.horizontal", &json!({})).unwrap();
+        }
+        assert_eq!(vertical(&s, [a, b]), [false, false], "first frame vertical: {first_vertical}");
+        assert_eq!(frame_box(&s, b), saved, "first frame vertical: {first_vertical}");
+        assert!(flows_as_laid_out(&s, &[a, b]), "first frame vertical: {first_vertical}");
+    }
+}
+
 /// One count runs through a thread: the second frame's numbered paragraphs go on from the
 /// first frame's, also after an edit, a save and a reopen. A pasted or duplicated copy of a
 /// frame, a frame converted to point type, the frames of a thread that Remove Threading breaks

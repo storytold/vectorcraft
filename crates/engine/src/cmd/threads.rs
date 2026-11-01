@@ -245,6 +245,25 @@ fn thread_setting<T: PartialEq>(before: &Document, doc: &Document, live: &[NodeI
     changed.or(live.first()).and_then(now)
 }
 
+/// Turn Auto Size off for the frames of each thread of two or more frames, as [`reflow`] does,
+/// without re-flowing the story: for a document restored from a file as it was saved, so a later
+/// change to a frame's settings keeps the frame's size.
+pub(crate) fn keep_frame_sizes(doc: &mut Document) {
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        if live.len() < 2 {
+            continue;
+        }
+        for id in live {
+            if text_of(doc, id).is_some_and(|t| t.area.fit == vectorcraft_doc::AreaFit::AutoHeight)
+                && let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind)
+            {
+                t.area.fit = vectorcraft_doc::AreaFit::None;
+            }
+        }
+    }
+}
+
 /// Give every frame of each thread the first frame's Optical Margin Alignment setting, without
 /// re-flowing the story: for a document restored from a file as it was saved.
 pub(crate) fn share_optical_margin(doc: &mut Document) {
