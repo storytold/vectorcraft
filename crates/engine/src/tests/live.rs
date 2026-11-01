@@ -1060,6 +1060,22 @@ fn mesh_create_at_a_point_outside_keeps_the_path() {
     assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(50.0, 100.0)) < 0.5);
 }
 
+/// With several objects selected, Create Gradient Mesh at a point turns the objects that hold the
+/// point into meshes in one undo step and leaves the others paths, without an error.
+#[test]
+fn mesh_create_at_a_point_inside_one_of_two_objects_converts_only_that_one() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 0.0, 300.0, 100.0);
+    sel(&mut s, &[a, b]);
+    let n = undo_len(&s);
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 50]})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]), "{r}");
+    assert!(matches!(node(&s, a).kind, NodeKind::Mesh(_)), "a holds the point");
+    assert!(matches!(node(&s, b).kind, NodeKind::Path { .. }), "b stays a path");
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+}
+
 #[test]
 fn mesh_expand_to_flat_pieces() {
     let mut s = session();
