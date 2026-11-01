@@ -18,7 +18,7 @@
 use vectorcraft_color::Color;
 
 use super::lex::{Lexer, Tok};
-use super::obj::V;
+use super::obj::{Names, V};
 use super::paint::{self, Named};
 
 /// Largest number of swatches read from one palette.
@@ -60,8 +60,9 @@ impl Palette {
     }
 }
 
-/// The palette of `data`: what follows `%AI5_BeginPalette`, up to its end.
-pub(super) fn palette(data: &[u8]) -> Palette {
+/// The palette of `data`: what follows `%AI5_BeginPalette`, up to its end, its names read by
+/// `names`.
+pub(super) fn palette(data: &[u8], names: &mut Names) -> Palette {
     let mut lex = Lexer::new(data);
     let mut out = Palette::default();
     let mut vals: Vec<V> = Vec::new();
@@ -110,29 +111,29 @@ pub(super) fn palette(data: &[u8]) -> Palette {
                 cell = None;
             }
             "Bg" if in_gradient => {
-                if let Some(name) = last_text(&vals) {
+                if let Some(name) = last_text(&vals, names) {
                     cell = Some(Cell::Gradient(name));
                 }
             }
             "BB" => in_gradient = false,
-            "p" => cell = first_text(&vals).map(Cell::Pattern),
+            "p" => cell = first_text(&vals, names).map(Cell::Pattern),
             "Xs" | "Xz" | "XS" | "XZ" => cell = None,
             "g" | "k" | "x" | "Xa" | "Xx" | "Xk" => {
-                cell = paint::color_op(w, &vals).and_then(|(p, named)| match named {
+                cell = paint::color_op_in(w, &vals, names).and_then(|(p, named)| match named {
                     Some(Named { color, spot, .. }) => Some(Cell::Color { color, global: true, spot }),
                     None => p.color().map(|color| Cell::Color { color, global: false, spot: false }),
                 });
             }
             "Pg" => {
                 // Capped as swatches are: a file of many `Pg` would make as many empty groups.
-                if let Some(name) = first_text(&vals)
+                if let Some(name) = first_text(&vals, names)
                     && out.groups.len() < MAX_SWATCHES
                 {
                     out.groups.push((name, Vec::new()));
                 }
             }
             "Pc" => {
-                if let (Some(name), Some(c)) = (last_text(&vals), cell.take())
+                if let (Some(name), Some(c)) = (last_text(&vals, names), cell.take())
                     && !name.starts_with('[')
                     && out.len() < MAX_SWATCHES
                 {
@@ -157,12 +158,12 @@ fn push(vals: &mut Vec<V>, v: V) {
     }
 }
 
-fn first_text(vals: &[V]) -> Option<String> {
-    vals.iter().find(|v| matches!(v, V::Str(_))).and_then(V::text)
+fn first_text(vals: &[V], names: &mut Names) -> Option<String> {
+    vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v))
 }
 
-fn last_text(vals: &[V]) -> Option<String> {
-    vals.iter().rev().find(|v| matches!(v, V::Str(_))).and_then(V::text)
+fn last_text(vals: &[V], names: &mut Names) -> Option<String> {
+    vals.iter().rev().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v))
 }
 
 #[cfg(test)]
@@ -171,6 +172,21 @@ mod tests {
 
     fn color(name: &str, color: Color, global: bool, spot: bool) -> Entry {
         Entry { name: name.into(), cell: Cell::Color { color, global, spot } }
+    }
+
+    fn palette(data: &[u8]) -> Palette {
+        super::palette(data, &mut Names::default())
+    }
+
+    /// Swatch, group and spot colour names that aren't UTF-8 are read in the encoding picked.
+    #[test]
+    fn palette_names_read_in_the_encoding() {
+        let mut names = Names::new(super::super::obj::NameEncoding::ShiftJis);
+        // 赤 (red) and 色 (color) in Shift_JIS.
+        let p = super::palette(b"0 0 Pb\n0 (\x90\x46) 1 Pg\n0 1 1 0 (\x90\xd4) 0 x\n(\x90\xd4)\nPc\nPB\n", &mut names);
+        assert_eq!(p.groups.first().map(|(n, s)| (n.as_str(), s.len())), Some(("色", 1)));
+        assert_eq!(p.groups.first().and_then(|(_, s)| s.first()), Some(&color("赤", Color::cmyk(0.0, 1.0, 1.0, 0.0), true, true)));
+        assert_eq!(names.notes().len(), 2);
     }
 
     #[test]

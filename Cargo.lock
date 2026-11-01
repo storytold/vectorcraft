@@ -6257,6 +6257,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.20.0"
 dependencies = [
+ "encoding_rs",
  "fax",
  "flate2",
  "hayro-ccitt",

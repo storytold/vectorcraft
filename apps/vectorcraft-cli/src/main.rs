@@ -4,7 +4,7 @@
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
@@ -94,7 +94,7 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --scale sizes a raster OUT (pixels per point, default 1); other formats leave it
       out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
@@ -107,7 +107,9 @@ USAGE:
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
       --replace-lossy is given. --editing-data opens a .ai or an EPS with editing data from its editing copy
       even where that draws differently from its PDF part or page (which can be older), as long as
-      it can be read. A PDF OUT omits the embedded native document unless --preserve-editing is
+      it can be read. --legacy-name-encoding reads the names in a .ai's or an EPS's editing data
+      that aren't UTF-8 (layers, objects, colors, swatches) in windows-1252 (the default),
+      macintosh, windows-949, shift_jis, gbk or big5. A PDF OUT omits the embedded native document unless --preserve-editing is
       given (the app's Save As PDF still defaults to keeping it). With --preserve-editing, when the
       attachment is written the result's warnings say so (it is left out, with its own warning, for
       --artboard or a --range without every artboard).
@@ -279,7 +281,19 @@ fn commands() -> Result<(), String> {
 }
 
 fn convert(args: &[String]) -> Result<(), String> {
-    let valued = ["--scale", "-s", "--artboard", "-a", "--range", "-r", "--decimals", "--ai-version", "--hidden-objects", "--transparent-images"];
+    let valued = [
+        "--scale",
+        "-s",
+        "--artboard",
+        "-a",
+        "--range",
+        "-r",
+        "--decimals",
+        "--ai-version",
+        "--hidden-objects",
+        "--transparent-images",
+        "--legacy-name-encoding",
+    ];
     if help_requested(args, &valued) {
         return help();
     }
@@ -287,6 +301,9 @@ fn convert(args: &[String]) -> Result<(), String> {
     let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data, mut preserve_editing) =
         (1.0f64, None::<u64>, None::<String>, false, false, false, false);
     let mut decimals = None::<u64>;
+    // The encoding of a legacy `.ai`'s names that aren't UTF-8, passed on as `document.open`'s
+    // `legacyNameEncoding`; the engine checks it.
+    let mut legacy_names = None::<String>;
     // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
     // `transparentImages`); the engine checks their values.
     let mut legacy: Vec<(&str, String)> = vec![];
@@ -301,6 +318,9 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--replace-lossy" => replace_lossy = true,
             "--editing-data" => editing_data = true,
             "--preserve-editing" => preserve_editing = true,
+            "--legacy-name-encoding" => {
+                legacy_names = Some(it.next().cloned().ok_or("--legacy-name-encoding needs an encoding such as windows-949")?);
+            }
             "--ai-version" => legacy.push(("aiVersion", it.next().cloned().ok_or("--ai-version needs 7 or pdf")?)),
             "--hidden-objects" => legacy.push(("hiddenObjects", it.next().cloned().ok_or("--hidden-objects needs layer, omit or visible")?)),
             "--transparent-images" => legacy.push(("transparentImages", it.next().cloned().ok_or("--transparent-images needs flatten or omit")?)),
@@ -313,8 +333,14 @@ fn convert(args: &[String]) -> Result<(), String> {
         return Err("a .ait template holds every artboard: --artboard and --range don't apply".into());
     }
     let mut h = Headless::new();
-    let opened = if editing_data {
-        let params = json!({"path": input, "editingData": "always"});
+    let opened = if editing_data || legacy_names.is_some() {
+        let mut params = json!({"path": input});
+        if editing_data {
+            params["editingData"] = json!("always");
+        }
+        if let Some(e) = &legacy_names {
+            params["legacyNameEncoding"] = json!(e);
+        }
         h.call("engine.execute", json!({"command": "document.open", "params": params})).map_err(|e| format!("open {input}: {e}"))?
     } else {
         h.call("app.open", json!({"path": input})).map_err(|e| format!("open {input}: {e}"))?

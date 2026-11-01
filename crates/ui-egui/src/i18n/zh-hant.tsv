@@ -1974,6 +1974,9 @@ file-filter	Templates	範本
 @msg	an image whose data is cut short was left out	已略過資料不完整的影像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名稱 `{name}` 不是 UTF-8，已依 {label} 讀取：若顯示不正確，請以其他 legacyNameEncoding 開啟檔案
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名稱 `{name}` 不是 UTF-8，且部分內容在 {label} 中也無效：請以其他 legacyNameEncoding 開啟檔案
+@msg	more names that aren't UTF-8 were read as {label} ({count})	其他非 UTF-8 名稱已依 {label} 讀取 ({count})
 @msg	patterns nested too deeply are filled with mid-grey	巢狀層級過深的圖樣以中灰色填滿
 @msg	shadings of an unknown type were left out	已略過類型未知的著色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函數類型未知的著色以其中間顏色填滿

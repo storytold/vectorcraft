@@ -1,5 +1,9 @@
 use super::*;
 
+fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
+    super::paint_op(f, op, vals, &mut Names::default());
+}
+
 #[test]
 fn a_variable_width_stroke_keeps_its_profile() {
     let data = b"/KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\

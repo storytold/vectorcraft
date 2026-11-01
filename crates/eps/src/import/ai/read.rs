@@ -67,7 +67,7 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use super::super::ate::CANVAS_CENTRE;
 use super::lex::{Lexer, Tok};
-use super::obj::{self, Obj, V};
+use super::obj::{self, NameEncoding, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};
 use crate::ps;
 
@@ -127,11 +127,20 @@ pub struct Structure {
     pub warnings: Vec<String>,
 }
 
+/// [`read_with`], names that aren't UTF-8 read as Windows-1252.
+#[cfg(test)]
+pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, NameEncoding::default())
+}
+
 /// Read the structure of the editing data `data`, applying the file's `%AI24_LargeCanvasScale` only
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
-/// keep the reduced one, which the PDF import reads as it is (#2031).
-pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+/// keep the reduced one, which the PDF import reads as it is (#2031). Names that aren't UTF-8
+/// (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches) are read in
+/// `names`, each with a warning.
+pub fn read_with(data: &[u8], large_canvas: bool, names: NameEncoding) -> Result<Structure, String> {
     let mut r = Reader::new(data);
+    r.names = obj::Names::new(names);
     r.large_canvas = large_canvas.then_some(1.0);
     r.run()?;
     r.finish()
@@ -272,6 +281,8 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// How names that aren't UTF-8 are read, and the notes on them.
+    names: obj::Names,
 }
 
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
@@ -364,6 +375,7 @@ impl<'a> Reader<'a> {
             pattern_tiles: HashMap::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            names: obj::Names::default(),
         }
     }
 

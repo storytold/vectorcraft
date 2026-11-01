@@ -4580,6 +4580,9 @@ axis	Both	Ambos
 @msg	its objects are nested too deeply	sus objetos están anidados a demasiada profundidad
 @msg	its section ending with `%{end}` doesn't end	su sección que termina con `%{end}` no termina
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	los objetos con varios rellenos o trazos, efectos o pinceles se importaron con su aspecto dibujado ({_1}): su aspecto aún no se puede editar
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	el nombre `{name}` no está en UTF-8 y se leyó como {label}: si no se ve bien, abre el archivo con otro legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	el nombre `{name}` no está en UTF-8 y partes de él tampoco son {label} válido: abre el archivo con otro legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	se leyeron como {label} más nombres que no están en UTF-8 ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	el degradado “{name}” no está definido en el archivo: lo sustituye un color sólido
 @msg	an image VectorCraft can't read was left out	se omitió una imagen que VectorCraft no puede leer
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos

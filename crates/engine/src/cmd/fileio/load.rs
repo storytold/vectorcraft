@@ -169,7 +169,8 @@ fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warning
     }
     let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data, unit);
+    let (doc, mut warnings, read) =
+        vectorcraft_eps::layered_ai_with(&private, doc, warnings, outlined, opts.trust_editing_data, unit, opts.legacy_names);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings, false);
@@ -195,7 +196,7 @@ fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(D
     }
     let private = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref())?;
     Some(
-        vectorcraft_eps::ai_alone(&private)
+        vectorcraft_eps::ai_alone_with(&private, opts.legacy_names)
             .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})"))),
     )
 }
@@ -290,7 +291,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_trusting(bytes, opts.editing_data, opts.trust_editing_data)
+                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?

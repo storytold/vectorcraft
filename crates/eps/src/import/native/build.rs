@@ -35,7 +35,7 @@ pub(super) struct Frame<'a> {
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects. `unit`: the size in points of a unit of the page's user space (see
-/// [`layered_ai`]).
+/// [`layered_ai`]). `names`: the encoding of names that aren't UTF-8.
 pub(super) fn build(
     data: &[u8],
     visible: Option<&Document>,
@@ -43,10 +43,11 @@ pub(super) fn build(
     outlined: bool,
     trust: bool,
     unit: f64,
+    names: ai::NameEncoding,
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+    build_from(ai::read_with(data, matches!(page, Page::Art), names)?, data, visible, page, outlined, trust, unit)
 }
 
 /// [`build`] from `structure`, the editing copy `data` already read.

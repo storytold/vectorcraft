@@ -4479,6 +4479,9 @@ axis	Both	Båda
 @msg	its objects are nested too deeply	dess objekt är för djupt kapslade
 @msg	its section ending with `%{end}` doesn't end	dess avsnitt som slutar med `%{end}` avslutas aldrig
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	namnet `{name}` är inte UTF-8 och lästes som {label}: om det ser fel ut, öppna filen med en annan legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	namnet `{name}` är inte UTF-8, och delar av det är inte heller giltig {label}: öppna filen med en annan legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	fler namn som inte är UTF-8 lästes som {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten ”{name}” är inte definierad i filen: en enfärgad fyllning används i stället
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades

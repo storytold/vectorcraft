@@ -5,6 +5,7 @@ use super::{
     Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure,
     Swatch, Unit, V, obj,
 };
+use crate::import::ai::NameEncoding;
 use vectorcraft_doc::{Guide, ImageBlob, PatternDef};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
@@ -36,10 +37,11 @@ pub(crate) fn slot_frame(name: Option<&str>) -> usize {
 
 /// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
 /// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
-/// call them (#1068).
-pub fn artboards(data: &[u8]) -> Vec<(String, Rect)> {
-    let found = artboards_read(data);
-    if !found.is_empty() {
+/// call them (#1068). Names that aren't UTF-8 are read in `names`, and the notes on them are
+/// returned too.
+pub fn artboards(data: &[u8], names: NameEncoding) -> (Vec<(String, Rect)>, Vec<String>) {
+    let found = artboards_read(data, names);
+    if !found.0.is_empty() {
         return found;
     }
     // Reading can stop before the artboards (art kept in the document's data comes first): read
@@ -48,7 +50,7 @@ pub fn artboards(data: &[u8]) -> Vec<(String, Rect)> {
         let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
         alone.extend_from_slice(array);
         alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
-        artboards_read(&alone)
+        artboards_read(&alone, names)
     })
 }
 
@@ -84,14 +86,18 @@ pub struct PaletteSwatches {
     pub patterns: Vec<PatternDef>,
     /// The image blobs the art of `patterns` shows, by key.
     pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The notes on the names that weren't UTF-8.
+    pub notes: Vec<String>,
 }
 
 /// The swatches and color groups of the palette of the editing data `data`, for a file whose
 /// layers aren't read: the swatches its PDF part has are the defaults (#4036). They come as
 /// [`read`] makes them, with pattern swatches only for the patterns in `patterns` and those the
-/// editing data defines; `None` when the palette is empty or reading stops before it.
-pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> {
+/// editing data defines; `None` when the palette is empty or reading stops before it. Names that
+/// aren't UTF-8 are read in `names`.
+pub fn palette(data: &[u8], patterns: &[PatternDef], names: NameEncoding) -> Option<PaletteSwatches> {
     let mut r = Reader::new(data);
+    r.names = obj::Names::new(names);
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
@@ -111,13 +117,22 @@ pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> 
             images.insert(im.key.clone(), blob.clone());
         }
     });
-    Some(PaletteSwatches { swatches, groups, patterns: added, images })
+    let used: Vec<&str> = swatches
+        .iter()
+        .chain(groups.iter().flat_map(|g| &g.swatches))
+        .map(|s| s.name.as_str())
+        .chain(groups.iter().map(|g| g.name.as_str()))
+        .chain(added.iter().map(|p| p.name.as_str()))
+        .collect();
+    let notes = r.names.notes_among(&used);
+    Some(PaletteSwatches { swatches, groups, patterns: added, images, notes })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
-fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
+fn artboards_read(data: &[u8], names: NameEncoding) -> (Vec<(String, Rect)>, Vec<String>) {
     let mut r = Reader::new(data);
+    r.names = obj::Names::new(names);
     let _ = r.run();
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
     for o in &open {
@@ -125,7 +140,9 @@ fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
             r.document(o);
         }
     }
-    r.artboards
+    let used: Vec<&str> = r.artboards.iter().map(|(n, _)| n.as_str()).collect();
+    let notes = r.names.notes_among(&used);
+    (r.artboards, notes)
 }
 
 /// How many variables and data sets the variable library of the editing data has: XML nodes
@@ -263,7 +280,7 @@ impl<'a> Reader<'a> {
                 self.unreadable("opacity masks without readable art", false);
             }
         }
-        let name = match o.text("AIArtName") {
+        let name = match self.names.entry(o, "AIArtName") {
             Some(name) => name,
             None => match o.obj("AI10_ArtUID").and_then(Obj::content_text) {
                 Some(id) => obj::xml_name(&id),
@@ -292,7 +309,7 @@ impl<'a> Reader<'a> {
             if !sane(r) || r.area() <= 0.0 {
                 continue;
             }
-            let name = ab.text("Name").unwrap_or_else(|| format!("Artboard {}", i + 1));
+            let name = self.names.entry(ab, "Name").unwrap_or_else(|| format!("Artboard {}", i + 1));
             self.artboards.push((name, r));
         }
     }
@@ -490,6 +507,7 @@ impl<'a> Reader<'a> {
             ));
         }
         warnings.extend(self.variables.note());
+        warnings.extend(self.names.notes());
         Ok(Structure {
             doc,
             to_doc,

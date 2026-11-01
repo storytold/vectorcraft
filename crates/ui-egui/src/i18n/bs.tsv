@@ -4846,6 +4846,9 @@ imageTrace	Outline	Obris
 @msg	its objects are nested too deeply	njeni objekti su previše duboko ugniježđeni
 @msg	its section ending with `%{end}` doesn't end	njen odjeljak koji završava s `%{end}` ne završava
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekti s više ispuna ili poteza, efekata ili četkica stigli su kao njihov iscrtani izgled ({_1}): njihov izgled se još ne može uređivati
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	naziv `{name}` nije u UTF-8 i pročitan je kao {label}: ako izgleda pogrešno, otvorite datoteku s drugim legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	naziv `{name}` nije u UTF-8, a dijelovi nisu ispravni ni u {label}: otvorite datoteku s drugim legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	još naziva koji nisu u UTF-8 pročitano je kao {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradijent „{name}” nije definisan u datoteci: umjesto njega koristi se obična boja
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni

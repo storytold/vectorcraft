@@ -4325,6 +4325,9 @@ font-technology	Variable	ცვლადი
 @msg	its objects are nested too deeply	მისი ობიექტები ზედმეტად ღრმადაა ჩადგმული
 @msg	its section ending with `%{end}` doesn't end	მისი სექცია, რომელიც `%{end}`-ით მთავრდება, არ სრულდება
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	სახელი `{name}` არ არის UTF-8 და წაკითხულია როგორც {label}: თუ არასწორად გამოიყურება, გახსენით ფაილი სხვა legacyNameEncoding-ით
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	სახელი `{name}` არ არის UTF-8 და მისი ნაწილები არც {label}-ში არის სწორი: გახსენით ფაილი სხვა legacyNameEncoding-ით
+@msg	more names that aren't UTF-8 were read as {label} ({count})	სხვა სახელები, რომლებიც არ არის UTF-8, წაკითხულია როგორც {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
 @msg	an image whose data is cut short was left out	გამოსახულება, რომლის მონაცემებიც შეკვეცილია, გამოტოვებულია
