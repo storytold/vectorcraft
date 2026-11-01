@@ -435,8 +435,7 @@ fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_
 }
 
 /// More Options at the end of the Bullets presets opens Bullets and Numbering on its Bullets
-/// tab, and at the end of the Numbered List presets on its Numbers tab. Type › Bullets and
-/// Numbering › Bullets and Numbering… opens it too, while type is selected.
+/// tab, and at the end of the Numbered List presets on its Numbers tab.
 #[test]
 fn more_options_opens_bullets_and_numbering_on_its_tab() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
@@ -461,12 +460,6 @@ fn more_options_opens_bullets_and_numbering_on_its_tab() {
         let d = app.ui.dialog.take().unwrap_or_else(|| panic!("More Options opens the dialog from the {tab} presets"));
         assert_eq!((d.kind.as_str(), d.str("tab")), ("bulletsAndNumbering", tab.to_string()));
     }
-    let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("ui.bulletsAndNumbering"));
-    let entry = entry.expect("Type › Bullets and Numbering › Bullets and Numbering…");
-    assert_eq!(
-        (entry.path.join(" › "), entry.label.as_str(), entry.enabled),
-        ("Type › Bullets and Numbering".into(), "Bullets and Numbering…", true)
-    );
     app.run("ui.bulletsAndNumbering", json!({})).unwrap();
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("bulletsAndNumbering"));
 }
