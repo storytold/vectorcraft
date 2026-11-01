@@ -17,7 +17,7 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
 fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
     let v = &app.ui.view;
     let text: String = match id {
-        "view.outline" => if v.outline { "Preview" } else { "Outline" }.into(),
+        "view.outline" => if app.outline_view() { "Preview" } else { "Outline" }.into(),
         "window.workspace.reset" => format!("Reset {}", app.ui.workspace),
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
         "view.template" => if v.templates { "Hide Template" } else { "Show Template" }.into(),
