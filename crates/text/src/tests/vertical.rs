@@ -379,6 +379,60 @@ fn manual_tate_chu_yoko_leaves_unmarked_digits_and_stays_on_one_line() {
     assert!(wrapped.lines.len() > 1, "unmarked 2026 is longer than the column");
 }
 
+/// Character panel menu › Standard Vertical Roman Alignment: marked Latin letters and digits stand
+/// upright one below the other, each in a cell of one em (the bundled font has no vertical
+/// metrics), centred on the column. A space keeps its width, two digits stay tate-chu-yoko,
+/// unmarked letters lie on their side, and horizontal type is unchanged.
+#[test]
+fn standard_vertical_roman_alignment_stands_half_width_characters_upright() {
+    let plain = CharStyle { size: 20.0, ..CharStyle::default() };
+    let marked = CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let h = layout(FontDb::global(), &TextObject::point(Point::ZERO, "l", plain.clone()));
+    let side = layout(FontDb::global(), &vertical_styled("lA l", plain.clone()));
+    let up = layout(FontDb::global(), &vertical_styled("lA l", marked.clone()));
+    let (hl, sl, ul) = (ink(&h, 0), ink(&side, 0), ink(&up, 0));
+    assert!(sl.width() > sl.height(), "unmarked l lies across the column: {sl:?}");
+    assert!((ul.width() - hl.width()).abs() < 0.01 && (ul.height() - hl.height()).abs() < 0.01, "marked l upright: {hl:?} {ul:?}");
+    assert!(ul.height() > ul.width());
+    for i in [0, 1, 3] {
+        assert!((up.glyphs[i].advance - 20.0).abs() < 1e-6, "one em down the column: {:?}", up.glyphs[i].advance);
+        assert!(ink(&up, i).center().x.abs() < 1.5, "centred on the column: {:?}", ink(&up, i));
+        assert!(side.glyphs[i].advance < 20.0, "unmarked advance: {:?}", side.glyphs[i].advance);
+    }
+    assert!(ink(&up, 1).center().y > ink(&up, 0).center().y + 15.0, "one below the other");
+    assert!((up.glyphs[2].advance - side.glyphs[2].advance).abs() < 1e-6, "the space keeps its width");
+
+    let digits = layout(FontDb::global(), &vertical_styled("10", marked.clone()));
+    assert!((digits.glyphs[0].advance - 20.0).abs() < 1e-6 && digits.glyphs[1].advance == 0.0, "two digits stay tate-chu-yoko");
+    let (a, b) = (ink(&digits, 0), ink(&digits, 1));
+    assert!((a.center().y - b.center().y).abs() < 1.0 && b.center().x > a.center().x, "side by side: {a:?} {b:?}");
+
+    let mut horizontal = TextObject::point(Point::ZERO, "lA", marked);
+    horizontal.xf = Affine::IDENTITY;
+    let row = layout(FontDb::global(), &horizontal);
+    let plain_row = layout(FontDb::global(), &TextObject::point(Point::ZERO, "lA", plain));
+    assert_eq!(row.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>(), plain_row.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    assert!((ink(&row, 0).height() - hl.height()).abs() < 0.01, "horizontal type stays as it is");
+}
+
+/// A combining mark shaped as a glyph of its own turns upright with its letter and stays over it,
+/// as in horizontal type, and takes no cell of its own down the column.
+#[test]
+fn standard_vertical_roman_alignment_keeps_combining_marks_on_their_letter() {
+    let plain = CharStyle { size: 20.0, ..CharStyle::default() };
+    let text = "q\u{301}x";
+    let h = layout(FontDb::global(), &TextObject::point(Point::ZERO, text, plain.clone()));
+    assert_eq!(h.glyphs.len(), 3, "the bundled font sets the acute as a glyph of its own");
+    let up = layout(FontDb::global(), &vertical_styled(text, CharStyle { standard_vertical_roman: true, ..plain }));
+    assert_eq!(up.glyphs.len(), 3);
+    let (hq, ha, q, a, x) = (ink(&h, 0), ink(&h, 1), ink(&up, 0), ink(&up, 1), ink(&up, 2));
+    let offset = |base: Rect, mark: Rect| (mark.center().x - base.center().x, mark.center().y - base.center().y);
+    let (want, got) = (offset(hq, ha), offset(q, a));
+    assert!((want.0 - got.0).abs() < 0.01 && (want.1 - got.1).abs() < 0.01, "the acute sits on the q as in a row: {want:?} {got:?}");
+    assert!((up.glyphs[0].advance - 20.0).abs() < 1e-6 && up.glyphs[1].advance == 0.0, "one cell for the cluster");
+    assert!(x.center().y > q.center().y + 10.0, "the next letter below: {q:?} {x:?}");
+}
+
 /// Issue #260 as reported, with a Japanese face of craft-fonts (whose own digits are proportional).
 #[test]
 fn japanese_numbers_keep_their_own_cells_down_the_column() {

@@ -49,7 +49,12 @@ pub fn after_open(app: &mut VectorcraftApp, r: &Value) {
     let (missing, modified) = (rows("missingLinks"), ids(&rows("modifiedLinks")));
     if missing.is_empty() || cfg!(target_arch = "wasm32") {
         if !missing.is_empty() {
-            app.status(format!("{} linked file(s) can't be read here: their previews show", missing.len()));
+            app.status(crate::i18n::msg_n(
+                missing.len() as u64,
+                "{n} linked file can't be read here: its preview shows",
+                "{n} linked files can't be read here: their previews show",
+                &[],
+            ));
         }
         ask_update(app, modified);
     } else {
@@ -96,11 +101,21 @@ fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, one: &str, other: &str) {
         return;
     }
     if app.session.prefs.update_links != "askWhenModified" {
-        app.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", ids.len()));
+        app.status(changed_on_disk_status(ids.len()));
         return;
     }
     let detail = crate::i18n::tn(ids.len() as u64, one, other);
     super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
+}
+
+/// The status bar's line for `n` linked images that changed on disk while Update Links doesn't ask.
+pub(crate) fn changed_on_disk_status(n: usize) -> String {
+    crate::i18n::msg_n(
+        n as u64,
+        "{n} linked image changed on disk: Update Links shows the new version",
+        "{n} linked images changed on disk: Update Links shows the new versions",
+        &[],
+    )
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {

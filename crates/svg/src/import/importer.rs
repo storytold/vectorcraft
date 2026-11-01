@@ -186,7 +186,7 @@ impl Importer {
                 let name = unique_name(self.name_of(&sym), |n| self.doc.symbols.iter().any(|s| s.name == n));
                 let reuse = Reuse::of(&self.doc, &art);
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
-                self.doc.symbols.push(vectorcraft_doc::Symbol { name: name.clone(), art: Arc::new(art) });
+                self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
                 self.symbols.insert(sym, made);
                 if !whole || !reuse.allows(xf) {
                     return None;

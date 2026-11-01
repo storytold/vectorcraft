@@ -588,6 +588,27 @@ fn structured_junk() {
         ("addon.arrange.replace", json!({"fit": "bounds", "scaleStrokes": true})),
         ("addon.arrange.size", json!({"width": 1e6, "height": 0.001, "reference": 8, "scaleStrokes": true})),
         ("addon.arrange.size", json!({"width": 0.001, "proportional": true, "reference": u64::MAX})),
+        ("addon.arrange.groupOverlapping", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.arrange.randomizeOpacity", json!({"min": 0, "max": 100, "seed": u64::MAX})),
+        ("addon.arrange.randomizeOpacity", json!({"min": f64::MAX, "max": -1e308, "seed": -1, "ids": [u64::MAX]})),
+        ("addon.arrange.randomizeOpacity", json!({"min": 100, "max": 0, "seed": 1e308, "ids": []})),
+        ("addon.arrange.sort", json!({"by": "area", "apply": "area", "distribute": true, "scaleStrokes": true})),
+        ("addon.arrange.sort", json!({"by": "stacking", "apply": "stacking", "order": "random", "seed": u64::MAX})),
+        ("addon.arrange.sort", json!({"by": "opacity", "apply": "y", "order": "descending", "ids": [u64::MAX]})),
+        ("addon.arrange.sort", json!({"by": "x", "apply": "opacity", "distribute": true, "seed": 1e308, "ids": []})),
+        ("addon.arrange.sort", json!({"by": "nope", "apply": null, "order": 3, "distribute": "x"})),
+        ("addon.pathtools.divideDashes", json!({"dash": 1e-308, "gap": -1e308, "fit": "x"})),
+        ("addon.pathtools.divideDashes", json!({"dash": 0.01, "gap": 1e6, "fit": true, "removeGaps": false})),
+        ("addon.pathtools.divideDashes", json!({"dash": f64::MAX, "gap": [0], "removeGaps": null})),
+        ("addon.pathtools.expandDashes", json!({})),
+        ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        // Refused before anything is written: no format of that name, a time that is no time.
+        ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
+        ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
+        ("addon.document.symbolsFromLayers", json!({"layers": "x", "replace": 3})),
+        ("addon.document.symbolsFromLayers", json!({"layers": [1e308, -1, null, u64::MAX], "replace": true})),
+        ("addon.document.symbolsFromLayers", json!({"layers": [], "replace": true})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
@@ -710,7 +731,7 @@ fn shape_builder_options_junk() {
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
-/// Area Type Options with junk fit values, on selected area type (the fixtures have none), with
+/// Area Type Options with junk fit and flow values, on selected area type (the fixtures have none), with
 /// text that overflows: never a panic, the document stays sound, and editing still works.
 #[test]
 fn area_options_fit_junk() {
@@ -731,6 +752,11 @@ fn area_options_fit_junk() {
         json!({"fit": "shrinkText", "columns": 100, "gutter": 0, "inset": 10000}),
         json!({"fitMinPercent": 50}),
         json!({"fit": "none", "fitMinPercent": 1e-308}),
+        json!({"flow": "rows", "rows": u64::MAX, "columns": u64::MAX, "gutter": 1e308}),
+        json!({"flow": "rows", "fit": "shrinkText", "rows": 3, "columns": 3}),
+        json!({"flow": "rows", "fit": "autoHeight", "columns": 4}),
+        json!({"flow": {"rows": 1}}),
+        json!({"flow": [1]}),
     ];
     let story = "Words that overflow a small frame. ".repeat(40);
     let mut failures = vec![];

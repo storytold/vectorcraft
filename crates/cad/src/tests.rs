@@ -986,7 +986,7 @@ fn crop_keeps_an_instance_whose_art_reaches_the_region() {
     // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
     let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 50.0, 140.0, 90.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let o = DxfOptions { crop: true, ..opts(&d) };
     assert!(!kinds(&export(&d, &o).unwrap()).is_empty());
 }

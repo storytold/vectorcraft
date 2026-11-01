@@ -291,6 +291,10 @@ pub(super) fn encode_carrying(
     private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
 ) -> Result<(Vec<u8>, Vec<String>)> {
     let mut opts = options(cmd, doc, p)?;
+    // The pages' background colors, behind the art (the editing data keeps them as colors).
+    let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
+    let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
+    let doc = &*filled;
     if opts.settings.thumbnails {
         opts.thumbnails = thumbnails(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     }

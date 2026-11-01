@@ -21,7 +21,7 @@ use super::encode::single_artboard;
 use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names, encode_with_warnings, unique_file_names,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names, encode_with_warnings, merge, unique_file_names,
     with_black_output, writable, write_file,
 };
 
@@ -289,6 +289,8 @@ struct ScreenParams {
     zip: bool,
     full_document: bool,
     include_bleed: bool,
+    /// Include Artboard Fill: the artboards' background colors behind the art (default on).
+    include_artboard_fill: Option<bool>,
     subfolders: bool,
     preset: Option<String>,
     prefix: Option<String>,
@@ -579,7 +581,7 @@ pub struct ScreenExportPreset {
 
 /// What a preset keeps: the formats, their settings, the naming and the folders; not which art
 /// (it changes with the document) nor where to (unless given).
-pub const PRESET_KEYS: [&str; 13] = [
+pub const PRESET_KEYS: [&str; 14] = [
     "formats",
     "settings",
     "preset",
@@ -590,6 +592,7 @@ pub const PRESET_KEYS: [&str; 13] = [
     "folders",
     "subfolders",
     "includeBleed",
+    "includeArtboardFill",
     "antiAlias",
     "folder",
     "fullDocument",
@@ -708,7 +711,9 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
     // Appearance of Black › Printing / Exporting for RGB raster rows.
-    let rows = rows.into_iter().map(|r| Row { options: with_black_output(s, &r.options), ..r }).collect();
+    // Include Artboard Fill off: the encoders leave the background colors out.
+    let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
+    let rows = rows.into_iter().map(|r| Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }).collect();
     let export = ScreenExport { cmd: C, o, rows, naming, items };
     match &mut s.screens_hand_off {
         Some(slot) => {
@@ -830,6 +835,10 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
                     .entry(b)
                     .or_insert_with(|| {
                         let mut d = single_artboard(&item.doc, item.region, &item.name);
+                        // It keeps its background color.
+                        if let (Some(a), Some(from)) = (d.artboards.first_mut(), item.doc.artboards.get(b)) {
+                            a.color = from.color;
+                        }
                         super::save::keep_art_on(&mut d, item.region);
                         Arc::new(d)
                     })

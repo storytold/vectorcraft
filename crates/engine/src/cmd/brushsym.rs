@@ -25,6 +25,7 @@ use super::{
 use crate::EngineError;
 
 mod brushes;
+mod dynamic;
 mod symbols;
 
 pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
@@ -32,10 +33,12 @@ use brushes::{
     brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_remove,
     brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
-pub(crate) use symbols::{natural_size, normalize, place_xf, set_natural_size};
+use dynamic::{symbol_instance_reset, symbol_instance_set_appearance};
+use symbols::selected_instances;
+pub(crate) use symbols::{instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol};
 use symbols::{
     symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_edit, symbol_list, symbol_new, symbol_options, symbol_place,
-    symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_update,
+    symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
 };
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
@@ -157,13 +160,21 @@ pub fn specs() -> Vec<CommandSpec> {
             brush_freehand
         ),
         // ----- symbols -----
-        cmd!(query "symbol.list", "Symbols", [], None, "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic}], current}", has_doc, symbol_list),
+        cmd!(
+            query "symbol.list",
+            "Symbols",
+            [],
+            None,
+            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic}], current}",
+            has_doc,
+            symbol_list
+        ),
         cmd!(
             "symbol.new",
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a third each) → {name, id, registration, exportType, nineSlice}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a third each) → {name, id, registration, exportType, nineSlice, type}",
             has_selection,
             symbol_new
         ),
@@ -172,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Options…",
             [],
             None,
-            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array} rename a symbol and/or set Symbol Options › Registration and Export Type and 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions 0..1; default name: current) → {name, registration, exportType, nineSlice}",
+            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic} rename a symbol and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions 0..1) and Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes); default name: current → {name, registration, exportType, nineSlice, type}",
             has_doc,
             symbol_options
         ),
@@ -190,7 +201,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol) → {ids}",
             has_selection,
             symbol_break_link
         ),
@@ -199,7 +210,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Symbol",
             [],
             None,
-            "{id?, ids?: [id…] (instead of id)} break the link of the selected instance so its art can be edited; finish with symbol.update → {name, ids}",
+            "{id?, ids?: [id…] (instead of id)} break the link of the selected instance so the symbol's art can be edited (without the instance's own appearance changes to a dynamic symbol); finish with symbol.update → {name, ids}",
             has_selection,
             symbol_edit
         ),
@@ -208,7 +219,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Symbol",
             [],
             None,
-            "{name, ids?|id?} replace the symbol's art with the selection (instances update; the selection becomes an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds) → {name, id}",
+            "{name, ids?|id?} replace the symbol's art with the selection (instances update, keeping their appearance changes to the objects at paths the new art still has; the selection becomes an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds) → {name, id}",
             has_selection,
             symbol_update
         ),
@@ -217,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Symbol",
             [],
             None,
-            "{name, expandInstances?: true} delete a symbol; its instances are expanded (or deleted with false)",
+            "{name | names: [name…], expandInstances?: true} delete a symbol (or several, in one undo step); its instances are expanded (or deleted with false)",
             has_doc,
             symbol_delete
         ),
@@ -227,9 +238,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Symbol",
             [],
             None,
-            "{name, ids?|id?} swap the symbol of the selected instances → {ids}",
+            "{name, ids?|id?} swap the symbol of the selected instances (they keep their appearance changes to the objects at paths a dynamic new symbol's art has) → {ids}",
             has_selection,
             symbol_replace
+        ),
+        cmd!(
+            "symbol.instance.setAppearance",
+            "Symbol Instance Appearance",
+            [],
+            None,
+            "{id?|ids?: [one id] (default: the one selected object), path: [i…] (the object in the symbol's art: child indices in paint order from the art's root down through its groups; [] the root), fill?: \"#rrggbb\"|{…paint params of paint.setFill: color, none, swatch, tint, gradient, keepModel}|null (null: the symbol's own again), stroke?: as fill, opacity?: 0..100|null, blend?: name|null} change the appearance of one object of a dynamic symbol instance's art, for that instance only: it stays linked, so editing the symbol reshapes it and keeps the change; refused for a static symbol or a path naming no object → {id, overrides: how many objects the instance changes}",
+            has_selection,
+            symbol_instance_set_appearance
+        ),
+        cmd!(
+            "symbol.instance.reset",
+            "Reset Symbol Instance",
+            [],
+            None,
+            "{ids?|id?} drop the selected dynamic symbol instances' own appearance changes, so they show the symbol's appearance again → {ids: the instances that had changes}",
+            has_selection,
+            symbol_instance_reset
         ),
         cmd!(
             "symbol.setCurrent",
@@ -239,6 +268,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name} the symbol the symbolism tools spray (not an undo step)",
             has_doc,
             symbol_set_current
+        ),
+        cmd!(
+            query "symbol.unused",
+            "Select All Unused",
+            [],
+            None,
+            "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
+            has_doc,
+            symbol_unused
         ),
         cmd!(query "symbol.selectInstances", "Select All Instances", [], None, "{name} select every instance of a symbol → {count}", has_doc, symbol_select_instances),
         cmd!(

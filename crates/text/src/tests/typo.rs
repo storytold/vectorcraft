@@ -457,6 +457,26 @@ fn hit_testing_picks_the_right_column() {
     }
 }
 
+/// Area Type Options › Text Flow (#4978): by columns (the default) the second cell is the one
+/// below the first; by rows it is the one beside it.
+#[test]
+fn text_flow_fills_the_cells_by_columns_or_by_rows() {
+    let t = area(&COPY.repeat(8), style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    let grid = LayoutOptions { rows: 2, columns: 2, gutter: 20.0, ..Default::default() };
+    for (flow, second) in [(TextFlow::Columns, (0.0, 160.0)), (TextFlow::Rows, (220.0, 0.0))] {
+        let l = layout_with(db(), &t, &LayoutOptions { flow, ..grid.clone() });
+        let frame = l.frames.get(1).copied().unwrap();
+        assert_eq!((frame.x0, frame.y0), second, "{flow:?}");
+        let line = l.lines.iter().find(|li| li.region == 1).expect("text reaches the second cell");
+        assert!(line.x0 >= second.0 - 1e-6 && line.baseline >= second.1, "{flow:?}: {line:?}");
+        assert!(l.lines.iter().all(|li| l.lines.iter().all(|m| m.region >= li.region || m.start <= li.start)), "{flow:?}: text runs in cell order");
+    }
+    // The object's own option lays out the same way.
+    let mut by_rows = t.clone();
+    (by_rows.area.rows, by_rows.area.columns, by_rows.area.gutter, by_rows.area.flow) = (2, 2, 20.0, TextFlow::Rows);
+    assert_eq!(layout(db(), &by_rows).frames.get(1).map(|f| (f.x0, f.y0)), Some((220.0, 0.0)));
+}
+
 // ---------- area flow ----------
 
 #[test]

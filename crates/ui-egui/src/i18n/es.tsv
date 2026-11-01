@@ -751,6 +751,9 @@ font-technology	Variable	Variables
 	Delete Swatch	Eliminar muestra
 	Delete Symbol	Eliminar símbolo
 	Delete the selected symbol?	¿Eliminar el símbolo seleccionado?
+	Delete the selected symbols?	¿Eliminar los símbolos seleccionados?
+	No unused symbols	No hay símbolos sin usar
+	Delete Symbols	Eliminar símbolos
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Uno o más de los símbolos están en uso y no se pueden eliminar hasta que se expandan o eliminen sus instancias.
 	Expand Instances	Expandir instancias
 	Delete Instances	Eliminar instancias
@@ -758,6 +761,9 @@ font-technology	Variable	Variables
 	No	No
 	Delete Tab	Eliminar tabulación
 	Delete the graphic style “{name}”?	¿Eliminar el estilo gráfico “{name}”?
+	Delete Action Sets	Eliminar conjuntos de acciones
+	Delete the action set “{name}” and its actions?	¿Eliminar el conjunto de acciones “{name}” y sus acciones?
+	Delete the selected action sets and their actions?	¿Eliminar los conjuntos de acciones seleccionados y sus acciones?
 	Delete Theme	Eliminar tema
 	Delete theme	Eliminar tema
 	Delete these {n} graphic styles?	¿Eliminar estos {n} estilos gráficos?
@@ -921,7 +927,7 @@ font-technology	Variable	Variables
 	Edit Symbol	Editar símbolo
 	Edit Text	Editar texto
 	Edit the applied effect, or add another one?	¿Editar el efecto aplicado o agregar otro?
-	Edit the selected point's colour in the Color panel	Edita el color del punto seleccionado en el panel Color
+	Edit the point	Editar el punto
 	Edit the stop	Editar la parada
 	Edit Theme	Editar tema
 	Edit theme	Editar tema
@@ -1261,6 +1267,9 @@ font-technology	Variable	Variables
 	Hide Live Paint Gaps	Ocultar huecos de pintura interactiva
 	Select Fills	Seleccionar rellenos
 	Select Strokes	Seleccionar trazos
+	Paint Fills	Pintar rellenos
+	Paint Strokes	Pintar trazos
+	Highlight	Resaltado
 	Gaussian Blur…	Desenfoque gaussiano…
 	General	General
 	General › Placement › X	General › Colocación › X
@@ -1463,6 +1472,8 @@ font-technology	Variable	Variables
 	Objects on Path	Objetos en trazado
 	Attach	Adjuntar
 	Objects on Path Options	Opciones de objetos en trazado
+	Pivot:	Pivote:
+	Rotate:	Rotación:
 	Objects on Path Tool	Herramienta Objetos en trazado
 	Attach Objects on Path	Adjuntar objetos al trazado
 	Expand Objects on Path	Expandir objetos en trazado
@@ -1562,6 +1573,7 @@ font-technology	Variable	Variables
 	In Tangent Handles	Manejadores de tangente de entrada
 	In the selected objects	En los objetos seleccionados
 	Inches	Pulgadas
+	Include Artboard Fill	Incluir relleno de la mesa de trabajo
 	Include Blacks with CMY:	Incluir negros con CMY:
 	Include Bleed	Incluir sangrado
 	Include Cmy Blacks	Incluir negros CMY
@@ -2458,6 +2470,16 @@ font-technology	Variable	Variables
 	Arabic	Árabes
 	Hindi	Hindi
 	Farsi	Farsi
+digits	Devanagari	Devanagari
+digits	Bengali	Bengalí
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Guyaratí
+digits	Odia	Oriya
+digits	Tamil	Tamil
+digits	Telugu	Telugu
+digits	Kannada	Canarés
+digits	Malayalam	Malayálam
+	Proportional Lining	Proporcionales de caja alta
 	Proportional Oldstyle	Estilo antiguo proporcional
 	Pucker & Bloat…	Fruncir y engordar…
 	Pucker Tool	Herramienta Fruncir
@@ -3260,6 +3282,7 @@ font-technology	Variable	Variables
 	Swap Fill and Stroke (Shift+X)	Intercambiar relleno y trazo (Shift+X)
 	Swap start and end arrowheads	Intercambiar puntas de flecha inicial y final
 	Swap the selected object for the file, keeping its place and transform	Sustituir el objeto seleccionado por el archivo, conservando su posición y transformación
+	Stylistic Alternates	Alternativas estilísticas
 	Swash	Decorativa
 	Swatch Conflict	Conflicto de muestras
 	Swatch Conflicts	Conflictos de muestras
@@ -3329,6 +3352,7 @@ font-technology	Variable	Variables
 	Tabs	Tabulaciones
 	Tabular Lining	Tabulares de caja alta
 	Tabular Oldstyle	Tabulares de estilo antiguo
+	Titling Alternates	Alternativas de titulares
 	Target	Destino
 	Target Contents	Contenido de destino
 	Target:	Destino:
@@ -3883,7 +3907,6 @@ axis	Both	Ambos
 @msg	Combine Slices: the slices have no bounds	Combinar sectores: los sectores no tienen límites
 @msg	Convert to Artboards: selection has no area	Convertir en mesas de trabajo: la selección no tiene área
 @msg	Convert to Shape: no rectangles or ellipses selected	Convertir en forma: no hay rectángulos ni elipses seleccionados
-@msg	Copied the CSS of {rules} object(s)	Se copió el CSS de {rules} objeto(s)
 @msg	Copied the script report	Se copió el informe del script
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
@@ -3900,13 +3923,11 @@ axis	Both	Ambos
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
-@msg	Downloaded {_1} file(s)	Se descargaron {_1} archivo(s)
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
 @msg	Expand: no brush strokes selected	Expandir: no hay trazos de pincel seleccionados
 @msg	Expand: no gradient fills	Expandir: no hay rellenos de degradado
 @msg	Expand: nothing to expand	Expandir: no hay nada que expandir
-@msg	Exported {count} file(s) to {folder}	Se exportaron {count} archivo(s) a {folder}
 @msg	Exported {path}	Se exportó {path}
 @msg	Flatten Transparency: select objects to flatten	Acoplar transparencia: selecciona los objetos que quieres acoplar
 @msg	Flatten Transparency: {e}	Acoplar transparencia: {e}
@@ -4466,10 +4487,6 @@ axis	Both	Ambos
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` ocupa {size} bytes (límite {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} ya lo usa {_2}
 @msg	{_1} is reserved by the system	{_1} está reservado por el sistema
-@msg	{_1} linked file(s) can't be read here: their previews show	aquí no se pueden leer {_1} archivo(s) vinculado(s): se muestran sus previsualizaciones
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	no se pudieron descodificar {undecoded} imagen(es): se muestran como recuadros tachados
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imagen(es) vinculada(s) cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
-@msg	Updated {_1} linked file(s) changed on disk	Se actualizaron {_1} archivo(s) vinculado(s) que cambiaron en el disco
 @msg	{_1}: not saved, so not closed	{_1}: no se guardó, así que no se cerró
 @msg	{bpp}-bit bitmaps can't be read	no se pueden leer mapas de bits de {bpp} bits
 @msg	{command} didn't create an object	{command} no creó ningún objeto
@@ -4489,7 +4506,6 @@ axis	Both	Ambos
 @msg	Couldn't place {name}: {e}	No se pudo colocar {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	No se pudo pegar desde el portapapeles: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Se guardó {path} con {_1} nota(s): {first}
-@msg	Exported {what} with {_1} note(s): {first}	Se exportó {what} con {_1} nota(s): {first}
 @msg	Exported {what}	Se exportó {what}
 @msg	Saved {n} files beside {path}	Se guardaron {n} archivos junto a {path}
 @msg	Saving	Guardando
@@ -4500,12 +4516,26 @@ axis	Both	Ambos
 @msg	Saving recovery data for {_1}	Guardando datos de recuperación de {_1}
 @msg	Discarded {_1} recovered document(s)	Se descartaron {_1} documento(s) recuperado(s)
 @msg	Restored {_1} recovered document(s): save them to keep them	Se restauraron {_1} documento(s) recuperado(s): guárdalos para conservarlos
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Se incrustaron {n} imagen(es); faltan {missing}: vuelve a vincularlas primero
-@msg	Embedded {n} image(s)	Se incrustaron {n} imagen(es)
-@msg	Relinked {_1} image(s)	Se volvieron a vincular {_1} imagen(es)
-@msg	Relinked {n} image(s)	Se volvieron a vincular {n} imagen(es)
-@msg	Relinked {n} image(s); not in that folder: {_1}	Se volvieron a vincular {n} imagen(es); no están en esa carpeta: {_1}
-@msg	Updated {_1} image(s)	Se actualizaron {_1} imagen(es)
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Se incrustó {n} imagen; faltan {missing}: vuelve a vincularlas primero|Se incrustaron {n} imágenes; faltan {missing}: vuelve a vincularlas primero
+@msgplural	Embedded {n} image|Embedded {n} images	Se incrustó {n} imagen|Se incrustaron {n} imágenes
+@msgplural	Relinked {n} image|Relinked {n} images	Se volvió a vincular {n} imagen|Se volvieron a vincular {n} imágenes
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Se volvió a vincular {n} imagen; no están en esa carpeta: {names}|Se volvieron a vincular {n} imágenes; no están en esa carpeta: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Se volvió a vincular {n} imagen; no se pudo volver a vincular {name}: {reason}|Se volvieron a vincular {n} imágenes; no se pudo volver a vincular {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Se actualizó {n} imagen|Se actualizaron {n} imágenes
+@msgplural	Replaced {n} image|Replaced {n} images	Se reemplazó {n} imagen|Se reemplazaron {n} imágenes
+@msgplural	Broke {n} link|Broke {n} links	Se rompió {n} vínculo|Se rompieron {n} vínculos
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Se rompió {n} vínculo; no se pueden leer {missing}: vuelve a vincularlos o actualízalos primero|Se rompieron {n} vínculos; no se pueden leer {missing}: vuelve a vincularlos o actualízalos primero
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	aquí no se puede leer {n} archivo vinculado: se muestra su previsualización|aquí no se pueden leer {n} archivos vinculados: se muestran sus previsualizaciones
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	no se pudo descodificar {n} imagen: se muestra como un recuadro tachado|no se pudieron descodificar {n} imágenes: se muestran como recuadros tachados
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imagen vinculada cambió en el disco: Actualizar vínculos muestra la versión nueva|{n} imágenes vinculadas cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Se actualizó {n} archivo vinculado que cambió en el disco|Se actualizaron {n} archivos vinculados que cambiaron en el disco
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Se exportó {what} con {n} nota: {first}|Se exportó {what} con {n} notas: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} archivo de fuentes ahora está en {folder}|{n} archivos de fuentes ahora están en {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo de fuentes ahora está en {folder}; no se pudieron agregar {failed}: {reason}|{n} archivos de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	aquí no está disponible {n} fuente: su texto se muestra con otra fuente|aquí no están disponibles {n} fuentes: su texto se muestra con otra fuente
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Se copió el CSS de {n} objeto|Se copió el CSS de {n} objetos
+@msgplural	Downloaded {n} file|Downloaded {n} files	Se descargó {n} archivo|Se descargaron {n} archivos
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Se exportó {n} archivo a {folder}|Se exportaron {n} archivos a {folder}
 @msg	Unembedded to {_1}	Se desincrustó en {_1}
 @msg	Reset {_1}	Se restableció {_1}
 @msg	Sent to {_1}	Se envió a {_1}
@@ -4557,9 +4587,6 @@ axis	Both	Ambos
 @msg	every search thread stopped on an internal error (please report this bug)	todos los hilos de búsqueda se detuvieron por un error interno (informa de este error)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	La carpeta Fonts de VectorCraft no está configurada aquí: la configuran la aplicación de escritorio y vectorcraft-cli
 @msg	choose the font files to add	elige los archivos de fuentes que quieres agregar
-@msg	{n} font file(s) are now in {folder}	{n} archivo(s) de fuentes ahora están en {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo(s) de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	aquí no están disponibles {n} fuente(s): su texto se muestra con otra fuente
 @msg	not a file	no es un archivo
 @msg	not a font file	no es un archivo de fuente
 @msg	that document is no longer open	ese documento ya no está abierto
@@ -4568,7 +4595,6 @@ axis	Both	Ambos
 @msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
 @msg	every numbered name for {name} is taken in the document's folder	todos los nombres numerados para {name} ya existen en la carpeta del documento
 @msg	No linked files to look for	No hay archivos vinculados que buscar
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Se volvieron a vincular {n} imagen(es); no se pudo volver a vincular {name}: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios
@@ -5576,7 +5602,7 @@ axis	Y Axis	Eje Y
 	Include Objects On Canvas	Incluir objetos en el lienzo
 	Result(s): {count}	Resultado(s): {count}
 @msg	select one object	seleccione un objeto
-@msg	Global Edit works on paths, compound paths and symbol instances	La edición global funciona con trazados, trazados compuestos e instancias de símbolos
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La edición global funciona con trazados, trazados compuestos, instancias de símbolos y grupos de ellos
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no se encontraron objetos similares (las copias giradas o reflejadas no coinciden); cambie las opciones de edición global e inténtelo de nuevo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
 	Add to Symbols	Agregar a símbolos
@@ -5968,6 +5994,9 @@ breakText	Glyphs	Glifos
 	Gap 4	Hueco 4
 	Dash 5	Guion 5
 	Gap 5	Hueco 5
+
+@msg	{_1}: they came in as the page's art	{_1}: se importaron como el arte de la página
+
 @msg	You must choose a side pattern.	Debe elegir un motivo lateral.
 @msg	invalid pattern tile choice	selección de mosaico de motivo no válida
 @msg	no pattern named `{choice}`	no hay ningún motivo llamado `{choice}`
@@ -5986,3 +6015,79 @@ breakText	Glyphs	Glifos
 	Set Size of Each	Definir el tamaño de cada uno
 @msg	select exactly two objects	selecciona exactamente dos objetos
 @msg	give `width` or `height`	indica `width` o `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Agrupar objetos superpuestos
+@msg	too many objects selected (at most 20000)	demasiados objetos seleccionados (como máximo 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Dividir en guiones…
+	Divide into Dashes	Dividir en guiones
+	Dash:	Guion:
+	Gap:	Separación:
+	Fit to Corners and Ends	Ajustar a esquinas y extremos
+	Remove Gaps	Quitar separaciones
+@msg	that makes too many pieces (at most 100000): make the dashes longer	eso da demasiados trozos (como máximo 100000): alargue los guiones
+@msg	select paths, or segments, to divide	seleccione trazados o segmentos para dividir
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandir guiones en trazados
+@msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Herramientas de documento
+	Save a Timestamped Copy	Guardar una copia con fecha y hora
+@msg	there is no clock here	aquí no hay reloj
+@msg	there is no clock here: give `time` (Unix seconds)	aquí no hay reloj: indique `time` (segundos Unix)
+@msg	the document has never been saved: give `folder`	el documento nunca se ha guardado: indique `folder`
+@msg	every numbered name for the copy is taken	todos los nombres numerados para la copia están ocupados
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Nuevos símbolos a partir de capas
+	Convert Layers to Symbols	Convertir capas en símbolos
+@msg	{id} is no top-level layer	{id} no es una capa de nivel superior
+	Marathi	Maratí
+	Gujarati	Guyaratí
+	Bengali	Bengalí
+	Punjabi	Punyabí
+	Tamil	Tamil
+	Telugu	Telugu
+	Kannada	Canarés
+	Malayalam	Malayálam
+	Odia	Oriya
+	Urdu	Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} y posteriores (versión {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportar todos los documentos abiertos como PDF
+	Export All Open Documents as SVG	Exportar todos los documentos abiertos como SVG
+@msgplural	Exported {n} document|Exported {n} documents	Se exportó {n} documento|Se exportaron {n} documentos
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Se exportó {n} documento; no se escribió {title}: {error}|Se exportaron {n} documentos; no se escribió {title}: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Tipo de símbolo:
+	Dynamic Symbol	Símbolo dinámico
+	Static Symbol	Símbolo estático
+	Symbol Instance Appearance	Apariencia de la instancia de símbolo
+	Reset Symbol Instance	Restablecer instancia de símbolo
+@msg	type must be static or dynamic, not {v}	type debe ser static o dynamic, no {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` es un símbolo estático: primero establezca su tipo de símbolo en Dinámico
+@msg	path must be a list of child indices	path debe ser una lista de índices de hijos
+@msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
+@msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	indique newName, registration, exportType, nineSlice y/o type
+	Text Flow	Flujo de texto
+	By Rows	Por filas
+	By Columns	Por columnas
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Opacidad aleatoria…
+	Randomize Opacity	Opacidad aleatoria
+	Minimum:	Mínimo:
+	Maximum:	Máximo:
+	Seed:	Semilla:
+@msg	`min` is greater than `max`	`min` es mayor que `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Ordenar objetos…
+	Sort Objects	Ordenar objetos
+	Sort By:	Ordenar por:
+	Apply To:	Aplicar a:
+	Area	Área
+	X Position	Posición X
+	Y Position	Posición Y
+	Stacking Order	Orden de apilamiento
+	Small to Large	De menor a mayor
+	Large to Small	De mayor a menor
+	Distribute Evenly	Distribuir uniformemente

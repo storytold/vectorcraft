@@ -8,7 +8,7 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
-pub(super) const KIND: &str = "actionBatch";
+pub const KIND: &str = "actionBatch";
 const LABEL: f32 = 130.0;
 
 pub(super) const SPEC: DialogSpec =

@@ -175,8 +175,10 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("charDirection", json!(v.char_direction)),
         ("proportionalMetrics", json!(v.proportional_metrics)),
         ("tateChuYoko", json!(v.tate_chu_yoko)),
+        ("standardVerticalRoman", json!(v.standard_vertical_roman)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
+        ("language", json!(v.language)),
     ] {
         m.insert(k.into(), x);
     }
@@ -480,7 +482,14 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
             // form (so comparing a style with its text's attributes is exact).
             let c = kind.cmd(verb);
             let full = match kind {
-                Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), m, &c)?),
+                Kind::Char => {
+                    let mut st = with_attrs(&CharStyle::default(), m, &c)?;
+                    // A language of the list, stored as its tag (as text.setFormat takes it).
+                    if let Some(l) = &st.language {
+                        st.language = vectorcraft_doc::setup::char_language(l).map_err(|e| bad(&c, e))?.map(str::to_string);
+                    }
+                    char_attrs(&st)
+                }
                 Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), m, &c)?),
             };
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))

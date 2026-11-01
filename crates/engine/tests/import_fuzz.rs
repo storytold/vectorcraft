@@ -4312,7 +4312,7 @@ fn brushed_document(kind: usize, art: usize) -> Document {
         Node::path(doc.alloc_id(), square(), Appearance::basic(fill, Paint::None, 0.0))
     };
     let (in_symbol, in_pattern) = (brushed(&mut doc), brushed(&mut doc));
-    doc.symbols.push(Symbol { name: "s0".into(), art: std::sync::Arc::new(in_symbol) });
+    doc.symbols.push(Symbol { dynamic: false, name: "s0".into(), art: std::sync::Arc::new(in_symbol) });
     doc.patterns.push(PatternDef::new("p0", vec![std::sync::Arc::new(in_pattern)]));
     let art = match art {
         0 => instance(&mut doc),
@@ -4502,7 +4502,7 @@ fn symbols_document(count: usize, levels: usize, last: &str) -> Document {
         for _ in 0..levels {
             art = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(art)]);
         }
-        doc.symbols.push(Symbol { name: format!("s{i}"), art: std::sync::Arc::new(art) });
+        doc.symbols.push(Symbol { dynamic: false, name: format!("s{i}"), art: std::sync::Arc::new(art) });
     }
     let first = instance(&mut doc, "s0".into());
     let layer = doc.layers[0].id;

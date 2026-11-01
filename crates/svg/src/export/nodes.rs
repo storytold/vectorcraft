@@ -653,7 +653,7 @@ impl Writer<'_> {
     /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
     fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
         // SVG Tiny has no `<symbol>`.
-        if self.tiny() || vectorcraft_brush::stain(inst).is_some() {
+        if self.tiny() || vectorcraft_brush::stain(inst).is_some() || !inst.extras().symbol_overrides.is_empty() {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {

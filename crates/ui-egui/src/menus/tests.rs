@@ -524,7 +524,7 @@ fn precise_cursors_command_toggles_the_preference() {
 fn precise_cursors_command_is_listed_and_assignable_in_the_shortcut_editor() {
     use crate::shortcut_editor as ed;
     let e = ed::entry("view.preciseCursors").expect("listed in the editor");
-    assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Precise Cursors", "View", false));
+    assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Use Precise Cursors", "View", false));
     assert_eq!(ed::default_of("view.preciseCursors"), None, "no default key");
     let mut overrides = craft_keymap::Overrides::new();
     assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None);

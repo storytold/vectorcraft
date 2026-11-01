@@ -1134,7 +1134,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     let mut brushed = rect_art(10.0, 4.0);
     brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
     for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed)] {
-        doc.symbols.push(Symbol { name: name.into(), art: std::sync::Arc::new(art.clone()) });
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art.clone()) });
         doc.patterns.push(PatternDef::new(name, vec![std::sync::Arc::new(art)]));
     }
     let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });

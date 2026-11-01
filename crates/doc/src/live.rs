@@ -233,6 +233,60 @@ mod tests {
         assert_eq!(envelope_mapper(&kind, Rect::new(0.0, 0.0, 100.0, 100.0))(p), p);
     }
 
+    /// How far the border of `m` strays from the ellipse in `r`, in points (measured across the
+    /// ellipse's short radius), checked at 20 places along every border edge.
+    fn mesh_border_off_ellipse(m: &GradientMesh, r: Rect) -> f64 {
+        let (rows, cols) = (m.rows as usize, m.cols as usize);
+        let edges = (0..cols).flat_map(|c| [m.edge_u(0, c), m.edge_u(rows, c)]).chain((0..rows).flat_map(|k| [m.edge_v(k, 0), m.edge_v(k, cols)]));
+        let (c, a, b) = (r.center(), r.width() / 2.0, r.height() / 2.0);
+        edges
+            .flat_map(|e| (0..=20).map(move |i| e.eval(f64::from(i) / 20.0)))
+            .map(|p| ((p.x - c.x) / a).hypot((p.y - c.y) / b) - 1.0)
+            .fold(0.0f64, |w, d| w.max(d.abs() * a.min(b)))
+    }
+
+    /// #3187: a gradient mesh made from an ellipse keeps the ellipse's shape: a Mesh tool click
+    /// (a 1×1 mesh with lines through the point) and Create Gradient Mesh's 4×4 grid both lay
+    /// their border on the outline, within about twice the 0.35 pt the outline is flattened to.
+    /// The 1×1 mesh was up to 7 pt off this 400 × 300 pt ellipse.
+    #[test]
+    fn a_mesh_from_an_ellipse_keeps_its_outline() {
+        const OFF: f64 = 0.75;
+        let r = Rect::new(100.0, 100.0, 500.0, 400.0);
+        let e = shapes::ellipse(r);
+        for (rows, cols) in [(1, 1), (4, 4), (2, 5)] {
+            let m = GradientMesh::for_path(&e, rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+            let off = mesh_border_off_ellipse(&m, r);
+            assert!(off < OFF, "{rows}×{cols} mesh: border {off} pt off the ellipse");
+        }
+        let made = GradientMesh::for_path(&e, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let mut m = made.clone();
+        // Off centre, so each line splits its edges unevenly.
+        let i = m.add_lines_at(Point::new(200.0, 330.0), 0.0).unwrap();
+        let off = mesh_border_off_ellipse(&m, r);
+        assert!(off < OFF, "after a Mesh tool click: {off} pt");
+        // Deleting the lines again (Alt-click) gives the border back as it was.
+        assert!(m.remove_point_lines(i));
+        assert_eq!((m.rows, m.cols), (1, 1));
+        for (k, (now, was)) in m.points.iter().zip(&made.points).enumerate() {
+            let moved = now.handles.iter().zip(&was.handles).map(|(a, b)| (*a - *b).hypot()).fold(0.0, f64::max);
+            assert!(now.p.distance(was.p) < 1e-6 && moved < 1e-3, "point {k}: {now:?}, made as {was:?}");
+        }
+        // With a handle at the new border point shortened since, the two edges no longer make one
+        // curve: the merged edge is straight rather than grown past its ends.
+        let mut m = made.clone();
+        let i = m.add_lines_at(Point::new(200.0, 330.0), 0.0).unwrap();
+        let top = m.idx(0, 1);
+        m.points[top].handles[H_LEFT] *= 1e-4;
+        assert!(m.remove_point_lines(i));
+        let (a, b) = (m.points[0].p, m.points[1].p);
+        assert!((m.points[0].handles[H_RIGHT] - (b - a) / 3.0).hypot() < 1e-9, "{:?}", m.points[0].handles);
+        // A rectangle's mesh keeps straight edges with handles a third of the way along.
+        let m = GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 90.0, 60.0)), 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let e = m.edge_u(0, 0);
+        assert!(e.p1.distance(Point::new(30.0, 0.0)) < 1e-6 && e.p2.distance(Point::new(60.0, 0.0)) < 1e-6, "{e:?}");
+    }
+
     #[test]
     fn mesh_insert_and_remove_lines() {
         let mut m =

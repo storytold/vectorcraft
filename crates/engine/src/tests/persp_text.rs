@@ -119,13 +119,15 @@ fn moving_type_whose_projection_would_overflow_is_refused() {
     let id = persp_text(&mut s);
     let NodeKind::Text(t) = &node(&s, id).kind else { panic!("type") };
     let flat = t.bounds().unwrap();
-    // A stored projection that draws the type flat where it is, with every entry scaled by `k`: a
-    // document can hold it (its entries are finite) and the type draws, but its product with a
-    // scale by 2 in perspective overflows.
+    // A stored projection that maps each point p of the type to k·(p − 0.9·q), with q its top-left
+    // corner: a document can hold it (its entries are finite, and its w row is already 1) and the
+    // type draws, but its product with a scale by 2 in perspective overflows, since its move,
+    // 0.9·k·q, is larger than any point it draws.
     let step = grid(&s).transform_map(Plane::Right, 0.0, vectorcraft_geom::Affine::scale(2.0), 0.0).unwrap();
+    let q = flat.origin();
     let scaled = |e: i32| {
         let k = 2f64.powf(f64::from(e) / 16.0);
-        vectorcraft_geom::Homography([[k, 0.0, 0.0], [0.0, k, 0.0], [0.0, 0.0, k]])
+        vectorcraft_geom::Homography([[k, 0.0, -0.9 * k * q.x], [0.0, k, -0.9 * k * q.y], [0.0, 0.0, 1.0]])
     };
     let finite = |m: &vectorcraft_geom::Homography| m.to_array().iter().all(|v| v.is_finite());
     let draws = |m: &vectorcraft_geom::Homography| {
@@ -180,12 +182,12 @@ fn edit_text_whose_flat_view_would_overflow_is_refused() {
     let id = persp_text(&mut s);
     let NodeKind::Text(t) = &node(&s, id).kind else { panic!("type") };
     let flat = t.bounds().unwrap();
-    // A stored projection that draws the type 4 times its size, with every entry scaled by `k`: a
-    // document can hold it and the type draws, but the projection that shows it flat where it is
+    // A stored projection that draws the type `4k` times its size: a document can hold it (its w
+    // row is already 1) and the type draws, but the projection that shows it flat where it is
     // drawn overflows.
     let scaled = |e: i32| {
         let k = 2f64.powf(f64::from(e) / 16.0);
-        vectorcraft_geom::Homography([[4.0 * k, 0.0, 0.0], [0.0, 4.0 * k, 0.0], [0.0, 0.0, k]])
+        vectorcraft_geom::Homography([[4.0 * k, 0.0, 0.0], [0.0, 4.0 * k, 0.0], [0.0, 0.0, 1.0]])
     };
     let overflows = |m: &vectorcraft_geom::Homography| {
         let Some(drawn) = m.map_rect_bbox(flat) else { return false };

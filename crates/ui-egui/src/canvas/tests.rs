@@ -75,6 +75,26 @@ fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
     }
 }
 
+/// A change to Caps Lock or to Use Precise Cursors through `app.run` (the host, the control channel,
+/// MCP) refreshes the pointer over the canvas without the pointer moving.
+#[test]
+fn command_cursor_settings_refresh_hover_cursor_while_view_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.session.select_tool("pen", vectorcraft_engine::ViewInfo::default()).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let mods = Mods::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+
+    app.run("view.capsLock", json!({"on": true})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+    app.run("view.capsLock", json!({"on": false})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+    app.run("prefs.set", json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+}
+
 /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
 /// reads x where the canvas has it.
 #[test]
@@ -1995,7 +2015,7 @@ fn undecodable_images_are_marked_and_reported_once() {
     app.status("");
     frame(&mut app, &ctx, vec![]);
     assert!(app.canvas.shown.as_ref().is_some_and(|(_, o)| o.mark_undecoded_images), "the canvas marks them");
-    assert_eq!(app.ui.status, "2 image(s) couldn't be decoded and show as crossed boxes");
+    assert_eq!(app.ui.status, "2 images couldn't be decoded and show as crossed boxes");
     app.status("");
     app.session.doc_mut().unwrap().revision += 1;
     frame(&mut app, &ctx, vec![]);

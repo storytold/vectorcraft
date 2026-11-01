@@ -995,10 +995,12 @@ fn tab_skips_the_isolation_bars_background() {
     };
     frame(vec![]);
     let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), 24.0));
-    let bar = ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == bar).map(|w| w.id));
-    let bar = bar.expect("the isolation bar");
+    let back = egui::Rect::from_min_size(bar.min + egui::vec2(6.0, 3.0), egui::vec2(18.0, 18.0));
+    let widget =
+        |rect: egui::Rect| ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == rect).map(|w| w.id));
+    let (bar, back) = (widget(bar).expect("the isolation bar"), widget(back).expect("the back button"));
     let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 10, frame);
-    assert!(!stops.is_empty(), "Tab reaches the back button and the breadcrumbs");
+    assert!(stops.contains(&back), "Tab reaches the back button: {stops:?}");
     assert!(!stops.contains(&bar), "{stops:?}");
 }
 

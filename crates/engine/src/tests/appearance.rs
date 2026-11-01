@@ -513,6 +513,27 @@ fn edits_change_the_active_row_of_the_first_selected_object() {
     assert!(!e.contains("internal error"), "{e}");
 }
 
+/// `effect.apply`'s reply names the new effect by its index in the object whose row `item` is,
+/// also when the objects painted after it already have effects there.
+#[test]
+fn apply_reports_the_index_in_the_object_whose_row_it_names() {
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    let c = rect(&mut s, 350.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    // b's red fill row is not shared, so each object's row 0 takes the effect: c's second one.
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0, c.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    assert_eq!(node(&s, c).appearance.items[0].effects().len(), 2);
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "b's row 0 holds one effect");
+    // An explicit item is a row of the first target, a, which paints below c.
+    run(&mut s, "select.set", json!({"ids": [c.0, a.0]}));
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    assert_eq!(node(&s, c).appearance.items[0].effects().len(), 3);
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(1)), "a's row 0 holds two effects");
+}
+
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
 fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();

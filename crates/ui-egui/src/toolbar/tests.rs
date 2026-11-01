@@ -1030,8 +1030,15 @@ fn tab_skips_the_grip_and_the_tear_off_bars() {
             .map(|w| w.id)
     });
     let grip = grip.expect("the Tools panel's grip");
+    // The Tools panel's tool buttons: 36 by 29 pt.
+    let buttons: Vec<egui::Id> = ctx.viewport(|vp| {
+        vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == vec2(36.0, PITCH - 1.0)).map(|w| w.id).collect()
+    });
+    assert!(!buttons.is_empty(), "the Tools panel's buttons are drawn");
     let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 120, frame);
-    assert!(!stops.is_empty(), "Tab reaches the tool buttons");
+    assert!(stops.iter().any(|id| buttons.contains(id)), "Tab reaches the Tools panel's buttons: {stops:?}");
+    let close = egui::Id::unique(("tool-flyout-close", "polygon"));
+    assert!(stops.contains(&close), "Tab reaches the strip's Put back in the toolbar button: {stops:?}");
     for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id("rectangle")), ("the strip's bar", bar_id("polygon"))] {
         assert!(!stops.contains(&id), "Tab stops on {name}: {stops:?}");
     }
