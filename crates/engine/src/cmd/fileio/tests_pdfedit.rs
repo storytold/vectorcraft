@@ -451,3 +451,29 @@ fn ai_files_carry_an_editing_copy_for_other_apps() {
     assert_eq!(vectorcraft_pdf::illustrator_data(&b64(&r), None), None);
     assert!(s.execute("document.export", &json!({"format": "ai", "editingData": "no"})).is_err());
 }
+
+/// A `.ai` whose editing copy for other apps differs from the VectorCraft document it carries (the
+/// copy has no transparency) opens in VectorCraft from the VectorCraft document.
+#[test]
+fn an_ai_file_opens_from_its_vectorcraft_document_when_the_editing_copy_differs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let bytes = b64(&s.execute("document.export", &json!({"format": "ai"})).unwrap());
+    let opacities = |doc: &vectorcraft_doc::Document| {
+        let mut out = vec![];
+        doc.walk(|n| {
+            if matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }) {
+                out.push(n.opacity);
+            }
+        });
+        out
+    };
+    let copy = load::load_with("art.ai", &bytes, &LoadOptions { native: false, trust_editing_data: true, ..Default::default() }).unwrap();
+    assert!(copy.editing_data && !copy.restored);
+    assert_eq!(opacities(&copy.doc), [1.0]);
+    let opened = load::load_with("art.ai", &bytes, &LoadOptions::default()).unwrap();
+    assert!(opened.restored);
+    assert_eq!(opacities(&opened.doc), [0.5]);
+}
