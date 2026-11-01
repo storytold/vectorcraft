@@ -1136,6 +1136,113 @@ fn text_objects_are_slots_named_after_their_story() {
     assert_eq!((a.len(), a[0].children().map(Vec::len), slot_of(a[1].name.as_deref())), (2, Some(1), Some(Some(7))));
 }
 
+/// A file in the legacy format (version 7) whose layer holds `art`, crop marks 0 0 200 100.
+fn type_stream7(art: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: test\n%AI5_FileFormat 3.0\n%AI3_Cropmarks: 0 0 200 100\n%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{}\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n",
+        layer(art)
+    )
+}
+
+/// The text objects of a legacy-format file whose layer holds `art`.
+fn legacy_texts(art: &str) -> Vec<vectorcraft_doc::TextObject> {
+    let doc = match read(type_stream7(art).as_bytes()) {
+        Ok(r) => r.doc,
+        Err(e) => panic!("{e}"),
+    };
+    art_texts(&doc)
+}
+
+fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
+    art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
+}
+
+/// Point type at (10, 50): `attrs`, then the characters `text`.
+fn point_type(attrs: &str, text: &str) -> String {
+    format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n{attrs}\n({text}) Tx\nTO\n")
+}
+
+/// `TC` and `TW` (§15.4.7) set the paragraph's letter and word spacing, `Tq` its hanging
+/// punctuation and `Th` (§22) its hyphenation; each paragraph keeps the values in force at its
+/// first character, and they last into the next text object.
+#[test]
+fn legacy_type_keeps_its_spacing_hanging_punctuation_and_hyphenation() {
+    let two_paragraphs =
+        point_type("10 15 20 TC\n70 110 140 TW\n1 Tq\n1 1 2 3 4 Th", "One\\r").replace("TO\n", "0 0 5 TC\n0 Tq\n0 0 4 5 6 Th\n(Two) Tx\nTO\n");
+    let texts = legacy_texts(&format!("{two_paragraphs}{}", point_type("", "Three")));
+    assert_eq!(texts.len(), 2);
+    let one = texts[0].para_at(0);
+    assert_eq!(one.justification.letter_spacing, [10.0, 15.0, 20.0]);
+    assert_eq!(one.justification.word_spacing, [70.0, 110.0, 140.0]);
+    assert!(one.roman_hanging && one.hyphenate);
+    let h = &one.hyphenation;
+    assert_eq!((h.after_first, h.before_last, h.hyphen_limit), (2, 3, 4));
+    assert_eq!(h.words_longer_than, vectorcraft_doc::text::HyphenationOptions::default().words_longer_than, "no operand sets it");
+    let two = texts[0].para_at(1);
+    assert_eq!(two.justification.letter_spacing, [0.0, 0.0, 5.0]);
+    assert_eq!(two.justification.word_spacing, [70.0, 110.0, 140.0], "word spacing stays");
+    assert!(!two.roman_hanging && !two.hyphenate);
+    // Without the limit flag, any number of hyphens in a row.
+    assert_eq!((two.hyphenation.after_first, two.hyphenation.before_last, two.hyphenation.hyphen_limit), (4, 5, 0));
+    // The next text object keeps them.
+    assert_eq!(texts[1].para_at(0), two);
+}
+
+/// A legacy attribute whose operands are missing, are not numbers, or are flags other than 0 and
+/// 1 leaves the attribute as it was, and operands are read by their place.
+#[test]
+fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
+    let set = "10 15 20 TC\n70 110 140 TW\n1 Tq\n1 1 2 3 4 Th\n2 Ta\n0 TA\n5 6 7 Ti";
+    let bad = "/x 15 20 TC\n110 140 TW\n2 Tq\n1 2 2 3 4 Th\n1 1 (2) 3 4 Th\n/x Ta\n2 TA\n5 /x 7 Ti";
+    let texts = legacy_texts(&point_type(&format!("{set}\n{bad}"), "Hi"));
+    let p = texts[0].para_at(0);
+    assert_eq!(p.justification.letter_spacing, [10.0, 15.0, 20.0]);
+    assert_eq!(p.justification.word_spacing, [70.0, 110.0, 140.0]);
+    assert!(p.roman_hanging && p.hyphenate);
+    assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 3, 4));
+    assert_eq!(p.justify, vectorcraft_doc::Justify::Right);
+    assert_eq!((p.first_line_indent, p.left_indent, p.right_indent), (5.0, 6.0, 7.0));
+    assert_eq!(texts[0].runs[0].style.kerning, Some(0.0), "kerning stays off");
+    // A scale or leading pair with a bad operand leaves both as they were; one operand is the
+    // horizontal scale (or the leading) of the format before version 7.
+    let texts = legacy_texts(&point_type("50 80 Tz\n14 3 Tl\n/x 120 Tz\n/x 20 Tl", "Hi"));
+    let st = &texts[0].runs[0].style;
+    assert_eq!((st.h_scale, st.v_scale, st.leading), (50.0, 80.0, Some(14.0)));
+    assert_eq!(texts[0].para_at(0).space_before, 3.0);
+    let st = &legacy_texts(&point_type("50 80 Tz\n120 Tz", "Hi"))[0].runs[0].style;
+    assert_eq!((st.h_scale, st.v_scale), (120.0, 100.0));
+    // A start point that isn't a number leaves the matrix.
+    let good = &legacy_texts(&point_type("", "Hi"))[0];
+    let bad = &legacy_texts(&point_type("", "Hi").replace("10 50 0 Tp", "10 50 /x Tp"))[0];
+    assert_eq!(bad.xf, good.xf);
+}
+
+/// Spacing is kept to the ranges the Justification options take, a Minimum, Desired and Maximum
+/// out of order go back to their defaults, and hyphenation's letter counts and limit to the ranges
+/// `text.setFormat` takes.
+#[test]
+fn legacy_type_spacing_and_hyphenation_are_kept_in_range() {
+    let texts = legacy_texts(&point_type("-500 0 900 TC\n0 2000 5000 TW\n1 1 0 40 99 Th", "Hi"));
+    let p = texts[0].para_at(0);
+    assert_eq!(p.justification.letter_spacing, [-100.0, 0.0, 500.0]);
+    assert_eq!(p.justification.word_spacing, [0.0, 1000.0, 1000.0]);
+    assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (1, 15, 25));
+    let texts = legacy_texts(&point_type("5 0 0 TC\n200 100 80 TW", "Hi"));
+    let j = &texts[0].para_at(0).justification;
+    let d = vectorcraft_doc::text::JustificationOptions::default();
+    assert_eq!((j.letter_spacing, j.word_spacing), (d.letter_spacing, d.word_spacing));
+}
+
+/// A file's legacy type is read up to its allowance of characters, a single long run included.
+#[test]
+fn one_long_run_of_legacy_type_stops_at_the_allowance() {
+    // The reader's allowance, `MAX_CHARS`.
+    const ALLOWANCE: usize = 1 << 22;
+    let long = "a".repeat(ALLOWANCE + 10);
+    let texts = legacy_texts(&point_type("", &long));
+    assert_eq!(texts[0].plain_text().chars().count(), ALLOWANCE);
+}
+
 #[test]
 fn what_it_doesnt_read_is_an_error_where_it_shows() {
     let e = read(stream(&layer("1 2 frobnicate\n")).as_bytes()).unwrap_err();
@@ -3101,111 +3208,4 @@ fn an_objects_on_path_group_in_versioned_content_opens_once() {
     assert_eq!(kids.len(), 1);
     assert_eq!(kids[0].children().unwrap().len(), 5);
     assert!(kids[0].extras().objects_on_path.is_some());
-}
-
-/// A file in the legacy format (version 7) whose layer holds `art`, crop marks 0 0 200 100.
-fn stream7(art: &str) -> String {
-    format!(
-        "%!PS-Adobe-3.0\n%%Creator: test\n%AI5_FileFormat 3.0\n%AI3_Cropmarks: 0 0 200 100\n%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{}\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n",
-        layer(art)
-    )
-}
-
-/// The text objects of a legacy-format file whose layer holds `art`.
-fn legacy_texts(art: &str) -> Vec<vectorcraft_doc::TextObject> {
-    let doc = match read(stream7(art).as_bytes()) {
-        Ok(r) => r.doc,
-        Err(e) => panic!("{e}"),
-    };
-    art_texts(&doc)
-}
-
-fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
-    art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
-}
-
-/// Point type at (10, 50): `attrs`, then the characters `text`.
-fn point_type(attrs: &str, text: &str) -> String {
-    format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n{attrs}\n({text}) Tx\nTO\n")
-}
-
-/// `TC` and `TW` (§15.4.7) set the paragraph's letter and word spacing, `Tq` its hanging
-/// punctuation and `Th` (§22) its hyphenation; each paragraph keeps the values in force at its
-/// first character, and they last into the next text object.
-#[test]
-fn legacy_type_keeps_its_spacing_hanging_punctuation_and_hyphenation() {
-    let two_paragraphs =
-        point_type("10 15 20 TC\n70 110 140 TW\n1 Tq\n1 1 2 3 4 Th", "One\\r").replace("TO\n", "0 0 5 TC\n0 Tq\n0 0 4 5 6 Th\n(Two) Tx\nTO\n");
-    let texts = legacy_texts(&format!("{two_paragraphs}{}", point_type("", "Three")));
-    assert_eq!(texts.len(), 2);
-    let one = texts[0].para_at(0);
-    assert_eq!(one.justification.letter_spacing, [10.0, 15.0, 20.0]);
-    assert_eq!(one.justification.word_spacing, [70.0, 110.0, 140.0]);
-    assert!(one.roman_hanging && one.hyphenate);
-    let h = &one.hyphenation;
-    assert_eq!((h.after_first, h.before_last, h.hyphen_limit), (2, 3, 4));
-    assert_eq!(h.words_longer_than, vectorcraft_doc::text::HyphenationOptions::default().words_longer_than, "no operand sets it");
-    let two = texts[0].para_at(1);
-    assert_eq!(two.justification.letter_spacing, [0.0, 0.0, 5.0]);
-    assert_eq!(two.justification.word_spacing, [70.0, 110.0, 140.0], "word spacing stays");
-    assert!(!two.roman_hanging && !two.hyphenate);
-    // Without the limit flag, any number of hyphens in a row.
-    assert_eq!((two.hyphenation.after_first, two.hyphenation.before_last, two.hyphenation.hyphen_limit), (4, 5, 0));
-    // The next text object keeps them.
-    assert_eq!(texts[1].para_at(0), two);
-}
-
-/// A legacy attribute whose operands are missing, are not numbers, or are flags other than 0 and
-/// 1 leaves the attribute as it was, and operands are read by their place.
-#[test]
-fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
-    let set = "10 15 20 TC\n70 110 140 TW\n1 Tq\n1 1 2 3 4 Th\n2 Ta\n0 TA\n5 6 7 Ti";
-    let bad = "/x 15 20 TC\n110 140 TW\n2 Tq\n1 2 2 3 4 Th\n1 1 (2) 3 4 Th\n/x Ta\n2 TA\n5 /x 7 Ti";
-    let texts = legacy_texts(&point_type(&format!("{set}\n{bad}"), "Hi"));
-    let p = texts[0].para_at(0);
-    assert_eq!(p.justification.letter_spacing, [10.0, 15.0, 20.0]);
-    assert_eq!(p.justification.word_spacing, [70.0, 110.0, 140.0]);
-    assert!(p.roman_hanging && p.hyphenate);
-    assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 3, 4));
-    assert_eq!(p.justify, vectorcraft_doc::Justify::Right);
-    assert_eq!((p.first_line_indent, p.left_indent, p.right_indent), (5.0, 6.0, 7.0));
-    assert_eq!(texts[0].runs[0].style.kerning, Some(0.0), "kerning stays off");
-    // A scale or leading pair with a bad operand leaves both as they were; one operand is the
-    // horizontal scale (or the leading) of the format before version 7.
-    let texts = legacy_texts(&point_type("50 80 Tz\n14 3 Tl\n/x 120 Tz\n/x 20 Tl", "Hi"));
-    let st = &texts[0].runs[0].style;
-    assert_eq!((st.h_scale, st.v_scale, st.leading), (50.0, 80.0, Some(14.0)));
-    assert_eq!(texts[0].para_at(0).space_before, 3.0);
-    let st = &legacy_texts(&point_type("50 80 Tz\n120 Tz", "Hi"))[0].runs[0].style;
-    assert_eq!((st.h_scale, st.v_scale), (120.0, 100.0));
-    // A start point that isn't a number leaves the matrix.
-    let good = &legacy_texts(&point_type("", "Hi"))[0];
-    let bad = &legacy_texts(&point_type("", "Hi").replace("10 50 0 Tp", "10 50 /x Tp"))[0];
-    assert_eq!(bad.xf, good.xf);
-}
-
-/// Spacing is kept to the ranges the Justification options take, a Minimum, Desired and Maximum
-/// out of order go back to their defaults, and hyphenation's letter counts and limit to the ranges
-/// `text.setFormat` takes.
-#[test]
-fn legacy_type_spacing_and_hyphenation_are_kept_in_range() {
-    let texts = legacy_texts(&point_type("-500 0 900 TC\n0 2000 5000 TW\n1 1 0 40 99 Th", "Hi"));
-    let p = texts[0].para_at(0);
-    assert_eq!(p.justification.letter_spacing, [-100.0, 0.0, 500.0]);
-    assert_eq!(p.justification.word_spacing, [0.0, 1000.0, 1000.0]);
-    assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (1, 15, 25));
-    let texts = legacy_texts(&point_type("5 0 0 TC\n200 100 80 TW", "Hi"));
-    let j = &texts[0].para_at(0).justification;
-    let d = vectorcraft_doc::text::JustificationOptions::default();
-    assert_eq!((j.letter_spacing, j.word_spacing), (d.letter_spacing, d.word_spacing));
-}
-
-/// A file's legacy type is read up to its allowance of characters, a single long run included.
-#[test]
-fn one_long_run_of_legacy_type_stops_at_the_allowance() {
-    // The reader's allowance, `MAX_CHARS`.
-    const ALLOWANCE: usize = 1 << 22;
-    let long = "a".repeat(ALLOWANCE + 10);
-    let texts = legacy_texts(&point_type("", &long));
-    assert_eq!(texts[0].plain_text().chars().count(), ALLOWANCE);
 }
