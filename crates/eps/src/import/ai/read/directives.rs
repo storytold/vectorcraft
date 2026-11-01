@@ -302,9 +302,10 @@ impl<'a> Reader<'a> {
     /// the art), read by a reader of its own as a pattern's is, in a space with y down. Art it can't
     /// read whole isn't kept: the brushes that use it aren't read.
     fn define_brush_art(&mut self, section: &[u8]) {
-        if self.brush_art.len() >= brush::MAX_BRUSH_ART || self.subreader_depth >= MAX_SUBREADERS {
+        if self.brush_art_sections >= brush::MAX_BRUSH_ART || self.subreader_depth >= MAX_SUBREADERS {
             return;
         }
+        self.brush_art_sections += 1;
         let mut lex = Lexer::new(section);
         let Some(Tok::Str(name) | Tok::Hex(name)) = lex.next_token().map(|t| t.tok) else { return };
         let name = obj::text(&name);
@@ -385,6 +386,18 @@ mod tests {
         reader.subreader_depth = MAX_SUBREADERS;
         reader.define_brush_art(art);
         assert!(reader.brush_art.is_empty());
+    }
+
+    #[test]
+    fn brush_art_sections_stop_at_their_limit_with_repeated_names() {
+        let mut reader = Reader::new(b"");
+        reader.brush_art_sections = brush::MAX_BRUSH_ART - 1;
+        reader.define_brush_art(b"(A)\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        let first = reader.brush_art.get("A").map(|n| n.id);
+        assert!(first.is_some());
+        // The same name again is past the limit: the first art stays.
+        reader.define_brush_art(b"(A)\n0 g\n0 0 m\n8 0 L\n8 8 L\nf\n");
+        assert_eq!(reader.brush_art.get("A").map(|n| n.id), first);
     }
 
     #[test]

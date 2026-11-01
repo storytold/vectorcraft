@@ -283,6 +283,8 @@ struct Reader<'a> {
     brush_drafts: Vec<super::brush::BrushDraft>,
     /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
     brush_art: HashMap<String, Node>,
+    /// The brush art sections read so far, repeated names included.
+    brush_art_sections: usize,
     /// Brush objects that weren't read.
     brushes_unread: usize,
 }
@@ -381,6 +383,7 @@ impl<'a> Reader<'a> {
             brush_order: None,
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
+            brush_art_sections: 0,
             brushes_unread: 0,
         }
     }
