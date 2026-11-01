@@ -491,6 +491,8 @@ struct Word97 {
     papx: Vec<(u32, u16, Vec<u8>)>,
     /// The styles by istd; None: an empty slot.
     styles: Vec<Option<Word97Style>>,
+    /// A style count `Stshif.cstd` to write instead of the styles'.
+    cstd: Option<u16>,
     fonts: Vec<&'static str>,
     /// FibBase's flags and `nFib` (0: 0x00C1).
     flags: u16,
@@ -609,7 +611,7 @@ impl Word97 {
         let plc: Vec<u8> = cps.iter().flat_map(|c| c.to_le_bytes()).chain(pcds).collect();
         let clx = self.clx.clone().unwrap_or_else(|| [vec![0x02], (plc.len() as u32).to_le_bytes().to_vec(), plc].concat());
         let words = |v: &[u16]| v.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>();
-        let mut stsh = words(&[18, self.styles.len() as u16, 10, 1, 0, 15, 0, 0, 0, 0]);
+        let mut stsh = words(&[18, self.cstd.unwrap_or(self.styles.len() as u16), 10, 1, 0, 15, 0, 0, 0, 0]);
         for (istd, s) in self.styles.iter().enumerate() {
             let Some((stk, base, papx, chpx)) = s else {
                 stsh.extend([0, 0]);
@@ -878,6 +880,13 @@ fn malformed_doc_fails_cleanly() {
     // Styles based on each other.
     let styles = vec![Some((1, 1, vec![], vec![])), Some((1, 0, vec![], vec![]))];
     let e = place(&mut s, "a.doc", &Word97 { styles, ..words() }.build()).unwrap_err();
+    assert!(e.contains("style sheet is damaged"), "{e}");
+    // A style sheet with fewer styles than its count, and one with 0x0FFE styles (`cstd` "MUST be
+    // less than 0x0FFE", Stshif).
+    let styles = vec![Some((1, 0x0FFF, vec![], vec![]))];
+    let e = place(&mut s, "a.doc", &Word97 { styles, cstd: Some(2), ..words() }.build()).unwrap_err();
+    assert!(e.contains("style sheet is damaged"), "{e}");
+    let e = place(&mut s, "a.doc", &Word97 { styles: vec![None; 0x0FFE], ..words() }.build()).unwrap_err();
     assert!(e.contains("style sheet is damaged"), "{e}");
     let r = place(&mut s, "a.doc", &words().build()).unwrap();
     assert_eq!(placed(&s, &r).0, "words");

@@ -70,7 +70,7 @@ const MAX_STREAM: u64 = 64 << 20;
 const MAX_PIECES: usize = 100_000;
 /// The most 512-byte pages of character or of paragraph properties read.
 const MAX_PAGES: usize = 16_384;
-/// The most styles read from the style sheet (`Stshif.cstd` is below 0x0FFE).
+/// The style count `Stshif.cstd` must be below.
 const MAX_STYLES: usize = 0x0FFE;
 /// The most fonts read from the font table (SttbfFfn's `cData` is at most 0x7FF0).
 const MAX_FONTS: usize = 0x7FF0;
@@ -505,14 +505,17 @@ impl Sheet {
         let broken = || damaged(cmd, "its style sheet is damaged");
         let size = usize::from(u16_at(stsh, 0).ok_or_else(broken)?);
         let stshi = bytes_at(stsh, 2, size).ok_or_else(broken)?;
-        let count = usize::from(u16_at(stshi, 0).ok_or_else(broken)?).min(MAX_STYLES);
+        let count = usize::from(u16_at(stshi, 0).ok_or_else(broken)?);
+        if count >= MAX_STYLES {
+            return Err(broken());
+        }
         // cbSTDBaseInFile: StdfBase, and StdfPost2000 when it is 18.
         let base_size = usize::from(u16_at(stshi, 2).ok_or_else(broken)?).max(10);
         let font = u16_at(stshi, 12);
         let mut at = 2 + size;
         let mut styles = Vec::with_capacity(count);
         for _ in 0..count {
-            let Some(len) = u16_at(stsh, at) else { break };
+            let len = u16_at(stsh, at).ok_or_else(broken)?;
             let std = bytes_at(stsh, at + 2, usize::from(len)).ok_or_else(broken)?;
             styles.push(if std.is_empty() { None } else { Some(style(std, base_size).ok_or_else(broken)?) });
             // LPStd records start on even offsets.
