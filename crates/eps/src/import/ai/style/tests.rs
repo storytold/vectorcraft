@@ -326,3 +326,139 @@ fn a_hidden_fill_comes_in_hidden() {
     assert!(st.plain, "{st:?}");
     assert_eq!(st.looks.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
 }
+
+/// A Convert to Shape filter whose dictionary holds `keys`.
+fn shape(keys: &str) -> String {
+    basic("Adobe Shape Effects", &format!("(Shape) /UnicodeString (DisplayString) ,\n{keys}"))
+}
+
+/// The style `Boxed`: a fill and a stroke, and `effects` on the whole object after them.
+fn shape_style(effects: &[String]) -> ArtStyle {
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            basic("Stroke Style Filter", "/StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n"),
+            fill("0 0 0 0 1 1 1 Xa"),
+        ],
+    );
+    let mut kids = vec![stack];
+    kids.extend_from_slice(effects);
+    let data = format!("/KnownStyle :\n(Boxed) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &kids));
+    art_styles(data.as_bytes()).remove("Boxed").unwrap_or_default()
+}
+
+/// Every setting of a Relative or Absolute size, with a corner radius.
+const SIZES: &str = "150 /Real (AbsWidth) ,\n40 /Real (AbsHeight) ,\n20 /Real (RelWidth) ,\n6 /Real (RelHeight) ,\n15 /Real (CornerRadius) ,\n";
+
+#[test]
+fn convert_to_shape_comes_in_live_with_its_settings() {
+    // GUARDS: `Adobe Shape Effects` wasn't read, so an object with it kept its drawn look.
+    for (keys, id, want) in [
+        (
+            format!("0 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0}),
+        ),
+        (
+            format!("1 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.roundedRectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0, "radius": 15.0}),
+        ),
+        (
+            format!("2 /Int (Shape) ,\n1 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.ellipse",
+            json!({"relative": false, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0}),
+        ),
+        (
+            format!("0 /Int (Shape) ,\n1 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.rectangle",
+            json!({"relative": false, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0}),
+        ),
+        // A relative size alone, and one that shrinks the shape: each is added to every side.
+        (
+            "0 /Int (Shape) ,\n0 /Real (Absolute) ,\n20 /Real (RelWidth) ,\n6 /Real (RelHeight) ,\n".to_string(),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 12.0, "width": 36.0, "height": 36.0}),
+        ),
+        (
+            "0 /Int (Shape) ,\n0 /Real (Absolute) ,\n-10 /Real (RelWidth) ,\n-4 /Real (RelHeight) ,\n".to_string(),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": -20.0, "extraH": -8.0, "width": 36.0, "height": 36.0}),
+        ),
+        // Missing sizes: 18 pt a side, 36 pt, and a 9 pt radius.
+        (
+            "0 /Int (Shape) ,\n0 /Real (Absolute) ,\n20 /Real (RelWidth) ,\n".to_string(),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 36.0, "width": 36.0, "height": 36.0}),
+        ),
+        (
+            "1 /Int (Shape) ,\n1 /Real (Absolute) ,\n".to_string(),
+            "convertToShape.roundedRectangle",
+            json!({"relative": false, "extraW": 36.0, "extraH": 36.0, "width": 36.0, "height": 36.0, "radius": 9.0}),
+        ),
+    ] {
+        let st = shape_style(&[shape(&keys)]);
+        assert!(st.plain && st.simple, "{keys}: {st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{keys}: {:?}", st.effects) };
+        assert_eq!((e.id.as_str(), &e.params, e.visible), (id, &want, true), "{keys}");
+        assert_eq!(st.items.len(), 2, "{keys}");
+    }
+}
+
+#[test]
+fn convert_to_shape_keeps_its_place_among_effects_and_its_visibility() {
+    let offset = basic("Adobe Offset Path", "2 /Int (jntp) ,\n4 /Real (mlim) ,\n4 /Real (ofst) ,\n");
+    let st = shape_style(&[shape(&format!("0 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}")), offset.clone()]);
+    assert!(st.plain, "{st:?}");
+    let ids: Vec<_> = st.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(ids, ["convertToShape.rectangle", "path.offsetPath"]);
+    // Offset Path isn't read on objects other than type yet.
+    assert!(!st.simple);
+    // A hidden one stays, hidden, with its settings.
+    let hidden = shape(&format!("1 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}")).replacen("1 /Visible", "0 /Visible", 1);
+    let st = shape_style(&[hidden]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let [e] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
+    assert_eq!(
+        (e.id.as_str(), e.visible, &e.params["radius"], &e.params["extraW"]),
+        ("convertToShape.roundedRectangle", false, &json!(15.0), &json!(40.0))
+    );
+}
+
+#[test]
+fn convert_to_shape_settings_that_arent_read_keep_the_drawn_look() {
+    let valid = format!("0 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}");
+    assert!(shape_style(&[shape(&valid)]).plain);
+    for keys in [
+        // Another shape, a shape that isn't a whole number or an /Int, and a missing one.
+        valid.replace("0 /Int (Shape)", "3 /Int (Shape)"),
+        valid.replace("0 /Int (Shape)", "0.5 /Int (Shape)"),
+        valid.replace("0 /Int (Shape)", "0 /Real (Shape)"),
+        valid.replace("0 /Int (Shape) ,\n", ""),
+        // A mode other than 0 and 1, or a missing one.
+        valid.replace("0 /Real (Absolute)", "2 /Real (Absolute)"),
+        valid.replace("0 /Real (Absolute) ,\n", ""),
+        valid.replace("0 /Real (Absolute)", "0 /Int (Absolute)"),
+        // Sizes that aren't finite numbers, negative absolute sizes and radii, and huge ones.
+        valid.replace("20 /Real (RelWidth)", "NaN /Real (RelWidth)"),
+        valid.replace("6 /Real (RelHeight)", "1e999 /Real (RelHeight)"),
+        valid.replace("6 /Real (RelHeight)", "(x) /Real (RelHeight)"),
+        valid.replace("150 /Real (AbsWidth)", "-150 /Real (AbsWidth)"),
+        valid.replace("15 /Real (CornerRadius)", "-1 /Real (CornerRadius)"),
+        valid.replace("20 /Real (RelWidth)", "1e6 /Real (RelWidth)"),
+        valid.replace("40 /Real (AbsHeight)", "40 /Int (AbsHeight)"),
+        // A key that isn't read.
+        format!("{valid}1 /Real (Future) ,\n"),
+        format!("{valid}(x) /String (Future) ,\n"),
+        // A relative Ellipse.
+        valid.replace("0 /Int (Shape)", "2 /Int (Shape)"),
+    ] {
+        let st = shape_style(&[shape(&keys)]);
+        assert!(!st.plain, "{keys}: {st:?}");
+    }
+    // On one fill: the drawn look, for type too.
+    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), shape(&valid)]);
+    let data =
+        format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+    assert!(!art_styles(data.as_bytes())["Odd"].plain);
+}

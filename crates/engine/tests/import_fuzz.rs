@@ -3400,6 +3400,18 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "/Def ;",
             "/Execution ;",
             "[5 5] 1e308 d",
+            "(Adobe Shape Effects) 1 0 /Filter ,",
+            "0 /Visible ,",
+            "(Rectangle) /UnicodeString (DisplayString) ,",
+            "2 /Int (Shape) ,",
+            "1e999 /Int (Shape) ,",
+            "1 /Real (Absolute) ,",
+            "-1e308 /Real (RelWidth) ,",
+            "1e5 /Real (RelHeight) ,",
+            "NaN /Real (AbsWidth) ,",
+            "0 /Real (AbsHeight) ,",
+            "-9 /Real (CornerRadius) ,",
+            "1 /Bool (Absolute) ,",
             "-0.5 /Real ,",
             "1.5 /Real ,",
             "-2 /Real ,",
@@ -3430,6 +3442,50 @@ fn deflated(data: &[u8]) -> Vec<u8> {
 
 proptest! {
     #![proptest_config(config())]
+
+    /// Art styles with Convert to Shape whose dictionary holds any of its entries, and unknown ones,
+    /// as any kind, with any value (huge, tiny, not a number, a string), repeated or left out, shown
+    /// or hidden, on a path, a group and type, on the whole object or on its fill.
+    #[test]
+    fn ai_convert_to_shape_never_panics(
+        entries in prop::collection::vec((
+            prop::sample::select(vec![
+                "Shape", "Absolute", "AbsWidth", "AbsHeight", "RelWidth", "RelHeight", "CornerRadius", "DisplayString", "futureKey",
+            ]),
+            prop::sample::select(vec!["Int", "Real", "Bool", "UnicodeString", "String"]),
+            prop_oneof![
+                (-1e4f64..1e4).prop_map(|v| v.to_string()),
+                prop::sample::select(vec!["0", "1", "2", "3", "-1", "0.5", "1e-300", "1e308", "-1e308", "1e999", "NaN", "(x)", ""]).prop_map(str::to_string),
+            ],
+        ), 0..16),
+        visible in any::<bool>(),
+        on_fill in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let keys: String = entries.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+        let basic = |name: &str, body: &str| format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n");
+        let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+        let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+        let effect = basic("Adobe Shape Effects", &keys).replacen("1 /Visible", if visible { "1 /Visible" } else { "0 /Visible" }, 1);
+        let bare = compound("Chain Style Filter", &[effect.clone(), basic("Conduit Filter", "")]);
+        let root = if on_fill {
+            compound("Chain Style Filter", &[compound("Stack Style Filter", &[compound("Chain Style Filter", &[fill, effect]), basic("Conduit Filter", "")])])
+        } else {
+            compound("Chain Style Filter", &[effect, compound("Stack Style Filter", &[fill, basic("Conduit Filter", "")])])
+        };
+        let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}/KnownStyle :\n(Bare) /Name ,\n/ActiveStyle :\n{bare}%AI9_EndArtStyles\n");
+        let hidden = ai::rect(20.0, 20.0, 80.0, 60.0).replace('\n', "\n%_");
+        let art = format!(
+            "0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{hidden}f\n1 (Fx) XW\n0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_0 Ae\n%_u\n%_{hidden}f\n%_U\n1 (Bare) XW\nu\n/AI11Text :\n1 /FreeUndo ,\n;\n0 0 1 0 k\n{}f\nU\n1 (Fx) XW\n",
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(100.0, 20.0, 180.0, 60.0)
+        );
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
+        survive("Convert to Shape art style", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("Convert to Shape art style in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
 
     /// Hostile editing data in Illustrator EPS and `.ai` files: operators in any order with any
     /// operands, sections and dictionaries left open, images of any size.

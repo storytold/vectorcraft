@@ -1870,6 +1870,45 @@ fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
 }
 
 #[test]
+fn an_object_with_convert_to_shape_comes_in_as_itself_with_the_effect_live() {
+    // GUARDS: `Adobe Shape Effects` wasn't read, so the object came in as its drawn look.
+    let styles = |keys: &str| {
+        format!(
+            "%AI9_BeginArtStyles\n\
+            /KnownStyle :\n(Boxed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+            /BasicFilter :\n(Adobe Shape Effects) 1 0 /Filter ,\n1 /Visible ,\n(ShapeEffect.aip) /PluginFileName ,\n(Shape) /Title ,\n\
+            /Dictionary : /NotRecorded ,\n(Rectangle) /UnicodeString (DisplayString) ,\n{keys}; /Dict ;\n /Part ,\n\
+            /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+            /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+            /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n\
+            %AI9_EndArtStyles\n"
+        )
+    };
+    let hidden_rect = rect_path(20.0, 20.0, 90.0, 60.0).replace('\n', "\n%_");
+    // The drawn look is the shape: 20 pt wider on each side and 6 pt taller.
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{hidden_rect}f\n%_0 BB\n1 (Boxed) XW\n", rect_path(0.0, 14.0, 110.0, 66.0));
+    let keys = "0 /Int (Shape) ,\n150 /Real (AbsWidth) ,\n0 /Real (Absolute) ,\n40 /Real (AbsHeight) ,\n20 /Real (RelWidth) ,\n15 /Real (CornerRadius) ,\n6 /Real (RelHeight) ,\n";
+    let r = read_ok(&format!("{}{}", styles(keys), layer(&art_)));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    let b = a[0].geometric_bounds().unwrap();
+    assert_eq!((b.width(), b.height()), (70.0, 40.0), "the object keeps its own path");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let [e] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance.effects) };
+    assert_eq!(
+        (e.id.as_str(), e.params["relative"].as_bool(), e.params["extraW"].as_f64(), e.params["extraH"].as_f64()),
+        ("convertToShape.rectangle", Some(true), Some(40.0), Some(12.0))
+    );
+    // A shape that isn't read: the drawn look.
+    let r = read_ok(&format!("{}{}", styles(&keys.replace("0 /Int (Shape)", "7 /Int (Shape)")), layer(&art_)));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
     let r = read_ok(&format!("%%BeginProlog\n%\n%%EndProlog\n{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)))));
