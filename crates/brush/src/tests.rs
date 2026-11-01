@@ -979,6 +979,42 @@ fn pen_modes_without_a_recording_draw_the_value_itself() {
     }
 }
 
+/// A mouse stroke records no pressure, tilt, bearing or rotation. On it, a brush whose values are
+/// on Tilt, Bearing or Rotation draws exactly what the same brush on Pressure draws, the output a
+/// mouse stroke gave before these modes existed.
+#[test]
+fn a_mouse_stroke_draws_pen_modes_as_pressure_did() {
+    let doc = Document::new(1.0, 1.0);
+    let wavy = {
+        let mut bp = line(0.0, 0.0, 60.0, 0.0);
+        bp.curve_to((90.0, 0.0), (90.0, 40.0), (120.0, 40.0));
+        bp
+    };
+    let mouse = stroke(1.0);
+    assert!(mouse.pressure.is_none() && mouse.tilt.is_none() && mouse.bearing.is_none() && mouse.rotation.is_none());
+    let calli = |mode: Variation| {
+        let c = Calligraphic { angle: 30.0, roundness: 40.0, size: 8.0, variation: [60.0, 30.0, 4.0], modes: Some([mode; 3]) };
+        stroke_pieces(&doc, &Brush { name: "c".into(), kind: BrushKind::Calligraphic(c) }, &wavy, &mouse)
+    };
+    let scattered = |mode: Variation| {
+        let sc = Scatter {
+            size: (50.0, 300.0),
+            spacing: (80.0, 160.0),
+            scatter: (-40.0, 40.0),
+            rotation: (-90.0, 90.0),
+            modes: Some([mode; 4]),
+            ..scatter(&scatter_brush(100.0))
+        };
+        stroke_pieces(&doc, &Brush { name: "s".into(), kind: BrushKind::Scatter(sc) }, &wavy, &mouse)
+    };
+    let (calli_before, scatter_before) = (calli(Variation::Pressure), scattered(Variation::Pressure));
+    assert!(!calli_before.is_empty() && !scatter_before.is_empty());
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+        assert_eq!(calli(mode), calli_before, "{mode:?}");
+        assert_eq!(scattered(mode), scatter_before, "{mode:?}");
+    }
+}
+
 /// The scatter brush of `b`.
 fn scatter(b: &Brush) -> Scatter {
     let BrushKind::Scatter(sc) = &b.kind else { panic!("not a scatter brush") };
