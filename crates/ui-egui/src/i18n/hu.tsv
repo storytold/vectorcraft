@@ -1238,6 +1238,7 @@ font-technology	Variable	Változó
 	Enable Background Export	Háttérben exportálás
 	Enable Background Save	Háttérben mentés
 	Enable Contextual Task Bar	Helyzetérzékeny műveletsáv bekapcsolása
+	Show the Discord button in the title bar	Discord gomb megjelenítése a címsorban
 	Enable copying of text, images and other content	Szöveg, képek és más tartalom másolásának engedélyezése
 	Enable in-menu font previews	Betűtípus-előnézet a menüben
 	Enable Missing Glyph Protection	Hiányzó glifák elleni védelem

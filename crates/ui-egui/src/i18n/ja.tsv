@@ -1471,6 +1471,7 @@ digits	Malayalam	マラヤーラム数字
 	Enable Background Export	バックグラウンドで書き出しを有効にする
 	Enable Background Save	バックグラウンドで保存を有効にする
 	Enable Contextual Task Bar	コンテキストタスクバーを有効にする
+	Show the Discord button in the title bar	タイトル バーに Discord ボタンを表示する
 	Enable Missing Glyph Protection	欠落グリフの保護を有効にする
 	Enable Opacity Mask	不透明マスクを有効にする
 	Enable Rubber Band for	ラバーバンドを有効にする対象
