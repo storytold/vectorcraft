@@ -5600,7 +5600,9 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
+@msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
 	Move Anchor Point	Flytta ankarpunkt

@@ -5487,7 +5487,9 @@ theme	Appearance	Външен вид
 	Effect Gallery	Галерия с ефекти
 	Filters	Филтри
 	Select artwork to apply effects	Изберете графика, за да приложите ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
+@msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
 	Move Anchor Point	Преместване на опорна точка

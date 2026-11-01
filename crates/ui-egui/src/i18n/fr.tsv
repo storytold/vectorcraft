@@ -5575,7 +5575,9 @@ theme	Appearance	Apparence
 	Effect Gallery	Galerie d'effets
 	Filters	Filtres
 	Select artwork to apply effects	Sélectionnez des éléments graphiques pour appliquer des effets
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	les variables et jeux de données du fichier n’ont pas été lus (variables : {variables}, jeux de données : {data_sets}) : le panneau Variables ne les affiche pas
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la bibliothèque de variables du fichier n’a été lue qu’en partie (entrées ignorées : {_1}) : le panneau Variables affiche le reste
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	la bibliothèque de variables du fichier n’a pas pu être lue : le panneau Variables ne l’affiche pas
+@msg	a variable of unknown kind can't be bound to objects	une variable de type inconnu ne peut pas être liée à des objets
 # Select by Color (select.color)
 	Select by Color	Sélectionner par couleur
 	Move Anchor Point	Déplacer le point d’ancrage

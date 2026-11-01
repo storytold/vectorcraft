@@ -21,11 +21,15 @@ pub enum VariableKind {
     Image,
     /// A graph object's data (CSV of categories and series, as Graph Data uses).
     Graph,
+    /// A variable a file declares without a kind (or with one VectorCraft doesn't know): it drives
+    /// nothing, no value fits it, and nothing can be bound to it.
+    Unknown,
 }
 
 impl VariableKind {
     /// Parse the `kind` of `variable.define`: `text`, `visibility` (`visible` is accepted
-    /// as the same thing, as the panel and the docs call it both), `image` or `graph`.
+    /// as the same thing, as the panel and the docs call it both), `image` or `graph`. A variable
+    /// of [`Self::Unknown`] kind is never defined this way.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "text" => Some(Self::Text),
@@ -43,6 +47,7 @@ impl VariableKind {
             Self::Visibility => "visibility",
             Self::Image => "image",
             Self::Graph => "graph",
+            Self::Unknown => "unknown",
         }
     }
 }
@@ -216,7 +221,7 @@ impl Document {
             (VariableKind::Visibility, _) => Some(DataValue::Visible(node.visible)),
             (VariableKind::Image, NodeKind::Image(im)) => im.link.as_ref().map(|l| DataValue::Image(l.path.clone())),
             (VariableKind::Graph, _) => node.extras().graph.as_ref().map(|g| DataValue::Graph(g.to_csv())),
-            (VariableKind::Text | VariableKind::Image, _) => None,
+            (VariableKind::Text | VariableKind::Image | VariableKind::Unknown, _) => None,
         }
     }
 

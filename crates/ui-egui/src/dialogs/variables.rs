@@ -131,6 +131,8 @@ fn value_fields(vars: &Variables, current: Option<&std::collections::BTreeMap<St
             // "unset".
             (None, VariableKind::Text | VariableKind::Image | VariableKind::Graph) => json!(""),
             (None, VariableKind::Visibility) => json!(true),
+            // A variable of unknown kind takes no value, so it has no field.
+            (None, VariableKind::Unknown) => continue,
         };
         out.insert(value_key(&v.name), value);
     }
@@ -213,6 +215,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                             text_area(ui, d, &key, 220.0);
                         }
                         VariableKind::Visibility => checkbox(ui, d, &key, &v.name),
+                        VariableKind::Unknown => {}
                     }
                     ui.end_row();
                 }
@@ -272,6 +275,7 @@ fn values_of(d: &Dialog, vars: &Variables) -> Value {
             VariableKind::Visibility => {
                 out.insert(v.name.clone(), json!(d.bool(&key)));
             }
+            VariableKind::Unknown => {}
         }
     }
     Value::Object(out)

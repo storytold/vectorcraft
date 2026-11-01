@@ -77,8 +77,12 @@ fn names_param(p: &Value, cmd: &str, fallback: Option<String>, nothing: &str) ->
 }
 
 /// Refuse what a variable of `kind` can't be bound to: art that is locked or on a hidden or locked
-/// layer; a text variable only drives type; an image variable only drives an image object.
+/// layer; a text variable only drives type; an image variable only drives an image object; a
+/// variable of unknown kind drives nothing.
 fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: VariableKind, cmd: &str) -> Result<()> {
+    if kind == VariableKind::Unknown {
+        return Err(bad(cmd, "a variable of unknown kind can't be bound to objects"));
+    }
     for id in ids {
         match doc.node(*id) {
             None => return Err(EngineError::NoNode(*id)),
@@ -123,6 +127,7 @@ fn dataset_value(cmd: &str, var: &str, kind: VariableKind, v: &Value) -> Result<
             .map(str::trim)
             .filter(|t| !t.is_empty())
             .and_then(|t| if t.len() > MAX_GRAPH_CSV { None } else { Some(DataValue::Graph(t.to_string())) }),
+        VariableKind::Unknown => None,
     }
     .ok_or_else(|| bad(cmd, format!("value for `{var}` must match its variable kind")))
 }

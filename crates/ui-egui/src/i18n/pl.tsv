@@ -5431,7 +5431,9 @@ mark-style	Japanese	Japońskie
 	Effect Gallery	Galeria efektów
 	Filters	Filtry
 	Select artwork to apply effects	Wybierz grafikę, aby zastosować efekty
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	zmienne i zestawy danych pliku nie zostały wczytane (zmienne: {variables}, zestawy danych: {data_sets}): panel Zmienne ich nie wyświetla
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka zmiennych pliku została wczytana tylko częściowo (pominięte wpisy: {_1}): panel Zmienne wyświetla resztę
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	nie udało się wczytać biblioteki zmiennych pliku: panel Zmienne jej nie wyświetla
+@msg	a variable of unknown kind can't be bound to objects	zmiennej nieznanego rodzaju nie można powiązać z obiektami
 # Select by Color (select.color)
 	Select by Color	Zaznacz według koloru
 	Move Anchor Point	Przesuń punkt kontrolny

@@ -382,32 +382,65 @@ fn what_the_reader_doesnt_read_opens_as_before_with_a_warning() {
     assert!(r["warnings"].to_string().contains("symbols") && r["warnings"].to_string().contains("PDF part"), "{r}");
 }
 
-/// A `.ai` whose document data has a variable library opens with a note that its variables and
-/// data sets weren't read, whether its layers are read or it comes in as its PDF part.
+/// A `.ai` whose document data has a variable library opens with its variables, data sets, active
+/// data set and lock, whether its layers are read or it comes in as its PDF part: `variable.list`
+/// and `dataset.list` report them. A variable of unknown kind can't be bound. What of the library
+/// can't be read is noted.
 #[test]
-fn an_ai_file_with_a_variable_library_says_its_variables_werent_read() {
-    const NOTE: &str = "the file's variables and data sets weren't read (variables: 2, data sets: 3): the Variables panel doesn't list them";
-    let library = ai::variable_library(&["Name", "Number"], &["One", "Two", "Three"]);
+fn an_ai_file_opens_its_variable_library() {
+    let library = ai::variable_library_data(&ai::sample_variable_sets("variableAndTypes", &[]));
     let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0));
-    let notes =
-        |r: &Value| r["warnings"].as_array().unwrap().iter().filter(|w| w.as_str().unwrap().contains("variables")).cloned().collect::<Vec<_>>();
+    let notes = |r: &Value| {
+        r["warnings"].as_array().map_or(vec![], |w| w.iter().filter(|w| w.as_str().unwrap().contains("variable")).cloned().collect::<Vec<_>>())
+    };
+    let check = |s: &mut Session| {
+        let r = s.execute("variable.list", &json!({})).unwrap();
+        assert_eq!(
+            r,
+            json!({"variables": [
+                {"name": "v_text", "kind": "text", "bindings": 0},
+                {"name": "v_visible", "kind": "visibility", "bindings": 0},
+                {"name": "v_file", "kind": "image", "bindings": 0},
+                {"name": "v_graph", "kind": "graph", "bindings": 0},
+                {"name": "v_unbound", "kind": "unknown", "bindings": 0},
+            ], "locked": true})
+        );
+        let r = s.execute("dataset.list", &json!({})).unwrap();
+        assert_eq!(r["active"], "ds_two", "{r}");
+        let names: Vec<&str> = r["datasets"].as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["ds_one", "ds_two", "ds_three"]);
+        assert_eq!(
+            r["datasets"][1]["values"],
+            json!({"v_text": {"text": "line one\nline two & < é"}, "v_visible": {"visible": false}, "v_file": {"image": ai::SAMPLE_MISSING_FILE}})
+        );
+    };
     let mut s = Session::new();
     let layered = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", &square)));
     let file = ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
     let r = open(&mut s, "variables.ai", &file, json!({})).unwrap();
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
-    assert_eq!(notes(&r), [json!(NOTE)], "{r}");
-    let r = s.execute("variable.list", &json!({})).unwrap();
-    assert_eq!(r["variables"], json!([]), "{r}");
-    // Its layers can't be read (a symbol): it comes in as its PDF part, with the note.
+    assert!(notes(&r).is_empty(), "{r}");
+    check(&mut s);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+    let e = s.execute("variable.bind", &json!({"variable": "v_unbound", "ids": [id]})).unwrap_err();
+    assert!(e.to_string().contains("a variable of unknown kind can't be bound to objects"), "{e}");
+    // Its layers can't be read (a symbol): it comes in as its PDF part, with the library.
     let symbols = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", "/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")));
     let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
     assert!(r["warnings"].to_string().contains("PDF part"), "{r}");
-    assert_eq!(notes(&r), [json!(NOTE)], "{r}");
-    // Without a library, no note.
+    assert!(notes(&r).is_empty(), "{r}");
+    check(&mut s);
+    // A graph value isn't read: the note says how many entries were left out.
+    let graph = ai::xml_element("v_graph", &[], &[ai::xml_text(ai::XmlValue::Str("a,b"))]);
+    let partly = ai::variable_library_data(&ai::sample_variable_sets("none", &[graph]));
+    let layered = ai::editing_data(200.0, 100.0, &format!("{partly}{}", ai::layer("Art", &square)));
+    let r = open(&mut s, "graph.ai", &ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
+    assert_eq!(notes(&r), [json!("the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest")], "{r}");
+    // Without a library, no note and no variables.
     let plain = ai::editing_data(200.0, 100.0, &ai::layer("Art", &square));
     let r = open(&mut s, "plain.ai", &ai::ai(&compressed(plain.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
     assert!(notes(&r).is_empty(), "{r}");
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["variables"], json!([]));
 }
 
 /// An Objects on Path group in a `.ai` file opens as one: its record names the group's children by

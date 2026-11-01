@@ -5158,7 +5158,9 @@ effect	Soft	Weich
 	Effect Gallery	Effekt-Galerie
 	Filters	Filter
 	Select artwork to apply effects	Wählen Sie Grafik aus, um Effekte anzuwenden
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	die Variablen und Datensätze der Datei wurden nicht gelesen (Variablen: {variables}, Datensätze: {data_sets}): Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	die Variablenbibliothek der Datei wurde nur teilweise gelesen (übersprungene Einträge: {_1}): Das Bedienfeld „Variablen“ listet den Rest auf
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	die Variablenbibliothek der Datei konnte nicht gelesen werden: Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	a variable of unknown kind can't be bound to objects	eine Variable unbekannter Art kann nicht an Objekte gebunden werden
 # Select by Color (select.color)
 	Select by Color	Nach Farbe auswählen
 	Move Anchor Point	Ankerpunkt verschieben

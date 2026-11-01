@@ -5237,7 +5237,9 @@ lighting	Light	ライト
 	Effect Gallery	効果ギャラリー
 	Filters	フィルター
 	Select artwork to apply effects	効果を適用するグラフィックを選択してください
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ファイルの変数ライブラリは一部だけ読み込まれました (スキップした項目: {_1})。残りは変数パネルに表示されます
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ファイルの変数ライブラリを読み込めませんでした。変数パネルには表示されません
+@msg	a variable of unknown kind can't be bound to objects	種類が不明な変数はオブジェクトにバインドできません
 # Select by Color (select.color)
 	Select by Color	カラーで選択
 	Move Anchor Point	アンカーポイントを移動

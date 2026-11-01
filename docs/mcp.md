@@ -1633,7 +1633,9 @@ already walks Image Trace. Short agent entry points:
   `variable.define`, `variable.delete`, `variable.rename`, the four `variable.make…Dynamic` commands and a
   `variable.loadLibrary` that would delete or define a variable (below) fail with "variables are locked";
   `variable.bind`, `variable.unbind` and the `dataset.*` commands still run (except a `dataset.import` whose header
-  would define a variable, below), and `variable.list` reports `locked`.
+  would define a variable, below), and `variable.list` reports `locked`. A variable that an opened `.ai` declares
+  without a kind VectorCraft reads is listed with `kind: "unknown"`: it takes no values, and `variable.bind`
+  refuses it.
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, values?}`, `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /

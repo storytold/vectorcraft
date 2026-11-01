@@ -3015,6 +3015,51 @@ proptest! {
         survive("mutated .ai variable library", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose variable library holds values of every kind, values of the wrong type, elements
+    /// nested deep, and more variables and data sets than are read, then is damaged: its layers are
+    /// read, or it comes in as its PDF part (an unknown operator), with or without layers.
+    #[test]
+    fn ai_variable_library_values_never_panic(
+        cut in 0usize..40_000,
+        edits in prop::collection::vec((0usize..40_000, prop::sample::select(vec!['0', '1', '2', '3', '9', ' ', '\n', '(', ')', '\\', '/', ':', ';', ',', '%', '_', 'Z'])), 0..16),
+        locked in prop::sample::select(vec!["none", "variableAndTypes", "", "other"]),
+        extra_variables in 0usize..300,
+        extra_rows in 0usize..1_100,
+        depth in 0usize..300,
+        bad in prop::sample::select(vec![0u8, 1, 2, 3, 4]),
+        layers in prop::sample::select(vec![0u8, 1, 2]),
+    ) {
+        use vectorcraft_testkit::ai::{self, XmlValue};
+        let mut nested = ai::xml_text(XmlValue::Str("deep"));
+        for _ in 0..depth {
+            nested = ai::xml_element("p", &[], &[nested]);
+        }
+        // A value of the wrong type, a second value, a value for no variable, wrong-typed children.
+        let wrong = match bad {
+            0 => ai::xml_element("v_visible", &[], &[ai::xml_text(XmlValue::Str("true"))]),
+            1 => ai::xml_element("v_text", &[], &[ai::xml_text(XmlValue::Bool(true))]),
+            2 => ai::xml_element("v_nope", &[], &[ai::xml_text(XmlValue::Raw("5 /Int"))]),
+            3 => ai::xml_element("v_graph", &[], &[ai::xml_text(XmlValue::Str("a,b\n1,2"))]),
+            _ => ai::xml_element("v_file", &[], &[]).replacen("%_/Array :", "%_/Dictionary :", 1),
+        };
+        let mut library = ai::sample_variable_sets(locked, &[ai::xml_element("v_text", &[], &[nested]), wrong]);
+        if extra_variables + extra_rows > 0 {
+            let declared: Vec<String> = (0..extra_variables).map(|i| ai::xml_element("variable", &[("varName", &format!("x{i}")), ("trait", "textcontent")], &[])).collect();
+            let rows: Vec<String> = (0..extra_rows).map(|i| ai::xml_element("v:sampleDataSet", &[("dataSetName", &format!("r{}", i % 900))], &[])).collect();
+            let set = ai::xml_element("variableSet", &[], &[ai::xml_element("variables", &[], &declared), ai::xml_element("v:sampleDataSets", &[], &rows)]);
+            library = ai::xml_element("variableSets", &[], &[set]);
+        }
+        let art = match layers {
+            0 => ai::layer("L", "0 g\n10 10 m\n20 20 L\nS\n"),
+            1 => ai::layer("L", "1 Zz\n"),
+            _ => String::new(),
+        };
+        let data = ai::editing_data(100.0, 100.0, &format!("{}{art}", ai::variable_library_data(&library)));
+        let text = mutate_text(&data, cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("hostile .ai variable library values", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose Objects on Path record and group are damaged or hostile.
     #[test]
     fn ai_objects_on_path_never_panics(cut in 0usize..4_000, edits in prop::collection::vec((0usize..4_000, prop::sample::select(vec!['0', '1', '9', '-', '.', 'e', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U'])), 0..12)) {

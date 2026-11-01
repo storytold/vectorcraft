@@ -5563,7 +5563,9 @@ imageTrace	Outline	Körvonal
 	Effect Gallery	Effektusgaléria
 	Filters	Szűrők
 	Select artwork to apply effects	Válasszon ki grafikát az effektusok alkalmazásához
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	a fájl változói és adatkészletei nem lettek beolvasva (változók: {variables}, adatkészletek: {data_sets}): a Változók panel nem listázza őket
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	a fájl változókönyvtára csak részben lett beolvasva (kihagyott bejegyzések: {_1}): a Változók panel a többit listázza
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	a fájl változókönyvtárát nem sikerült beolvasni: a Változók panel nem listázza
+@msg	a variable of unknown kind can't be bound to objects	ismeretlen típusú változó nem köthető objektumokhoz
 # Select by Color (select.color)
 	Select by Color	Kijelölés szín szerint
 	Move Anchor Point	Horgonypont áthelyezése

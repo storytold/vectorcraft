@@ -5445,7 +5445,9 @@ imageTrace	Outline	კონტური
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს; .ait შაბლონი ყოველთვის PDF-თან თავსებადია
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ფაილის ცვლადებისა და მონაცემთა ნაკრებების წაკითხვა ვერ მოხერხდა (ცვლადები: {variables}, მონაცემთა ნაკრებები: {data_sets}): პანელი „ცვლადები“ მათ არ აჩვენებს
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ფაილის ცვლადების ბიბლიოთეკა მხოლოდ ნაწილობრივ იქნა წაკითხული (გამოტოვებული ჩანაწერები: {_1}): პანელი „ცვლადები“ დანარჩენს აჩვენებს
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ფაილის ცვლადების ბიბლიოთეკის წაკითხვა ვერ მოხერხდა: პანელი „ცვლადები“ მას არ აჩვენებს
+@msg	a variable of unknown kind can't be bound to objects	უცნობი სახის ცვლადის ობიექტებთან დაკავშირება შეუძლებელია
 @msg	its zlib compression is damaged	მისი zlib შეკუმშვა დაზიანებულია
 @msg	its Zstandard compression is damaged	მისი Zstandard შეკუმშვა დაზიანებულია
 @msg	it decompresses to more than {_1} MB	გაშლისას {_1} MB-ს აღემატება

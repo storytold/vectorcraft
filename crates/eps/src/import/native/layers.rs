@@ -7,7 +7,8 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why, with the swatches of the
-/// editing copy's palette ([`use_palette`]) when it could be read, and with its layer tree, empty,
+/// editing copy's palette ([`use_palette`]) and its variable library ([`use_variables`]) when it
+/// could be read, and with its layer tree, empty,
 /// below the page's layer when that could be read (#2033).
 pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Imported {
     let Some(data) = editing_copy(ps) else { return visible };
@@ -33,6 +34,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
             let mut v = visible;
             if let Ok(data) = &data {
                 use_palette(data, &mut v.document);
+                use_variables(data, &mut v.document, &mut v.warnings);
             }
             if tree.is_empty() {
                 v.warnings.push(format!("{LAYERS_UNREAD} ({why}): it comes in as its page, in one layer"));
@@ -80,8 +82,9 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// notes, or a note saying why the layers weren't read when the editing data can't be decompressed
 /// or its layers can't be read. The flag returned is `true` when the document is the one read from
 /// the layers; else the document is `visible`, its pages moved by `place_pages` when the editing
-/// data was decompressed but its layers can't be read, and its swatches those of the editing data's
-/// palette ([`use_palette`]) when it was decompressed. `outlined`: the PDF part's type was read as
+/// data was decompressed but its layers can't be read, and its swatches and variables those of the
+/// editing data's palette ([`use_palette`]) and variable library ([`use_variables`]) when it was
+/// decompressed. `outlined`: the PDF part's type was read as
 /// outlines (a file whose type shows then comes in as its PDF part).
 /// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
 /// `unit`: the size in points of a unit of the PDF part's user space, its first page's `UserUnit`,
@@ -98,8 +101,9 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         Err(why) => return (visible, unread(warnings, &why), false),
     };
     if !has_layers(&data) {
-        let mut visible = visible;
+        let (mut visible, mut warnings) = (visible, warnings);
         use_palette(&data, &mut visible);
+        use_variables(&data, &mut visible, &mut warnings);
         return (visible, warnings, false);
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
@@ -108,7 +112,7 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         place_pages(&ai::artboards(&data), &mut visible, unit);
         use_palette(&data, &mut visible);
         let mut all = unread(warnings, why);
-        all.extend(ai::variables(&data).note());
+        use_variables(&data, &mut visible, &mut all);
         (visible, all, false)
     };
     match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
@@ -124,6 +128,18 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
             (done, all, true)
         }
         Err(why) => from_pdf_part(visible, warnings, &why),
+    }
+}
+
+/// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data
+/// sets, active data set and lock of the variable library of its editing data `data`, as [`build`]
+/// gives a document read from the layers, and the note about what of the library wasn't read
+/// added to `warnings`. Left as it is when the editing data has no library.
+fn use_variables(data: &[u8], doc: &mut Document, warnings: &mut Vec<String>) {
+    let read = ai::variables(data);
+    warnings.extend(read.note());
+    if read.present {
+        doc.variables = read.variables.into();
     }
 }
 

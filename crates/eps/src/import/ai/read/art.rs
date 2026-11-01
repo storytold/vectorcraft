@@ -584,11 +584,6 @@ pub(super) fn element_name(o: &Obj) -> Option<String> {
     Some(name.rsplit(':').next().unwrap_or(&name).to_string())
 }
 
-/// The child nodes named `name` (see [`element_name`]) of the XML node `o`.
-pub(super) fn elements<'o>(o: &'o Obj, name: &'o str) -> impl Iterator<Item = &'o Obj> {
-    o.obj("xmlnode-children").into_iter().flat_map(Obj::items).filter(move |c| c.ty == "XMLNode" && element_name(c).as_deref() == Some(name))
-}
-
 /// A placed file's preview as a PNG, with its size: `w h rowBytes 32 n ` (each number followed by
 /// a space), then `h` rows of `rowBytes` bytes, premultiplied ARGB. `None` when it isn't that, is
 /// larger than [`MAX_PIXELS`] or is cut short.
