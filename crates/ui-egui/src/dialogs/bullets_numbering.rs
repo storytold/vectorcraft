@@ -1,5 +1,4 @@
-//! Type › Bullets and Numbering › Bullets and Numbering…, and More Options at the end of the
-//! Paragraph panel's Bullets and Numbered List presets (or `ui.bulletsAndNumbering {tab?}`): a
+//! More Options at the end of the Paragraph panel's Bullets and Numbered List presets (or `ui.bulletsAndNumbering {tab?}`): a
 //! Bullets tab and a Numbers tab with the presets, and the Position group (Alignment, Left Indent
 //! and First Line Indent) of the paragraphs the Paragraph panel acts on. The dialog opens on the
 //! values the Paragraph panel shows, with no preset picked and a field blank where the paragraphs
