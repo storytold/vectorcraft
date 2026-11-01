@@ -165,6 +165,33 @@ fn an_instance_that_slices_into_too_many_objects_stays_an_instance() {
     assert!(is_instance(&s), "Break Link leaves it an instance");
 }
 
+/// An instance of a symbol without guides whose opacity masks hold more than a million objects
+/// stays an instance under Object › Expand, and Break Link to Symbol reports an error without an
+/// edit, though the art outside the masks holds about a thousand.
+#[test]
+fn an_instance_whose_masks_hold_too_many_objects_stays_an_instance() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r = rect(&mut s, 50.0, 50.0, 20.0, 20.0);
+    s.select(|_, sel| sel.set([r])).unwrap();
+    let id = NodeId(s.execute("symbol.new", &json!({"name": "Masked"})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    assert!(doc.symbol_nine_slice("Masked").is_none(), "no guides");
+    let square = doc.symbols.iter().find(|s| s.name == "Masked").unwrap().art.clone();
+    let mask_art = Node::group(doc.alloc_id(), vec![square.clone(); 1_000]);
+    let mut masked = (*square).clone();
+    masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(mask_art, true)));
+    let masked = std::sync::Arc::new(masked);
+    let big = Node::group(doc.alloc_id(), vec![masked; 1_000]);
+    assert!(big.count() < 1_000_000 && big.count_with_masks() > 1_000_000);
+    doc.symbols.iter_mut().find(|s| s.name == "Masked").unwrap().art = std::sync::Arc::new(big);
+    let is_instance = |s: &Session| matches!(s.doc().unwrap().doc.node(id).unwrap().kind, NodeKind::SymbolInstance { .. });
+    s.execute("object.expand", &json!({"fill": false, "stroke": false})).unwrap();
+    assert!(is_instance(&s), "Object › Expand leaves it an instance");
+    assert!(s.execute("symbol.breakLink", &json!({})).is_err());
+    assert!(is_instance(&s), "Break Link leaves it an instance");
+}
+
 /// A scaled instance of a dynamic symbol keeps its own appearance changes when Break Link to
 /// Symbol and Object › Expand place its art through the guides.
 #[test]

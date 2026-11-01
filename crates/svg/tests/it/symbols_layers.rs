@@ -144,6 +144,72 @@ fn a_nine_slice_instance_past_the_object_limit_is_left_out() {
     assert_eq!(svg.matches("<use ").count(), 0, "{svg}");
 }
 
+/// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`
+/// objects, as on the canvas: of two instances whose art placed through the guides could hold
+/// about 9,009,000 objects each (a gradient square in all nine cells, each copy with a disabled
+/// opacity mask of 1,001,001 objects), the first is written in its nine clip groups and the
+/// second is left out. With a small mask both are written. One such instance over a square in a
+/// knockout group is written twice, as itself and in the group's knockout mask, which copies it
+/// with the count it was written with: after another such instance, it is left out of both. Of
+/// two instances of a symbol "Outer" whose art holds one such instance, the first is a `<use>` of
+/// a def holding the instance's nine clip groups, and the second, which the def's art would take
+/// past the limit, is written as its own art without the instance.
+#[test]
+fn nine_slice_instances_share_one_object_limit_in_an_export() {
+    let doc = |mask_objects: usize, plain: &[f64], layout: &str| {
+        let mut d = Document::new(300.0, 200.0);
+        let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default()));
+        let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; mask_objects]));
+        let mut mask = vectorcraft_doc::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; mask_objects]), true);
+        // A linked mask moves with its art, which lets "Outer" share a def.
+        (mask.linked, mask.disabled) = (layout == "outer", true);
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+        let mut square =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(mask));
+        let art = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+        d.symbols.push(Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+        d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        let xf = |x: f64| Affine::translate((x, 20.0)) * Affine::scale_non_uniform(2.0, 1.5);
+        for x in plain {
+            instance(&mut d, "Panel", xf(*x));
+        }
+        let panel = |d: &mut Document, x: f64| Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf: xf(x) });
+        let l = d.layers[0].id;
+        if layout == "knockout" {
+            let below = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 200.0)), Appearance::default());
+            let top = panel(&mut d, 60.0);
+            let mut group = Node::group(d.alloc_id(), vec![below.into(), top.into()]);
+            group.knockout = vectorcraft_doc::Knockout::On;
+            d.insert(Some(l), usize::MAX, group).unwrap();
+        } else if layout == "outer" {
+            let art = Node::group(d.alloc_id(), vec![panel(&mut d, 20.0).into()]);
+            d.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(art) });
+            for y in [0.0, 10.0] {
+                instance(&mut d, "Outer", Affine::translate((0.0, y)));
+            }
+        }
+        d
+    };
+    let svg = export(&doc(2, &[20.0, 40.0], ""), &ExportOptions::default());
+    assert_eq!(svg.matches("<clipPath").count(), 18, "{svg}");
+    let svg = export(&doc(1_000, &[20.0, 40.0], ""), &ExportOptions::default());
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+    assert_eq!(svg.matches("<use ").count(), 0);
+    let svg = export(&doc(1_000, &[], "knockout"), &ExportOptions::default());
+    assert_eq!(svg.matches("<mask").count(), 1);
+    assert_eq!(svg.matches("<clipPath").count(), 18);
+    let svg = export(&doc(1_000, &[20.0], "knockout"), &ExportOptions::default());
+    assert_eq!(svg.matches("<mask").count(), 1);
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+    let svg = export(&doc(2, &[], "outer"), &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 2, "{svg}");
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+    let svg = export(&doc(1_000, &[], "outer"), &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 1);
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+}
+
 #[test]
 fn instances_the_def_cant_stand_for_get_their_own_art() {
     // Rotated: shared (a stroke turns with its path). Scaled: stroke weights don't scale on the

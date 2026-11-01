@@ -372,18 +372,18 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
 }
 
 /// The most objects [`expanded_instance`] makes of instance `inst` in `d` (`own` as there): its
-/// symbol's object count, or [`vectorcraft_doc::NineSliceMap::most_placed`] when it is placed
-/// through 9-slice guides, plus the group that opacity or a blending mode adds. 0 for any other
-/// object.
+/// symbol's object count with the art of its opacity masks, or
+/// [`vectorcraft_doc::NineSliceMap::most_placed`] when it is placed through 9-slice guides, plus
+/// the group that opacity or a blending mode adds. 0 for any other object.
 fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return 0 };
     let Some(sym) = d.symbols.iter().find(|s| &s.name == symbol) else { return 0 };
+    let dynamic = own && !inst.extras().symbol_overrides.is_empty();
     let most = match d.symbol_slice_map(symbol, *xf) {
-        Some(m) if own && !inst.extras().symbol_overrides.is_empty() => {
-            m.most_placed(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst), d)
-        }
+        Some(m) if dynamic => m.most_placed(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst), d),
         Some(m) => m.most_placed(&sym.art, d),
-        None => sym.art.count() as u64,
+        None if dynamic => vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst).count_with_masks() as u64,
+        None => sym.art.count_with_masks() as u64,
     };
     most.saturating_add(1)
 }

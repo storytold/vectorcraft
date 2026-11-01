@@ -105,6 +105,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         instance_xf: Affine::IDENTITY,
         symbols: HashMap::new(),
         symbol_nest: 0,
+        symbol_nodes: 0,
         inline_graphic: false,
         fonts: Vec::new(),
         shared_images: HashMap::new(),
@@ -272,6 +273,9 @@ struct Writer<'a> {
     /// Symbols being written inside one another (instances nested deeper are left out: a symbol
     /// can't contain itself).
     symbol_nest: u32,
+    /// The objects in the placed art of the 9-slice instances written so far (see
+    /// [`vectorcraft_doc::charge_symbol_art`]).
+    symbol_nodes: u64,
     /// An inline graphic in type is being written: its symbol's 9-slice guides do not apply, as
     /// on the canvas.
     inline_graphic: bool,
