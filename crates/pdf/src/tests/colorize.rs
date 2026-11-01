@@ -66,6 +66,17 @@ fn a_spot_color_writes_the_image_in_its_ink() {
 }
 
 #[test]
+fn a_spot_colorized_image_keeps_the_ink_values_of_its_swatch() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 0.75, 0.75, 0.1), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let Some(ink) = d.swatches.iter_mut().find(|s| s.name == "Ink") else { panic!("the Ink swatch") };
+    ink.paint = Paint::solid(Color::cmyk(0.0, 0.75, 0.75, 0.1));
+    let text = String::from_utf8_lossy(&pdf(&d)).into_owned();
+    assert!(text.contains("/Separation/Ink/DeviceCMYK"), "{text}");
+    assert!(text.contains("/C1[0 0.75 0.75 0.1]"), "M75 Y75 K10, not 191/255 and 26/255: {text}");
+}
+
+#[test]
 fn a_process_color_writes_the_image_in_that_color_with_a_soft_mask() {
     let out = pdf(&doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)))));
     // The image and its soft mask, a gray image.

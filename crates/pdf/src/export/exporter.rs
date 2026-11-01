@@ -173,9 +173,10 @@ pub(super) fn q(v: f32) -> u8 {
 pub(super) fn color(c: &Color) -> krilla::color::Color {
     match *c {
         Color::Rgb { r, g, b } => rgb::Color::new(q(r), q(g), q(b)).into(),
-        Color::Cmyk { c, m, y, k } => cmyk::Color::new(q(c), q(m), q(y), q(k)).into(),
+        // Inks and grey keep their values: C75 is written as 0.75, not 191/255.
+        Color::Cmyk { c, m, y, k } => cmyk::Color::new_f32(c, m, y, k).into(),
         // VectorCraft grey is ink coverage (0 = white); PDF DeviceGray is lightness.
-        Color::Gray { k } => luma::Color::new(q(1.0 - k)).into(),
+        Color::Gray { k } => luma::Color::new_f32(1.0 - k).into(),
         Color::Lab { .. } => {
             let [r, g, b] = c.to_rgb();
             rgb::Color::new(q(r), q(g), q(b)).into()

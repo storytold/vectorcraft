@@ -159,10 +159,7 @@ fn spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
     let (pdf, warnings) = pdf_of(&s);
     assert!(pdf.contains("/DeviceN[/Ink/Leaf]/DeviceCMYK"), "a DeviceN shading of both spot inks");
     let functions: Vec<_> = pdf.match_indices("/C0[").filter_map(|(i, _)| pdf.get(i..i + 32)).collect();
-    assert!(
-        pdf.contains("/C0[1 0]/C1[0.5019608 0.2509804]") && pdf.contains("/C0[0.5019608 0.2509804]/C1[0 0.5019608]"),
-        "the tints through the midpoint: {functions:?}"
-    );
+    assert!(pdf.contains("/C0[1 0]/C1[0.5 0.25]") && pdf.contains("/C0[0.5 0.25]/C1[0 0.5]"), "the tints through the midpoint: {functions:?}");
     assert!(!warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
 }
 
