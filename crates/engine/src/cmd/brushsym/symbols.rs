@@ -1,3 +1,4 @@
+use super::dynamic::{fit_overrides, type_id, type_param};
 use super::{
     Affine, AppearanceItem, Arc, CURRENT_SYMBOL, Color, Document, EngineError, FillLayer, HALF, Node, NodeId, NodeKind, Paint, Point, Result,
     SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_value, ids_json, json,
@@ -94,7 +95,14 @@ pub(crate) fn normalize(mut art: Node) -> Result<(Node, (f64, f64), Point)> {
     Ok((art, (w, h), c))
 }
 
-fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
+/// After the art of symbol `name` changed: each of its instances keeps its appearance changes to
+/// the objects the art still has.
+pub(crate) fn fit_instances_of(d: &mut Document, name: &str) {
+    let ids = instances_of(d, Some(name));
+    fit_overrides(d, &ids);
+}
+
+pub(crate) fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
     let mut v = vec![];
     d.walk(|n| {
         if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
@@ -104,6 +112,37 @@ fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
         }
     });
     v
+}
+
+/// The symbols an instance in `n` (its opacity masks included) places, pushed onto `out`.
+fn art_symbols(n: &Node, out: &mut Vec<String>) {
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &m.kind {
+            out.push(symbol.clone());
+        }
+    });
+}
+
+/// Select All Unused (#4918): the symbols nothing places. Instances in the art (opacity masks
+/// included), graph designs, pattern tiles and the tiles that pattern editing's Cancel puts back,
+/// and the art of the document's brushes count, and so do the instances in the art of every symbol
+/// a counted instance places. A symbol placed only inside an unused symbol is unused too.
+pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let mut todo = vec![];
+    let lib = brush::library(d);
+    let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
+    let trees = d.layers.iter().map(|l| &**l).chain(d.graph_designs.iter().map(|g| &*g.art));
+    trees.chain(patterns.flat_map(|p| p.art.iter().map(|n| &**n))).chain(lib.iter().flat_map(|b| b.art())).for_each(|n| art_symbols(n, &mut todo));
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(name) = todo.pop() {
+        if !used.contains(&name) {
+            d.symbols.iter().filter(|sym| sym.name == name).for_each(|sym| art_symbols(&sym.art, &mut todo));
+            used.insert(name);
+        }
+    }
+    let names: Vec<&str> = d.symbols.iter().map(|sym| sym.name.as_str()).filter(|n| !used.contains(*n)).collect();
+    Ok(json!({ "names": names }))
 }
 
 fn symbol_names(d: &Document) -> Vec<String> {
@@ -128,10 +167,30 @@ pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "registration": d.symbol_registration(&sym.name).0,
                 "exportType": d.symbol_export_type(&sym.name).id(),
                 "nineSlice": nine_slice_json(d, &sym.name),
+                "type": type_id(sym.dynamic),
             })
         })
         .collect();
     Ok(json!({ "symbols": list, "current": current_symbol(d).or_else(|| symbol_names(d).into_iter().next()) }))
+}
+
+/// Store `art` ([`normalize`]d, of natural size `size`) as symbol `name`, which becomes the
+/// current symbol.
+pub(crate) fn store_symbol(d: &mut Document, art: &Node, name: &str, size: (f64, f64)) {
+    let art = d.reid(art);
+    d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    set_natural_size(d, name, Some(size));
+    d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+}
+
+/// Replace the root nodes `ids` with one instance of symbol `name` (already stored) placed by
+/// `xf`. Frames of threaded text among them leave their threads with the text they show. Returns
+/// the instance's id.
+pub(crate) fn instance_in_place(d: &mut Document, ids: &[NodeId], name: &str, xf: Affine) -> Result<NodeId> {
+    let threaded = crate::cmd::threads::frames(d);
+    let id = replace_with_instance(d, ids, name, xf)?;
+    crate::cmd::threads::leave_threads(d, &threaded);
+    Ok(id)
 }
 
 /// Replace the root nodes `ids` with one instance of `name` (art already stored). Returns the id.
@@ -160,26 +219,29 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let reg = registration_param(p, C)?.unwrap_or(SymbolRegistration::CENTER);
     let export = export_type_param(p, C)?.unwrap_or_default();
     let nine = nine_slice_param(p, C, None)?.flatten();
+    let dynamic = type_param(p, C)?.unwrap_or(false);
     // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
     let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
-        let art = d.reid(&art);
-        d.symbols.push(Symbol { name: name.clone(), art: Arc::new(art) });
-        set_natural_size(d, &name, Some(size));
+        store_symbol(d, &art, &name, size);
+        if let Some(sym) = d.symbols.iter_mut().find(|x| x.name == name) {
+            sym.dynamic = dynamic;
+        }
         d.set_symbol_registration(&name, reg);
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
-        d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
-        let threaded = crate::cmd::threads::frames(d);
-        let id = replace_with_instance(d, &ids, &name, place)?;
-        // Frames of threaded text in the symbol leave their threads with the text they show.
-        crate::cmd::threads::leave_threads(d, &threaded);
+        let id = instance_in_place(d, &ids, &name, place)?;
         sel.set([id]);
         Ok(id)
     })?;
-    Ok(
-        json!({ "name": name, "id": id.0, "registration": reg.0, "exportType": export.id(), "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value) }),
-    )
+    Ok(json!({
+        "name": name,
+        "id": id.0,
+        "registration": reg.0,
+        "exportType": export.id(),
+        "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value),
+        "type": type_id(dynamic),
+    }))
 }
 
 pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
@@ -188,9 +250,10 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
     let export = export_type_param(p, C)?;
     let reg = registration_param(p, C)?;
     let nine = nine_slice_param(p, C, s.doc()?.doc.symbol_nine_slice(&name))?;
+    let dynamic = type_param(p, C)?;
     let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
-    if new_name.is_none() && export.is_none() && reg.is_none() && nine.is_none() {
-        return Err(bad(C, "pass newName, registration, exportType and/or nineSlice"));
+    if new_name.is_none() && export.is_none() && reg.is_none() && nine.is_none() && dynamic.is_none() {
+        return Err(bad(C, "pass newName, registration, exportType, nineSlice and/or type"));
     }
     if let Some(ref n) = new_name
         && n != &name
@@ -218,6 +281,14 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
             if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
                 d.unknown.insert(CURRENT_SYMBOL.into(), json!(n));
             }
+            // Symbol editing mode follows the new name, and so does its layer.
+            if let Some(e) = d.symbol_edit.as_mut().filter(|e| e.symbol == name) {
+                e.symbol = n.clone();
+                let layer = e.layer;
+                if let Some(l) = d.node_mut(layer) {
+                    l.name = Some(n.clone());
+                }
+            }
         }
         if let Some(r) = reg {
             d.set_symbol_registration(&final_name, r);
@@ -228,6 +299,13 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(g) = nine {
             d.set_symbol_nine_slice(&final_name, g);
         }
+        if let Some(dynamic) = dynamic
+            && let Some(sym) = d.symbols.iter_mut().find(|x| x.name == final_name)
+        {
+            // A static symbol's instances drop their own appearance changes.
+            sym.dynamic = dynamic;
+            fit_overrides(d, &instances_of(d, Some(&final_name)));
+        }
         Ok(())
     })?;
     let d = &s.doc()?.doc;
@@ -236,6 +314,7 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
         "registration": d.symbol_registration(&final_name).0,
         "exportType": d.symbol_export_type(&final_name).id(),
         "nineSlice": nine_slice_json(d, &final_name),
+        "type": type_id(d.symbols.iter().any(|x| x.name == final_name && x.dynamic)),
     }))
 }
 
@@ -266,11 +345,12 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
-/// The plain art of instance `inst` in document space (fresh ids).
-fn expanded_instance(d: &mut Document, inst: &Node) -> Option<Node> {
+/// The plain art of instance `inst` in document space (fresh ids), with the instance's own
+/// appearance changes to a dynamic symbol's art when `own`.
+fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
-    let mut art = (*sym.art).clone();
+    let mut art = if own { vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst) } else { (*sym.art).clone() };
     if let Some(f) = inst.appearance.fill()
         && let Some(c) = f.paint.color()
     {
@@ -289,11 +369,13 @@ fn expanded_instance(d: &mut Document, inst: &Node) -> Option<Node> {
     Some(art)
 }
 
-fn break_links(d: &mut Document, ids: &[NodeId]) -> Result<Vec<NodeId>> {
+/// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
+/// art's ids.
+fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId>> {
     let mut out = vec![];
     for id in ids {
         let Some(inst) = d.node(*id).cloned() else { continue };
-        let Some(art) = expanded_instance(d, &inst) else { continue };
+        let Some(art) = expanded_instance(d, &inst, own) else { continue };
         let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
         let aid = art.id;
         d.remove(*id)?;
@@ -303,7 +385,7 @@ fn break_links(d: &mut Document, ids: &[NodeId]) -> Result<Vec<NodeId>> {
     Ok(out)
 }
 
-fn selected_instances(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+pub(super) fn selected_instances(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
     let mut out = vec![];
     for id in roots(s, p)? {
@@ -324,26 +406,11 @@ pub(super) fn symbol_break_link(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("no symbol instances selected".into()));
     }
     let out = s.edit("Break Link to Symbol", |d, sel| {
-        let out = break_links(d, &ids)?;
+        let out = break_links(d, &ids, true)?;
         sel.set(out.iter().copied());
         Ok(out)
     })?;
     Ok(json!({ "ids": ids_json(&out) }))
-}
-
-pub(super) fn symbol_edit(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = selected_instances(s, p)?;
-    let first = *ids.first().ok_or_else(|| EngineError::Other("select a symbol instance".into()))?;
-    let name = match &s.doc()?.doc.node(first).map(|n| n.kind.clone()) {
-        Some(NodeKind::SymbolInstance { symbol, .. }) => symbol.clone(),
-        _ => return Err(EngineError::Other("select a symbol instance".into())),
-    };
-    let out = s.edit("Edit Symbol", |d, sel| {
-        let out = break_links(d, &[first])?;
-        sel.set(out.iter().copied());
-        Ok(out)
-    })?;
-    Ok(json!({ "name": name, "ids": ids_json(&out) }))
 }
 
 pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
@@ -352,58 +419,138 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
     if !s.doc()?.doc.symbols.iter().any(|x| x.name == name) {
         return Err(bad(C, format!("no symbol named `{name}`")));
     }
+    // Redefining the symbol being edited leaves symbol editing mode in the same step.
+    let session = s.doc()?.doc.symbol_edit.clone().filter(|e| e.symbol == name);
+    if session.is_some() {
+        crate::cmd::settle_interaction(s)?;
+        s.end_text_edit();
+    }
     let ids = roots(s, p)?;
+    // The art on the editing layer can't redefine it: the symbol would hold an instance of itself.
+    if let Some(se) = &session {
+        let d = &s.doc()?.doc;
+        if ids.iter().any(|i| d.ancestry(*i).is_some_and(|a| a.contains(&se.layer))) {
+            return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));
+        }
+    }
     let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
     crate::cmd::threads::keep_shown_text(&s.doc()?.doc, &mut art);
     let (art, size, c) = normalize(art)?;
     let old = natural_size(&s.doc()?.doc, &name);
+    let editing = session.is_some();
     let id = s.edit("Redefine Symbol", |d, sel| {
+        if editing {
+            crate::cmd::symboledit::finish(d, sel);
+        }
         let art = d.reid(&art);
         if let Some(sym) = d.symbols.iter_mut().find(|x| x.name == name) {
             sym.art = Arc::new(art);
         }
         set_natural_size(d, &name, Some(size));
         let fix = Affine::scale_non_uniform(size.0 / old.0, size.1 / old.1);
-        for i in instances_of(d, Some(&name)) {
-            if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(i).map(|n| &mut n.kind) {
+        let instances = instances_of(d, Some(&name));
+        for i in &instances {
+            if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(*i).map(|n| &mut n.kind) {
                 *xf *= fix;
             }
         }
+        // Each instance keeps its appearance changes to the objects the new art still has.
+        fit_overrides(d, &instances);
         let reg = d.symbol_registration(&name);
-        let threaded = crate::cmd::threads::frames(d);
-        let id = replace_with_instance(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
-        // Frames of threaded text in the symbol leave their threads with the text they show.
-        crate::cmd::threads::leave_threads(d, &threaded);
+        let id = instance_in_place(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
         sel.set([id]);
         Ok(id)
     })?;
+    if let Some(se) = &session {
+        crate::cmd::symboledit::leave_editing(s, se)?;
+    }
     Ok(json!({ "name": name, "id": id.0 }))
 }
 
+/// How many levels of nested instances Delete Symbol expands before it gives up.
+const MAX_DELETE_ROUNDS: usize = 256;
+
 pub(super) fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "symbol.delete";
-    let name = name_param(p, C)?.to_string();
-    if !s.doc()?.doc.symbols.iter().any(|x| x.name == name) {
+    // `names` deletes several symbols in one undo step (the Symbols panel's Select All Unused, #4918).
+    let names: Vec<String> = match p.get("names") {
+        Some(v) => {
+            let a = v.as_array().ok_or_else(|| bad(C, "names must be an array of symbol names"))?;
+            let mut names = Vec::with_capacity(a.len());
+            for n in a {
+                let n = n.as_str().ok_or_else(|| bad(C, "names must be an array of symbol names"))?;
+                if !names.iter().any(|x: &String| x == n) {
+                    names.push(n.to_string());
+                }
+            }
+            if names.is_empty() {
+                return Err(bad(C, "names is empty"));
+            }
+            names
+        }
+        None => vec![name_param(p, C)?.to_string()],
+    };
+    let d = &s.doc()?.doc;
+    if let Some(name) = names.iter().find(|n| !d.symbols.iter().any(|x| &x.name == *n)) {
         return Err(bad(C, format!("no symbol named `{name}`")));
     }
     let expand = switch_or(p, "expandInstances", true, C)?;
-    s.edit("Delete Symbol", |d, _| {
-        let inst = instances_of(d, Some(&name));
-        if expand {
-            break_links(d, &inst)?;
-        } else {
-            remove_each(d, &inst)?;
+    // Deleting the symbol being edited leaves symbol editing mode in the same step.
+    let session = s.doc()?.doc.symbol_edit.clone().filter(|e| names.contains(&e.symbol));
+    let editing = session.is_some();
+    if editing {
+        crate::cmd::settle_interaction(s)?;
+        s.end_text_edit();
+    }
+    let label = if names.len() == 1 { "Delete Symbol" } else { "Delete Symbols" };
+    s.edit(label, |d, sel| {
+        if editing {
+            crate::cmd::symboledit::finish(d, sel);
         }
-        d.symbols.retain(|x| x.name != name);
-        set_natural_size(d, &name, None);
-        d.set_symbol_registration(&name, SymbolRegistration::CENTER);
-        d.clear_symbol_export_type(&name);
-        d.set_symbol_nine_slice(&name, None);
-        if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
-            d.unknown.remove(CURRENT_SYMBOL);
+        // Every instance goes before any definition, whatever the order of `names`: expanding an
+        // instance of one symbol can bring out instances of another being deleted (nested in its
+        // art), which expand in turn while their definitions are still there. Each round expands
+        // one level of nesting, so the rounds are capped.
+        let of_names = |d: &Document| {
+            let mut v = vec![];
+            d.walk(|n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                    && names.contains(symbol)
+                {
+                    v.push(n.id);
+                }
+            });
+            v
+        };
+        for _ in 0..=MAX_DELETE_ROUNDS {
+            let inst = of_names(d);
+            if inst.is_empty() {
+                break;
+            }
+            if expand {
+                break_links(d, &inst, true)?;
+            } else {
+                remove_each(d, &inst)?;
+            }
+        }
+        if !of_names(d).is_empty() {
+            return Err(EngineError::Other("the symbols are nested too deeply to expand their instances".into()));
+        }
+        for name in &names {
+            d.symbols.retain(|x| &x.name != name);
+            set_natural_size(d, name, None);
+            d.set_symbol_registration(name, SymbolRegistration::CENTER);
+            d.clear_symbol_export_type(name);
+            d.set_symbol_nine_slice(name, None);
+            if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
+                d.unknown.remove(CURRENT_SYMBOL);
+            }
         }
         Ok(())
     })?;
+    if let Some(se) = &session {
+        crate::cmd::symboledit::leave_editing(s, se)?;
+    }
     ok()
 }
 
@@ -420,7 +567,7 @@ pub(super) fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let nine = d.symbol_nine_slice(&name);
     s.edit("Duplicate Symbol", |d, _| {
         let art = d.reid(&sym.art);
-        d.symbols.push(Symbol { name: new.clone(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: sym.dynamic, name: new.clone(), art: Arc::new(art) });
         set_natural_size(d, &new, Some(size));
         d.set_symbol_registration(&new, reg);
         d.set_symbol_export_type(&new, export);
@@ -452,6 +599,7 @@ pub(super) fn symbol_replace(s: &mut Session, p: &Value) -> Result<Value> {
                 *xf *= Affine::scale_non_uniform(new.0 / old.0, new.1 / old.1);
             }
         }
+        fit_overrides(d, &ids);
         Ok(())
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))

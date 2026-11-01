@@ -84,9 +84,11 @@ mod style;
 pub mod stylelib;
 mod swatch;
 pub mod swatchlib;
+pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
+pub use textedit::effective_kerning;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
@@ -182,20 +184,26 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.len() < 2 { Err("select at least two objects".into()) } else { Ok(()) }
 }
-/// A document is open and it is not in isolation mode: Object › Lock's and Object › Hide's items,
-/// Unlock All and Show All are off in isolation mode. Pattern editing mode and opacity mask
-/// editing isolate their art too, and do not count as isolation mode here while their own layer
-/// is the isolated one. An object isolated inside them counts.
-pub fn outside_isolation(s: &Session) -> std::result::Result<(), String> {
-    let st = s.active().ok_or("no document open")?;
-    let editing_layer = |l| st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == l) || st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == l);
-    if st.isolation.is_some_and(|l| !editing_layer(l)) { Err("exit isolation mode first".into()) } else { Ok(()) }
+/// The isolated group, layer or object in isolation mode. Pattern editing mode, opacity mask
+/// editing and symbol editing mode isolate their own layer, which does not count here; an object
+/// isolated inside them counts.
+pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
+    st.isolation.filter(|l| {
+        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
+    })
 }
-/// Objects are selected ([`has_selection`]) and the document is not in isolation mode
-/// ([`outside_isolation`]).
-pub fn has_selection_outside_isolation(s: &Session) -> std::result::Result<(), String> {
-    outside_isolation(s)?;
-    has_selection(s)
+/// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
+/// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
+pub fn has_selected_member(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    let Some(root) = ordinary_isolation(st) else { return has_selection(s) };
+    if st.selection.objects.iter().any(|id| inside_isolation(&st.doc, root, *id)) { Ok(()) } else { Err("nothing selected".into()) }
+}
+/// Whether `id` lies inside the isolated object `root` (the root itself does not).
+pub(crate) fn inside_isolation(d: &vectorcraft_doc::Document, root: vectorcraft_doc::NodeId, id: vectorcraft_doc::NodeId) -> bool {
+    id != root && d.ancestry(id).is_some_and(|a| a.contains(&root))
 }
 pub fn can_undo(s: &Session) -> std::result::Result<(), String> {
     s.active().filter(|d| !d.history.undo.is_empty()).map(|_| ()).ok_or_else(|| "nothing to undo".into())

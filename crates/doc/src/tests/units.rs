@@ -200,3 +200,10 @@ fn only_the_east_asian_type_list_names_q_and_ha() {
     assert_eq!(Unit::named_east_asian("Ha"), Some(Unit::Ha));
     assert_eq!(Unit::named_east_asian("furlongs"), None);
 }
+
+#[test]
+fn readout_has_no_negative_zero() {
+    assert_eq!(Unit::Points.readout(-0.001), "0.00 pt");
+    assert_eq!(Unit::Points.readout(-0.0), "0.00 pt");
+    assert_eq!(Unit::Points.readout(-12.5), "-12.50 pt");
+}

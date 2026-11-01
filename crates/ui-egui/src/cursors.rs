@@ -554,6 +554,11 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             double_arrow(ink, p + vec2(15.0, 18.0), vec2(1.0, 0.0));
         }
         Cursor::Crosshair => crosshair(ink, p),
+        // Only the centre: the tool draws the tip's outline round it, at the zoom.
+        Cursor::BlobBrush | Cursor::Eraser => {
+            ink.circle_filled(p, 2.5, HALO);
+            ink.circle_filled(p, 1.25, INK);
+        }
         // The Pencil's crosshair with the Pen's star where the closing ring goes.
         Cursor::PencilNew => {
             crosshair(ink, p);

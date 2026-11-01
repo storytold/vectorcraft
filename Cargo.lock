@@ -706,6 +706,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfb"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f13298d9178622b7916ec5d01d470425c04273c8ed07e87b1c38b34c4f4612b"
+dependencies = [
+ "fnv",
+ "uuid",
+ "web-time",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1942,6 +1953,16 @@ dependencies = [
 
 [[package]]
 name = "gif"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ae047235e33e2829703574b54fdec96bfbad892062d97fed2f76022287de61b"
+dependencies = [
+ "color_quant",
+ "weezl 0.1.12",
+]
+
+[[package]]
+name = "gif"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
@@ -2233,7 +2254,7 @@ dependencies = [
  "rustc-hash 2.1.3",
  "smallvec",
  "stringprep",
- "zune-jpeg",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
@@ -2609,14 +2630,14 @@ dependencies = [
  "bytemuck",
  "byteorder-lite",
  "color_quant",
- "gif",
+ "gif 0.14.2",
  "image-webp",
  "moxcms",
  "num-traits",
  "png 0.18.1",
  "tiff",
- "zune-core",
- "zune-jpeg",
+ "zune-core 0.5.3",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
@@ -2837,7 +2858,7 @@ dependencies = [
  "bumpalo",
  "flate2",
  "float-cmp",
- "gif",
+ "gif 0.14.2",
  "image-webp",
  "imagesize 0.14.0",
  "indexmap",
@@ -2852,7 +2873,7 @@ dependencies = [
  "tiny-skia-path 0.12.0",
  "xmp-writer",
  "yoke",
- "zune-jpeg",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
@@ -4380,12 +4401,15 @@ version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8928798c0a55e03c9ca6c4c6846f76377427d2c1e1f7e6de3c06ae57942df43"
 dependencies = [
+ "gif 0.13.3",
+ "image-webp",
  "log",
  "pico-args",
  "rgb",
  "svgtypes 0.15.3",
  "tiny-skia",
  "usvg 0.45.1",
+ "zune-jpeg 0.4.21",
 ]
 
 [[package]]
@@ -5490,7 +5514,7 @@ dependencies = [
  "half",
  "quick-error 2.0.1",
  "weezl 0.1.12",
- "zune-jpeg",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
@@ -6065,6 +6089,7 @@ dependencies = [
  "smithay-clipboard",
  "socket2",
  "vectorcraft-engine",
+ "vectorcraft-render",
  "vectorcraft-text",
  "vectorcraft-ui-egui",
  "wayland-backend",
@@ -6168,7 +6193,7 @@ dependencies = [
  "tiff",
  "vectorcraft-color",
  "vectorcraft-geom",
- "zune-jpeg",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
@@ -6191,9 +6216,11 @@ dependencies = [
 name = "vectorcraft-engine"
 version = "0.19.0"
 dependencies = [
+ "cfb",
  "craft-docpath",
  "crc32fast",
  "flate2",
+ "hayro-jpeg2000",
  "image",
  "kurbo 0.13.1",
  "log",
@@ -6373,7 +6400,7 @@ name = "vectorcraft-render"
 version = "0.19.0"
 dependencies = [
  "flate2",
- "gif",
+ "gif 0.14.2",
  "image",
  "jpeg-encoder",
  "log",
@@ -6382,6 +6409,7 @@ dependencies = [
  "psd",
  "serde_json",
  "tiff",
+ "unicode-general-category",
  "vectorcraft-brush",
  "vectorcraft-color",
  "vectorcraft-doc",
@@ -6484,6 +6512,7 @@ dependencies = [
  "kurbo 0.13.1",
  "serde",
  "serde_json",
+ "vectorcraft-brush",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-effects",
@@ -7950,9 +7979,24 @@ dependencies = [
 
 [[package]]
 name = "zune-core"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f423a2c17029964870cfaabb1f13dfab7d092a62a29a89264f4d36990ca414a"
+
+[[package]]
+name = "zune-core"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
+
+[[package]]
+name = "zune-jpeg"
+version = "0.4.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29ce2c8a9384ad323cf564b67da86e21d3cfdff87908bc1223ed5c99bc792713"
+dependencies = [
+ "zune-core 0.4.12",
+]
 
 [[package]]
 name = "zune-jpeg"
@@ -7960,7 +8004,7 @@ version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
- "zune-core",
+ "zune-core 0.5.3",
 ]
 
 [[package]]

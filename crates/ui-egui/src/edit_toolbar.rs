@@ -602,7 +602,7 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     let icon = Rect::from_center_size(rect.left_center() + vec2(8.0 + ICON / 2.0, 0.0), vec2(ICON, ICON));
     icons::paint(ui, icons::tool_icon(tool.icon), icon, if dimmed || on { color } else { t.icon });
     let painter = ui.painter().with_clip_rect(rect);
-    let shortcut = crate::shortcut_editor::tool_shortcut(tool.id);
+    let shortcut = crate::shortcut_editor::tool_shortcut(tool.id).map(crate::shortcut_editor::as_typed);
     let keys_w = shortcut.as_ref().map_or(0.0, |k| {
         let keys = if on {
             t.text_strong

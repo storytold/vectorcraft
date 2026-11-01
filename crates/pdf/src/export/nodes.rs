@@ -217,7 +217,7 @@ impl Exporter<'_> {
                 let total = sym.map_or(0, |sym| self.symbol_nodes.saturating_add(sym.art.count() as u64));
                 if let Some(sym) = sym.filter(|_| total <= vectorcraft_doc::MAX_SYMBOL_NODES) {
                     self.symbol_nodes = total;
-                    let mut art = (*sym.art).clone();
+                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
                     art.transform(*xf, false);
                     self.node(s, &art, page, true);
                 }
@@ -348,11 +348,12 @@ impl Exporter<'_> {
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
-    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`])?
+    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
+    /// inks ([`Self::perceptual_spot`])?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
-            Paint::Gradient(g) => g.draws_as_pixels(fill),
+            Paint::Gradient(g) => g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill),
             _ => false,
         }
     }

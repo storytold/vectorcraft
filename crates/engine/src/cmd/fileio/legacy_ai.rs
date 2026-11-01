@@ -167,7 +167,7 @@ fn expand_image_patterns(d: &mut Document) -> Result<()> {
     let keys = super::super::flatten::see_through_images(d);
     let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
     for id in layers {
-        super::super::expand::expand_transparent_image_patterns(d, id, &keys)?;
+        super::super::expand::expand_transparent_image_patterns(d, id, &keys, &|_, _| true)?;
     }
     Ok(())
 }

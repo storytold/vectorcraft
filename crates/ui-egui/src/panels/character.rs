@@ -1,11 +1,12 @@
 //! Character panel: font family / style, size, leading, kerning, tracking, vertical and horizontal
 //! scale, baseline shift, character rotation and the All Caps, Small Caps, Superscript, Subscript,
-//! Underline and Strikethrough toggles.
+//! Underline and Strikethrough toggles and the Language menu.
 
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
+use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -90,20 +91,27 @@ pub(crate) fn shared_text_flag(app: &VectorcraftApp, f: impl Fn(&vectorcraft_doc
 /// caret's style at a caret), else every run of the selected type, groups' included. `None` (a
 /// blank field) where they differ, or with no type.
 pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
-    shared_styles(app, |_, _, style| Some(f(style)))
+    shared_styles(app, |_, _, style, _| Some(f(style)))
 }
 
 /// Dimensional controls use document units and tolerate arithmetic roundoff when comparing
 /// compensated runs. Keep raw styles available to font/paragraph controls and style definitions,
 /// even if a collapsed affine prevents editing dimensions.
 fn shared_effective(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> f64) -> Option<f64> {
-    shared_styles(app, |t, _, style| t.effective_char_style(style).map(|s| Metric(f(&s)))).map(|v| v.0)
+    shared_styles(app, |t, _, style, _| t.effective_char_style(style).map(|s| Metric(f(&s)))).map(|v| v.0)
 }
 
-/// The Leading shown: each character's own, or for Auto leading the share of its size its
-/// paragraph's Justification › Auto Leading sets, as the layout uses.
+/// The Leading shown: each character's own, or for Auto leading the share of the em size their
+/// font height reference gives them ([`vectorcraft_text::FontDb::em_size`]) that their paragraph's
+/// Justification › Auto Leading sets, as the layout uses. An inline graphic keeps its size.
 fn shared_leading(app: &VectorcraftApp) -> Option<f64> {
-    shared_styles(app, |t, para, style| t.effective_char_style(style).map(|s| Metric(para.effective_leading(&s)))).map(|v| v.0)
+    let db = vectorcraft_text::FontDb::global();
+    shared_styles(app, |t, para, style, inline| {
+        let s = t.effective_char_style(style)?;
+        let em = if inline { s.size } else { db.em_size(&s, t.vertical) };
+        Some(Metric(para.effective_leading(&CharStyle { size: em, ..s })))
+    })
+    .map(|v| v.0)
 }
 
 pub(crate) struct Metric(pub(crate) f64);
@@ -114,11 +122,12 @@ impl PartialEq for Metric {
     }
 }
 
-/// `f` of each character style in the selection, with its text object and the paragraph the
-/// characters are in (a run that spans paragraphs counts once for each).
+/// `f` of each character style in the selection, with its text object, the paragraph the
+/// characters are in (a run that spans paragraphs counts once for each) and whether the run is an
+/// inline graphic.
 fn shared_styles<T: PartialEq>(
     app: &VectorcraftApp,
-    f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle) -> Option<T>,
+    f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool) -> Option<T>,
 ) -> Option<T> {
     let st = app.session.active()?;
     let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
@@ -130,14 +139,14 @@ fn shared_styles<T: PartialEq>(
         let t = text(id)?;
         if b <= a {
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
-            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b));
+            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
         }
-        each_paragraph_run(t, Some((a, b)), |para, style| acc.add(f(t, para, style)));
+        each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline)));
     } else {
         for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             n.walk(&mut |c| {
                 if let NodeKind::Text(t) = &c.kind {
-                    each_paragraph_run(t, None, |para, style| acc.add(f(t, para, style)));
+                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
                 }
             });
         }
@@ -146,13 +155,14 @@ fn shared_styles<T: PartialEq>(
 }
 
 /// `f` of the paragraph and style of each piece of `t`'s runs that lies in one paragraph (a
-/// paragraph's closing line break belongs to it): the pieces within bytes `a..b`, or with no
-/// range every run's, empty ones included. With no range, a final empty paragraph (the text ends
-/// in a line break) counts too, with the style of the run before it, as the caret there types.
+/// paragraph's closing line break belongs to it), and whether the run is an inline graphic: the
+/// pieces within bytes `a..b`, or with no range every run's, empty ones included. With no range, a
+/// final empty paragraph (the text ends in a line break) counts too, with the style of the run
+/// before it, as the caret there types.
 fn each_paragraph_run<'a>(
     t: &'a vectorcraft_doc::TextObject,
     range: Option<(usize, usize)>,
-    mut f: impl FnMut(&'a vectorcraft_doc::ParaStyle, &'a CharStyle),
+    mut f: impl FnMut(&'a vectorcraft_doc::ParaStyle, &'a CharStyle, bool),
 ) {
     let (mut end, mut para) = (0, 0);
     // The style of the last character and whether it is a line break: the paragraph after it has
@@ -161,7 +171,7 @@ fn each_paragraph_run<'a>(
     for r in &t.runs {
         if r.text.is_empty() {
             if range.is_none_or(|(a, b)| a < end && end < b) {
-                f(t.para_at(para), &r.style);
+                f(t.para_at(para), &r.style, r.inline.is_some());
             }
             continue;
         }
@@ -169,7 +179,7 @@ fn each_paragraph_run<'a>(
             let start = end;
             end += piece.len();
             if range.is_none_or(|(a, b)| start < b && end > a) {
-                f(t.para_at(para), &r.style);
+                f(t.para_at(para), &r.style, r.inline.is_some());
             }
             para += usize::from(piece.ends_with('\n'));
             last = Some((&r.style, piece.ends_with('\n')));
@@ -178,7 +188,7 @@ fn each_paragraph_run<'a>(
     if range.is_none()
         && let Some((style, true)) = last
     {
-        f(t.para_at(para), style);
+        f(t.para_at(para), style, false);
     }
 }
 
@@ -222,7 +232,7 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     range_style(app, p);
 }
 
-/// Set the Kerning field's `value` (a number or "auto"). At a caret in text the Type tool edits
+/// Set the Kerning field's `value` (a number, "auto", or "optical"). At a caret in text the Type tool edits
 /// it is the pair kerning after the character before the caret, as Alt+←/→ steps it
 /// (`type.step`); nowhere to set at the start of the text. Else it is a character attribute like
 /// the others: the selected range, or all the text.
@@ -242,6 +252,37 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     }
     end_typing(app);
     app.run("text.setRangeStyle", json!({"id": id.0, "start": start, "end": a, "kerning": value})).ok();
+}
+
+/// The pair before the caret, in 1/1000 em, using the layout the canvas draws.
+fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
+    let (id, a, b) = text_editing(app)?;
+    if a != b {
+        return None;
+    }
+    let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
+    let text = t.plain_text();
+    let start = vectorcraft_text::edit::prev_char(&text, a);
+    if start >= a {
+        return None;
+    }
+    let style = vectorcraft_text::edit::style_at(&t.runs, start + 1);
+    if let Some(v) = style.kerning {
+        return Some((v, false));
+    }
+    let state = app.session.active()?;
+    let key = (state.uid, state.revision, id, a);
+    let slot = ui.scope_id().with("caret-kerning");
+    if let Some((cached_key, value)) = ui.ctx().data(|d| d.get_temp::<((u64, u64, NodeId, usize), f64)>(slot))
+        && cached_key == key
+    {
+        return Some((value, true));
+    }
+    let original = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let value = vectorcraft_engine::cmd::effective_kerning(vectorcraft_text::FontDb::global(), t, &original, start, a);
+    let value = value.round();
+    ui.ctx().data_mut(|d| d.insert_temp(slot, (key, value)));
+    Some((value, true))
 }
 
 /// The faces Type › Bold and Type › Italic switch to.
@@ -378,11 +419,12 @@ pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value,
 }
 
 /// `type.underline` (Cmd+Shift+U): what the Underline button does, on the text the panels act on.
-/// Returns whether the text is now underlined.
+/// Returns whether the text is now underlined: off only when every character was underlined.
 pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let (s, _) = text_style(app).ok_or("select some type first")?;
-    format(app, json!({"underline": !s.underline}));
-    Ok(json!(!s.underline))
+    text_style(app).ok_or("select some type first")?;
+    let on = shared(app, |s| s.underline) != Some(true);
+    format(app, json!({"underline": on}));
+    Ok(json!(on))
 }
 
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
@@ -625,7 +667,8 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 
 /// The Character panel's grid of numeric fields, `w` wide: Font Size, Leading, Kerning and
 /// Tracking, then with `more` the scales, Baseline Shift and Character Rotation (`s`: the style
-/// shown). The Properties panel shows its first rows.
+/// shown). With Show Font Height Options on, a row under Font Size holds the Set Font Height
+/// Reference dropdown. The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -637,14 +680,37 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             match widgets::spin_field_auto(ui, "ch-lead", leading, Some(auto), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
                 Some(SpinPick::Value(v)) => style(app, json!({"leading": v})),
                 Some(SpinPick::Auto) => style(app, json!({"leading": "auto"})),
+                Some(SpinPick::Optical) => {}
                 None => {}
             }
         });
         ui.end_row();
-        cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
-            let kerning = shared(app, |s| s.kerning.unwrap_or(0.0));
-            if let Some(v) = widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
-                set_kerning(app, if v == 0.0 { json!("auto") } else { json!(v) });
+        if pstate::<bool>(ui.ctx(), FONT_HEIGHT_OPTIONS) {
+            cell(ui, "T↕", tl!("Set Font Height Reference"), |ui| font_height_reference(app, ui, fw));
+            ui.end_row();
+        }
+        cell(ui, "VA", tl!("Kerning"), |ui| {
+            let mode = shared(app, |s| (s.optical_kerning, s.kerning));
+            let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
+            let at_caret = if caret { caret_kerning(app, ui) } else { None };
+            let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
+            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
+            let optical = mode.map(|(optical, _)| optical);
+            match widgets::spin_kerning(
+                ui,
+                "ch-kern",
+                kerning,
+                automatic,
+                optical,
+                tl!("Optical"),
+                at_caret.is_some_and(|(_, auto)| auto),
+                fw,
+                &TRACKING_PRESETS,
+            ) {
+                Some(SpinPick::Value(v)) => set_kerning(app, json!(v)),
+                Some(SpinPick::Auto) => set_kerning(app, json!("auto")),
+                Some(SpinPick::Optical) => set_kerning(app, json!("optical")),
+                None => {}
             }
         });
         cell(ui, "VA↔", tl!("Tracking"), |ui| {
@@ -687,6 +753,30 @@ pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width:
     let size = shared_effective(app, |s| s.size);
     if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
+    }
+}
+
+/// The panel state of the Character panel menu's Show Font Height Options.
+const FONT_HEIGHT_OPTIONS: &str = "ch-font-height-options";
+
+/// The font height references the Set Font Height Reference dropdown lists, with their
+/// `text.setFormat` values.
+const FONT_HEIGHT_REFERENCES: [(vectorcraft_doc::FontHeightReference, &str); 4] = [
+    (vectorcraft_doc::FontHeightReference::EmBox, "emBox"),
+    (vectorcraft_doc::FontHeightReference::CapHeight, "capHeight"),
+    (vectorcraft_doc::FontHeightReference::XHeight, "xHeight"),
+    (vectorcraft_doc::FontHeightReference::IcfBox, "icfBox"),
+];
+
+/// The Set Font Height Reference dropdown, `width` wide: the height of the font that the Font Size
+/// measures, blank where the characters the panel acts on differ.
+fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
+    // The labels of [`FONT_HEIGHT_REFERENCES`], in its order.
+    let labels = [tl!("Em Box"), tl!("Cap Height"), tl!("x-Height"), tl!("ICF Box")];
+    let current = shared(app, |s| s.font_height_reference);
+    let shown = FONT_HEIGHT_REFERENCES.iter().zip(labels).find(|(r, _)| Some(r.0) == current).map_or("", |(_, l)| l);
+    if let Some((_, key)) = widgets::dropdown_names(ui, "ch-font-height", shown, &labels, width).and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
+        format(app, json!({"fontHeightReference": key}));
     }
 }
 
@@ -857,19 +947,34 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
+        // On only when every character the panel acts on has it; a mixed selection turns it on.
+        let all_caps = shared(app, |s| s.all_caps) == Some(true);
         let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
         let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+        let underline = shared(app, |s| s.underline) == Some(true);
+        let strike = shared(app, |s| s.strikethrough) == Some(true);
         for (kind, tip, on, change) in [
-            (Glyph::AllCaps, tl!("All Caps"), s.all_caps, json!({"allCaps": !s.all_caps})),
+            (Glyph::AllCaps, tl!("All Caps"), all_caps, json!({"allCaps": !all_caps})),
             (Glyph::SmallCaps, tl!("Small Caps"), small, json!({"smallCaps": !small})),
             (Glyph::Super, tl!("Superscript"), position == "superscript", position_toggle(position, "superscript")),
             (Glyph::Sub, tl!("Subscript"), position == "subscript", position_toggle(position, "subscript")),
-            (Glyph::Underline, tl!("Underline"), s.underline, json!({"underline": !s.underline})),
-            (Glyph::Strike, tl!("Strikethrough"), s.strikethrough, json!({"strikethrough": !s.strikethrough})),
+            (Glyph::Underline, tl!("Underline"), underline, json!({"underline": !underline})),
+            (Glyph::Strike, tl!("Strikethrough"), strike, json!({"strikethrough": !strike})),
         ] {
             if style_toggle(ui, kind, tip, on) {
                 format(app, change);
             }
+        }
+    });
+    // Language: the characters are shaped in it, so that the font uses that language's forms.
+    ui.add_space(4.0);
+    let names: Vec<&str> = LANGUAGES.iter().map(|(n, _, _)| *n).collect();
+    // Mixed: blank; a tag from a file that is not in the list: as it is.
+    let current = shared(app, |s| s.language.clone())
+        .map_or_else(String::new, |l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
+    widgets::label_row(ui, tl!("Language:"), 64.0, |ui| {
+        if let Some(name) = widgets::dropdown(ui, "ch-language", &current, &names, w - 72.0).and_then(|i| names.get(i)) {
+            format(app, json!({"language": name}));
         }
     });
 }
@@ -954,9 +1059,46 @@ fn char_direction_items(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The numeral systems Character panel menu › Digits lists after Default, with their English
+/// labels, translated in the `digits` context (Hindi, Bengali, Tamil… are also languages): the
+/// Arabic-script ones, then the Indic scripts' own digits from Devanagari on.
+pub(crate) const DIGITS: [(&str, vectorcraft_doc::Digits); 12] = {
+    use vectorcraft_doc::Digits;
+    [
+        ("Arabic", Digits::Arabic),
+        ("Hindi", Digits::Hindi),
+        ("Farsi", Digits::Farsi),
+        ("Devanagari", Digits::Devanagari),
+        ("Bengali", Digits::Bengali),
+        ("Gurmukhi", Digits::Gurmukhi),
+        ("Gujarati", Digits::Gujarati),
+        ("Odia", Digits::Odia),
+        ("Tamil", Digits::Tamil),
+        ("Telugu", Digits::Telugu),
+        ("Kannada", Digits::Kannada),
+        ("Malayalam", Digits::Malayalam),
+    ]
+};
+
+/// Character panel menu › Digits; `digits`: the selected characters' (`None` when they differ).
+fn digits_items(app: &mut VectorcraftApp, ui: &mut Ui, digits: Option<vectorcraft_doc::Digits>) {
+    use vectorcraft_doc::Digits;
+    let mut item = |ui: &mut Ui, label: &str, d: Digits| {
+        if menu_item(ui, label, true, digits == Some(d)) {
+            format(app, json!({"digits": d.id()}));
+        }
+    };
+    item(ui, tl!("Default"), Digits::Default);
+    for (label, d) in DIGITS {
+        if d == Digits::Devanagari {
+            ui.separator();
+        }
+        item(ui, crate::i18n::tr_ctx(crate::i18n::current(), "digits", label), d);
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let st = text_style(app);
-    let has = st.is_some();
+    let has = text_style(app).is_some();
     let hidden: bool = pstate(ui.ctx(), "ch-hide-options");
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "ch-hide-options", !hidden);
@@ -965,12 +1107,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, if glyph { tl!("Hide Snap to Glyph Options") } else { tl!("Show Snap to Glyph Options") }, true, false) {
         set_pstate(ui.ctx(), SNAP_TO_GLYPH_OPTIONS, !glyph);
     }
+    // Show Font Height Options shows the Set Font Height Reference dropdown under Font Size.
+    let heights: bool = pstate(ui.ctx(), FONT_HEIGHT_OPTIONS);
+    if menu_item(ui, if heights { tl!("Hide Font Height Options") } else { tl!("Show Font Height Options") }, true, false) {
+        set_pstate(ui.ctx(), FONT_HEIGHT_OPTIONS, !heights);
+    }
     ui.separator();
-    let s = st.map(|x| x.0);
+    // A check item is checked when every character the panel acts on has it; choosing it with a
+    // mixed selection turns it on.
     for (label, key, on) in [
-        (tl!("All Caps"), "allCaps", s.as_ref().is_some_and(|s| s.all_caps)),
-        (tl!("Underline"), "underline", s.as_ref().is_some_and(|s| s.underline)),
-        (tl!("Strikethrough"), "strikethrough", s.as_ref().is_some_and(|s| s.strikethrough)),
+        (tl!("All Caps"), "allCaps", shared(app, |s| s.all_caps) == Some(true)),
+        (tl!("Underline"), "underline", shared(app, |s| s.underline) == Some(true)),
+        (tl!("Strikethrough"), "strikethrough", shared(app, |s| s.strikethrough) == Some(true)),
     ] {
         if menu_item(ui, label, has, on) {
             format(app, json!({key: !on}));
@@ -991,7 +1139,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Character Alignment: where characters smaller than the largest on their line line up, with
     // the East Asian options.
     if app.session.prefs.show_east_asian_options {
-        let align = s.as_ref().map(|s| s.char_align);
+        let align = shared(app, |s| s.char_align);
         ui.add_enabled_ui(has, |ui| {
             // Indented like the items beside it (their check column).
             ui.menu_button(format!("   {}", tl!("Character Alignment")), |ui| {
@@ -1011,35 +1159,30 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         });
         // Proportional Metrics: full-width glyphs on the font's proportional widths (`palt`, `vpal`).
-        let proportional = s.as_ref().is_some_and(|s| s.proportional_metrics);
+        let proportional = shared(app, |s| s.proportional_metrics) == Some(true);
         if menu_item(ui, tl!("Proportional Metrics"), has, proportional) {
             format(app, json!({"proportionalMetrics": !proportional}));
         }
         // Tate-chu-yoko: the selected characters stand side by side across one em of a vertical column.
-        let tcy = s.as_ref().is_some_and(|s| s.tate_chu_yoko);
+        let tcy = shared(app, |s| s.tate_chu_yoko) == Some(true);
         if menu_item(ui, tl!("Tate-chu-yoko"), has, tcy) {
             format(app, json!({"tateChuYoko": !tcy}));
+        }
+        // Standard Vertical Roman Alignment: the selected half-width characters stand upright in
+        // vertical type instead of being rotated. Checked when every selected character has it; a
+        // mixed selection turns it on.
+        let roman = shared(app, |s| s.standard_vertical_roman) == Some(true);
+        if menu_item(ui, tl!("Standard Vertical Roman Alignment"), has, roman) {
+            format(app, json!({"standardVerticalRoman": !roman}));
         }
         ui.separator();
     }
     // Digits: the numeral system the selected characters' digits are drawn in, with the Middle
     // Eastern (Indic) options, as Paragraph Direction is in the Paragraph panel.
     if app.session.prefs.show_indic_options {
-        let digits = s.as_ref().map(|s| s.digits);
+        let digits = shared(app, |s| s.digits);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Digits")), |ui| {
-                use vectorcraft_doc::Digits;
-                for (label, d, key) in [
-                    (tl!("Default"), Digits::Default, "default"),
-                    (tl!("Arabic"), Digits::Arabic, "arabic"),
-                    (tl!("Hindi"), Digits::Hindi, "hindi"),
-                    (tl!("Farsi"), Digits::Farsi, "farsi"),
-                ] {
-                    if menu_item(ui, label, true, digits == Some(d)) {
-                        format(app, json!({"digits": key}));
-                    }
-                }
-            });
+            ui.menu_button(format!("   {}", tl!("Digits")), |ui| digits_items(app, ui, digits));
         });
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
@@ -1047,7 +1190,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.separator();
     }
     // No Break: the selected characters stay on one line.
-    let no_break = s.as_ref().is_some_and(|s| s.no_break);
+    let no_break = shared(app, |s| s.no_break) == Some(true);
     if menu_item(ui, tl!("No Break"), has, no_break) {
         format(app, json!({"noBreak": !no_break}));
     }
@@ -1068,7 +1211,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("System Layout"), open, system) {
         app.run("type.systemLayout", json!({})).ok();
     }
-    menu_item(ui, tl!("Standard Vertical Roman Alignment"), false, false);
     ui.separator();
     // The installed fonts are always listed; this picks up fonts installed since the app started.
     #[cfg(not(target_arch = "wasm32"))]
@@ -1096,9 +1238,10 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
-/// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off, the Default character
-/// direction and the Default digits, whether or not Show East Asian Options and Show Indic Options
-/// are on.
+/// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
+/// No Break off, the Default character direction, the Default digits and the Em Box font height
+/// reference, whether or not Show East Asian Options, Show Indic Options and Show Font Height
+/// Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -1107,8 +1250,9 @@ fn reset_panel(app: &mut VectorcraftApp) {
         json!({
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
-            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko, "noBreak": d.no_break, "charDirection": "default",
-            "digits": d.digits
+            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
+            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
+            "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );
 }

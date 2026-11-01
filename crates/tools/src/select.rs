@@ -427,6 +427,13 @@ pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
     remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds(cx.doc, &cx.selection.objects, cx.preview_bounds))
 }
 
+/// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
+/// on their own): its handles take a press only then. A path the Pen is drawing keeps its end
+/// anchor selected, so Cmd/Ctrl lending the Selection tool doesn't scale it by hidden handles (#4980).
+fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
+    (cx.show_bbox && cx.selection.anchors.is_empty()).then(|| selection_box(cx)).flatten()
+}
+
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
 fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
     remembered(cx, |m| m.by_object.entry(id).or_insert(None), || vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds))
@@ -460,7 +467,7 @@ fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
 /// Whether the current selection's bounding-box handle is under `p`, using the same geometry as
 /// the Selection tool's press handling.
 pub(crate) fn bbox_handle_at(cx: &ToolContext, p: Point) -> bool {
-    cx.show_bbox && selection_box(cx).is_some_and(|b| matches!(box_hit(cx, &b, p), Some(BoxHit::Handle(_))))
+    shown_box(cx).is_some_and(|b| matches!(box_hit(cx, &b, p), Some(BoxHit::Handle(_))))
 }
 
 /// How near (screen points) the pointer must come to an object's centre or anchor for Smart Guides
@@ -933,9 +940,7 @@ impl Tool for SelectionTool {
         if typewidget::over_widget(cx, p) {
             return Cursor::TypeWidget;
         }
-        if cx.show_bbox
-            && let Some(bx) = selection_box(cx)
-        {
+        if let Some(bx) = shown_box(cx) {
             match box_hit(cx, &bx, p) {
                 Some(BoxHit::Handle(h)) => return handle_cursor(h, bx.angle - cx.view_angle()),
                 Some(BoxHit::Rotate) => return Cursor::rotate_about_in_view(bx.center(), p, cx.view_angle()),
@@ -1165,6 +1170,11 @@ impl SelectionTool {
             if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
                 return vec![Action::SwitchTool("type".into())];
             }
+            // A symbol instance: its symbol is edited in symbol editing mode, except one inside
+            // the art of a symbol already being edited.
+            if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })) {
+                return if cx.doc.symbol_edit.is_some() { vec![] } else { vec![Action::Exec("symbol.edit".into(), json!({ "id": top.0 }))] };
+            }
             // An object that [`isolates`], not the one already isolated.
             if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {
                 return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
@@ -1205,9 +1215,7 @@ impl SelectionTool {
             self.state = State::Idle;
             return Some(vec![]);
         }
-        if cx.show_bbox
-            && let Some(bx) = selection_box(cx)
-        {
+        if let Some(bx) = shown_box(cx) {
             match box_hit(cx, &bx, p) {
                 Some(BoxHit::Handle(handle)) => {
                     let is_area = |id: &NodeId| cx.doc.node(*id).is_some_and(is_area_type);

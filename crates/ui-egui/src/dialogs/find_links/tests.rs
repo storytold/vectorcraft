@@ -119,7 +119,7 @@ fn find_in_folder_relinks_the_missing_files_to_the_files_found() {
     }
     super::super::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
-    assert_eq!(app.ui.status, "Relinked 2 image(s)");
+    assert_eq!(app.ui.status, "Relinked 2 images");
     assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 0);
 }
 
@@ -140,7 +140,7 @@ fn files_not_relinked_go_back_to_linked_file_not_found() {
     assert_eq!((pick(d, "b.png"), pick(d, "c.png")), (&json!(at(&root, "found/b.png")), &Value::Null));
     assert!(frame(&mut app).contains("Not found"));
     super::super::confirm(&mut app).unwrap();
-    assert!(app.ui.status.starts_with("Relinked 1 image(s); b.png couldn't be relinked: "), "{}", app.ui.status);
+    assert!(app.ui.status.starts_with("Relinked 1 image; b.png couldn't be relinked: "), "{}", app.ui.status);
     let d = app.ui.dialog.as_ref().expect("Linked File Not Found again");
     let names: Vec<&str> = d.fields["missing"].as_array().unwrap().iter().map(|r| r["name"].as_str().unwrap()).collect();
     assert_eq!((d.kind.as_str(), names.len()), (super::super::missing_links::KIND, 2));

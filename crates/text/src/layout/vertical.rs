@@ -218,6 +218,12 @@ pub(super) const QUARTER_TURN: Affine = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0
 /// their side when the font has none (Unicode's Vertical_Orientation Tr).
 /// Fullwidth !/? instead keep the nominal glyph upright (Tu fallback, UAX #50 §3.1):
 /// <https://www.unicode.org/reports/tr50/#vo>.
+///
+/// Standard Vertical Roman Alignment (Character panel menu): a marked Latin letter, digit or other
+/// character outside the classes above stands upright instead of lying on its side, except spaces
+/// and control characters (they keep their width down the column) and the glyphs of a
+/// tate-chu-yoko block, which stays across the column.
+/// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
 pub(super) fn stands_upright(g: &SGlyph) -> bool {
     let c = g.ch as u32;
     let upright = matches!(c,
@@ -230,7 +236,7 @@ pub(super) fn stands_upright(g: &SGlyph) -> bool {
         | 0xE000..=0xFAFF | 0xFE10..=0xFE1F | 0xFE30..=0xFE4F | 0xFE50..=0xFE6F | 0xFF00..=0xFFE7
         | 0x1F000..=0x1FAFF | 0x20000..=0x3FFFF);
     if !upright {
-        return false;
+        return g.vertical_roman && g.tcy.is_none() && g.inline.is_none() && !g.ch.is_whitespace() && !g.ch.is_control();
     }
     let needs_vertical_form = matches!(c,
         0x3001 | 0x3002 | 0x3008..=0x3011 | 0x3013..=0x301F | 0x3030 | 0x30A0 | 0x30FC

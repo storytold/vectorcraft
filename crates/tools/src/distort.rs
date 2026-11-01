@@ -50,9 +50,31 @@ pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
 }
 
 /// [`warp_node_with`] for the projective map `h` (perspective): type and symbol instances keep
-/// their flat art and are drawn through `h` (composed with the projection they had).
-pub fn project_node(n: &mut Node, h: &Homography) {
+/// their flat art and are drawn through `h` (composed with the projection they had). Returns
+/// `false`, and leaves `n` as it is, when the projection of a type or symbol instance in `n` would
+/// have an entry that is not finite.
+pub fn project_node(n: &mut Node, h: &Homography) -> bool {
+    if !projects_finitely(n, h) {
+        return false;
+    }
     warp_node(n, &|p| h.apply(p).unwrap_or(p), Some(h));
+    true
+}
+
+/// Whether every type and symbol instance that [`project_node`] reaches in `n` keeps a projection
+/// whose entries are all finite.
+fn projects_finitely(n: &Node, h: &Homography) -> bool {
+    match &n.kind {
+        NodeKind::Text(_) | NodeKind::SymbolInstance { .. } => {
+            let had = n.extras().perspective.as_deref().and_then(|p| p.homography()).unwrap_or(Homography::IDENTITY);
+            h.checked_then_after(&had).is_some()
+        }
+        NodeKind::Layer { children, .. }
+        | NodeKind::Group { children, .. }
+        | NodeKind::Compound { children, .. }
+        | NodeKind::Blend { children, .. } => children.iter().all(|c| projects_finitely(c, h)),
+        _ => true,
+    }
 }
 
 fn warp_node(n: &mut Node, f: &dyn Fn(Point) -> Point, h: Option<&Homography>) {
@@ -62,7 +84,9 @@ fn warp_node(n: &mut Node, f: &dyn Fn(Point) -> Point, h: Option<&Homography>) {
         let mut extras = n.extras_mut();
         let rec = extras.perspective.get_or_insert_with(Default::default);
         let had = rec.homography().unwrap_or(Homography::IDENTITY);
-        rec.projection = Some(h.then_after(&had).to_array());
+        if let Some(c) = h.checked_then_after(&had) {
+            rec.projection = Some(c.to_array());
+        }
         return;
     }
     let bounds = n.geometric_bounds();

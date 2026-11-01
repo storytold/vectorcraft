@@ -543,6 +543,31 @@ fn double_clicking_a_stop_opens_the_shared_popover_beside_it() {
     assert_eq!(app.session.selected_stop(), Some(1));
 }
 
+/// #4953: with a freeform point selected, clicking the Color swatch opens the popover for that
+/// point, which recolours it and leaves the other points as they were.
+#[test]
+fn the_freeform_color_swatch_opens_the_points_popover() {
+    let mut app = app(json!({"gradient": {"kind": "freeform"}}));
+    app.run("paint.freeform.selectPoint", json!({"index": 1})).unwrap();
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = text_at(&texts, "Color:").unwrap_or_else(|| panic!("the Color row: {texts:?}"));
+    let swatch = p.widget_after(label);
+    p.click(&mut app, swatch.center());
+    let d = app.ui.dialog.clone().expect("the popover opened");
+    assert_eq!(
+        (d.kind.as_str(), &d.fields["index"], &d.fields["screen"]),
+        ("gradientStop", &json!(1), &json!([swatch.left(), swatch.bottom() + 4.0]))
+    );
+    let points = |app: &VectorcraftApp| shown_points(&fill(app)).points.iter().map(|p| p.color.to_hex()).collect::<Vec<_>>();
+    let before = points(&app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let mut want = before.clone();
+    want[1] = "#ff0000".into();
+    assert_eq!((fill(&app).gradient.kind, points(&app)), (GradientKind::Freeform, want));
+}
+
 #[test]
 fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     let mut app = app(json!({"gradient": {}}));

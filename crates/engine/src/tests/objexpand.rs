@@ -160,6 +160,35 @@ fn eight_strips_match_the_gradient_samples() {
 }
 
 #[test]
+fn expanding_a_group_keeps_its_hidden_and_locked_members_hidden_and_locked() {
+    // A hidden stroked square with a gradient fill, a locked square with a pattern fill and a
+    // plain square, grouped.
+    let mut s = session();
+    let pat = pattern_rect(&mut s, Rect::new(20.0, 100.0, 80.0, 160.0), false);
+    let grad = gradient_rect(&mut s, Rect::new(20.0, 20.0, 80.0, 80.0), white_black(), true);
+    let plain = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 20, "width": 40, "height": 40}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [pat.0, grad.0, plain.0]}));
+    run(&mut s, "object.group", json!({}));
+    s.edit("t", |d, _| {
+        d.node_mut(grad).unwrap().visible = false;
+        d.node_mut(pat).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "object.expand", json!({}));
+    let g = selected(&s);
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 3);
+    assert!(!clip_parts(&ch[0]).1.is_empty() && ch[0].locked && ch[0].visible, "the pattern's tiles stay locked: {:?}", ch[0]);
+    assert!(!ch[1].visible && !ch[1].locked, "the gradient square's art stays hidden: {:?}", ch[1]);
+    assert!(ch[2].visible && !ch[2].locked);
+    // Showing or unlocking the new art shows or unlocks all of it.
+    for c in ch[..2].iter().flat_map(|c| c.children().unwrap().iter()) {
+        c.walk(&mut |n| assert!(n.visible && !n.locked, "{n:?}"));
+    }
+}
+
+#[test]
 fn a_radial_gradient_becomes_concentric_ellipses() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(50.0, 50.0, 150.0, 150.0), json!({"kind": "radial"}), false);
