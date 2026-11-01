@@ -1489,6 +1489,59 @@ fn a_variable_library_replaces_every_variable_and_data_set() {
     assert_eq!(s.doc().unwrap().doc.variables, before, "one undo step brings everything back");
 }
 
+/// An import or a library load that leaves the variables and data sets as they were (the same CSV
+/// imported again, a row rewritten with its own values, the same library loaded again) records no
+/// undo step: the step to redo stays, and the document stays unmodified. An import or load that
+/// changes something is still one undo step.
+#[test]
+fn an_import_or_library_load_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let csv = "name,Name,#Shown\nA,Ann,true\nB,Bob,false\n";
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    for csv in [csv, "name\tName\t#Shown\nB\tBob\tfalse\n", "Name,#Shown\nAnn,true\n"] {
+        super::select_with_a_step_to_redo(&mut s, &[t]);
+        let before = super::history(&s);
+        assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+        let r = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+        if csv.starts_with("name") {
+            assert_eq!((super::history(&s), r["imported"].clone()), (before, json!(0)), "{csv}");
+        } else {
+            // Without a name column the row is a new data set, which is a change.
+            assert_eq!((super::history(&s), r["imported"].clone()), ((before.0 + 1, 0, true), json!(1)), "{csv}");
+        }
+    }
+    super::select_with_a_step_to_redo(&mut s, &[t]);
+    let undo = super::history(&s).0;
+    s.execute("dataset.import", &json!({"csv": "name,Name\nB,Cy\n"})).unwrap();
+    assert_eq!(super::history(&s), (undo + 1, 0, true));
+
+    let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["Ann"])]), ("B", &[("Name", &["Bob"])])]);
+    s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    super::select_with_a_step_to_redo(&mut s, &[t]);
+    let before = super::history(&s);
+    let r = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!((super::history(&s), r["names"].clone()), (before, json!(["A", "B"])));
+    // Binding the variable makes the next load a change: it deletes the binding.
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    super::select_with_a_step_to_redo(&mut s, &[t]);
+    let undo = super::history(&s).0;
+    s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(super::history(&s), (undo + 1, 0, true));
+
+    // While the variables are locked, a library without text variables still loads its data sets,
+    // and loading it again changes nothing.
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    let xml = library(&[("Shown", "other")], &[("B", &[])]);
+    s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    super::select_with_a_step_to_redo(&mut s, &[t]);
+    let before = super::history(&s);
+    s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(super::history(&s), before);
+}
+
 /// A library that is refused leaves the document's variables and data sets as they were.
 #[test]
 fn a_refused_variable_library_deletes_nothing() {

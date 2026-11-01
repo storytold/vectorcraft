@@ -322,21 +322,26 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let names: Vec<String> = parsed.iter().map(|d| d.name.clone()).collect();
     let new_variables: Vec<String> = defined.iter().map(|v| v.name.clone()).collect();
-    let (imported, updated) = s.edit("Import Data Sets", |d, _| {
-        d.variables.variables.extend(defined);
-        let mut imported = 0usize;
-        let mut updated = 0usize;
-        for row in parsed {
-            if let Some(existing) = d.variables.datasets.iter_mut().find(|x| x.name == row.name) {
-                *existing = row;
-                updated += 1;
-            } else {
-                d.variables.datasets.push(row);
-                imported += 1;
-            }
+    let mut vars = s.doc()?.doc.variables.clone();
+    vars.variables.extend(defined);
+    let (mut imported, mut updated) = (0usize, 0usize);
+    for row in parsed {
+        if let Some(existing) = vars.datasets.iter_mut().find(|x| x.name == row.name) {
+            *existing = row;
+            updated += 1;
+        } else {
+            vars.datasets.push(row);
+            imported += 1;
         }
-        Ok((imported, updated))
-    })?;
+    }
+    // The import is one undo step, and an import that leaves the variables and data sets as they
+    // were adds none.
+    if vars != s.doc()?.doc.variables {
+        s.edit("Import Data Sets", |d, _| {
+            d.variables = vars;
+            Ok(())
+        })?;
+    }
     Ok(json!({"imported": imported, "updated": updated, "names": names, "defined": new_variables}))
 }
 
