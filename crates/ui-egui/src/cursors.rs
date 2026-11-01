@@ -476,7 +476,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 89] = [
+const GLYPHS: [Cursor; 93] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
