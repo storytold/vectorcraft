@@ -546,6 +546,27 @@ fn type_edges_are_drawn_on_at_most_the_budgets_pixels() {
     assert_eq!(edge_grid(Rect::new(0.0, 0.0, 10_000.0, 1.0), coarser), Affine::IDENTITY, "40,000 pixels a side");
 }
 
+/// Type whose offscreen drawing would hold more pixels than the effects' pixel budget (in a large
+/// raster export) is drawn as Sharp draws it, without the offscreen drawing; just within the
+/// budget it is drawn offscreen with its method.
+#[test]
+fn type_past_the_pixel_budget_is_drawn_as_sharp() {
+    // "Hamburg" at 10,000%, its letters across every pixel of the render.
+    let draw = |m: TypeAntiAlias, side: u32| {
+        let half = f64::from(side) / 2.0;
+        let view = Affine::translate((half - 9_000.0, half - 4_500.0)) * Affine::scale(100.0);
+        let mut r = Renderer::new();
+        let pixels = r.render(&page(m, None), side, side, view, &RenderOptions::default()).pixels;
+        (r.stats.type_edges, pixels)
+    };
+    // 3,000 × 3,000 pixels, past the 8.4 million of the budget.
+    let (drawn, strong) = draw(TypeAntiAlias::Strong, 3_000);
+    assert_eq!(drawn, 0, "the type is not drawn offscreen");
+    assert!(strong == draw(TypeAntiAlias::Sharp, 3_000).1, "the type is drawn as Sharp draws it");
+    // 2,800 × 2,800 pixels, within it.
+    assert_eq!(draw(TypeAntiAlias::Strong, 2_800).0, 1, "the type is drawn offscreen");
+}
+
 /// Type across a canvas of the largest side the renderer draws (`MAX_CONTEXT_SIDE` pixels) is
 /// drawn with its method on every pixel.
 #[test]

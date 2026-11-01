@@ -233,7 +233,7 @@ impl Renderer {
     /// Overprint Preview is on, and type that shows a substitution highlight on screen. Drawn
     /// offscreen, those would blend with nothing or take the method on art that is not the
     /// characters'. It also returns false for type whose offscreen drawing would be more than
-    /// [`MAX_RASTER_SIDE`] pixels a side.
+    /// [`MAX_RASTER_SIDE`] pixels a side or more than [`fx::PIXEL_BUDGET`] pixels in all.
     fn draw_type_edges(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject, g: &Arc<TextGeom>, geom_kept: bool) -> bool {
         if proof::overprints(f.opts) && t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke) {
             return false;
@@ -280,8 +280,9 @@ impl Renderer {
         // Whole pixels of the output.
         let (x0, y0) = (on.x0.floor(), on.y0.floor());
         let (Ok(w), Ok(h)) = (u16::try_from((on.x1 - x0).ceil() as u64), u16::try_from((on.y1 - y0).ceil() as u64)) else { return false };
-        // (vello_cpu panics drawing near `u16::MAX` pixels a side.)
-        if u32::from(w) > MAX_RASTER_SIDE || u32::from(h) > MAX_RASTER_SIDE {
+        // (vello_cpu panics drawing near `u16::MAX` pixels a side.) Past the pixel budget the type
+        // is drawn as Sharp draws it.
+        if u32::from(w) > MAX_RASTER_SIDE || u32::from(h) > MAX_RASTER_SIDE || f64::from(w) * f64::from(h) > fx::PIXEL_BUDGET {
             return false;
         }
         let view = Affine::translate((-x0, -y0)) * output;
