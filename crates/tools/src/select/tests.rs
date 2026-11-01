@@ -1018,10 +1018,18 @@ fn a_click_on_a_selected_object_makes_it_the_key() {
         assert!(t.pointer(&c, &ev(PointerKind::Down, x, y)).is_empty());
         t.pointer(&c, &ev(PointerKind::Up, x, y))
     };
+    let alt_click = |s: &Selection, x, y| {
+        let alt = |kind| ev(kind, x, y).with_mods(Mods { alt: true, ..Mods::default() });
+        let c = cx(&d, s, &p);
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &alt(PointerKind::Down)).is_empty());
+        t.pointer(&c, &alt(PointerKind::Up))
+    };
     let mut s = Selection::default();
     s.add(rect);
     s.add(id);
     assert_eq!(click(&s, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({"id": rect.0}))]);
+    assert_eq!(alt_click(&s, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({"id": rect.0}))], "Alt-click keys it too");
     s.key = Some(rect);
     assert_eq!(click(&s, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({}))], "the key again: no key");
     // A drag moves the selection and leaves the key alone.
