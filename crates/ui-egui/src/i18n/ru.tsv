@@ -4201,6 +4201,8 @@ axis	Both	Оба
 @msg	join needs open paths	соединение требует открытых контуров
 @msg	lang must be one of {_1}	lang должен быть одним из: {_1}
 @msg	layers can't be wrap objects	слои не могут быть объектами обтекания
+@msg	line {line}: value for `{var}` must be true or false	строка {line}: значение `{var}` должно быть true или false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	строка {line}: значение `{var}` длиннее {MAX_GRAPH_CSV} байт
 @msg	missing `folder`	отсутствует `folder`
 @msg	missing `id` (see plugin.list)	отсутствует `id` (см. plugin.list)
 @msg	missing `name`	отсутствует `name`

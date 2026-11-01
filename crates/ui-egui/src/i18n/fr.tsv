@@ -4155,6 +4155,8 @@ axis	Both	Les deux
 @msg	join needs open paths	la jonction nécessite des tracés ouverts
 @msg	lang must be one of {_1}	lang doit valoir l’une de ces valeurs : {_1}
 @msg	layers can't be wrap objects	les calques ne peuvent pas être des objets d’habillage
+@msg	line {line}: value for `{var}` must be true or false	ligne {line} : la valeur de `{var}` doit valoir true ou false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	ligne {line} : la valeur de `{var}` dépasse {MAX_GRAPH_CSV} octets
 @msg	missing `folder`	`folder` manquant
 @msg	missing `id` (see plugin.list)	`id` manquant (voir plugin.list)
 @msg	missing `name`	`name` manquant

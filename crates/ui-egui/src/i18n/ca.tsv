@@ -5086,6 +5086,8 @@ digits	Malayalam	Malaiàlam
 @msg	lang must be one of {_1}	lang ha de ser un de {_1}
 @msg	larger than 256 MB	més gran de 256 MB
 @msg	layers can't be wrap objects	les capes no poden ser objectes d’embolcall
+@msg	line {line}: value for `{var}` must be true or false	línia {line}: el valor de `{var}` ha de ser true o false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	línia {line}: el valor de `{var}` ocupa més de {MAX_GRAPH_CSV} bytes
 @msg	library panel `{given}` isn't missing its library	al panell de biblioteca `{given}` no li falta la biblioteca
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
