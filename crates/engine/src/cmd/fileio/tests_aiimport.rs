@@ -197,6 +197,24 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
 }
 
+/// A stroke of width 0 (`0 w`) in the editing data is the thinnest line the device draws: the
+/// opened `.ai` shows a hairline where the same path without its stroke shows nothing.
+#[test]
+fn a_zero_width_stroke_in_the_editing_data_draws_a_hairline() {
+    let drawn = |art: &str| {
+        let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", art));
+        let file = ai::ai(&compressed(data.as_bytes()), "");
+        let mut s = Session::new();
+        let r = open(&mut s, "zero.ai", &file, json!({})).unwrap();
+        assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+        let v = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
+        let png = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+        image::load_from_memory(&png).unwrap().to_rgba8().pixels().filter(|p| p.0[3] > 0).count()
+    };
+    assert!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nS\n") > 0, "the hairline draws");
+    assert_eq!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nN\n"), 0, "the unstroked path draws nothing");
+}
+
 /// A page of a square and a line of type, as a `.ai`'s PDF part draws them.
 const SQUARE_AND_TYPE: &str = "0 g 10 10 40 40 re f BT /F1 12 Tf 100 50 Td (Hi) Tj ET";
 

@@ -1,6 +1,6 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, IGNORED, Kind, MAX_DEPTH};
+use super::types::{BLENDS, FLIP, Frame, IGNORED, Kind, MAX_DEPTH, line_width};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, HashMap, HashSet, Instance, Knockout,
     LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
@@ -699,7 +699,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 }
             },
             StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } => {
-                let mut layer = StrokeLayer::new(paint.clone(), *width);
+                let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
                 (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
                 AppearanceItem::Stroke(layer)
             }

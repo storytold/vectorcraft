@@ -158,6 +158,51 @@ fn paths_colours_and_strokes() {
     assert!(a[4].appearance.fill().is_none() && a[4].appearance.stroke().is_some());
 }
 
+/// `0 w` is the thinnest line the device draws (PostScript's `setlinewidth`), so a stroke of width 0
+/// comes in as a hairline: on a path, on a gradient-filled path that `1 BB` strokes, and on type.
+#[test]
+fn a_line_width_of_zero_is_a_hairline() {
+    let red = Some(Color::rgb(1.0, 0.0, 0.0));
+    let a = art(&read_ok(&layer("0 1 1 0 1 0 0 XA\n2 J\n0 w\n20 20 m\n180 80 L\nS\n")).doc);
+    assert_eq!(a.len(), 1);
+    let st = a[0].appearance.stroke().unwrap();
+    assert_eq!((st.width, st.paint.color(), st.cap), (0.25, red, LineCap::Square));
+
+    let art_ = format!(
+        "0 1 1 0 1 0 0 XA\n0 w\n{}Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n50 0 0 -50 100 50 Bm\nf\n1 BB\n",
+        rect_path(50.0, 0.0, 150.0, 100.0)
+    );
+    let a = art(&read_ok(&format!("{G_DEFS}{}", layer(&art_))).doc);
+    assert!(matches!(fill(&a[0]), Paint::Gradient(_)), "{:?}", fill(&a[0]));
+    let st = a[0].appearance.stroke().unwrap();
+    assert_eq!((st.width, st.paint.color()), (0.25, red));
+
+    let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n1 Tr\n0 1 1 0 1 0 0 XA\n0 w\n/_Helvetica 9 Tf\n(hi) Tx\nTO\n";
+    let a = art(&read_ok(&layer(text)).doc);
+    let Some(NodeKind::Text(t)) = a.first().map(|n| &n.kind) else { panic!("{a:#?}") };
+    let style = &t.runs[0].style;
+    assert_eq!((style.stroke_width, style.stroke.color(), style.fill.clone()), (0.25, red, Paint::None));
+}
+
+/// An art style's stroke of width 0 comes in as a hairline too.
+#[test]
+fn an_art_style_s_line_width_of_zero_is_a_hairline() {
+    let styles = "%AI9_BeginArtStyles\n/KnownStyle :\n(Thin) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+        /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 0 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n";
+    let line = "20 20 m\n180 80 L\n";
+    let art_ = format!("0 Ae\nu\n0 1 1 0 1 0 0 XA\n0 w\n{line}S\nU\n%_0 1 1 0 1 0 0 XA\n%_0 w\n%_{}S\n1 (Thin) XW\n", line.replace('\n', "\n%_"));
+    let r = read_ok(&format!("{styles}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let st = a[0].appearance.stroke().unwrap();
+    assert_eq!((st.width, st.paint.color()), (0.25, Some(Color::rgb(1.0, 0.0, 0.0))));
+}
+
 /// `Xk` and `XK` are global process colours: a name, a tint and whether the colour is RGB, as
 /// `Xx` has them (#1025). They come in as global swatches that aren't inks, linked at their tint.
 #[test]
