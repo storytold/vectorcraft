@@ -1062,6 +1062,63 @@ fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
     assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
 }
 
+/// In symbol editing mode the Control bar's isolation button is Exit Symbol Editing Mode and
+/// leaves the mode. With a group isolated inside the symbol's art it is Exit Isolation Mode and
+/// goes back to the symbol's art.
+#[test]
+fn the_control_bar_exits_symbol_editing_mode() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let layer = app.session.active().unwrap().doc.symbol_edit.as_ref().expect("symbol editing mode").layer;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    // The isolation button's label (the one exit label the bar shows), and a click on it.
+    let label = |app: &mut crate::VectorcraftApp| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let exits: Vec<String> = nodes
+            .iter()
+            .filter_map(|(_, n)| n.label().map(|l| l.trim().to_string()))
+            .filter(|l| l == "Exit Symbol Editing Mode" || l == "Exit Isolation Mode")
+            .collect();
+        assert!(exits.len() <= 1, "{exits:?}");
+        exits.into_iter().next()
+    };
+    let click = |app: &mut crate::VectorcraftApp| {
+        let r = isolation_button(app, &ctx, vec![]).expect("the bar shows the isolation button");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for e in [egui::Event::PointerMoved(r.center()), press(true), press(false)] {
+            isolation_button(app, &ctx, vec![e]);
+        }
+    };
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    // Two rectangles drawn into the symbol's art, grouped and isolated.
+    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": g})).unwrap();
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Isolation Mode"));
+    click(&mut app);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (Some(layer), true), "back to the symbol's art");
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    click(&mut app);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (None::<NodeId>, false), "symbol editing mode ends");
+    // The symbol keeps the art drawn while editing.
+    let symbol = st.doc.symbols.iter().find(|s| s.name == "Box").expect("the symbol");
+    assert!(symbol.art.children().is_some_and(|c| c.len() >= 2), "the edit reached the symbol");
+}
+
 /// #4819: with Direct Selection, a selected blend shows the Control bar's and the Properties
 /// panel's Convert buttons, as a path selected whole does; with the Selection tool it doesn't.
 #[test]
