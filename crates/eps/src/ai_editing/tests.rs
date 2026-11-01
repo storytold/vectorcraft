@@ -329,7 +329,7 @@ fn art_lies_on_its_artboard_in_ruler_space() {
         assert!(text.contains(line), "{line}\n{text}");
     }
     // The creator names the format's app, before the canvas size and the template box, and holds
-    // no version number another app could read as the format's version.
+    // no version number (the version is written in `%%AI8_CreatorVersion`).
     let creator = text.lines().find_map(|l| l.strip_prefix("%%Creator: ")).unwrap();
     assert!(creator.contains("Illustrator"), "{creator}");
     assert!(!creator.contains("88") && !creator.chars().any(|c| c.is_ascii_digit()), "{creator}");

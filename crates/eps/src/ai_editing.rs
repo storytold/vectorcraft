@@ -84,12 +84,10 @@ const TARGET_RESOLUTION: u32 = 800;
 /// The gridlines' gray: VectorCraft's default grid color (200 of 255).
 const GRID_GRAY: f64 = 200.0 / 255.0;
 
-/// `%%Creator`. Apps that read the editing data take the file's version from this line while they
-/// read the header, and only a creator that names the format's app gets the version that measures
-/// `%AI3_TemplateBox` on a canvas of [`CANVAS_SIZE`] points; any other creator places the art
-/// 3,871.5 points off its artboard. The text holds no version number (a number in it would be
-/// read as the format's version).
-const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator the format's version is read from
+/// `%%Creator`: the creator line VectorCraft writes in the header of the editing data. It names
+/// VectorCraft and the format's app, and holds no version number; the version is written on its
+/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
+const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
 
 /// The first line of a PostScript file (the DSC version comment).
 const PS_HEADER: &str = "%!PS-Adobe-3.0"; // brand-ok: the PostScript header comment
@@ -304,11 +302,9 @@ fn ruler_units(u: Unit) -> u8 {
 /// bottom-right corners in art space (`PositionPoint1`, `PositionPoint2`), its top-left corner on
 /// the canvas (`RulerOrigin`, `origin` being art space's origin there), its pixel aspect ratio
 /// (`PAR`), `DisplayMark` 0 (as in the files users sent), whether it is the selected one (the
-/// first) and its name; then the canvas's size. Apps that read the editing data drop a record that
-/// lacks any of the first five. Both sit in the dictionary the `/Document` marks `/Recorded`,
-/// followed by an empty `/NotRecorded` one, as in the files users sent: apps that read the editing
-/// data do not read artboards from the `/NotRecorded` dictionary, and then place the art one
-/// artboard's height above a default artboard.
+/// first) and its name; then the canvas's size. Every record holds all of these entries. The
+/// artboards and the canvas size are written in the `/Recorded` part of the `/Document`
+/// dictionary, followed by an empty `/NotRecorded` part.
 fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64)) {
     s.push_str("%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n");
     for (i, ab) in doc.artboards.iter().enumerate() {
