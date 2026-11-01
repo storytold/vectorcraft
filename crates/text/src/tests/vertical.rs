@@ -750,6 +750,35 @@ fn kinsoku_shori_type_pushes_a_closing_bracket_in_or_out() {
     assert!((l.glyphs[1].origin.x - 20.0).abs() < 0.01, "{:?}", l.glyphs[1].origin);
 }
 
+/// Kinsoku Shori Type at 200% Vertical Scale in a column of 225 pt: the font's vertical metrics set
+/// each character 40 pt long, and its five gaps close by up to 4 pt each, room for the 15 pt 」
+/// overflows by, so 」 is pushed in; Push Out Only moves 五 to the next column with it. Needs
+/// craft-fonts' Shippori Mincho (skipped without it).
+#[test]
+fn kinsoku_shori_type_closes_a_column_by_the_em_down_the_column() {
+    use vectorcraft_doc::KinsokuShoriType;
+    if FontDb::global().face("Shippori Mincho", "Regular").is_none_or(|f| f.family != "Shippori Mincho") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let lay = |ty: KinsokuShoriType| {
+        let mut t = vertical_styled(
+            "一二三四五」六",
+            CharStyle { size: 20.0, font_family: "Shippori Mincho".into(), v_scale: 200.0, ..CharStyle::default() },
+        );
+        t.para.kinsoku_type = ty;
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 200.0, 225.0).to_path(0.1)) };
+        layout(FontDb::global(), &t)
+    };
+    let lines = |ty| lay(ty).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
+    let out = lay(KinsokuShoriType::PushOutOnly);
+    assert!((out.glyphs[0].advance - 40.0).abs() < 0.01, "40 pt down the column: {}", out.glyphs[0].advance);
+    assert_eq!(lines(KinsokuShoriType::PushInFirst), [0, 0, 0, 0, 0, 0, 1]);
+    let bracket = &lay(KinsokuShoriType::PushInFirst).glyphs[5];
+    assert!(bracket.origin.y + bracket.advance <= 225.01, "」 ends inside the column: {:?} +{}", bracket.origin, bracket.advance);
+    assert_eq!(lines(KinsokuShoriType::PushOutOnly), [0, 0, 0, 0, 1, 1, 1]);
+}
+
 /// Proportional Metrics in vertical type (#966): upright glyphs take the font's proportional
 /// heights (`vpal`, from shaping them top to bottom) and move with them, so each glyph's ink stays in
 /// its shorter cell. Line-end Punctuation Half Width takes nothing more off the punctuation `vpal`

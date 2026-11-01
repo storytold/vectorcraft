@@ -1,7 +1,7 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{
     Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, hangs, leader_outline, optical_hangs, optical_hangs_rtl, optical_punct, optical_share,
-    roman_share, set_width, tab_advance, word_width,
+    roman_share, set_width, squeeze_em, tab_advance, word_width,
 };
 use super::region::Region;
 use super::vertical::{EM_CENTER, align_shift, compress_punctuation, glyph_em, punct_half, space_japanese_and_latin};
@@ -343,7 +343,8 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
         let (end, hyph, pushed_in) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
             Some(&(end, hyph)) if end > *i => (end, hyph, false),
             _ if *i < n => {
-                let line = |ty| break_line(cx.text, sg, *i, width, &para.tabs, ind_l, hyphenate, para.burasagari, para.kinsoku, ty, *hanging);
+                let line =
+                    |ty| break_line(cx.text, sg, *i, width, &para.tabs, ind_l, hyphenate, para.burasagari, para.kinsoku, ty, *hanging, cx.vertical);
                 let (end, hyph) = line(para.kinsoku_type);
                 // The line pushed characters in where it ends after the line that pushes out.
                 let pushed_in = pushes_in(para) && end > line(KinsokuShoriType::PushOutOnly).0;
@@ -595,12 +596,13 @@ fn drawn_after(index: usize, glyph: usize, after: &[Option<usize>]) -> Option<us
 }
 
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
-// gaps next to a CJK character, not inside a Latin word or a tate-chu-yoko block.
+// gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko block or a shaped
+// cluster.
 fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
     !held.contains(&glyph)
-        && drawn_after(index, glyph, after)
-            .and_then(|next| sg.get(glyph).zip(sg.get(next)))
-            .is_some_and(|(a, b)| !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch)))
+        && drawn_after(index, glyph, after).and_then(|next| sg.get(glyph).zip(sg.get(next))).is_some_and(|(a, b)| {
+            a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
+        })
 }
 
 // What justification may change of glyph `j`: nothing of a `held` glyph, and no glyph
@@ -668,7 +670,7 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
     // the same share of the em of the glyph before it, at most [`PUSH_IN_SQUEEZE`].
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
-        let ems: f64 = (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| glyph_em(&sg[j])).sum();
+        let ems: f64 = (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| squeeze_em(&sg[j], vertical)).sum();
         if ems > EPS {
             squeeze = ((room - width) / ems).max(-PUSH_IN_SQUEEZE);
         }
@@ -773,7 +775,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.per_space;
             } else if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
                 if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
-                    advance += justification.per_cjk + justification.squeeze * glyph_em(glyph);
+                    advance += justification.per_cjk + justification.squeeze * squeeze_em(glyph, cx.vertical);
                 }
             } else if !line.held.contains(&glyph_index)
                 && drawn_after(index, glyph_index, &justification.after).and_then(|next| sg.get(next)).is_some_and(|next| !next.continues_tcy())
