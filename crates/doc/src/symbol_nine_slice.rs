@@ -334,10 +334,12 @@ impl NineSliceMap {
     /// - Any other object that crosses a guide (type, images, live objects, paths painted with a
     ///   gradient or pattern) is drawn once in each cell it reaches, placed by that cell's map and
     ///   clipped to the cell, so its paint lines up across the guides.
-    /// - An object that crosses a guide and is, or holds, a symbol instance is placed by the map
-    ///   of the cell its center is in: copies in each cell would multiply with every level of
-    ///   nesting. So is art nested more than 64 levels deep that holds one; other such art is
-    ///   clipped to the cells as above.
+    /// - Such an object that draws symbol art ([`draws_symbol_art`]: a symbol instance, type with
+    ///   an inline graphic, a placed document, a brushed stroke, or a pattern whose tile draws any
+    ///   of these, in it or in its opacity masks) is placed by the map of the cell its center is
+    ///   in, and is not copied into each cell. So is art nested more than 64 levels deep that
+    ///   draws symbol art; other such art is clipped to the cells as above. A path with solid or
+    ///   no paint is cut at the guides whatever its strokes' brushes, and stays one path.
     ///
     /// Strokes keep their weight, as they do for any instance.
     pub fn place(&self, art: &Node, doc: &Document) -> Node {
@@ -403,7 +405,7 @@ impl NineSliceMap {
     /// size is `b`.
     fn most_clipped(&self, n: &Node, boxes: &SymbolBoxes, b: Rect) -> u64 {
         let whole = n.count_with_masks() as u64;
-        if holds_instance(n) || !self.clips {
+        if !self.clips || draws_symbol_art(n, boxes.document()) {
             return whole;
         }
         let (cols, rows) = self.clip_cells(n, boxes, b).0;
@@ -472,7 +474,7 @@ impl NineSliceMap {
 
     /// `n`, whose box at the natural size is `b`, drawn in each cell it reaches: a clip group of
     /// the cell around a copy placed by the cell's map, all in a group with `n`'s id. `n` placed
-    /// by `center` when it is or holds a symbol instance, and in [`Self::place_unclipped`].
+    /// by `center` when it draws symbol art ([`draws_symbol_art`]), and in [`Self::place_unclipped`].
     ///
     /// The drop shadows, outer glows and blurs ([`PAINTED_EFFECTS`]) at the end of `n`'s own
     /// effects, after its last other visible effect, go on that group with its opacity, blending
@@ -481,7 +483,7 @@ impl NineSliceMap {
     /// order before the moved ones, so effects that reshape it do not reshape the cells' clip
     /// paths, and effects that follow its outline follow the copy's.
     fn clipped(&self, n: &Node, boxes: &SymbolBoxes, b: Rect, center: Affine) -> Node {
-        if holds_instance(n) || !self.clips {
+        if !self.clips || draws_symbol_art(n, boxes.document()) {
             return transformed(n, center);
         }
         let mut piece = n.clone();
@@ -539,12 +541,42 @@ fn plain_paint(n: &Node) -> bool {
     n.appearance.items.iter().all(|i| matches!(i.paint(), Paint::None | Paint::Solid { .. }))
 }
 
-/// Whether `n` is a symbol instance or holds one (in its members or opacity masks).
-fn holds_instance(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::SymbolInstance { .. })
-        || n.children().is_some_and(|c| c.iter().any(|c| holds_instance(c)))
-        || n.extras().mask.as_ref().is_some_and(|m| holds_instance(&m.art))
-        || matches!(&n.kind, NodeKind::Envelope { content, .. } if content.iter().any(|c| holds_instance(c)))
+/// Whether drawing `n` draws the art of a symbol: `n`, a member of it (the members and sources of
+/// live objects included) or the art of an opacity mask in it is a symbol instance, type with an
+/// inline graphic, a placed document (whose art may hold instances), an object with a visible
+/// brushed stroke (whose brush art may hold instances), or is painted with a pattern of `doc`
+/// whose tile draws symbol art (by a visible fill or stroke, or by its characters). Each
+/// pattern's tile is looked at once, without recursion.
+fn draws_symbol_art(n: &Node, doc: &Document) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    let mut stack = vec![n];
+    while let Some(n) = stack.pop() {
+        let draws = match &n.kind {
+            NodeKind::SymbolInstance { .. } | NodeKind::PlacedDocument(_) => true,
+            NodeKind::Text(t) => t.runs.iter().any(|r| r.inline.is_some()),
+            _ => false,
+        };
+        let brushed = n.appearance.items.iter().any(|i| matches!(i, crate::AppearanceItem::Stroke(s) if s.visible && s.brush.is_some()));
+        if draws || brushed {
+            return true;
+        }
+        let runs = match &n.kind {
+            NodeKind::Text(t) => t.runs.as_slice(),
+            _ => &[],
+        };
+        let items = n.appearance.items.iter().filter(|i| i.visible()).map(|i| i.paint());
+        for p in items.chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])) {
+            if let Paint::Pattern { pattern, .. } = p
+                && seen.insert(pattern.as_str())
+                && let Some(def) = doc.pattern(pattern)
+            {
+                stack.extend(def.art.iter().map(|a| &**a));
+            }
+        }
+        stack.extend(n.children().into_iter().flatten().map(|c| &**c));
+        stack.extend(n.extras().mask.as_ref().map(|m| &*m.art));
+    }
+    false
 }
 
 /// The parameters in (0, 1) where `c` crosses one of the lines x = `xs` or y = `ys`, in order.
@@ -625,7 +657,7 @@ mod tests {
     use vectorcraft_geom::{Vec2, shapes};
 
     use super::*;
-    use crate::{Appearance, ImageObject, OpacityMask, SYMBOL_SIZES, Symbol};
+    use crate::{Appearance, ImageObject, OpacityMask, PatternDef, PlacedDocument, SYMBOL_SIZES, Symbol};
 
     fn square(d: &mut Document, r: Rect, stroke: f64) -> Node {
         let s = if stroke > 0.0 { Paint::solid(Color::BLACK) } else { Paint::None };
@@ -1106,6 +1138,80 @@ mod tests {
         assert!((xf.as_coeffs()[0] - 2.4).abs() < 1e-9 && (xf.as_coeffs()[3] - 0.2).abs() < 1e-9, "{xf:?}");
         let NodeKind::SymbolInstance { xf, .. } = m.place(&corner, &d).kind else { panic!() };
         assert_eq!(xf, Affine::new([0.05, 0.0, 0.0, 0.05, 192.0, 142.0]));
+    }
+
+    /// Type with an inline graphic, a placed document, a brushed stroke and a pattern whose tile
+    /// holds an instance draw symbol art: across the guides each is placed by its center's cell as
+    /// one piece, and counted as one, while the same art without them is drawn in each cell.
+    #[test]
+    fn art_that_draws_symbol_art_across_the_guides_is_placed_as_one_piece() {
+        let mut d = markers(Some(SymbolNineSlice::default()));
+        let m = d.symbol_slice_map("S", Affine::scale_non_uniform(2.0, 1.5)).unwrap();
+        let across = Rect::new(0.0, 40.0, 100.0, 60.0);
+        let one_piece = |d: &Document, n: &Node| {
+            let p = m.place(n, d);
+            assert_eq!(std::mem::discriminant(&p.kind), std::mem::discriminant(&n.kind), "{p:?}");
+            assert_eq!(m.most_placed(n, d), n.count_with_masks() as u64);
+        };
+        let in_cells = |d: &Document, n: &Node| {
+            let p = m.place(n, d);
+            assert_eq!(p.children().map(Vec::len), Some(3), "{p:?}");
+        };
+        // Type.
+        let mut text = crate::TextObject::point(Point::ZERO, "Label", crate::CharStyle::default());
+        text.kind = crate::TextKind::Area { frame: shapes::rectangle(across) };
+        text.xf = Affine::IDENTITY;
+        let plain = Node::new(d.alloc_id(), NodeKind::Text(Box::new(text.clone())));
+        text.runs[0].inline = Some(crate::InlineArt::new("S"));
+        let inline = Node::new(d.alloc_id(), NodeKind::Text(Box::new(text)));
+        in_cells(&d, &plain);
+        one_piece(&d, &inline);
+        // A placed document.
+        let doc = PlacedDocument {
+            link: crate::LinkInfo::new("/art/logo.vectorcraft"),
+            key: "k".into(),
+            bounding: false,
+            page_box: crate::PageBox::Crop,
+            width: 100.0,
+            height: 20.0,
+            xf: Affine::translate((0.0, 40.0)),
+            placement: Default::default(),
+        };
+        let doc = Node::new(d.alloc_id(), NodeKind::PlacedDocument(Box::new(doc)));
+        one_piece(&d, &doc);
+        // A brushed stroke on a gradient bar, in a group so the group's member is the one placed.
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let bar = Node::path(d.alloc_id(), shapes::rectangle(across), Appearance::basic(gradient, Paint::solid(Color::BLACK), 1.0));
+        in_cells(&d, &bar);
+        let mut brushed = bar.clone();
+        brushed.appearance.stroke_mut().unwrap().brush = Some("Brush".into());
+        one_piece(&d, &brushed);
+        let group = Node::group(d.alloc_id(), vec![Arc::new(brushed)]);
+        assert!(matches!(m.place(&group, &d).children().unwrap()[0].kind, NodeKind::Path { .. }));
+        // Patterns: one whose tile holds an instance (through a second pattern), one whose does not.
+        let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::scale(0.1) });
+        let mut tile = square(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0), 0.0);
+        d.patterns.push(PatternDef::new("Plain", vec![Arc::new(tile.clone())]));
+        d.patterns.push(PatternDef::new("Inner", vec![Arc::new(instance)]));
+        tile.appearance = Appearance::basic(Paint::Pattern { pattern: "Inner".into(), xf: Default::default() }, Paint::None, 0.0).into();
+        d.patterns.push(PatternDef::new("Outer", vec![Arc::new(tile)]));
+        for (name, holds) in [("Plain", false), ("Outer", true)] {
+            let fill = Paint::Pattern { pattern: name.into(), xf: Default::default() };
+            let bar = Node::path(d.alloc_id(), shapes::rectangle(across), Appearance::basic(fill, Paint::None, 0.0));
+            if holds { one_piece(&d, &bar) } else { in_cells(&d, &bar) }
+        }
+        // A hidden stroke painted with that pattern draws nothing: the gradient bar is drawn in
+        // each cell.
+        let outer = Paint::Pattern { pattern: "Outer".into(), xf: Default::default() };
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(across), Appearance::basic(gradient, outer, 1.0));
+        hidden.appearance.stroke_mut().unwrap().visible = false;
+        in_cells(&d, &hidden);
+        // A brushed path with solid paint is cut at the guides as one path, drawn once.
+        let black = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0);
+        let mut solid = Node::path(d.alloc_id(), shapes::rectangle(across), black);
+        solid.appearance.stroke_mut().unwrap().brush = Some("Brush".into());
+        assert!(matches!(m.place(&solid, &d).kind, NodeKind::Path { .. }));
     }
 
     /// Art nested deeper than [`MAX_SLICE_DEPTH`] is clipped to the cells it reaches, so it still
