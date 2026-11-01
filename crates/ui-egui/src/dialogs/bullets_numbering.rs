@@ -643,20 +643,24 @@ mod tests {
             })
         };
         app.run("ui.bulletsAndNumbering", json!({})).unwrap();
-        // Left Indent, the first field, is focused: type over it and Tab to commit it.
         frame(&mut app, vec![], "");
-        frame(&mut app, vec![egui::Event::Text("2000 pt".into())], "");
-        frame(&mut app, vec![key(egui::Key::Tab)], "");
-        // Click First Line Indent's field, beside its label, and type over it.
-        let label = frame(&mut app, vec![], "First Line Indent:").expect("First Line Indent is drawn");
-        let at = egui::pos2(label.right() + 30.0, label.center().y);
-        let click = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(&mut app, vec![egui::Event::PointerMoved(at)], "");
-        frame(&mut app, vec![click(true), click(false)], "");
-        frame(&mut app, vec![], "");
-        frame(&mut app, vec![egui::Event::Text("-5000 pt".into())], "");
-        frame(&mut app, vec![key(egui::Key::Tab)], "");
-        frame(&mut app, vec![], "");
+        // The fields' column starts after the longest label, First Line Indent's.
+        let x = frame(&mut app, vec![], "First Line Indent:").expect("First Line Indent is drawn").right() + 30.0;
+        // Click the field beside the label `name`, type `text` over it and Tab to commit it.
+        let type_into = |app: &mut VectorcraftApp, name: &str, text: &str| {
+            let label = frame(app, vec![], name).unwrap_or_else(|| panic!("{name} is drawn"));
+            let at = egui::pos2(x, label.center().y);
+            let click =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, vec![egui::Event::PointerMoved(at)], "");
+            frame(app, vec![click(true), click(false)], "");
+            frame(app, vec![], "");
+            frame(app, vec![egui::Event::Text(text.into())], "");
+            frame(app, vec![key(egui::Key::Tab)], "");
+            frame(app, vec![], "");
+        };
+        type_into(&mut app, "Left Indent:", "2000 pt");
+        type_into(&mut app, "First Line Indent:", "-5000 pt");
         let d = app.ui.dialog.clone().expect("the dialog stays open");
         assert_eq!((d.f64("leftIndent", 0.0), d.f64("firstLineIndent", 0.0)), (1296.0, -1296.0));
         assert_eq!(first(&app, id), (None, 1296.0, -1296.0), "previewed as shown");
