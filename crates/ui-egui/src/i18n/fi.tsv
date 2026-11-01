@@ -665,7 +665,6 @@
 	Links	Linkit
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} linkitetty kuva muuttui levyllä. Näytetäänkö uusi versio?|{n} linkitettyä kuvaa muuttui levyllä. Näytetäänkö uudet versiot?
 	Update Changed Links	Päivitä muuttuneet linkit
-@msg	Updated {_1} linked file(s) changed on disk	Päivitettiin {_1} levyllä muuttunutta linkitettyä tiedostoa
 	Magic Wand	Taikasauva
 	Navigator	Navigaattori
 	Pattern Options	Kuvion asetukset
@@ -1767,13 +1766,16 @@ digits	Malayalam	Malajalam
 	Fractions	Murtoluvut
 	Ligatures are off while the text is tracked.	Ligatuurit eivät ole käytössä, kun tekstin merkkiväliä on muutettu.
 	Ordinals	Järjestysluvut
+	Proportional Lining	Suhteelliset numerot
 	Proportional Oldstyle	Suhteelliset vanhanaikaiset numerot
 	Reset OpenType Features	Palauta OpenType-ominaisuudet
 	Select text to set its OpenType features.	Valitse teksti, jonka OpenType-ominaisuudet haluat asettaa.
 	Standard Ligatures	Vakioligatuurit
+	Stylistic Alternates	Tyylivaihtoehdot
 	Swash	Koukerot
 	Tabular Lining	Taulukkonumerot
 	Tabular Oldstyle	Vanhanaikaiset taulukkonumerot
+	Titling Alternates	Otsikkovaihtoehdot
 	Every-line Composer	Kaikkien rivien asettelu
 	First-line Left Indent	Ensimmäisen rivin vasen sisennys
 	Hyphenation…	Tavutus…
@@ -3040,6 +3042,9 @@ theme	Appearance	Ulkoasu
 	Delete Brush	Poista sivellin
 	Delete Symbol	Poista symboli
 	Delete the selected symbol?	Poistetaanko valittu symboli?
+	Delete the selected symbols?	Poistetaanko valitut symbolit?
+	No unused symbols	Ei käyttämättömiä symboleja
+	Delete Symbols	Poista symbolit
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Yksi tai useampi symboleista on käytössä, eikä niitä voi poistaa ennen kuin niiden ilmentymät on laajennettu tai poistettu.
 	Expand Instances	Laajenna ilmentymät
 	Delete Instances	Poista ilmentymät
@@ -4124,7 +4129,6 @@ imageTrace	Outline	Ääriviiva
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja
 @msg	Convert to Artboards: selection has no area	Muunna piirtoalustoiksi: valinnalla ei ole pinta-alaa
 @msg	Convert to Shape: no rectangles or ellipses selected	Muunna muodoksi: suorakulmioita tai ellipsejä ei ole valittu
-@msg	Copied the CSS of {rules} object(s)	Kopioitiin {rules} objektin CSS
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
@@ -4141,13 +4145,11 @@ imageTrace	Outline	Ääriviiva
 @msg	direct-select anchor points to cut at (not the end points of open paths)	valitse suoravalinnalla ankkuripisteet, joista leikataan (ei avoimien polkujen päätepisteitä)
 @msg	Divide Objects Below: select a path	Jaa alla olevat objektit: valitse polku
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
-@msg	Downloaded {_1} file(s)	Ladattiin {_1} tiedosto(a)
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
 @msg	Expand: no brush strokes selected	Laajenna: sivellinviivoja ei ole valittu
 @msg	Expand: no gradient fills	Laajenna: ei liukuväritäyttöjä
 @msg	Expand: nothing to expand	Laajenna: ei laajennettavaa
-@msg	Exported {count} file(s) to {folder}	Vietiin {count} tiedosto(a) kansioon {folder}
 @msg	Exported {path}	Vietiin {path}
 @msg	Flatten Transparency: select objects to flatten	Litistä läpinäkyvyys: valitse litistettävät objektit
 @msg	Flatten Transparency: {e}	Litistä läpinäkyvyys: {e}
@@ -4694,9 +4696,6 @@ imageTrace	Outline	Ääriviiva
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` on {size} tavua (raja {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} on jo käytössä kohteella {_2}
 @msg	{_1} is reserved by the system	{_1} on järjestelmän varaama
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} linkitettyä tiedostoa ei voi lukea täällä: niiden esikatselut näytetään
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} kuvaa ei voitu purkaa: ne näkyvät ristillä merkittyinä ruutuina
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} linkitettyä kuvaa muuttui levyllä: Päivitä linkit näyttää uudet versiot
 @msg	{_1}: not saved, so not closed	{_1}: ei tallennettu, joten ei suljettu
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bittisiä bittikarttoja ei voi lukea
 @msg	{command} didn't create an object	{command} ei luonut objektia
@@ -4716,7 +4715,6 @@ imageTrace	Outline	Ääriviiva
 @msg	Couldn't place {name}: {e}	Kohdetta {name} ei voitu sijoittaa: {e}
 @msg	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Tallennettiin {path}, {_1} huomautus(ta): {first}
-@msg	Exported {what} with {_1} note(s): {first}	Vietiin {what}, {_1} huomautus(ta): {first}
 @msg	Exported {what}	Vietiin {what}
 @msg	Saved {n} files beside {path}	Tallennettiin {n} tiedostoa kohteen {path} viereen
 @msg	Saving	Tallennetaan
@@ -4727,12 +4725,26 @@ imageTrace	Outline	Ääriviiva
 @msg	Saving recovery data for {_1}	Tallennetaan palautustietoja: {_1}
 @msg	Discarded {_1} recovered document(s)	Hylättiin {_1} palautettu(a) asiakirja(a)
 @msg	Restored {_1} recovered document(s): save them to keep them	Palautettiin {_1} asiakirja(a): tallenna ne säilyttääksesi ne
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Upotettiin {n} kuva(a); {missing} puuttuu: linkitä ne ensin uudelleen
-@msg	Embedded {n} image(s)	Upotettiin {n} kuva(a)
-@msg	Relinked {_1} image(s)	Linkitettiin uudelleen {_1} kuva(a)
-@msg	Relinked {n} image(s)	Linkitettiin uudelleen {n} kuva(a)
-@msg	Relinked {n} image(s); not in that folder: {_1}	Linkitettiin uudelleen {n} kuva(a); ei kyseisessä kansiossa: {_1}
-@msg	Updated {_1} image(s)	Päivitettiin {_1} kuva(a)
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Upotettiin {n} kuva; {missing} puuttuu: linkitä ne ensin uudelleen|Upotettiin {n} kuvaa; {missing} puuttuu: linkitä ne ensin uudelleen
+@msgplural	Embedded {n} image|Embedded {n} images	Upotettiin {n} kuva|Upotettiin {n} kuvaa
+@msgplural	Relinked {n} image|Relinked {n} images	Linkitettiin uudelleen {n} kuva|Linkitettiin uudelleen {n} kuvaa
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Linkitettiin uudelleen {n} kuva; ei kyseisessä kansiossa: {names}|Linkitettiin uudelleen {n} kuvaa; ei kyseisessä kansiossa: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Linkitettiin uudelleen {n} kuva; kohdetta {name} ei voitu linkittää uudelleen: {reason}|Linkitettiin uudelleen {n} kuvaa; kohdetta {name} ei voitu linkittää uudelleen: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Päivitettiin {n} kuva|Päivitettiin {n} kuvaa
+@msgplural	Replaced {n} image|Replaced {n} images	Korvattiin {n} kuva|Korvattiin {n} kuvaa
+@msgplural	Broke {n} link|Broke {n} links	Katkaistiin {n} linkki|Katkaistiin {n} linkkiä
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Katkaistiin {n} linkki; {missing} ei voi lukea: linkitä ne uudelleen tai päivitä ne ensin|Katkaistiin {n} linkkiä; {missing} ei voi lukea: linkitä ne uudelleen tai päivitä ne ensin
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} linkitetty tiedosto ei ole luettavissa täällä: sen esikatselu näytetään|{n} linkitettyä tiedostoa ei voi lukea täällä: niiden esikatselut näytetään
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} kuvaa ei voitu purkaa: se näkyy ristillä merkittynä ruutuna|{n} kuvaa ei voitu purkaa: ne näkyvät ristillä merkittyinä ruutuina
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linkitetty kuva muuttui levyllä: Päivitä linkit näyttää uuden version|{n} linkitettyä kuvaa muuttui levyllä: Päivitä linkit näyttää uudet versiot
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Päivitettiin {n} levyllä muuttunut linkitetty tiedosto|Päivitettiin {n} levyllä muuttunutta linkitettyä tiedostoa
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Vietiin {what}, {n} huomautus: {first}|Vietiin {what}, {n} huomautusta: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fonttitiedosto on nyt kansiossa {folder}|{n} fonttitiedostoa on nyt kansiossa {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fonttitiedosto on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}|{n} fonttitiedostoa on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} fontti ei ole käytettävissä täällä: sen teksti näytetään toisella fontilla|{n} fonttia ei ole käytettävissä täällä: niiden teksti näytetään toisella fontilla
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopioitiin {n} objektin CSS|Kopioitiin {n} objektin CSS
+@msgplural	Downloaded {n} file|Downloaded {n} files	Ladattiin {n} tiedosto|Ladattiin {n} tiedostoa
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Vietiin {n} tiedosto kansioon {folder}|Vietiin {n} tiedostoa kansioon {folder}
 @msg	Unembedded to {_1}	Upotus purettiin kohteeseen {_1}
 @msg	Reset {_1}	Palautettiin oletukseksi {_1}
 @msg	Sent to {_1}	Lähetettiin kohteeseen {_1}
@@ -4784,9 +4796,6 @@ imageTrace	Outline	Ääriviiva
 @msg	every search thread stopped on an internal error (please report this bug)	jokainen hakusäie pysähtyi sisäiseen virheeseen (ilmoita tästä virheestä)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCraftin Fonts-kansiota ei ole määritetty täällä: työpöytäsovellus ja vectorcraft-cli määrittävät sen
 @msg	choose the font files to add	valitse lisättävät fonttitiedostot
-@msg	{n} font file(s) are now in {folder}	{n} fonttitiedosto(a) on nyt kansiossa {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} fonttitiedosto(a) on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} fontti(a) ei ole käytettävissä täällä: niiden teksti näytetään toisella fontilla
 @msg	not a file	ei tiedosto
 @msg	not a font file	ei fonttitiedosto
 @msg	that document is no longer open	kyseinen asiakirja ei ole enää auki
@@ -4795,7 +4804,6 @@ imageTrace	Outline	Ääriviiva
 @msg	every numbered name for it is taken in the Fonts folder	kaikki sen numeroidut nimet ovat jo käytössä Fonts-kansiossa
 @msg	every numbered name for {name} is taken in the document's folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä asiakirjan kansiossa
 @msg	No linked files to look for	Ei etsittäviä linkitettyjä tiedostoja
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Linkitettiin uudelleen {n} kuva(a); kohdetta {name} ei voitu linkittää uudelleen: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` on vaiheviittaus {r}, jonka vain `run` ja `command_batch` ratkaisevat
 @msg	`ids` must be an array of object ids, not {v}	`ids` on oltava objektitunnusten taulukko, ei {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` on oltava ankkuri-indeksien taulukko, ei {v}
@@ -6142,3 +6150,22 @@ breakText	Glyphs	Merkit
 	Text Flow	Tekstin kulku
 	By Rows	Riveittäin
 	By Columns	Sarakkeittain
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Satunnainen peittävyys…
+	Randomize Opacity	Satunnainen peittävyys
+	Minimum:	Pienin:
+	Maximum:	Suurin:
+	Seed:	Siemen:
+@msg	`min` is greater than `max`	`min` on suurempi kuin `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Lajittele objektit…
+	Sort Objects	Lajittele objektit
+	Sort By:	Lajitteluperuste:
+	Apply To:	Käytä kohteeseen:
+	Area	Pinta-ala
+	X Position	X-sijainti
+	Y Position	Y-sijainti
+	Stacking Order	Pinoamisjärjestys
+	Small to Large	Pienestä suureen
+	Large to Small	Suuresta pieneen
+	Distribute Evenly	Jaa tasaisesti

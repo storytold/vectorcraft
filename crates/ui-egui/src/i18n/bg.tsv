@@ -740,6 +740,9 @@ font-technology	Variable	Променливи
 	Delete Swatch	Изтриване на образец
 	Delete Symbol	Изтриване на символ
 	Delete the selected symbol?	Да се изтрие ли избраният символ?
+	Delete the selected symbols?	Да се изтрият ли избраните символи?
+	No unused symbols	Няма неизползвани символи
+	Delete Symbols	Изтриване на символи
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Един или повече от символите се използват и не могат да бъдат изтрити, докато екземплярите им не бъдат разширени или изтрити.
 	Expand Instances	Разширяване на екземплярите
 	Delete Instances	Изтриване на екземплярите
@@ -2420,6 +2423,7 @@ digits	Tamil	Тамилски
 digits	Telugu	Телугу
 digits	Kannada	Каннада
 digits	Malayalam	Малаялам
+	Proportional Lining	Пропорционални подравнени цифри
 	Proportional Oldstyle	Пропорционални стари цифри
 	Pucker & Bloat…	Свиване и раздуване…
 	Pucker Tool	Инструмент „Свиване“
@@ -3207,6 +3211,7 @@ digits	Malayalam	Малаялам
 	Swap Fill and Stroke (Shift+X)	Размяна на запълването и щриха (Shift+X)
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
+	Stylistic Alternates	Стилистични алтернативи
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
 	Swatch Conflicts	Конфликти на образци
@@ -3276,6 +3281,7 @@ digits	Malayalam	Малаялам
 	Tabs	Табулатори
 	Tabular Lining	Таблични подравнени цифри
 	Tabular Oldstyle	Таблични стари цифри
+	Titling Alternates	Алтернативи за заглавия
 	Target	Цел
 	Target Contents	Целево съдържание
 	Target:	Цел:
@@ -3806,7 +3812,6 @@ axis	Both	И двете
 @msg	Combine Slices: the slices have no bounds	Обединяване на парчета: парчетата нямат граници
 @msg	Convert to Artboards: selection has no area	Преобразуване в работни области: селекцията няма площ
 @msg	Convert to Shape: no rectangles or ellipses selected	Преобразуване в фигура: няма избрани правоъгълници или елипси
-@msg	Copied the CSS of {rules} object(s)	Копиран е CSS кодът на {rules} обект(а)
 @msg	Copied the script report	Копиран е отчетът за скрипта
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
@@ -3823,13 +3828,11 @@ axis	Both	И двете
 @msg	direct-select anchor points to cut at (not the end points of open paths)	директно избиране на опорни точки за рязане (не крайните точки на отворени пътища)
 @msg	Divide Objects Below: select a path	Разделяне на обектите отдолу: изберете път
 @msg	Divide Objects Below: select exactly one path	Разделяне на обектите отдолу: изберете точно един път
-@msg	Downloaded {_1} file(s)	Изтеглени файлове: {_1}
 @msg	Downloaded {what}	Изтеглено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разширяване на облика: селекцията има основен облик
 @msg	Expand: no brush strokes selected	Разширяване: няма избрани щрихи на четка
 @msg	Expand: no gradient fills	Разширяване: няма запълвания с градиент
 @msg	Expand: nothing to expand	Разширяване: няма нищо за разширяване
-@msg	Exported {count} file(s) to {folder}	Експортирани са {count} файла в {folder}
 @msg	Exported {path}	Експортирано: {path}
 @msg	Flatten Transparency: select objects to flatten	Сплескване на прозрачността: изберете обекти за сплескване
 @msg	Flatten Transparency: {e}	Сплескване на прозрачността: {e}
@@ -4355,10 +4358,6 @@ axis	Both	И двете
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} е динамичен ефект (Ефект › Добавки)
 @msg	{_1} is already used by {_2}	{_1} вече се използва от {_2}
 @msg	{_1} is reserved by the system	{_1} е запазено от системата
-@msg	{_1} linked file(s) can't be read here: their previews show	свързаните файлове {_1} не могат да бъдат прочетени тук: показват се техните прегледи
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	изображенията ({undecoded}) не могат да бъдат декодирани: показват се като зачеркнати рамки
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	свързаните изображения {_1} са променени на диска: „Обновяване на връзките“ показва новите версии
-@msg	Updated {_1} linked file(s) changed on disk	Обновени са свързани файлове {_1}, променени на диска
 @msg	{_1}: not saved, so not closed	{_1}: не е запазен, затова не е затворен
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-битови битови масиви не могат да бъдат прочетени
 @msg	{command} didn't create an object	{command} не създаде обект
@@ -4378,7 +4377,6 @@ axis	Both	И двете
 @msg	Couldn't place {name}: {e}	Неуспешно поставяне на {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Неуспешно поставяне от клипборда: {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} е запазен с {_1} бележка/и: {first}
-@msg	Exported {what} with {_1} note(s): {first}	{what} е експортиран с {_1} бележка/и: {first}
 @msg	Exported {what}	Експортирано: {what}
 @msg	Saved {n} files beside {path}	Записани са {n} файла до {path}
 @msg	Saving	Запазване
@@ -4389,12 +4387,26 @@ axis	Both	И двете
 @msg	Saving recovery data for {_1}	Записване на данни за възстановяване на {_1}
 @msg	Discarded {_1} recovered document(s)	Изхвърлени са {_1} възстановени документ(и)
 @msg	Restored {_1} recovered document(s): save them to keep them	Възстановени са {_1} документ(и): запазете ги, за да ги съхраните
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
-@msg	Embedded {n} image(s)	Вградени са {n} изображения
-@msg	Relinked {_1} image(s)	Презакачени са {_1} изображения
-@msg	Relinked {n} image(s)	Свързани наново {n} изображения
-@msg	Relinked {n} image(s); not in that folder: {_1}	Презакачени са {n} изображения; липсват в тази папка: {_1}
-@msg	Updated {_1} image(s)	Обновени са {_1} изображения
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
+@msgplural	Embedded {n} image|Embedded {n} images	Вградено е {n} изображение|Вградени са {n} изображения
+@msgplural	Relinked {n} image|Relinked {n} images	Свързано наново е {n} изображение|Свързани наново са {n} изображения
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Свързано наново е {n} изображение; липсват в тази папка: {names}|Свързани наново са {n} изображения; липсват в тази папка: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Свързано наново е {n} изображение; {name} не можа да бъде свързан наново: {reason}|Свързани наново са {n} изображения; {name} не можа да бъде свързан наново: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Обновено е {n} изображение|Обновени са {n} изображения
+@msgplural	Replaced {n} image|Replaced {n} images	Заменено е {n} изображение|Заменени са {n} изображения
+@msgplural	Broke {n} link|Broke {n} links	Разкъсана е {n} връзка|Разкъсани са {n} връзки
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Разкъсана е {n} връзка; {missing} не могат да бъдат прочетени: първо ги свържете наново или ги обновете|Разкъсани са {n} връзки; {missing} не могат да бъдат прочетени: първо ги свържете наново или ги обновете
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} свързан файл не може да бъде прочетен тук: показва се неговият преглед|{n} свързани файла не могат да бъдат прочетени тук: показват се техните прегледи
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} изображение не може да бъде декодирано: показва се като зачеркната рамка|{n} изображения не могат да бъдат декодирани: показват се като зачеркнати рамки
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} свързано изображение е променено на диска: „Обновяване на връзките“ показва новата версия|{n} свързани изображения са променени на диска: „Обновяване на връзките“ показва новите версии
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновен е {n} свързан файл, променен на диска|Обновени са {n} свързани файла, променени на диска
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} е експортиран с {n} бележка: {first}|{what} е експортиран с {n} бележки: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} шрифтов файл вече е в {folder}|{n} шрифтови файла вече са в {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов файл вече е в {folder}; {failed} не можаха да бъдат добавени: {reason}|{n} шрифтови файла вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} шрифт не е достъпен тук: текстът му се показва в друг шрифт|{n} шрифта не са достъпни тук: техният текст се показва в друг шрифт
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Копиран е CSS кодът на {n} обект|Копиран е CSS кодът на {n} обекта
+@msgplural	Downloaded {n} file|Downloaded {n} files	Изтеглен е {n} файл|Изтеглени са {n} файла
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортиран е {n} файл в {folder}|Експортирани са {n} файла в {folder}
 @msg	Unembedded to {_1}	Извадено от вграждане в {_1}
 @msg	Reset {_1}	Нулирано: {_1}
 @msg	Sent to {_1}	Изпратено към {_1}
@@ -4446,9 +4458,6 @@ axis	Both	И двете
 @msg	every search thread stopped on an internal error (please report this bug)	всяка нишка за търсене спря поради вътрешна грешка (моля, докладвайте този бъг)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папката със шрифтове на VectorCraft не е зададена тук: десктоп приложението и vectorcraft-cli я задават
 @msg	choose the font files to add	изберете шрифтовите файлове за добавяне
-@msg	{n} font file(s) are now in {folder}	{n} шрифтов(и) файл(а) вече са в {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов(и) файл(а) вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} шрифт(а) не са достъпни тук: техният текст се показва в друг шрифт
 @msg	not a file	не е файл
 @msg	not a font file	не е шрифтов файл
 @msg	that document is no longer open	този документ вече не е отворен
@@ -4457,7 +4466,6 @@ axis	Both	И двете
 @msg	every numbered name for it is taken in the Fonts folder	всяко номерирано име за него е заето в папката със шрифтове
 @msg	every numbered name for {name} is taken in the document's folder	всяко номерирано име за {name} е заето в папката на документа
 @msg	No linked files to look for	Няма свързани файлове за търсене
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Превързани са {n} изображения; {name} не можа да бъде превързан: {reason}
 	Services	Услуги
 	Hide VectorCraft	Скриване на VectorCraft
 	Zoom	Мащабиране
@@ -5995,3 +6003,22 @@ breakText	Glyphs	Глифи
 	Text Flow	Поток на текста
 	By Rows	По редове
 	By Columns	По колони
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Произволна непрозрачност…
+	Randomize Opacity	Произволна непрозрачност
+	Minimum:	Минимум:
+	Maximum:	Максимум:
+	Seed:	Начално число:
+@msg	`min` is greater than `max`	`min` е по-голямо от `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Сортиране на обекти…
+	Sort Objects	Сортиране на обекти
+	Sort By:	Сортиране по:
+	Apply To:	Прилагане към:
+	Area	Площ
+	X Position	Позиция по X
+	Y Position	Позиция по Y
+	Stacking Order	Ред на подреждане
+	Small to Large	От малко към голямо
+	Large to Small	От голямо към малко
+	Distribute Evenly	Равномерно разпределение

@@ -755,6 +755,9 @@ font-technology	Variable	Variabili
 	Delete Swatch	Elimina campione
 	Delete Symbol	Elimina simbolo
 	Delete the selected symbol?	Eliminare il simbolo selezionato?
+	Delete the selected symbols?	Eliminare i simboli selezionati?
+	No unused symbols	Nessun simbolo inutilizzato
+	Delete Symbols	Elimina simboli
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Uno o più simboli sono in uso e non possono essere eliminati finché le loro istanze non vengono espanse o eliminate.
 	Expand Instances	Espandi istanze
 	Delete Instances	Elimina istanze
@@ -2508,6 +2511,7 @@ digits	Tamil	Tamil
 digits	Telugu	Telugu
 digits	Kannada	Kannada
 digits	Malayalam	Malayalam
+	Proportional Lining	Proporzionali allineati
 	Proportional Oldstyle	Proporzionali stile antico
 	Pucker & Bloat…	Contrai e gonfia…
 	Pucker Tool	Strumento Contrai
@@ -3313,6 +3317,7 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Inverti riempimento e traccia (Shift+X)
 	Swap start and end arrowheads	Inverti punte di freccia iniziale e finale
 	Swap the selected object for the file, keeping its place and transform	Sostituisci l'oggetto selezionato con il file, mantenendone posizione e trasformazione
+	Stylistic Alternates	Alternative stilistiche
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
 	Swatch Conflicts	Conflitti campioni
@@ -3382,6 +3387,7 @@ digits	Malayalam	Malayalam
 	Tabs	Tabulazioni
 	Tabular Lining	Tabulari allineati
 	Tabular Oldstyle	Tabulari stile antico
+	Titling Alternates	Alternative per titoli
 	Target	Destinazione
 	Target Contents	Contenuto destinazione
 	Target:	Destinazione:
@@ -3941,7 +3947,6 @@ axis	Both	Entrambi
 @msg	Combine Slices: the slices have no bounds	Combina sezioni: le sezioni non hanno limiti
 @msg	Convert to Artboards: selection has no area	Converti in tavole da disegno: la selezione non ha area
 @msg	Convert to Shape: no rectangles or ellipses selected	Converti in forma: nessun rettangolo o ellisse selezionato
-@msg	Copied the CSS of {rules} object(s)	Copiato il CSS di {rules} oggetto/i
 @msg	Copied the script report	Rapporto dello script copiato
 @msg	Corners edits the corners of a path	Angoli modifica gli angoli di un tracciato
 @msg	Couldn't copy to the system clipboard: {e}	Impossibile copiare negli appunti di sistema: {e}
@@ -3958,13 +3963,11 @@ axis	Both	Entrambi
 @msg	direct-select anchor points to cut at (not the end points of open paths)	seleziona con Selezione diretta i punti di ancoraggio in cui tagliare (non i punti finali dei tracciati aperti)
 @msg	Divide Objects Below: select a path	Dividi oggetti sottostanti: seleziona un tracciato
 @msg	Divide Objects Below: select exactly one path	Dividi oggetti sottostanti: seleziona esattamente un tracciato
-@msg	Downloaded {_1} file(s)	File scaricati: {_1}
 @msg	Downloaded {what}	Scaricato {what}
 @msg	Expand Appearance: the selection has a basic appearance	Espandi aspetto: la selezione ha un aspetto di base
 @msg	Expand: no brush strokes selected	Espandi: nessuna traccia di pennello selezionata
 @msg	Expand: no gradient fills	Espandi: nessun riempimento con sfumatura
 @msg	Expand: nothing to expand	Espandi: niente da espandere
-@msg	Exported {count} file(s) to {folder}	File esportati in {folder}: {count}
 @msg	Exported {path}	Esportato {path}
 @msg	Flatten Transparency: select objects to flatten	Appiattisci trasparenza: seleziona gli oggetti da appiattire
 @msg	Flatten Transparency: {e}	Appiattisci trasparenza: {e}
@@ -4525,10 +4528,6 @@ axis	Both	Entrambi
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` occupa {size} byte (limite {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} è già usato da {_2}
 @msg	{_1} is reserved by the system	{_1} è riservato dal sistema
-@msg	{_1} linked file(s) can't be read here: their previews show	file collegati non leggibili qui: {_1}; vengono mostrate le loro anteprime
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	immagini non decodificabili: {undecoded}; vengono mostrate come riquadri barrati da una croce
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	immagini collegate modificate su disco: {_1}; Aggiorna collegamenti mostra le nuove versioni
-@msg	Updated {_1} linked file(s) changed on disk	File collegati modificati su disco aggiornati: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: non salvato, quindi non chiuso
 @msg	{bpp}-bit bitmaps can't be read	impossibile leggere bitmap a {bpp} bit
 @msg	{command} didn't create an object	{command} non ha creato alcun oggetto
@@ -4548,7 +4547,6 @@ axis	Both	Entrambi
 @msg	Couldn't place {name}: {e}	Impossibile inserire {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Impossibile incollare dagli appunti: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Salvato {path} con {_1} nota/e: {first}
-@msg	Exported {what} with {_1} note(s): {first}	Esportato {what} con {_1} nota/e: {first}
 @msg	Exported {what}	Esportato {what}
 @msg	Saved {n} files beside {path}	Salvati {n} file accanto a {path}
 @msg	Saving	Salvataggio
@@ -4559,12 +4557,26 @@ axis	Both	Entrambi
 @msg	Saving recovery data for {_1}	Salvataggio dei dati di recupero per {_1}
 @msg	Discarded {_1} recovered document(s)	Documenti recuperati scartati: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Documenti recuperati ripristinati: {_1}. Salvali per conservarli
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Immagini incorporate: {n}; mancanti: {missing} (ricollegale prima)
-@msg	Embedded {n} image(s)	Immagini incorporate: {n}
-@msg	Relinked {_1} image(s)	Immagini ricollegate: {_1}
-@msg	Relinked {n} image(s)	Immagini ricollegate: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	Immagini ricollegate: {n}; non presenti in quella cartella: {_1}
-@msg	Updated {_1} image(s)	Immagini aggiornate: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Incorporata {n} immagine; mancanti: {missing} (ricollegale prima)|Incorporate {n} immagini; mancanti: {missing} (ricollegale prima)
+@msgplural	Embedded {n} image|Embedded {n} images	Incorporata {n} immagine|Incorporate {n} immagini
+@msgplural	Relinked {n} image|Relinked {n} images	Ricollegata {n} immagine|Ricollegate {n} immagini
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Ricollegata {n} immagine; non presenti in quella cartella: {names}|Ricollegate {n} immagini; non presenti in quella cartella: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Ricollegata {n} immagine; impossibile ricollegare {name}: {reason}|Ricollegate {n} immagini; impossibile ricollegare {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Aggiornata {n} immagine|Aggiornate {n} immagini
+@msgplural	Replaced {n} image|Replaced {n} images	Sostituita {n} immagine|Sostituite {n} immagini
+@msgplural	Broke {n} link|Broke {n} links	Interrotto {n} collegamento|Interrotti {n} collegamenti
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Interrotto {n} collegamento; impossibile leggerne {missing}: ricollegali o aggiornali prima|Interrotti {n} collegamenti; impossibile leggerne {missing}: ricollegali o aggiornali prima
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} file collegato non leggibile qui: viene mostrata la sua anteprima|{n} file collegati non leggibili qui: vengono mostrate le loro anteprime
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} immagine non decodificabile: viene mostrata come riquadro barrato da una croce|{n} immagini non decodificabili: vengono mostrate come riquadri barrati da una croce
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} immagine collegata modificata su disco: Aggiorna collegamenti mostra la nuova versione|{n} immagini collegate modificate su disco: Aggiorna collegamenti mostra le nuove versioni
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aggiornato {n} file collegato modificato su disco|Aggiornati {n} file collegati modificati su disco
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Esportato {what} con {n} nota: {first}|Esportato {what} con {n} note: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} file di font ora in {folder}|{n} file di font ora in {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}|{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} font non disponibile qui: il suo testo viene mostrato con un altro font|{n} font non disponibili qui: il loro testo viene mostrato con un altro font
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Copiato il CSS di {n} oggetto|Copiato il CSS di {n} oggetti
+@msgplural	Downloaded {n} file|Downloaded {n} files	Scaricato {n} file|Scaricati {n} file
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Esportato {n} file in {folder}|Esportati {n} file in {folder}
 @msg	Unembedded to {_1}	Incorporamento rimosso, salvato in {_1}
 @msg	Reset {_1}	Reimpostato {_1}
 @msg	Sent to {_1}	Inviato a {_1}
@@ -4616,9 +4628,6 @@ axis	Both	Entrambi
 @msg	every search thread stopped on an internal error (please report this bug)	tutti i thread di ricerca si sono fermati per un errore interno (segnala questo bug)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	La cartella Fonts di VectorCraft non è impostata qui: la impostano l'app desktop e vectorcraft-cli
 @msg	choose the font files to add	scegli i file dei font da aggiungere
-@msg	{n} font file(s) are now in {folder}	File di font ora in {folder}: {n}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	File di font ora in {folder}: {n}; impossibile aggiungerne {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	font non disponibili qui: {n}; il loro testo viene mostrato con un altro font
 @msg	not a file	non è un file
 @msg	not a font file	non è un file di font
 @msg	that document is no longer open	quel documento non è più aperto
@@ -4627,7 +4636,6 @@ axis	Both	Entrambi
 @msg	every numbered name for it is taken in the Fonts folder	tutti i nomi numerati per il file sono già usati nella cartella Fonts
 @msg	every numbered name for {name} is taken in the document's folder	tutti i nomi numerati per {name} sono già usati nella cartella del documento
 @msg	No linked files to look for	Nessun file collegato da cercare
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Immagini ricollegate: {n}; impossibile ricollegare {name}: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servizi
@@ -5731,3 +5739,22 @@ breakText	Glyphs	Glifi
 	Text Flow	Flusso del testo
 	By Rows	Per righe
 	By Columns	Per colonne
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Opacità casuale…
+	Randomize Opacity	Opacità casuale
+	Minimum:	Minimo:
+	Maximum:	Massimo:
+	Seed:	Seme:
+@msg	`min` is greater than `max`	`min` è maggiore di `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Ordina oggetti…
+	Sort Objects	Ordina oggetti
+	Sort By:	Ordina per:
+	Apply To:	Applica a:
+	Area	Area
+	X Position	Posizione X
+	Y Position	Posizione Y
+	Stacking Order	Ordine di sovrapposizione
+	Small to Large	Dal più piccolo al più grande
+	Large to Small	Dal più grande al più piccolo
+	Distribute Evenly	Distribuisci uniformemente

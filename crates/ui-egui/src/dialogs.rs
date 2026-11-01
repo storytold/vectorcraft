@@ -400,7 +400,7 @@ registry! {
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
-    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE] => crate::addons::arrange::SPEC,
+    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 

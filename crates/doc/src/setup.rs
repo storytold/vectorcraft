@@ -164,6 +164,14 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Polish", "pl", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", "cs", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", "ru", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    // „…” outside, ’…’ inside: Pravopis srpskoga jezika (Matica srpska, 2010, ISBN
+    // 978-86-7946-079-0, т. 168, pp. 133–135) and CLDR
+    // (https://github.com/unicode-org/cldr/blob/main/common/main/sr.xml, `delimiters`).
+    ("Serbian: Cyrillic", "sr-Cyrl", Quotes { double: ['„', '”'], single: ['’', '’'] }),
+    ("Serbian: Latin", "sr-Latn", Quotes { double: ['„', '”'], single: ['’', '’'] }),
+    // „…“ outside, ‚…‘ inside: CLDR (https://github.com/unicode-org/cldr/blob/main/common/main/hr.xml,
+    // `delimiters`).
+    ("Croatian", "hr", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Turkish", "tr", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Japanese", "ja", Quotes { double: ['「', '」'], single: ['『', '』'] }),
     ("Chinese", "zh", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
@@ -373,12 +381,19 @@ mod tests {
             (char_language_name(None), char_language_name(Some("gu")), char_language_name(Some("x-unknown"))),
             (Some("English: USA"), Some("Gujarati"), None)
         );
+        // Serbian in either script, and Croatian.
+        assert_eq!(char_language("Serbian: Cyrillic"), Ok(Some("sr-Cyrl")));
+        assert_eq!(char_language("sr-latn"), Ok(Some("sr-Latn")));
+        assert_eq!(char_language("Croatian"), Ok(Some("hr")));
+        assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
         // Every entry has a tag of its own, and a name of its own.
         for (i, (n, t, _)) in LANGUAGES.iter().enumerate() {
             assert!(LANGUAGES.iter().skip(i + 1).all(|(n2, t2, _)| n2 != n && t2 != t), "{n} {t}");
         }
     }
 
+    /// Straight quotes become the language's: opening or closing by what comes before, inner
+    /// quotes as single ones, and the context carried across pieces converted apart.
     #[test]
     fn quotes_open_and_close_by_context() {
         let mut prev = None;
@@ -387,6 +402,13 @@ mod tests {
         let mut prev = Some('(');
         assert_eq!(german.apply("\"a\"", &mut prev), "„a“");
         assert_eq!(prev, Some('“'));
+        // Serbian closes high (”), with ’ on both sides of an inner quote; Croatian as German.
+        for name in ["Serbian: Cyrillic", "Serbian: Latin"] {
+            let mut prev = None;
+            assert_eq!(language_quotes(name).unwrap().apply("\"a 'b' c\"", &mut prev), "„a ’b’ c”", "{name}");
+        }
+        let mut prev = None;
+        assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
         // Converting in pieces keeps the context.
         let mut prev = None;
         let a = Quotes::ENGLISH.apply("\"", &mut prev);

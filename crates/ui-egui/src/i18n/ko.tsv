@@ -1302,6 +1302,9 @@ digits	Malayalam	말라얄람어
 	Delete Swatch	견본 삭제
 	Delete Symbol	심볼 삭제
 	Delete the selected symbol?	선택한 심볼을 삭제하시겠습니까?
+	Delete the selected symbols?	선택한 심볼을 모두 삭제하시겠습니까?
+	No unused symbols	사용하지 않는 심볼이 없습니다
+	Delete Symbols	심볼 삭제
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	하나 이상의 심볼이 사용 중이므로 인스턴스를 확장하거나 삭제하기 전에는 삭제할 수 없습니다.
 	Expand Instances	인스턴스 확장
 	Delete Instances	인스턴스 삭제
@@ -3034,6 +3037,7 @@ mark-style	Japanese	일본식
 	Superscript:	위 첨자:
 	Swap Fill and Stroke	칠과 선 바꾸기
 	Swap start and end arrowheads	시작과 끝 화살촉 바꾸기
+	Stylistic Alternates	스타일 대체 글자
 	Swash	스워시
 	Swatch Conflict	견본 충돌
 	Swatch Conflicts	견본 충돌
@@ -3607,6 +3611,7 @@ file-filter	Templates	템플릿
 	Preset {}	프리셋 {}
 	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일이 다운로드됩니다)
 	Print presets	인쇄 프리셋
+	Proportional Lining	비례 라이닝
 	Proportional Oldstyle	비례 올드스타일
 	Punctuation	문장 부호
 	Radius 1	반지름 1
@@ -3688,6 +3693,7 @@ file-filter	Templates	템플릿
 	System Layout	시스템 레이아웃
 	Tabular Lining	고정폭 라이닝
 	Tabular Oldstyle	고정폭 올드스타일
+	Titling Alternates	제목 대체 글자
 	Tate-chu-yoko	다테추요코
 	Temperature	색온도
 	Template	템플릿
@@ -3934,7 +3940,6 @@ theme	Appearance	외관
 @msg	the drawing is too large to open	도면이 너무 커서 열 수 없습니다
 @msg	scale must be a number from {_1} to {_2}, not {_3}	배율은 {_1}에서 {_2} 사이의 숫자여야 합니다: {_3}
 @msg	an image has no pixels and was left out	픽셀이 없는 이미지를 제외했습니다
-@msg	Embedded {n} image(s)	이미지 {n}개를 포함했습니다
 @msg	object {0} cannot have children	개체 {0}에는 하위 항목을 둘 수 없습니다
 @msg	range `{s}` is empty	범위 `{s}`이(가) 비어 있습니다
 @msg	range `{s}`: `{part}` names no number	범위 `{s}`: `{part}`에 숫자가 없습니다
@@ -4402,10 +4407,6 @@ theme	Appearance	외관
 @msg	the PDF is no longer loaded	PDF가 더 이상 로드되어 있지 않습니다
 @msg	no such layer or object	해당 레이어나 개체가 없습니다
 @msg	`{tool}` isn't a Liquify tool	`{tool}`은(는) 픽셀 유동화 도구가 아닙니다
-@msg	{_1} linked file(s) can't be read here: their previews show	링크된 파일 {_1}개를 여기서 읽을 수 없습니다: 미리 보기가 표시됩니다
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	이미지 {undecoded}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	링크된 이미지 {_1}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
-@msg	Updated {_1} linked file(s) changed on disk	디스크에서 바뀐 링크된 파일 {_1}개를 업데이트했습니다
 @msg	pick a colour, gradient or pattern to save as a swatch	견본으로 저장할 색상, 그레이디언트 또는 패턴을 선택하세요
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder}에 파일 {n}개를 패키지했습니다({note})
 @msg	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
@@ -4433,7 +4434,6 @@ theme	Appearance	외관
 @msg	print settings are not an object	인쇄 설정이 개체가 아닙니다
 @msg	no colour group `{g}`	색상 그룹 `{g}`이(가) 없습니다
 @msg	select artwork (or a colour group) to recolor	리컬러할 아트웍(또는 색상 그룹)을 선택하세요
-@msg	Downloaded {_1} file(s)	파일 {_1}개를 다운로드했습니다
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
 @msg	no file system here	여기에는 파일 시스템이 없습니다
 @msg	nothing to preview	미리 볼 항목이 없습니다
@@ -4461,7 +4461,6 @@ theme	Appearance	외관
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
-@msg	Exported {count} file(s) to {folder}	파일 {count}개를 {folder}에 내보냈습니다
 @msg	Imported {what}: {_1}	{what}을(를) 가져왔습니다: {_1}
 @msg	Installed plug-in {_1}	플러그인 {_1}을(를) 설치했습니다
 @msg	Opened with {_1} note(s): {_2}	참고 {_1}건과 함께 열었습니다: {_2}
@@ -4475,7 +4474,6 @@ theme	Appearance	외관
 @msg	the document has never been saved	문서가 저장된 적이 없습니다
 @msg	the export returned unreadable data	내보내기가 읽을 수 없는 데이터를 반환했습니다
 @msg	{status} ({e})	{status}({e})
-@msg	Exported {what} with {_1} note(s): {first}	참고 {_1}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msg	Saved {path} with {_1} note(s): {first}	참고 {_1}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Couldn't open {name}: {e}	{name}을(를) 열 수 없습니다: {e}
 @msg	Couldn't read {name}: {e}	{name}을(를) 읽을 수 없습니다: {e}
@@ -4534,7 +4532,6 @@ theme	Appearance	외관
 @msg	the library item is damaged	라이브러리 항목이 손상되었습니다
 @msg	{_1} font families available	사용 가능한 글꼴 패밀리 {_1}개
 @msg	{_1} has no {_2} style	{_1}에는 {_2} 스타일이 없습니다
-@msg	Copied the CSS of {rules} object(s)	개체 {rules}개의 CSS를 복사했습니다
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -4547,12 +4544,27 @@ theme	Appearance	외관
 @msg	no library `{key}` (see {list})	라이브러리 `{key}`이(가) 없습니다({list} 참조)
 @msg	select a linked image: an embedded one has no file	링크된 이미지를 선택하세요: 포함된 이미지에는 파일이 없습니다
 @msg	{path} can't be found: relink it first	{path}을(를) 찾을 수 없습니다: 먼저 다시 링크하세요
-@msg	Embedded {n} image(s); {missing} missing: relink them first	이미지 {n}개를 포함했으며 {missing}개가 없습니다: 먼저 다시 링크하세요
-@msg	Relinked {_1} image(s)	이미지 {_1}개를 다시 링크했습니다
-@msg	Relinked {n} image(s)	이미지 {n}개를 다시 링크했습니다
-@msg	Relinked {n} image(s); not in that folder: {_1}	이미지 {n}개를 다시 링크했습니다. 해당 폴더에 없음: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	이미지 {n}개를 포함했으며 {missing}개가 없습니다: 먼저 다시 링크하세요
+@msgplural	Embedded {n} image|Embedded {n} images	이미지 {n}개를 포함했습니다
+@msgplural	Relinked {n} image|Relinked {n} images	이미지 {n}개를 다시 링크했습니다
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	이미지 {n}개를 다시 링크했습니다. 해당 폴더에 없음: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	이미지 {n}개를 다시 링크했으며 {name}은(는) 다시 링크할 수 없었습니다: {reason}
+@msgplural	Updated {n} image|Updated {n} images	이미지 {n}개를 업데이트했습니다
+@msgplural	Replaced {n} image|Replaced {n} images	이미지 {n}개를 바꿨습니다
+@msgplural	Broke {n} link|Broke {n} links	링크 {n}개를 끊었습니다
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	링크 {n}개를 끊었으며 {missing}개를 읽을 수 없습니다: 먼저 다시 링크하거나 업데이트하세요
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	링크된 파일 {n}개를 여기서 읽을 수 없습니다: 미리 보기가 표시됩니다
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	이미지 {n}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	글꼴 {n}개를 여기서 사용할 수 없습니다: 해당 텍스트는 다른 글꼴로 표시됩니다
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	개체 {n}개의 CSS를 복사했습니다
+@msgplural	Downloaded {n} file|Downloaded {n} files	파일 {n}개를 다운로드했습니다
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	파일 {n}개를 {folder}에 내보냈습니다
 @msg	Unembedded to {_1}	{_1}에 포함 해제했습니다
-@msg	Updated {_1} image(s)	이미지 {_1}개를 업데이트했습니다
 @msg	no swatch library `{l}` (see swatch.library.list)	견본 라이브러리 `{l}`이(가) 없습니다(swatch.library.list 참조)
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다
@@ -4612,9 +4624,6 @@ theme	Appearance	외관
 @msg	every search thread stopped on an internal error (please report this bug)	내부 오류로 모든 검색 스레드가 중지되었습니다(이 버그를 신고해 주세요)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	여기에는 VectorCraft의 글꼴 폴더가 설정되어 있지 않습니다: 데스크톱 앱과 vectorcraft-cli가 설정합니다
 @msg	choose the font files to add	추가할 글꼴 파일을 선택하세요
-@msg	{n} font file(s) are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	글꼴 {n}개를 여기서 사용할 수 없습니다: 해당 텍스트는 다른 글꼴로 표시됩니다
 @msg	not a file	파일이 아닙니다
 @msg	not a font file	글꼴 파일이 아닙니다
 @msg	that document is no longer open	해당 문서는 더 이상 열려 있지 않습니다
@@ -4623,7 +4632,6 @@ theme	Appearance	외관
 @msg	every numbered name for it is taken in the Fonts folder	글꼴 폴더에서 이를 위한 번호 이름이 모두 사용 중입니다
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	이미지 {n}개를 다시 링크했으며 {name}은(는) 다시 링크할 수 없었습니다: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`corners` must be an array of anchor indices, not {v}	`corners`는 {v}이(가) 아니라 앵커 인덱스 배열이어야 합니다
@@ -5694,3 +5702,22 @@ breakText	Glyphs	글리프
 	Text Flow	텍스트 흐름
 	By Rows	행 방향
 	By Columns	열 방향
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	불투명도 무작위화…
+	Randomize Opacity	불투명도 무작위화
+	Minimum:	최소:
+	Maximum:	최대:
+	Seed:	시드:
+@msg	`min` is greater than `max`	`min`이(가) `max`보다 큽니다
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	개체 정렬…
+	Sort Objects	개체 정렬
+	Sort By:	정렬 기준:
+	Apply To:	적용 대상:
+	Area	면적
+	X Position	X 위치
+	Y Position	Y 위치
+	Stacking Order	쌓는 순서
+	Small to Large	작은 것부터
+	Large to Small	큰 것부터
+	Distribute Evenly	균등 분포

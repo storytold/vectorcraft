@@ -1561,7 +1561,8 @@ already walks Image Trace. Short agent entry points:
   of `symbol.list` carry `nineSlice`: the guides or `null`; `type` is Symbol Type, `static` by default for the command
   and `dynamic` by default in the Symbol Options dialog),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`, `symbol.edit`, `symbol.duplicate`,
-  `symbol.selectInstances {name}`. `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
+  `symbol.selectInstances {name}`, `symbol.delete {name | names, expandInstances?}` (`names` deletes several in one
+  undo step). `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
   name they are given, as `symbol.options` trims `newName`; a blank one gives "New Symbol" or "<name> copy".
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
@@ -1577,6 +1578,11 @@ already walks Image Trace. Short agent entry points:
 ```json
 {"name":"run_command","arguments":{"command":"symbol.instance.setAppearance","params":{"id":42,"path":[1],"fill":"#d0021b","opacity":80}}}
 ```
+- The Symbols panel menu's Select All Unused: `symbol.unused` (a query) lists the symbols nothing places, in panel
+  order, and the panel shows them selected; its Delete Symbol then deletes them all, asked once, in one undo step.
+  Instances in the art (opacity masks included), graph designs, pattern tiles (with the tiles that pattern editing's
+  Cancel puts back) and the art of the document's brushes count, and so do the instances in the art of a symbol that
+  is used; a symbol placed only inside an unused symbol is unused too.
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the
@@ -3831,6 +3837,19 @@ headers, footers, notes and list numbers are left out. A package with more than 
 more than 16 MiB or nests elements more than 256 deep, and a document with more than 4 MiB of text or 100,000
 paragraphs or runs are refused.
 `file.place` answers `format: "docx"`.
+
+A Word 97-2003 document (a compound file named `.doc`, or one that holds a `WordDocument` stream; an RTF file named
+`.doc` is placed as RTF) is placed the same way and keeps the same formatting, taken from the style sheet's default
+font, the paragraph style and the character style (and the styles each is based on) and direct formatting. Its main
+text is read; table cells are separated by tabs and each row is a paragraph, and a field places as its result. Hidden
+and deleted text, field instructions, pictures and embedded objects, headers, footers, notes, comments and text boxes
+are left out, and `warnings` names each kind of content left out or changed once (pictures and objects, fields,
+tracked changes, tables, and the other stories the document has); a field with no result is left out with its own
+warning. Documents saved by Word 6.0 or Word 95, encrypted or password-protected documents and documents last saved with
+fast save are refused, and so are a stream larger than 64 MiB, a document with more than 4 MiB of text, 100,000 pieces,
+16,384 pages of properties or 100,000 paragraphs or runs, one whose 16-bit text holds half of a surrogate pair, and one
+whose structures lie outside their streams.
+`file.place` answers `format: "doc"`.
 
 ## PDF presets
 
@@ -6352,12 +6371,14 @@ as `object.setBounds` measures them (Use Preview Bounds), except Arrange in Grid
 | `addon.arrange.replace` | `fit`: `keep`, `bounds` (the replaced object's width and height), `proportional` (fits inside them) (`keep`); `scaleStrokes`; `keep` (false) | Puts a copy of the topmost selected object centred on each of the other selected objects, in that object's place in the stacking order; the replaced objects are deleted unless `keep` (the copy then goes right above each). Needs two objects or more; the copies are selected. → `{ids}` |
 | `addon.arrange.size` | `width`, `height` pt, 0.001…1000000 (at least one); `proportional` (false: a side not given stays; true: it follows the given one in proportion); `reference` 0…8 (4, the centre); `scaleStrokes` | Gives every selected object that width and height, keeping its reference point in place (the 9-point grid row by row from the top-left). |
 | `addon.arrange.groupOverlapping` | none | Groups the selected objects (at most 20000) wherever their visual bounds overlap or touch, chains included: when A overlaps B and B overlaps C, all three go in one group. Only objects in the same layer or group are grouped together; objects that overlap nothing stay as they are. Each new group goes where its frontmost member was in the stacking order, and the groups and the objects left alone stay selected; with nothing overlapping it makes no step. Needs two objects or more. → `{groups: [id…], grouped}` (how many objects went into groups) |
+| `addon.arrange.randomizeOpacity` | `min`, `max` % 0…100 (30, 100; `min` not more than `max`); `seed` whole number (0); `ids` (the selection) | Gives each selected object its own opacity (the object opacity the Transparency panel sets), picked at random and evenly from `min` to `max`; the same seed, objects and range give the same opacities. Groups take one opacity of their own; the objects inside keep theirs. → `{count}` |
+| `addon.arrange.sort` | `by`, `apply`: `width`, `height`, `area` (width × height), `x` (left edge), `y` (top edge), `opacity` (%), `stacking` (stacking order from the back) (`area`, `stacking`); `order`: `ascending` (small to large), `descending` (large to small), `random` (`ascending`); `distribute` (false); `seed` whole number (0, for `random`); `scaleStrokes`; `ids` (the selection) | Sorts the selected objects (at most 20000) by `by` and gives them the values of `apply` in that order: the first gets the smallest value. Without `distribute` the objects trade the values they have; with it the values step evenly from the smallest to the largest. A width, height or area changes about each object's centre (an area in proportion), a place moves the top-left corner. Stacking order always trades places, and only among objects in the same layer or group. Needs two objects or more. → `{count}` |
 
 Zoom to Selection is the UI command `addon.arrange.zoomSelection {}` (remote mode only): it zooms and centres the
 active view so the selection's visual bounds fill the window with a margin, as `view.fitArtboard` fits the artboard,
-and fails with nothing selected. Arrange in Grid…, Replace with Top Object… and Set Size of Each… open dialogs
-(`ui.menuDialog {command}`, dialog kinds `arrangeGrid`, `arrangeReplace` and `arrangeSize`) whose fields are the
-command's parameters, with Preview; Set Size of Each's `__width` and `__height` say which sizes OK applies.
+and fails with nothing selected. Arrange in Grid…, Replace with Top Object…, Set Size of Each…, Randomize Opacity… and Sort Objects… open dialogs
+(`ui.menuDialog {command}`, dialog kinds `arrangeGrid`, `arrangeReplace`, `arrangeSize`, `arrangeOpacity` and `arrangeSort`) whose
+fields are the command's parameters, with Preview (Randomize Opacity's seed, and Sort Objects' `seed`, which is not shown, start new whenever the document has changed); Set Size of Each's `__width` and `__height` say which sizes OK applies.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.arrange.grid","params":{"columns":4,"gapX":12,"gapY":12}}}

@@ -568,7 +568,6 @@
 	Links	ბმულები
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?
 	Update Changed Links	შეცვლილი ბმულების განახლება
-@msg	Updated {_1} linked file(s) changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {_1}
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
 	Pattern Options	პატერნის პარამეტრები
@@ -1525,13 +1524,16 @@ digits	Malayalam	მალაიალამური
 	Fractions	წილადები
 	Ligatures are off while the text is tracked.	ტექსტზე ტრეკინგის დროს ლიგატურები გამორთულია.
 	Ordinals	რიგობითი რიცხვები
+	Proportional Lining	პროპორციული ხაზოვანი
 	Proportional Oldstyle	პროპორციული ძველებური
 	Reset OpenType Features	OpenType შესაძლებლობების ჩამოყრა
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.
 	Standard Ligatures	სტანდარტული ლიგატურები
+	Stylistic Alternates	სტილისტური ალტერნატივები
 	Swash	მოხატული ასოები (swash)
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
+	Titling Alternates	სათაურის ალტერნატივები
 	Every-line Composer	აბზაცის მიხედვით აწყობა
 	First-line Left Indent	პირველი სტრიქონის მარცხენა შეწევა
 	Hyphenation…	სიტყვების გადატანა…
@@ -2670,6 +2672,9 @@ theme	Appearance	იერსახე
 	Delete Brush	ფუნჯის წაშლა
 	Delete Symbol	სიმბოლოს წაშლა
 	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
+	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?
+	No unused symbols	გამოუყენებელი სიმბოლოები არ არის
+	Delete Symbols	სიმბოლოების წაშლა
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	ერთი ან მეტი სიმბოლო გამოიყენება და მისი წაშლა შეუძლებელია, სანამ მისი ეგზემპლარები არ გაიშლება ან არ წაიშლება.
 	Expand Instances	ეგზემპლარების გაშლა
 	Delete Instances	ეგზემპლარების წაშლა
@@ -3696,7 +3701,6 @@ font-technology	Variable	ცვლადი
 @msg	Combine Slices: the slices have no bounds	ნაჭრების გაერთიანება: ნაჭრებს საზღვრები არ აქვს
 @msg	Convert to Artboards: selection has no area	სამუშაო დაფებად გარდაქმნა: მონიშნულს ფართობი არ აქვს
 @msg	Convert to Shape: no rectangles or ellipses selected	ფიგურად გარდაქმნა: მართკუთხედები ან ელიფსები მონიშნული არ არის
-@msg	Copied the CSS of {rules} object(s)	კოპირებულია ობიექტის CSS ({rules})
 @msg	Corners edits the corners of a path	„კუთხეები“ ტრაექტორიის კუთხეებს არედაქტირებს
 @msg	Couldn't copy to the system clipboard: {e}	სისტემის გაცვლის ბუფერში კოპირება ვერ მოხერხდა: {e}
 @msg	Couldn't open {name}: {e}	{name} ვერ გაიხსნა: {e}
@@ -3712,13 +3716,11 @@ font-technology	Variable	ცვლადი
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
-@msg	Downloaded {_1} file(s)	ჩამოტვირთულია ფაილი ({_1})
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
-@msg	Exported {count} file(s) to {folder}	ექსპორტირებულია ფაილი ({count}) საქაღალდეში {folder}
 @msg	Exported {path}	ექსპორტირებულია: {path}
 @msg	Flatten Transparency: select objects to flatten	გამჭვირვალობის გაბრტყელება: მონიშნეთ გასაბრტყელებელი ობიექტები
 @msg	Flatten Transparency: {e}	გამჭვირვალობის გაბრტყელება: {e}
@@ -4237,9 +4239,6 @@ font-technology	Variable	ცვლადი
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` {size} ბაიტია (ლიმიტი {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} უკვე გამოიყენება აქ: {_2}
 @msg	{_1} is reserved by the system	{_1} დაჯავშნილია სისტემის მიერ
-@msg	{_1} linked file(s) can't be read here: their previews show	მიბმული ფაილების წაკითხვა აქ ვერ ხერხდება ({_1}): ჩანს მათი გადახედვა
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({undecoded}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({_1}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msg	{_1}: not saved, so not closed	{_1}: არ შენახულა, ამიტომ არ დაიხურა
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-ბიტიანი bitmap-ების წაკითხვა ვერ ხერხდება
 @msg	{command} didn't create an object	{command}-მა ობიექტი არ შექმნა
@@ -4258,7 +4257,6 @@ font-technology	Variable	ცვლადი
 @msg	Couldn't place {name}: {e}	{name}-ის განთავსება ვერ მოხერხდა: {e}
 @msg	Couldn't paste from the clipboard: {e}	გაცვლის ბუფერიდან ჩასმა ვერ მოხერხდა: {e}
 @msg	Saved {path} with {_1} note(s): {first}	შენახულია {path}, შენიშვნები: {_1}: {first}
-@msg	Exported {what} with {_1} note(s): {first}	ექსპორტირებულია {what}, შენიშვნები: {_1}: {first}
 @msg	Exported {what}	ექსპორტირებულია {what}
 @msg	Saved {n} files beside {path}	{path}-ის გვერდით შენახულია ფაილები: {n}
 @msg	Saving	შენახვა
@@ -4269,12 +4267,26 @@ font-technology	Variable	ცვლადი
 @msg	Saving recovery data for {_1}	{_1}-ის აღდგენის მონაცემების შენახვა
 @msg	Discarded {_1} recovered document(s)	უარყოფილია აღდგენილი დოკუმენტები: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	აღდგენილია დოკუმენტები: {_1}: შესანარჩუნებლად შეინახეთ ისინი
-@msg	Embedded {n} image(s); {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
-@msg	Embedded {n} image(s)	ჩაშენებულია გამოსახულებები: {n}
-@msg	Relinked {_1} image(s)	ხელახლა მიბმულია გამოსახულებები: {_1}
-@msg	Relinked {n} image(s)	ხელახლა მიბმულია გამოსახულებები: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {_1}
-@msg	Updated {_1} image(s)	განახლებულია გამოსახულებები: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
+@msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
+@msgplural	Updated {n} image|Updated {n} images	განახლებულია გამოსახულებები: {n}
+@msgplural	Replaced {n} image|Replaced {n} images	ჩანაცვლებულია გამოსახულებები: {n}
+@msgplural	Broke {n} link|Broke {n} links	გაწყვეტილია ბმულები: {n}
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა მიაბით ან განაახლეთ
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	მიბმული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})
+@msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
 @msg	Unembedded to {_1}	ჩაშენება მოხსნილია: {_1}
 @msg	Reset {_1}	ჩამოყრილია: {_1}
 @msg	Sent to {_1}	გაგზავნილია: {_1}
@@ -4322,9 +4334,6 @@ font-technology	Variable	ცვლადი
 @msg	every search thread stopped on an internal error (please report this bug)	ძიების ყველა ნაკადი შიდა შეცდომით შეჩერდა (გთხოვთ, შეგვატყობინოთ ეს ხარვეზი)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCraft-ის შრიფტების საქაღალდე აქ დაყენებული არ არის: მას აყენებს სამაგიდო აპი და vectorcraft-cli
 @msg	choose the font files to add	აირჩიეთ დასამატებელი შრიფტის ფაილები
-@msg	{n} font file(s) are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
 @msg	not a file	ფაილი არ არის
 @msg	not a font file	შრიფტის ფაილი არ არის
 @msg	that document is no longer open	ის დოკუმენტი აღარ არის გახსნილი
@@ -4682,7 +4691,6 @@ font-technology	Variable	ცვლადი
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -6101,3 +6109,22 @@ breakText	Glyphs	გლიფები
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
 	By Columns	სვეტების მიხედვით
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	შემთხვევითი გაუმჭვირვალობა…
+	Randomize Opacity	შემთხვევითი გაუმჭვირვალობა
+	Minimum:	მინიმუმი:
+	Maximum:	მაქსიმუმი:
+	Seed:	საწყისი რიცხვი:
+@msg	`min` is greater than `max`	`min` მეტია, ვიდრე `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	ობიექტების დალაგება…
+	Sort Objects	ობიექტების დალაგება
+	Sort By:	დალაგება:
+	Apply To:	გამოყენება:
+	Area	ფართობი
+	X Position	X პოზიცია
+	Y Position	Y პოზიცია
+	Stacking Order	დაწყობის რიგი
+	Small to Large	პატარიდან დიდისკენ
+	Large to Small	დიდიდან პატარისკენ
+	Distribute Evenly	თანაბრად განაწილება

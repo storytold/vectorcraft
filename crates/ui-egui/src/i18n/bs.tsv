@@ -664,7 +664,6 @@
 	Links	Veze
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	Povezanih slika promijenjenih na disku: {n}. Prikazati nove verzije?|Povezanih slika promijenjenih na disku: {n}. Prikazati nove verzije?|Povezanih slika promijenjenih na disku: {n}. Prikazati nove verzije?
 	Update Changed Links	Ažuriraj promijenjene veze
-@msg	Updated {_1} linked file(s) changed on disk	Ažurirano povezanih datoteka promijenjenih na disku: {_1}
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
 	Pattern Options	Opcije uzorka
@@ -1780,13 +1779,16 @@ digits	Malayalam	Malajalam
 	Fractions	Razlomci
 	Ligatures are off while the text is tracked.	Ligature su isključene dok tekst ima razmak slova.
 	Ordinals	Redni brojevi
+	Proportional Lining	Proporcionalne brojke
 	Proportional Oldstyle	Proporcionalne stare brojke
 	Reset OpenType Features	Vrati OpenType mogućnosti na početno
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
+	Stylistic Alternates	Stilske alternative
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
+	Titling Alternates	Alternative za naslove
 	Every-line Composer	Slagač svih redova
 	First-line Left Indent	Lijeva uvlaka prvog reda
 	Hyphenation…	Rastavljanje riječi…
@@ -3070,6 +3072,9 @@ theme	Appearance	Izgled
 	Delete Brush	Izbriši četkicu
 	Delete Symbol	Izbriši simbol
 	Delete the selected symbol?	Izbrisati odabrani simbol?
+	Delete the selected symbols?	Izbrisati odabrane simbole?
+	No unused symbols	Nema nekorištenih simbola
+	Delete Symbols	Brisanje simbola
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Jedan ili više simbola se koriste i ne mogu se izbrisati dok se njihove instance ne prošire ili izbrišu.
 	Expand Instances	Proširi instance
 	Delete Instances	Izbriši instance
@@ -4172,7 +4177,6 @@ imageTrace	Outline	Obris
 @msg	Combine Slices: the slices have no bounds	Kombinuj isječke: isječci nemaju granice
 @msg	Convert to Artboards: selection has no area	Pretvori u radne ploče: odabir nema površinu
 @msg	Convert to Shape: no rectangles or ellipses selected	Pretvori u oblik: nisu odabrani pravougaonici ni elipse
-@msg	Copied the CSS of {rules} object(s)	Kopiran CSS objekata: {rules}
 @msg	Copied the script report	Izvještaj skripte kopiran
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
@@ -4189,13 +4193,11 @@ imageTrace	Outline	Obris
 @msg	direct-select anchor points to cut at (not the end points of open paths)	direktno odaberite sidrene tačke za presijecanje (ne krajnje tačke otvorenih putanja)
 @msg	Divide Objects Below: select a path	Podijeli objekte ispod: odaberite putanju
 @msg	Divide Objects Below: select exactly one path	Podijeli objekte ispod: odaberite tačno jednu putanju
-@msg	Downloaded {_1} file(s)	Preuzeto datoteka: {_1}
 @msg	Downloaded {what}	Preuzeto: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Proširi izgled: odabir ima osnovni izgled
 @msg	Expand: no brush strokes selected	Proširi: nisu odabrani potezi četkicom
 @msg	Expand: no gradient fills	Proširi: nema gradijentnih ispuna
 @msg	Expand: nothing to expand	Proširi: nema ničeg za proširivanje
-@msg	Exported {count} file(s) to {folder}	Izvezeno datoteka u {folder}: {count}
 @msg	Exported {path}	Izvezeno: {path}
 @msg	Flatten Transparency: select objects to flatten	Spljošti prozirnost: odaberite objekte za spljoštavanje
 @msg	Flatten Transparency: {e}	Spljošti prozirnost: {e}
@@ -4752,9 +4754,6 @@ imageTrace	Outline	Obris
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` ima {size} bajtova (ograničenje {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} već koristi {_2}
 @msg	{_1} is reserved by the system	{_1} je rezervisano od strane sistema
-@msg	{_1} linked file(s) can't be read here: their previews show	Povezane datoteke koje se ovdje ne mogu pročitati: {_1}; prikazuju se njihovi pregledi
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	Slike koje nije moguće dekodirati prikazuju se kao prekriženi okviri ({undecoded})
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	Povezane slike promijenjene na disku: {_1}; Ažuriraj veze prikazuje nove verzije
 @msg	{_1}: not saved, so not closed	{_1}: nije sačuvano, pa nije zatvoreno
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bitne bitmape ne mogu se pročitati
 @msg	{command} didn't create an object	{command} nije kreirala objekat
@@ -4774,7 +4773,6 @@ imageTrace	Outline	Obris
 @msg	Couldn't place {name}: {e}	Nije moguće postaviti {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Sačuvano {path} s bilješkama ({_1}): {first}
-@msg	Exported {what} with {_1} note(s): {first}	Izvezeno {what} s bilješkama ({_1}): {first}
 @msg	Exported {what}	Izvezeno: {what}
 @msg	Saved {n} files beside {path}	Sačuvano datoteka pored {path}: {n}
 @msg	Saving	Čuvanje
@@ -4785,12 +4783,26 @@ imageTrace	Outline	Obris
 @msg	Saving recovery data for {_1}	Čuvanje podataka za oporavak za {_1}
 @msg	Discarded {_1} recovered document(s)	Odbačeno oporavljenih dokumenata: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Vraćeno oporavljenih dokumenata: {_1}; sačuvajte ih da ih zadržite
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Ugrađeno slika: {n}; nedostaje {missing}: prvo ih ponovo povežite
-@msg	Embedded {n} image(s)	Ugrađeno slika: {n}
-@msg	Relinked {_1} image(s)	Ponovo povezano slika: {_1}
-@msg	Relinked {n} image(s)	Ponovo povezano slika: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	Ponovo povezano slika: {n}; nisu u tom folderu: {_1}
-@msg	Updated {_1} image(s)	Ažurirano slika: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
+@msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika
+@msgplural	Relinked {n} image|Relinked {n} images	Ponovo je povezana {n} slika|Ponovo su povezane {n} slike|Ponovo je povezano {n} slika
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Ponovo je povezana {n} slika; nisu u tom folderu: {names}|Ponovo su povezane {n} slike; nisu u tom folderu: {names}|Ponovo je povezano {n} slika; nisu u tom folderu: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Ponovo je povezana {n} slika; {name} nije moguće ponovo povezati: {reason}|Ponovo su povezane {n} slike; {name} nije moguće ponovo povezati: {reason}|Ponovo je povezano {n} slika; {name} nije moguće ponovo povezati: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Ažurirana je {n} slika|Ažurirane su {n} slike|Ažurirano je {n} slika
+@msgplural	Replaced {n} image|Replaced {n} images	Zamijenjena je {n} slika|Zamijenjene su {n} slike|Zamijenjeno je {n} slika
+@msgplural	Broke {n} link|Broke {n} links	Prekinuta je {n} veza|Prekinute su {n} veze|Prekinuto je {n} veza
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Prekinuta je {n} veza; {missing} nije moguće pročitati: prvo ih ponovo povežite ili ažurirajte|Prekinute su {n} veze; {missing} nije moguće pročitati: prvo ih ponovo povežite ili ažurirajte|Prekinuto je {n} veza; {missing} nije moguće pročitati: prvo ih ponovo povežite ili ažurirajte
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} povezana datoteka se ovdje ne može pročitati: prikazuje se njen pregled|{n} povezane datoteke se ovdje ne mogu pročitati: prikazuju se njihovi pregledi|{n} povezanih datoteka se ovdje ne može pročitati: prikazuju se njihovi pregledi
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} sliku nije moguće dekodirati: prikazuje se kao prekriženi okvir|{n} slike nije moguće dekodirati: prikazuju se kao prekriženi okviri|{n} slika nije moguće dekodirati: prikazuju se kao prekriženi okviri
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} font ovdje nije dostupan: njegov tekst se prikazuje drugim fontom|{n} fonta ovdje nisu dostupna: njihov tekst se prikazuje drugim fontom|{n} fontova ovdje nije dostupno: njihov tekst se prikazuje drugim fontom
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopiran je CSS {n} objekta|Kopiran je CSS {n} objekta|Kopiran je CSS {n} objekata
+@msgplural	Downloaded {n} file|Downloaded {n} files	Preuzeta je {n} datoteka|Preuzete su {n} datoteke|Preuzeto je {n} datoteka
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Izvezena je {n} datoteka u {folder}|Izvezene su {n} datoteke u {folder}|Izvezeno je {n} datoteka u {folder}
 @msg	Unembedded to {_1}	Ugrađivanje poništeno u {_1}
 @msg	Reset {_1}	Vrati na početno: {_1}
 @msg	Sent to {_1}	Poslano na {_1}
@@ -4842,9 +4854,6 @@ imageTrace	Outline	Obris
 @msg	every search thread stopped on an internal error (please report this bug)	sve niti pretrage su se zaustavile zbog interne greške (molimo prijavite ovu grešku)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Folder Fontovi VectorCrafta ovdje nije postavljen: postavljaju ga desktop aplikacija i vectorcraft-cli
 @msg	choose the font files to add	odaberite datoteke fontova za dodavanje
-@msg	{n} font file(s) are now in {folder}	Datoteke fontova ({n}) sada su u {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Datoteke fontova ({n}) sada su u {folder}; {failed} nije moguće dodati: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	Fontovi koji ovdje nisu dostupni: {n}; njihov tekst se prikazuje drugim fontom
 @msg	not a file	nije datoteka
 @msg	not a font file	nije datoteka fonta
 @msg	that document is no longer open	taj dokument više nije otvoren
@@ -4853,7 +4862,6 @@ imageTrace	Outline	Obris
 @msg	every numbered name for it is taken in the Fonts folder	svi numerisani nazivi za njega su zauzeti u folderu Fontovi
 @msg	every numbered name for {name} is taken in the document's folder	svi numerisani nazivi za {name} su zauzeti u folderu dokumenta
 @msg	No linked files to look for	Nema povezanih datoteka za traženje
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Ponovo povezano slika: {n}; {name} nije moguće ponovo povezati: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je referenca na korak {r}, koju razrješavaju samo `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` mora biti niz ID-ova objekata, a ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` mora biti niz indeksa sidara, a ne {v}
@@ -6028,3 +6036,22 @@ shape	Open	Otvoren
 	Text Flow	Tok teksta
 	By Rows	Po redovima
 	By Columns	Po kolonama
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Nasumična neprozirnost…
+	Randomize Opacity	Nasumična neprozirnost
+	Minimum:	Minimum:
+	Maximum:	Maksimum:
+	Seed:	Početna vrijednost:
+@msg	`min` is greater than `max`	`min` je veće od `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Sortiraj objekte…
+	Sort Objects	Sortiraj objekte
+	Sort By:	Sortiraj po:
+	Apply To:	Primijeni na:
+	Area	Površina
+	X Position	Položaj X
+	Y Position	Položaj Y
+	Stacking Order	Redoslijed slaganja
+	Small to Large	Od manjeg prema većem
+	Large to Small	Od većeg prema manjem
+	Distribute Evenly	Rasporedi ravnomjerno
