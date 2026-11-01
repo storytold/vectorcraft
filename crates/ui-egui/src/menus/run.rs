@@ -184,7 +184,11 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "edit.colorSettings" | "edit.assignProfile" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::panel_docking::reveal_panel(app, "separations").and_then(|_| app.session.execute(id, p).map_err(|e| e.to_string()))
         }
-        "view.outline" => flag(&mut app.ui.view.outline),
+        // Outline or Preview is a setting of the active document's view.
+        "view.outline" => match app.view_mut() {
+            Some(v) => flag(&mut v.outline),
+            None => Err("no document".into()),
+        },
         _ => return None,
     };
     Some(r)

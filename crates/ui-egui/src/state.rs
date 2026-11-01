@@ -21,11 +21,15 @@ pub struct View {
     /// Size show it.
     #[serde(default)]
     pub artboard: usize,
+    /// View › Outline: the document's art is drawn as outlines. Each document has its own, and a
+    /// document opens in Preview.
+    #[serde(default)]
+    pub outline: bool,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0 }
+        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0, outline: false }
     }
 }
 
@@ -45,6 +49,7 @@ impl View {
             fitted: true,
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
             artboard: 0,
+            outline: false,
         })
     }
 }
@@ -232,7 +237,6 @@ pub struct ViewFlags {
     pub guides: bool,
     pub smart_guides: bool,
     pub bounding_box: bool,
-    pub outline: bool,
     pub pixel_preview: bool,
     pub snap_to_grid: bool,
     pub snap_to_point: bool,
@@ -271,7 +275,6 @@ impl Default for ViewFlags {
             guides: true,
             smart_guides: true,
             bounding_box: true,
-            outline: false,
             pixel_preview: false,
             snap_to_grid: false,
             snap_to_point: true,

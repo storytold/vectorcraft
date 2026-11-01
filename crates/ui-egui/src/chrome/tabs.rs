@@ -12,6 +12,13 @@ pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bo
     format!("{}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom, display_print_size).replace('%', " %"))
 }
 
+/// The title of open document `i`'s tab, with its own view's zoom and Outline or Preview.
+pub(super) fn doc_tab_title(app: &VectorcraftApp, i: usize, d: &vectorcraft_engine::DocState) -> String {
+    let view = app.views.get(i);
+    let zoom = view.map_or(1.0, |v| v.zoom);
+    tab_title(d, zoom, view.is_some_and(|v| v.outline), app.session.prefs.display_print_size)
+}
+
 /// Whether a document tab's × comes before its title (macOS) rather than after it (Windows,
 /// Linux and the web).
 pub(super) const CLOSE_BEFORE_TITLE: bool = cfg!(target_os = "macos");
@@ -46,8 +53,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         .iter()
         .enumerate()
         .map(|(i, d)| {
-            let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
-            let title = tab_title(d, zoom, app.ui.view.outline, app.session.prefs.display_print_size);
+            let title = doc_tab_title(app, i, d);
             let color = if Some(i) == active { t.text_strong } else { t.text_dim };
             (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })

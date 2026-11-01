@@ -41,7 +41,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             selected_text(false).is_some_and(|t| t.vertical == (id == "type.orientation.vertical"))
         }
         "type.opticalMarginAlignment" => crate::panels::character::shared_text_flag(app, |t| t.optical_margin) == Some(true),
-        "view.outline" => v.outline,
+        "view.outline" => app.outline_view(),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
         "view.snapToPixel" => v.snap_to_pixel,
@@ -205,6 +205,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitArtboard"
         | "view.fitAll"
         | "view.actualSize"
+        | "view.outline"
         | "view.rotate" => app.session.active().is_some(),
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),

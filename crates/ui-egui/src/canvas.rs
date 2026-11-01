@@ -492,7 +492,7 @@ fn cache_key(
         cy: v.center.y,
         w,
         h,
-        outline: app.ui.view.outline,
+        outline: app.outline_view(),
         trim: app.ui.view.trim_view,
         templates: app.ui.view.templates,
         guides: app.ui.view.guides,
@@ -560,7 +560,7 @@ fn frame_options(
     mask_view: Option<vectorcraft_doc::NodeId>,
     smooth_images: bool,
 ) -> vectorcraft_render::RenderOptions {
-    let opts = vectorcraft_render::RenderOptions { outline: app.ui.view.outline, background: None, artboards: false, ..Default::default() };
+    let opts = vectorcraft_render::RenderOptions { outline: app.outline_view(), background: None, artboards: false, ..Default::default() };
     vectorcraft_render::RenderOptions {
         proof: vectorcraft_render::proof::active_proof(),
         overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
@@ -669,7 +669,7 @@ fn paint_paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, 
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
         painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
-    } else if !app.ui.view.outline {
+    } else if !app.outline_view() {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
@@ -687,7 +687,7 @@ fn paint_paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, 
                 }
             }
         }
-    } else if app.ui.view.outline {
+    } else if app.outline_view() {
         for ab in &doc.artboards {
             painter.add(Shape::convex_polygon(xf.quad(ab.rect), Color32::WHITE, Stroke::NONE));
         }
