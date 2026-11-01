@@ -4626,7 +4626,7 @@ theme	Appearance	Giao diện
 @msg	object {0} cannot have children	đối tượng {0} không thể có phần tử con
 @msg	object {id} is not a path	đối tượng {id} không phải là đường dẫn
 @msg	object {id} is not a selected top-level object	đối tượng {id} không phải là đối tượng cấp cao nhất đã chọn
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	đối tượng có nhiều tô hoặc nét, hiệu ứng hoặc cọ đã vào dưới dạng bề ngoài ({_1}): diện mạo chưa thể chỉnh sửa
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	đối tượng có nhiều tô hoặc nét, nét có độ rộng thay đổi, hiệu ứng hoặc cọ đã vào dưới dạng bề ngoài ({_1}): diện mạo chưa thể chỉnh sửa
 @msg	Offset Path: select paths	Đường dẫn độ lệch: hãy chọn đường dẫn
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Đường dẫn độ lệch: độ lệch không để lại gì từ các đường dẫn đã chọn (độ lệch vào trong lớn hơn hình)
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi

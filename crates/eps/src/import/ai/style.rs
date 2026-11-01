@@ -93,9 +93,9 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
 pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
-    /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
-    /// no transparency or effects of their own, and only Outer Glow, Feather and Drop Shadow on the
-    /// object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// It is one fill and one stroke of even width at most, in solid colours or the object's own
+    /// gradient, with no transparency or effects of their own, and only Outer Glow, Feather and Drop
+    /// Shadow on the object: what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -655,7 +655,9 @@ fn style(filters: &[Filter]) -> ArtStyle {
     st.simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
-        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
+        // A variable-width stroke curves between its width points, and `WidthProfile` is straight
+        // between them: the drawn look holds the outline as drawn.
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { profile: None, .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
         && st.effects.iter().all(|e| matches!(e.id.as_str(), "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow"));
     st
