@@ -1,6 +1,8 @@
 //! EPS and PostScript files opened and placed: our own EPS files restore the document they carry,
 //! others are read by the PostScript interpreter or come in as their preview.
 
+use std::io::Write as _;
+
 use serde_json::{Value, json};
 
 use super::tests_svgedit::{comparable, rich};
@@ -91,6 +93,33 @@ fn cmyk_images_keep_their_inks_when_an_eps_opens_or_is_placed() {
     let r = s.execute("file.place", &json!({"name": "cmyk.eps", "dataBase64": vectorcraft_format::base64_encode(eps)})).unwrap();
     assert_eq!(r["ids"].as_array().unwrap().len(), 1, "{r}");
     assert_eq!(images(&s), [want.clone(), want]);
+}
+
+/// A 4-bit gray image compressed with Flate and TIFF predictor 2 draws the samples it had before
+/// differencing, in an EPS and in a PostScript `.ai`.
+#[test]
+fn tiff_predicted_4_bit_images_open_from_eps_and_postscript_ai_files() {
+    // Two rows of four samples, 0 5 15 3 and 9 9 2 0, differenced to 0 5 10 4 and 9 0 9 14.
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    z.write_all(&[0x05, 0xa4, 0x90, 0x9e]).unwrap();
+    let hex: String = z.finish().unwrap().iter().map(|b| format!("{b:02x}")).collect();
+    let ps = format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 20\n%%EndComments\n40 20 scale 4 2 4 [4 0 0 -2 0 2] currentfile /ASCIIHexDecode filter \
+         << /Predictor 2 /Colors 1 /BitsPerComponent 4 /Columns 4 >> /FlateDecode filter image\n{hex}>\nshowpage\n%%EOF\n"
+    );
+    for name in ["predicted.eps", "predicted.ai"] {
+        let mut s = Session::new();
+        let r = open(&mut s, name, ps.as_bytes()).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{name}: {r}");
+        let d = &s.doc().unwrap().doc;
+        let mut grays = vec![];
+        d.walk(|n| {
+            if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+                grays = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_luma8().into_raw();
+            }
+        });
+        assert_eq!(grays, [0, 5, 15, 3, 9, 9, 2, 0].map(|v| v * 17), "{name}");
+    }
 }
 
 #[test]

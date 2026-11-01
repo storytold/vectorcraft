@@ -15,7 +15,14 @@
 //! blending mode written opaque is a box hiding the art under it (version 7 images have no alpha
 //! channel, §8.1). With `flatten` (the default) each becomes an opaque image of itself and the art
 //! under it, rendered from the document as it is, clipped to the area where it changes what shows;
-//! the art under it stays as it was. With `omit` they are left out.
+//! the art under it stays as it was. An image in a group with opacity or a blending mode is
+//! flattened the same way, and a pattern fill that paints a transparent image (see-through
+//! pixels, or opacity or a blending mode on the image, the fill, the shape or a group it is in) is
+//! expanded into its tiles first so its images flatten too. With `omit` the images with
+//! see-through pixels, opacity or a blending mode of their own are left out, and pattern fills stay
+//! as the writer draws them (their tiles opaque over white). An image that can't be decoded is
+//! missing from the images that flattening and expanding raster effects draw, and the warnings
+//! then carry the raster exports' note once.
 //!
 //! The format can't hide objects, only layers (`hiddenObjects`): with `layer` (the default) each
 //! layer's hidden objects go to a hidden layer of their own just above it, with `omit` they are
@@ -30,18 +37,23 @@ use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Anchor, FillRule, PathData, Point, Rect, SubPath};
 
-use super::super::*;
+use super::super::{Affine, EngineError, NodeId, Result, bad};
 use super::{ArtboardPick, Encoded, Format};
 
-/// Does `p` ask for a legacy `.ai` file of version 7 (`aiVersion: "7"`)? An unknown version is an error.
-pub(super) fn wanted(cmd: &str, p: &Value) -> Result<bool> {
-    match p.get("aiVersion") {
-        None | Some(Value::Null) => Ok(false),
-        Some(Value::String(v)) if v.trim().is_empty() || v.eq_ignore_ascii_case("pdf") => Ok(false),
-        Some(Value::String(v)) if v.trim() == "7" => Ok(true),
-        Some(Value::Number(n)) if n.as_f64() == Some(7.0) => Ok(true),
-        Some(v) => Err(bad(cmd, format!("aiVersion {v}: \"pdf\" (PDF-compatible, the default) or \"7\" (legacy .ai, version 7)"))),
+/// Does `p` ask a save in `f` for a legacy `.ai` file of version 7 (`aiVersion: "7"`)? An unknown
+/// version is an error, and so is version 7 for a `.ait` template, which is PDF-compatible only.
+pub(super) fn wanted(cmd: &str, f: &Format, p: &Value) -> Result<bool> {
+    let legacy = match p.get("aiVersion") {
+        None | Some(Value::Null) => false,
+        Some(Value::String(v)) if v.trim().is_empty() || v.eq_ignore_ascii_case("pdf") => false,
+        Some(Value::String(v)) if v.trim() == "7" => true,
+        Some(Value::Number(n)) if n.as_f64() == Some(7.0) => true,
+        Some(v) => return Err(bad(cmd, format!("aiVersion {v}: \"pdf\" (PDF-compatible, the default) or \"7\" (legacy .ai, version 7)"))),
+    };
+    if legacy && f.id == "ait" {
+        return Err(bad(cmd, "aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible"));
     }
+    Ok(legacy)
 }
 
 /// What a legacy `.ai` does with the images it can't hold (`transparentImages`).
@@ -103,12 +115,16 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
     if boards.len() > 1 {
         enc.warnings.push(SEPARATE.to_string());
     }
-    let created = vectorcraft_doc::metadata::now_unix();
+    let created = vectorcraft_doc::metadata::output_time();
+    let failed = vectorcraft_render::decode_failures();
     for b in boards {
         let one = super::save::artboard_doc(doc, b);
         let (full, placed) = crate::cmd::place::document::full_documents(&one);
         let mut d = full.into_owned();
         expand_appearances(&mut d);
+        if mode == SeeThrough::Flatten {
+            expand_image_patterns(&mut d)?;
+        }
         let images = see_through_images(&d, mode);
         if !images.is_empty() {
             note(&mut enc.warnings, if mode == SeeThrough::Flatten { FLATTENED } else { OMITTED });
@@ -127,6 +143,11 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
         }
         enc.files.push((Some(b), out.bytes));
     }
+    // Expanding raster effects and flattening images draw the art, and an image the renderer
+    // couldn't decode drew nothing there.
+    if let Some(w) = super::super::rasterfx::undecoded_warning(failed) {
+        note(&mut enc.warnings, w);
+    }
     Ok(enc)
 }
 
@@ -140,17 +161,33 @@ fn expand_appearances(d: &mut Document) {
     }
 }
 
+/// Expand every layer's pattern fills that paint an image with see-through pixels, a colorize paint,
+/// opacity or blending into their tiles, so those images can be flattened.
+fn expand_image_patterns(d: &mut Document) -> Result<()> {
+    let keys = super::super::flatten::see_through_images(d);
+    let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
+    for id in layers {
+        super::super::expand::expand_transparent_image_patterns(d, id, &keys, &|_, _| true)?;
+    }
+    Ok(())
+}
+
 /// The images of `d` a legacy `.ai` can't hold, in paint order with their places in it (as
-/// [`Document::walk`] counts): those with see-through pixels, opacity or a blending mode. Only
-/// visible ones flatten (a hidden one, which the hidden objects option may write, is written over
-/// white); all are left out with `omit`.
+/// [`Document::walk`] counts). These have see-through pixels or a colorize paint, or have opacity
+/// or a blending mode of their own or, with `flatten`, of a group they are in.
+/// With `flatten` only visible images are returned, because a hidden one (which the hidden objects
+/// option may write) is written over white. With `omit` all of them are returned.
 fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
     let keys = super::super::flatten::see_through_images(d);
     let mut out = vec![];
     let mut at = 0;
     d.walk(|n| {
         if let NodeKind::Image(im) = &n.kind
-            && (keys.contains(&im.key) || n.opacity < 1.0 || n.blend != BlendMode::Normal)
+            && (keys.contains(&im.key)
+                || n.extras().colorize.is_some()
+                || n.opacity < 1.0
+                || n.blend != BlendMode::Normal
+                || (mode == SeeThrough::Flatten && transparent(d, n.id)))
         {
             out.push((at, n.id));
         }
@@ -160,6 +197,12 @@ fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
         out.retain(|(_, id)| d.is_visible(*id));
     }
     out
+}
+
+/// Whether node `id` or a group it is in has opacity or a blending mode. [`Document::ancestry`]
+/// lists `id` itself last, so its own opacity and blending mode count too.
+fn transparent(d: &Document, id: NodeId) -> bool {
+    d.ancestry(id).unwrap_or_default().iter().filter_map(|a| d.node(*a)).any(|n| n.opacity < 1.0 || n.blend != BlendMode::Normal)
 }
 
 /// Replace each of `images` (from [`see_through_images`]) with an opaque image of what shows
@@ -175,7 +218,8 @@ fn flatten_images(d: &mut Document, images: &[(usize, NodeId)]) -> Result<()> {
             let png = flat.png;
             let key = super::super::menucmds::unique_key(d, "flattened");
             d.images.insert(key.clone(), ImageBlob::new("image/png", png));
-            let image = ImageObject { key, width: flat.width, height: flat.height, xf: flat.xf, link: None, placement: Default::default() };
+            let image =
+                ImageObject { key, width: flat.width, height: flat.height, xf: flat.xf, link: None, placement: Default::default(), pixels: None };
             let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
             let mut group = super::super::rasterfx::clip_group(d, flat.clip, FillRule::NonZero, image);
             group.name = src.node(id).and_then(|n| n.name.clone());

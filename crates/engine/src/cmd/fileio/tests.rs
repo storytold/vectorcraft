@@ -185,8 +185,24 @@ fn planar_tiffs_with_more_strips_than_can_be_counted_are_too_large() {
     file[102..106].copy_from_slice(&1u32.to_le_bytes());
     let e = raster_image(&file).err().expect("refused");
     assert!(e.to_string().contains("an image of 3 × 2147483649 pixels is too large to draw"), "{e}");
-    assert!(too_large_note(&file).is_some());
+    assert!(load::too_large_note(&file).is_some());
     assert_eq!(vectorcraft_doc::cmyk::oversized_tiff(&file), Some((3, 1 << 31 | 1)));
+}
+
+/// A 16-bit RGB TIFF whose samples need more than the allowance (6 bytes a pixel), though its RGBA
+/// pixels would fit, is refused as too large to draw before it is decoded.
+#[test]
+fn tiffs_whose_samples_pass_the_allowance_are_too_large() {
+    let plane = |v: u16| vec![v; 6];
+    let mut file = hand_tiff(2, 16, &[], false, &[plane(9000), plane(30_000), plane(60_000)]);
+    // The loop sets ImageWidth, ImageLength and RowsPerStrip (the first, second and eighth entries) to `side`.
+    let side = 20_000u32;
+    assert!(u64::from(side * side) * 6 > MAX_RASTER_ALLOC && u64::from(side * side) * 4 <= MAX_RASTER_ALLOC);
+    for at in [18, 30, 102] {
+        file[at..at + 4].copy_from_slice(&side.to_le_bytes());
+    }
+    let e = raster_image(&file).err().expect("refused");
+    assert_eq!(e.to_string(), "an image of 20000 × 20000 pixels is too large to draw");
 }
 
 /// A planar CMYK TIFF opens and places with its ink amounts, stored as a TIFF the image decoder
@@ -206,6 +222,113 @@ fn planar_cmyk_tiffs_open_and_place_with_their_inks() {
     let blob = &s.doc().unwrap().doc.images[&image_of(&s).key];
     assert_eq!(blob.cmyk().map(|i| i.data), Some(want), "Place keeps the inks");
     assert!(image::load_from_memory(&blob.bytes).is_ok(), "the image decoder reads the stored image");
+}
+
+/// A 70 × 7 picture, `true` for black: a white row and a black row (runs past 63 take a make-up
+/// code), then runs of several lengths.
+fn fax_picture() -> Vec<Vec<bool>> {
+    (0..7).map(|y| (0..70).map(|x| if y < 2 { y == 1 } else { (x * (y + 2) / 5 + y) % 3 == 0 }).collect()).collect()
+}
+
+/// The first `rows` rows of [`fax_picture`] as a TIFF compressed with CCITT Group 3 in one strip:
+/// `compression` 2 or 3 with `t4_options`, white is zero, the highest bit of each byte first.
+fn group3_tiff(compression: u16, t4_options: u32, rows: usize) -> Vec<u8> {
+    let rows = &fax_picture()[..rows];
+    let g =
+        vectorcraft_testkit::tiff::Group3 { rows, compression, t4_options, photometric: 0, fill_order: 1, rows_per_strip: 7, tile: None, rtc: false };
+    vectorcraft_testkit::tiff::group3(&g)
+}
+
+/// 1-bit TIFFs compressed with CCITT Group 3 open and place with their pixels (#1466): Compression
+/// 2 (modified Huffman) and Compression 3 (ITU-T T.4) with one-dimensional rows or two-dimensional
+/// ones (T4Options bit 0), with and without fill bits (bit 2) and six EOLs at the end, in one strip,
+/// three strips or three 32 × 16 tiles, each byte's highest or lowest bit first (FillOrder 1 and 2),
+/// white or black as zero.
+#[test]
+fn ccitt_group3_tiffs_open_and_place_with_their_pixels() {
+    let rows = fax_picture();
+    let mut s = Session::new();
+    for (compression, t4_options, rtc) in [(2, 0, false), (3, 0, false), (3, 4, true), (3, 1, false), (3, 5, true)] {
+        for (rows_per_strip, tile) in [(7, None), (3, None), (7, Some((32, 16)))] {
+            for fill_order in [1, 2] {
+                for photometric in [0, 1] {
+                    let what = format!(
+                        "Compression {compression}, T4Options {t4_options}, {rows_per_strip} rows a strip, tiles {tile:?}, FillOrder {fill_order}, photometric {photometric}"
+                    );
+                    let g = vectorcraft_testkit::tiff::Group3 {
+                        rows: &rows,
+                        compression,
+                        t4_options,
+                        photometric,
+                        fill_order,
+                        rows_per_strip,
+                        tile,
+                        rtc,
+                    };
+                    let file = vectorcraft_testkit::tiff::group3(&g);
+                    assert!(image::load_from_memory(&file).is_err(), "{what}: the image decoder reads Group 3 now");
+                    // A black run's pixels are 1 bits, which show as black when white is zero.
+                    let want: Vec<u8> = rows.concat().iter().map(|&black| if black == (photometric == 0) { 0 } else { 255 }).collect();
+                    let pixels = |s: &Session| {
+                        let blob = &s.doc().unwrap().doc.images[&image_of(s).key];
+                        image::load_from_memory(&blob.bytes).unwrap_or_else(|e| panic!("{what}: {e}")).to_luma8().into_raw()
+                    };
+                    open(&mut s, "fax.tif", &file);
+                    assert_eq!(pixels(&s), want, "{what}: Open");
+                    let mut placed = session(100.0, 100.0, 1);
+                    placed.execute("file.place", &json!({"name": "fax.tif", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+                    assert_eq!(pixels(&placed), want, "{what}: Place");
+                }
+            }
+        }
+    }
+}
+
+/// A Group 3 TIFF whose pixels would take more than the decoding allowance as RGBA is refused as
+/// too large to draw, without a panic at 2^31 × 2^31 pixels too. One whose data ends inside a row,
+/// or after a whole row before the strip's last, is refused as damaged, and so is one whose tiles
+/// are wider than the allowance.
+#[test]
+fn ccitt_group3_tiffs_too_large_or_cut_short_are_refused() {
+    // ImageWidth (the directory's first entry, its value at offset 18), ImageLength (the second, at
+    // 30) and RowsPerStrip (the eighth, at 102).
+    for (width, height) in [(70u32, 1u32 << 30), (1 << 31, 1 << 31)] {
+        let mut big = group3_tiff(3, 1, 7);
+        big[18..22].copy_from_slice(&width.to_le_bytes());
+        big[30..34].copy_from_slice(&height.to_le_bytes());
+        big[102..106].copy_from_slice(&height.to_le_bytes());
+        let e = raster_image(&big).err().expect("refused");
+        assert!(e.to_string().contains(&format!("an image of {width} × {height} pixels is too large to draw")), "{e}");
+    }
+    let mut short = group3_tiff(3, 0, 7);
+    short.truncate(short.len() - 6);
+    let e = raster_image(&short).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: unexpected end of input"), "{e}");
+    // Compression 2 rows start at a byte, so the strip of the first six rows is where the strip of
+    // seven starts. StripByteCounts (the ninth entry, its value at offset 114) gives the six rows'.
+    let (mut seven, six) = (group3_tiff(2, 0, 7), group3_tiff(2, 0, 6));
+    seven[114..118].copy_from_slice(&six[114..118]);
+    assert_eq!(seven[30..34], 7u32.to_le_bytes(), "ImageLength");
+    assert_eq!(seven[78..82], six[78..82], "StripOffsets (the sixth entry, at offset 78)");
+    let e = raster_image(&seven).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: unexpected end of input"), "{e}");
+    // A tile wider than the allowance: TileWidth (the eighth entry, its value at offset 102).
+    let rows = fax_picture();
+    let g = vectorcraft_testkit::tiff::Group3 {
+        rows: &rows,
+        compression: 3,
+        t4_options: 1,
+        photometric: 0,
+        fill_order: 1,
+        rows_per_strip: 7,
+        tile: Some((80, 16)),
+        rtc: false,
+    };
+    let mut wide = vectorcraft_testkit::tiff::group3(&g);
+    assert_eq!(wide[102..106], 80u32.to_le_bytes(), "TileWidth");
+    wide[102..106].copy_from_slice(&u32::MAX.to_le_bytes());
+    let e = raster_image(&wide).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: arithmetic overflow"), "{e}");
 }
 
 #[test]
@@ -259,6 +382,14 @@ fn open_exts_cover_every_readable_format() {
     );
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
+}
+
+#[test]
+fn library_open_filters_list_library_formats_first() {
+    let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS).collect();
+    assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
+    assert!(filters[0].1.contains(&"ase"));
+    assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
 }
 
 /// The extensions usage texts list for export: one per writable format, each picking that format
@@ -571,6 +702,58 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
+/// values is refused before anything is written; `compress`, `version` or `preview` beside the path of a format that doesn't
+/// read it is named in the warnings.
+#[test]
+fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
+    let d = tmp_dir("save-options");
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let path = d.join("both.vectorcraft").to_string_lossy().to_string();
+    for cmd in ["document.save", "file.saveAs", "file.saveCopy", "file.saveAsTemplate"] {
+        let e = s.execute(cmd, &json!({"path": path, "compress": true, "options": {"compress": false}})).unwrap_err().to_string();
+        assert!(e.contains("`compress: true` and `options.compress: false` disagree") && e.contains(&format!("`{cmd}`")), "{cmd}: {e}");
+    }
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    assert!(!d.join("both.vctemplate").exists(), "nor a template");
+    // An SVG option given in `svg: {…}` or in `options.svg` counts as given there.
+    let svg = d.join("a.svg").to_string_lossy().to_string();
+    for p in [
+        json!({"svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+        json!({"hiddenLayers": false, "options": {"svg": {"hiddenLayers": true}}}),
+        json!({"hiddenLayers": true, "svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(svg);
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("`hiddenLayers: false` and `options.hiddenLayers: true` disagree") && e.contains("`file.saveCopy`"), "{p}: {e}");
+    }
+    assert!(!std::path::Path::new(&svg).exists(), "nothing is written");
+    // Agreeing values, or one of them null, save as asked; `3` and `3.0` agree.
+    for p in [
+        json!({"compress": true, "options": {"compress": true}}),
+        json!({"compress": null, "options": {"compress": true}}),
+        json!({"compress": true, "version": 3, "options": {"compress": true, "version": 3.0}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(path);
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{p}: {r}");
+        assert_eq!(std::fs::read(&path).unwrap()[..2], [0x1f, 0x8b], "{p}");
+    }
+    // An SVG file reads none of the native options; a .ai file reads `compress` only.
+    let r = s.execute("file.saveCopy", &json!({"path": svg, "compress": true, "version": 3, "preview": null})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.contains(&"`compress` was not used: SVG files don't read it"), "{w:?}");
+    assert!(w.contains(&"`version` was not used: SVG files don't read it") && !w.iter().any(|w| w.starts_with("`preview`")), "{w:?}");
+    assert!(std::fs::read(&svg).unwrap().starts_with(b"<"), "plain SVG");
+    let r = s.execute("file.saveCopy", &json!({"path": d.join("a.ai").to_string_lossy(), "compress": false, "version": 3})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.iter().any(|w| w.starts_with("`version` was not used")) && !w.iter().any(|w| w.starts_with("`compress`")), "{w:?}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A native save whose file write fails partway (a full disk) leaves the file as it was, and no
 /// temporary file behind.
 #[test]
@@ -653,4 +836,34 @@ fn a_failed_save_does_not_stamp_the_documents_dates() {
     // Undoing the edit is back at what the file holds.
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(!s.doc().unwrap().is_dirty());
+}
+
+/// #4284: a photo whose EXIF orientation says the camera was turned places upright: its pixels
+/// turned as the orientation says, its width and height swapped. One without keeps its own bytes.
+#[test]
+fn a_photo_places_the_way_its_exif_orientation_says() {
+    // 16 × 8, red on the left half.
+    let mut rgb = image::RgbImage::from_pixel(16, 8, image::Rgb([255, 255, 255]));
+    for y in 0..8 {
+        for x in 0..8 {
+            rgb.put_pixel(x, y, image::Rgb([220, 0, 0]));
+        }
+    }
+    let mut jpg = Vec::new();
+    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    // An EXIF segment with Orientation 6: turn a quarter clockwise to show.
+    let exif: Vec<u8> =
+        [b"Exif\0\0".as_slice(), b"II", &[0x2a, 0, 8, 0, 0, 0], &[1, 0], &[0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0], &[0, 0, 0, 0]].concat();
+    let mut turned = jpg[..2].to_vec();
+    turned.extend([0xff, 0xe1]);
+    turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    turned.extend(&exif);
+    turned.extend(&jpg[2..]);
+    let plain = raster_image(&jpg).unwrap();
+    assert_eq!((plain.width, plain.height, plain.blob.bytes.as_slice()), (16, 8, jpg.as_slice()), "a photo as taken keeps its bytes");
+    let img = raster_image(&turned).unwrap();
+    assert_eq!((img.width, img.height), (8, 16), "turned a quarter");
+    let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+    let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
+    assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
 }

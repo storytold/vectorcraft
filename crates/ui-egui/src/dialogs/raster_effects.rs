@@ -2,12 +2,15 @@
 //! anti-alias, clipping mask, room around the art and spot colour options.
 //!
 //! Fields: what `document.rasterEffectsSettings` reports (and takes back). OK runs it with them:
-//! one undo step. On an error the dialog stays open.
+//! one undo step. On an error the dialog stays open. [`effect_fields`] lays out the options of
+//! Effect › Rasterize… with the same widgets.
 
 use serde_json::{Value, json};
+use vectorcraft_effects::RASTERIZE;
 
 use super::DialogSpec;
 use super::document_setup::{LABEL, check, choice};
+use super::effect::own_choices;
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -94,6 +97,69 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
+/// The options of Effect › Rasterize… in its effect dialog, with this dialog's widgets: Color
+/// Model, Resolution (a preset, Use Document Raster Effects Resolution or Other) and Background,
+/// then an Anti-aliasing menu, Create Clipping Mask and Add … Around Object.
+pub(super) fn effect_fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
+    let models: Vec<(&str, &str)> =
+        own_choices(RASTERIZE, "colorModel", cmyk).unwrap_or_default().into_iter().map(|(label, value)| (value, label)).collect();
+    choice(ui, d, "colorModel", tl!("Color Model:"), &models);
+    ui.add_space(4.0);
+    let (ppi, document) = (d.f64("resolution", 72.0), d.bool("useDocumentResolution"));
+    let preset = RESOLUTIONS.iter().position(|(p, _)| (*p - ppi).abs() < 1e-9);
+    let mut labels: Vec<&str> = RESOLUTIONS.iter().map(|(_, l)| tl!(l)).collect();
+    labels.push(tl!("Use Document Raster Effects Resolution"));
+    labels.push(tl!("Other"));
+    let shown = if document { RESOLUTIONS.len() } else { preset.unwrap_or(RESOLUTIONS.len() + 1) };
+    widgets::label_row(ui, tl!("Resolution:"), LABEL, |ui| {
+        if let Some(i) = widgets::dropdown(ui, "rasterize-resolution", labels.get(shown).copied().unwrap_or_default(), &labels, 260.0) {
+            d.fields.insert("useDocumentResolution".into(), json!(i == RESOLUTIONS.len()));
+            if let Some((p, _)) = RESOLUTIONS.get(i) {
+                d.fields.insert("resolution".into(), json!(p));
+            } else if i > RESOLUTIONS.len() && preset.is_some() {
+                // Other moves the value 1 ppi off the preset, so its own field shows.
+                d.fields.insert("resolution".into(), json!(ppi.round() + 1.0));
+            }
+        }
+        if !document
+            && preset.is_none()
+            && let Some(v) = widgets::plain_field(ui, "rasterize-ppi", ppi, " ppi", 0, 80.0)
+        {
+            d.fields.insert("resolution".into(), json!(v));
+        }
+    });
+    ui.add_space(6.0);
+    widgets::label_row(ui, tl!("Background:"), LABEL, |ui| {
+        let cur = d.str("background");
+        for (label, id) in own_choices(RASTERIZE, "background", false).unwrap_or_default() {
+            if widgets::radio(ui, label, cur == id, true) {
+                d.fields.insert("background".into(), json!(id));
+            }
+            ui.add_space(12.0);
+        }
+    });
+    ui.add_space(10.0);
+    widgets::subheader(ui, tl!("Options"));
+    widgets::label_row(ui, tl!("Anti-aliasing:"), LABEL, |ui| {
+        use vectorcraft_render::AntiAlias;
+        let aa = AntiAlias::from_id(&d.str("antiAlias")).unwrap_or(AntiAlias::Art);
+        if let Some(i) = widgets::dropdown(ui, "rasterize-aa", aa.label(), &AntiAlias::ALL.map(AntiAlias::label), 170.0) {
+            d.fields.insert("antiAlias".into(), json!(AntiAlias::ALL.get(i).copied().unwrap_or(AntiAlias::Art).id()));
+        }
+    });
+    check(ui, d, "clippingMask", tl!("Create Clipping Mask"));
+    let unit = app.session.general_unit();
+    let t = crate::theme::Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(tl!("Add")).color(t.text));
+        if let Some(v) = widgets::num_field(ui, "rasterize-add-around", Some(d.f64("addAround", 0.0)), unit, 80.0) {
+            d.fields.insert("addAround".into(), json!(v));
+        }
+        ui.label(egui::RichText::new(tl!("Around Object")).color(t.text));
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -148,5 +214,33 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let st = app.session.active().unwrap();
         assert!(st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Image(_)))));
+    }
+
+    #[test]
+    fn rasterize_effect_dialog_previews_and_ok_applies_its_options_as_one_undo_step() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let steps = app.session.active().unwrap().history.undo.len();
+        crate::menus::invoke(&mut app, "effect.dialog", json!({"effect": "rasterize"}));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.kind.as_str(), d.fields["useDocumentResolution"].as_bool()), ("effect", Some(true)));
+        frame(&mut app);
+        assert!(app.session.in_interaction(), "previews");
+        let d = app.ui.dialog.as_mut().unwrap();
+        for (k, v) in
+            [("useDocumentResolution", json!(false)), ("resolution", json!(200)), ("background", json!("white")), ("antiAlias", json!("none"))]
+        {
+            d.fields.insert(k.into(), v);
+        }
+        // Other resolutions show their own field.
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        let (e, p) = (&n.appearance.effects[0], &n.appearance.effects[0].params);
+        assert_eq!((e.id.as_str(), &p["resolution"], &p["background"], &p["antiAlias"]), ("rasterize", &json!(200), &json!("white"), &json!("none")));
+        assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }), "the rectangle stays a path");
+        assert_eq!(st.history.undo.len(), steps + 1);
     }
 }

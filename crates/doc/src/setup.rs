@@ -107,14 +107,17 @@ impl Quotes {
     /// Single-quote pairs offered by Document Setup.
     pub const SINGLE_CHOICES: &[[char; 2]] = &[['‘', '’'], ['‚', '‘'], ['‚', '’'], ['’', '’'], ['‹', '›'], ['›', '‹'], ['『', '』'], ['\'', '\'']];
 
-    /// Is `c` one of these opening quotes?
+    /// Is `c` one of these opening quotes? A typographic glyph that is also a closing quote does not
+    /// count; a straight quote has no direction, so it still opens.
     fn is_open(&self, c: char) -> bool {
-        c == self.double[0] || c == self.single[0]
+        (c == self.double[0] || c == self.single[0]) && (c.is_ascii() || (c != self.double[1] && c != self.single[1]))
     }
 
     /// A quote opens after nothing, whitespace, an opening bracket, a dash or another opening quote.
-    fn opens(&self, prev: Option<char>) -> bool {
-        prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || self.is_open(p))
+    /// `quote_opened` says whether `prev` is a quote this conversion just produced, and if so whether
+    /// it opened; that settles glyphs which serve as both opening and closing quote.
+    fn opens(&self, prev: Option<char>, quote_opened: Option<bool>) -> bool {
+        prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || quote_opened.unwrap_or_else(|| self.is_open(p)))
     }
 
     /// `text` with straight quotes (`"` and `'`) replaced by these quotes: opening or closing by
@@ -122,11 +125,16 @@ impl Quotes {
     /// and is updated to its last character, so text can be converted in pieces.
     pub fn apply(&self, text: &str, prev: &mut Option<char>) -> String {
         let mut out = String::with_capacity(text.len());
+        let mut quote_opened = None;
         for c in text.chars() {
-            let r = match c {
-                '"' => self.double[usize::from(!self.opens(*prev))],
-                '\'' => self.single[usize::from(!self.opens(*prev))],
-                c => c,
+            quote_opened = match c {
+                '"' | '\'' => Some(self.opens(*prev, quote_opened)),
+                _ => None,
+            };
+            let r = match (c, quote_opened) {
+                ('"', Some(open)) => self.double[usize::from(!open)],
+                ('\'', Some(open)) => self.single[usize::from(!open)],
+                (c, _) => c,
             };
             out.push(r);
             *prev = Some(r);
@@ -135,32 +143,74 @@ impl Quotes {
     }
 }
 
-/// Document languages and the quote characters each uses (choosing a language in Document Setup
-/// also picks its quotes).
-pub const LANGUAGES: &[(&str, Quotes)] = &[
-    ("English: USA", Quotes::ENGLISH),
-    ("English: UK", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
-    ("German", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
-    ("German: Swiss", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
-    ("French", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
-    ("Italian", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
-    ("Spanish", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
-    ("Portuguese", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
-    ("Dutch", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
-    ("Danish", Quotes { double: ['»', '«'], single: ['›', '‹'] }),
-    ("Swedish", Quotes { double: ['”', '”'], single: ['’', '’'] }),
-    ("Finnish", Quotes { double: ['”', '”'], single: ['’', '’'] }),
-    ("Norwegian", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
-    ("Polish", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
-    ("Czech", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
-    ("Russian", Quotes { double: ['«', '»'], single: ['„', '“'] }),
-    ("Japanese", Quotes { double: ['「', '」'], single: ['『', '』'] }),
-    ("Chinese", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
+/// Document and character languages: the name, the BCP 47 tag text is shaped in (so that fonts use
+/// their language's forms, OpenType `locl`) and the quote characters each uses (choosing a
+/// language in Document Setup also picks its quotes). The first is the default.
+pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
+    ("English: USA", "en-US", Quotes::ENGLISH),
+    ("English: UK", "en-GB", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
+    ("German", "de", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
+    ("German: Swiss", "de-CH", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
+    ("French", "fr", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
+    ("Italian", "it", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Spanish", "es", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Catalan", "ca", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Portuguese", "pt", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Dutch", "nl", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
+    ("Danish", "da", Quotes { double: ['»', '«'], single: ['›', '‹'] }),
+    ("Swedish", "sv", Quotes { double: ['”', '”'], single: ['’', '’'] }),
+    ("Finnish", "fi", Quotes { double: ['”', '”'], single: ['’', '’'] }),
+    ("Norwegian", "nb", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Polish", "pl", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
+    ("Czech", "cs", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
+    ("Russian", "ru", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    // „…” outside, ’…’ inside: Pravopis srpskoga jezika (Matica srpska, 2010, ISBN
+    // 978-86-7946-079-0, т. 168, pp. 133–135) and CLDR
+    // (https://github.com/unicode-org/cldr/blob/main/common/main/sr.xml, `delimiters`).
+    ("Serbian: Cyrillic", "sr-Cyrl", Quotes { double: ['„', '”'], single: ['’', '’'] }),
+    ("Serbian: Latin", "sr-Latn", Quotes { double: ['„', '”'], single: ['’', '’'] }),
+    // „…“ outside, ‚…‘ inside: CLDR (https://github.com/unicode-org/cldr/blob/main/common/main/hr.xml,
+    // `delimiters`).
+    ("Croatian", "hr", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
+    ("Turkish", "tr", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
+    ("Japanese", "ja", Quotes { double: ['「', '」'], single: ['『', '』'] }),
+    ("Chinese", "zh", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
+    ("Hindi", "hi", Quotes::ENGLISH),
+    ("Marathi", "mr", Quotes::ENGLISH),
+    ("Gujarati", "gu", Quotes::ENGLISH),
+    ("Bengali", "bn", Quotes::ENGLISH),
+    ("Punjabi", "pa", Quotes::ENGLISH),
+    ("Tamil", "ta", Quotes::ENGLISH),
+    ("Telugu", "te", Quotes::ENGLISH),
+    ("Kannada", "kn", Quotes::ENGLISH),
+    ("Malayalam", "ml", Quotes::ENGLISH),
+    ("Odia", "or", Quotes::ENGLISH),
+    ("Urdu", "ur", Quotes::ENGLISH),
 ];
 
 /// The quotes of a [`LANGUAGES`] entry (case-insensitive).
 pub fn language_quotes(language: &str) -> Option<Quotes> {
-    LANGUAGES.iter().find(|(l, _)| l.eq_ignore_ascii_case(language)).map(|(_, q)| *q)
+    LANGUAGES.iter().find(|(l, _, _)| l.eq_ignore_ascii_case(language)).map(|(_, _, q)| *q)
+}
+
+/// The [`LANGUAGES`] entry named or tagged `language` (case-insensitive) as a character's
+/// language ([`crate::CharStyle::language`]) stores it: its tag, or `None` for the default (the
+/// first entry); `Err` for a language not in the list.
+pub fn char_language(language: &str) -> Result<Option<&'static str>, String> {
+    let i = LANGUAGES
+        .iter()
+        .position(|(n, t, _)| n.eq_ignore_ascii_case(language) || t.eq_ignore_ascii_case(language))
+        .ok_or_else(|| format!("unknown language `{language}` (one of {})", LANGUAGES.iter().map(|(n, _, _)| *n).collect::<Vec<_>>().join(", ")))?;
+    Ok(LANGUAGES.get(i).filter(|_| i > 0).map(|(_, t, _)| *t))
+}
+
+/// The name of the language a character's stored `language` tag stands for: the default's for
+/// none, `None` for a tag not in [`LANGUAGES`] (from a file).
+pub fn char_language_name(language: Option<&str>) -> Option<&'static str> {
+    match language {
+        None => LANGUAGES.first().map(|(n, _, _)| *n),
+        Some(tag) => LANGUAGES.iter().find(|(_, t, _)| t.eq_ignore_ascii_case(tag)).map(|(n, _, _)| *n),
+    }
 }
 
 /// The transparency flattener preset Document Setup uses unless another is chosen.
@@ -211,7 +261,8 @@ pub struct DocSetup {
     pub bleed: [f64; 4],
     /// Show Images in Outline Mode.
     pub outline_images: bool,
-    /// Highlight text whose font is missing (drawn in a substitute font).
+    /// The Highlight Substituted Fonts value older builds kept in Document Setup. Files keep it as
+    /// they were saved; the screen follows Preferences › Type › Highlight Substituted Fonts.
     pub highlight_substituted_fonts: bool,
     /// Highlight glyphs the font lacks (drawn from a fallback font).
     pub highlight_substituted_glyphs: bool,
@@ -238,6 +289,11 @@ pub struct DocSetup {
     pub export_text: ExportText,
     /// Background Contents chosen in New Document.
     pub background: Background,
+    /// Character panel menu › System Layout: every text object advances by whole points. Off by
+    /// default and for documents from before it, and saved only when on.
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+    #[serde(default, rename = "systemLayout", skip_serializing_if = "crate::skip::is_default")]
+    pub system_layout: bool,
 }
 
 impl Default for DocSetup {
@@ -260,6 +316,7 @@ impl Default for DocSetup {
             small_caps_size: 70.0,
             export_text: ExportText::Editable,
             background: Background::Transparent,
+            system_layout: false,
         }
     }
 }
@@ -291,8 +348,18 @@ impl DocSetup {
     pub fn keep_in_range(&mut self) {
         self.bleed = bleed_in_range(self.bleed);
         for m in [&mut self.superscript, &mut self.subscript] {
+            // `clamp` passes NaN through, so a non-finite value falls back to the default first.
+            if !m.size.is_finite() {
+                m.size = ScriptMetrics::DEFAULT.size;
+            }
+            if !m.position.is_finite() {
+                m.position = ScriptMetrics::DEFAULT.position;
+            }
             m.size = m.size.clamp(1.0, MAX_SCRIPT);
             m.position = m.position.clamp(-MAX_SCRIPT, MAX_SCRIPT);
+        }
+        if !self.small_caps_size.is_finite() {
+            self.small_caps_size = DocSetup::default().small_caps_size;
         }
         self.small_caps_size = self.small_caps_size.clamp(1.0, MAX_SMALL_CAPS);
     }
@@ -302,6 +369,31 @@ impl DocSetup {
 mod tests {
     use super::*;
 
+    /// Characters store a language of the list by its tag, the default as none.
+    #[test]
+    fn char_languages_are_stored_by_tag() {
+        assert_eq!(char_language("Turkish"), Ok(Some("tr")));
+        assert_eq!(char_language("MR"), Ok(Some("mr")));
+        assert_eq!(char_language("english: usa"), Ok(None));
+        assert_eq!(char_language("en-US"), Ok(None));
+        assert!(char_language("Klingon").is_err() && char_language("").is_err());
+        assert_eq!(
+            (char_language_name(None), char_language_name(Some("gu")), char_language_name(Some("x-unknown"))),
+            (Some("English: USA"), Some("Gujarati"), None)
+        );
+        // Serbian in either script, and Croatian.
+        assert_eq!(char_language("Serbian: Cyrillic"), Ok(Some("sr-Cyrl")));
+        assert_eq!(char_language("sr-latn"), Ok(Some("sr-Latn")));
+        assert_eq!(char_language("Croatian"), Ok(Some("hr")));
+        assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
+        // Every entry has a tag of its own, and a name of its own.
+        for (i, (n, t, _)) in LANGUAGES.iter().enumerate() {
+            assert!(LANGUAGES.iter().skip(i + 1).all(|(n2, t2, _)| n2 != n && t2 != t), "{n} {t}");
+        }
+    }
+
+    /// Straight quotes become the language's: opening or closing by what comes before, inner
+    /// quotes as single ones, and the context carried across pieces converted apart.
     #[test]
     fn quotes_open_and_close_by_context() {
         let mut prev = None;
@@ -310,6 +402,13 @@ mod tests {
         let mut prev = Some('(');
         assert_eq!(german.apply("\"a\"", &mut prev), "„a“");
         assert_eq!(prev, Some('“'));
+        // Serbian closes high (”), with ’ on both sides of an inner quote; Croatian as German.
+        for name in ["Serbian: Cyrillic", "Serbian: Latin"] {
+            let mut prev = None;
+            assert_eq!(language_quotes(name).unwrap().apply("\"a 'b' c\"", &mut prev), "„a ’b’ c”", "{name}");
+        }
+        let mut prev = None;
+        assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
         // Converting in pieces keeps the context.
         let mut prev = None;
         let a = Quotes::ENGLISH.apply("\"", &mut prev);
@@ -318,10 +417,36 @@ mod tests {
     }
 
     #[test]
+    fn closing_quote_equal_to_other_kinds_opening_quote_still_closes() {
+        let q = Quotes { double: ['”', '”'], single: ['‘', '’'] };
+        let mut prev = None;
+        assert_eq!(q.apply("'\"a\"'", &mut prev), "‘”a”’");
+        let q = Quotes { double: ['"', '"'], single: ['‘', '’'] };
+        let mut prev = None;
+        assert_eq!(q.apply("'\"a\"'", &mut prev), "‘\"a\"’");
+        let mut prev = None;
+        assert_eq!(q.apply("\"'a'\"", &mut prev), "\"‘a’\"");
+    }
+
+    #[test]
     fn bleed_grows_the_artboard() {
         let s = DocSetup { bleed: [9.0, 9.0, 4.0, 2.0], ..Default::default() };
         assert_eq!(s.bleed_rect(Rect::new(0.0, 0.0, 100.0, 50.0)), Rect::new(-4.0, -9.0, 102.0, 59.0));
         assert!(s.has_bleed() && !DocSetup::default().has_bleed());
+    }
+
+    #[test]
+    fn keep_in_range_replaces_non_finite_type_values() {
+        let mut s = DocSetup::default();
+        s.superscript.size = f64::NAN;
+        s.superscript.position = f64::INFINITY;
+        s.subscript.size = f64::NEG_INFINITY;
+        s.subscript.position = f64::NAN;
+        s.small_caps_size = f64::NAN;
+        s.keep_in_range();
+        for v in [s.superscript.size, s.superscript.position, s.subscript.size, s.subscript.position, s.small_caps_size] {
+            assert!(v.is_finite(), "{v}");
+        }
     }
 
     #[test]

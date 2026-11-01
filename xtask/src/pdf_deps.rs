@@ -5,9 +5,16 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const REV: &str = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d";
-const PACKAGES: &[(&str, &str)] =
-    &[("craft-pdf", "0.1.0"), ("krilla", "0.8.2"), ("hayro-syntax", "0.7.2"), ("hayro-interpret", "0.7.0"), ("hayro-jbig2", "0.3.0")];
+const REV: &str = "92d392cff132eaf53e13afff77f38b5c11b73aa0";
+const PACKAGES: &[(&str, &str)] = &[
+    ("craft-pdf", "0.1.0"),
+    ("krilla", "0.8.2"),
+    ("hayro-syntax", "0.7.2"),
+    ("hayro-interpret", "0.7.0"),
+    ("hayro-jbig2", "0.3.0"),
+    ("hayro-cmap", "0.1.0"),
+    ("hayro-postscript", "0.1.0"),
+];
 
 pub fn run(root: &Path) -> Result<(), String> {
     let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))

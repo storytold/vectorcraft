@@ -2,7 +2,8 @@
 //! or Custom with its size), Gap Preview Color (a layer color or a custom color) and Close Gaps
 //! With Paths for the selected Live Paint groups, opened on the first group's options. With Preview
 //! on, the options apply to the groups live and the gaps they find draw on the canvas in the preview
-//! color; OK keeps them as one undo step (`livePaint.gapOptions`).
+//! color; OK keeps them as one undo step (`livePaint.gapOptions`). View › Show Live Paint Gaps
+//! draws the gaps of the selected groups the same way ([`selected_gaps`]).
 //!
 //! Fields: `detect`, `size` (`small` | `medium` | `large` | `custom`), `custom` (pt), `color`
 //! (`#rrggbb`, or a preset's name such as "Red"), `closeGaps`, `preview`, `__ids` (the groups) and
@@ -139,12 +140,30 @@ pub(crate) fn overlays(app: &VectorcraftApp) -> Vec<Overlay> {
         .filter_map(|gap| {
             let v: Vec<f64> = gap.as_array()?.iter().filter_map(Value::as_f64).collect();
             let [x0, y0, x1, y1] = v.as_slice() else { return None };
-            let mut path = BezPath::new();
-            path.move_to(Point::new(*x0, *y0));
-            path.line_to(Point::new(*x1, *y1));
-            Some(Overlay::Path { path, color: [r, g, b], width: 2.0, dashed: false })
+            Some(gap_line(Point::new(*x0, *y0), Point::new(*x1, *y1), [r, g, b]))
         })
         .collect()
+}
+
+/// View › Show Live Paint Gaps: the gaps of the selected Live Paint groups, as lines in each
+/// group's Gap Preview Color, drawn as the preview draws them.
+pub(crate) fn selected_gaps(app: &VectorcraftApp) -> Vec<Overlay> {
+    let Some(st) = app.session.active() else { return vec![] };
+    let groups = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).filter(|n| vectorcraft_tools::builder::is_live_paint(n));
+    groups
+        .flat_map(|n| {
+            let color = n.gap_options().color;
+            vectorcraft_engine::cmd::live_paint_gaps(n).into_iter().map(move |[a, b]| gap_line(a, b, color))
+        })
+        .collect()
+}
+
+/// A gap from `a` to `b` as a line in `color`, 2 screen points wide.
+fn gap_line(a: Point, b: Point, color: [u8; 3]) -> Overlay {
+    let mut path = BezPath::new();
+    path.move_to(a);
+    path.line_to(b);
+    Overlay::Path { path, color, width: 2.0, dashed: false }
 }
 
 #[cfg(test)]

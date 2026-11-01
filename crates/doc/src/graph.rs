@@ -127,7 +127,7 @@ impl crate::Document {
                 break;
             }
             let Some(name) = GraphDesign::clean_name(&d.name) else { continue };
-            if kept.iter().any(|k| k.name == name) || d.art.count() > GraphDesign::MAX_NODES {
+            if kept.iter().any(|k| k.name == name) || d.art.count_with_masks() > GraphDesign::MAX_NODES {
                 continue;
             }
             kept.push(GraphDesign { name, art: std::sync::Arc::new(GraphDesign::plain_art(&d.art)) });

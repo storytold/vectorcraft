@@ -9,19 +9,25 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 use crate::DocState;
 
-use super::super::*;
+use super::super::{Result, Session, bad, bool_or, edit, f64_or, str_param};
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, default_name, encode, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
-    write_or_return,
+    ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
 };
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
-    let doc = &*source(s, f, &p, "document.serialize")?;
-    let enc = encode_all(doc, f.id, &p)?;
+    let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
+    let doc = &*doc;
+    let mut q = p.clone();
+    if f.id == "pdf"
+        && let Some(o) = q.as_object_mut()
+    {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    }
+    let enc = encode_all(doc, f.id, &q)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
     // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
@@ -54,8 +60,15 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.export", str_param(p, "format"), path)?;
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
-    let doc = &*source(s, f, &p, "document.export")?;
-    let enc = encode_all(doc, f.id, &p)?;
+    let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
+    let doc = &*doc;
+    let mut q = p.clone();
+    if f.id == "pdf"
+        && let Some(o) = q.as_object_mut()
+    {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    }
+    let enc = encode_all(doc, f.id, &q)?;
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
@@ -133,6 +146,21 @@ pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document
     d
 }
 
+/// `doc` with the background colors of `artboards` drawn behind its art
+/// ([`Document::with_artboard_fills`]), what exports and print draw, unless `p` turns
+/// `includeArtboardFill` off (Export for Screens › Include Artboard Fill; on by default).
+pub(crate) fn with_artboard_fills<'a>(
+    doc: &'a Document,
+    p: &Value,
+    artboards: impl IntoIterator<Item = usize>,
+) -> std::result::Result<Cow<'a, Document>, String> {
+    let include = match p.get("includeArtboardFill") {
+        None | Some(Value::Null) => true,
+        Some(v) => v.as_bool().ok_or("`includeArtboardFill` must be true or false")?,
+    };
+    Ok(include.then(|| doc.with_artboard_fills(artboards)).flatten().map_or(Cow::Borrowed(doc), Cow::Owned))
+}
+
 /// `p` without its artboard choice, also inside its SVG options (for documents made of one
 /// synthetic artboard, and for callers that pick the artboard themselves).
 pub(super) fn without_artboards(p: &Value) -> Value {
@@ -155,13 +183,16 @@ fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Va
 
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text
 /// with `selectionOnly` the selected objects alone.
-fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Cow<'a, Document>> {
+fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(Cow<'a, Document>, bool)> {
     if f.id == "txt" && bool_or(p, "selectionOnly", false) {
-        return Ok(Cow::Owned(selection(s, cmd)?.0));
+        let doc = selection(s, cmd)?.0;
+        let display_doc_title = super::has_own_title(&doc);
+        return Ok((Cow::Owned(doc), display_doc_title));
     }
     let st = s.doc()?;
     let doc = export_source(st, p)?;
-    Ok(super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned))
+    let display_doc_title = super::has_own_title(&doc);
+    Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }
 
 /// The selected objects (not on template layers) alone on one layer, with one artboard: their
@@ -173,7 +204,7 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
 
 /// The selected objects (their top-most selected ancestors) that are artwork: those on template
 /// layers are guides and are left out.
-pub(crate) fn selected_artwork(s: &mut Session) -> Result<Vec<NodeId>> {
+pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
     let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
@@ -224,7 +255,7 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// File → Save for Office Documents: one artboard as a PNG at `ppi`, on white unless
-/// `transparent`.
+/// `transparent`, with the encoder's warnings.
 pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportForOffice";
     if let Some(path) = str_param(p, "path") {
@@ -242,8 +273,8 @@ pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
     let opts = with_black_output(s, &json!({ "ppi": ppi, "background": background, "artboard": artboard }));
-    let bytes = encode(doc, "png", &opts)?;
+    let (bytes, warnings) = encode_with_warnings(doc, "png", &opts)?;
     // The pixel size, from the PNG header.
     let side = |at: usize| bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).map_or(0, u32::from_be_bytes);
-    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20) }))
+    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20), "warnings": warnings }))
 }

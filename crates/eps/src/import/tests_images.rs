@@ -408,3 +408,57 @@ fn predicted_rows_of_an_odd_width() {
     let want: Vec<[u8; 4]> = raw.iter().flat_map(|row| (0..3).map(move |x| [row[3 * x], row[3 * x + 1], row[3 * x + 2], 255])).collect();
     assert_eq!(pixels(&r, 3, 5), want);
 }
+
+/// Rows of `bpc`-bit samples packed from the high bit (16-bit ones big-endian), each row padded to
+/// a whole byte.
+fn packed(rows: &[Vec<u32>], bpc: usize) -> Vec<u8> {
+    let mut out = vec![];
+    for row in rows {
+        let mut bytes = vec![0u8; (row.len() * bpc).div_ceil(8)];
+        for (k, v) in row.iter().enumerate() {
+            if bpc == 16 {
+                bytes[2 * k..2 * k + 2].copy_from_slice(&(*v as u16).to_be_bytes());
+            } else {
+                let bit = k * bpc;
+                bytes[bit / 8] |= (*v as u8) << (8 - bpc - bit % 8);
+            }
+        }
+        out.extend(bytes);
+    }
+    out
+}
+
+/// A TIFF-predicted Flate stream (Predictor 2, horizontal differencing: ISO 32000-1 §7.4.4.4) at
+/// 1, 2, 4, 8 and 16 bits a component, gray and RGB, five pixels a row: each component is the
+/// difference from the same component of the pixel to its left, within its bit width, and each
+/// row starts again. The filter gives back the samples before differencing, read here as 8-bit
+/// gray pixels one byte each.
+#[test]
+fn tiff_predicted_rows_at_every_depth() {
+    let columns = 5;
+    let mut wrong = vec![];
+    for bpc in [1, 2, 4, 8, 16] {
+        for colors in [1, 3] {
+            let max = (1u32 << bpc) - 1;
+            let rows: Vec<Vec<u32>> =
+                (0..3u32).map(|y| (0..(columns * colors) as u32).map(|i| (i * i * 40_503 + i * 7 + y * 12_345 + 1) & max).collect()).collect();
+            let differenced: Vec<Vec<u32>> = rows
+                .iter()
+                .map(|row| (0..row.len()).map(|i| if i < colors { row[i] } else { row[i].wrapping_sub(row[i - colors]) & max }).collect())
+                .collect();
+            let (want, data) = (packed(&rows, bpc), packed(&differenced, bpc));
+            let width = want.len() / 3;
+            let r = read(&format!(
+                "30 30 scale << /ImageType 1 /Width {width} /Height 3 /BitsPerComponent 8 /Decode [0 1] /ImageMatrix [{width} 0 0 -3 0 3] \
+                 /DataSource currentfile /ASCII85Decode filter << /Predictor 2 /Colors {colors} /BitsPerComponent {bpc} /Columns {columns} >> \
+                 /FlateDecode filter >> image\n{}",
+                crate::ps::ascii85(&crate::ps::deflate(&data))
+            ));
+            let got: Vec<u8> = pixels(&r, width as u32, 3).iter().map(|p| p[0]).collect();
+            if got != want {
+                wrong.push(format!("{bpc} bits, {colors} colors: {got:?}, not {want:?}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}

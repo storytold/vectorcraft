@@ -168,6 +168,42 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+/// Edit Original hands only regular image and document files to the system's default app.
+#[test]
+fn edit_original_opens_image_and_document_files_only() {
+    let dir = Folder::new("kinds");
+    for f in ["photo.png", "Art.SVG", "run.exe", "run.bat", "photo.png.lnk", "page.hta", "app.desktop"] {
+        dir.file(f, b"");
+    }
+    for f in ["Tool.app", "folder.png"] {
+        std::fs::create_dir_all(dir.0.join(f)).unwrap();
+    }
+    let ok = |f: &str| super::links::openable_original(&dir.0.join(f).to_string_lossy()).is_ok();
+    assert!(ok("photo.png") && ok("Art.SVG"));
+    for f in ["run.exe", "run.bat", "photo.png.lnk", "page.hta", "app.desktop", "Tool.app", "folder.png", "missing.png", ""] {
+        assert!(!ok(f), "{f}");
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(dir.0.join("app.desktop"), dir.0.join("link.png")).unwrap();
+        assert!(!ok("link.png"), "an image name linking to another kind of file");
+        // The command refuses a linked image that became such a link, without opening anything.
+        let (mut app, linked, _) = app(&dir);
+        let opened: Rc<RefCell<Vec<String>>> = Rc::default();
+        let o = opened.clone();
+        app.services.open_file = Some(Box::new(move |p: &str| {
+            o.borrow_mut().push(p.to_string());
+            Ok(())
+        }));
+        let png = dir.0.join("linked.png");
+        std::fs::remove_file(&png).unwrap();
+        std::os::unix::fs::symlink(dir.0.join("app.desktop"), &png).unwrap();
+        let e = app.run("links.editOriginal", json!({"id": linked})).unwrap_err();
+        assert!(e.contains("image and document files only"), "{e}");
+        assert!(opened.borrow().is_empty());
+    }
+}
+
 #[test]
 fn placement_options_dialog_sets_the_options() {
     let dir = Folder::new("dialog");

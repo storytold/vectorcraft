@@ -26,18 +26,58 @@ const ROWS: &[Row] = &[
     (SYMBOLISM, Some("symbolism"), &["diameter", "intensity", "density"]),
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
-    (&["arc"], None, &["closed"]),
+    (&["arc"], None, &["closed", "lengthX", "lengthY", "reference", "baseAlong", "slope", "fillArc"]),
     (&["spiral"], None, &["decay", "segments", "clockwise"]),
-    (&["rectangularGrid"], None, &["rows", "columns", "rowSkew", "columnSkew", "frame", "fill"]),
-    (&["polarGrid"], None, &["concentric", "radial", "concentricSkew", "radialSkew", "compound", "fill"]),
+    // The grids' Tool Options: the dividers and switches the drag uses, the Default Size and
+    // Reference Point a click's dialog opens with.
+    (&["rectangularGrid"], None, &["rows", "columns", "rowSkew", "columnSkew", "frame", "fill", "width", "height", "reference"]),
+    (&["polarGrid"], None, &["concentric", "radial", "concentricSkew", "radialSkew", "compound", "fill", "width", "height", "reference"]),
+    // Line Segment Tool Options: the Length and Angle a click's dialog opens with, Fill Line.
+    (&["lineSegment"], None, &["length", "angle", "fillLine"]),
     (&["pencil", "paintbrush"], None, &["fidelity", "fill", "keepSelected", "editWithin", "closeWithin"]),
+    // Pencil Tool Options' Alt key toggles to Smooth Tool, Live preview and Live curve fitting (the
+    // Paintbrush has none of them).
+    (&["pencil"], None, &["altSmooth", "livePreview", "liveFit"]),
     (&["smooth"], None, &["fidelity"]),
-    (&["blobBrush", "eraser"], None, &["size"]),
-    (&["blobBrush"], None, &["keepSelected", "mergeOnlySelection"]),
+    (&["blobBrush", "eraser"], None, &["size", "sizeMode", "sizeVariation"]),
+    (&["blobBrush"], None, &["fidelity", "keepSelected", "mergeOnlySelection"]),
+    // Eraser Tool Options' tip shape.
+    (&["blobBrush", "eraser"], None, &["angle", "roundness"]),
+    // Live Paint Selection Tool Options (`builder::LivePaintSelectionTool`).
+    (&["livePaintSelection"], None, &["selectFills", "selectStrokes", "color", "width"]),
+    // Live Paint Bucket Options (`builder::LivePaintBucketTool`).
+    (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "highlight", "color", "width"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),
+    // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
+    (
+        &["shapeBuilder"],
+        None,
+        &[
+            "openFilledAsClosed",
+            "pickColorFrom",
+            "cursorSwatchPreview",
+            "selection",
+            "highlightFill",
+            "gapDetection",
+            "gapLength",
+            "clickStrokeSplitsPath",
+            "highlightStroke",
+            "highlightColor",
+        ],
+    ),
+    // Objects on Path Tool Options: the Pivot and Rotate of the objects attached next.
+    (&["objectsOnPath"], None, &["pivot", "rotate"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),
+    // The add-ons' tools (`crate::addons`).
+    (&[crate::addons::anchor_eraser::ID], None, &["size", "tolerance", "pressure"]),
+    (&[crate::addons::extend_path::ID], None, &["mode"]),
+    (&[crate::addons::corner_tool::ID], None, &["radius", "kind"]),
+    (&[crate::addons::shared_edge::ID], None, &["diameter", "tolerance", "together"]),
+    (&[crate::addons::smart_pen::ID], None, &["next"]),
+    // The kind first: a new kind resets the values after it.
+    (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation"]),
     // Flare Tool Options (`extra::FLARE_OPTIONS` and the Rays and Rings checkboxes).
     (
         &["flare"],

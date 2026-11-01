@@ -12,7 +12,10 @@ use vectorcraft_geom::Vec2;
 use super::edit::selected_roots;
 use super::pathops::Beside;
 use super::select::{selectable_ids, walk_selectable};
-use super::*;
+use super::{
+    CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
+    str_param,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -83,13 +86,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bristle Brush Strokes",
             ["Select", "Object"],
             None,
-            "{} objects whose brush name contains \"bristle\" → {count}",
+            "{} objects whose topmost stroke has a bristle brush (type bristle in brush.list), whatever the brush is named → {count}",
             has_doc,
-            |s, _| by_kind(s, |n| n
-                .appearance
-                .stroke()
-                .and_then(|st| st.brush.as_deref())
-                .is_some_and(|b| b.to_ascii_lowercase().contains("bristle")))
+            |s, _| {
+                let brushes = vectorcraft_brush::library(&s.doc()?.doc);
+                by_kind(s, |n| {
+                    n.appearance
+                        .stroke()
+                        .and_then(|st| st.brush.as_deref())
+                        .and_then(|name| brushes.iter().find(|b| b.name == name))
+                        .is_some_and(|b| matches!(b.kind, vectorcraft_brush::BrushKind::Bristle(_)))
+                })
+            }
         ),
         cmd!(
             "select.save",
@@ -226,7 +234,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every colour of the art, symbols, pattern tiles and swatches through the colour settings; swatch links kept; Gray colours stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB greys separate through the CMYK profile like any colour, into four-colour greys and a rich black) | \"black\" (to CMYK, RGB greys with R = G = B go on the black plate only, K = their grey value)} → {changed}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks included), symbols, graph designs, pattern tiles, graphic styles, brushes and swatches through the color settings; swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
             has_doc,
             super::colormgmt::convert_mode
         ),
@@ -264,11 +272,11 @@ fn candidates(s: &Session, f: impl Fn(&Node) -> bool) -> Result<Vec<NodeId>> {
 }
 
 fn finish_same(s: &mut Session, cmd: &str, ids: Vec<NodeId>) -> Result<Value> {
-    let n = ids.len();
     let from = s.doc()?.selection.objects.clone();
     s.select(|_, sel| sel.set(ids))?;
-    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), json!({}), from));
-    Ok(json!({ "count": n }))
+    let st = s.doc_mut()?;
+    st.last_selection_cmd = Some((cmd.to_string(), json!({}), from));
+    Ok(json!({ "count": st.selection.objects.len() }))
 }
 
 fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Value> {
@@ -305,11 +313,11 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
     finish_same(s, cmd, ids)
 }
 
-fn by_kind(s: &mut Session, f: fn(&Node) -> bool) -> Result<Value> {
+fn by_kind(s: &mut Session, f: impl Fn(&Node) -> bool) -> Result<Value> {
     let ids = candidates(s, f)?;
-    let n = ids.len();
     s.select(|_, sel| sel.set(ids))?;
-    Ok(json!({ "count": n }))
+    // The objects selected, after Lock Guides has left out guide paths.
+    Ok(json!({ "count": s.doc()?.selection.objects.len() }))
 }
 
 fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
@@ -538,10 +546,11 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
         let roots = if ids.is_some() { checked_ids_param(s, p, "ids", C)? } else { vec![] };
         let d = &s.doc()?.doc;
         let mut paths = vec![];
+        let editable = d.editable();
         for r in roots {
             if let Some(n) = d.node(r) {
                 n.walk(&mut |c| {
-                    if matches!(c.kind, NodeKind::Path { guide: true, .. }) && d.is_editable(c.id) && !paths.contains(&c.id) {
+                    if matches!(c.kind, NodeKind::Path { guide: true, .. }) && editable(c.id) && !paths.contains(&c.id) {
                         paths.push(c.id);
                     }
                 });
@@ -557,7 +566,8 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
         } else {
             st.selection.guides.iter().copied().filter(|i| st.doc.guides.get(*i).is_some_and(|g| st.doc.guide_editable(g))).collect()
         };
-        if sel.is_empty() && rulers.is_empty() { (vec![], all.into_iter().filter(|id| st.doc.is_editable(*id)).collect()) } else { (rulers, sel) }
+        let editable = st.doc.editable();
+        if sel.is_empty() && rulers.is_empty() { (vec![], all.into_iter().filter(|id| editable(*id)).collect()) } else { (rulers, sel) }
     };
     // Find each ruler guide's line and its parent: the guide's layer, else where new art goes.
     let st = s.doc()?;
@@ -610,7 +620,7 @@ fn lock_guides(s: &mut Session, p: &Value) -> Result<Value> {
     if v {
         let active = s.active;
         for (i, st) in s.docs.iter_mut().enumerate() {
-            if Some(i) != active && crate::deselect_guides(&st.doc, &mut st.selection) {
+            if Some(i) != active && crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection) {
                 st.revision += 1;
             }
         }

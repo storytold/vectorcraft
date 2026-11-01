@@ -42,6 +42,12 @@ pub trait PrintService {
     fn shared_print(&self) -> Option<SharedPrintFn> {
         None
     }
+    /// Whether the system turns a landscape page to fit the paper. macOS's print queues put
+    /// each page on the paper as it is, so their jobs are written upright (`file.print`'s
+    /// `forPrinter`); Windows and the browser's print dialog turn them themselves.
+    fn turns_landscape(&self) -> bool {
+        true
+    }
     /// Whether Setup… can open the system's printer settings.
     fn has_setup(&self) -> bool {
         false
@@ -90,6 +96,9 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         v["path"] = json!(path);
         v["printed"] = json!(false);
         return Ok(v);
+    }
+    if app.services.print.as_ref().is_some_and(|s| !s.turns_landscape()) {
+        q["forPrinter"] = json!(true);
     }
     let mut v = app.session.execute("file.print", &q).map_err(|e| e.to_string())?;
     let data = v.as_object_mut().and_then(|o| o.remove("dataBase64"));

@@ -277,6 +277,28 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
     Recoded { image, warning: rule.instead }
 }
 
+/// A colorized image's coverage (one sample a pixel, `w` × `h`, see
+/// [`ImageBlob::coverage`]) placed `size` points wide and high, resampled as the Compression
+/// settings `c` ask for monochrome images (when every sample is 0 or 255) or grayscale ones.
+pub(crate) fn coverage_sized(w: u32, h: u32, cover: Vec<u8>, size: (f64, f64), c: &CompressionSettings) -> Option<(u32, u32, Vec<u8>)> {
+    let mono = cover.iter().all(|v| *v == 0 || *v == 255);
+    let rule = rule(c, if mono { Kind::Mono } else { Kind::Gray });
+    let to = sized(&rule, (w, h), size);
+    if to == (w, h) {
+        return Some((w, h, cover));
+    }
+    let img = DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, cover)?);
+    let mut out = resample(img, &rule, to).into_luma8();
+    if mono {
+        // Resampling greys the edges: back to covered and not.
+        for p in out.pixels_mut() {
+            p[0] = if p[0] >= 128 { 255 } else { 0 };
+        }
+    }
+    let (w, h) = out.dimensions();
+    Some((w, h, out.into_raw()))
+}
+
 /// [`recode`] of CMYK image `blob` ([`ImageBlob::cmyk`]): a JPEG already as asked is kept as it
 /// is when its numbers are (`convert` is `None`); otherwise its ink amounts are resampled,
 /// converted by `convert` and compressed again. With `alpha` (one sample a pixel, see
@@ -353,6 +375,7 @@ fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, qual
             let t = if space == ImageColorspace::Rgb { ExtendedColorType::Rgb8 } else { ExtendedColorType::L8 };
             image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode(samples, width, height, t).ok()?;
         }
+        ImageColorspace::DeviceN => return None,
     }
     Image::from_jpeg(out.into(), interpolate).ok()
 }

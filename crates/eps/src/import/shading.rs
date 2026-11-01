@@ -12,7 +12,7 @@ use vectorcraft_geom::{Affine, Point};
 
 use super::graphics::Space;
 use super::interp::{Interp, matrix_of};
-use super::obj::{DictRef, Key, Obj, PsError, Res, ps_err};
+use super::obj::{DictRef, Key, Obj, PsError, Res, clamp_between, ps_err};
 
 /// Most patches (or triangles) one shading makes: past it, it is left out with a warning.
 const MAX_PATCHES: usize = 4096;
@@ -348,7 +348,7 @@ impl Interp<'_> {
                 decode.get(2 * j + 1).or(range.get(2 * j + 1)).copied().unwrap_or(1.0),
             );
             let (r0, r1) = (range.get(2 * j).copied().unwrap_or(0.0), range.get(2 * j + 1).copied().unwrap_or(1.0));
-            (d0 + raw * (d1 - d0) / max).clamp(r0.min(r1), r0.max(r1))
+            clamp_between(d0 + raw * (d1 - d0) / max, r0, r1)
         };
         // Each input into sample space.
         let mut pos = Vec::with_capacity(m);
@@ -356,9 +356,9 @@ impl Interp<'_> {
             let (a, b) = (domain.get(2 * i).copied().unwrap_or(0.0), domain.get(2 * i + 1).copied().unwrap_or(1.0));
             let s = size.get(i).copied().unwrap_or(1.0);
             let (e0, e1) = (encode.get(2 * i).copied().unwrap_or(0.0), encode.get(2 * i + 1).copied().unwrap_or(s - 1.0));
-            let xi = x.get(i).copied().unwrap_or(a).clamp(a.min(b), a.max(b));
+            let xi = clamp_between(x.get(i).copied().unwrap_or(a), a, b);
             let e = if b != a { e0 + (xi - a) * (e1 - e0) / (b - a) } else { e0 };
-            pos.push(e.clamp(0.0, s - 1.0));
+            pos.push(clamp_between(e, 0.0, s - 1.0));
         }
         if let ([p], Some(s)) = (pos.as_slice(), size.first()) {
             let (lo, hi) = (p.floor() as usize, (p.ceil() as usize).min(*s as usize - 1));

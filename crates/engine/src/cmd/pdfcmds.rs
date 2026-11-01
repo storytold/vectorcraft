@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_pdf::{PdfPreset, builtin_preset, builtin_presets};
 
 use super::fileio::pdf::{find_preset, resolve};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param, unique_name};
 
 /// The `format` of a PDF presets file, also its extension.
 pub const PRESET_FORMAT: &str = "vcpdfpresets";

@@ -226,6 +226,11 @@ impl BracketDrag {
         Value::Object(m)
     }
 
+    /// The drag has left the click: the bracket is moving along the path.
+    pub fn adjusting(&self) -> bool {
+        self.began
+    }
+
     pub fn finish(self) -> Vec<Action> {
         if self.began { vec![Action::Commit] } else { vec![] }
     }

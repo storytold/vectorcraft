@@ -105,6 +105,17 @@ fn the_counter_counts_items_or_files_from_any_start() {
     assert_eq!(parts, ["1_Artboard 2_2x@2x_png.png"]);
 }
 
+/// Export for Screens writes the characters Windows does not allow in a file name (`<`, `>`, `"`,
+/// `|`, `?`, `*`, control characters) as `-` in a pattern's text and in the names its tokens stand
+/// for, on every platform.
+#[test]
+fn a_pattern_writes_the_characters_windows_does_not_allow_as_dashes() {
+    let mut s = session(1);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "a|b?\"c\u{7}"})).unwrap();
+    let r = export(&mut s, json!({"name": "<name>*<x>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["a-b--c---x-.svg"]);
+}
+
 #[test]
 fn layers_and_the_selection_are_exported_by_name() {
     let mut s = session(1);
@@ -123,17 +134,25 @@ fn layers_and_the_selection_are_exported_by_name() {
     assert!(s.execute("document.exportForScreens", &json!({"selection": "one"})).is_err(), "nothing selected");
 }
 
-/// Document formats write each artboard as a document of its own: one artboard, its art.
+/// Document formats write each artboard as a document of its own: one artboard, its art and
+/// not the other artboards' (#3868).
 #[test]
 fn document_formats_write_one_artboard_each() {
     let mut s = session(2);
+    let second = s.doc().unwrap().doc.artboards[1].rect;
+    s.execute("shape.ellipse", &json!({"x": second.x0 + 5.0, "y": 5, "width": 10, "height": 10})).unwrap();
     let r = export(&mut s, json!({"formats": [{"format": "vectorcraft"}, {"format": "ai"}, {"format": "eps"}]}));
     let n = names(&r);
     assert_eq!(n, ["Artboard-1.vectorcraft", "Artboard-1.ai", "Artboard-1.eps", "Artboard-2.vectorcraft", "Artboard-2.ai", "Artboard-2.eps"]);
-    let native = &files(&r)[0].1;
-    let mut t = Session::new();
-    t.execute("document.open", &json!({"name": "a.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(native)})).unwrap();
-    assert_eq!(t.doc().unwrap().doc.artboards.len(), 1, "that artboard alone");
+    let all = files(&r);
+    for (name, bytes) in &all {
+        let mut t = Session::new();
+        t.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap();
+        let d = &t.doc().unwrap().doc;
+        assert_eq!(d.artboards.len(), 1, "{name}: that artboard alone");
+        let objects: usize = d.layers.iter().filter_map(|l| l.children()).map(|c| c.len()).sum();
+        assert_eq!(objects, 1, "{name}: only its own artboard's art");
+    }
 }
 
 #[test]

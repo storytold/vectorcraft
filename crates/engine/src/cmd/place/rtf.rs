@@ -14,6 +14,8 @@
 //!   superscript and subscript, baseline shift (`\up`, `\dn`) and the color table's color (`\cf`).
 //! - Paragraph formatting, reset by `\pard`: alignment (`\ql`, `\qc`, `\qr`, `\qj`, `\qd`), left,
 //!   right and first-line indents, space before and after, and direction (`\rtlpar`, `\ltrpar`).
+//!   `\ql` and `\qr` are the left and right edges in either direction, and a justified (`\qj`)
+//!   paragraph marked right to left (`\rtlpar`) ends its last line on the right.
 //!
 //! Other control words are skipped, and so are hidden text (`\v`) and the groups of destinations
 //! that are not the document's text: every `\*` destination, the style sheet, document
@@ -29,7 +31,7 @@ use std::collections::HashMap;
 use vectorcraft_doc::{CharPosition, CharStyle, Justify, ParaDirection, ParaStyle, ScriptMetrics, TextRun};
 
 use super::text::{self, Story};
-use super::*;
+use super::{Paint, Result, bad, fileio};
 
 /// RTF files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {
@@ -106,7 +108,12 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<Story> {
                 match next {
                     b'*' => starred = true,
                     b'\'' => {
-                        if let Some(v) = bytes.get(i..i + 2).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                        if let Some(v) = bytes
+                            .get(i..i + 2)
+                            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+                            .and_then(|h| std::str::from_utf8(h).ok())
+                            .and_then(|h| u8::from_str_radix(h, 16).ok())
+                        {
                             i += 2;
                             r.byte(v);
                         }
@@ -608,7 +615,11 @@ impl Reader {
             .paras
             .iter()
             .map(|p| ParaStyle {
-                justify: p.justify,
+                // `\qj` in an `\rtlpar` paragraph justifies it with its last line on the right.
+                justify: match p.justify {
+                    Justify::JustifyLeft if p.rtl == Some(true) => Justify::JustifyRight,
+                    j => j,
+                },
                 left_indent: twips(p.left),
                 right_indent: twips(p.right),
                 first_line_indent: twips(p.first),
@@ -642,6 +653,13 @@ mod tests {
         assert_eq!(text_of(&read(r"{\rtf1\uc1\u233\bin1 ?X}")), "éX", "binary data is one fallback character");
         let mac = read(r"{\rtf1\mac \'8e\'a5}");
         assert_eq!(text_of(&mac), "é•", "Mac Roman");
+    }
+
+    #[test]
+    fn hex_escapes_need_two_hex_digits() {
+        assert_eq!(text_of(&read(r"{\rtf1\ansi A\'+1B}")), "A+1B");
+        assert_eq!(text_of(&read(r"{\rtf1\ansi A\'-1B}")), "A-1B");
+        assert_eq!(text_of(&read(r"{\rtf1\ansi A\'g0B}")), "Ag0B");
     }
 
     #[test]
@@ -680,6 +698,18 @@ mod tests {
         let justify: Vec<Justify> = s.paras.iter().map(|p| p.justify).collect();
         assert_eq!(justify, [Justify::Left, Justify::Center]);
         assert_eq!(s.paras.last().map(|p| p.left_indent), Some(20.0));
+    }
+
+    #[test]
+    fn justified_right_to_left_paragraphs_end_their_last_line_on_the_right() {
+        let s = read(concat!(
+            r"{\rtf1\pard\rtlpar\qj a\par\pard\qj\rtlpar b\par\pard\qj c\par\pard\rtlpar\ltrpar\qj d\par",
+            r"\pard\rtlpar\ql e\par\pard\rtlpar\qr f\par\pard\rtlpar\qc g\par\pard\rtlpar\qd h}"
+        ));
+        let justify: Vec<Justify> = s.paras.iter().map(|p| p.justify).collect();
+        use Justify::*;
+        assert_eq!(justify, [JustifyRight, JustifyRight, JustifyLeft, JustifyLeft, Left, Right, Center, JustifyAll]);
+        assert_eq!(s.paras.first().and_then(|p| p.direction), Some(ParaDirection::RightToLeft));
     }
 
     #[test]

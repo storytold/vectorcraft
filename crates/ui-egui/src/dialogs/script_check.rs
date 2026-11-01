@@ -40,7 +40,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         if app.services.open_async.is_some() {
             return io::open_dialog(app).map(|_| Value::Null);
         }
-        let pick = FilePick { filters: vec![("Scripts", vectorcraft_engine::cmd::scripts::EXTS)], ..Default::default() };
+        let pick = FilePick { filters: vec![FilePick::filter("Scripts", vectorcraft_engine::cmd::scripts::EXTS)], ..Default::default() };
         params = json!({ "path": crate::picks::open(app, &pick).ok_or("cancelled")? });
     }
     if params.get("path").is_some()

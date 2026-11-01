@@ -1,7 +1,7 @@
 //! Parameter parsing, deterministic noise and path-mapping helpers.
 
 use serde_json::Value;
-use vectorcraft_geom::{Anchor, CubicBez, ParamCurve, Point, Rect, SubPath, Vec2};
+use vectorcraft_geom::{Anchor, CubicBez, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
 
 /// Number param (also accepts numeric strings such as `"10 pt"`); non-finite → default.
 pub fn num(p: &Value, key: &str, default: f64) -> f64 {
@@ -69,8 +69,25 @@ pub fn seg_cubic(sp: &SubPath, i: usize) -> CubicBez {
     if sp.segment_is_line(i) { CubicBez::new(c.p0, c.p0.lerp(c.p3, 1.0 / 3.0), c.p0.lerp(c.p3, 2.0 / 3.0), c.p3) } else { c }
 }
 
-/// Non-linear path mapping (shared with live envelopes in `vectorcraft-doc`).
-pub use vectorcraft_doc::live::map_nonlinear;
+/// Non-linear path mapping (shared with live envelopes in `vectorcraft-doc`), and the split of
+/// segments into pieces within an anchor budget.
+pub use vectorcraft_doc::live::{fit_piece, map_nonlinear_within, pieces};
+
+/// About how many lines the renderer flattens `path` into at 1 px/pt: one for a straight
+/// segment, and for a curve the count Wang's formula gives at vello's tolerance of 0.25 px,
+/// `sqrt(0.75 × d / 0.25)` for the largest second difference `d` of its control points.
+pub fn line_estimate(path: &PathData) -> usize {
+    let curve = |c: CubicBez| {
+        let d =
+            (c.p0.to_vec2() - c.p1.to_vec2() * 2.0 + c.p2.to_vec2()).hypot().max((c.p1.to_vec2() - c.p2.to_vec2() * 2.0 + c.p3.to_vec2()).hypot());
+        // A NaN casts to 0 and an infinity to the largest count.
+        ((3.0 * d).sqrt().ceil() as usize).max(1)
+    };
+    path.subpaths
+        .iter()
+        .flat_map(|sp| (0..sp.segment_count()).map(move |i| if sp.segment_is_line(i) { 1 } else { curve(sp.segment(i)) }))
+        .fold(0, usize::saturating_add)
+}
 
 /// Smooth subpath through `pts` (Catmull-Rom tangents, see [`turn_tangent`] for sharp turns).
 pub fn catmull_rom(pts: &[Point], closed: bool, tension: f64) -> SubPath {

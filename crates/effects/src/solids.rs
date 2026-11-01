@@ -3,10 +3,13 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_doc::color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::color::{BlendMode, Paint};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect};
 use vectorcraft_three_d::{Bevel, BevelShape, Extrude, Facet, Inflate, View};
+
+#[cfg(test)]
+use vectorcraft_doc::color::Color;
 
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry};
@@ -65,6 +68,8 @@ pub fn view_options(p: &Value) -> View {
         light_rotation: num(p, "lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0),
         light_height: num(p, "lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1),
         light_behind: flag(p, "lightBehind", false),
+        light_color: crate::lighting::light_color(p),
+        lights: crate::lighting::lights(p),
         light_intensity: num(p, "lightIntensity", 80.0) / 100.0,
         light_softness: num(p, "lightSoftness", 0.0) / 100.0,
         ambient: num(p, "ambient", 25.0) / 100.0,
@@ -109,8 +114,32 @@ fn profile(n: &Node) -> Option<(PathData, FillRule)> {
         NodeKind::Compound { children, rule } => {
             Some((PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect()), *rule))
         }
+        // Type extrudes as its glyph outlines and stays type: editing it reshapes the solid (#4715).
+        NodeKind::Text(_) => {
+            let mut subpaths = vec![];
+            crate::outline_text(n)?.walk(&mut |c| subpaths.extend(c.path_data().into_iter().flat_map(|p| p.subpaths.iter().cloned())));
+            (!subpaths.is_empty()).then(|| (PathData::new(subpaths), FillRule::NonZero))
+        }
         _ => None,
     }
+}
+
+/// What a 3D effect paints `n` with: its own fills and strokes, else, for type that has none, the
+/// fill and stroke of its first painted run (its characters' colours).
+fn solid_paints(n: &Node) -> Vec<AppearanceItem> {
+    let own: Vec<AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).cloned().collect();
+    if !own.is_empty() || !matches!(n.kind, NodeKind::Text(_)) {
+        return own;
+    }
+    let mut runs = vec![];
+    if let Some(outlined) = crate::outline_text(n) {
+        outlined.walk(&mut |c| {
+            if runs.is_empty() && c.path_data().is_some() {
+                runs = c.appearance.items.iter().filter(|i| crate::paints(i)).cloned().collect();
+            }
+        });
+    }
+    runs
 }
 
 fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
@@ -124,6 +153,7 @@ fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) ->
 
 /// Validate before a command changes the document; the evaluator bounds loaded files too.
 pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    crate::lighting::validate(p)?;
     let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     let (path, rule) =
         profile(n).ok_or_else(|| format!("{label} currently requires a path or compound path. Convert type, images and groups to paths first."))?;
@@ -137,34 +167,47 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
     facets(id, &path, rule, b, p).map(|_| ())
 }
 
+/// Can 3D effect `id` (Revolve included, [`is_three_d`]) with parameters `p` draw `n`? Checked
+/// before a command changes the document: Revolve by [`crate::validate_revolve`], the others by
+/// [`validate_solid`].
+pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    if id == crate::REVOLVE { crate::validate_revolve(n, p) } else { validate_solid(n, id, p) }
+}
+
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and
 /// blend mode (so overlapping facets don't add up their transparency).
-fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode) -> Node {
+fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool) -> Node {
+    if colored && paint.color().is_some() && facets.iter().any(|face| face.rgb_gradient.is_some()) {
+        let mut group = crate::lighting::solid_surface(n.id, &facets, paint);
+        group.opacity = opacity;
+        group.blend = blend;
+        return group;
+    }
+    // Preserve existing white-light paints, alpha composition and seam joins exactly.
+    let (opaque, mask) = if colored { crate::lighting::opaque_paint(paint) } else { (paint.clone(), None) };
+    let paint = &opaque;
     let children = facets
         .into_iter()
         .map(|face| {
-            let mut items = vec![];
-            if let Some(c) = paint.color() {
-                let [r, g, b] = c.to_rgb();
-                let s = face.brightness as f32;
-                items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(r * s, g * s, b * s)))));
-            } else {
-                // Gradients and patterns keep their paint, darkened by a black layer.
-                items.push(AppearanceItem::Fill(FillLayer::new(paint.clone())));
-                let mut shadow = FillLayer::new(Paint::solid(Color::BLACK));
-                shadow.opacity = (1.0 - face.brightness) as f32;
-                items.push(AppearanceItem::Fill(shadow));
-            }
             // Adjacent facets, antialiased on their own, would leave hairline seams: a narrow
             // stroke of the same paint closes them. No wider than the facet is thick, though: seen
             // at a grazing angle a facet can be thinner than the stroke, and its stroke would then
             // paint over its neighbours.
             let seam = (face.thickness() / 2.0).clamp(0.05, 0.75);
+            if let Some(g) = face.rgb_gradient
+                && (paint.color().is_some() || matches!(paint, Paint::Gradient(_)))
+            {
+                return Arc::new(crate::lighting::facet_art(n.id, &face.path(), paint, g, seam));
+            }
+            let items = crate::lighting::fills(paint, face.illumination, face.brightness, colored);
             let items = items
                 .into_iter()
                 .flat_map(|item| {
                     let AppearanceItem::Fill(fill) = &item else { return vec![item] };
                     let mut edge = StrokeLayer::new(fill.paint.clone(), seam);
+                    if colored {
+                        edge.join = vectorcraft_doc::LineJoin::Round;
+                    }
                     edge.opacity = fill.opacity;
                     vec![item, AppearanceItem::Stroke(edge)]
                 })
@@ -175,6 +218,11 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
+    if let Some(mask) = mask {
+        let bounds = group.visual_bounds().unwrap_or(Rect::ZERO).inflate(1.0, 1.0);
+        let coverage = Node::path(n.id, vectorcraft_geom::shapes::rectangle(bounds), Appearance::basic(mask, Paint::None, 0.0));
+        group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
+    }
     group
 }
 
@@ -195,11 +243,16 @@ fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, 
 }
 
 /// The 3D art of one effect `fx` on `path` (already through the effects before it).
-/// Extrude & Bevel and Inflate build a solid from the outline, painted with the top visible fill
-/// (or, without one, the top stroke); Rotate turns every fill and stroke, each in its own paint.
+/// Rotate turns every fill and stroke, each in its own paint. Extrude & Bevel and Inflate build a
+/// solid from the path for the top visible fill and one from the outline of each visible stroke,
+/// each in its own paint. When every one is opaque with normal blending and no colored light makes
+/// a surface one composite or masks it, their faces are drawn in one back-to-front order (where
+/// depths tie, as for the caps turned toward the viewer, in the order of the appearance);
+/// otherwise each solid is a surface of its own, in that order.
 fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&AppearanceItem]) -> Option<Vec<Arc<Node>>> {
     let b = path.bounds()?;
     let p = crate::merged_params(&fx.id, &fx.params);
+    let colored = view_options(&p).has_colored_lights();
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds, so they stay together.
         let mut out = vec![];
@@ -207,16 +260,76 @@ fn art_for(n: &Node, fx: &Effect, path: &PathData, rule: FillRule, items: &[&App
             let (paint, opacity, blend) = paint_of(item);
             let (area, rule) = region(path, rule, item);
             let f = facets(ROTATE, &area, rule, b, &p).ok()?;
-            out.push(Arc::new(surface(n, f, &paint, opacity, blend)));
+            out.push(Arc::new(surface(n, f, &paint, opacity, blend, colored)));
         }
         return Some(out);
     }
-    let item = items.iter().rev().find(|i| matches!(i, AppearanceItem::Fill(_))).or_else(|| items.last())?;
-    let (paint, opacity, blend) = paint_of(item);
-    // A loaded file or a shape edited past the limits keeps drawing its source path instead of
-    // failing the frame; commands validate the same evaluator and report its errors.
-    let f = facets(&fx.id, path, rule, b, &p).ok()?;
-    Some(vec![Arc::new(surface(n, f, &paint, opacity, blend))])
+    let top_fill = items.iter().rposition(|i| matches!(i, AppearanceItem::Fill(_)));
+    let parts: Vec<(&AppearanceItem, PathData, FillRule)> = items
+        .iter()
+        .enumerate()
+        .filter(|(k, i)| Some(*k) == top_fill || matches!(i, AppearanceItem::Stroke(_)))
+        .map(|(_, i)| {
+            let (area, rule) = region(path, rule, i);
+            (*i, area, rule)
+        })
+        .collect();
+    // The solids share the bounds of all their shapes: one center to turn, twist and taper about,
+    // and Inflate's grid reaches over the strokes' outlines.
+    let bounds = parts.iter().filter_map(|(_, area, _)| area.bounds()).reduce(|a, c| a.union(c)).unwrap_or(b);
+    let built = if fx.id == INFLATE {
+        // One eye for every puff, as far away as the highest needs.
+        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, area, rule)| (area, *rule)).collect();
+        vectorcraft_three_d::inflate_together(&shapes, bounds, inflate_options(&p), view_options(&p))
+    } else {
+        parts.iter().map(|(_, area, rule)| facets(&fx.id, area, *rule, bounds, &p)).collect()
+    };
+    let mut solids = vec![];
+    for ((item, _, _), f) in parts.iter().zip(built) {
+        let item: &AppearanceItem = item;
+        match f {
+            Ok(f) => solids.push((item, f)),
+            // A stroke's outline past the limits is left out; the fill's solid still draws.
+            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
+            // A loaded file or a shape edited past the limits keeps drawing its source path
+            // instead of failing the frame; commands validate the same evaluator and report its
+            // errors.
+            Err(_) => return None,
+        }
+    }
+    if solids.is_empty() {
+        return None;
+    }
+    let opaque = solids.iter().all(|(item, _)| {
+        let (_, opacity, blend) = paint_of(item);
+        opacity >= 1.0 && blend == BlendMode::Normal
+    });
+    let surfaces: Vec<(Vec<f64>, Node)> = solids
+        .into_iter()
+        .map(|(item, f)| {
+            let depths: Vec<f64> = f.iter().map(|f| f.depth).collect();
+            let (paint, opacity, blend) = paint_of(item);
+            (depths, surface(n, f, &paint, opacity, blend, colored))
+        })
+        .collect();
+    // One order takes a plain group of faces from each solid, one face for each facet. With
+    // colored lights a surface can instead be one clipped composite of all its facets, or carry an
+    // opacity mask, and then it stays whole.
+    let plain = surfaces.iter().all(|(depths, s)| {
+        s.extras().mask.is_none() && matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len())
+    });
+    if !opaque || !plain {
+        return Some(surfaces.into_iter().map(|(_, s)| Arc::new(s)).collect());
+    }
+    let mut faces = vec![];
+    for (depths, s) in surfaces {
+        if let NodeKind::Group { children, .. } = s.kind {
+            faces.extend(depths.into_iter().zip(children));
+        }
+    }
+    // A stable sort: faces at the same depth keep the order of the appearance.
+    faces.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Some(vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(_, face)| face).collect()))])
 }
 
 fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
@@ -231,7 +344,8 @@ pub fn solid_art(n: &Node) -> Option<Node> {
     }
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
-    let painted: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).collect();
+    let paints = solid_paints(n);
+    let painted: Vec<&AppearanceItem> = paints.iter().collect();
     let mut children = vec![];
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
@@ -269,5 +383,4 @@ pub fn solid_art(n: &Node) -> Option<Node> {
 }
 
 #[cfg(test)]
-#[path = "tests_solids.rs"]
 mod tests;

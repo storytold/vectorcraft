@@ -1,4 +1,4 @@
-# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/lib.rs).
+# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/cursor.rs).
 #
 # This is the source of truth for what each cursor is for, written for whoever draws them:
 # designers never decide what a cursor is for, this file does. `cargo xtask cursors` warns about
@@ -126,6 +126,15 @@ shown_when = ["The Selection tool over the type widget of selected type (a doubl
 hotspot = "The arrow's tip."
 look = "Arrow with a type badge (a letter T)."
 
+[[cursor]]
+id = "LoadedText"
+group = "Selection"
+shown_when = [
+    "The Selection tool after a click on the out port or the in port of selected area type or type on a path, threaded, overflowing or not: the pointer carries that text until a click threads it into a closed path, area type or type on a path, a click on empty canvas makes a new frame of the same kind and shape there, or a drag draws the new frame; from the in port the frame placed comes before the clicked one. Escape or another tool drops it.",
+]
+hotspot = "Where the new frame's top-left corner goes (the click), or the path clicked."
+look = "A small block of text lines: the overflow text the pointer carries."
+
 # ── Pen family ────────────────────────────────────────────────────────────────────────────────────
 
 [[cursor]]
@@ -137,7 +146,7 @@ shown_when = [
     "With Use Precise Cursors on, the crosshair shows instead.",
 ]
 hotspot = "The nib's tip."
-look = "A pen nib. Every Pen-family cursor is this nib with a different badge."
+look = "A fountain-pen nib pointing up-left along the selection arrow's axis (so swapping to the selection tools doesn't rotate the cursor), its slit widening into the breather hole and its heel clipped at the back; the shape approximates the pen tool's icon. Every Pen-family cursor is this nib with a different badge."
 
 [[cursor]]
 id = "PenDrawing"
@@ -154,7 +163,7 @@ id = "PenAdd"
 group = "Pen"
 shown_when = [
     "The Pen over a segment of a selected path with Auto Add/Delete on (Shift off), or over a selected blend's spine.",
-    "The Add Anchor Point tool everywhere (and the Delete Anchor Point tool with Alt).",
+    "The Add Anchor Point tool everywhere (and the Delete Anchor Point tool and the Scissors tool with Alt).",
     "The Curvature tool over a segment.",
     "Stands in for MeshAdd and PuppetPin until they're drawn.",
 ]
@@ -383,6 +392,16 @@ shown_when = [
 hotspot = "The centre."
 designer = false
 
+[[cursor]]
+id = "Busy"
+group = "Navigation"
+shown_when = [
+    "A file is opening off the UI thread.",
+    "A background save or export is in progress (the status bar shows its name).",
+]
+hotspot = "The centre."
+designer = false
+
 # ── Colour and gradient ───────────────────────────────────────────────────────────────────────────
 
 [[cursor]]
@@ -472,6 +491,13 @@ hotspot = "The crosshair's centre."
 look = "Crosshair with a target badge (a ring with a centre dot)."
 
 [[cursor]]
+id = "ObjectsOnPath"
+group = "Width, blend, slice and shape builder"
+shown_when = ["The Objects on Path tool over a path the selected objects can attach to: a click attaches them."]
+hotspot = "The crosshair's center."
+look = "Crosshair with a badge of small squares along a curve, as on the tool's icon."
+
+[[cursor]]
 id = "Slice"
 group = "Width, blend, slice and shape builder"
 shown_when = ["The Slice tool, always. With Use Precise Cursors on, the plain crosshair shows instead."]
@@ -504,8 +530,39 @@ look = "Crosshair with a minus badge."
 [[cursor]]
 id = "Pencil"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Alt while drawing closes the path."]
+shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Shift held at the press, or Alt held at the press when Alt key toggles to Smooth Tool is off, draws a straight line; Alt pressed after the drag starts, when that option is off, closes the path; when it is on, Alt held at the press gives the Smooth tool."]
 hotspot = "The lead tip."
+
+[[cursor]]
+id = "PencilNew"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star."]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a small star badge, where PencilClose has its ring."
+
+[[cursor]]
+id = "PencilClose"
+group = "Drawing and editing tools"
+shown_when = [
+    "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
+    "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
+
+[[cursor]]
+id = "PencilStraight"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone."]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a short straight-line badge, where PencilClose has its ring."
+
+[[cursor]]
+id = "PencilContinue"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool over an end of a selected open path, within Edit Selected Paths, with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line that continues the path from that end."]
+hotspot = "The lead tip."
+look = "PencilStraight's badge with a small filled square at the line's lower end (the end point the line continues from)."
 
 [[cursor]]
 id = "Paintbrush"
@@ -514,21 +571,36 @@ shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pres
 hotspot = "The bristle tip."
 
 [[cursor]]
+id = "PaintbrushClose"
+group = "Drawing and editing tools"
+shown_when = [
+    "The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path.",
+    "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+]
+hotspot = "The bristle tip."
+look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClose."
+
+[[cursor]]
 id = "BlobBrush"
 group = "Drawing and editing tools"
-shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. No brush-size outline shows while hovering."]
+shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while painting; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The brush centre."
+look = "Only a small dot at the centre: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Eraser"
 group = "Drawing and editing tools"
-shown_when = ["The Eraser tool: a drag erases the area it covers. No size outline shows while hovering."]
+shown_when = ["The Eraser tool: a drag erases the area it covers. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while erasing; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The eraser's centre."
+look = "Only a small dot at the centre, as the Blob Brush's: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Smooth"
 group = "Drawing and editing tools"
-shown_when = ["The Smooth tool: a drag along a selected path smooths it."]
+shown_when = [
+    "The Smooth tool: a drag along a selected path smooths it.",
+    "The Pencil tool with Alt key toggles to Smooth Tool on: with Alt held before a stroke begins to draw, and through a drag that smooths.",
+]
 hotspot = "The tip."
 
 [[cursor]]
@@ -552,14 +624,14 @@ hotspot = "The blade's point."
 [[cursor]]
 id = "Scissors"
 group = "Drawing and editing tools"
-shown_when = ["The Scissors tool over a path segment: a click splits the path there."]
+shown_when = ["The Scissors tool over a path segment, Alt up: a click splits the path there."]
 hotspot = "Where the blades cross, exact enough to cut where aimed."
 look = "Scissors. ScissorsNotAllowed is this drawing with a badge."
 
 [[cursor]]
 id = "ScissorsNotAllowed"
 group = "Drawing and editing tools"
-shown_when = ["The Scissors tool away from every path segment: a click does nothing."]
+shown_when = ["The Scissors tool away from every path segment, Alt up: a click does nothing."]
 hotspot = "The same point as Scissors."
 look = "The Scissors with a small not-allowed badge, so the cursor keeps its size and shape and only the badge says a click won't cut."
 
@@ -597,10 +669,58 @@ shown_when = ["The Measure tool: drag to measure distance and angle."]
 hotspot = "Exact, because precision matters here (an open centre suits it)."
 
 [[cursor]]
+id = "SmartPen"
+group = "Drawing and editing tools"
+shown_when = ["The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path. Over a path, or while a path is drawn, the tool shows the Pen's and Direct Selection's cursors for what a click there does."]
+hotspot = "The nib's tip."
+
+[[cursor]]
 id = "PrintTiling"
 group = "Drawing and editing tools"
 shown_when = ["The Print Tiling tool: a drag moves the printable page area over the artboard (it snaps to the artboard's edges)."]
 hotspot = "The page corner being placed."
+
+[[cursor]]
+id = "AnchorEraser"
+group = "Drawing and editing tools"
+shown_when = ["The Anchor Eraser Brush (Path Precision Tools add-on): a drag over selected paths removes the anchors under the brush that the outline can do without. The app draws the brush's size as a circle around the cursor."]
+hotspot = "The brush centre."
+
+[[cursor]]
+id = "ExtendPath"
+group = "Drawing and editing tools"
+shown_when = ["The Extend Path tool (Path Precision Tools add-on): a drag from an end of an open path lengthens or shortens the path there."]
+hotspot = "Exact: the end being dragged follows it."
+
+[[cursor]]
+id = "MeasureInspect"
+group = "Drawing and editing tools"
+shown_when = ["The Measure & Inspect tool (Path Precision Tools add-on): drag to measure distance and angle; hover a path to read its lengths, area, curvature and angles."]
+hotspot = "Exact, because precision matters here (an open centre suits it)."
+
+[[cursor]]
+id = "ParametricShape"
+group = "Drawing and editing tools"
+shown_when = ["The Parametric Shape Tool (Path Precision Tools add-on): a drag draws a re-editable shape out from its centre; a click selects one and shows its handles."]
+hotspot = "Exact: the centre of the shape being drawn."
+
+[[cursor]]
+id = "CornerTool"
+group = "Drawing and editing tools"
+shown_when = ["The Corner Tool (Path Precision Tools add-on): a click or drag on an anchor where two sides meet cuts a corner there; a drag on a corner's marker resizes it; an Alt-drag cuts corners on every anchor inside the marquee."]
+hotspot = "Exact: the anchor or marker being picked."
+
+[[cursor]]
+id = "SlideAnchor"
+group = "Drawing and editing tools"
+shown_when = ["The Slide Anchor Along Path tool (Path Precision Tools add-on): a drag moves an anchor along the curve it sits on."]
+hotspot = "Exact: the anchor being dragged follows it along the path."
+
+[[cursor]]
+id = "SharedEdge"
+group = "Drawing and editing tools"
+shown_when = ["The Shared Edge Merge Tool (Path Precision Tools add-on): a click merges the touching edges of two paths under the round brush, or brings their anchors together there."]
+hotspot = "Exact: the centre of the brush, drawn by the app as a circle around the cursor."
 
 # ── Symbolism tools ───────────────────────────────────────────────────────────────────────────────
 # The brush size is drawn by the app as a circle around the cursor.

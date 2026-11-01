@@ -191,16 +191,24 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
             ui.spacing_mut().item_spacing.x = 6.0;
             dim(ui, tl!("Rasters"));
             let rail = (ui.available_width() - FIELD - 56.0).clamp(80.0, 200.0);
-            if let (Some(x), _) =
-                widgets::color_slider_named(ui, (id, "balance-slider"), tl!("Raster/Vector Balance:"), (o.balance / 100.0) as f32, rail, &|_| {
-                    t.input_border
-                })
-            {
-                o.balance = (x as f64 * 100.0).round();
+            let shown = widgets::SliderValue::field(o.balance, 0.0..=100.0, "", 0);
+            let (x, _, keyed) = widgets::color_slider_stepped(
+                ui,
+                (id, "balance-slider"),
+                tl!("Raster/Vector Balance:"),
+                Some(shown),
+                (o.balance / 100.0) as f32,
+                rail,
+                &|_| t.input_border,
+            );
+            if let Some(b) = x.map(|x| (x as f64 * 100.0).round()).or(keyed) {
+                o.balance = b;
             }
             dim(ui, tl!("Vectors"));
-            if let Some(v) = widgets::plain_field(ui, (id, "balance"), o.balance, "", 0, FIELD - 12.0) {
-                o.balance = v.round().clamp(0.0, 100.0);
+            if let Some(v) =
+                widgets::range_field_named(ui, (id, "balance"), Some(tl!("Raster/Vector Balance:")), o.balance, 0.0..=100.0, "", 0, FIELD - 12.0)
+            {
+                o.balance = v;
             }
         });
         ui.add_space(4.0);
@@ -209,8 +217,8 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
                 widgets::dim_label(ui, label);
                 ui.horizontal(|ui| {
                     let v = if key == 0 { &mut o.line_art_ppi } else { &mut o.gradient_ppi };
-                    if let Some(n) = widgets::plain_field(ui, (id, key), *v, "", 0, FIELD) {
-                        *v = n.round().clamp(1.0, 2400.0);
+                    if let Some(n) = widgets::range_field_named(ui, (id, key), Some(label), *v, 1.0..=2400.0, "", 0, FIELD) {
+                        *v = n;
                     }
                     dim(ui, "ppi");
                 });
@@ -311,16 +319,14 @@ mod tests {
     #[test]
     fn ok_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
         const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-        // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+        // A PNG whose header reads but whose pixel data is cut short.
         let mut png = Vec::new();
         image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
             .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .unwrap();
-        let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-        png.truncate(idat + 8);
         for preview in [true, false] {
             let mut app = scene();
-            let placed = app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+            let placed = vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
             // The image is half transparent itself, so Flatten Transparency flattens it wherever it was placed.
             app.run("transparency.set", json!({"ids": placed["ids"], "opacity": 50})).unwrap();
             app.run("select.all", json!({})).unwrap();

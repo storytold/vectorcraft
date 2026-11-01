@@ -40,6 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
     min_width: PREVIEW_W + GAP + SIDE_W,
+    inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
 };
 
@@ -68,11 +69,12 @@ const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality steps: (label, quality).
 const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), ("Very High", 80), ("Maximum", 100)];
 
-/// Open the dialog on the remembered settings.
+/// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let n = app.session.active().ok_or("no document")?.doc.artboards.len();
     let mut s = app.session.last_web_settings();
-    // A remembered artboard this document doesn't have: its first.
+    s.artboard = Some(crate::panels::artboards::selected(app, n));
+    // A document with no artboards has no valid index.
     if s.artboard.is_some_and(|a| a >= n) {
         s.artboard = None;
     }
@@ -131,7 +133,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
-/// output, else the image); the web downloads them.
+/// output, else the image); the web downloads them. The status bar shows the export's first
+/// warning.
 pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     // Bad settings never open a save panel.
     let s = app.session.web_settings(&p)?;
@@ -145,8 +148,11 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
             io::write_to(&mut app.services, name, &bytes)?;
             names.push(json!(name));
         }
-        app.status(format!("Downloaded {} file(s)", names.len()));
-        return Ok(json!({ "files": names, "bytes": r["bytes"] }));
+        match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {
+            Some(first) => io::report_saved(app, first, &r),
+            None => app.status(crate::i18n::msg_n(names.len() as u64, "Downloaded {n} file", "Downloaded {n} files", &[])),
+        }
+        return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
     let ext = if s.output == WebOutput::Html { "html" } else { s.format.ext() };
     let path = io::target_path(app, path, ext)?;
@@ -155,12 +161,23 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
     }
     let r = app.run("document.exportForWeb", p)?;
     let n = r["files"].as_array().map_or(0, Vec::len);
-    app.status(if n > 1 { format!("Saved {n} files beside {path}") } else { format!("Saved {path}") });
+    if n > 1 && !has_warnings(&r) {
+        app.status(format!("Saved {n} files beside {path}"));
+    } else {
+        io::report_saved(app, &path, &r);
+    }
     Ok(r)
 }
 
-/// `file.saveForWeb.browser`: the HTML page and its images in a temporary folder, opened in the
-/// default browser (desktop).
+/// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
+/// [`io::report_saved`] puts the first in the status bar as a save's note.
+fn has_warnings(r: &Value) -> bool {
+    r["warnings"].as_array().is_some_and(|w| !w.is_empty())
+}
+
+/// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
+/// default browser (desktop). When the export has warnings, the status bar shows the first in
+/// place of "Opened …".
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
@@ -173,17 +190,159 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
         o.insert("path".into(), json!(path));
         o.insert("output".into(), json!("html"));
     }
-    app.run("document.exportForWeb", q)?;
+    let r = app.run("document.exportForWeb", q)?;
     app.open_url(&io::file_url(&path));
-    Ok(json!({ "path": path }))
+    if has_warnings(&r) {
+        io::report_saved(app, &path, &r);
+    }
+    Ok(json!({ "path": path, "warnings": r["warnings"] }))
 }
 
-/// The folder browser previews go to.
+/// The age at which a later browser preview removes an earlier preview's folder.
+#[cfg(not(target_arch = "wasm32"))]
+const PREVIEW_KEEP: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// The folder a browser preview goes to: a new one for each preview, in the system's temporary
+/// folder ([`preview_folder_in`]).
 #[cfg(not(target_arch = "wasm32"))]
 fn temp_folder() -> Result<String, String> {
-    let dir = std::env::temp_dir().join("VectorCraft Save for Web");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    Ok(dir.to_string_lossy().replace('\\', "/"))
+    preview_folder_in(&std::env::temp_dir(), PREVIEW_KEEP)
+}
+
+/// The name of a folder that a preview made in the temporary folder, beside a `VectorCraft Save
+/// for Web` it couldn't use, before the process id and the count.
+#[cfg(not(target_arch = "wasm32"))]
+const BESIDE: &str = "VectorCraft Save for Web ";
+
+/// A new folder for a browser preview in the temporary folder `tmp`: inside `VectorCraft Save for
+/// Web` ([`preview_folder`]), or, when that folder can't be used, directly in `tmp`, named
+/// [`BESIDE`] followed by the process id and a count. The log says why the shared folder wasn't
+/// used. Each preview first removes the folders of that name in `tmp` last changed `keep` or longer
+/// ago ([`remove_old`]).
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn preview_folder_in(tmp: &std::path::Path, keep: std::time::Duration) -> Result<String, String> {
+    remove_old(tmp, BESIDE, keep);
+    preview_folder(&tmp.join("VectorCraft Save for Web"), keep).or_else(|e| {
+        log::warn!("vectorcraft: Preview in Browser can't use {e}, so the preview goes to a new folder of its own");
+        new_folder(tmp, BESIDE)
+    })
+}
+
+/// A new folder in `root` ([`new_folder`]). `root` is made when it is missing. An existing `root`
+/// is refused when it is a link or not a folder, or, on unix, when it belongs to another user or
+/// users other than its owner can write to it. Before the new folder is made, the preview folders
+/// in `root` last changed `keep` or longer ago are removed ([`remove_old`]).
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn preview_folder(root: &std::path::Path, keep: std::time::Duration) -> Result<String, String> {
+    match private_folder().recursive(true).create(root) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(format!("{}: {e}", root.display())),
+    }
+    let m = std::fs::symlink_metadata(root).map_err(|e| format!("{}: {e}", root.display()))?;
+    if let Some(why) = refused(&m) {
+        return Err(format!("{}: {}", root.display(), why));
+    }
+    remove_old(root, "", keep);
+    new_folder(root, "")
+}
+
+/// Removes the preview folders in `dir` last changed `keep` or longer ago: folders (not links)
+/// named `prefix` followed by `<digits>-<digits>`, on unix only those the current user owns. Other
+/// entries are left alone.
+#[cfg(not(target_arch = "wasm32"))]
+fn remove_old(dir: &std::path::Path, prefix: &str, keep: std::time::Duration) {
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if !is_preview_name(&e.file_name(), prefix) {
+            continue;
+        }
+        // `DirEntry::metadata` doesn't follow a link, so a link is never a folder here.
+        let Ok(m) = e.metadata() else { continue };
+        let old = m.modified().ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= keep);
+        if old && m.is_dir() && mine(&m) {
+            // Best effort: one that can't be removed now is tried again by the next preview.
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// A new folder in `parent` named `prefix` followed by the process id, `-` and a count of the
+/// process's previews; on unix only its owner can open it. A name that is already taken, by an
+/// earlier process with the same id or by anyone else, is skipped for the next count.
+#[cfg(not(target_arch = "wasm32"))]
+fn new_folder(parent: &std::path::Path, prefix: &str) -> Result<String, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    loop {
+        let dir = parent.join(format!("{prefix}{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        match private_folder().create(&dir) {
+            Ok(()) => return Ok(dir.to_string_lossy().replace('\\', "/")),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", dir.display())),
+        }
+    }
+}
+
+/// A builder for folders that only their owner can read, write or open (mode 0o700).
+#[cfg(unix)]
+fn private_folder() -> std::fs::DirBuilder {
+    let mut b = std::fs::DirBuilder::new();
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b
+}
+
+/// A builder for folders: a plain one outside unix.
+#[cfg(all(not(unix), not(target_arch = "wasm32")))]
+fn private_folder() -> std::fs::DirBuilder {
+    std::fs::DirBuilder::new()
+}
+
+/// Why a preview root whose metadata (of the root itself, not what a link points to) is `m` can't
+/// be used, or `None` when it can.
+#[cfg(not(target_arch = "wasm32"))]
+fn refused(m: &std::fs::Metadata) -> Option<&'static str> {
+    if m.file_type().is_symlink() {
+        Some("it is a link")
+    } else if !m.is_dir() {
+        Some("it is not a folder")
+    } else if !mine(m) {
+        Some("it belongs to another user")
+    } else if others_can_write(m) {
+        Some("other users can write to it")
+    } else {
+        None
+    }
+}
+
+/// Whether the current user owns the file with metadata `m`.
+#[cfg(unix)]
+fn mine(m: &std::fs::Metadata) -> bool {
+    std::os::unix::fs::MetadataExt::uid(m) == rustix::process::geteuid().as_raw()
+}
+
+/// Whether the current user owns the file with metadata `m`: always true outside unix.
+#[cfg(all(not(unix), not(target_arch = "wasm32")))]
+fn mine(_: &std::fs::Metadata) -> bool {
+    true
+}
+
+/// Whether users other than the owner of the file with metadata `m` can write to it.
+#[cfg(unix)]
+fn others_can_write(m: &std::fs::Metadata) -> bool {
+    std::os::unix::fs::MetadataExt::mode(m) & 0o022 != 0
+}
+
+/// Whether users other than the owner of the file with metadata `m` can write to it: always false
+/// outside unix.
+#[cfg(all(not(unix), not(target_arch = "wasm32")))]
+fn others_can_write(_: &std::fs::Metadata) -> bool {
+    false
+}
+
+/// Whether `name` is a preview folder's name: `prefix`, then digits, `-` and digits.
+#[cfg(not(target_arch = "wasm32"))]
+fn is_preview_name(name: &std::ffi::OsStr, prefix: &str) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    name.to_str().and_then(|n| n.strip_prefix(prefix)).and_then(|n| n.split_once('-')).is_some_and(|(a, b)| digits(a) && digits(b))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -214,8 +373,9 @@ struct Cache {
     shots: Vec<(String, Result<Shot, String>)>,
 }
 
+/// Temp-memory key for the Save for Web preview render, original image and optimised shot textures.
 fn cache_id() -> egui::Id {
-    egui::Id::new("save-for-web-previews")
+    egui::Id::unique("save-for-web-previews")
 }
 
 /// The texture of straight RGBA pixels.
@@ -350,7 +510,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(4.0);
     let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
-    let pan_id = egui::Id::new("save-for-web-pan");
+    let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {
         pan += resp.drag_delta();
@@ -396,14 +556,16 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     let mut browser = false;
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
-        if let Some(i) = widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0) {
+        let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
+        if let Some(i) = zoom {
             d.fields.insert("__zoom".into(), json!(ZOOMS[i]));
             ui.ctx().data_mut(|m| m.insert_temp(pan_id, egui::Vec2::ZERO));
         }
         let kbps = d.f64("__kbps", 56.6);
         let labels: Vec<String> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
         let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0)
+        let speed = ui.name_inputs(tl!("Download:"), |ui| widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0));
+        if let Some(i) = speed
             && let Some(s) = SPEEDS.get(i)
         {
             d.fields.insert("__kbps".into(), json!(s));
@@ -810,12 +972,12 @@ fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option
         d.fields.insert(key.into(), v);
     };
     widgets::label_row(ui, tl!("W:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::plain_field(ui, "sfw-w", f64::from(w), " px", 0, 80.0) {
-            set(d, "width", json!(v.round().max(1.0)));
+        if let Some(v) = widgets::range_field(ui, "sfw-w", f64::from(w), 1.0..=f64::INFINITY, " px", 0, 80.0) {
+            set(d, "width", json!(v));
         }
         widgets::field_label(ui, tl!("H:"));
-        if let Some(v) = widgets::plain_field(ui, "sfw-h", f64::from(h), " px", 0, 80.0) {
-            set(d, "height", json!(v.round().max(1.0)));
+        if let Some(v) = widgets::range_field(ui, "sfw-h", f64::from(h), 1.0..=f64::INFINITY, " px", 0, 80.0) {
+            set(d, "height", json!(v));
         }
     });
     let percent = region.map_or(100.0, |(_, scale)| (scale * 100.0 * 100.0).round() / 100.0);

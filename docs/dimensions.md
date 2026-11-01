@@ -5,7 +5,9 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
 
 - **Linear:** hover a path segment and drag outwards: releasing places the dimension. Or click two
   points (anchors snap, Shift constrains to 45°), then click to place. A curved segment is measured
-  from end to end.
+  from end to end. With Smart Guides on, both points also snap into line with other objects'
+  anchors and centres, and the second onto the construction guides through the first; the guides
+  show while hovering, before each click.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its

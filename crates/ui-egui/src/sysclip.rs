@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::channel;
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, EPS, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
+use vectorcraft_engine::cmd::clipboard::{AI, BITMAP, EMF, EPS, Flavour, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
@@ -45,6 +45,13 @@ pub(crate) struct Publishing {
     pending: bool,
 }
 
+impl Publishing {
+    /// Whether the latest Copy or Cut still has formats waiting to be written to the system clipboard.
+    pub(crate) fn is_pending(&self) -> bool {
+        self.pending
+    }
+}
+
 /// The command (and its params) that loads `f` into the internal clipboard, centred on `center`.
 pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static str, Value) {
     let b64 = || vectorcraft_format::base64_encode(&f.data);
@@ -59,6 +66,7 @@ pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static
         }
         SVG => ("clipboard.importSvg", json!({ "dataBase64": b64(), "center": center })),
         PDF => ("clipboard.importPdf", json!({ "dataBase64": b64(), "center": center })),
+        AI => ("clipboard.importPdf", json!({ "dataBase64": b64(), "editingData": true, "center": center })),
         EPS => ("clipboard.importEps", json!({ "dataBase64": b64(), "center": center })),
         EMF => ("clipboard.importEmf", json!({ "dataBase64": b64(), "center": center })),
         mime => ("clipboard.importImage", json!({ "dataBase64": b64(), "mime": mime, "center": center })),
@@ -74,7 +82,8 @@ impl VectorcraftApp {
     /// ([`Self::drop_formats_after_egui_copy`]), drops the formats not written yet. While the
     /// latest Copy or Cut's formats wait to be written, Paste takes the internal clipboard, and
     /// while a text field or type has the keyboard the app waits for them
-    /// ([`Self::write_formats_before_text_input`]).
+    /// ([`Self::write_formats_before_text_input`]). Once they are written, the status bar shows
+    /// the first of the PNG's and PDF's warnings.
     pub(crate) fn publish_clipboard(&mut self) {
         if self.services.system_clipboard.is_none() {
             if self.session.prefs.copy_as_svg {
@@ -92,7 +101,7 @@ impl VectorcraftApp {
             // These formats are not made when a later Copy or Cut, or a copy through egui, dropped them.
             if latest.load(Ordering::SeqCst) == n {
                 // The receiver is gone only when the job was dropped unapplied.
-                let _ = tx.send(clip.flavours(svg, pdf));
+                let _ = tx.send(clip.flavours_with_warnings(svg, pdf));
             }
             Ok(Value::Null)
         };
@@ -102,16 +111,27 @@ impl VectorcraftApp {
                 return Ok(Value::Null);
             }
             publishing.pending = false;
-            let flavours = r.and_then(|_| made.try_recv().map_err(|e| e.to_string()));
-            let written = flavours.and_then(|f| app.services.system_clipboard.as_mut().map_or(Ok(()), |cb| cb.write(&f)));
-            if let Err(e) = written {
-                app.ui.status = format!("Couldn't copy to the system clipboard: {e}");
+            let formats = r.and_then(|_| made.try_recv().map_err(|e| e.to_string()));
+            let written = formats.and_then(|(f, warnings)| {
+                app.services.system_clipboard.as_mut().map_or(Ok(()), |cb| cb.write(&f))?;
+                Ok(warnings)
+            });
+            match written {
+                Err(e) => app.ui.status = format!("Couldn't copy to the system clipboard: {e}"),
+                // Show the first of the PNG's and PDF's warnings (an image that couldn't be decoded,
+                // type in the fallback font).
+                Ok(warnings) => {
+                    if let Some(first) = warnings.into_iter().next() {
+                        app.ui.status = first;
+                    }
+                }
             }
             Ok(Value::Null)
         };
         // Only the formats of other copies (jobs without a label) may be ahead of these on the worker.
         let free = self.background.jobs.iter().all(|j| j.label.is_empty());
-        // No label: the status bar doesn't show the job, and the status stays as it is.
+        // No label: the status bar doesn't show the job, and only a failure or a warning changes
+        // the status.
         if let Err(e) = background::run(self, free, String::new(), None, work, then) {
             self.ui.status = e;
         }
@@ -142,7 +162,11 @@ impl VectorcraftApp {
         }
         // A paste chord egui sent no Paste event for: the clipboard held no text when it came.
         let textless = ctx.input(|i| self.paste_chord.clone().textless_paste(&i.events).is_some());
-        if !self.clipboard_publishing.pending {
+        // Formats that waited when this host iteration began still own a paste event read while
+        // they were pending, even if the worker wrote them during this iteration's tick.
+        let waited = ctx.data(|d| d.get_temp::<bool>(egui::Id::unique("clipboard.pending-at-tick"))).unwrap_or(false);
+        ctx.data_mut(|d| d.remove::<bool>(egui::Id::unique("clipboard.pending-at-tick")));
+        if !(self.clipboard_publishing.pending || waited) {
             // The formats the clipboard still holds were written after the chord's key went down.
             if textless
                 && self.services.system_clipboard.as_mut().is_some_and(|cb| cb.holds_ours())
@@ -184,6 +208,9 @@ impl VectorcraftApp {
     /// copy, and so does what we are still making the formats of. An error means nothing should be
     /// pasted.
     pub(crate) fn adopt_system_clipboard(&mut self) -> Result<(), String> {
+        // A paste command may run before the next tick consumes an image signal: this is that
+        // paste, so a queued `PasteImage` must not read the clipboard a second time.
+        self.clipboard_image_request = None;
         let pasted = self.clipboard_in.take();
         let center = self.view().map(|v| [v.center.x, v.center.y]);
         let (cmd, params) = match (pasted, self.services.system_clipboard.as_mut()) {

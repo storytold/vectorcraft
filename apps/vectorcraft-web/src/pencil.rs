@@ -5,6 +5,9 @@
 //! - A pen drives egui's pointer and is a touch contact with the pen's pressure as its force (the
 //!   canvas reads it), so holding it still opens the context menu (egui's long touch). It hovers
 //!   where the pen can (Apple Pencil hover).
+//! - A press of the pen's eraser end (the eraser button, `button` 5 in Pointer Events) presses
+//!   like the tip, and the pen's samples go into a [`StylusFeed`] with that end, so the canvas
+//!   selects the Eraser tool for the press. A press of the tip turns the pen back.
 //! - Fingers are touch contacts: two pinch and pan the canvas, and tap to undo or redo. The first
 //!   finger also drives the pointer, so it taps the panels and menus; on the canvas it navigates
 //!   only once a pen has been seen ([`touch::set_source`]), for this page session only.
@@ -20,6 +23,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui::{Event, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
+use vectorcraft_ui_egui::stylus::{PenSample, StylusFeed};
 use vectorcraft_ui_egui::touch::{self, Source};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast as _;
@@ -28,8 +32,11 @@ use wasm_bindgen::JsCast as _;
 const PEN_DEVICE: TouchDeviceId = TouchDeviceId(1);
 const FINGER_DEVICE: TouchDeviceId = TouchDeviceId(2);
 
+/// The Pointer Events `button` of a pen's eraser button, which is how a pen's eraser end presses
+/// (<https://www.w3.org/TR/pointerevents3/#the-button-property>).
+const ERASER_BUTTON: i16 = 5;
+
 /// The pen and finger contacts followed, and the egui events they made since the last frame.
-#[derive(Default)]
 pub struct Pointers {
     events: Vec<Event>,
     /// The pen pressing, by pointer id.
@@ -39,6 +46,16 @@ pub struct Pointers {
     /// The contact driving egui's pointer.
     primary: Option<i32>,
     button: Option<PointerButton>,
+    /// The pen last pressed with its eraser end.
+    eraser: bool,
+    /// The pen's pressure and end for the canvas (`Services::stylus`).
+    stylus: StylusFeed,
+}
+
+impl Default for Pointers {
+    fn default() -> Self {
+        Self { events: vec![], pen: None, fingers: vec![], primary: None, button: None, eraser: false, stylus: StylusFeed::on_ui_thread() }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -69,6 +86,16 @@ impl Pointers {
     /// The events since the last frame, for the frame's raw input.
     pub fn take(&mut self) -> Vec<Event> {
         std::mem::take(&mut self.events)
+    }
+
+    /// The feed the pen's samples go into, for `Services::stylus`.
+    pub fn stylus(&self) -> StylusFeed {
+        self.stylus.clone()
+    }
+
+    /// A pen moved or pressed with `pressure`, with the end it last pressed with.
+    fn pen_sample(&self, pressure: f32) {
+        self.stylus.set_sample(Some(PenSample { pressure, eraser: self.eraser }));
     }
 
     fn touch(&mut self, device: TouchDeviceId, id: i32, phase: TouchPhase, pos: Pos2, force: Option<f32>) {
@@ -110,6 +137,11 @@ impl Pointers {
     /// Follow one pointer event; `true` if it was the pen's or a finger's (taken from eframe).
     fn feed(&mut self, kind: &str, e: &Input<'_>, pos: Pos2, coalesced: &[(Pos2, f32)], on_canvas: bool) -> bool {
         let id = e.id;
+        if e.pointer_type != "pen" && self.pen.is_none() && matches!(kind, "pointerdown" | "pointermove") {
+            // Another pointer moved while no pen presses (a palm under a pen pressing is
+            // rejected): the canvas takes no pen pressure or pen end for it.
+            self.stylus.set(None);
+        }
         match e.pointer_type {
             "pen" => {
                 let force = Some(e.pressure.clamp(0.0, 1.0));
@@ -118,14 +150,27 @@ impl Pointers {
                         if !on_canvas && self.pen.is_none() {
                             return false;
                         }
-                        let Some(button) = button(e.button) else { return false };
+                        // The eraser end presses like the tip; the tip and the eraser end each
+                        // set the end the pen is turned to.
+                        let (button, end) = match e.button {
+                            ERASER_BUTTON => (PointerButton::Primary, Some(true)),
+                            number => match button(number) {
+                                Some(button) => (button, (number == 0).then_some(false)),
+                                None => return false,
+                            },
+                        };
                         touch::set_source(Source::Pen);
                         self.cancel_fingers(pos, e.modifiers);
+                        if let Some(end) = end {
+                            self.eraser = end;
+                        }
+                        self.pen_sample(e.pressure);
                         self.pen = Some(id);
                         self.touch(PEN_DEVICE, id, TouchPhase::Start, pos, force);
                         self.press(id, pos, button, e.modifiers);
                     }
                     "pointermove" if self.pen == Some(id) => {
+                        self.pen_sample(e.pressure);
                         // The positions the pen reported between two events (up to 240 a second
                         // on an iPad), each with its pressure, so fast strokes keep their curve.
                         for c in coalesced.iter().take(coalesced.len().saturating_sub(1)) {
@@ -143,10 +188,14 @@ impl Pointers {
                         if !on_canvas {
                             return false;
                         }
+                        // Pointer Events report no end while a pen hovers: it keeps the end it
+                        // last pressed with.
+                        self.pen_sample(e.pressure);
                         self.events.push(Event::PointerMoved(pos));
                     }
                     "pointerup" | "pointercancel" if self.pen == Some(id) => {
                         let phase = if kind == "pointerup" { TouchPhase::End } else { TouchPhase::Cancel };
+                        self.pen_sample(0.0);
                         self.pen = None;
                         self.touch(PEN_DEVICE, id, phase, pos, None);
                         self.release(pos, e.modifiers);
@@ -388,8 +437,85 @@ mod tests {
     fn unknown_pen_buttons_are_not_reinterpreted_as_primary() {
         reset();
         let mut p = Pointers::default();
-        assert!(!p.feed("pointerdown", &input("pen", 5), Pos2::ZERO, &[], true));
+        assert!(!p.feed("pointerdown", &input("pen", 6), Pos2::ZERO, &[], true));
         assert!(p.take().is_empty());
         assert!(!touch::pen_seen());
+        assert_eq!(p.stylus().eraser(), None);
+    }
+
+    fn presses(p: &mut Pointers) -> Vec<(PointerButton, bool)> {
+        p.take()
+            .into_iter()
+            .filter_map(|e| match e {
+                Event::PointerButton { button, pressed, .. } => Some((button, pressed)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The eraser end presses as Pointer Events' eraser button (`button` 5): a primary press whose
+    /// samples carry the eraser end, kept while the pen hovers, until the tip presses.
+    #[test]
+    fn the_eraser_button_presses_with_the_eraser_end() {
+        reset();
+        let mut p = Pointers::default();
+        let feed = p.stylus();
+        let pos = Pos2::new(30.0, 40.0);
+        let eraser = input("pen", ERASER_BUTTON);
+        assert!(p.feed("pointerdown", &eraser, pos, &[], true));
+        assert_eq!(presses(&mut p), [(PointerButton::Primary, true)]);
+        assert!(touch::pen_seen());
+        assert_eq!((feed.eraser(), feed.held()), (Some(true), Some(0.6)));
+        assert!(p.feed("pointermove", &input("pen", -1), pos, &[], true));
+        assert_eq!(feed.eraser(), Some(true));
+        assert!(p.feed("pointerup", &eraser, pos, &[], true));
+        assert_eq!(presses(&mut p), [(PointerButton::Primary, false)]);
+        let mut hover = input("pen", -1);
+        hover.pressure = 0.0;
+        assert!(p.feed("pointermove", &hover, pos, &[], true));
+        assert_eq!(feed.eraser(), Some(true), "a hovering pen keeps the end it pressed with");
+        // The barrel button leaves the end as it was.
+        assert!(p.feed("pointerdown", &input("pen", 2), pos, &[], true));
+        assert!(p.feed("pointerup", &input("pen", 2), pos, &[], true));
+        assert_eq!(feed.eraser(), Some(true));
+        assert!(p.feed("pointerdown", &input("pen", 0), pos, &[], true));
+        assert_eq!(feed.eraser(), Some(false), "the tip");
+        reset();
+    }
+
+    /// A mouse or a finger that moves takes the pen out of the feed, so the canvas gives it no
+    /// pen pressure and does not switch tools for it.
+    #[test]
+    fn other_pointers_clear_the_pen_feed() {
+        for (pointer_type, kind) in [("mouse", "pointermove"), ("mouse", "pointerdown"), ("touch", "pointerdown"), ("touch", "pointermove")] {
+            reset();
+            let mut p = Pointers::default();
+            let feed = p.stylus();
+            assert!(p.feed("pointerdown", &input("pen", ERASER_BUTTON), Pos2::ZERO, &[], true));
+            assert!(p.feed("pointerup", &input("pen", ERASER_BUTTON), Pos2::ZERO, &[], true));
+            let mut other = input(pointer_type, 0);
+            other.id = 10;
+            p.feed(kind, &other, Pos2::ZERO, &[], true);
+            assert_eq!((feed.eraser(), feed.held()), (None, None), "{pointer_type} {kind}");
+        }
+        reset();
+    }
+
+    /// A palm that lands or moves while the eraser end presses is rejected, and the feed keeps the
+    /// eraser end for the canvas's next frame.
+    #[test]
+    fn a_rejected_palm_keeps_the_pen_end() {
+        reset();
+        let mut p = Pointers::default();
+        let feed = p.stylus();
+        assert!(p.feed("pointerdown", &input("pen", ERASER_BUTTON), Pos2::ZERO, &[], true));
+        let mut palm = input("touch", 0);
+        palm.id = 10;
+        for (pointer_type, kind) in [("touch", "pointerdown"), ("touch", "pointermove"), ("mouse", "pointermove")] {
+            palm.pointer_type = pointer_type;
+            p.feed(kind, &palm, Pos2::ZERO, &[], true);
+            assert_eq!(feed.eraser(), Some(true), "{pointer_type} {kind}");
+        }
+        reset();
     }
 }

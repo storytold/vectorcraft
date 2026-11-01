@@ -8,7 +8,7 @@ pub(crate) const WHITE_MIN: u8 = 245;
 /// `#rrggbb` or `rrggbb`.
 pub(crate) fn parse_hex(s: &str) -> Option<[u8; 3]> {
     let h = s.trim().trim_start_matches('#');
-    if h.len() != 6 || !h.is_ascii() {
+    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let v = |i: usize| u8::from_str_radix(h.get(i..i + 2)?, 16).ok();
@@ -336,24 +336,75 @@ pub(crate) fn fold_tones(pix: &[Px], mut palette: Vec<[u8; 3]>) -> Vec<[u8; 3]> 
     }
 }
 
+/// The color of the ground a flat bar two pixels wide lies on, if the pixel at (`x`, `y`) is one of
+/// the bar's. Across the bar (down or across the image) the pixel and one neighbor are the bar, and
+/// the pixels on either side of the two are the ground; along the bar, three pixels in a row that
+/// include the pixel (at either end or in the middle) are bar and ground in the same way, so all
+/// six pixels of a bar three pixels long count. Every bar pixel lies within √12, about 3.5 (in
+/// RGB), of the pixel's color; the ground's pixels lie within 10 (in RGB) of the first one and at
+/// least 25 from the pixel's color. `at` is the opaque color at a pixel, `None` outside the image or where it is
+/// not opaque.
+fn bar_ground(at: &impl Fn(isize, isize) -> Option<[f64; 3]>, x: isize, y: isize, c: [f64; 3]) -> Option<[f64; 3]> {
+    let bar = |q: Option<[f64; 3]>| q.is_some_and(|q| dist2(q, c) <= 12.0);
+    for ((ax, ay), (bx, by)) in [((1, 0), (0, 1)), ((0, 1), (1, 0))] {
+        for s in [-1, 1] {
+            // Across the bar: ground, the pixel, its partner, ground.
+            let Some(g) = at(x + 2 * s * bx, y + 2 * s * by) else { continue };
+            let ground = |q: Option<[f64; 3]>| q.is_some_and(|q| dist2(q, g) < 100.0 && dist2(q, c) >= 625.0);
+            // Along the bar: three pixels in a row, the pixel at either end of them or in the middle.
+            let flat = (-1..=1).any(|o| {
+                (o - 1..=o + 1).all(|k| {
+                    let (px, py) = (x + k * ax, y + k * ay);
+                    bar(at(px, py))
+                        && bar(at(px + s * bx, py + s * by))
+                        && ground(at(px - s * bx, py - s * by))
+                        && ground(at(px + 2 * s * bx, py + 2 * s * by))
+                })
+            });
+            if flat {
+                return Some(g);
+            }
+        }
+    }
+    None
+}
+
 /// Colours the current palette cannot explain. `residual` is each pixel's error after the best blend
 /// of the known classes (see `unmix`); a solid run of pixels (a pixel and its four neighbours agree)
 /// with a large error is a colour that is missing, such as the small accent that was too few
-/// pixels to be found at first. Groups of at least three such pixels at least 25 away from every
-/// known colour are returned, most common first.
+/// pixels to be found at first. A flat bar two pixels wide on a ground within 25 of a known color
+/// ([`bar_ground`]) has no such run: its pixels count when their error is large, and also when their
+/// color lies less than two thirds as far from that known color as from every other known color (a
+/// gray bar on white beside black art), where the bar would otherwise be traced as the ground.
+/// Groups of at least three such pixels at least 25 away from every known color are returned, most
+/// common first.
 pub(crate) fn unexplained_colours(pix: &[Px], w: usize, h: usize, residual: &[f32], known: &[[u8; 3]]) -> Vec<[u8; 3]> {
     let mut pal: Vec<[f64; 3]> = known.iter().map(|c| c.map(f64::from)).collect();
     pal.push([255.0, 255.0, 255.0]);
     let at = |x: usize, y: usize| pix.get(y * w + x).filter(|p| p[3] > 0.98).map(rgb255);
+    let at_signed = |x: isize, y: isize| {
+        let (x, y) = (usize::try_from(x).ok()?, usize::try_from(y).ok()?);
+        if x < w && y < h { at(x, y) } else { None }
+    };
     let mut groups: Vec<([f64; 3], usize)> = Vec::new();
     for y in 1..h.saturating_sub(1) {
         for x in 1..w.saturating_sub(1) {
-            if residual.get(y * w + x).copied().unwrap_or(0.0) < 0.0064 {
+            let large = residual.get(y * w + x).copied().unwrap_or(0.0) >= 0.0064;
+            let Some(c) = at(x, y) else { continue };
+            if pal.iter().any(|q| dist2(*q, c) < 625.0) {
                 continue;
             }
-            let Some(c) = at(x, y) else { continue };
             let uniform = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)].iter().all(|&(xx, yy)| at(xx, yy).is_some_and(|q| dist2(q, c) < 100.0));
-            if !uniform || pal.iter().any(|q| dist2(*q, c) < 625.0) {
+            let missing = match (uniform, isize::try_from(x), isize::try_from(y)) {
+                (true, ..) => large,
+                (false, Ok(sx), Ok(sy)) => bar_ground(&at_signed, sx, sy, c).is_some_and(|g| {
+                    // The known color of the ground, and every other known color more than 1.5 times as far from the bar.
+                    let Some(ground) = pal.iter().copied().find(|q| dist2(*q, g) < 625.0) else { return false };
+                    large || pal.iter().filter(|q| dist2(**q, ground) >= 625.0).all(|q| 2.25 * dist2(c, ground) < dist2(c, *q))
+                }),
+                _ => false,
+            };
+            if !missing {
                 continue;
             }
             match groups.iter_mut().find(|(m, _)| dist2(*m, c) < 400.0) {
@@ -403,7 +454,7 @@ mod tests {
     fn hex_parsing() {
         assert_eq!(parse_hex("#6C60F6"), Some([0x6c, 0x60, 0xf6]));
         assert_eq!(parse_hex("ea4335"), Some([0xea, 0x43, 0x35]));
-        for bad in ["", "#12345", "#1234567", "#gg0000", "é2345z", "  "] {
+        for bad in ["", "#12345", "#1234567", "#gg0000", "é2345z", "  ", "+1+2+3", "#+1+2+3"] {
             assert_eq!(parse_hex(bad), None, "{bad:?}");
         }
     }
@@ -451,6 +502,31 @@ mod tests {
         // that lies on no ink's line from white.
         let groups = vec![([30, 90, 200], 50), ([143, 173, 228], 40), ([210, 40, 50], 30), ([240, 150, 40], 5)];
         assert_eq!(fold_fringes(groups), vec![[30, 90, 200], [210, 40, 50], [240, 150, 40]]);
+    }
+
+    #[test]
+    fn a_bar_two_pixels_wide_and_three_long_is_an_unexplained_color() {
+        // A red bar two pixels wide on white beside a black block, three and four pixels long,
+        // lying across and down the image. Only the bar three pixels long needs its end pixels
+        // counted to reach the three pixels a color needs.
+        const RED: [u8; 3] = [210, 40, 50];
+        for long in [3, 4] {
+            for across in [true, false] {
+                let (w, h) = (16, 12);
+                let pix = blocks(w, h, |x, y| {
+                    let (along, side) = if across { (x, y) } else { (y, x) };
+                    if x < 3 {
+                        [0, 0, 0, 255]
+                    } else if (6..6 + long).contains(&along) && (5..7).contains(&side) {
+                        [RED[0], RED[1], RED[2], 255]
+                    } else {
+                        [255, 255, 255, 255]
+                    }
+                });
+                let residual = vec![1.0; w * h];
+                assert_eq!(unexplained_colours(&pix, w, h, &residual, &[[0, 0, 0]]), vec![RED], "{long} long, across: {across}");
+            }
+        }
     }
 
     #[test]

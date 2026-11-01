@@ -94,6 +94,36 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
+    let selected = info["target"] == "blend";
+    // Position easing needs a spine to run along: a replaced one, or Align to Path.
+    let spined = info["spine"]["explicit"] == true || info["orientation"] == "path";
+    ui.add_enabled_ui(selected && spined, |ui| {
+        let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
+        let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
+        let mode = info["easingType"].as_str().unwrap_or(modes[0]);
+        let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
+        widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
+            if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[index], &labels, ui.available_width().max(FIELD_W))
+                && let Some(mode) = modes.get(i)
+            {
+                change = Some(json!({"easingType": mode}));
+            }
+        });
+        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
+            let mut ramp = info["ramp"].as_f64().unwrap_or(0.0);
+            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
+                change = Some(json!({"ramp": ramp}));
+            }
+        });
+    });
+    ui.add_enabled_ui(selected, |ui| {
+        widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
+            let mut shift = info["colorShift"].as_f64().unwrap_or(0.0);
+            if ui.add(egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%")).changed() {
+                change = Some(json!({"colorShift": shift}));
+            }
+        });
+    });
     if let Some(p) = change {
         app.run("object.blend.options", p).ok();
     }

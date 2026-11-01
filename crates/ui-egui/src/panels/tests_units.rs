@@ -117,6 +117,27 @@ fn new_documents_start_in_the_general_preference() {
     assert_eq!((d.units, d.artboards[0].rect.width()), (Unit::Millimeters, 612.0));
 }
 
+/// A label spelled down the left ruler is tall, and a sixteenth-inch step does not always leave
+/// room for a long one: at zoom 12 the labels are 54 pt apart while "-0.0625" reaches 60.5 pt, so
+/// the ruler leaves that label out rather than drawing it over its neighbour. Every tick stays.
+#[test]
+fn a_long_vertical_label_does_not_fit_a_sixteenth_inch_step() {
+    use crate::canvas::vertical_label_height;
+    use vectorcraft_doc::Unit;
+    // One character is one line; each further character adds a line.
+    assert_eq!(vertical_label_height(1), 9.5);
+    assert_eq!(vertical_label_height(2), 18.0);
+    assert_eq!(vertical_label_height(7), 60.5);
+    // The gap a label has to fit into, at the zoom where a sixteenth is first chosen and beyond.
+    let gap = |zoom: f64| Unit::Inches.ruler_step(zoom) * Unit::Inches.points() * zoom;
+    assert!((gap(12.0) - 54.0).abs() < 1e-9, "{}", gap(12.0));
+    assert!(vertical_label_height(7) > gap(12.0) as f32, "a seven-character label has to be left out");
+    // The labels this ruler actually writes below an inch are six characters, which do fit.
+    assert!(vertical_label_height("0.0625".chars().count()) < gap(12.0) as f32);
+    // Zoomed further in the gap grows and even a long label fits.
+    assert!(vertical_label_height(7) < gap(20.0) as f32, "{}", gap(20.0));
+}
+
 #[test]
 fn ruler_labels_have_the_steps_decimals() {
     use crate::canvas::ruler_label;
@@ -125,6 +146,13 @@ fn ruler_labels_have_the_steps_decimals() {
     assert_eq!(ruler_label(1.25, 0.05), "1.25");
     assert_eq!(ruler_label(-0.0000001, 0.5), "0");
     assert_eq!(ruler_label(-2.5, 0.5), "-2.5");
+    // An inch ruler's binary steps keep their exact value: rounding the step's magnitude wrote
+    // 1/16 as "0.06" and 1/8 as "0.13" (#2827).
+    assert_eq!(ruler_label(0.0625, 0.0625), "0.0625");
+    assert_eq!(ruler_label(0.125, 0.125), "0.125");
+    assert_eq!(ruler_label(0.75, 0.25), "0.75");
+    assert_eq!(ruler_label(1.0, 0.0625), "1");
+    assert_eq!(ruler_label(1.1875, 0.0625), "1.1875");
 }
 
 #[test]

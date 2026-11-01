@@ -8,7 +8,7 @@ use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_engine::Session;
 
 use super::graphic_styles::GraphicStyleLibraries;
-use super::library_panel::{self, LibraryKind, OpenLibrary};
+use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
 use crate::VectorcraftApp;
 
 fn app_with(services: crate::Services) -> VectorcraftApp {
@@ -52,7 +52,7 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: M
     for t in [time, time + 0.25] {
         frame(ctx, vec![], Modifiers::NONE, t, |ui| library_panel::show_window(app, ui.ctx()));
     }
-    let id = library_panel::tile_id::<GraphicStyleLibraries>(name);
+    let id = library_panel::tile_id(&last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default(), name);
     let at = ctx.read_response(id).unwrap_or_else(|| panic!("no tile for {name}")).rect.center();
     let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
     frame(ctx, vec![Event::PointerMoved(at), button(true), button(false)], modifiers, time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
@@ -69,13 +69,13 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap();
     let r = app.run("window.graphicStyleLibrary", json!({"library": "Shadows and Glows"})).unwrap();
     assert_eq!((r["open"].as_str(), r["name"].as_str()), (Some("shadows-glows"), Some("Shadows and Glows")));
-    assert_eq!(app.ui.library_panel, Some(OpenLibrary { kind: "graphicStyles".into(), id: "shadows-glows".into() }));
+    assert_eq!(last_open(&app.ui).map(|p| (p.kind.as_str(), p.id.as_str())), Some(("graphicStyles", "shadows-glows")));
     let undo = undo_len(&app);
     click(&mut app, &ctx, "Halo", Modifiers::NONE, 0.0);
     let (g, linked) = app.session.selection_graphic_style().expect("applied to the selection");
     assert_eq!((g.name.as_str(), linked), ("Halo", true));
     assert_eq!(undo_len(&app), undo + 1, "added and applied as one undo step");
-    let tile = ctx.read_response(library_panel::tile_id::<GraphicStyleLibraries>("Halo")).unwrap().rect;
+    let tile = ctx.read_response(library_panel::tile_id("library:graphicStyles:shadows-glows", "Halo")).unwrap().rect;
     assert_eq!(tile.width(), 30.0, "styles open in large thumbnails");
     // Alt-click adds the style's appearance on top, unlinked.
     let fills = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().appearance.items.len();
@@ -98,7 +98,7 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     assert!(std::sync::Arc::ptr_eq(&lib, &GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1));
     assert!(app.run("window.graphicStyleLibrary", json!({"library": "nope"})).is_err());
     app.run("window.graphicStyleLibrary", json!({"library": null})).unwrap();
-    assert!(app.ui.library_panel.is_none());
+    assert!(last_open(&app.ui).is_none());
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
     assert!(app.ui.dialog.is_none());
     assert_eq!(user_items(&app), [("Warm".to_string(), "window.userGraphicStyleLibrary1".to_string())]);
     app.run("window.userGraphicStyleLibrary1", json!({})).unwrap();
-    assert_eq!(app.ui.library_panel.as_ref().map(|o| o.id.as_str()), Some("user/Warm.vcstyles"));
+    assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some("user/Warm.vcstyles"));
     let (name, lib) = GraphicStyleLibraries::get(&app, "user/Warm.vcstyles").unwrap();
     assert_eq!((name.as_str(), lib.len()), ("Warm", 1), "only the selected style");
     let _ = std::fs::remove_dir_all(dir);
@@ -179,7 +179,7 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     assert!(path.ends_with(".vcstyles"), "{path}");
     // Opening it opens it in the library panel, not as a document.
     crate::io::open_bytes(&mut app, "Saved.vcstyles", &bytes, None).unwrap();
-    let open = app.ui.library_panel.clone().unwrap();
+    let open = last_open(&app.ui).cloned().unwrap();
     assert_eq!(open.kind, GraphicStyleLibraries::KIND);
     assert_eq!(app.session.documents().len(), 1);
     let other = GraphicStyleLibraries::list(&app).into_iter().find(|l| l.id == open.id).unwrap();

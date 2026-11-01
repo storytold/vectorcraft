@@ -121,6 +121,23 @@ fn a_postscript_ai_whose_layers_cant_be_read_says_why() {
     assert!(e.contains("`Adobe_packedarray`") && e.contains("its layers couldn't be read either") && e.contains("`frobnicate`"), "{e}");
 }
 
+/// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
+/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`XB` (a tab definition) and `Th`
+/// (hyphen control). These keep no geometry, so the reader drops them rather than failing the
+/// file the way it did before — the symptom seen on Illustrator 6/8 EPS files whose
+/// `Adobe_level2_AI5` program can't be run.
+#[test]
+fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
+    let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
+        %_ 0 XL\n36 0 Xb\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+    // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
+    // on a hidden one), beside the square so the layer is never empty.
+    let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
+    let r = import(src.as_bytes()).unwrap();
+    assert!(!r.preview, "read through the layers, not a fallback preview");
+    assert!(!r.warnings.iter().any(|w| w.contains("doesn't know") || w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
 /// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):
 /// no prolog and no layers, the paths unpainted (`n` closes, `N` doesn't), a compound path of two.
 const PATHS_ONLY: &str = "%!PS-Adobe-2.0 EPSF-1.2\n%%Creator: an image editor\n%%BoundingBox: 0 0 200 100\n\

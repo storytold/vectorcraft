@@ -1,6 +1,14 @@
 # Image Trace quality
 
-> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Paths and Corners aligned with the documented behaviour of the controls; Image Trace: a higher Paths never gives fewer segments on collapsed loops)
+> **Update 2026-11-01:** Paths/Corners reconciled with current main; generated-input sweeps and before/after comparison rerun.
+
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Auto Color keeps rare but distinct colours; earlier: Gradients: grown over noise and soft rims)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: large images trace with a warning; anchor limit raised to 8,000,000; earlier: Gradients: grown over noise and soft rims)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Raster::new returns an error for a buffer of the wrong length; earlier: Gradients: grown over noise and soft rims)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (Create Strokes: maximal-disc pruning and junction merging; centre-lines rerun)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (Create Strokes: exact crop distances and Guo–Hall thinning; centre-lines rerun)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (centre-lines baseline; no tracing behaviour change)
+> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-16 · **Change:** minor (Image Trace: a higher Paths never gives fewer segments on collapsed loops)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-16 · **Change:** minor (Image Trace: the notch rule reads only its own piece)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-16 · **Change:** minor (Image Trace: an edge's sub-pixel shift is the same from either side)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-16 · **Change:** minor (Image Trace: a simpler contour walk with no precomputed direction table)
@@ -12,33 +20,52 @@ with any other product except the open tracer named under [Yardstick](#4-yardsti
 
 ## Paths and Corners as documented
 
-Paths and Corners now map to the fit so that each documented property of the controls holds
-([image-trace-adjustments.md](image-trace-adjustments.md#paths-corners-and-noise-documented-meaning-and-vectorcrafts-mapping)):
-the tolerance runs 0.495 px (Paths 0), 0.31 px (50), 0.08 px (100, the tightest, as before) instead of
-0.78 / 0.33 / 0.08 px, and the corner angle 99.2° (Corners 0), 57.9° (75), 35° (100) instead of
-90° / 48.75° / 35°. Every trace changes slightly. Measured on code-drawn art only; the tables further
-down are from before this change.
+Remeasured 2026-11-01 against main `05d5f99fd`, including the current fitter. The older PR's
+12-image and preset tables are superseded; they were not measurements of this main revision.
+The control values are independent VectorCraft choices informed by the public
+[panel documentation](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html),
+not verified mappings from another application's settings. No Adobe application or output was
+observed for this follow-up. Numeric defaults and preset percentages stay the same, but the
+new mapping changes traces made at those settings.
 
-Six shapes (a disc, a wavy and a bumpy blob, a five-pointed rounded star, a rounded heptagon with
-turns of different sizes, a turned quadrilateral), each at 64 and 128 px, drawn with 8 × 8 samples
-a pixel and again hard-edged, Black and White, Noise 4, Corners 75: mean distance (px) between the
-traced outline and the drawn one, both ways, and segments (sum over the 12 images), before → after.
+`paths_controls_measurement_report` uses the same six generated 40 × 40 inputs as the sweep
+regressions: disc, wavy blob and bumpy blob, each at 8 × 8 samples per pixel and hard-edged.
+Black and White, Noise 4, Corners 75, Snap off. Mean is the bidirectional distance to the known
+outline, averaged over three images; segments are summed over those images. Both runs use the
+same native optimized test profile (workspace opt-level 1, debug info off); no timing claim.
 
-| Paths | anti-aliased: mean px | anti-aliased: segments | hard-edged: mean px | hard-edged: segments |
+| Paths | anti-aliased mean px, before → after | segments | hard-edged mean px, before → after | segments |
 |--:|--:|--:|--:|--:|
-| 0 | 0.127 → 0.101 | 125 → 128 | 0.352 → 0.326 | 135 → 99 |
-| 25 | 0.109 → 0.091 | 126 → 136 | 0.321 → 0.282 | 113 → 104 |
-| 50 | 0.076 → 0.073 | 141 → 143 | 0.243 → 0.238 | 112 → 113 |
-| 75 | 0.048 → 0.056 | 191 → 168 | 0.203 → 0.211 | 148 → 131 |
-| 100 | 0.038 → 0.038 | 233 → 233 | 0.164 → 0.164 | 259 → 259 |
+| 0 | 0.083396 → 0.067737 | 46 → 42 | 0.490835 → 0.363445 | 21 → 22 |
+| 25 | 0.068117 → 0.068233 | 43 → 42 | 0.365806 → 0.352153 | 22 → 23 |
+| 50 | 0.066932 → 0.066375 | 36 → 34 | 0.340931 → 0.323518 | 25 → 25 |
+| 75 | 0.054731 → 0.058080 | 36 → 36 | 0.285997 → 0.299467 | 29 → 25 |
+| 100 | 0.047165 → 0.047165 | 49 → 49 | 0.241362 → 0.241362 | 45 → 45 |
 
-Before, the hard-edged shapes had more segments at Paths 0 than at Paths 25 or 50 (135, 113, 112);
-after, segments rise with Paths in this table at both edge kinds. Paths 75 is a little looser than
-before (fewer segments, slightly farther from the outline); Paths 100 is unchanged.
+Paths 75 is looser on these inputs; Paths 100 is unchanged. The tolerance decreases strictly,
+but greedy fitting does not guarantee monotone segment counts or outline distance at every
+slider step: even this small table shows that limitation. The regular-polygon Default probe
+changes from 92 to 94 segments (seven traced components, 40 corner points in both runs).
+These probes demonstrate changed default output; they do not establish universal improvement.
 
-The quality harness (section 1's inputs, all sizes and variants, before → after; `TRACE_QUALITY_MP=1`):
+Reproduce the report and sweeps (baseline: main plus the same measurement-only test helpers):
 
-| preset | edge ΔE | off mean | off max | anchors | kinks |
+```text
+cargo test -p vectorcraft-trace --lib
+cargo test -p vectorcraft-trace --lib paths_controls_measurement_report -- --ignored --nocapture
+```
+
+Use separate build directories or clean the tracer package between checkouts; a shared build
+cache must not substitute a previously compiled binary for either comparison.
+
+### Preset accuracy against current main
+
+The full generated-input accuracy harness also passed on both revisions (all sizes and clean,
+aliased, blurred, noisy and scanned variants). Cost sizes were disabled with `TRACE_QUALITY_MP=`;
+these are accuracy measurements, not release-performance or browser measurements. This comparison
+retains main's Limited photo palettes; it does not combine the separate #2699 proposal.
+
+| Preset | edge ΔE, before → after | off mean px | off max px | anchors | kinks |
 |:--|--:|--:|--:|--:|--:|
 | Default | 10.06 → 9.89 | 0.091 → 0.086 | 1.02 → 1.02 | 17 → 18 | 0.4 → 0.3 |
 | 6 Colors | 5.06 → 5.11 | 0.143 → 0.146 | 1.34 → 1.31 | 55 → 50 | 6.4 → 5.6 |
@@ -46,16 +73,84 @@ The quality harness (section 1's inputs, all sizes and variants, before → afte
 | Black and White Logo | 9.46 → 9.52 | 0.064 → 0.066 | 1.02 → 1.02 | 27 → 23 | 0.3 → 0.3 |
 | Silhouettes | 19.29 → 19.08 | 0.523 → 0.517 | 2.13 → 2.13 | 13 → 15 | 0.4 → 0.2 |
 | Technical Drawing | 10.88 → 10.89 | 0.126 → 0.127 | 1.46 → 1.46 | 39 → 35 | 0.8 → 0.8 |
-| High Fidelity Photo | 1.96 → 1.96 | – | – | 9929 → 8689 | – |
-| 6 Colors with Shapes | 6.64 → 6.74 | 0.076 → 0.080 | 0.60 → 0.88 | 30 → 30 | – |
+| High Fidelity Photo | 1.94 → 1.94 | – → – | – → – | 8898 → 7784 | – → – |
+| 6 Colors with Shapes | 6.64 → 6.74 | 0.076 → 0.080 | 0.60 → 0.88 | 30 → 30 | – → – |
 
-Corners % is unchanged for every preset; Flat Logo and Outline are unchanged (they do not use this
-mapping). Colour presets lose a few anchors and fewer kinks for about 0.003 px of mean distance;
-6 Colors with Shapes has one shape fitted 0.3 px farther at its worst point.
+As with the control probes, these figures show tradeoffs rather than uniform improvement. The
+remaining tables below are historical and have not been replaced by this narrow comparison.
+Reproduce each revision's accuracy report (native optimized test profile):
+
+```text
+TRACE_QUALITY_MP= TRACE_QUALITY_REPORT=report.md cargo test -p vectorcraft-trace --test quality -- --ignored
+```
+
+## Auto Color keeps rare colours
+
+The Automatic palette (Auto Color) counts flat art's colours by area: a colour needs about 1% of the
+picture (0.5% at Colors 100) to be counted, and the count is then fitted by median cut (Heckbert 1982)
+and k-means (Lloyd 1982), weighted by area. A stem, a highlight or a cream close to a pale background
+was averaged into a large neighbour, and Noise could remove what was left of it. Now, on the flat route
+only, after the count is fitted, the colours too rare or too close for it are found and kept when they
+are:
+
+- distinct: at least 2.5 (Oklab × 100; Ottosson 2020) from every palette colour and from the main
+  colour each one stands for;
+- flat: mostly one histogram bin;
+- drawn: a 4-connected region of their own (not blended) pixels of at least 8 pixels, or three of at
+  least 4 (repeated highlights); a colour lying between two others, as an edge's anti-aliasing mixes
+  them, must also have an inside (pixels whose four neighbours are all of it).
+
+At most six are kept, largest region first. They are fixed while the other colours are refitted around
+them, mixed-colour merging leaves them alone, and Noise removal keeps their regions of 4 pixels or more
+(smaller specks of them still go). This follows the idea of salient-colour preservation in palette
+reduction (Fukuda et al. 2019, doi:10.1117/12.2521607); the rule and its numbers are VectorCraft's own.
+Full Tone, Limited and the continuous-tone route of Automatic are unchanged.
+
+Tests (code-drawn): `automatic_keeps_a_rare_distinct_stem_or_patch` (2, 3, 5 and 8 flat colours and a
+contrasting stem 1–4 px wide or a patch, about 0.05% to 0.5% of the picture, hard and anti-aliased at
+1× and 2×: the stem's colour is kept and no other is added), `automatic_keeps_near_white_highlights_on_a_pale_background`
+(ten white islands of about 12 px on #FFF4E0: kept, each still a path at Noise 16),
+`automatic_keeps_a_thin_low_contrast_stem` (#909090 on #808080, 3 px), `scattered_noise_adds_no_colour`
+(the negative control: the same areas as single scattered pixels add no colour) and
+`noise_keeps_a_kept_rare_colours_regions_but_not_its_specks` (Noise 0 to 32).
+
+Measured on 22 synthetic flat-colour logos drawn from known palettes, each hard 1×, anti-aliased 1×
+and 2× (66 inputs, used locally and not committed; a key colour is missing when no traced colour is
+within ΔE00 5): every key colour and no spurious one in **66 of 66** (was 39); missing key colours 0 (was 43),
+spurious 0 (was 2), key colours sharing one traced colour 0 pairs (was 46); mean rendered ΔE00 against
+the input 0.138 (was 0.348); paths 2547 → 2586, anchors 27,204 → 24,896, trace time 2.85 → 3.02 s in
+all. On four public-domain scan crops (1024 × 1024) Auto Color takes the continuous-tone route and
+nothing changes: 14, 72, 199 and 98 colours, the same paths, anchors and rendered error (2.11, 5.66,
+9.15 and 1.00 ΔE00), time within run-to-run spread.
 
 
+## Large images
+Images over 1500 px on a side are traced with a warning that they trace more slowly (Flat Logo names
+the size it traced at instead; see
+[image-trace-adjustments.md](image-trace-adjustments.md)), and the anchor limit that guards memory is
+8,000,000 (2,000,000 on the web) instead of 2,000,000. Measured through `imageTrace.make` (release
+build, 4 cores, one trace at a time; memory is the peak allocated above the placed image, and what the
+document keeps after the trace) on code-drawn photo-like pictures (40 soft-edged shaded discs on a
+gradient, texture, sensor noise):
+| size | preset | time | anchors | paths | peak | kept |
+|:--|:--|--:|--:|--:|--:|--:|
+| 2000 × 2000 | High Fidelity Photo | 4.1 s | 737,478 | 16,064 | 152 MB | 52 MB |
+| 2000 × 2000 | Low Fidelity Photo | 1.6 s | 114,008 | 1,486 | 142 MB | 7 MB |
+| 2000 × 2000 | Default | 0.9 s | 103,084 | 1,001 | 117 MB | 6 MB |
+| 3000 × 2000 | High Fidelity Photo | 6.4 s | 1,013,114 | 25,256 | 236 MB | 75 MB |
+| 3000 × 2000 | Default | 1.2 s | 145,756 | 1,574 | 162 MB | 9 MB |
+| 4000 × 3000 | High Fidelity Photo | 12.8 s | 1,914,018 | 58,638 | 471 MB | 150 MB |
+| 4000 × 3000 | Low Fidelity Photo | 5.1 s | 258,826 | 4,833 | 428 MB | 18 MB |
+| 4000 × 3000 | Default | 2.4 s | 273,392 | 3,568 | 317 MB | 17 MB |
+| 4000 × 3000 | 16 Colors | 3.0 s | 103,222 | 2,434 | 364 MB | 7 MB |
+| 4000 × 3000 | Full Tone, Colors 85, Paths 90, Noise 4 | 29.6 s | 5,230,847 | 164,687 | 684 MB | 412 MB |
+| 4000 × 3000 | Full Tone, Colors 100, Paths 100, Noise 1 | 37.2 s | 7,885,709 | 338,561 | 876 MB | 685 MB |
+| 6000 × 4000 | Full Tone, Colors 85, Paths 90, Noise 4 | 106.1 s | 10,445,409 | 398,772 | 1169 MB | 872 MB |
+| 6000 × 4000 | Full Tone, Colors 100, Paths 100, Noise 1 | 116.3 s | 13,508,871 | 658,133 | 1456 MB | 1230 MB |
+(The last two rows were measured without a limit; they are refused now.) The 4000 × 3000 High Fidelity
+Photo trace was 86,000 anchors under the old limit; a noisier scan of the same size would have been
+refused. At 8,000,000 anchors a trace keeps about 0.7 GB, with a peak of about 0.9 GB while tracing.
 ## Collapsed loops keep few segments
-
 A small closed loop (or a piece that returns to its own junction) whose fit collapsed to a single
 cubic cannot stay as one, so it kept every positioned point as a straight segment. A looser Paths
 collapses more loops, so it could give more segments than a tighter one. Such a loop now tries the
@@ -64,7 +159,6 @@ stays within 1.5 × max(tolerance, 0.5 px) of the points both ways: the fit at u
 tighter tolerances (what a slightly higher Paths gives); for a closed loop then two cubics split at
 its start and its farthest point, then the outline simplified at the tolerance and finer; the
 positioned points last, as before.
-
 Test on code-drawn images: `a_higher_paths_never_gives_fewer_segments` (32 seeded 48 px images of
 soft blobs in four colours plus pixel noise, Color and Black and White, Noise 1 and 3, segments at
 Paths 0, 25, 50, 75 and 100 must not fall). Before, six runs fell, e.g. 125 → 79 segments from
@@ -72,7 +166,6 @@ Paths 0 to 25 (seed 21, Color, Noise 1) and 71 → 63 → 52 from Paths 0 to 50 
 White, Noise 3); now they are 75 → 79 and 41 → 48 → 52. One image (seed 16 in Black and White) still
 falls from 140 to 136 segments between Paths 0 and 25, before and after this change; that fall has
 another cause, still open, and the image is left out of the test. The crate's other tests pass unchanged.
-
 ## Notches read only their own piece
 Where the pixel at a sharp corner falls to the other colour, the outline cuts the corner in two
 one-pixel steps, and between two straight edges of three cracks or more those two steps become one
@@ -1114,11 +1207,150 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 | Outline, enhanced | photo-like | 16 | 1.64 s, 632 paths, 34884 anchors, 256 MB |
 | Outline, enhanced | four-colour badge | 16 | 0.73 s, 1 paths, 49 anchors, 176 MB |
 
+## Centre lines
+
+Measured 2026-10-17 with maximal-disc pruning and junction merging, against base `3e44478f`.
+Earlier preset and cost tables retain their previous measurements. Regenerate only this class:
+
+```text
+TRACE_QUALITY_CLASS=centre-lines TRACE_QUALITY_REPORT=centre-lines.md cargo test --release -p vectorcraft-trace --test quality quality_report -- --ignored --nocapture
+```
+
+Junction clusters use their deepest pixel and a disc radius of `distance − 0.5` px. Terminal
+branches shorter than `r + max(2, 0.5 × min(2r, Stroke))` are pruned, shortest first. Tiny
+self-loops inside the junction disc are removed; overlapping junctions and geometrically split
+crossings merge, and runs join through degree-two nodes. Simplification is bounded to 32 rounds;
+nodes and branches are each capped at 200,000. An over-budget blob stays with the fill path.
+Whole-blob selection, ink refinement, cap detection and curve fitting retain their current rules.
+
+Code-drawn scenes only: 23 scenes, each anti-aliased (8×8 coverage samples) and hard (that coverage thresholded at 0.5). Coordinates, widths and scene Stroke values are fixed; junction/letter/crossing coordinates include the 0.27/0.41 px offset. Create Fills and Strokes are on, Stroke is the scene's limit (13 px, mix 6 px, varying 12 px), Black and White threshold 128, Noise 4, Ignore White on, other settings at their defaults. Today's tracer has no minimum-length setting (the dashed scenes specify 0 for future use).
+
+Distances use dense exact centre samples (≤0.25 px), emitted curves sampled at ≤0.5 px control-polygon steps, and nearest-point searches capped at 30 px. Found is the fraction of true samples within 1.5 px; width errors use output samples within 2 px of a true stroke. Samples inside exact fills are excluded. Topology is recovered from emitted subpath endpoints and intersections, merging coincident positions within 0.05 px; an endpoint contributes one arm, an interior two. Junction matching radius is local true width + 3 px; ends use half-width + 4 px. Each match is used once. Free ends exclude true junctions, corners, other strokes and fills; unmatched emitted ends are spurs. Junctions/ends within 2 px of fills are excluded. End error is distance, with signed error along the outward tangent in parentheses. Coverage is a union of painted output at pixel centres (0.02 px flattening tolerance, actual emitted caps), compared with the exact swept shape at pixel centres, for both input variants. Area error is signed relative to exact area. Anchors counts stroke anchors, including all compound subpaths; paths counts stroked + filled paths. Time covers tracing only, one scene at a time. Profile-dependent columns are unavailable (–).
+
+### Centre line and width (px)
+
+| scene | input | paths | out→true mean / p95 | true→out mean / p95 | found % | width err uniform mean / p95 | variable mean / p95 | profile mean |
+|---|---|---|---|---|---|---|---|---|
+| lines w1 | aa | 93+0 | 0.09 / 0.16 | 2.64 / 30.00 | 90.9 | 0.05 / 0.13 | – | – |
+| lines w1 | hard | 92+0 | 0.18 / 0.38 | 1.93 / 5.01 | 82.3 | 0.14 / 1.00 | – | – |
+| lines w2 | aa | 24+0 | 0.11 / 0.27 | 0.16 / 0.29 | 100.0 | 0.03 / 0.06 | – | – |
+| lines w2 | hard | 24+0 | 0.22 / 0.38 | 0.25 / 0.42 | 100.0 | 0.18 / 0.59 | – | – |
+| lines w3 | aa | 24+0 | 0.09 / 0.21 | 0.15 / 0.27 | 100.0 | 0.04 / 0.09 | – | – |
+| lines w3 | hard | 24+0 | 0.20 / 0.42 | 0.24 / 0.46 | 100.0 | 0.22 / 0.54 | – | – |
+| lines w4 | aa | 24+0 | 0.09 / 0.20 | 0.15 / 0.26 | 100.0 | 0.06 / 0.12 | – | – |
+| lines w4 | hard | 24+0 | 0.20 / 0.42 | 0.24 / 0.46 | 100.0 | 0.12 / 0.46 | – | – |
+| lines w6 | aa | 24+0 | 0.10 / 0.22 | 0.15 / 0.26 | 100.0 | 0.09 / 0.19 | – | – |
+| lines w6 | hard | 24+0 | 0.20 / 0.40 | 0.24 / 0.43 | 100.0 | 0.24 / 0.40 | – | – |
+| lines w8 | aa | 24+0 | 0.11 / 0.26 | 0.16 / 0.29 | 100.0 | 0.13 / 0.26 | – | – |
+| lines w8 | hard | 24+0 | 0.23 / 0.56 | 0.26 / 0.59 | 100.0 | 0.13 / 0.49 | – | – |
+| lines w10 | aa | 24+0 | 0.11 / 0.24 | 0.16 / 0.29 | 100.0 | 0.16 / 0.32 | – | – |
+| lines w10 | hard | 24+0 | 0.24 / 0.64 | 0.27 / 0.67 | 99.9 | 0.24 / 0.61 | – | – |
+| lines w12 | aa | 24+0 | 0.12 / 0.30 | 0.17 / 0.32 | 100.0 | 0.20 / 0.39 | – | – |
+| lines w12 | hard | 24+0 | 0.24 / 0.60 | 0.27 / 0.61 | 99.9 | 0.25 / 0.52 | – | – |
+| curves w2 | aa | 4+0 | 0.11 / 0.22 | 0.15 / 0.26 | 100.0 | 0.01 / 0.01 | – | – |
+| curves w2 | hard | 4+0 | 0.22 / 0.55 | 0.25 / 0.57 | 100.0 | 0.05 / 0.06 | – | – |
+| curves w4 | aa | 4+0 | 0.12 / 0.25 | 0.16 / 0.28 | 99.9 | 0.01 / 0.03 | – | – |
+| curves w4 | hard | 4+0 | 0.24 / 0.57 | 0.26 / 0.56 | 99.9 | 0.00 / 0.00 | – | – |
+| curves w8 | aa | 4+0 | 0.16 / 0.30 | 0.22 / 0.34 | 98.7 | 0.02 / 0.06 | – | – |
+| curves w8 | hard | 4+0 | 0.26 / 0.61 | 0.29 / 0.63 | 98.8 | 0.00 / 0.00 | – | – |
+| circles | aa | 25+0 | 0.09 / 0.23 | 0.24 / 0.30 | 97.6 | 0.00 / 0.02 | – | – |
+| circles | hard | 23+0 | 0.27 / 0.64 | 0.45 / 0.75 | 96.5 | 0.02 / 0.10 | – | – |
+| junctions w2 | aa | 7+0 | 0.14 / 0.34 | 0.18 / 0.35 | 100.0 | 0.12 / 0.03 | – | – |
+| junctions w2 | hard | 7+0 | 0.36 / 0.82 | 0.40 / 0.85 | 100.0 | 0.14 / 0.12 | – | – |
+| junctions w4 | aa | 7+0 | 0.17 / 0.72 | 0.20 / 0.49 | 99.5 | 0.27 / 5.00 | – | – |
+| junctions w4 | hard | 7+0 | 0.42 / 1.11 | 0.42 / 0.98 | 99.2 | 0.30 / 5.00 | – | – |
+| junctions w8 | aa | 7+0 | 0.28 / 1.49 | 0.31 / 1.45 | 95.1 | 0.30 / 0.04 | – | – |
+| junctions w8 | hard | 7+0 | 0.47 / 1.36 | 0.50 / 1.47 | 95.1 | 0.33 / 0.22 | – | – |
+| crossings w3 | aa | 5+0 | 0.14 / 0.34 | 0.18 / 0.31 | 100.0 | 0.05 / 0.09 | – | – |
+| crossings w3 | hard | 5+0 | 0.39 / 1.14 | 0.40 / 0.93 | 99.9 | 0.20 / 0.32 | – | – |
+| crossings w6 | aa | 5+0 | 0.42 / 2.16 | 0.38 / 1.79 | 92.3 | 0.10 / 0.19 | – | – |
+| crossings w6 | hard | 5+0 | 0.57 / 2.27 | 0.54 / 1.95 | 90.9 | 0.25 / 0.36 | – | – |
+| dashed w2 | aa | 31+0 | 0.10 / 0.22 | 0.15 / 0.25 | 100.0 | 0.02 / 0.05 | – | – |
+| dashed w2 | hard | 31+0 | 0.14 / 0.36 | 0.18 / 0.38 | 100.0 | 0.09 / 0.34 | – | – |
+| dashed w4 | aa | 29+0 | 0.11 / 0.28 | 0.15 / 0.31 | 100.0 | 0.01 / 0.03 | – | – |
+| dashed w4 | hard | 29+0 | 0.15 / 0.42 | 0.19 / 0.41 | 100.0 | 0.11 / 0.46 | – | – |
+| letters w3 | aa | 7+0 | 0.19 / 0.86 | 0.22 / 0.62 | 98.7 | 0.01 / 0.13 | – | – |
+| letters w3 | hard | 7+0 | 0.33 / 0.92 | 0.34 / 0.71 | 99.0 | 0.06 / 0.20 | – | – |
+| letters w5 | aa | 7+0 | 0.27 / 1.49 | 0.29 / 1.31 | 95.9 | 0.02 / 0.20 | – | – |
+| letters w5 | hard | 7+0 | 0.40 / 1.48 | 0.41 / 1.29 | 96.2 | 0.05 / 0.20 | – | – |
+| mix | aa | 3+1 | 0.10 / 0.21 | 12.89 / 30.00 | 57.3 | 0.03 / 0.14 | – | – |
+| mix | hard | 3+1 | 0.22 / 0.43 | 12.95 / 30.00 | 57.3 | 0.08 / 0.15 | – | – |
+| varying | aa | 5+0 | 0.13 / 0.28 | 0.19 / 0.31 | 99.5 | 1.89 / 4.13 | – | – |
+| varying | hard | 5+0 | 0.20 / 0.51 | 0.24 / 0.52 | 99.7 | 1.90 / 4.22 | – | – |
+
+### Topology, ends, coverage
+
+| scene | input | junctions ok / wrong deg / missed / extra | junction pos err | ends found | end err (signed) | spurs | IoU uniform / profile | area err uniform / profile | fill→fill % | anchors | width pts | ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| lines w1 | aa | 0 / 0 / 0 / 76 | – | 43/48 | 0.71 (-0.69) | 88 | 0.790 / – | -6.2% / – | – | 186 | – | 4.6 |
+| lines w1 | hard | 0 / 0 / 0 / 0 | – | 42/48 | 1.50 (-1.42) | 142 | 0.644 / – | -25.8% / – | – | 184 | – | 3.6 |
+| lines w2 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.32 (-0.20) | 0 | 0.914 / – | -0.3% / – | – | 71 | – | 4.3 |
+| lines w2 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.38 (-0.10) | 0 | 0.808 / – | -2.0% / – | – | 58 | – | 4.2 |
+| lines w3 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.26 (-0.17) | 0 | 0.931 / – | -3.0% / – | – | 64 | – | 4.4 |
+| lines w3 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.46 (-0.24) | 0 | 0.881 / – | -2.5% / – | – | 50 | – | 4.3 |
+| lines w4 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.25 (-0.18) | 0 | 0.964 / – | -0.6% / – | – | 70 | – | 4.6 |
+| lines w4 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.40 (-0.15) | 0 | 0.906 / – | -0.1% / – | – | 54 | – | 4.5 |
+| lines w6 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.30 (-0.18) | 0 | 0.965 / – | -0.3% / – | – | 65 | – | 5.1 |
+| lines w6 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.45 (-0.12) | 0 | 0.923 / – | 1.4% / – | – | 55 | – | 4.9 |
+| lines w8 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.37 (-0.20) | 0 | 0.967 / – | -1.0% / – | – | 66 | – | 5.4 |
+| lines w8 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.46 (-0.18) | 0 | 0.934 / – | -0.3% / – | – | 53 | – | 5.4 |
+| lines w10 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.35 (-0.16) | 0 | 0.969 / – | -0.7% / – | – | 66 | – | 5.9 |
+| lines w10 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.50 (-0.12) | 0 | 0.942 / – | -0.1% / – | – | 52 | – | 5.9 |
+| lines w12 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.40 (-0.16) | 0 | 0.969 / – | -0.6% / – | – | 70 | – | 6.4 |
+| lines w12 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.54 (-0.11) | 0 | 0.949 / – | -0.2% / – | – | 53 | – | 6.3 |
+| curves w2 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 0.18 (-0.13) | 0 | 0.921 / – | -0.6% / – | – | 34 | – | 4.7 |
+| curves w2 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 0.22 (-0.05) | 0 | 0.821 / – | -2.4% / – | – | 29 | – | 4.7 |
+| curves w4 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 0.56 (-0.42) | 0 | 0.949 / – | -0.8% / – | – | 35 | – | 5.1 |
+| curves w4 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 0.66 (-0.38) | 0 | 0.904 / – | -0.5% / – | – | 30 | – | 5.2 |
+| curves w8 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 2.24 (-2.01) | 0 | 0.956 / – | -0.9% / – | – | 42 | – | 5.9 |
+| curves w8 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 1.97 (-1.67) | 0 | 0.936 / – | -0.5% / – | – | 31 | – | 5.9 |
+| circles | aa | 0 / 0 / 0 / 0 | – | 0/0 | – (–) | 32 | 0.964 / – | -0.9% / – | – | 71 | – | 7.4 |
+| circles | hard | 0 / 0 / 0 / 0 | – | 0/0 | – (–) | 28 | 0.888 / – | -0.7% / – | – | 52 | – | 8.0 |
+| junctions w2 | aa | 7 / 0 / 0 / 0 | 1.17 | 23/23 | 0.32 (-0.16) | 0 | 0.889 / – | 6.1% / – | – | 84 | – | 3.7 |
+| junctions w2 | hard | 7 / 0 / 0 / 0 | 1.17 | 23/23 | 0.49 (-0.15) | 0 | 0.771 / – | 4.9% / – | – | 59 | – | 3.6 |
+| junctions w4 | aa | 7 / 0 / 0 / 1 | 1.62 | 23/23 | 0.33 (-0.26) | 0 | 0.919 / – | 5.0% / – | – | 100 | – | 4.1 |
+| junctions w4 | hard | 7 / 0 / 0 / 1 | 1.62 | 23/23 | 0.65 (-0.32) | 0 | 0.850 / – | 7.0% / – | – | 81 | – | 4.0 |
+| junctions w8 | aa | 7 / 0 / 0 / 2 | 2.76 | 23/23 | 0.43 (-0.27) | 0 | 0.937 / – | 2.7% / – | – | 93 | – | 4.7 |
+| junctions w8 | hard | 7 / 0 / 0 / 1 | 2.76 | 23/23 | 0.80 (-0.35) | 0 | 0.913 / – | 2.5% / – | – | 77 | – | 4.7 |
+| crossings w3 | aa | 5 / 0 / 0 / 2 | 0.25 | 20/20 | 0.27 (-0.18) | 0 | 0.935 / – | -1.1% / – | – | 74 | – | 2.8 |
+| crossings w3 | hard | 5 / 0 / 0 / 5 | 0.25 | 20/20 | 0.41 (-0.17) | 0 | 0.791 / – | -7.6% / – | – | 69 | – | 2.8 |
+| crossings w6 | aa | 5 / 0 / 0 / 1 | 0.25 | 20/20 | 0.35 (-0.17) | 0 | 0.925 / – | -3.6% / – | – | 112 | – | 3.3 |
+| crossings w6 | hard | 5 / 0 / 0 / 4 | 0.25 | 20/20 | 0.51 (-0.20) | 0 | 0.872 / – | -2.0% / – | – | 81 | – | 3.4 |
+| dashed w2 | aa | 0 / 0 / 0 / 0 | – | 62/62 | 0.28 (-0.20) | 0 | 0.927 / – | -2.6% / – | – | 64 | – | 2.0 |
+| dashed w2 | hard | 0 / 0 / 0 / 0 | – | 62/62 | 0.33 (-0.11) | 0 | 0.926 / – | -3.6% / – | – | 67 | – | 1.9 |
+| dashed w4 | aa | 0 / 0 / 0 / 0 | – | 58/58 | 0.30 (-0.20) | 0 | 0.952 / – | -0.1% / – | – | 61 | – | 2.1 |
+| dashed w4 | hard | 0 / 0 / 0 / 0 | – | 58/58 | 0.37 (-0.08) | 0 | 0.944 / – | -1.5% / – | – | 60 | – | 2.1 |
+| letters w3 | aa | 7 / 0 / 0 / 6 | 1.47 | 17/17 | 0.62 (-0.47) | 1 | 0.923 / – | -0.9% / – | – | 114 | – | 3.3 |
+| letters w3 | hard | 7 / 0 / 0 / 3 | 1.47 | 17/17 | 0.38 (-0.21) | 1 | 0.859 / – | -0.6% / – | – | 81 | – | 3.3 |
+| letters w5 | aa | 6 / 1 / 0 / 6 | 2.10 | 17/17 | 0.99 (-0.83) | 0 | 0.929 / – | -1.7% / – | – | 124 | – | 3.7 |
+| letters w5 | hard | 6 / 1 / 0 / 8 | 2.10 | 17/17 | 1.05 (-0.79) | 0 | 0.887 / – | -2.0% / – | – | 100 | – | 3.7 |
+| mix | aa | 0 / 0 / 0 / 0 | – | 6/7 | 0.24 (-0.17) | 0 | 0.986 / – | 0.1% / – | 99.7 | 11 | – | 6.5 |
+| mix | hard | 0 / 0 / 0 / 0 | – | 6/7 | 0.57 (-0.46) | 0 | 0.969 / – | -0.0% / – | 99.1 | 11 | – | 6.4 |
+| varying | aa | 0 / 0 / 0 / 0 | – | 10/10 | 2.03 (-1.08) | 0 | 0.735 / – | 4.8% / – | – | 22 | – | 5.2 |
+| varying | hard | 0 / 0 / 0 / 0 | – | 10/10 | 1.92 (-0.94) | 0 | 0.736 / – | 5.2% / – | – | 22 | – | 5.3 |
+
+**aa totals**: junctions 44 correct, 1 wrong degree, 0 missed, 94 extra (of 45); ends 682 of 688; spurs 121.
+
+**hard totals**: junctions 44 correct, 1 wrong degree, 0 missed, 22 extra (of 45); ends 681 of 688; spurs 171.
+
+**Scope of the improvement:** correct junction degrees rise from 30/45 to 44/45 in each variant;
+missed junctions fall from two to zero. Extra junctions fall from 104 to 94 aa and 27 to 22 hard.
+Spur totals remain 121 aa / 171 hard: the one-pixel-line and circle scenes contribute 120 / 170
+of those, with unchanged path counts (one-pixel lines: 93 aa / 92 hard; circles: 25 aa / 23 hard).
+The graph stage does not reconnect separate blobs. Raw graph tests cover straight lines at 24
+angles, junctions and 20–90° crossings; these do not replace the emitted-path measurements above.
+The remaining spur/extra-junction target is not met by this graph-only change.
+
 ## Revision history
 
 | date | change |
 |:--|:--|
-| 2026-10-17 | Paths and Corners aligned with the documented behaviour of the controls: tolerance 0.495 / 0.31 / 0.08 px at Paths 0 / 50 / 100 (was 0.78 / 0.33 / 0.08), corner angle 99.2° / 57.9° / 35° at Corners 0 / 75 / 100 (was 90° / 48.75° / 35°); code-drawn shapes before and after; property tests over every value 0–100 |
+| 2026-10-17 | Auto Color keeps rare but distinct colours (stems, highlights, near-white on pale backgrounds): 66 of 66 flat test logos keep every key colour (was 39); scans unchanged |
+| 2026-10-17 | Images over 1500 px on a side trace with a warning; the anchor limit is 8,000,000 (2,000,000 on the web); time and memory of 2000 × 2000 to 6000 × 4000 code-drawn photos |
+| 2026-10-17 | `Raster::new` returns an error for RGBA bytes of the wrong length (it failed an assertion) and `Raster::pixel` reads nothing past the raster; traces of valid images unchanged |
+| 2026-10-17 | M12: maximal-disc graph pruning, split-crossing merges and degree-two joins; correct junction degrees 30→44/45 aa and hard, none missed; remaining spurs unchanged. Centre-lines rerun, scores and earlier tables unchanged. |
+| 2026-10-17 | M12: exact per-blob Euclidean distances and Guo–Hall thinning; centre-lines rerun on 46 inputs. Ends found: aa 638→682/688, hard 631→681/688. Whole-blob stroke/fill choice retained; preset/cost tables unchanged. |
+| 2026-10-17 | M12: add the ignored centre-lines class and measure the existing Create Strokes output on 23 code-drawn scenes, aa and hard; centre/width/topology/end/coverage metrics, no new images, dependencies or behaviour |
 | 2026-10-16 | Image Trace: a loop or junction-returning piece whose fit collapsed to one cubic keeps the fewest segments that hold its area and course instead of every positioned point, so a higher Paths no longer gives fewer segments on code-drawn noisy images (six falling runs to none; one other cause remains). |
 | 2026-10-16 | Image Trace: a notch corner is cut only when the straight edges beside it lie in the shared piece, so both regions of the piece get the same points (code-drawn noisy colour images: 93 uncovered sample points to 0). |
 | 2026-10-16 | Image Trace: a crack's sub-pixel shift is the mean of the readings from its two sides, exactly antisymmetric, so abutting regions get the same points on thin slivers (a code-drawn noisy ripple went from 482–1,228 uncovered sample points per trace to 0). |
