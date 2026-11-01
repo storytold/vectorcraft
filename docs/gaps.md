@@ -417,8 +417,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done (from users' reports):** Object › Create Gradient Mesh on an embedded image turns it into a mesh over its
   rectangle, with the image's transform kept; each point takes the average colour and opacity of the picture around it
   (#1676). A linked image is refused, as the public documentation has it.
-- **Partial:** blend easing and spine (#1124, 30.7): Window › Blend has Type (Ease In, Ease Out, Ease In Out,
-  Ease Out In), Ramp 0–100% and independent color Shift and Spine (Auto, Always, Never); the Type and Ramp move the
+- **Partial:** blend easing and spine (#1124, 30.7): Window › Blend has an Asymmetric or Symmetric Ease mode and
+  a signed -100..100 value (Ease In…Out, or Ease In Out…Out In; the side picks the pair, the distance from the middle
+  is the Ramp), an independent color Shift and Spine (Auto, Always, Never); the Ease value moves the
   steps between any two keys, spine or not, while Spine Never takes the spine off the distribution and the
   canvas, Always runs the steps along the straight lines between the keys, and Auto follows a replaced spine or
   Align to Path. With a blend selected, the Blend tool and the Selection tool show its
@@ -426,7 +427,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   and up — the pointer's height is the count on a fixed exponential scale (a box height covers 1–1000
   steps, and the handle keeps its place when the box rotates) and it rests where the count lands
   instead of pinning to the top — switching a Smooth Color or Distance blend to Specified Steps with
-  the first drag; the Ease knob on the spine (Type and Ramp) and the Colour handle (Shift), shown
+  the first drag; the Ease knob on the spine (the same signed value, drawn filled for Asymmetric and
+  empty for Symmetric, a control-click switching the mode) and the Colour handle (Shift), shown
   in every spine mode, each drag one undo step and Escape cancelling it. The Blend Options dialog carries the same controls as the panel in a compact size. The step
   positions and Align to Path's angles come from the spine's own bezier, so a blend with many steps keeps
   turning smoothly instead of in polyline jumps.
@@ -648,6 +650,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | G1: the Blend panel and Blend Options fold the easing types into two modes, Asymmetric (Ease In or Ease Out) and Symmetric (Ease In Out or Ease Out In), each with a signed -100..100 value; the canvas Ease knob drags the same value (the mode stays, the side picks the pair, the distance the Ramp), draws a filled dot for Asymmetric and an empty one for Symmetric, and a control-click on it switches the mode; fmt, clippy -D warnings, tools/ui-egui tests and wasm check pass |
 | 2026-11-01 | minor | G1: the linked Ramp handle is off the canvas; the Ease knob still sets Type and Ramp, and the Colour handle Shift. fmt, clippy -D warnings, tools/ui-egui tests and wasm check pass |
 | 2026-10-31 | minor | G1: the Ease knob, linked Ramp handle and Colour handle are back on the canvas (Type and Ramp set the curve, Shift the colours; they show in every spine mode) with no Midpoint slider, and Escape cancels any handle drag. Blend Options is compact — 320–360 pt wide, with a 170 pt Direction button and a fit-width Reverse Spine button. A hidden replaced spine no longer stretches the Distance spacing. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |
 | 2026-10-30 | minor | G1: Blend Options dialog no longer spans the window — capped at 460 pt wide (min 420). Reverted the easing canvas handles (Ease knob, linked Ramp, Colour) and the Midpoint slider from panel and dialog; midpoint clamp back to 0.05–0.95. The step-count knob still rests at its count's height on the fixed 1–1000 exponential scale. Direction and Reverse Spine buttons remain in panel and dialog. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |

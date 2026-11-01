@@ -84,6 +84,21 @@ impl BlendEaseType {
             Self::OutIn => "easeOutIn",
         }
     }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "easeIn" => Some(Self::In),
+            "easeOut" => Some(Self::Out),
+            "easeInOut" => Some(Self::InOut),
+            "easeOutIn" => Some(Self::OutIn),
+            _ => None,
+        }
+    }
+
+    /// In Out and Out In ease both ends: the panel's Symmetric mode.
+    pub fn is_symmetric(self) -> bool {
+        matches!(self, Self::InOut | Self::OutIn)
+    }
 }
 
 /// Blend panel Type and Ramp. Ramp is a fraction from 0 (even) to 1.
@@ -104,6 +119,31 @@ impl Default for BlendEase {
 impl BlendEase {
     pub fn is_linear(&self) -> bool {
         self.ramp <= 0.0
+    }
+
+    /// The ease as one signed value, -100..100: negative eases in (In, In Out), positive eases
+    /// out (Out, Out In), and the distance from 0 is the Ramp. This is what the panel's Ease
+    /// slider and the canvas knob both show.
+    pub fn signed(&self) -> f64 {
+        let r = if self.ramp.is_finite() { self.ramp.clamp(0.0, 1.0) } else { 0.0 };
+        match self.kind {
+            BlendEaseType::In | BlendEaseType::InOut => -r * 100.0,
+            BlendEaseType::Out | BlendEaseType::OutIn => r * 100.0,
+        }
+    }
+
+    /// The ease a signed value stands for in the asymmetric (In/Out) or the symmetric (In Out/
+    /// Out In) mode: the side picks the pair, the size is the Ramp.
+    pub fn from_signed(signed: f64, symmetric: bool) -> Self {
+        let v = if signed.is_finite() { signed.clamp(-100.0, 100.0) } else { 0.0 };
+        let out = v > 0.0;
+        let kind = match (out, symmetric) {
+            (false, false) => BlendEaseType::In,
+            (true, false) => BlendEaseType::Out,
+            (false, true) => BlendEaseType::InOut,
+            (true, true) => BlendEaseType::OutIn,
+        };
+        Self { kind, ramp: (v.abs() / 100.0).clamp(0.0, 1.0) }
     }
 
     /// Only the default Type and Ramp can be omitted without losing a chosen Type at Ramp 0.

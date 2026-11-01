@@ -250,23 +250,26 @@ fn spine_mode_edits_the_selected_blend_and_undoes() {
 }
 
 #[test]
-fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
-    // The easing moves the steps between any two keys, spine or not, so Type, Ramp and Shift
-    // need only a blend selected.
+fn panel_ease_mode_and_value_and_shift_edit_the_blend_and_undo() {
+    // The easing moves the steps between any two keys, spine or not, so the Ease mode and value
+    // and Shift need only a blend selected.
     let (mut app, id) = blended();
     let mut f = Frames::new();
-    for label in ["Type:", "Ease In", "Ramp:", "Shift:"] {
+    for label in ["Type:", "Asymmetric", "Ease:", "Shift:"] {
         f.text(&mut app, label);
     }
-    f.click_text(&mut app, "Ease In");
-    f.click_text(&mut app, "Ease Out In");
-    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
+    // The Type menu switches Asymmetric (Ease In/Out) and Symmetric (Ease In Out/Out In) at the
+    // same value; the default is Asymmetric at 0, so Symmetric gives In Out at 0.
+    assert!(!spec(&app, id).ease.kind.is_symmetric());
+    f.click_text(&mut app, "Asymmetric");
+    f.click_text(&mut app, "Symmetric");
+    assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::InOut);
     // Click each real slider: its command updates the engine, and Undo restores the old value.
     for (index, key) in [(0, "ramp"), (1, "colorShift")] {
         let out = f.run(&mut app, vec![]);
         let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
         let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
-        // The tree is not in layout order: Ramp sits above Shift.
+        // The tree is not in layout order: Ease sits above Shift.
         sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
         let slider = sliders[index];
         let b = slider.1.bounds().unwrap();
@@ -280,9 +283,9 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
     }
     app.run("ui.blendOptions", json!({})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    // The Blend Options dialog matches the panel: the same Type, Ramp, Shift, Direction
-    // and Reverse Spine to tweak.
-    for label in ["Type:", "Ramp:", "Shift:", "Direction:", "Reverse Front to Back", "Reverse Spine"] {
+    // The Blend Options dialog matches the panel: the same Type, Ease, Shift, Direction and
+    // Reverse Spine to tweak.
+    for label in ["Type:", "Ease:", "Shift:", "Direction:", "Reverse Front to Back", "Reverse Spine"] {
         assert!(text.contains(label), "{label} in {text}");
     }
 }

@@ -704,6 +704,14 @@ impl Tool for SelectionTool {
         }
         if matches!(self.state, State::Idle)
             && ev.kind == PointerKind::Down
+            && let Some(params) = crate::blendhandles::BlendDrag::ease_toggle(cx, ev.pos, ev.mods)
+        {
+            // A control-click on the Ease knob switches its mode (Asymmetric ↔ Symmetric) as its
+            // own undo step instead of picking the object behind it.
+            return vec![Action::Exec("object.blend.options".into(), params)];
+        }
+        if matches!(self.state, State::Idle)
+            && ev.kind == PointerKind::Down
             && let Some(d) = crate::blendhandles::BlendDrag::hit(cx, ev.pos, ev.mods)
         {
             self.state = State::BlendControls(d);

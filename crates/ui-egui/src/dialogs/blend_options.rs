@@ -1,7 +1,8 @@
 //! Object → Blend → Blend Options (also the Blend tool's double-click, Alt-click and toolbar
 //! button): Spacing (Smooth Color, Specified Steps or Specified Distance) with its value,
 //! Orientation (Align to Page or Align to Path), Spine (Auto, Always or Never), the Blend panel's
-//! easing (Type, Ramp and the independent color Shift), and Direction and Reverse Spine,
+//! easing (the Asymmetric or Symmetric mode with its signed -100..100 value, and the independent
+//! color Shift), and Direction and Reverse Spine,
 //! opened on the selected blend's options and previewed live on it; OK keeps the preview as one
 //! undo step (`object.blend.options`). With no blend selected it sets the options new blends start
 //! with (the easing is per blend).
@@ -13,6 +14,7 @@
 
 use egui::{CornerRadius, Sense, Stroke, Vec2, pos2, vec2};
 use serde_json::{Value, json};
+use vectorcraft_doc::live::{BlendEase, BlendEaseType};
 
 use super::{DialogSpec, form, run_and_close};
 use crate::state::Dialog;
@@ -121,25 +123,30 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     if on_blend(d) {
-        // The easing rows match the Blend panel's: Type and Ramp move the steps between any two
-        // keys, spine or not, and Shift moves the colours on their own.
+        // The easing rows match the Blend panel's: the mode (Asymmetric or Symmetric) and its
+        // signed -100..100 value move the steps between any two keys, spine or not, and Shift
+        // moves the colours on their own.
         ui.add_space(6.0);
+        let kind = BlendEaseType::parse(&d.str("easingType")).unwrap_or_default();
+        let signed = BlendEase { kind, ramp: d.f64("ramp", 0.0) / 100.0 }.signed();
+        let symmetric = kind.is_symmetric();
         widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
-            let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
-            let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
-            let mode = d.str("easingType");
-            let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
-            if let Some(i) = widgets::dropdown(ui, "blend-easing", labels[index], &labels, 150.0)
-                && let Some(mode) = modes.get(i)
+            let labels = [tl!("Asymmetric"), tl!("Symmetric")];
+            if let Some(i) = widgets::dropdown(ui, "blend-easing", labels[usize::from(symmetric)], &labels, 150.0)
+                && (i == 1) != symmetric
             {
-                d.fields.insert("easingType".into(), json!(mode));
+                let ease = BlendEase::from_signed(signed, i == 1);
+                d.fields.insert("easingType".into(), json!(ease.kind.id()));
+                d.fields.insert("ramp".into(), json!(ease.ramp * 100.0));
             }
         });
         ui.add_space(6.0);
-        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = d.f64("ramp", 0.0);
-            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
-                d.fields.insert("ramp".into(), json!(ramp));
+        widgets::label_row(ui, tl!("Ease:"), LABEL_W, |ui| {
+            let mut value = signed;
+            if ui.add(egui::Slider::new(&mut value, -100.0..=100.0).suffix("%")).changed() {
+                let ease = BlendEase::from_signed(value, symmetric);
+                d.fields.insert("easingType".into(), json!(ease.kind.id()));
+                d.fields.insert("ramp".into(), json!(ease.ramp * 100.0));
             }
         });
         ui.add_space(6.0);

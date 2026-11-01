@@ -6,7 +6,7 @@
 //! with a dark outline, like the other on-canvas handles (`ui-egui::canvas::tool_overlays`).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::live::{BlendEase, BlendEaseType, BlendSpec, Spine, blend_key_stops, blend_step_count};
+use vectorcraft_doc::live::{BlendEase, BlendSpec, Spine, blend_key_stops, blend_step_count};
 use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox, Selection};
 use vectorcraft_geom::{Point, Vec2};
 
@@ -144,7 +144,7 @@ impl BlendHandles {
         let total = spine.length();
         let easing = (total > 1e-9).then(|| {
             let (a, b) = (stops.first().copied().unwrap_or(0.0) / total, stops.get(1).copied().unwrap_or(total) / total);
-            let (ease, angle) = spine.at(a + (b - a) * ease_half(spec.ease.kind, spec.ease.ramp));
+            let (ease, angle) = spine.at(a + (b - a) * ease_half(spec.ease));
             let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
             EasingHandles { ease, color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom) }
         });
@@ -205,16 +205,29 @@ impl BlendHandles {
         json!({ "spacing": "steps", "steps": self.steps_count_at(p) })
     }
 
-    /// The easing Type and Ramp the pointer at `p` gives: the pair of keys it is between, and
-    /// where in that pair — toward a key bunches the steps toward it. A symmetric Type (In Out,
-    /// Out In) has no halfway point to drag: it keeps its Type and Ramp.
+    /// The easing Type and Ramp the pointer at `p` gives: the knob's own mode (Asymmetric or
+    /// Symmetric) stays, the side picks its pair member (In/Out or In Out/Out In) and the
+    /// distance from the middle is the Ramp.
     fn ease_params(&self, p: Point) -> Value {
-        let local = self.local_at(p);
-        let (kind, ramp) = match self.ease.kind {
-            BlendEaseType::InOut | BlendEaseType::OutIn => (self.ease.kind, self.ease.ramp),
-            _ => ease_at(local),
-        };
-        json!({ "easingType": kind.id(), "ramp": ramp * 100.0 })
+        let ease = self.ease_at(self.local_at(p));
+        json!({ "easingType": ease.kind.id(), "ramp": ease.ramp * 100.0 })
+    }
+
+    /// The ease the pointer at `local` (0..1) between two keys gives.
+    fn ease_at(&self, local: f64) -> BlendEase {
+        BlendEase::from_signed(ease_signed(local), self.ease.kind.is_symmetric())
+    }
+
+    /// The blend's easing (the Ease knob's mode and Ramp).
+    pub fn ease(&self) -> BlendEase {
+        self.ease
+    }
+
+    /// The options a control-click on the Ease knob sets: the other mode (Asymmetric ↔
+    /// Symmetric) at the same side and Ramp.
+    fn ease_toggled(&self) -> Value {
+        let ease = BlendEase::from_signed(self.ease.signed(), !self.ease.kind.is_symmetric());
+        json!({ "easingType": ease.kind.id(), "ramp": ease.ramp * 100.0 })
     }
 
     /// The colour Shift the pointer at `p` gives, in its pair.
@@ -316,24 +329,16 @@ fn nearest_fraction(spine: &Spine, p: Point) -> f64 {
     best
 }
 
-/// Where the Ease knob rests for `kind` at `ramp`: the shape's halfway point between two keys.
-/// The inverse for In and Out is [`ease_at`]; In Out and Out In rest at the middle.
-fn ease_half(kind: BlendEaseType, ramp: f64) -> f64 {
-    let half = match kind {
-        BlendEaseType::In => 0.25,
-        BlendEaseType::Out => 0.75,
-        BlendEaseType::InOut | BlendEaseType::OutIn => 0.5,
-    };
-    0.5 + ramp.clamp(0.0, 1.0) * (half - 0.5)
+/// Where the Ease knob rests for `ease`: the middle plus a quarter of the spine each way, signed
+/// like [`BlendEase::signed`] (In and In Out left of the middle, Out and Out In right).
+fn ease_half(ease: BlendEase) -> f64 {
+    0.5 + 0.25 * ease.signed() / 100.0
 }
 
-/// The easing Type and Ramp whose halfway point sits at `local` (0..1) between two keys, so the
-/// knob rests where it is dropped: Ease In bunches the steps toward the first key, Ease Out
-/// toward the second; Ramp 1 is the strongest either way.
-fn ease_at(local: f64) -> (BlendEaseType, f64) {
-    let local = local.clamp(0.0, 1.0);
-    let ramp = (4.0 * (local - 0.5).abs()).clamp(0.0, 1.0);
-    if local <= 0.5 { (BlendEaseType::In, ramp) } else { (BlendEaseType::Out, ramp) }
+/// The signed ease (see [`BlendEase::signed`]) the pointer at `local` (0..1) between two keys
+/// gives: the middle is 0, and each end of the middle quarter is ±100.
+fn ease_signed(local: f64) -> f64 {
+    (4.0 * (local.clamp(0.0, 1.0) - 0.5)).clamp(-1.0, 1.0) * 100.0
 }
 
 /// The colour Shift whose halfway point sits at `local` (0..1) between two keys.
@@ -368,6 +373,17 @@ impl BlendDrag {
         let handles = BlendHandles::selected(cx.doc, cx.selection, crate::select::selection_box(cx), cx.zoom)?;
         let (_, part) = hit_part(std::slice::from_ref(&handles), p, cx.tol(REACH))?;
         (!crate::select::bbox_handle_at(cx, p)).then(|| Self::new(handles, part, p))
+    }
+
+    /// The options a control-click at `p` on the Ease knob of the one blend selected whole asks
+    /// for: the other Ease mode, keeping the side and Ramp.
+    pub fn ease_toggle(cx: &ToolContext, p: Point, mods: Mods) -> Option<Value> {
+        if !(mods.cmd || mods.ctrl) || mods.alt || !cx.bounding_box || !finite(p) {
+            return None;
+        }
+        let handles = BlendHandles::selected(cx.doc, cx.selection, crate::select::selection_box(cx), cx.zoom)?;
+        let (_, part) = hit_part(std::slice::from_ref(&handles), p, cx.tol(REACH))?;
+        (part == BlendPart::Ease).then(|| handles.ease_toggled())
     }
 
     /// The handle under `p` of any selected blend (the Blend tool's).
@@ -511,6 +527,7 @@ mod tests {
     use crate::testutil::{cx, paint};
     use crate::{PointerEvent, PointerKind, Tool};
     use std::sync::Arc;
+    use vectorcraft_doc::live::BlendEaseType;
     use vectorcraft_doc::{Appearance, Node, live::BlendSpacing, live::BlendSpineMode};
     use vectorcraft_geom::{Affine, PathData, Rect, SubPath, shapes};
 
@@ -560,15 +577,19 @@ mod tests {
 
     #[test]
     fn the_ease_knob_and_its_drag_map_round_trip() {
-        for (kind, ramp, local) in [
-            (BlendEaseType::In, 1.0, 0.25),
-            (BlendEaseType::In, 0.5, 0.375),
-            (BlendEaseType::In, 0.0, 0.5),
-            (BlendEaseType::Out, 0.5, 0.625),
-            (BlendEaseType::Out, 1.0, 0.75),
+        for (kind, ramp) in [
+            (BlendEaseType::In, 1.0),
+            (BlendEaseType::In, 0.5),
+            (BlendEaseType::In, 0.0),
+            (BlendEaseType::Out, 0.5),
+            (BlendEaseType::Out, 1.0),
+            (BlendEaseType::InOut, 0.5),
+            (BlendEaseType::OutIn, 1.0),
         ] {
-            assert!((ease_half(kind, ramp) - local).abs() < 1e-9, "{kind:?} {ramp}: {}", ease_half(kind, ramp));
-            assert_eq!(ease_at(local), (kind, ramp));
+            let ease = BlendEase { kind, ramp };
+            // The knob rests at the signed value, and a drag there reads the same ease back.
+            let back = BlendEase::from_signed(ease_signed(ease_half(ease)), kind.is_symmetric());
+            assert_eq!((back.kind, back.ramp), (kind, ramp), "{kind:?} {ramp}");
         }
         // The knob rests where the drag reads it back, so the first move does not snap the ramp.
         let (d, b) = blend_with(BlendSpec {
@@ -583,17 +604,59 @@ mod tests {
     }
 
     #[test]
-    fn a_symmetric_ease_keeps_its_type_when_dragged() {
-        for kind in [BlendEaseType::InOut, BlendEaseType::OutIn] {
-            let (d, b) = blend_with(BlendSpec { ease: BlendEase { kind, ramp: 0.5 }, spine_mode: BlendSpineMode::Always, ..Default::default() });
-            let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-            let e = h.easing_handles().unwrap();
-            let at = Point::new(e.ease.x + 2.0, e.ease.y);
-            assert_eq!(h.ease_params(at), json!({"easingType": kind.id(), "ramp": 50.0}));
-            let mut drag = BlendDrag::new(h, BlendPart::Ease, e.ease);
-            assert!(drag.drag(at).is_empty(), "{kind:?} changed");
-            assert_eq!(drag.finish(), vec![]);
-        }
+    fn a_symmetric_ease_drag_keeps_the_mode_and_sets_the_amount() {
+        let (d, b) = blend_with(BlendSpec {
+            ease: BlendEase { kind: BlendEaseType::InOut, ramp: 0.25 },
+            spine_mode: BlendSpineMode::Always,
+            ..Default::default()
+        });
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        let e = h.easing_handles().unwrap();
+        // In Out rests left of the middle, at its Ramp; a drag never leaves the Symmetric mode,
+        // and the distance from the middle sets the Ramp (the side picks In Out or Out In).
+        assert!(e.ease.distance(Point::new(10.0 + 100.0 * 0.4375, 10.0)) < 1e-6, "{:?}", e.ease);
+        let at = h.ease_params(Point::new(55.0, 10.0));
+        assert_eq!(at["easingType"], json!("easeInOut"));
+        assert!((at["ramp"].as_f64().unwrap_or_default() - 20.0).abs() < 0.1, "{at:?}");
+        let at = h.ease_params(Point::new(75.0, 10.0));
+        assert_eq!(at["easingType"], json!("easeOutIn"));
+        assert!((at["ramp"].as_f64().unwrap_or_default() - 60.0).abs() < 0.1, "{at:?}");
+    }
+
+    #[test]
+    fn a_control_click_toggles_the_ease_mode() {
+        let (d, b) = blend_with(BlendSpec {
+            ease: BlendEase { kind: BlendEaseType::Out, ramp: 0.4 },
+            spine_mode: BlendSpineMode::Always,
+            ..Default::default()
+        });
+        let mut s = Selection::default();
+        s.set([b]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        let e = h.easing_handles().unwrap();
+        // A plain press drags the knob; a control press switches Asymmetric ↔ Symmetric at the
+        // same side and Ramp, as its own command.
+        assert!(BlendDrag::ease_toggle(&c, e.ease, Mods::default()).is_none());
+        let params = BlendDrag::ease_toggle(&c, e.ease, Mods { cmd: true, ..Mods::default() }).expect("a control-click switches it");
+        assert_eq!(params["easingType"], json!("easeOutIn"));
+        assert!((params["ramp"].as_f64().unwrap_or_default() - 40.0).abs() < 1e-9, "{params:?}");
+        let mut t = SelectionTool::default();
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, e.ease.x, e.ease.y).with_mods(Mods { cmd: true, ..Mods::default() }));
+        assert!(matches!(&acts[..], [Action::Exec(id, p)] if id == "object.blend.options" && p["easingType"] == json!("easeOutIn")), "{acts:?}");
+        // Back the other way gives Asymmetric at the same side.
+        let (d2, b2) = blend_with(BlendSpec {
+            ease: BlendEase { kind: BlendEaseType::InOut, ramp: 0.4 },
+            spine_mode: BlendSpineMode::Always,
+            ..Default::default()
+        });
+        let h2 = BlendHandles::for_blend(&d2, b2, None, 1.0).unwrap();
+        let e2 = h2.easing_handles().unwrap();
+        let mut s2 = Selection::default();
+        s2.set([b2]);
+        let params = BlendDrag::ease_toggle(&cx(&d2, &s2, &p), e2.ease, Mods { ctrl: true, ..Mods::default() });
+        assert_eq!(params.unwrap_or_default()["easingType"], json!("easeIn"));
     }
 
     #[test]
@@ -709,8 +772,9 @@ mod tests {
         let (d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
         // Toward the second key: Ease Out; toward the first: Ease In; Ramp 1 at the keys.
-        assert_eq!(ease_at(0.75), (BlendEaseType::Out, 1.0));
-        assert_eq!(ease_at(0.25), (BlendEaseType::In, 1.0));
+        assert_eq!(ease_signed(0.75), 100.0);
+        assert_eq!(BlendEase::from_signed(100.0, false), BlendEase { kind: BlendEaseType::Out, ramp: 1.0 });
+        assert_eq!(BlendEase::from_signed(-100.0, false), BlendEase { kind: BlendEaseType::In, ramp: 1.0 });
         // With the default Ease In at Ramp 0, the knob is at the spine's middle and the colour
         // handle 14 pt below.
         let e = h.easing_handles().unwrap();

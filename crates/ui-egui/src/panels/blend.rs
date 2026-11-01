@@ -1,14 +1,15 @@
 //! Blend panel (Window → Blend): Make, the Spacing, Orientation and Spine of the selected blend
-//! (with no blend selected, the options new blends start with), Type, Ramp and Shift,
-//! Reverse Front to Back, Reverse Spine, Replace Spine, Expand and Release. Each control runs its
-//! Object → Blend command (`object.blend.make`, `object.blend.options` and the others), so a
-//! change of the selected blend's spacing, orientation, spine or easing shows on the canvas at
-//! once as one undo step. Make is dimmed until two or more objects are selected. Spacing and
-//! Orientation are dimmed until a blend or two or more objects are selected, Type, Ramp and Shift
-//! until a blend is selected, and the other buttons until a blend is selected.
+//! (with no blend selected, the options new blends start with), the Ease mode and value, and
+//! Shift, Reverse Front to Back, Reverse Spine, Replace Spine, Expand and Release. Each control
+//! runs its Object → Blend command (`object.blend.make`, `object.blend.options` and the others),
+//! so a change of the selected blend's spacing, orientation, spine or easing shows on the canvas
+//! at once as one undo step. Make is dimmed until two or more objects are selected. Spacing and
+//! Orientation are dimmed until a blend or two or more objects are selected, the Ease mode and
+//! value and Shift until a blend is selected, and the other buttons until a blend is selected.
 
 use egui::Ui;
 use serde_json::{Value, json};
+use vectorcraft_doc::live::{BlendEase, BlendEaseType};
 
 use super::selection_len;
 use crate::VectorcraftApp;
@@ -109,22 +110,27 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let selected = info["target"] == "blend";
     // The easing moves the steps between any two keys, spine or not, so it needs only a blend.
+    // Asymmetric (Ease In / Ease Out) and Symmetric (Ease In Out / Ease Out In) are one signed
+    // control each: the side picks the pair, the distance from the middle is the Ramp. The
+    // canvas's Ease knob drags the same value, and a control-click there switches the mode.
     ui.add_enabled_ui(selected, |ui| {
-        let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
-        let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
-        let mode = info["easingType"].as_str().unwrap_or(modes[0]);
-        let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
+        let kind = BlendEaseType::parse(info["easingType"].as_str().unwrap_or("easeIn")).unwrap_or_default();
+        let signed = BlendEase { kind, ramp: info["ramp"].as_f64().unwrap_or(0.0) / 100.0 }.signed();
+        let symmetric = kind.is_symmetric();
         widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
-            if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[index], &labels, ui.available_width().max(FIELD_W))
-                && let Some(mode) = modes.get(i)
+            let labels = [tl!("Asymmetric"), tl!("Symmetric")];
+            if let Some(i) = widgets::dropdown(ui, "blend-panel-easing", labels[usize::from(symmetric)], &labels, ui.available_width().max(FIELD_W))
+                && (i == 1) != symmetric
             {
-                change = Some(json!({"easingType": mode}));
+                let ease = BlendEase::from_signed(signed, i == 1);
+                change = Some(json!({"easingType": ease.kind.id(), "ramp": ease.ramp * 100.0}));
             }
         });
-        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = info["ramp"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"ramp": ramp}));
+        widgets::label_row(ui, tl!("Ease:"), LABEL_W, |ui| {
+            let mut value = signed;
+            if ui.add(egui::Slider::new(&mut value, -100.0..=100.0).suffix("%")).changed() {
+                let ease = BlendEase::from_signed(value, symmetric);
+                change = Some(json!({"easingType": ease.kind.id(), "ramp": ease.ramp * 100.0}));
             }
         });
     });
