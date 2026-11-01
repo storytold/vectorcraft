@@ -379,25 +379,6 @@ mod tests {
     }
 
     #[test]
-    fn editing_a_dataset_opens_with_the_rows_own_values() {
-        let mut app = app_with_variables();
-        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello", "Badge": false}})).unwrap();
-        app.run("dataset.set", json!({"name": "Row 1", "values": {"Badge": true}})).unwrap();
-        open(&mut app, "dataset.set", None);
-        {
-            let d = app.ui.dialog.as_ref().unwrap();
-            assert_eq!(d.str("name"), "Row 1");
-            assert_eq!(d.str(&value_key("Title")), "", "the row carries no value for it");
-            assert!(d.bool(&value_key("Badge")), "the row's own value");
-        }
-        app.ui.dialog.as_mut().unwrap().fields.insert(value_key("Title"), json!("Changed"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let sets = app.run("dataset.list", json!({})).unwrap();
-        assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Changed"}));
-        assert_eq!(sets["datasets"][0]["values"]["Badge"], json!({"visible": true}));
-    }
-
-    #[test]
     fn an_untouched_edit_keeps_an_empty_text_value() {
         let mut app = app_with_variables();
         let id = app.run("text.create", json!({"x": 10, "y": 10, "text": "x"})).unwrap()["id"].as_u64().unwrap();
@@ -440,6 +421,25 @@ mod tests {
             let sets = app.run("dataset.list", json!({})).unwrap();
             assert_eq!(sets["datasets"][0]["values"]["Title"], json!(null), "typed: {typed}");
         }
+    }
+
+    #[test]
+    fn editing_a_dataset_opens_with_the_rows_own_values() {
+        let mut app = app_with_variables();
+        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello", "Badge": false}})).unwrap();
+        app.run("dataset.set", json!({"name": "Row 1", "values": {"Badge": true}})).unwrap();
+        open(&mut app, "dataset.set", None);
+        {
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!(d.str("name"), "Row 1");
+            assert_eq!(d.str(&value_key("Title")), "", "the row carries no value for it");
+            assert!(d.bool(&value_key("Badge")), "the row's own value");
+        }
+        app.ui.dialog.as_mut().unwrap().fields.insert(value_key("Title"), json!("Changed"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let sets = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Changed"}));
+        assert_eq!(sets["datasets"][0]["values"]["Badge"], json!({"visible": true}));
     }
 
     #[test]
