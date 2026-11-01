@@ -1,3 +1,5 @@
+use vectorcraft_testkit::ai::geometry_3d as dict_3d;
+
 use super::*;
 
 #[test]
@@ -325,4 +327,150 @@ fn a_hidden_fill_comes_in_hidden() {
     let st = &art_styles(data.as_bytes())["Hidden"];
     assert!(st.plain, "{st:?}");
     assert_eq!(st.looks.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
+}
+
+/// The style `Solid`: a red fill with the basic filter `filter` holding `dict` on the whole object,
+/// then `after`.
+fn solid_style(filter: &str, dict: &str, after: &str) -> ArtStyle {
+    let effect = format!(
+        "/BasicFilter :\n({filter}) 1 0 /Filter ,\n1 /Visible ,\n(Solid.plugin) /PluginFileName ,\n(Solids) /Title ,\n\
+         /Dictionary : /NotRecorded ,\n{dict}; /Dict ;\n /Part ,\n"
+    );
+    let stack = compound("Stack Style Filter", &[fill("0 0 0 0 1 0 0 Xa"), basic("Conduit Filter", "")]);
+    let data = format!("/KnownStyle :\n(Solid) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[effect, stack, after.to_string()]));
+    art_styles(data.as_bytes()).remove("Solid").unwrap_or_default()
+}
+
+#[test]
+fn a_3d_extrude_reads_its_depth_taper_cap_and_rotation() {
+    // GUARDS: a 3D effect made the style not plain, and the object came in as its drawn look.
+    let edits = [
+        ("Geometry3DkExtrudeDepthKey", "30 /Real"),
+        ("Geometry3DkExtrudeTaperEndKey", "80 /Real"),
+        ("Geometry3DkExtrudeCapKey", "0 /Bool"),
+        ("Geometry3DkRotationXKey", "0.34906585039887 /Real"),
+        ("Geometry3DkRotationYKey", "-0.61086523819802 /Real"),
+        ("Geometry3DkRotationZKey", "0.17453292519943 /Real"),
+    ];
+    let st = solid_style("Adobe Geometry3D", &dict_3d(&edits, ""), "");
+    assert!(st.plain && st.simple, "{st:?}");
+    let [solid] = st.effects.as_slice() else { panic!("{st:?}") };
+    assert_eq!(solid.id, "threeD.extrude");
+    assert!(solid.visible);
+    let want = json!({
+        "depth": 30.0, "taper": 80.0, "cap": false, "rotationX": 20.0, "rotationY": 35.0, "rotationZ": 10.0,
+        "lightIntensity": 70.0, "lightRotation": 35.0, "lightHeight": 45.0, "lightSoftness": 40.0, "ambient": 50.0,
+    });
+    assert_eq!(solid.params, want);
+    // A new effect's own turn.
+    let st = solid_style("Adobe Geometry3D", &dict_3d(&[], ""), "");
+    let [solid] = st.effects.as_slice() else { panic!("{st:?}") };
+    assert_eq!((&solid.params["rotationX"], &solid.params["rotationY"], &solid.params["rotationZ"]), (&json!(-18.0), &json!(26.0), &json!(-8.1)));
+}
+
+#[test]
+fn a_3d_plane_reads_its_rotation() {
+    let st =
+        solid_style("Adobe Geometry3D", &dict_3d(&[("Geometry3DkOperationTypeKey", "4 /Int"), ("Geometry3DkExtrudeDepthKey", "10 /Real")], ""), "");
+    assert!(st.plain && st.simple, "{st:?}");
+    let [plane] = st.effects.as_slice() else { panic!("{st:?}") };
+    let want = json!({
+        "rotationX": -18.0, "rotationY": 26.0, "rotationZ": -8.1,
+        "lightIntensity": 70.0, "lightRotation": 35.0, "lightHeight": 45.0, "lightSoftness": 40.0, "ambient": 50.0,
+    });
+    assert_eq!((plane.id.as_str(), &plane.params), ("threeD.rotate", &want));
+}
+
+#[test]
+fn a_hidden_3d_effect_comes_in_hidden_and_a_later_effect_keeps_its_place() {
+    let shadow = "/BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n";
+    let mut st = solid_style("Adobe Geometry3D", &dict_3d(&[], ""), shadow);
+    assert!(st.plain, "{st:?}");
+    assert_eq!(st.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["threeD.extrude", "stylize.dropShadow"]);
+    let effect = format!(
+        "/BasicFilter :\n(Adobe Geometry3D) 1 0 /Filter ,\n0 /Visible ,\n/Dictionary : /NotRecorded ,\n{}; /Dict ;\n /Part ,\n",
+        dict_3d(&[], "")
+    );
+    let data = format!("/KnownStyle :\n(Off) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[effect, fill("0 0 0 0 1 0 0 Xa")]));
+    st = art_styles(data.as_bytes()).remove("Off").unwrap_or_default();
+    let [solid] = st.effects.as_slice() else { panic!("{st:?}") };
+    assert!(!solid.visible);
+}
+
+#[test]
+fn settings_of_a_3d_effect_not_read_here_keep_the_drawn_look() {
+    let cases: Vec<(&str, String)> = vec![
+        ("perspective", dict_3d(&[("Geometry3DkFOVKey", "40 /Real")], "")),
+        ("a brighter light", dict_3d(&[("Geometry3DkSunlightIntensityKey", "60 /Real")], "")),
+        ("ambient light", dict_3d(&[("Geometry3DkGlobalLightIntensityKey", "40 /Real")], "")),
+        ("a metal", dict_3d(&[("MaterialMetallic", "80 /Real")], "")),
+        ("ray tracing", dict_3d(&[("Geometry3DkEngineProfileKey", "1 /Int")], "")),
+        ("a bevel", dict_3d(&[], "1 /Int (Geometry3DkBevelProfileKey) ,\n")),
+        ("Revolve", dict_3d(&[("Geometry3DkOperationTypeKey", "3 /Int")], "")),
+        ("Inflate", dict_3d(&[("Geometry3DkOperationTypeKey", "2 /Int")], "")),
+        ("another mode", dict_3d(&[("Geometry3DkOperationTypeKey", "7 /Int")], "")),
+        ("other keys", dict_3d(&[("Geometry3DkContainKeys", "5 /Int")], "")),
+        ("a missing depth", dict_3d(&[("Geometry3DkExtrudeDepthKey", "")], "")),
+        ("a missing light", dict_3d(&[("Geometry3DkSunlightRotationKey", "")], "")),
+        ("a repeated depth", dict_3d(&[], "20 /Real (Geometry3DkExtrudeDepthKey) ,\n")),
+        ("a depth of another kind", dict_3d(&[("Geometry3DkExtrudeDepthKey", "50 /Int")], "")),
+        ("a depth without a number", dict_3d(&[("Geometry3DkExtrudeDepthKey", "(deep) /Real")], "")),
+        ("too deep", dict_3d(&[("Geometry3DkExtrudeDepthKey", "2500 /Real")], "")),
+        ("a negative depth", dict_3d(&[("Geometry3DkExtrudeDepthKey", "-1 /Real")], "")),
+        ("too far round", dict_3d(&[("Geometry3DkRotationXKey", "3.5 /Real")], "")),
+        ("a twist", dict_3d(&[("Geometry3DkExtrudeTwistEndKey", "15 /Real")], "")),
+        ("a twisted front", dict_3d(&[("Geometry3DkExtrudeTwistBeginKey", "10 /Real")], "")),
+        ("no taper left", dict_3d(&[("Geometry3DkExtrudeTaperEndKey", "0 /Real")], "")),
+        ("a tapered front", dict_3d(&[("Geometry3DkExtrudeTaperBeginKey", "50 /Real")], "")),
+        ("a cap of 2", dict_3d(&[("Geometry3DkExtrudeCapKey", "2 /Bool")], "")),
+        ("an unknown key", dict_3d(&[], "1 /Real (Geometry3DkSomethingNew) ,\n")),
+        ("an unknown kind", dict_3d(&[], "(x) /Name (Geometry3DkLabel) ,\n")),
+        ("an array", dict_3d(&[], "/Array :\n1 /Real ,\n; (Geometry3DkList) ,\n")),
+        ("a nested light", dict_3d(&[], "/Dictionary : /NotRecorded ,\n80 /Real (Intensity) ,\n; (Geometry3DkLight2) ,\n")),
+        ("material overrides", dict_3d(&[], "").replace("; (MaterialOverridenParams)", "5 /Real (MaterialRoughness) ,\n; (MaterialOverridenParams)")),
+        ("a material file", dict_3d(&[], "").replace("() /UnicodeString (MaterialFilePathKey)", "(wood.tex) /UnicodeString (MaterialFilePathKey)")),
+        ("a colored light", dict_3d(&[], "").replace("0 0 0 0 1 1 1 Xa", "0 0 0 0 1 0.5 0 Xa")),
+        (
+            "an entry inside the light's color",
+            dict_3d(&[("Geometry3DkSunlightNameKey", "")], "")
+                .replace("0 XR\n0 1 Xd", "0 XR\n(Key light) /UnicodeString (Geometry3DkSunlightNameKey) ,\n0 1 Xd"),
+        ),
+    ];
+    for (what, dict) in cases {
+        let st = solid_style("Adobe Geometry3D", &dict, "");
+        assert!(!st.plain && st.effects.is_empty(), "{what}: {st:?}");
+    }
+    // The classic 3D effects, and a 3D effect on a fill of its own.
+    assert!(!solid_style("Adobe 3D Effect", &dict_3d(&[], ""), "").plain);
+    let effect = format!(
+        "/BasicFilter :\n(Adobe Geometry3D) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{}; /Dict ;\n /Part ,\n",
+        dict_3d(&[], "")
+    );
+    let item = compound("Chain Style Filter", &[fill("0 0 0 0 1 0 0 Xa"), effect]);
+    let data =
+        format!("/KnownStyle :\n(Fill3D) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+    assert!(!art_styles(data.as_bytes())["Fill3D"].plain);
+}
+
+#[test]
+fn a_3d_effect_without_paint_or_after_another_effect_is_not_simple() {
+    // GUARDS: with no fill or stroke the 3D effect drew nothing, and a shadow before it was drawn after it.
+    let effect = format!(
+        "/BasicFilter :\n(Adobe Geometry3D) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{}; /Dict ;\n /Part ,\n",
+        dict_3d(&[], "")
+    );
+    let shadow = "/BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n".to_string();
+    for (name, kids) in [("Bare", vec![effect.clone()]), ("Shaded", vec![shadow, effect, fill("0 0 0 0 1 0 0 Xa")])] {
+        let data = format!("/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &kids));
+        let st = art_styles(data.as_bytes()).remove(name).unwrap_or_default();
+        assert!(st.plain && !st.simple, "{name}: {st:?}");
+    }
+}
+
+#[test]
+fn a_3d_dictionary_with_more_entries_than_are_kept_keeps_the_drawn_look() {
+    let extra: String = (0..MAX_ENTRIES).map(|i| format!("{i} /Real (Pad{i}) ,\n")).collect();
+    assert!(!solid_style("Adobe Geometry3D", &dict_3d(&[], &extra), "").plain);
+    let deep = "/Dictionary : /NotRecorded ,\n".repeat(MAX_BLOCKS + 4) + &"; (Deep) ,\n".repeat(MAX_BLOCKS + 4);
+    assert!(!solid_style("Adobe Geometry3D", &dict_3d(&[], &deep), "").plain);
 }

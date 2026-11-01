@@ -1,7 +1,7 @@
 //! Hand-written Illustrator editing data (the format `vectorcraft_eps`'s reader documents) and the
 //! EPS, `.ai` and PDF files that carry it, for import tests. Nothing here comes from files another
-//! app wrote, except the key names that [`pdf`] uses, the XML node keys of [`variable_library`] and
-//! the keys of [`on_path_record`] and [`on_path_member`].
+//! app wrote, except the key names that [`pdf`] uses, the XML node keys of [`variable_library`], the
+//! keys of [`on_path_record`] and [`on_path_member`], and the keys and kinds of [`geometry_3d`].
 
 /// Editing data of a `width` × `height` page: header comments (the art's bounding box and the crop
 /// marks are the page), `body` (setup and layers), the trailer.
@@ -111,6 +111,64 @@ pub fn on_path_member(id: &str, order: Option<usize>, angle: f64) -> String {
             "%_/ArtDictionary :\n%_{i} /Int (ConstraintArtOrderId) ,\n%_({id}) /String (Persistent ID) ,\n%_({angle}) /String (BBAccumRotation) ,\n%_;\n%_\n"
         ),
     }
+}
+
+/// The entries of a 3D effect's dictionary for Extrude & Bevel with a white light and no materials,
+/// each as its key and its line's value and kind.
+const GEOMETRY_3D: [(&str, &str); 37] = [
+    ("Geometry3DkOperationTypeKey", "0 /Int"),
+    ("Geometry3DkContainKeys", "1 /Int"),
+    ("Geometry3DkExtrudeDepthKey", "50 /Real"),
+    ("Geometry3DkExtrudeCapKey", "1 /Bool"),
+    ("Geometry3DkExtrudeTwistBeginKey", "0 /Real"),
+    ("Geometry3DkExtrudeTwistEndKey", "0 /Real"),
+    ("Geometry3DkExtrudeTaperBeginKey", "100 /Real"),
+    ("Geometry3DkExtrudeTaperEndKey", "100 /Real"),
+    ("Geometry3DkRotationXKey", "-0.314159 /Real"),
+    ("Geometry3DkRotationYKey", "-0.45378561 /Real"),
+    ("Geometry3DkRotationZKey", "-0.1413717 /Real"),
+    ("Geometry3DkFOVKey", "0 /Real"),
+    ("Geometry3DkEngineProfileKey", "0 /Int"),
+    ("Geometry3DkOutputProfileKey", "0 /Int"),
+    ("Geometry3DkQualityProfileKey", "1 /Int"),
+    ("Geometry3DkShadowProfileKey", "0 /Int"),
+    ("Geometry3DkReduceNoiseKey", "1 /Bool"),
+    ("Geometry3DkRenderAsWireframe", "0 /Bool"),
+    ("Geometry3DkUseDynamicShadowBoundsKey", "1 /Bool"),
+    ("Geometry3DkShadowGroundDistanceKey", "0 /Real"),
+    ("Geometry3DkShadowSpreadKey", "50 /Real"),
+    ("Geometry3DkGlobalLightKey", "1 /Bool"),
+    ("Geometry3DkGlobalLightIntensityKey", "50 /Real"),
+    ("Geometry3DkSunlightVisibilityKey", "1 /Bool"),
+    ("Geometry3DkSunlightIntensityKey", "70 /Real"),
+    ("Geometry3DkSunlightRotationKey", "145 /Real"),
+    ("Geometry3DkSunlightElevationKey", "45 /Real"),
+    ("Geometry3DkSunlightCloudinessKey", "40 /Real"),
+    ("Geometry3DkSunlightNameCounterKey", "1 /Real"),
+    ("Geometry3DkSunlightNameKey", "(Key light) /UnicodeString"),
+    ("MaterialDensity", "100 /Real"),
+    ("MaterialMetallic", "0 /Real"),
+    ("MaterialOffsetX", "0 /Real"),
+    ("MaterialOffsetY", "0 /Real"),
+    ("MaterialResolutionKey", "10 /Int"),
+    ("MaterialRotation", "0 /Real"),
+    ("MaterialRoughness", "40 /Real"),
+];
+
+/// The entries of a 3D effect's dictionary (the `Adobe Geometry3D` filter's) for Extrude & Bevel at
+/// a depth of 50 pt, with a new effect's turn, a white light and no materials: each of
+/// `edits` replaces its key's value and kind (an empty one removes the entry), and `extra` follows.
+pub fn geometry_3d(edits: &[(&str, &str)], extra: &str) -> String {
+    let mut out = String::new();
+    for (key, value) in GEOMETRY_3D {
+        let value = edits.iter().find(|(k, _)| *k == key).map_or(value, |(_, v)| *v);
+        if !value.is_empty() {
+            out += &format!("{value} ({key}) ,\n");
+        }
+    }
+    out += "/FillStyle : 0 O\n0 0 0 0 1 1 1 Xa\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Def ;\n (Geometry3DkSunlightColorKey) ,\n";
+    out += "() /UnicodeString (MaterialFilePathKey) ,\n/Dictionary : /NotRecorded ,\n; (MaterialOverridenParams) ,\n";
+    out + extra
 }
 
 /// A document of 200 × 100 pt with a bit of everything the reader reads. A layer `Art` that shows:
