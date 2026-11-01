@@ -3012,6 +3012,15 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         let (flat, fg) = expand(false);
         let (mut s, g) = expand(true);
         let paths = node(&flat, fg).children().unwrap().clone();
+        // Without byColor (the default) the paths sit in the trace's group, with no group of their own.
+        assert!(paths.iter().all(|p| !matches!(p.kind, NodeKind::Group { .. })), "{method}");
+        let (default, dg) = {
+            let mut s = session();
+            add_image(&mut s, &art, Affine::IDENTITY);
+            let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
+            (s, NodeId(r["id"].as_u64().unwrap()))
+        };
+        assert!(*node(&default, dg).children().unwrap() == paths, "{method}: byColor is false when not given");
         // The colors in the order they first come in, bottom to top.
         let mut order: Vec<String> = vec![];
         for p in &paths {
@@ -3058,6 +3067,17 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     assert_eq!(got, ["#000000", "#c82832", "#f0f0dc"]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+
+    // A trace of one color gives one group holding every path.
+    let mut one = session();
+    let bar =
+        vectorcraft_trace::Raster::from_fn(80, 40, |x, y| if (10..70).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    add_image(&mut one, &bar, Affine::IDENTITY);
+    let r = one.execute("imageTrace.makeAndExpand", &json!({"params": {"ignoreWhite": true}, "byColor": true})).unwrap();
+    let og = node(&one, NodeId(r["id"].as_u64().unwrap()));
+    assert_eq!(names(&og), ["#000000"]);
+    let only = &og.children().unwrap()[0];
+    assert!(!only.children().unwrap().is_empty() && only.children().unwrap().iter().all(|m| hex(m) == "#000000"));
 
     // Auto Grouping's groups are not split: refused, and the trace stays as it was.
     let mut grouped = params.clone();
