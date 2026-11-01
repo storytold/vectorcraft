@@ -29,8 +29,9 @@ pub enum BlendOrientation {
 /// Blend panel → Spine: when the blend follows and shows its spine.
 ///
 /// `Auto` follows a replaced spine, or a straight one when the steps align to the path; `Always`
-/// always follows and shows one (so easing works on a straight blend too); `Never` leaves the
-/// spine alone: no distribution along it, no spine or easing handles on the canvas.
+/// always follows and shows one (so a straight blend has a spine to edit); `Never` leaves the
+/// spine alone: no distribution along it and no spine on the canvas. The easing handles still
+/// show, as easing acts in every mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BlendSpineMode {

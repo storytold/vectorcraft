@@ -5224,8 +5224,8 @@ transparency:
 `object.blend.options` also sets the spine (`spineMode`: `auto`, `always` or `never`) and the easing: `easingType`
 (`easeIn`, `easeOut`, `easeInOut`, `easeOutIn`), `ramp` (0–100%) and `colorShift` (-100–100%, independent of the
 position easing). Auto follows a replaced spine or Align to Path; Always eases along the straight lines between
-the keys; Never takes the spine off the distribution and the canvas. `object.blend.info` reports `spineMode`,
-`spineVisible` (false for Never) and `spineFollowed` (whether easing acts).
+the keys; Never takes the spine off the distribution and the canvas, while easing still acts. `object.blend.info` reports `spineMode`,
+`spineVisible` (false for Never) and `spineFollowed` (whether the steps run along it; distribution and spine visibility only).
 
 A blend's spine is the straight lines between its key centres until it is edited. `object.blend.info` lists it
 (`spine.anchors`, `keyAnchors`: the point each key sits on). `object.blend.spine.addAnchor {x, y}` adds a point where

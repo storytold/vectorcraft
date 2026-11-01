@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Info",
             [],
             None,
-            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, spineMode: auto|always|never, spineVisible?: bool (false for Never), spineFollowed?: bool (whether the steps run along it, so easing acts), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
+            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, spineMode: auto|always|never, spineVisible?: bool (false for Never), spineFollowed?: bool (whether the steps run along it; distribution and spine visibility only — easing acts in every mode), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
             always,
             blend_info
         ),
