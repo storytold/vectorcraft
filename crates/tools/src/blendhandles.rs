@@ -223,7 +223,7 @@ impl BlendHandles {
         self.ease
     }
 
-    /// The options a control-click on the Ease knob sets: the other mode (Asymmetric ↔
+    /// The options a double-click on the Ease knob sets: the other mode (Asymmetric↔
     /// Symmetric) at the same side and Ramp.
     fn ease_toggled(&self) -> Value {
         let ease = BlendEase::from_signed(self.ease.signed(), !self.ease.kind.is_symmetric());
@@ -375,15 +375,25 @@ impl BlendDrag {
         (!crate::select::bbox_handle_at(cx, p)).then(|| Self::new(handles, part, p))
     }
 
-    /// The options a control-click at `p` on the Ease knob of the one blend selected whole asks
-    /// for: the other Ease mode, keeping the side and Ramp.
-    pub fn ease_toggle(cx: &ToolContext, p: Point, mods: Mods) -> Option<Value> {
-        if !(mods.cmd || mods.ctrl) || mods.alt || !cx.bounding_box || !finite(p) {
+    /// The options a double-click at `p` on the Ease knob of the one blend selected whole asks
+    /// for: the other Ease mode (Asymmetric ↔ Symmetric), keeping the side and Ramp.
+    pub fn ease_toggle(cx: &ToolContext, p: Point) -> Option<Value> {
+        if !cx.bounding_box || !finite(p) {
             return None;
         }
         let handles = BlendHandles::selected(cx.doc, cx.selection, crate::select::selection_box(cx), cx.zoom)?;
         let (_, part) = hit_part(std::slice::from_ref(&handles), p, cx.tol(REACH))?;
         (part == BlendPart::Ease).then(|| handles.ease_toggled())
+    }
+
+    /// Whether a blend handle of the one blend selected whole is under `p` (a double-click there
+    /// opens the Blend panel).
+    pub fn on_handle(cx: &ToolContext, p: Point) -> bool {
+        if !cx.bounding_box || !finite(p) {
+            return false;
+        }
+        let Some(handles) = BlendHandles::selected(cx.doc, cx.selection, crate::select::selection_box(cx), cx.zoom) else { return false };
+        hit_part(std::slice::from_ref(&handles), p, cx.tol(REACH)).is_some()
     }
 
     /// The handle under `p` of any selected blend (the Blend tool's).
@@ -624,7 +634,7 @@ mod tests {
     }
 
     #[test]
-    fn a_control_click_toggles_the_ease_mode() {
+    fn a_double_click_on_the_ease_knob_switches_its_mode() {
         let (d, b) = blend_with(BlendSpec {
             ease: BlendEase { kind: BlendEaseType::Out, ramp: 0.4 },
             spine_mode: BlendSpineMode::Always,
@@ -636,14 +646,13 @@ mod tests {
         let c = cx(&d, &s, &p);
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
         let e = h.easing_handles().unwrap();
-        // A plain press drags the knob; a control press switches Asymmetric ↔ Symmetric at the
-        // same side and Ramp, as its own command.
-        assert!(BlendDrag::ease_toggle(&c, e.ease, Mods::default()).is_none());
-        let params = BlendDrag::ease_toggle(&c, e.ease, Mods { cmd: true, ..Mods::default() }).expect("a control-click switches it");
+        // A drag moves the knob; a double-click switches Asymmetric ↔ Symmetric at the same side
+        // and Ramp, as its own command.
+        let params = BlendDrag::ease_toggle(&c, e.ease).expect("a double-click switches it");
         assert_eq!(params["easingType"], json!("easeOutIn"));
         assert!((params["ramp"].as_f64().unwrap_or_default() - 40.0).abs() < 1e-9, "{params:?}");
         let mut t = SelectionTool::default();
-        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, e.ease.x, e.ease.y).with_mods(Mods { cmd: true, ..Mods::default() }));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, e.ease.x, e.ease.y));
         assert!(matches!(&acts[..], [Action::Exec(id, p)] if id == "object.blend.options" && p["easingType"] == json!("easeOutIn")), "{acts:?}");
         // Back the other way gives Asymmetric at the same side.
         let (d2, b2) = blend_with(BlendSpec {
@@ -655,8 +664,27 @@ mod tests {
         let e2 = h2.easing_handles().unwrap();
         let mut s2 = Selection::default();
         s2.set([b2]);
-        let params = BlendDrag::ease_toggle(&cx(&d2, &s2, &p), e2.ease, Mods { ctrl: true, ..Mods::default() });
+        let params = BlendDrag::ease_toggle(&cx(&d2, &s2, &p), e2.ease);
         assert_eq!(params.unwrap_or_default()["easingType"], json!("easeIn"));
+    }
+
+    #[test]
+    fn a_double_click_on_another_blend_handle_opens_the_blend_panel() {
+        let (d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(4));
+        let mut s = Selection::default();
+        s.set([b]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        let mut t = SelectionTool::default();
+        // The step knob and the Colour handle open the Blend panel; the Ease knob switches its
+        // mode instead.
+        for at in [h.steps_at, h.easing_handles().unwrap().color] {
+            let acts = t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y));
+            assert_eq!(acts, vec![Action::Dialog("window.panel".into(), json!({"panel": "blend"}))], "{at:?}");
+        }
+        // Off the handles the double-click is the Selection tool's own.
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
     }
 
     #[test]

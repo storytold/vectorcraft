@@ -2,8 +2,10 @@
 //!
 //! - Blend: click object A, then object B → `object.blend.make {ids: [A, B]}`; clicking an anchor
 //!   point of a path blends from that point (`starts`). Each further click adds the object as one
-//!   more key of the new blend (as does clicking a blend first). Double-click or Alt-click opens
-//!   Blend Options (dialog `blendOptions`). Clicking empty canvas starts over. A selected blend
+//!   more key of the new blend (as does clicking a blend first). Double-click on a blend handle
+//!   opens the Blend panel (the Ease knob switches its Asymmetric/Symmetric mode instead), and a
+//!   double-click or Alt-click anywhere else opens Blend Options (dialog `blendOptions`). Clicking
+//!   empty canvas starts over. A selected blend
 //!   shows its step-count, Ease and Colour handles on the canvas: dragging them previews
 //!   `object.blend.options` (Steps, Type/Ramp and Shift), one undo step; Escape cancels a drag.
 //! - Mesh: click inside a filled path → `object.mesh.create {ids, at}` (1×1 mesh plus lines through
@@ -92,7 +94,19 @@ impl Tool for BlendTool {
             vec![Action::Dialog(BLEND_OPTIONS.into(), json!({}))]
         };
         match ev.kind {
-            PointerKind::DoubleClick => options(self),
+            PointerKind::DoubleClick => {
+                // The Ease knob switches its mode and another handle opens the Blend panel;
+                // anywhere else opens Blend Options.
+                if let Some(params) = crate::blendhandles::BlendDrag::ease_toggle(cx, ev.pos) {
+                    (self.first, self.chained) = (None, false);
+                    return vec![Action::Exec("object.blend.options".into(), params)];
+                }
+                if crate::blendhandles::BlendDrag::on_handle(cx, ev.pos) {
+                    (self.first, self.chained) = (None, false);
+                    return vec![Action::Dialog("window.panel".into(), json!({ "panel": "blend" }))];
+                }
+                options(self)
+            }
             PointerKind::Down if ev.mods.alt => options(self),
             PointerKind::Down => {
                 // A selected blend's handles (steps, ease, colour) come before picking objects;

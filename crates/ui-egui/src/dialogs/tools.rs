@@ -130,6 +130,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             }
             return;
         }
+        // A double-click on a blend handle (the step knob or the Colour handle): the Blend panel.
+        "window.panel" => {
+            app.run("window.panel", p).ok();
+            return;
+        }
         // The Blend tool's double-click and Alt-click: Blend Options.
         super::blend_options::KIND => {
             if let Err(e) = super::blend_options::open(app) {

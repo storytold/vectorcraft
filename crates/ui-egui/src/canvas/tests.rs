@@ -7199,6 +7199,48 @@ fn a_selected_blend_shows_its_step_handle_and_hovering_names_it() {
     assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["steps"], 32);
 }
 
+/// A double-click on a blend handle opens the Blend panel, and on the Ease knob switches its
+/// mode (Asymmetric ↔ Symmetric) instead.
+#[test]
+fn double_clicking_a_blend_handle_opens_the_blend_panel_and_the_ease_knob_switches_mode() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 0, "width": 20, "height": 20})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let id = app.run("object.blend.make", json!({"steps": 4, "spineMode": "always"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let (frame_box, view) = (app.selection_box(), app.view_info());
+    let st = app.session.active().unwrap();
+    let h = vectorcraft_tools::blendhandles::BlendHandles::selected(&st.doc, &st.selection, frame_box, view.zoom).unwrap();
+    let double_click = |app: &mut VectorcraftApp, at: Point| {
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            let r = app.session.pointer(&PointerEvent::new(kind, at.x, at.y), view);
+            crate::canvas::apply_requests(app, r);
+        }
+    };
+    // The step knob and the Colour handle open the Blend panel.
+    double_click(&mut app, h.steps_at);
+    assert!(crate::panel_docking::showing(&app.ui, crate::panels::blend::ID), "the step knob opens the Blend panel");
+    app.run("window.panel", json!({"panel": crate::panels::blend::ID, "toggle": true})).unwrap();
+    double_click(&mut app, h.easing_handles().unwrap().color);
+    assert!(crate::panel_docking::showing(&app.ui, crate::panels::blend::ID), "the Colour handle opens the Blend panel");
+    // The Ease knob switches its mode at the same side and Ramp, and does not open the panel.
+    app.run("object.blend.options", json!({"easingType": "easeOut", "ramp": 40})).unwrap();
+    let (frame_box, view) = (app.selection_box(), app.view_info());
+    let st = app.session.active().unwrap();
+    let h = vectorcraft_tools::blendhandles::BlendHandles::selected(&st.doc, &st.selection, frame_box, view.zoom).unwrap();
+    double_click(&mut app, h.easing_handles().unwrap().ease);
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!(info["easingType"], "easeOutIn");
+    assert!((info["ramp"].as_f64().unwrap_or_default() - 40.0).abs() < 0.1, "{info:?}");
+}
+
 /// The step-count knob follows the pointer up the box's edge while it drags, and when it is let
 /// go it rests at the height matching the new count on the fixed 1..1000 scale.
 #[test]

@@ -372,7 +372,7 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
             let (ease, color) = (xf.to_screen(e.ease), xf.to_screen(e.color));
             knob(p, ease, HANDLE_RADIUS);
             // The Ease knob says its mode: a filled dot inside for Asymmetric, an empty one for
-            // Symmetric (a control-click switches it).
+            // Symmetric (a double-click switches it).
             if h.ease().kind.is_symmetric() {
                 p.circle_stroke(ease, 3.0, Stroke::new(1.5, KNOB_STROKE));
             } else {

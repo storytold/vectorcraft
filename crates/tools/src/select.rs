@@ -704,14 +704,6 @@ impl Tool for SelectionTool {
         }
         if matches!(self.state, State::Idle)
             && ev.kind == PointerKind::Down
-            && let Some(params) = crate::blendhandles::BlendDrag::ease_toggle(cx, ev.pos, ev.mods)
-        {
-            // A control-click on the Ease knob switches its mode (Asymmetric ↔ Symmetric) as its
-            // own undo step instead of picking the object behind it.
-            return vec![Action::Exec("object.blend.options".into(), params)];
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
             && let Some(d) = crate::blendhandles::BlendDrag::hit(cx, ev.pos, ev.mods)
         {
             self.state = State::BlendControls(d);
@@ -733,6 +725,15 @@ impl Tool for SelectionTool {
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
+                // A double-click on a blend handle: the Ease knob switches its mode (Asymmetric ↔
+                // Symmetric), any other handle opens the Blend panel — both before the widgets and
+                // art under the knob answer.
+                if let Some(params) = crate::blendhandles::BlendDrag::ease_toggle(cx, p) {
+                    return vec![Action::Exec("object.blend.options".into(), params)];
+                }
+                if crate::blendhandles::BlendDrag::on_handle(cx, p) {
+                    return vec![Action::Dialog("window.panel".into(), json!({ "panel": "blend" }))];
+                }
                 // A threaded port: the thread breaks there. Any other port takes the double-click
                 // too, so it neither edits the type nor isolates.
                 if let Some((id, port)) = crate::text::port_at(cx, p) {

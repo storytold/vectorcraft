@@ -112,7 +112,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The easing moves the steps between any two keys, spine or not, so it needs only a blend.
     // Asymmetric (Ease In / Ease Out) and Symmetric (Ease In Out / Ease Out In) are one signed
     // control each: the side picks the pair, the distance from the middle is the Ramp. The
-    // canvas's Ease knob drags the same value, and a control-click there switches the mode.
+    // canvas's Ease knob drags the same value, and a double-click on it switches the mode.
     ui.add_enabled_ui(selected, |ui| {
         let kind = BlendEaseType::parse(info["easingType"].as_str().unwrap_or("easeIn")).unwrap_or_default();
         let signed = BlendEase { kind, ramp: info["ramp"].as_f64().unwrap_or(0.0) / 100.0 }.signed();
