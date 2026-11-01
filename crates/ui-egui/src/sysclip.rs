@@ -85,6 +85,11 @@ impl VectorcraftApp {
     /// ([`Self::write_formats_before_text_input`]). Once they are written, the status bar shows
     /// the first of the PNG's and PDF's warnings.
     pub(crate) fn publish_clipboard(&mut self) {
+        // Ruler guides copied alone stay in VectorCraft: the system clipboard keeps what other
+        // apps put there (#3226).
+        if !self.session.clipboard.has_art() {
+            return;
+        }
         if self.services.system_clipboard.is_none() {
             if self.session.prefs.copy_as_svg {
                 self.clipboard_out = self.session.clipboard_svg();

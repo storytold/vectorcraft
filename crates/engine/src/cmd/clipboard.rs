@@ -102,6 +102,12 @@ impl Clipboard {
         self.nodes.is_empty() && self.artboards.is_empty() && self.guides.is_empty()
     }
 
+    /// Does it hold art (objects or artboards) for other apps? Ruler guides stay in VectorCraft:
+    /// guides alone put nothing on the system clipboard (#3226).
+    pub fn has_art(&self) -> bool {
+        !self.nodes.is_empty() || !self.artboards.is_empty()
+    }
+
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
     pub(crate) fn copy(st: &DocState, roots: &[NodeId]) -> Self {
         let d = &*st.doc;
@@ -188,7 +194,7 @@ impl Clipboard {
 
     /// The objects as standalone SVG (`None` when there are none).
     pub fn svg(&self) -> Option<String> {
-        if self.is_empty() {
+        if !self.has_art() {
             return None;
         }
         let d = self.to_document();
