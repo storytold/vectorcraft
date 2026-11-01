@@ -7,6 +7,9 @@ pub(super) struct CatalogFamily {
     pub(super) name: String,
     /// Non-English family name from the name table, when the scan found one.
     pub(super) native: Option<String>,
+    /// The family names its faces write, `(language, name)`: what the menu labels and searches
+    /// by in the interface's own writing system (the first face found that has any).
+    pub(super) localized: Vec<(String, String)>,
     pub(super) faces: Vec<CatalogFace>,
     /// The family's kind (from its first face found); variable when any face found is.
     pub(super) traits: Option<FontTraits>,

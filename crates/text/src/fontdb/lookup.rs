@@ -87,7 +87,14 @@ impl FontDb {
         let loaded = {
             let faces = self.read_faces();
             let mut of_family = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family));
-            of_family.next().map(|first| FontTraits { variable: first.traits.variable || of_family.any(|f| f.traits.variable), ..first.traits })
+            of_family.next().map(|first| {
+                let mut traits = first.traits;
+                for f in of_family {
+                    traits.variable |= f.traits.variable;
+                    traits.scripts = traits.scripts.or(f.traits.scripts);
+                }
+                traits
+            })
         };
         let scanned = |catalog: &Catalog| catalog.get(&family.to_ascii_lowercase()).and_then(|c| c.traits);
         match loaded {

@@ -180,3 +180,6 @@ sync_github_name = true
 
 [people.ashokram-si]
 real_name = "Ashok Ram"
+
+[people.RICHRAN2030]
+sync_github_name = true

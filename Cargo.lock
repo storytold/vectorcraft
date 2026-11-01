@@ -6450,6 +6450,7 @@ dependencies = [
 name = "vectorcraft-text"
 version = "0.18.0"
 dependencies = [
+ "encoding_rs",
  "harfrust 0.13.3",
  "icu_segmenter",
  "kurbo 0.13.1",

@@ -61,6 +61,16 @@ pub fn snapshot(app: &mut VectorcraftApp) {
 /// Restore engine prefs from `UiState` after the host loaded saved UI state.
 pub fn restore(app: &mut VectorcraftApp) {
     let mut p: Prefs = serde_json::from_value(app.ui.engine_prefs.clone()).unwrap_or_default();
+    // Before schema 1, Show Font Names in English was a plain flag saved as `true` in every file
+    // (its old default), so a Chinese, Japanese or Korean interface listed English names. It now
+    // follows the interface language until the user chooses: an old file's `true` is dropped, and
+    // a `false` the user chose stays.
+    if app.ui.prefs_version < crate::state::PREFS_VERSION {
+        if p.font_names_in_english == Some(true) {
+            p.font_names_in_english = None;
+        }
+        app.ui.prefs_version = crate::state::PREFS_VERSION;
+    }
     if app.ui.engine_prefs.is_null() {
         // Older preference files: keep the saved brightness.
         p.ui_brightness = app.ui.brightness.id().into();
@@ -266,6 +276,8 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
         first = false;
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         match sp.kind {
+            // Show Font Names in English follows the interface language until the user chooses.
+            PrefKind::Bool if sp.key == "fontNamesInEnglish" => font_names_english_row(ui, d, sp.key, sp.label),
             // Units › Numbers Without Units Are Points only tells points from picas: dimmed
             // unless a unit is Picas.
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
@@ -403,6 +415,29 @@ fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let on = d.bool(key);
     if widgets::check(ui, label, on, ui.is_enabled()) {
         d.fields.insert(key.into(), json!(!on));
+    }
+}
+
+/// Preferences › Type › Show Font Names in English, which follows the interface language until
+/// the user chooses: the checkbox shows the value in effect (as Illustrator's does in a Chinese,
+/// Japanese or Korean interface), and a link puts the choice back to following the language.
+fn font_names_english_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
+    let t = Tokens::get(ui.ctx());
+    let stored = d.fields.get(key).and_then(Value::as_bool);
+    let localized = vectorcraft_text::CjkScript::of_language(crate::i18n::current().code()).is_some();
+    let on = stored.unwrap_or(!localized);
+    if widgets::check(ui, label, on, ui.is_enabled()) {
+        d.fields.insert(key.into(), json!(!on));
+    }
+    match stored {
+        Some(_) => {
+            if ui.link(egui::RichText::new(tl!("Follow the interface language")).size(11.0)).clicked() {
+                d.fields.insert(key.into(), Value::Null);
+            }
+        }
+        None => {
+            ui.label(egui::RichText::new(tl!("Follows the interface language.")).color(t.text_dim).size(11.0));
+        }
     }
 }
 

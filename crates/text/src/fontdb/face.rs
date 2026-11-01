@@ -86,6 +86,9 @@ pub struct FontFace {
     /// Non-English family name from the name table (`ヒラギノ角ゴシック`), when the font has one.
     /// Used when Preferences › Type › Show Font Names in English is off.
     pub native_family: Option<String>,
+    /// Every family name the face writes, `(language, name)`: what a font menu labels the family
+    /// by in the interface's own writing system (`未来荧黑`, `ヒカリ角ゴ`) and searches it by.
+    pub localized_family: std::sync::Arc<[(String, String)]>,
     /// Typographic style name (e.g. "Semibold", "Italic").
     pub style: String,
     /// The font's version string (name ID 5, e.g. "Version 7.200"; empty when it has none). Two

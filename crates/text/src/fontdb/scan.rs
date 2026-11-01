@@ -17,6 +17,7 @@ pub(super) fn named_instances(
     style: &str,
     keys: &mut FaceKeys,
     native_family: Option<String>,
+    localized_family: &std::sync::Arc<[(String, String)]>,
 ) -> (Vec<FaceStyle>, Option<String>) {
     let axes = f.axes();
     if axes.is_empty() || axes.len() > MAX_AXES {
@@ -81,6 +82,7 @@ pub(super) fn named_instances(
         out.push(FaceStyle {
             family: family.to_string(),
             native_family: native_family.clone(),
+            localized_family: localized_family.clone(),
             style,
             keys,
             variations,

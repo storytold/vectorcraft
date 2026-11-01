@@ -458,7 +458,8 @@ fn take_submenu(bar: &mut MenuBar, command: &str) -> Option<Node> {
 
 /// VectorCraft's menus as a Mac menu bar, as they show now.
 pub fn layout(app: &VectorcraftApp) -> Layout {
-    let mut layout = mac_layout(app, &from_tree(app, &menus::menu_tree_named(app.session.prefs.font_names_in_english)), crate::i18n::current());
+    let (script, english_names) = crate::font_menu::menu_names(app);
+    let mut layout = mac_layout(app, &from_tree(app, &menus::menu_tree_named(script, english_names)), crate::i18n::current());
     if app.file_dialog_open() {
         for menu in &mut layout.bar.menus {
             inert(&mut menu.children);

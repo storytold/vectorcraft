@@ -101,7 +101,8 @@ pub struct MenuEntry {
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
+    let (script, english_names) = crate::font_menu::menu_names(app);
+    for (title, items) in menu_tree_named(script, english_names) {
         flatten(app, vec![title.to_string()], &items, &mut out);
     }
     out

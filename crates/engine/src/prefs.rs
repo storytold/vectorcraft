@@ -67,7 +67,10 @@ pub struct Prefs {
     pub show_east_asian_options: bool,
     pub show_indic_options: bool,
     pub type_selection_by_path_only: bool,
-    pub font_names_in_english: bool,
+    /// Show Font Names in English (Type › Options). `None` — the default — follows the interface
+    /// language: off in a Chinese, Japanese or Korean interface, which lists fonts by their own
+    /// names as Illustrator does, and on elsewhere. See [`Prefs::font_names_in_english`].
+    pub font_names_in_english: Option<bool>,
     pub auto_size_area_type: bool,
     pub font_preview: bool,
     pub font_preview_size: String,
@@ -356,7 +359,7 @@ impl Default for Prefs {
             show_east_asian_options: false,
             show_indic_options: false,
             type_selection_by_path_only: false,
-            font_names_in_english: true,
+            font_names_in_english: None,
             auto_size_area_type: false,
             font_preview: true,
             font_preview_size: s("medium"),
@@ -473,5 +476,15 @@ impl Default for Prefs {
             perspective_widget: Default::default(),
             import_matches: vec![],
         }
+    }
+}
+
+impl Prefs {
+    /// Preferences › Type › Show Font Names in English, as applied: the user's choice, or — until
+    /// they make one — off in a Chinese, Japanese or Korean interface (which lists fonts by their
+    /// own names, as Illustrator does) and on in every other. `localized_ui` says whether the
+    /// interface is in one of those languages.
+    pub fn font_names_in_english(&self, localized_ui: bool) -> bool {
+        self.font_names_in_english.unwrap_or(!localized_ui)
     }
 }

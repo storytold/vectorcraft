@@ -3176,10 +3176,13 @@ Pen's second anchor at (150, 431), in line with the square's centre.
   type's frame, type on a path's path — within `selectionTolerance`; a click among the glyphs, between the lines or
   inside the frame selects nothing. Off, anywhere in the type's bounds selects it. Marquee selection is unchanged, and
   the Type tools (a click among the characters edits them) and the Eyedropper (`eyedropper`) are not affected.
-- `fontNamesInEnglish` (on by default): Preferences › Type › Show Font Names in English. Off, the Character panel and
-  Type → Font menus label a family by its native-language name when the font has one. `text.fontList` and
-  `text.setStyle {font}` always use the English (canonical) family name; a document may still name a font by any of
-  its aliases (`ヒラギノ角ゴシック` resolves to Hiragino Sans).
+- `fontNamesInEnglish` (unset by default; then it follows the interface language): Preferences › Type › Show Font
+  Names in English. Off, the Character panel and Type → Font menus label a family by the name the font gives in the
+  interface's own writing system (`未来荧黑` in a Chinese interface, `ヒカリ角ゴ` in a Japanese one), else its first
+  non-English name. Unset (`null`), it follows the interface language — off in a Chinese, Japanese or Korean
+  interface, on elsewhere; `prefs.set` with `true` or `false` fixes it. `text.fontList` and `text.setStyle {font}`
+  always use the English (canonical) family name; a document may still name a font by any of its aliases
+  (`ヒラギノ角ゴシック` resolves to Hiragino Sans).
 - `hyphenationExceptions` (empty by default): Preferences › Hyphenation › Exceptions. A comma-separated list of words,
   matched without regard to case: a word with no hyphens is never hyphenated (`typography`), and a word with hyphens
   breaks only where they are (`hap-pen`). `prefs.set` pushes the list into the hyphenator and reflows open documents.

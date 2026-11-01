@@ -16,7 +16,8 @@ use std::sync::Arc;
 use egui::{Color32, Sense, Ui, vec2};
 use serde_json::json;
 
-use vectorcraft_text::FontClass;
+use vectorcraft_text::cjk::{menu_sort_key, CjkScript};
+use vectorcraft_text::{FontClass, FontDb};
 
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
@@ -40,8 +41,13 @@ pub enum FontPick {
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
     pub samples: bool,
-    /// Preferences › Type › Show Font Names in English (on by default).
+    /// Preferences › Type › Show Font Names in English as applied: the user's choice, or whether
+    /// the interface is in a non-CJK language until they make one.
     pub english_names: bool,
+    /// The interface language's writing system: the menu lists that writing system's fonts first
+    /// and sorts both groups the way it orders names (pinyin for Simplified Chinese, and so on).
+    /// `None` in every other language, whose menu lists all fonts by their English names.
+    pub script: Option<CjkScript>,
     /// Row height in points (Font Preview Size).
     pub row: f32,
     /// The starred families.
@@ -51,10 +57,18 @@ pub struct MenuLook<'a> {
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, English names, medium rows, no favourites.
+    /// Samples on, English names, no group of the interface's own, medium rows, no favourites.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[] }
+        Self { samples: true, english_names: true, script: None, row: ROW, favorites: &[], recent: &[] }
     }
+}
+
+/// The interface's writing system (the font menus' group and order) and Preferences › Type ›
+/// Show Font Names in English as applied: the user's choice, else on everywhere but a Chinese,
+/// Japanese or Korean interface, which lists fonts by their own names as Illustrator does.
+pub fn menu_names(app: &VectorcraftApp) -> (Option<CjkScript>, bool) {
+    let script = CjkScript::of_language(crate::i18n::current().code());
+    (script, app.session.prefs.font_names_in_english(script.is_some()))
 }
 
 impl<'a> MenuLook<'a> {
@@ -64,13 +78,8 @@ impl<'a> MenuLook<'a> {
             "large" => 32.0,
             _ => ROW,
         };
-        Self {
-            samples: app.session.prefs.font_preview,
-            english_names: app.session.prefs.font_names_in_english,
-            row,
-            favorites: &app.ui.favorite_fonts,
-            recent: app.recent_fonts(),
-        }
+        let (script, english_names) = menu_names(app);
+        Self { samples: app.session.prefs.font_preview, english_names, script, row, favorites: &app.ui.favorite_fonts, recent: app.recent_fonts() }
     }
 }
 
@@ -137,6 +146,9 @@ fn class_label(c: FontClass) -> &'static str {
 #[derive(Clone, Debug, PartialEq)]
 enum Row {
     Heading(&'static str),
+    /// A line between the interface's own fonts and the rest, as Photoshop separates its groups
+    /// without a heading.
+    Separator,
     Family(String),
     Style(String, String),
 }
@@ -144,13 +156,13 @@ enum Row {
 impl Row {
     fn family(&self) -> Option<&str> {
         match self {
-            Row::Heading(_) => None,
+            Row::Heading(_) | Row::Separator => None,
             Row::Family(f) | Row::Style(f, _) => Some(f),
         }
     }
     fn style(&self) -> Option<&str> {
         match self {
-            Row::Heading(_) | Row::Family(_) => None,
+            Row::Heading(_) | Row::Separator | Row::Family(_) => None,
             Row::Style(_, s) => Some(s),
         }
     }
@@ -160,9 +172,11 @@ impl Row {
 }
 
 /// Recent families keep their application order, once each, and only while still available and
-/// passing the filters. The other families keep the database's order. Headings share the virtual
+/// passing the filters. The interface language's own fonts (`native`) come next, then the rest,
+/// each in the order `families` has them (the menu sorts them by label in a CJK interface; the
+/// database's order is English-alphabetical). Headings and the separator share the virtual
 /// list's row height, but never act as fonts or take keyboard focus.
-fn grouped_rows(families: &[String], recent: &[String], expanded: &[String], styles: impl Fn(&str) -> Vec<String>) -> Vec<Row> {
+fn grouped_rows(families: &[String], recent: &[String], native: &std::collections::HashSet<String>, expanded: &[String], styles: impl Fn(&str) -> Vec<String>) -> Vec<Row> {
     let mut first: Vec<&String> = vec![];
     for name in recent {
         if let Some(f) = families.iter().find(|f| f.eq_ignore_ascii_case(name))
@@ -178,20 +192,31 @@ fn grouped_rows(families: &[String], recent: &[String], expanded: &[String], sty
             rows.extend(styles(f).into_iter().map(|s| Row::Style(f.clone(), s)));
         }
     };
-    // Build the family rows before adding headings, so the same expansion logic serves both groups.
+    let mut recent_rows = vec![];
     for f in &first {
-        append(&mut rows, f);
+        append(&mut recent_rows, f);
     }
-    let boundary = rows.len();
+    let mut native_rows = vec![];
+    let mut other_rows = vec![];
     for f in families.iter().filter(|f| !first.contains(f)) {
-        append(&mut rows, f);
+        append(if native.contains(f.as_str()) { &mut native_rows } else { &mut other_rows }, f);
     }
-    if boundary > 0 {
-        if boundary < rows.len() {
-            rows.insert(boundary, Row::Heading("Fonts"));
+    if !recent_rows.is_empty() {
+        rows.push(Row::Heading("Recent Fonts"));
+        rows.extend(recent_rows);
+    }
+    if !native_rows.is_empty() {
+        if !rows.is_empty() {
+            rows.push(Row::Heading("Fonts"));
         }
-        rows.insert(0, Row::Heading("Recent Fonts"));
+        rows.extend(native_rows);
+        if !other_rows.is_empty() {
+            rows.push(Row::Separator);
+        }
+    } else if !rows.is_empty() && !other_rows.is_empty() {
+        rows.push(Row::Heading("Fonts"));
     }
+    rows.extend(other_rows);
     rows
 }
 
@@ -203,9 +228,10 @@ fn remap_highlight(before: &[Row], selected: Option<usize>, after: &[Row]) -> Op
 }
 
 /// What the rows were listed for: the query, the script, kind, font technology (variable only) and
-/// favourites filters, Show Font Names in English, the expanded families, favourites, recent
-/// history and font list generation.
-type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Vec<String>, Vec<String>, Vec<String>, u64);
+/// favourites filters, Show Font Names in English and the interface's writing system, the expanded
+/// families, favourites, recent history and font list generation.
+#[allow(clippy::type_complexity)]
+type RowsKey = (String, usize, Option<FontClass>, bool, bool, bool, Option<CjkScript>, Vec<String>, Vec<String>, Vec<String>, u64);
 
 /// The menu's state between frames.
 #[derive(Clone, Default)]
@@ -254,7 +280,10 @@ pub fn font_menu(
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let shown = widgets::combo_menu(ui, &id, current, width, |menu| {
+    // The field names the family as the menu does: its own name in a Chinese, Japanese or Korean
+    // interface (未来荧黑), the English one elsewhere.
+    let shown = FontDb::global().family_display_name(current, look.script, look.english_names);
+    let shown = widgets::combo_menu(ui, &id, &shown, width, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| header(ui, state_id, state, current, look),
             look.row,
@@ -381,6 +410,7 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         st.variable_only,
         st.favorites_only,
         look.english_names,
+        look.script,
         st.expanded.clone(),
         look.favorites.to_vec(),
         look.recent.to_vec(),
@@ -388,8 +418,12 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     );
     if st.rows_key.as_ref() != Some(&key) {
         let wanted = |f: &str| {
-            let label = db.family_display_name(f, look.english_names);
-            if !(query.is_empty() || f.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)) {
+            let label = db.family_display_name(f, look.script, look.english_names);
+            if !(query.is_empty()
+                || f.to_lowercase().contains(&query)
+                || label.to_lowercase().contains(&query)
+                || db.family_search_names(f).iter().any(|name| name.to_lowercase().contains(&query)))
+            {
                 return false;
             }
             if st.favorites_only && !favorite(f) {
@@ -401,8 +435,19 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
             let traits = db.family_traits(f);
             script_matches(st.script, traits) && st.class.is_none_or(|c| c == traits.class) && (!st.variable_only || traits.variable)
         };
-        let families: Vec<_> = db.menu_family_list().iter().filter(|f| wanted(f)).cloned().collect();
-        let rows = grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f));
+        let mut families: Vec<String> = db.menu_family_list().iter().filter(|f| wanted(f)).cloned().collect();
+        // The interface language's own fonts form a group of their own, after Recent.
+        let native: std::collections::HashSet<String> = match look.script {
+            Some(script) => families.iter().filter(|f| db.family_scripts(f).has(script)).cloned().collect(),
+            None => std::collections::HashSet::new(),
+        };
+        // A CJK interface sorts by the label it shows, in that writing system's own order
+        // (pinyin for Chinese), as Photoshop and Illustrator list these fonts; other interfaces
+        // keep the database's English-alphabetical order.
+        if let Some(script) = look.script {
+            families.sort_by_cached_key(|f| (menu_sort_key(&db.family_display_name(f, look.script, look.english_names), Some(script)), f.to_lowercase()));
+        }
+        let rows = grouped_rows(&families, look.recent, &native, &st.expanded, |f| db.styles(f));
         // Filter changes (including un-starring a favourite) may remove rows; expanding
         // another family or a background font scan can insert rows before the highlight.
         // Never preview an unrelated family because the old numeric index now points to it.
@@ -521,6 +566,12 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
             heading_row(ui, row_h, label, &t);
             continue;
         }
+        if matches!(row, Row::Separator) {
+            // A line between the interface's own fonts and the rest, as Photoshop separates groups.
+            let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
+            ui.painter_at(rect).hline(rect.x_range(), rect.center().y, egui::Stroke::new(1.0, t.text_dim.gamma_multiply(0.35)));
+            continue;
+        }
         let Some(family) = row.family() else { continue };
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
         if resp.hovered() && ui.input(|inp| inp.pointer.delta() != egui::Vec2::ZERO || inp.smooth_scroll_delta != egui::Vec2::ZERO) {
@@ -560,8 +611,8 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         // Family rows follow Show Font Names in English; style rows keep the style name (#394).
         let name = match row {
             Row::Style(_, style) => style.clone(),
-            Row::Family(f) => db.family_display_name(f, look.english_names),
-            Row::Heading(_) => continue,
+            Row::Family(f) => db.family_display_name(f, look.script, look.english_names),
+            Row::Heading(_) | Row::Separator => continue,
         };
         ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
         let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));

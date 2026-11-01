@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use super::face::{MAX_AXES, Variation};
-use super::names::{MAX_LEGACY_NAMES, all_names, localized, name, native_family_name, norm};
+use super::names::{MAX_LEGACY_NAMES, all_names, localized, localized_family, name, native_family_name, norm};
 use super::scan::named_instances;
 use super::{MetadataProvider, StringId};
+
+use crate::cjk::{self, CjkScripts};
 
 /// The names a face answers to besides its (English) family and style, normalized ([`norm`]):
 /// its family in every language (typographic, else legacy: `ヒラギノ角ゴシック`), its style likewise
@@ -90,8 +94,8 @@ impl FontClass {
         [FontClass::Serif, FontClass::Sans, FontClass::Rounded, FontClass::Script, FontClass::Monospaced, FontClass::Decorative];
 }
 
-/// What a font menu filters on: whether a family sets Japanese or Thai, its kind, and whether it
-/// is a variable font.
+/// What a font menu filters on: whether a family sets Japanese or Thai, its kind, whether it is a
+/// variable font, and which CJK writing systems it serves.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FontTraits {
     pub japanese: bool,
@@ -101,11 +105,15 @@ pub struct FontTraits {
     /// The face has variation axes (an `fvar` table of at most 64 axes); for a family, one of
     /// its faces has.
     pub variable: bool,
+    /// The CJK writing systems the font serves, from the OS/2 code page bits Photoshop and
+    /// Illustrator group by, else the languages it names itself in, else the characters it
+    /// covers (see [`scripts_of`]). A font menu lists the interface language's own fonts first.
+    pub scripts: CjkScripts,
 }
 
 impl FontTraits {
-    /// From a face's OS/2 and `fvar` tables (when it has them) and names.
-    fn of(font: &skrifa::FontRef<'_>, keys: &FaceKeys) -> Self {
+    /// From a face's OS/2 and `fvar` tables (when it has them), its names and its characters.
+    fn of(font: &skrifa::FontRef<'_>, keys: &FaceKeys, localized: &[(String, String)]) -> Self {
         use skrifa::raw::TableProvider;
         let os2 = font.os2().ok();
         let names: Vec<&str> = keys.families.iter().chain(&keys.postscript).map(String::as_str).collect();
@@ -216,7 +224,7 @@ impl FontTraits {
             FontClass::Other
         };
         let variable = (1..=MAX_AXES).contains(&font.axes().len());
-        FontTraits { japanese, thai, class, variable }
+        FontTraits { japanese, thai, class, variable, scripts: scripts_of(font, localized, codepages) }
     }
 }
 
@@ -324,6 +332,8 @@ pub(crate) struct FaceStyle {
     pub(super) family: String,
     /// See [`FontFace::native_family`].
     pub(super) native_family: Option<String>,
+    /// See [`FontFace::localized_family`].
+    pub(super) localized_family: Arc<[(String, String)]>,
     pub(super) style: String,
     pub(super) keys: FaceKeys,
     /// A named instance's axis settings (user units); empty for the face itself.
@@ -341,9 +351,10 @@ pub(crate) struct FaceStyle {
 pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
     let Some((family, style)) = face_names(f) else { return vec![] };
     let native_family = native_family_name(f, &family);
+    let localized = localized_family(f);
     let mut keys = FaceKeys::of(f, &family, &style);
-    let traits = FontTraits::of(f, &keys);
-    let (mut instances, renamed) = named_instances(f, &family, &style, &mut keys, native_family.clone());
+    let traits = FontTraits::of(f, &keys, &localized);
+    let (mut instances, renamed) = named_instances(f, &family, &style, &mut keys, native_family.clone(), &localized);
     for i in &mut instances {
         i.traits = traits;
     }
@@ -358,6 +369,77 @@ pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
         .filter(|w| w.is_finite())
         .map(|w| w.clamp(1.0, 1000.0));
     let style = renamed.unwrap_or(style);
-    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight, italic: false, traits };
+    let face = FaceStyle { family, native_family, localized_family: localized, style, keys, variations: vec![], weight, italic: false, traits };
     std::iter::once(face).chain(instances).collect()
+}
+
+/// Characters only a Simplified Chinese font has: all sixteen are in GB2312 and in none of
+/// JIS X 0208, Big5 or KS X 1001, so a Japanese, Korean or Traditional Chinese font never covers
+/// them however broad its character set.
+const HANS_PROBE: &str = "这们为说时对过发经现动还进样开实";
+/// How many of [`HANS_PROBE`] make a Simplified Chinese font; a broader font may also cover
+/// characters outside GB2312, a partial one none.
+const HANS_PROBE_MIN: usize = 14;
+/// Kana, which every Japanese font has and no Chinese or Korean one does.
+const JPAN_KANA: &str = "あいうアイウ";
+/// Kanji only JIS X 0208 has (図·駅-style simplifications and kana-font kanji).
+const JPAN_PROBE: &str = "図駅広楽歩込働気";
+/// Hangul syllables, which only a Korean font has.
+const KORE_PROBE: &str = "가나다라한글국어";
+/// Traditional forms that the Japanese and Korean sets also have (their fonts cover these too),
+/// so [`HANT_BOPO`] is what tells a Traditional Chinese font apart.
+const HANT_PROBE: &str = "們這個來為國說時會對學與關點";
+/// Bopomofo, which only a Traditional Chinese font has.
+const HANT_BOPO: &str = "ㄅㄆㄇㄈ";
+
+/// The CJK writing systems a face serves, from what it says about itself, in the order that names
+/// the fewest fonts wrongly:
+///
+/// 1. The OS/2 code page bits, which is what Photoshop and Illustrator group by: 18 (GB2312)
+///    Simplified Chinese, 20 (Big5) Traditional, 17 (Shift-JIS) Japanese, 19 and 21
+///    (Wansung/Johab) Korean. The writing systems' fonts cover almost the same characters (Glow
+///    Sans SC, TC and J differ only in preferred forms), so coverage cannot tell them apart.
+/// 2. The languages the font names itself in (a font without code page bits), for example
+///    "Glow Sans SC" naming itself "未来荧黑" in zh-CN.
+/// 3. The characters it covers, for a font that says neither. Han characters are shared, so each
+///    script is probed with characters only its own standard set has.
+fn scripts_of(font: &skrifa::FontRef<'_>, names: &[(String, String)], code_pages: u32) -> CjkScripts {
+    let bits = CjkScripts {
+        hans: code_pages & (1 << 18) != 0,
+        hant: code_pages & (1 << 20) != 0,
+        jpan: code_pages & (1 << 17) != 0,
+        kore: code_pages & ((1 << 19) | (1 << 21)) != 0,
+    };
+    if bits.any() {
+        return bits;
+    }
+    let mut named = CjkScripts::NONE;
+    for (lang, _) in names {
+        if let Some(script) = cjk::locale_script(Some(lang)) {
+            named.set(script);
+        }
+    }
+    if named.any() {
+        return named;
+    }
+    let covers = |c: char| font.charmap().map(c).is_some();
+    let count = |probe: &str| probe.chars().filter(|c| covers(*c)).count();
+    let mut out = CjkScripts::NONE;
+    if count(HANS_PROBE) >= HANS_PROBE_MIN {
+        out.hans = true;
+    }
+    let jpan = count(JPAN_KANA) == JPAN_KANA.chars().count() && count(JPAN_PROBE) >= 7;
+    let kore = count(KORE_PROBE) >= 7;
+    if jpan {
+        out.jpan = true;
+    }
+    if kore {
+        out.kore = true;
+    }
+    // A Japanese or Korean font covers most Traditional forms too (JIS X 0208 and KS X 1001
+    // carry them), so a Traditional Chinese font is one that also has Bopomofo.
+    if !jpan && !kore && count(HANT_BOPO) >= 3 && count(HANT_PROBE) >= 13 {
+        out.hant = true;
+    }
+    out
 }

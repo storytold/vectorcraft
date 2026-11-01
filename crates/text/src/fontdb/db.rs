@@ -9,7 +9,7 @@ use super::dirs::confined_font_dirs;
 use super::face::{BUNDLED, FontBytes, FontFace, Instances};
 #[cfg(not(target_arch = "wasm32"))]
 use super::names::SysFallback;
-use super::names::name;
+use super::names::{name, name_for_script};
 use super::scan::enumerate_faces;
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{file_face_names, is_font_file};
@@ -18,6 +18,8 @@ use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
 use super::traits::{Alias, FaceStyle};
 use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
+
+use crate::cjk::{CjkScript, CjkScripts};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
 
@@ -153,20 +155,66 @@ impl FontDb {
     }
 
     /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›
-    /// Show Font Names in English, the default), else the font's native-language name when it has
-    /// one. The document and commands still use the English family ([`Self::canonical`]).
-    pub fn family_display_name(&self, family: &str, english: bool) -> String {
+    /// Show Font Names in English), else the name the font gives itself in `script`'s language —
+    /// `未来荧黑`, `未来熒黑` or `ヒカリ角ゴ` for Glow Sans SC, TC and J in a Chinese, Taiwanese or
+    /// Japanese interface — else its first non-English name, else the English one. The document
+    /// and commands still use the English family ([`Self::canonical`]).
+    pub fn family_display_name(&self, family: &str, script: Option<CjkScript>, english: bool) -> String {
         let (family, _) = self.canonical(family, "");
         if english {
             return family;
         }
-        if let Some(native) = self.read_faces().iter().find(|f| f.family.eq_ignore_ascii_case(&family)).and_then(|f| f.native_family.clone()) {
+        let (preferred, native) = {
+            let faces = self.read_faces();
+            let mut mine = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(&family));
+            let preferred = script.and_then(|script| mine.clone().find_map(|f| name_for_script(&f.localized_family, script)));
+            (preferred, mine.find_map(|f| f.native_family.clone()))
+        };
+        if let Some(name) = preferred {
+            return name;
+        }
+        if let Some(native) = native {
             return native;
         }
-        if let Some(native) = self.read_catalog().get(&family.to_ascii_lowercase()).and_then(|c| c.native.clone()) {
-            return native;
+        if let Some(entry) = self.read_catalog().get(&family.to_ascii_lowercase()) {
+            if let Some(name) = script.and_then(|script| name_for_script(&entry.localized, script)) {
+                return name;
+            }
+            if let Some(native) = &entry.native {
+                return native.clone();
+            }
         }
         family
+    }
+
+    /// The names a font menu searches `family` by: its English name and every family name its
+    /// faces write, in every language ("Glow Sans SC", "未来荧黑", "未来熒黑", "ヒカリ角ゴ").
+    pub fn family_search_names(&self, family: &str) -> Vec<String> {
+        let (family, _) = self.canonical(family, "");
+        let mut out = vec![family.clone()];
+        let add = |names: &[(String, String)], out: &mut Vec<String>| {
+            for (_, name) in names {
+                if !name.trim().is_empty() && !out.contains(name) {
+                    out.push(name.clone());
+                }
+            }
+        };
+        {
+            let faces = self.read_faces();
+            for f in faces.iter().filter(|f| f.family.eq_ignore_ascii_case(&family)) {
+                add(&f.localized_family, &mut out);
+            }
+        }
+        if let Some(entry) = self.read_catalog().get(&family.to_ascii_lowercase()) {
+            add(&entry.localized, &mut out);
+        }
+        out
+    }
+
+    /// The CJK writing systems `family` serves ([`FontTraits::scripts`]): a menu lists the
+    /// interface language's own fonts first.
+    pub fn family_scripts(&self, family: &str) -> CjkScripts {
+        self.family_traits(family).scripts
     }
 
     /// Style names available for `family`: upright styles by weight, then italics.
@@ -341,7 +389,7 @@ impl FontDb {
             if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
-            for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
+            for FaceStyle { family, native_family, localized_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                 for (k, a) in Alias::of(&family, &style, &keys) {
                     aliases.entry(k).or_default().push(a);
                 }
@@ -352,11 +400,15 @@ impl FontDb {
                 let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                 let kind = entry.traits.get_or_insert(traits);
                 kind.variable |= traits.variable;
+                kind.scripts = kind.scripts.or(traits.scripts);
                 if entry.name.is_empty() {
                     entry.name = family;
                 }
                 if entry.native.is_none() {
                     entry.native = native_family;
+                }
+                if entry.localized.is_empty() {
+                    entry.localized = localized_family.to_vec();
                 }
                 let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
                 entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });

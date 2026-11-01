@@ -4,13 +4,14 @@ use super::{Item, Sep, c, cp, json, sub, todo, todos};
 
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
-/// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels
-/// follow it; tests use the default `true`).
+/// `script` and `english_names` are the font menu's own ([`crate::font_menu::menu_names`]): the
+/// Type → Font labels follow the interface's writing system and Preferences › Type › Show Font
+/// Names in English (tests use the defaults, no writing system and English names).
 pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
-    menu_tree_named(true)
+    menu_tree_named(None, true)
 }
 
-pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
+pub fn menu_tree_named(script: Option<vectorcraft_text::CjkScript>, english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (
@@ -373,7 +374,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         (
             "Type",
             vec![
-                sub("Font", font_items(english_names)),
+                sub("Font", font_items(script, english_names)),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
                 sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
                 c("Bold", "type.bold"),
