@@ -787,8 +787,9 @@ fn float_space(app: &VectorcraftApp) -> FloatSpace<String> {
 }
 
 /// Float `panel` (open or not) as a window of its own with its top-left corner at `at`, `width`
-/// wide: the Tabs panel over the text it sets.
-pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Pos2, width: f32) -> Result<(), String> {
+/// wide: the Tabs panel over the text it sets. `origin`: the main window's content top-left on the
+/// desktop. A panel already floating in an OS window of its own moves to `at` from there (#4995).
+pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Pos2, width: f32, origin: Option<egui::Pos2>) -> Result<(), String> {
     let panel = normalize(panel).ok_or("unknown panel")?.to_string();
     if !(at.x.is_finite() && at.y.is_finite() && width.is_finite()) {
         return Err("panel position must be finite".into());
@@ -800,8 +801,13 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Po
     let height = floating_window(&txn.workspace.layout, &panel).map_or(floating_size(&panel).y, |w| w.rect[3]);
     let rect = [at.x, at.y, width.max(1.0), height];
     let whole = floating_window(&txn.workspace.layout, &panel).is_some_and(|w| w.panels().count() == 1);
-    let action = if whole { Action::MoveFloating { panel, rect } } else { Action::Float { panel, rect } };
+    let native = whole && floating_window(&txn.workspace.layout, &panel).is_some_and(|w| w.native.is_some());
+    let action = if whole { Action::MoveFloating { panel: panel.clone(), rect } } else { Action::Float { panel: panel.clone(), rect } };
     txn.apply(action)?;
+    // The OS window follows its desktop rect, not the in-window one.
+    if let Some(origin) = origin.filter(|o| native && o.is_finite()) {
+        txn.apply(Action::SetNative { panel, rect: Some([origin.x + at.x, origin.y + at.y, rect[2], rect[3]]) })?;
+    }
     txn.commit(app, Vec::new(), None);
     Ok(())
 }
