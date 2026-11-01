@@ -19,6 +19,7 @@ impl Session {
         let doc = Arc::make_mut(&mut st.doc);
         // The Global Edit members the edit reached besides the selection.
         let mut spread = vec![];
+        let mut dim_changed = false;
         // Objects attached to a path follow it, and dimensions follow the art they measure.
         let result = match f(doc, &mut st.selection).and_then(|v| {
             // Global Edit: the other members take what the edit changed about the one it edited.
@@ -26,18 +27,24 @@ impl Session {
                 spread = cmd::globaledit::propagate(&before, doc, ge, [&before_sel.objects, &st.selection.objects]);
             }
             cmd::objects_on_path::refresh(&before, doc);
-            cmd::dimension::refresh(&before, doc)?;
+            dim_changed = cmd::dimension::refresh(&before, doc)?;
             Ok(v)
         }) {
             Ok(v) => match cmd::shaper::refresh(&before, Arc::make_mut(&mut st.doc)) {
                 Err(e) => Err(e),
-                Ok(()) => {
+                Ok(shaper_changed) => {
                     // Attached Shaper groups whose art was rebuilt go back on their path.
-                    cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                    if shaper_changed || dim_changed {
+                        cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                    }
+                    // Symbol editing: the symbol follows its art on the editing layer, before
+                    // inline graphics follow their symbols.
+                    let symbol_synced =
+                        if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
                     cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Text Wrap: area type follows its wrap objects; then threads re-flow.
-                    cmd::textwrap::refresh(Arc::make_mut(&mut st.doc));
+                    cmd::textwrap::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Type in no thread numbers its list paragraphs from 1 (before the mask copies
                     // its editing layer's art).
                     cmd::threads::restart_unthreaded_counts(&mut st.doc);
@@ -57,7 +64,9 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
-                    if st.doc.too_deep(Some(&before)) {
+                    if let Err(e) = symbol_synced {
+                        Err(e)
+                    } else if st.doc.too_deep(Some(&before)) {
                         // Deeper trees overflow the stack of what walks them.
                         Err(EngineError::Other(TOO_DEEP.into()))
                     } else if doc_sane(&st.doc, &st.selection) && objects_in_range(&st.doc, &spread) {
@@ -79,6 +88,21 @@ impl Session {
                 // The art on a locked artboard can't stay selected, however it got there, except
                 // the new art this edit made and new art still selected.
                 st.protect_locked_artboards(&before_sel.objects, &before_sel.new_art, Some(&*before));
+                // Symbol or opacity mask editing ended because the edit deleted its layer:
+                // isolation on the layer or inside it leaves too, out of symbol editing to what it
+                // was before.
+                let mode_layer = before.symbol_edit.as_ref().map(|e| e.layer).or(before.mask_edit.map(|m| m.layer));
+                if let Some(layer) = mode_layer
+                    && st.doc.node(layer).is_none()
+                    && st.isolation.is_some_and(|i| i == layer || st.doc.node(i).is_none())
+                {
+                    if let Some(se) = &before.symbol_edit {
+                        cmd::symboledit::go_back(st, se);
+                    } else {
+                        st.isolation = None;
+                        st.active_layer = st.doc.default_layer();
+                    }
+                }
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {

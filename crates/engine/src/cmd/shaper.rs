@@ -4,7 +4,10 @@
 use super::pathops::Beside;
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, has_doc, id_param, point_param};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use vectorcraft_doc::shaper::{EdgeEdit, FILL_PREFIX, FaceEdit, FaceSelector, SOURCES, STROKE_PREFIX, ShaperSpec};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, Shape as _};
@@ -386,17 +389,37 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
     Ok(out)
 }
 
-/// Re-evaluate only groups whose original art changed. Errors reach Session::edit's rollback.
-pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
-    let mut ids = vec![];
-    d.walk(|n| {
-        if n.extras().shaper.is_some() {
-            ids.push(n.id)
+fn changed_shaper_groups(before: &[Arc<Node>], after: &[Arc<Node>], out: &mut Vec<NodeId>) {
+    let mut by_id: Option<HashMap<NodeId, &Arc<Node>>> = None;
+    for (i, a) in after.iter().enumerate() {
+        let b = match before.get(i) {
+            Some(b) if b.id == a.id => Some(b),
+            _ => by_id.get_or_insert_with(|| before.iter().map(|b| (b.id, b)).collect()).get(&a.id).copied(),
+        };
+        if b.is_some_and(|b| Arc::ptr_eq(b, a)) {
+            continue;
         }
-    });
+        if a.extras().shaper.is_some() {
+            out.push(a.id);
+        }
+        if let Some(children) = a.children() {
+            changed_shaper_groups(b.and_then(|b| b.children()).map_or(&[], Vec::as_slice), children, out);
+        }
+    }
+}
+
+/// Re-evaluate only groups whose original art changed. Errors reach Session::edit's rollback.
+/// Returns whether any Shaper group's artwork was rebuilt or modified.
+pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<bool> {
+    let mut ids = vec![];
+    changed_shaper_groups(&before.layers, &d.layers, &mut ids);
+    if ids.is_empty() {
+        return Ok(false);
+    }
     // Groups whose source art is all gone are removed through `emptied`, which is made when the
     // first one is found.
     let mut emptied: Option<Beside> = None;
+    let mut rebuilt_any = false;
     for &id in &ids {
         let Some(current) = d.node(id).cloned() else { continue };
         let Some(old) = before.node(id) else { continue };
@@ -413,6 +436,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
         }
         if src.is_empty() {
             emptied.get_or_insert_with(|| Beside::replacing(d, &ids)).put(d, id, vec![])?;
+            rebuilt_any = true;
             continue;
         }
         let map = map_of(&src)?;
@@ -510,8 +534,10 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
         if let Some(ch) = n.children_mut() {
             *ch = children;
         }
+        rebuilt_any = true;
     }
-    emptied.map_or(Ok(()), |e| e.finish(d))
+    emptied.map_or(Ok(()), |e| e.finish(d))?;
+    Ok(rebuilt_any)
 }
 
 fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Result<Vec<NodeId>> {
@@ -747,9 +773,10 @@ fn select(s: &mut Session, p: &Value) -> Result<Value> {
     }
     Ok(json!({"id": target.0}))
 }
-/// The layer an opacity mask or a pattern is edited in, which stays isolated while that mode is on.
+/// The layer an opacity mask, a pattern or a symbol is edited in, which stays isolated while that
+/// mode is on.
 fn editing_layer(d: &Document) -> Option<NodeId> {
-    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer))
+    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer)).or_else(|| d.symbol_edit.as_ref().map(|e| e.layer))
 }
 /// Leave isolation mode, Construction mode included. While an opacity mask or a pattern is edited,
 /// its editing layer stays isolated.

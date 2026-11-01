@@ -40,7 +40,9 @@ mod trace;
 pub use live_paint::live_paint_gaps;
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
 use shape_builder::{sb_merge, sb_regions};
-use trace::{trace_expand, trace_make, trace_release, trace_set_view};
+pub(crate) use trace::TracePresetChanges;
+pub use trace::{TracePreset, TracePresetChange, TraceRun, Traced};
+use trace::{trace_expand, trace_make, trace_presets_delete, trace_presets_save, trace_release, trace_set_view};
 
 /// Name of an Image Trace group.
 pub const TRACE_NAME: &str = "Image Trace";
@@ -142,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down; Flat Logo names only the size it traced a larger image at)}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), savedPreset?: {settings} (a saved preset's settings, which the journal records so a replay traces with them after the preset is changed, renamed or deleted; used in place of the saved preset `preset` names), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down; Flat Logo names only the size it traced a larger image at)}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -182,9 +184,29 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection_or_ids,
             trace_set_view
         ),
-        cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, params, enhanced: the params of the preset's enhanced version, null if it has none}]}", always, |_, _| {
-            Ok(json!({ "presets": tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "params": p, "enhanced": tr::enhanced_preset(n) })).collect::<Vec<_>>() }))
+        cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, builtIn, params, enhanced: the params of the preset's enhanced version, null if it has none}], revision: grows each time the saved presets change} the built-in presets, then the saved ones (builtIn false, enhanced null); any of these names works as imageTrace.make's `preset`", always, |s, _| {
+            let builtin = tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "builtIn": true, "params": p, "enhanced": tr::enhanced_preset(n) }));
+            let saved = s.prefs.trace_presets.iter().map(|p| json!({ "name": p.name, "builtIn": false, "params": p.params, "enhanced": null }));
+            Ok(json!({ "presets": builtin.chain(saved).collect::<Vec<_>>(), "revision": s.trace_presets_revision() }))
         }),
+        cmd!(
+            query "imageTrace.presets.save",
+            "Save Image Trace Preset",
+            [],
+            None,
+            "{name?: (default: a new \"Tracing Preset N\"), newName?: rename the saved preset `name`, preset?: the preset to start from (default: the saved preset `name`, else Default), enhanced?, params?: {settings, as imageTrace.make takes them, over the preset's}} create or change a saved tracing preset, kept with the preferences (built-in ones can't change) → {name, params, created, renamedFrom: the name before `newName` changed it, else null}",
+            always,
+            trace_presets_save
+        ),
+        cmd!(
+            query "imageTrace.presets.delete",
+            "Delete Image Trace Preset",
+            [],
+            None,
+            "{name} delete a saved tracing preset (built-in ones stay) → {deleted: name}",
+            always,
+            trace_presets_delete
+        ),
     ]
 }
 

@@ -250,6 +250,13 @@ fn font_variation_settings_become_variable_font_settings() {
 }
 
 #[test]
+fn comment_markers_inside_css_strings_are_not_comments() {
+    let d = open(r#"<style>text { font-family: "A/*B"; fill: red }</style><text y="10">x</text>"#);
+    let t = only_text(&d);
+    assert_eq!(t.first_style().fill.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+}
+
+#[test]
 fn css_selectors_reach_text() {
     let d = open(
         r#"<style>

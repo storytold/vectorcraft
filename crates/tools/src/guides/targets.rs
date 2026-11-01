@@ -1,6 +1,6 @@
 use super::snap::{Leave, meeting, seg_direction, touch_params};
 use super::{
-    Affine, Arc, BezPath, Document, FontDb, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind, OrientedBox, Overlay, ParamCurve,
+    Affine, Arc, BezPath, Document, FontDb, GlyphSnap, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind, OrientedBox, Overlay, ParamCurve,
     ParamCurveNearest, PathSeg, Point, Rect, Ruler, Selection, Shape, SubPath, ToolContext, Vec2, layout_text,
 };
 
@@ -81,11 +81,11 @@ fn within<T>(sorted: &[T], key: impl Fn(&T) -> f64, v: f64, tol: f64) -> &[T] {
     sorted.get(lo..hi).unwrap_or_default()
 }
 
-/// Visit `nodes` and everything inside them, but the nodes in `skip` and everything inside those:
-/// one pass, however many are skipped. A Shaper Group's original shapes, its first child, are
-/// not shown and are skipped too.
+/// Visit `nodes` and everything inside them, but the nodes in `skip`, the hidden nodes and
+/// everything inside those: one pass, however many are skipped. A Shaper Group's original
+/// shapes, its first child, are not shown and are skipped too.
 fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnMut(&'a Node)) {
-    for n in nodes.iter().filter(|n| !skip.contains(&n.id)) {
+    for n in nodes.iter().filter(|n| n.visible && !skip.contains(&n.id)) {
         f(n);
         if let Some(ch) = n.children() {
             walk_but(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), skip, f);
@@ -163,12 +163,13 @@ impl Targets {
 
     /// Targets for a drawn point: the art in `visible` (all of it for None) but `exclude`, its
     /// anchors, centres, edges and path segments, its anchors in line too. The anchors and
-    /// segments of `exclude` (the path being drawn, whose bounds grow with it) stay targets.
-    pub fn for_drawing(doc: &Document, exclude: &[NodeId], visible: Option<Rect>, glyphs: bool) -> Self {
+    /// segments of `exclude` (the path being drawn, whose bounds grow with it) stay targets. With
+    /// `glyphs` (Snap to Glyph on), live text gives the guides those options ask for.
+    pub fn for_drawing(doc: &Document, exclude: &[NodeId], visible: Option<Rect>, glyphs: Option<GlyphSnap>) -> Self {
         let mut t = Self::collect_inner(doc, exclude, None, visible, Gather::Drawing);
         t.push_paths(doc, exclude, true);
-        if glyphs {
-            t.push_glyphs(doc, exclude, visible);
+        if let Some(o) = glyphs {
+            t.push_glyphs(doc, exclude, visible, o);
         }
         t.index()
     }
@@ -214,8 +215,9 @@ impl Targets {
     }
 
     /// A glyph guide through `at` along `dir` (on the page): a line the art lines up with when it
-    /// runs across or down the page, else an angled line a point lands on.
-    fn push_glyph_line(&mut self, at: Point, dir: Vec2) {
+    /// runs across or down the page, else (with `angular`, Angular Guides) an angled line a point
+    /// lands on.
+    fn push_glyph_line(&mut self, at: Point, dir: Vec2, angular: bool) {
         let len = dir.hypot();
         if !(len.is_finite() && len > 1e-12 && at.is_finite()) {
             return;
@@ -225,7 +227,7 @@ impl Targets {
             self.ys.push((at.y, at, Kind::Glyph));
         } else if d.x.abs() <= 1e-9 {
             self.xs.push((at.x, at, Kind::Glyph));
-        } else {
+        } else if angular {
             self.angled.push((at, d));
         }
     }
@@ -234,8 +236,9 @@ impl Targets {
     /// a single line of type also its baseline and x-height, the proximity guides at the edges of
     /// each character's advance width, and its glyphs' anchor points. In rotated type these
     /// guides run at its angle (angular guides), and type of one glyph also has angular guides
-    /// along the glyph's slanted straight segments.
-    fn push_glyphs(&mut self, doc: &Document, exclude: &[NodeId], visible: Option<Rect>) {
+    /// along the glyph's slanted straight segments. Each kind of guide is there only while its
+    /// option `o` is on.
+    fn push_glyphs(&mut self, doc: &Document, exclude: &[NodeId], visible: Option<Rect>, o: GlyphSnap) {
         let skip: HashSet<NodeId> = exclude.iter().copied().collect();
         let db = FontDb::global();
         let kind = Kind::Glyph;
@@ -264,10 +267,10 @@ impl Targets {
             // Text space → the page, and a direction in text space → one on the page.
             let to_doc = |p: Point| t.xf * p;
             let along = |m: Affine, v: Vec2| (m * v.to_point()) - (m * Point::ZERO);
-            if single {
+            if single && o.baseline {
                 let line_doc = t.xf * lay.line_xf;
                 for line in &lay.lines {
-                    self.push_glyph_line(line_doc * Point::new(line.x0, line.baseline), along(line_doc, Vec2::new(1.0, 0.0)));
+                    self.push_glyph_line(line_doc * Point::new(line.x0, line.baseline), along(line_doc, Vec2::new(1.0, 0.0)), o.angular);
                 }
             }
             // The last x-height pushed, to push each run of glyphs alike once.
@@ -300,23 +303,26 @@ impl Targets {
                         let (l, k) = (d.hypot(), dir.hypot());
                         l > 1e-12 && k > 1e-12 && (d / l - dir / k).hypot() <= 1e-9 && ((at - a).cross(d / l)).abs() <= 1e-6
                     });
-                    if face.x_height() > 0.0 && !same {
-                        self.push_glyph_line(at, dir);
+                    if o.x_height && face.x_height() > 0.0 && !same {
+                        self.push_glyph_line(at, dir, o.angular);
                         last_x_height = Some((at, dir));
                     }
                     // Proximity guides: across the baseline at both edges of the width the layout
                     // gives the character (its advance with tracking and kerning).
-                    for e in [g.origin, g.origin + ahead * g.advance] {
-                        self.push_glyph_line(to_doc(e), along(t.xf, up));
+                    if o.proximity {
+                        for e in [g.origin, g.origin + ahead * g.advance] {
+                            self.push_glyph_line(to_doc(e), along(t.xf, up), o.angular);
+                        }
                     }
                 }
                 if single {
                     for seg in g.outline.segments() {
-                        if anchors > 0 {
+                        if o.anchors && anchors > 0 {
                             self.points.push((to_doc(seg.start()), Kind::Anchor));
                             anchors -= 1;
                         }
-                        if one_glyph
+                        if o.angular
+                            && one_glyph
                             && angular > 0
                             && let PathSeg::Line(l) = seg
                         {
@@ -324,16 +330,18 @@ impl Targets {
                             let d = q - p;
                             let len = d.hypot();
                             if len > 1e-6 && d.x.abs() > 1e-9 * len && d.y.abs() > 1e-9 * len {
-                                self.push_glyph_line(p, d);
+                                self.push_glyph_line(p, d, true);
                                 angular -= 1;
                             }
                         }
                     }
                 }
-                let r = t.xf.transform_rect_bbox(bb);
-                for p in [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)] {
-                    self.xs.push((p.x, p, kind));
-                    self.ys.push((p.y, p, kind));
+                if o.bounds {
+                    let r = t.xf.transform_rect_bbox(bb);
+                    for p in [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)] {
+                        self.xs.push((p.x, p, kind));
+                        self.ys.push((p.y, p, kind));
+                    }
                 }
             }
         });
@@ -492,6 +500,19 @@ impl Targets {
         self
     }
 
+    /// Only these targets' anchors and path segments pull, and where segments cross: no centers,
+    /// bounds, lines up, extensions or glyph guides.
+    pub(super) fn anchors_and_paths(mut self) -> Self {
+        self.points.retain(|(_, k)| *k == Kind::Anchor);
+        self.xs.clear();
+        self.ys.clear();
+        self.rulers.clear();
+        self.boxes.clear();
+        self.extensions.clear();
+        self.angled.clear();
+        self
+    }
+
     /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
     /// unlocked, as the selection tools pick them) pull the pointer into line where they run.
     pub(super) fn for_snap_to_point(self, cx: &ToolContext) -> Self {
@@ -542,23 +563,27 @@ impl Targets {
     }
 
     /// Anchors and centres of the visible leaves under `roots` (the roots included) whose bounds
-    /// reach into `near`.
+    /// reach into `near`. Nothing inside a hidden group or layer counts.
     pub(super) fn points_near(doc: &Document, roots: &[NodeId], near: Rect) -> Self {
         let mut t = Targets::default();
-        for n in roots.iter().filter_map(|id| doc.node(*id)) {
-            crate::draw2::walk_shown(n, &mut |c| {
-                if c.is_container() || !c.visible {
-                    return;
-                }
-                let Some(b) = c.geometric_bounds() else { return };
-                if b.x0 > near.x1 || b.x1 < near.x0 || b.y0 > near.y1 || b.y1 < near.y0 {
-                    return;
-                }
-                if let NodeKind::Path { path, .. } = &c.kind {
-                    t.points.extend(path.anchors().map(|(_, _, a)| (a.p, Kind::Anchor)));
-                }
-                t.points.push((b.center(), Kind::Center));
-            });
+        let mut push = |c: &Node| {
+            if c.is_container() {
+                return;
+            }
+            let Some(b) = c.geometric_bounds() else { return };
+            if b.x0 > near.x1 || b.x1 < near.x0 || b.y0 > near.y1 || b.y1 < near.y0 {
+                return;
+            }
+            if let NodeKind::Path { path, .. } = &c.kind {
+                t.points.extend(path.anchors().map(|(_, _, a)| (a.p, Kind::Anchor)));
+            }
+            t.points.push((b.center(), Kind::Center));
+        };
+        for n in roots.iter().filter_map(|id| doc.node(*id)).filter(|n| n.visible) {
+            push(n);
+            if let Some(ch) = n.children() {
+                walk_but(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), &HashSet::new(), &mut push);
+            }
         }
         t.index()
     }

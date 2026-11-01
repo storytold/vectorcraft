@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-10-25 · **Change:** brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-10-31 · **Change:** Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -68,7 +68,7 @@ writes (save, export, package, captures, library saves…) inside a write root; 
 ordinary error reply. Paths are made absolute against the app's working directory, links are followed
 (for a file that doesn't exist yet, its folder's), and the comparison is by whole folder names (`/work2` is
 not inside `/work`), ignoring case on Windows; `..` below a folder that doesn't exist, a link that leads
-nowhere and Windows device names are refused. A root left out grants none of its access. The roots must be
+nowhere, Windows device names and, on Windows, a `:` in any name after the drive (an NTFS alternate data stream such as `x.svg:evil`) are refused. A root left out grants none of its access. The roots must be
 existing folders, or the app doesn't start; without `--control` they are ignored. See `docs/mcp.md`
 › Confining file access for the details.
 
@@ -155,6 +155,11 @@ Graphic styles: `ui.graphicStyleOptions {name}` opens the `graphicStyleOptions` 
 dialog open); without `name` it names a new style made from the selection (`graphicStyle.new`).
 `ui.mergeGraphicStyles {names}` opens the same dialog to name the style `ui.dialog.confirm` merges from them
 (`graphicStyle.merge`). Deleting styles from the panel asks first with a `confirm` dialog (`graphicStyle.delete`).
+
+Text styles: `ui.newCharStyle` and `ui.newParaStyle`, what Alt-click on New in the Character Styles and Paragraph
+Styles panels runs, open the `newTextStyle` dialog (field `name`) for a style made from the text selected when it
+opened; `ui.dialog.confirm` makes it with `charStyle.new` / `paraStyle.new` (a name another style has returns an error
+and keeps the dialog open).
 
 Symbols: `ui.symbolOptions` opens the `symbolOptions` dialog (field `name`) that the Symbols panel's New Symbol asks
 first; `ui.dialog.confirm` makes the symbol from the selection with that name (`symbol.new`). F8 runs
@@ -415,7 +420,9 @@ opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` 
 `__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
 `gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255), which are enabled when `fill` is on and
 `__gradient` says the selection has a gradient fill (`object.expand.info`'s `gradient`). `ui.dialog.confirm` runs `object.expand` with them as
-one undo step.
+one undo step. While the selection has an appearance Expand Appearance expands (effects, several fills or strokes, a
+brush: `object.expand.info`'s `appearance`), the menu item is dimmed with a tooltip to use Object → Expand Appearance
+first, and `ui.expandDialog` refuses with that message (#3089).
 
 Attributes panel: `window.panel {panel: "attributes"}` (Cmd+F11) shows it; its controls run `attributes.set`,
 `path.reverse {reversed}` and `path.setFillRule {rule}`, and its Browser button runs the UI command
@@ -448,6 +455,9 @@ value: true}` then `ui.dialog.confirm` does the same.
 Use Preview Bounds: the Align panel flyout's Use Preview Bounds item shows and toggles the `usePreviewBounds`
 preference (`prefs.set`); while it is on, the bounding box and the Transform panel, Properties and Control bar
 fields measure visual bounds.
+
+Align to Glyph Bounds: the Align panel flyout's Align to Glyph Bounds submenu shows and toggles the
+`alignGlyphBoundsPoint` (Point Text) and `alignGlyphBoundsArea` (Area Text) preferences (`prefs.set`), checked while on.
 
 Align To: the Align panel's Align To choice is saved with the preferences, and `ui.inspect` reports it as
 `ui.align_to` (`"selection"` or `"artboard"`; Align to Key Object stores no choice). The align buttons of the Align
@@ -804,7 +814,8 @@ Paintbrush, Blob Brush; on by default for the Pencil and Paintbrush and off for 
 the path a stroke draws, continues or merges into is not selected afterwards), `mergeOnlySelection` (Blob Brush;
 off by default, and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin`
 (screen pixels, 0 turns it off; Pencil, Paintbrush), `size` (pt; Blob Brush, Eraser), and `angle`
-(°, −180 to 180; 0) and `roundness` (%, 1 to 100; 100) of the Eraser's tip (Eraser). `ui.dialog.confirm` runs
+(°, −180 to 180; 0) and `roundness` (%, 0 to 100 for the Blob Brush, where 0 is drawn as 0.1, and 1 to 100 for
+the Eraser; 100) of the tip (Blob Brush, Eraser); the tip keeps its angle on the page along a stroke. `ui.dialog.confirm` runs
 `tool.setOption {tool, values}`.
 
 `ui.pointer` events also take `holdMs` (0..60000): the pointer then holds still that long, button down, before the
@@ -944,9 +955,11 @@ hidden tab (whose frames the browser pauses) answers when it is shown again.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | Confining file access: on Windows a `:` in a name after the drive (an NTFS alternate data stream) is refused with the device names (#3604). |
 | 2026-10-25 | minor | Panel docking on craft-ui's layout: `ui.docking`, the floating and dock parameters, native floating windows. |
 | 2026-10-24 | minor | Documented the brush library panel commands (`window.brushLibrary`, `.other`, `ui.saveBrushLibrary`, `window.userBrushLibrary1`…`10`). |
 | 2026-10-24 | minor | Documented `ui.screenshot`'s 64 MiB inline-PNG reply cap: with `path` the file is still written and `pngBase64` is omitted when over the cap; a path-less `data: true` request fails before encoding. |
+| 2026-10-25 | minor | Documented that Object → Expand… is dimmed, and `ui.expandDialog` refuses, while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089). |
 | 2026-10-25 | minor | Documented that Transform Each opens on the values it was last confirmed with and that its Copy button confirms with `copy: true` (#1732). |
 | 2026-10-23 | minor | Documented the symbol library panel commands (`window.symbolLibrary`, `.other`, `ui.saveSymbolLibrary`, `window.userSymbolLibrary1`…`10`). |
 | 2026-10-13 | minor | Documented count, pending-event and per-frame request budgets (#1709). |

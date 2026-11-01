@@ -1,7 +1,7 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
 use craft_pdf::syntax::page::Page;
@@ -11,6 +11,7 @@ use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
 use crate::import_color::{direct, items, readable, values};
+use crate::streams::{Refusal, Refused, refused};
 use crate::{Choice, CropTo, ImportOptions, PdfError};
 
 /// What `info` tells about one page.
@@ -115,7 +116,8 @@ fn procedures_too_deep(o: &Object<'_>) -> bool {
     })
 }
 
-/// The error of a file with a stream the reader would fail on ([`crate::streams`]).
+/// The error of a file with an object or cross-reference stream the reader would fail on as it
+/// opens the file ([`crate::streams::unsafe_file_streams`]); [`stream_note`] names any other.
 const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
 
 /// The error of a file with functions or color spaces built on one another past [`MAX_LINKS`]
@@ -125,33 +127,97 @@ const NESTED_NOTE: &str = "its functions or colour spaces are built on one anoth
 /// The error of a file with an array whose items can't all be read (a damaged file).
 const UNREADABLE_NOTE: &str = "an array in it is damaged and can't be read";
 
-/// Why `pdf` is refused, if it is: a stream the reader would fail on ([`STREAM_NOTE`]), or
+/// Why `pdf` is refused, if it is: a stream the reader would fail on ([`stream_note`]), or
 /// functions, color spaces or calculator procedures nested too deep ([`NESTED_NOTE`]). Every
 /// object is looked at, and every array, dictionary and stream written inside one, wherever it
 /// is used from: the interpreter builds functions and color spaces from resources, shadings,
 /// images, patterns, masks and graphics states alike.
-fn hostile(pdf: &Pdf) -> Option<&'static str> {
+fn hostile(pdf: &Pdf) -> Option<String> {
     let xref = pdf.xref();
     let mut known = HashMap::new();
     // The objects of the file, then what each holds directly (64 deep at most: the reader's cap).
     let mut pending: Vec<Object<'_>> = pdf.objects().into_iter().collect();
     while let Some(o) = pending.pop() {
         // A stream's own checks come first: a calculator function is decoded below.
-        if matches!(&o, Object::Stream(s) if crate::streams::unsafe_stream(s)) {
-            return Some(STREAM_NOTE);
+        if let Object::Stream(s) = &o
+            && let Some(r) = refused(s)
+        {
+            return Some(stream_note(pdf, s, r));
         }
         if procedures_too_deep(&o) || built_on(MaybeRef::NotRef(o.clone()), xref, &mut known, MAX_LINKS).is_none() {
-            return Some(NESTED_NOTE);
+            return Some(NESTED_NOTE.into());
         }
         match &o {
             // An array with an item that can't be read can't be looked at whole, and the
             // interpreter would still read its leading items: the file is refused.
-            Object::Array(a) if !readable(a) => return Some(UNREADABLE_NOTE),
+            Object::Array(a) if !readable(a) => return Some(UNREADABLE_NOTE.into()),
             Object::Array(a) => pending.extend(items(a).filter_map(direct)),
             _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| values(d)).filter_map(direct)),
         }
     }
     None
+}
+
+/// The error of a file with the stream `s` the reader would fail on, as [`refused`] says why:
+/// which object it is and what it holds, so a report of a file that can't be shared still says
+/// which stream it is (#4366).
+fn stream_note(pdf: &Pdf, s: &Stream<'_>, r: Refusal) -> String {
+    let id = s.obj_id();
+    // A stream written inside another object goes by that object; 0 is a stream the reader can't
+    // place.
+    let object = (id.obj_number > 0).then(|| format!("object {}", id.obj_number));
+    let what = match (r.inline_image, object) {
+        (true, Some(object)) => format!("an inline image in the content of {object}"),
+        (true, None) => "an inline image in it".to_string(),
+        (false, Some(object)) => format!("{} ({object})", stream_kind(pdf, id, s.dict())),
+        (false, None) => stream_kind(pdf, id, s.dict()),
+    };
+    match r.why {
+        Refused::TooBig(most) => format!("{what} would decode to more than {}", decoded_size(most)),
+        Refused::Parameters => format!("{what} has decode parameters that can't be applied"),
+    }
+}
+
+/// What the stream `id` with dictionary `dict` holds, for [`stream_note`]: an image (and its size
+/// in pixels), a form, a page's content, the editing data an `.ai` keeps in its first page's
+/// `PieceInfo`, or another stream.
+fn stream_kind(pdf: &Pdf, id: ObjectIdentifier, dict: &Dict<'_>) -> String {
+    let subtype = dict.get::<Name<'_>>(b"Subtype");
+    let subtype_is = |v: &[u8]| subtype.as_ref().is_some_and(|n| n.as_ref() == v);
+    if subtype_is(b"Image") {
+        let side = |key: &[u8]| dict.get::<u32>(key).unwrap_or(0);
+        return format!("an image of {} × {} px in it", side(b"Width"), side(b"Height"));
+    }
+    if subtype_is(b"Form") {
+        return "a form in it".to_string();
+    }
+    let is = |m: Option<MaybeRef<Object<'_>>>| matches!(m, Some(MaybeRef::Ref(r)) if ObjectIdentifier::from(r) == id);
+    let pages = pdf.pages();
+    // `Contents` is a stream or an array of them, the array in the page or an object of its own.
+    // Each object is read once however many pages share it, so a file can't make this quadratic.
+    let mut read = HashSet::new();
+    let content = pages.iter().any(|page| match page.raw().get_raw::<Object<'_>>(b"Contents") {
+        Some(MaybeRef::NotRef(Object::Array(a))) => items(&a).any(|m| is(Some(m))),
+        Some(MaybeRef::Ref(r)) => {
+            let at = ObjectIdentifier::from(r);
+            read.insert(at) && page.raw().get::<Array<'_>>(b"Contents").map_or(at == id, |a| items(&a).any(|m| is(Some(m))))
+        }
+        _ => false,
+    });
+    if content {
+        return "a page's content in it".to_string();
+    }
+    let private = pages.first().and_then(|p| p.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"));
+    if private.is_some_and(|d| d.entries().any(|(key, m)| key.as_ref().starts_with(b"AI") && is(Some(m)))) {
+        return "its editing data".to_string();
+    }
+    "a stream in it".to_string()
+}
+
+/// `bytes` for a message, in whole megabytes, or gigabytes when it is a whole number of them.
+fn decoded_size(bytes: usize) -> String {
+    const GB: usize = 1 << 30;
+    if bytes >= GB && bytes.is_multiple_of(GB) { format!("{} GB", bytes / GB) } else { format!("{} MB", bytes >> 20) }
 }
 
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
@@ -202,7 +268,7 @@ pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &
         // Twice: looking at every object makes the reader repair a damaged table of objects (once
         // only), and the objects are other ones after that.
         .and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
-            Some(why) => Err(PdfError::Parse(why.into())),
+            Some(why) => Err(PdfError::Parse(why)),
             None => Ok(pdf),
         })
 }
@@ -365,4 +431,15 @@ fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
             })
     }
     page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn decoded_sizes_read_in_whole_units() {
+        assert_eq!(super::decoded_size(256 << 20), "256 MB");
+        assert_eq!(super::decoded_size(418 << 20), "418 MB");
+        assert_eq!(super::decoded_size(1 << 30), "1 GB");
+        assert_eq!(super::decoded_size((1 << 30) + (1 << 20)), "1025 MB");
+    }
 }

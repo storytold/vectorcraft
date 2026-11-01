@@ -5,11 +5,34 @@ fn gpu(name: &str, backend: Backend, device_type: DeviceType) -> Candidate {
 }
 
 /// #1459: a 9048 px wide window (two display scales' ratio past 8192) fits an adapter that
-/// takes 16384 px textures; an adapter with less than eframe asks for changes nothing.
+/// takes 16384 px textures.
 #[test]
 fn the_surface_may_be_as_large_as_the_adapter_allows() {
-    assert_eq!(surface_limit(8192, 16384), 16384);
-    assert_eq!(surface_limit(8192, 4096), 8192);
+    let adapter = wgpu::Limits { max_texture_dimension_2d: 16384, ..wgpu::Limits::default() };
+    let asked = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked, &adapter).max_texture_dimension_2d, 16384);
+}
+
+/// #2105: a GPU that offers less than eframe asks for on any limit (here a Raspberry Pi 5's V3D 7.1:
+/// 15 inter-stage variables on Vulkan, 4096 px textures on OpenGL) gets a device with what it
+/// offers, instead of failing and leaving the window to the software rasterizer. A GPU that offers
+/// more is asked for no more than before, except for the texture side.
+#[test]
+fn the_device_asks_for_no_more_than_the_adapter_offers() {
+    let asked = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    let vulkan = wgpu::Limits { max_inter_stage_shader_variables: 15, max_texture_dimension_2d: 7680, ..wgpu::Limits::default() };
+    let limits = device_limits(asked.clone(), &vulkan);
+    assert_eq!((limits.max_inter_stage_shader_variables, limits.max_texture_dimension_2d), (15, 7680));
+    assert!(limits.check_limits(&vulkan), "{limits:?}");
+    let gl = wgpu::Limits { max_texture_dimension_2d: 4096, ..wgpu::Limits::downlevel_webgl2_defaults() };
+    let webgl2 = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::downlevel_webgl2_defaults() };
+    let limits = device_limits(webgl2.clone(), &gl);
+    assert_eq!(limits.max_texture_dimension_2d, 4096);
+    assert!(limits.check_limits(&gl), "{limits:?}");
+    let ample = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked.clone(), &ample), asked);
+    let better = wgpu::Limits { max_inter_stage_shader_variables: 31, max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked.clone(), &better), asked, "never more than eframe asked for");
 }
 
 fn names(c: &[Candidate], order: &[usize]) -> Vec<String> {
@@ -451,13 +474,50 @@ fn a_windows_gpu_renders_through_dx12_before_vulkan() {
 #[test]
 fn windows_never_loads_vulkan_drivers_unless_asked() {
     let all = Backends::all();
-    let start = backends(all, false);
+    let start = backends(all, false, false);
+    let fallback = backends(all, false, true);
     if cfg!(windows) {
-        assert_eq!(start, Backends::DX12 | Backends::GL, "#806");
+        assert_eq!(start, Backends::DX12, "#806, and no OpenGL unless needed (#4150)");
+        assert_eq!(fallback, Backends::DX12 | Backends::GL);
     } else {
-        assert_eq!(start, all);
+        assert_eq!((start, fallback), (all, all));
     }
-    assert_eq!(backends(Backends::VULKAN, true), Backends::VULKAN, "WGPU_BACKEND=vulkan still picks it");
+    assert_eq!(backends(Backends::VULKAN, true, false), Backends::VULKAN, "WGPU_BACKEND=vulkan still picks it");
+    assert_eq!(backends(Backends::GL, true, false), Backends::GL, "WGPU_BACKEND=gl still picks it");
+}
+
+#[test]
+fn windows_lists_opengl_once_a_start_leaves_an_adapter_out() {
+    let crashed = LeftOut { adapters: vec!["Dx12:8086:3ea0".into()], ..LeftOut::default() };
+    assert!(windows_opengl(&crashed), "#2243: the next start can fall back to OpenGL");
+    let listing = LeftOut { opengl_only: true, ..LeftOut::default() };
+    assert!(windows_opengl(&listing));
+    assert_eq!(listing.backends(backends(Backends::all(), false, true)), Backends::GL);
+}
+
+/// OpenGL stays where it drew before #4150's fix: a GPU without a Direct3D 12 driver (DX12 lists
+/// WARP alone) and an adapter `WGPU_ADAPTER_NAME` names; a start with a DX12 GPU lists DX12 alone.
+#[test]
+fn windows_lists_opengl_without_a_dx12_gpu_or_with_an_adapter_named() {
+    let start = LeftOut::default();
+    let asked = std::cell::Cell::new(false);
+    let hardware = |found: bool| {
+        asked.set(true);
+        found
+    };
+    assert!(!opengl_needed(&start, false, false, || hardware(true)), "a DX12 GPU: DX12 alone (#4150)");
+    assert!(asked.replace(false));
+    assert!(opengl_needed(&start, false, false, || hardware(false)), "WARP alone: the GPU draws through OpenGL, not the CPU");
+    assert!(opengl_needed(&start, false, true, || hardware(true)), "a named adapter may be an OpenGL one");
+    assert!(opengl_needed(&start, true, false, || hardware(true)), "a restart left an adapter out");
+    let listing = LeftOut { opengl_only: true, ..LeftOut::default() };
+    asked.set(false);
+    assert!(opengl_needed(&listing, false, false, || hardware(true)));
+    assert!(!asked.get(), "DX12 isn't listed once OpenGL must be");
+    assert!(any_hardware(&[DeviceType::Cpu, DeviceType::IntegratedGpu]));
+    assert!(any_hardware(&[DeviceType::VirtualGpu]));
+    assert!(!any_hardware(&[DeviceType::Cpu]), "WARP");
+    assert!(!any_hardware(&[]), "Windows 7");
 }
 
 #[test]

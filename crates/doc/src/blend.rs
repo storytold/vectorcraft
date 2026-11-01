@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
-use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
@@ -196,7 +196,11 @@ pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
 /// so dashes open out of a solid line; patterns of different lengths repeat to a common one.
 fn lerp_dash(x: Option<&Dash>, y: Option<&Dash>, t: f64) -> Option<Dash> {
     let solid_like = |d: &Dash| Dash {
-        pattern: d.pattern.chunks(2).flat_map(|c| [c.iter().sum::<f64>(), 0.0]).take(d.pattern.len().max(2)).collect(),
+        // An odd pattern repeats twice per period, so pair up the doubled one to keep every gap closed.
+        pattern: if d.pattern.len() % 2 == 1 { d.pattern.repeat(2) } else { d.pattern.clone() }
+            .chunks(2)
+            .flat_map(|c| [c.iter().sum::<f64>(), 0.0])
+            .collect(),
         offset: d.offset,
         align_corners: d.align_corners,
     };
@@ -1025,6 +1029,27 @@ impl Rail {
     }
 }
 
+/// A box round everything a blend of `keys` can paint once [`Rail::place`] puts its keys and steps
+/// on its spine, turned to it with Align to Path: the spine's box grown by three times the farthest
+/// any key paints from its centre. A step's shape lies within that distance of the point on the
+/// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
+/// moves.
+pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
+    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+        return None;
+    }
+    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let radius = keys
+        .iter()
+        .filter_map(|k| {
+            let (c, b) = (center_of(k), k.visual(symbols)?);
+            let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
+            Some(corners.into_iter().map(|q| (q - c).hypot()).fold(0.0, f64::max))
+        })
+        .fold(0.0, f64::max);
+    Some(spine.inflate(3.0 * radius, 3.0 * radius))
+}
+
 // =====================================================================================
 // Blend evaluation
 // =====================================================================================
@@ -1421,6 +1446,12 @@ mod tests {
         let p = lerp_profile(Some(&WidthProfile::lens()), None, 0.5).unwrap();
         assert_eq!(p.at(0.0), (0.5, 0.5));
         assert_eq!(p.at(0.5), (1.0, 1.0));
+    }
+
+    #[test]
+    fn odd_dash_blends_to_solid_with_closed_gaps() {
+        let d = lerp_dash(Some(&Dash { pattern: vec![2.0, 3.0, 4.0], ..Default::default() }), None, 1.0).unwrap();
+        assert!(d.pattern.iter().skip(1).step_by(2).all(|g| *g == 0.0), "{:?}", d.pattern);
     }
 
     #[test]

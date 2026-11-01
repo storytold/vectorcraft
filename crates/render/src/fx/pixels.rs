@@ -40,7 +40,11 @@ impl Renderer {
     ) {
         let chain: Vec<&RasterFx> = rfx.iter().filter(content_changing).collect();
         // When the first draw of this content kept its raster, that raster is drawn.
-        if let Some(KeptImage::Raster(image, place)) = content.kept.and_then(|k| k.image.borrow().clone()) {
+        if let Some(KeptImage::Raster(image, place, failed, image_left_out)) = content.kept.and_then(|k| k.image.borrow().clone()) {
+            crate::paint::add_decode_failures(failed);
+            if image_left_out {
+                self.image_left_out = self.image_left_out.map(|_| true);
+            }
             draw_placed(ctx, image, f.view * place);
             return;
         }
@@ -131,6 +135,9 @@ impl Renderer {
             let p = f.view * e.anchor;
             let (image, at, k) = (e.image.clone(), ((p.x + e.rel.0).round(), (p.y + e.rel.1).round()), e.k);
             crate::paint::add_decode_failures(e.failed);
+            if e.image_left_out {
+                self.image_left_out = self.image_left_out.map(|_| true);
+            }
             draw_scaled(ctx, image, at, k);
             return;
         }
@@ -151,23 +158,32 @@ impl Renderer {
         let frame = Frame { mt: false, view, visible: to_doc.transform_rect_bbox(Rect::new(0.0, 0.0, w, h)), px, ..*f };
         let line = 72.0 / ppi;
         let (before, decoded) = (self.stats.moved, crate::paint::decode_failures());
+        let outer_image_left_out = self.image_left_out.replace(false);
+        let pattern_images_left_out = crate::pattern::images_left_out();
         // A Rasterize first in the chain draws the content on its image's own grid instead, unless
         // that image is too large: the content is drawn once.
         let mut rasterized = match chain.first() {
             Some(RasterFx::Rasterize(r)) => {
                 let rect = r.image(content.bounds.unwrap_or(content.reach), line);
                 let kept = content.kept.and_then(|k| match &*k.image.borrow() {
-                    Some(KeptImage::Grid(image, failed)) => {
+                    Some(KeptImage::Grid(image, failed, image_left_out)) => {
                         crate::paint::add_decode_failures(*failed);
+                        if *image_left_out {
+                            self.image_left_out = self.image_left_out.map(|_| true);
+                        }
                         Some(image.clone())
                     }
                     _ => None,
                 });
                 let image = kept.or_else(|| {
                     let failures = crate::paint::decode_failures();
+                    let outer_image_left_out = self.image_left_out.replace(false);
+                    let pattern_images_left_out = crate::pattern::images_left_out();
                     let image = self.rasterize_image(f, r, rect, paint).map(std::rc::Rc::new);
+                    let left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
+                    self.image_left_out = outer_image_left_out.map(|outer| outer || left_out);
                     if let (Some(k), Some(image)) = (content.kept, &image) {
-                        *k.image.borrow_mut() = Some(KeptImage::Grid(image.clone(), crate::paint::decode_failures() - failures));
+                        *k.image.borrow_mut() = Some(KeptImage::Grid(image.clone(), crate::paint::decode_failures() - failures, left_out));
                     }
                     image
                 });
@@ -190,6 +206,8 @@ impl Renderer {
             off.render(&mut pm, &mut self.resources);
         }
         let failed = crate::paint::decode_failures() - decoded;
+        let image_left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
+        self.image_left_out = outer_image_left_out.map(|outer| outer || image_left_out);
         // Content drawn over moved rasters makes a moved raster.
         let moved = self.stats.moved > before;
         // What the raster is made from, for its object once it moves (`move_pixel_content`): a
@@ -258,7 +276,8 @@ impl Renderer {
             let rel = (x0 - p.x, y0 - p.y);
             let owner = content.owner.cloned().or_else(|| self.fx_owner.clone().filter(|o| std::ptr::eq(&**o, content.node)));
             let node = Drawn::of(content.node, owner.as_ref());
-            let entry = PixelEntry { node, linear, anchor, rel, k, image: image.clone(), view: in_view, made, inputs, moved, failed, stamp };
+            let entry =
+                PixelEntry { node, linear, anchor, rel, k, image: image.clone(), view: in_view, made, inputs, moved, failed, image_left_out, stamp };
             self.pixel_fx.insert(key, entry);
             self.trim_fx_rasters(FX_RASTER_BUDGET);
         }
@@ -266,7 +285,7 @@ impl Renderer {
         match content.kept.filter(|kept| kept.image.borrow().is_none()) {
             Some(kept) => {
                 let place = f.view.inverse() * Affine::translate((x0, y0)) * Affine::scale(1.0 / k);
-                *kept.image.borrow_mut() = Some(KeptImage::Raster(image.clone(), place));
+                *kept.image.borrow_mut() = Some(KeptImage::Raster(image.clone(), place, failed, image_left_out));
                 if f.view == call { draw_scaled(ctx, image, (x0, y0), k) } else { draw_placed(ctx, image, call * place) }
             }
             None => draw_scaled(ctx, image, (x0, y0), k),

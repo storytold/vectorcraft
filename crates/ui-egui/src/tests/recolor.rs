@@ -238,6 +238,27 @@ fn each_recolor_hex_field_has_its_row_number() {
     assert!(h.query_by_role_and_label(egui::accesskit::Role::TextInput, "Color").is_none(), "no ambiguous Color field");
 }
 
+/// #2960: the Preserve checkboxes open as OK last left them; Cancel keeps what OK left.
+#[test]
+fn the_preserve_checkboxes_open_as_they_were_last_confirmed() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#ffffff", "#000000", "#808080"]);
+    let preserve = |app: &VectorcraftApp| ["preserveWhite", "preserveBlack", "preserveGrays"].map(|k| field(app, k));
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(preserve(&app), [json!(true), json!(true), json!(false)], "a first open");
+    set(&mut app, "preserveWhite", json!(false));
+    set(&mut app, "preserveBlack", json!(false));
+    set(&mut app, "preserveGrays", json!(true));
+    dialogs::confirm(&mut app).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(preserve(&app), [json!(false), json!(false), json!(true)], "as confirmed");
+    set(&mut app, "preserveWhite", json!(true));
+    dialogs::cancel(&mut app);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(preserve(&app), [json!(false), json!(false), json!(true)], "Cancel keeps what OK left");
+}
+
 /// The rect of the widget drawn `size` big (the wheel is 220 across, its Brightness slider 220 by 22).
 fn widget_of_size(h: &egui_kittest::Harness<'_, VectorcraftApp>, size: egui::Vec2) -> Rect {
     h.ctx

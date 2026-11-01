@@ -645,6 +645,7 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if sw.spot != spot {
         let n = name.clone();
+        let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
         s.edit("Swatch Options", |d, _| {
             if let Some(w) = d.swatch_mut(&n) {
                 w.spot = spot;
@@ -652,7 +653,7 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
                     w.global = true;
                 }
             }
-            Ok(())
+            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))
         })?;
     }
     Ok(json!({"name": name, "spot": spot}))

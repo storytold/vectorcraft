@@ -25,8 +25,11 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
 }
 
 /// Draw a gradient preview into `rect`, laid out as the gradient would be on an object of that
-/// shape: linear along its angle, radial from the centre, freeform from its colour points.
+/// shape: linear along its angle, radial from the centre, freeform from its colour points. The
+/// rect is rounded to whole pixels, as filled rectangles are when drawn, so the chip lines up with
+/// a colour chip beside it (#3826).
 pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::GradientPaint) {
+    let rect = egui::emath::GuiRounding::round_to_pixels(rect, ui.pixels_per_point());
     if !(rect.width() > 0.0 && rect.height() > 0.0) {
         return;
     }

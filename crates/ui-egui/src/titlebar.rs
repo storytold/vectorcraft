@@ -45,7 +45,8 @@ fn toggle_maximize(ctx: &egui::Context) {
 /// maximize. Call it before laying out the bar so its widgets, registered later, take the clicks.
 pub fn drag_area(ui: &Ui, rect: Rect) {
     let ctx = ui.ctx();
-    let resp = ui.interact(rect, Id::unique("titlebar-drag"), Sense::click_and_drag());
+    // Not focusable (`click_and_drag` is): Tab goes through the bar's widgets, not its background.
+    let resp = ui.interact(rect, Id::unique("titlebar-drag"), Sense::CLICK | Sense::DRAG);
     // egui hands a drag that starts on a click-only widget (a menu title) to the drag-sensing
     // background below it, so remember whether the press itself landed on bare background.
     if ctx.input(|i| i.pointer.any_pressed()) {
@@ -162,7 +163,8 @@ pub fn resize_zones(ui: &mut Ui) {
     let layer = LayerId::new(Order::Foreground, Id::unique("titlebar-resize"));
     let zui = ui.new_child(egui::UiBuilder::new().layer_id(layer).max_rect(w));
     for (i, (r, dir, cursor)) in zones(w).into_iter().enumerate() {
-        let resp = zui.interact(r, Id::unique(("titlebar-resize", i)), Sense::drag()).on_hover_cursor(cursor);
+        // Not focusable (`Sense::drag()` is): Tab does not stop on the zones.
+        let resp = zui.interact(r, Id::unique(("titlebar-resize", i)), Sense::DRAG).on_hover_cursor(cursor);
         if resp.drag_started_by(PointerButton::Primary) {
             ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
             handed_to_os(&ctx);
@@ -389,6 +391,23 @@ mod tests {
         assert!(!cmds.iter().any(|c| matches!(c, ViewportCommand::BeginResize(_))), "{cmds:?}");
         assert!(w.click(pos2(999.5, 0.5)).is_empty());
         assert_eq!(w.app.ui.status, "quit");
+    }
+
+    /// Tab goes through the bar's controls and does not stop on the bar's background or on the
+    /// resize zones, which only the pointer uses.
+    #[test]
+    fn tab_skips_the_bar_background_and_the_resize_zones() {
+        let mut w = Win::new(1000.0);
+        w.frame(vec![]);
+        let ctx = w.ctx.clone();
+        let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 40, |events| {
+            w.frame(events);
+        });
+        for c in CAPTIONS {
+            assert!(stops.contains(&caption_id(c)), "Tab reaches the {c:?} button: {stops:?}");
+        }
+        let regions: Vec<Id> = std::iter::once(Id::unique("titlebar-drag")).chain((0..8usize).map(|i| Id::unique(("titlebar-resize", i)))).collect();
+        assert!(!stops.iter().any(|id| regions.contains(id)), "{stops:?}");
     }
 
     #[test]

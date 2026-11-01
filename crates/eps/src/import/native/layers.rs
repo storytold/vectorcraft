@@ -1,4 +1,4 @@
-use super::build::{Page, build};
+use super::build::{Page, build, build_from};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -6,11 +6,20 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// its program in the legacy format, see [`editing_copy`]): its layers (the
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
-/// has one that can't be used, `visible` with a warning that says why, and with the swatches of
-/// the editing copy's palette ([`use_palette`]) when it could be read.
+/// has one that can't be used, `visible` with a warning that says why, with the swatches of the
+/// editing copy's palette ([`use_palette`]) when it could be read, and with its layer tree, empty,
+/// below the page's layer when that could be read (#2033).
 pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Imported {
     let Some(data) = editing_copy(ps) else { return visible };
-    let result = data.as_deref().map_err(Clone::clone).and_then(|data| build(data, Some(&visible.document), Page::Art, false, trust, 1.0));
+    // The layer tree is kept from the structure read, for the page to come in on when the layers
+    // can't be used.
+    let (tree, result) = match data.as_deref() {
+        Ok(d) => match ai::read(d, true) {
+            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
+            Err(why) => (vec![], Err(why)),
+        },
+        Err(why) => (vec![], Err(why.clone())),
+    };
     match result {
         Ok((document, mut warnings)) => {
             for w in &visible.warnings {
@@ -25,10 +34,42 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
             if let Ok(data) = &data {
                 use_palette(data, &mut v.document);
             }
-            v.warnings.push(format!("{LAYERS_UNREAD} ({why}): it comes in as its page, in one layer"));
+            if tree.is_empty() {
+                v.warnings.push(format!("{LAYERS_UNREAD} ({why}): it comes in as its page, in one layer"));
+                return v;
+            }
+            let doc = &mut v.document;
+            let mut layers: Vec<Arc<Node>> = tree.iter().map(|l| Arc::new(doc.reid(l))).collect();
+            let taken: Vec<Option<String>> = layers.iter().map(|l| l.name.clone()).collect();
+            layers.append(&mut doc.layers);
+            doc.layers = layers;
+            // The page's layer takes a name of its own: the file's layers usually have its `Layer 1`.
+            for i in taken.len()..doc.layers.len() {
+                if doc.layers.get(i).is_some_and(|l| taken.contains(&l.name)) {
+                    let name = doc.next_layer_name();
+                    if let Some(l) = doc.layers.get_mut(i) {
+                        Arc::make_mut(l).name = Some(name);
+                    }
+                }
+            }
+            v.warnings.push(format!("{LAYERS_UNREAD} ({why}): it comes in as its page, on a layer above its layers, which come in empty"));
             v
         }
     }
+}
+
+/// The layers in `nodes` with only their sublayers in them: names, order and options without the art.
+fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
+    let layers = nodes.iter().filter(|n| matches!(n.kind, NodeKind::Layer { .. }));
+    layers
+        .map(|l| {
+            let mut l = Node::clone(l);
+            if let Some(children) = l.children_mut() {
+                *children = layer_tree(children);
+            }
+            Arc::new(l)
+        })
+        .collect()
 }
 
 /// The `.ai` `visible` (read as its PDF part), or a PDF saved with the editing data, read through

@@ -125,7 +125,7 @@ pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
 }
 
 /// The color type of TIFF `bytes` and its decoder; `None` for [`oversized_tiff`] images too.
-fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
+pub(crate) fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
     if !is_tiff(bytes) || oversized_tiff(bytes).is_some() {
         return None;
     }

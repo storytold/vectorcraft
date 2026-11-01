@@ -1254,18 +1254,18 @@ fn rect(app: &mut VectorcraftApp, x: f64, y: f64, w: f64, h: f64) -> serde_json:
     app.run("shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h})).unwrap()["id"].clone()
 }
 
-/// One blend selected with the Blend tool has Blend Options in Quick Actions, which opens the
-/// Blend Options dialog on it; OK is one undo step. Not with another tool, nor for a blend
-/// selected with another object.
+/// One selected blend has Blend Options in Quick Actions, with the Selection tool (#4817) as with
+/// the Blend tool, which opens the Blend Options dialog on it; OK is one undo step. Not for a
+/// blend selected with another object.
 #[test]
-fn blend_options_is_a_quick_action_for_one_blend_with_the_blend_tool() {
+fn blend_options_is_a_quick_action_for_one_blend() {
     let mut app = new_app();
     let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 200.0, 20.0, 40.0, 40.0));
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
     let blend = app.run("object.blend.make", json!({})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [blend]})).unwrap();
     let ctx = egui::Context::default();
-    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "not with the Selection tool");
+    assert!(shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "with the Selection tool");
     app.select_tool("blend");
     app.run("select.set", json!({"ids": [blend]})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
@@ -1286,25 +1286,28 @@ fn blend_options_is_a_quick_action_for_one_blend_with_the_blend_tool() {
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "a rectangle");
 }
 
-/// Quick Actions have no Lock in isolation mode, where Object › Lock › Selection is off. Outside
-/// isolation mode Lock is there and locks the selection.
+/// Quick Actions offer Lock for a selected member in isolation and for a selected group outside it.
 #[test]
-fn lock_is_a_quick_action_outside_isolation_mode_only() {
+fn lock_is_a_quick_action_in_and_outside_isolation_mode() {
     let mut app = new_app();
     let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 200.0, 20.0, 40.0, 40.0));
     app.run("select.set", json!({"ids": [a.clone(), b]})).unwrap();
     let g = app.run("object.group", json!({})).unwrap()["id"].clone();
     app.run("object.isolate", json!({"id": g.clone()})).unwrap();
-    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
     let ctx = egui::Context::default();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(shows(&texts, "Offset Path") && !shows(&texts, "Lock"), "no Lock in isolation mode: {texts:?}");
+    assert!(shows(&texts, "Offset Path") && shows(&texts, "Lock"), "Lock in isolation mode: {texts:?}");
+    press(&mut app, &ctx, text_at(&texts, "Lock").center());
+    let locked = |app: &VectorcraftApp, id: &serde_json::Value| {
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().locked
+    };
+    assert!(locked(&app, &a));
     app.run("object.exitIsolation", json!({})).unwrap();
     app.run("select.set", json!({"ids": [g.clone()]})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
     press(&mut app, &ctx, text_at(&texts, "Lock").center());
-    let locked = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(g.as_u64().unwrap())).unwrap().locked;
-    assert!(locked, "Lock locks the group");
+    assert!(locked(&app, &g), "Lock locks the group");
 }
 
 /// A Live Paint group selected with a path has Merge Live Paint in Quick Actions, which adds
@@ -1599,4 +1602,159 @@ fn a_symbol_instance_turns_about_its_registration_point() {
     let bx = app.selection_box().unwrap();
     assert!((bx.angle - 45.0).abs() < 1e-6, "turned to {}", bx.angle);
     assert!(near(bx.reference_point(8), vectorcraft_geom::Point::new(200.0, 160.0)), "the registration point moved to {:?}", bx.reference_point(8));
+}
+
+/// Ruler guides selected on their own (a click on one) show a Guides heading and a Transform
+/// section, where X moves the vertical ones and Y the horizontal ones; with art selected too, the
+/// panel shows the art's sections.
+#[test]
+fn selected_guides_show_their_position_in_a_transform_section() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let v = app.run("guide.add", json!({"vertical": true, "pos": 30})).unwrap()["index"].as_u64().unwrap();
+    let h = app.run("guide.add", json!({"vertical": false, "pos": 20})).unwrap()["index"].as_u64().unwrap();
+    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.guides[i as usize].pos;
+    let ctx = egui::Context::default();
+    // Steps the field labelled `label` up by one with ↑.
+    let step = |app: &mut VectorcraftApp, label: &str| {
+        let texts = frame(app, &ctx, vec![]);
+        let r = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label:?} in {texts:?}")).1;
+        let at = egui::pos2(r.right() + 40.0, r.center().y);
+        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, &ctx, vec![Event::PointerMoved(at), press(true)]);
+        frame(app, &ctx, vec![press(false)]);
+        let up = Event::Key { key: egui::Key::ArrowUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![up]);
+        frame(
+            app,
+            &ctx,
+            vec![Event::PointerButton { pos: egui::pos2(5.0, 690.0), button: PointerButton::Primary, pressed: true, modifiers: Default::default() }],
+        );
+    };
+    for (index, label, before) in [(v, "X:", 30.0), (h, "Y:", 20.0)] {
+        app.run("guide.select", json!({"indexes": [index]})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        for shown in ["Guides", "Transform", "X:", "Y:"] {
+            assert!(texts.iter().any(|t| t == shown), "{shown:?} in {texts:?}");
+        }
+        assert!(!texts.iter().any(|t| t == "Document"), "{texts:?}");
+        step(&mut app, label);
+        assert_eq!((pos(&app, index) - before).abs(), 1.0, "{label} moves the selected guide");
+    }
+    // A guide and a rectangle: the rectangle's sections.
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("guide.select", json!({"indexes": [v], "toggle": true})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+    assert!(!texts.iter().any(|t| t == "Guides") && texts.iter().any(|t| t == "W:"), "{texts:?}");
+}
+
+/// #2238: Object › Path's Offset Path and Simplify take paths, so they aren't Quick Actions for
+/// type alone, where they could only fail ("select paths"); live type offsets through the
+/// Appearance panel's Effect › Path › Offset Path. A path, also with type, still has them.
+#[test]
+fn offset_path_and_simplify_are_not_quick_actions_for_type_alone() {
+    let mut app = new_app();
+    let t = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(!shows(&texts, "Offset Path") && !shows(&texts, "Simplify") && shows(&texts, "Lock"), "type: {texts:?}");
+    let r = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [t, r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "type and a path: {texts:?}");
+}
+
+/// A dynamic symbol instance with appearance changes of its own has Reset in Quick Actions, which
+/// drops them (#4938); without changes there is no Reset.
+#[test]
+fn reset_is_a_quick_action_for_a_changed_dynamic_instance() {
+    let mut app = new_app();
+    let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 80.0, 20.0, 40.0, 40.0));
+    let inst = app.run("symbol.new", json!({"ids": [a, b], "type": "dynamic"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [inst]})).unwrap();
+    let ctx = egui::Context::default();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Reset"), "nothing to reset");
+    app.run("symbol.instance.setAppearance", json!({"path": [0], "fill": "#ff0000"})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Reset").center());
+    let id = vectorcraft_doc::NodeId(inst.as_u64().unwrap());
+    assert!(app.session.doc().unwrap().doc.node(id).unwrap().extras().symbol_overrides.is_empty());
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Reset"));
+}
+
+/// Two 20 pt squares attached to a horizontal line in an Objects on Path group (`rotate` degrees),
+/// with the group selected → the group.
+fn objects_on_path(app: &mut VectorcraftApp, y: f64, rotate: f64) -> Value {
+    let line = app.run("shape.line", json!({"x1": 20, "y1": y, "x2": 380, "y2": y})).unwrap()["id"].clone();
+    let a = rect(app, 40.0, y - 60.0, 20.0, 20.0);
+    let b = rect(app, 80.0, y - 60.0, 20.0, 20.0);
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let group = app.run("object.objectsOnPath.attach", json!({"path": line, "rotate": rotate})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    group
+}
+
+/// The Pivot and Rotate of the Objects on Path group `id`.
+fn pivot_rotate(app: &VectorcraftApp, id: &Value) -> (u8, f64) {
+    let d = &app.session.active().unwrap().doc;
+    let rec = d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().extras().objects_on_path.as_deref().unwrap();
+    (rec.pivot, rec.rotate)
+}
+
+/// The Objects on Path Options section alone.
+fn objects_on_path_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if let Some(oop) = selected_objects_on_path(app) {
+        objects_on_path_section(app, ui, &oop);
+    }
+}
+
+/// The help page's Objects on Path Options section of the Properties panel shows for an Objects on
+/// Path group selected on its own or with other such groups, and not for a plain group, an object
+/// or an Objects on Path group selected with another object.
+#[test]
+fn objects_on_path_groups_show_objects_on_path_options() {
+    let mut app = new_app();
+    let ctx = egui::Context::default();
+    let group = objects_on_path(&mut app, 150.0, 0.0);
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Objects on Path Options") && shows(&texts, "Pivot:") && shows(&texts, "Rotate:"), "one group: {texts:?}");
+    let other = objects_on_path(&mut app, 250.0, 0.0);
+    app.run("select.set", json!({"ids": [group, other]})).unwrap();
+    assert!(shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "two groups");
+    let r = rect(&mut app, 300.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [group, r]})).unwrap();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "a group and a rectangle");
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "a rectangle");
+    let s = rect(&mut app, 340.0, 20.0, 20.0, 20.0);
+    app.run("select.set", json!({"ids": [r, s]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "a plain group");
+}
+
+/// A click on a Pivot square and a typed Rotate each set the selected groups' Objects on Path
+/// Options in one undo step: one group's, and two groups' at once, where Rotate starts blank as
+/// the groups' angles differ.
+#[test]
+fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
+    let (mut app, ctx) = reference_setup(&[]);
+    let group = objects_on_path(&mut app, 150.0, 0.0);
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Top Left");
+    assert_eq!(pivot_rotate(&app, &group), (0, 0.0), "Pivot: top left");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    type_over(&mut app, &ctx, objects_on_path_options, "0°", "30");
+    assert_eq!(pivot_rotate(&app, &group), (0, 30.0), "Rotate: 30°");
+    assert_eq!(undo_depth(&app), depth + 2, "one undo step");
+    let other = objects_on_path(&mut app, 250.0, 45.0);
+    app.run("select.set", json!({"ids": [group, other]})).unwrap();
+    let texts = panel_frame(&mut app, &ctx, vec![], objects_on_path_options);
+    assert!(!shows(&texts, "30°") && !shows(&texts, "45°"), "Rotate is blank: {texts:?}");
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Bottom Right");
+    assert_eq!((pivot_rotate(&app, &group), pivot_rotate(&app, &other)), ((8, 30.0), (8, 45.0)), "both groups' Pivot");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step for both groups");
 }

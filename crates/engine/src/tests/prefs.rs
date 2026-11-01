@@ -389,6 +389,31 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
+/// Caps Lock gives the drawing tools the precise crosshair while it is on, and leaves the saved
+/// Use Precise Cursors preference as it was.
+#[test]
+fn caps_lock_gives_drawing_tools_the_crosshair() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let cursor = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        s.cursor(vectorcraft_geom::Point::new(300.0, 300.0), Mods::default(), ViewInfo::default())
+    };
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+    assert_eq!(s.execute("view.capsLock", &json!({"on": true})).unwrap(), json!({"on": true}));
+    assert!(!s.prefs.use_precise_cursors, "Caps Lock leaves the preference off");
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "lasso"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    assert_eq!(s.execute("view.capsLock", &json!({"on": false})).unwrap(), json!({"on": false}));
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
+    assert!(s.execute("view.capsLock", &json!({"on": 1})).is_err());
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+}
+
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
 /// pointer; on, a crosshair. Every other drawing tool shows a crosshair either way, and the Type tool and the
 /// Scissors over no path keep theirs.
@@ -1616,6 +1641,23 @@ fn real_time_drawing_off_skips_tool_previews_until_commit() {
     assert!(s.doc().unwrap().revision > rev, "on again: previews run while dragging");
 }
 
+/// #4646: with Real-time Drawing off, a ruler guide moved with the Selection tool still moves
+/// while it is dragged (the guide is all the drag shows).
+#[test]
+fn real_time_drawing_off_still_shows_a_dragged_guide() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 200.0), v).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[0].pos, 150.0, "the guide moves while dragged");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 200.0), v).unwrap();
+    assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
+}
+
 /// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.
 #[test]
 fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {
@@ -1867,4 +1909,28 @@ fn transform_panel_patterns_defaults_to_following_the_general_preference() {
     s.execute("prefs.set", &json!({"key": "transformPanelPatterns", "value": "both"})).unwrap();
     s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
     assert_eq!(s.prefs.transform_panel_patterns, "default");
+}
+
+/// Character panel › Show Snap to Glyph Options (#4232): `view.snapToGlyph.options` reads and sets
+/// the options, all on by default, kept as the `glyphSnap` preference group; bad keys and values
+/// change nothing, and resetting the preferences turns them all back on.
+#[test]
+fn snap_to_glyph_options_read_set_and_reset() {
+    let mut s = Session::new();
+    let all = json!({"baseline": true, "xHeight": true, "bounds": true, "proximity": true, "angular": true, "anchors": true});
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+    let mut set = all.clone();
+    (set["xHeight"], set["angular"]) = (json!(false), json!(false));
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({"xHeight": false, "angular": false})).unwrap(), set);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "glyphSnap"})).unwrap(), set);
+    assert!(!s.prefs.glyph_snap.x_height && s.prefs.glyph_snap.baseline);
+    for bad in [json!({"xHeight": 1}), json!({"glyphBounds": false})] {
+        assert!(s.execute("view.snapToGlyph.options", &bad).is_err(), "{bad}");
+        assert!(s.execute("prefs.set", &json!({"key": "glyphSnap", "value": bad})).is_err(), "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "glyphSnap", "value": {"anchors": false}})).unwrap();
+    set["anchors"] = json!(false);
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
 }

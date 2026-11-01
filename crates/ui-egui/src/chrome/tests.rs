@@ -902,6 +902,108 @@ fn the_isolation_bar_does_not_take_layout_height_from_the_canvas() {
     assert_eq!(top(&mut app), before, "isolation mode leaves the canvas where it was");
 }
 
+/// #4468: In nested isolation, clicking the back button steps up one level in the hierarchy,
+/// and clicking ancestor breadcrumbs navigates directly to that isolation level.
+#[test]
+fn isolation_bar_navigation_and_back_button_steps_up() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+    // Group 1 contains a and b
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g1 = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    let c = rect(&mut app, 90.0);
+    // Group 2 contains g1 and c
+    app.run("select.set", json!({"ids": [g1, c]})).unwrap();
+    let g2 = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+
+    // Isolate path a (deepest level: Layer 1 > <Group> > <Group> > <Path>)
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)));
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    egui_extras::install_image_loaders(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+
+    let click_at = |app: &mut crate::VectorcraftApp, pos: egui::Pos2| {
+        let button = egui::PointerButton::Primary;
+        let mut run_frame = |events| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+                super::isolation_bar(app, ui, screen);
+            });
+            out.textures_delta.clear();
+        };
+        run_frame(vec![egui::Event::PointerMoved(pos)]);
+        run_frame(vec![egui::Event::PointerButton { pos, button, pressed: true, modifiers: Default::default() }]);
+        run_frame(vec![egui::Event::PointerButton { pos, button, pressed: false, modifiers: Default::default() }]);
+    };
+
+    // Clicking back from `a` steps up to parent group `g1`
+    click_at(&mut app, egui::pos2(15.0, 12.0));
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g1)));
+
+    // Clicking back from `g1` steps up to grandparent group `g2`
+    click_at(&mut app, egui::pos2(15.0, 12.0));
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+
+    // Clicking back from `g2` (parent is layer) exits isolation mode completely
+    click_at(&mut app, egui::pos2(15.0, 12.0));
+    assert_eq!(app.session.active().unwrap().isolation, None);
+
+    // Deep isolate again to test clicking ancestor breadcrumb directly
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)));
+
+    // First crumb is Layer 1 (at x ~ 30..80). Clicking it exits isolation directly.
+    click_at(&mut app, egui::pos2(45.0, 12.0));
+    assert_eq!(app.session.active().unwrap().isolation, None);
+
+    // Deep isolate again to test clicking an intermediate ancestor group breadcrumb directly
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)));
+
+    // Second crumb is g2 ("<Group>") at x ~ 95..140.
+    // Clicking g2 isolates g2 directly.
+    click_at(&mut app, egui::pos2(115.0, 12.0));
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+}
+
+/// Tab goes to the isolation bar's back button and breadcrumbs and does not stop on the bar
+/// behind them, which only keeps the pointer off the canvas.
+#[test]
+fn tab_skips_the_isolation_bars_background() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let mut frame = |events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::isolation_bar(&mut app, ui, screen);
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), 24.0));
+    let back = egui::Rect::from_min_size(bar.min + egui::vec2(6.0, 3.0), egui::vec2(18.0, 18.0));
+    let widget =
+        |rect: egui::Rect| ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == rect).map(|w| w.id));
+    let (bar, back) = (widget(bar).expect("the isolation bar"), widget(back).expect("the back button"));
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 10, frame);
+    assert!(stops.contains(&back), "Tab reaches the back button: {stops:?}");
+    assert!(!stops.contains(&bar), "{stops:?}");
+}
+
 /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
 /// Selection selected, and Exit Isolation Mode leaves with the path selected. Type, symbol
 /// instances, blends, two objects and an envelope's contents get no isolate button, and pattern
@@ -958,6 +1060,23 @@ fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
     app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
     assert!(app.session.active().unwrap().isolation.is_some());
     assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
+}
+
+/// #4819: with Direct Selection, a selected blend shows the Control bar's and the Properties
+/// panel's Convert buttons, as a path selected whole does; with the Selection tool it doesn't.
+#[test]
+fn a_blend_selected_with_direct_selection_shows_the_convert_buttons() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 200.0));
+    let blend = app.run("object.blend.make", json!({"ids": [a, b], "steps": 1})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [blend]})).unwrap();
+    assert!(super::anchor_controls(&app) == super::AnchorControls::None, "the Selection tool");
+    app.select_tool("directSelection");
+    assert!(super::anchor_controls(&app) == super::AnchorControls::Convert);
 }
 
 /// The Zoom tool's hint follows Performance › Animated Zoom (#394): a drag zooms as it goes,
@@ -1223,6 +1342,127 @@ fn artboard_document_tab_roundtrip_preserves_other_tools() {
     }
 }
 
+/// Press F6 with `modifiers` through the shortcut handler.
+fn press_f6(app: &mut crate::VectorcraftApp, modifiers: egui::Modifiers) {
+    let ctx = egui::Context::default();
+    let ev = egui::Event::Key { key: egui::Key::F6, physical_key: None, pressed: true, repeat: false, modifiers };
+    let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+    out.textures_delta.clear();
+}
+
+/// Cmd+F6 is Next Document and Cmd+Shift+F6 is Previous Document by default: Ctrl+F6 and
+/// Ctrl+Shift+F6 on Windows and Linux, Command+F6 and Shift+Command+F6 on macOS. Keyboard
+/// Shortcuts lists both under Window. F6 and Shift+F6 are still the Color and Appearance panels'
+/// keys, and no other command, tool or panel has either key by default.
+#[test]
+fn cmd_f6_and_cmd_shift_f6_are_next_and_previous_document() {
+    use crate::shortcut_editor::{command_for_key, default_command_shortcut, panel_shortcut};
+    assert_eq!(default_command_shortcut("window.nextDocument"), Some("Cmd+F6"));
+    assert_eq!(default_command_shortcut("window.previousDocument"), Some("Cmd+Shift+F6"));
+    assert_eq!(command_for_key("Cmd+F6"), Some("window.nextDocument"));
+    assert_eq!(command_for_key("Cmd+Shift+F6"), Some("window.previousDocument"));
+    assert_eq!((panel_shortcut("color"), panel_shortcut("appearance")), (Some("F6"), Some("Shift+F6")));
+    let chord = crate::shortcuts::parse("Cmd+Shift+F6").expect("parses");
+    assert_eq!((chord.modifiers, chord.logical_key), (egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::F6));
+    let shown = (crate::menus::pretty_shortcut("Cmd+F6"), crate::menus::pretty_shortcut("Cmd+Shift+F6"));
+    let want = if cfg!(target_os = "macos") { ("⌘F6", "⇧⌘F6") } else { ("Ctrl+F6", "Ctrl+Shift+F6") };
+    assert_eq!((shown.0.as_str(), shown.1.as_str()), want);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let listed = app.run("shortcuts.list", json!({"query": "Document"})).unwrap();
+    let rows: Vec<_> = listed
+        .as_array()
+        .expect("rows")
+        .iter()
+        .filter(|r| r["id"].as_str().is_some_and(|id| id.ends_with("Document") && id.starts_with("window.")))
+        .map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone()))
+        .collect();
+    assert_eq!(
+        rows,
+        [(json!("Next Document"), json!("Window"), json!("Cmd+F6")), (json!("Previous Document"), json!("Window"), json!("Cmd+Shift+F6"))],
+        "Keyboard Shortcuts lists both"
+    );
+    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the keys");
+}
+
+/// Cmd+F6 makes the next open document in tab order the current one, and Cmd+Shift+F6 makes the
+/// previous one the current one. After the last document comes the first, and before the first document comes the
+/// last. From the Home screen the keys go to the first and the last document and close the screen.
+/// With no document open the commands are disabled and fail with "no document open".
+#[test]
+fn cmd_f6_goes_to_the_next_document_and_cmd_shift_f6_to_the_previous_one() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    assert!(!crate::menus::enabled(&app, "window.nextDocument") && !crate::menus::enabled(&app, "window.previousDocument"));
+    assert_eq!(app.run("window.nextDocument", json!({})).unwrap_err(), "no document open");
+    assert_eq!(app.run("window.previousDocument", json!({})).unwrap_err(), "no document open");
+    for name in ["A", "B", "C"] {
+        app.run("file.new", json!({"width": 100, "height": 100, "name": name})).unwrap();
+    }
+    assert!(crate::menus::enabled(&app, "window.nextDocument") && crate::menus::enabled(&app, "window.previousDocument"));
+    assert_eq!(app.session.active_index(), Some(2));
+    let mut seen = vec![];
+    for modifiers in [egui::Modifiers::COMMAND; 4] {
+        press_f6(&mut app, modifiers);
+        seen.push(app.session.active_index());
+    }
+    assert_eq!(seen, [Some(0), Some(1), Some(2), Some(0)], "Cmd+F6 goes right and wraps from the last to the first");
+    seen.clear();
+    for modifiers in [egui::Modifiers::COMMAND | egui::Modifiers::SHIFT; 4] {
+        press_f6(&mut app, modifiers);
+        seen.push(app.session.active_index());
+    }
+    assert_eq!(seen, [Some(2), Some(1), Some(0), Some(2)], "Cmd+Shift+F6 goes left and wraps from the first to the last");
+    assert_eq!(app.run("window.nextDocument", json!({})).unwrap(), json!({"index": 0}));
+    assert_eq!(app.run("window.previousDocument", json!({})).unwrap(), json!({"index": 2}));
+    app.session.set_active(1);
+    app.run("app.home", json!({})).unwrap();
+    press_f6(&mut app, egui::Modifiers::COMMAND);
+    assert_eq!((app.session.active_index(), app.ui.home), (Some(0), None), "from the Home screen Cmd+F6 shows the first");
+    app.session.set_active(1);
+    app.run("app.home", json!({})).unwrap();
+    press_f6(&mut app, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+    assert_eq!((app.session.active_index(), app.ui.home), (Some(2), None), "and Cmd+Shift+F6 the last");
+    // One document: the keys keep it current.
+    let mut one = crate::VectorcraftApp::new(Session::new(), Default::default());
+    one.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    press_f6(&mut one, egui::Modifiers::COMMAND);
+    press_f6(&mut one, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+    assert_eq!(one.session.active_index(), Some(0));
+}
+
+/// With the Artboard tool, Cmd+F6 and Cmd+Shift+F6 switch documents as a click on a tab does: the
+/// document switched back to keeps the artboard it shows as the tool's target, so the Properties
+/// panel's Delete Artboard then removes that artboard. Switching is not an edit.
+#[test]
+fn cmd_f6_switches_documents_as_a_tab_click_does_with_the_artboard_tool() {
+    let (mut app, ctx) = artboard_document_app();
+    app.select_tool("artboard");
+    artboard_navigation_next(&mut app, &ctx);
+    assert_eq!(app.session.tool_options()["selected"], json!([1]));
+    let before = app.session.active().unwrap().doc.clone();
+    let undo = app.session.active().unwrap().history.undo.len();
+    press_f6(&mut app, egui::Modifiers::COMMAND);
+    assert_eq!(app.session.active_index(), Some(1));
+    // The app draws frames while the other document is the current one.
+    artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
+    artboard_document_tabs_frame(&mut app, &ctx, vec![]);
+    press_f6(&mut app, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+    assert_eq!(app.session.active_index(), Some(0));
+    app.sync_views();
+    assert_eq!(app.session.tool_options()["selected"], json!([1]), "the tool targets the displayed artboard");
+    assert_eq!(app.view().unwrap().artboard, 1, "the document keeps its displayed artboard");
+    assert_eq!(app.session.active().unwrap().doc, before, "switching documents is not a document edit");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
+    let texts = artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
+    let at = texts.iter().find(|(label, _)| label == "Delete Artboard").map(|(_, r)| r.center()).expect("Properties Delete button");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
+        artboard_navigation_properties_frame(&mut app, &ctx, vec![event]);
+    }
+    let names: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+    assert_eq!(names, ["Keep"], "Delete Artboard after the keys removes the artboard the document shows");
+}
+
 /// One history entry: its label, document and selection.
 type HistoryRow = (String, Arc<vectorcraft_doc::Document>, Arc<vectorcraft_doc::Selection>);
 
@@ -1410,4 +1650,87 @@ fn artboard_close_active_tab_properties_delete_uses_shown_board() {
     let base = Baseline { uid, revision, before, selection, history_before, history_limits, expected };
     close_b_tab(&mut app, &ctx, &base);
     delete_shown_board(&mut app, &ctx, &base);
+}
+
+/// #4365: Full Screen and Presentation Mode put the window full screen once, and Normal Screen
+/// Mode takes it back out; a window already full screen is left as it is.
+#[test]
+fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
+    let mut app = title_test_app(true);
+    let ctx = egui::Context::default();
+    let sent = |app: &mut crate::VectorcraftApp, fullscreen: bool| -> Vec<bool> {
+        let mut input = egui::RawInput::default();
+        input.viewports.entry(egui::ViewportId::ROOT).or_default().fullscreen = Some(fullscreen);
+        let mut out = ctx.run_ui(input, |ui| super::sync_fullscreen(app, ui.ctx()));
+        out.textures_delta.clear();
+        let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
+        cmds.iter().filter_map(|c| if let egui::ViewportCommand::Fullscreen(f) = c { Some(*f) } else { None }).collect()
+    };
+    assert!(sent(&mut app, false).is_empty(), "Normal Screen Mode");
+    app.ui.screen_mode = 3;
+    assert_eq!(sent(&mut app, false), [true], "Presentation Mode");
+    assert!(sent(&mut app, true).is_empty(), "once");
+    app.ui.screen_mode = 2;
+    assert!(sent(&mut app, true).is_empty(), "Full Screen Mode keeps it");
+    app.ui.screen_mode = 0;
+    assert_eq!(sent(&mut app, true), [false], "back to a window");
+    assert!(sent(&mut app, false).is_empty());
+    // Full screen by the user's own choice: the modes leave it so.
+    app.ui.screen_mode = 3;
+    assert!(sent(&mut app, true).is_empty());
+    app.ui.screen_mode = 0;
+    assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
+}
+
+/// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
+/// a single object keeps the bar as it was. A click distributes as the Align panel's button does.
+#[test]
+fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone()
+    };
+    let (a, b, c) = (rect(&mut app, 10.0), rect(&mut app, 100.0), rect(&mut app, 200.0));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    const DISTRIBUTE: [&str; 6] = [
+        "Vertical Distribute Top",
+        "Vertical Distribute Center",
+        "Vertical Distribute Bottom",
+        "Horizontal Distribute Left",
+        "Horizontal Distribute Center",
+        "Horizontal Distribute Right",
+    ];
+    let rects = |app: &mut crate::VectorcraftApp| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        DISTRIBUTE.map(|name| {
+            let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n)?;
+            n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        })
+    };
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(rects(&mut app).iter().all(Option::is_none), "one object: no distribute buttons");
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    let rects = rects(&mut app);
+    assert!(rects.iter().all(Option::is_some), "three objects: {rects:?}");
+    let r = rects[3].expect("Horizontal Distribute Left");
+    let press =
+        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(r.center()), press(true)], vec![press(false)]] {
+        frame(&mut app, events);
+    }
+    let left = |app: &crate::VectorcraftApp, id: &serde_json::Value| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
+    };
+    assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
 }

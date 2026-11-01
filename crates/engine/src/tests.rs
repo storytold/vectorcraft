@@ -26,9 +26,11 @@ mod cmdsplit;
 mod cmykflatten;
 mod colorguide;
 mod colorguidelib;
+mod colorize;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compound_shape;
 mod compoundpaint;
 mod constrain_new;
 mod constrain_tools;
@@ -39,6 +41,7 @@ mod dashalign;
 mod distort;
 mod docsetup;
 mod draw2;
+mod dynamic_symbols;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -57,8 +60,10 @@ mod fontfiles;
 mod fontlist;
 mod freeform;
 mod globaledit;
+mod glyphbounds;
 mod gradient;
 mod gradpanel;
+mod gradpresets;
 mod gradspan;
 mod halftone;
 mod history_mem;
@@ -153,6 +158,7 @@ mod swatchcmds;
 mod swatches;
 mod swatchlib;
 mod symbolbounds;
+mod symboledit;
 mod symbollib;
 mod targeting;
 mod textcombos;
@@ -1460,6 +1466,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", with(&flare, "opacity", json!("50")), "opacity"),
         ("shape.flare", with(&flare, "largest", json!(true)), "largest"),
         ("shape.flare", with(&flare, "rays", json!("15")), "rays"),
+        ("shape.flare", with(&flare, "rotation", json!("90")), "rotation"),
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
@@ -3160,6 +3167,33 @@ fn flare_tool_two_step_gesture_is_one_undo() {
     assert_eq!(rays.path_data().unwrap().subpaths.len(), 13);
 }
 
+/// `shape.flare`'s `rotation` turns the rays clockwise about the center, and leaves the halo, the
+/// center and the rings as they are.
+#[test]
+fn flare_rotation_turns_only_the_rays() {
+    use vectorcraft_geom::Affine;
+    let mut s = session();
+    let parts = |s: &mut Session, rotation: f64| {
+        let p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 4, "x2": 400, "y2": 300, "seed": 3, "rotation": rotation});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.path_data().unwrap().clone())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, 0.0);
+    let turned = parts(&mut s, 90.0);
+    assert_eq!(plain.len(), turned.len());
+    let quarter = Affine::translate((200.0, 200.0)) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::translate((-200.0, -200.0));
+    for ((name, a), (_, b)) in plain.iter().zip(&turned) {
+        let pa: Vec<Point> = a.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|k| k.p)).collect();
+        let pb: Vec<Point> = b.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|k| k.p)).collect();
+        let want: Vec<Point> = if name.as_deref() == Some("Rays") { pa.iter().map(|&p| quarter * p).collect() } else { pa };
+        assert_eq!(pb.len(), want.len(), "{name:?}");
+        for (p, q) in pb.iter().zip(&want) {
+            assert!(p.distance(*q) < 1e-6, "{name:?}: {p:?} is not {q:?}");
+        }
+    }
+}
+
 #[test]
 fn reshape_moves_the_grabbed_point_and_its_neighbourhood() {
     let mut s = session();
@@ -3487,6 +3521,46 @@ fn a_panicking_command_rolls_back_instead_of_crashing() {
     let b = rect(&mut s, 200.0, 10.0, 50.0, 50.0);
     assert!(s.doc().unwrap().doc.node(b).is_some());
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
+}
+
+/// A command that recorded an undo step and then panicked leaves Undo and Redo as they were.
+#[test]
+fn a_panic_after_an_edit_leaves_undo_and_redo_as_they_were() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!((undo, redo), (1, 1));
+    let r = s.run_guarded("test.panic", |s| {
+        s.execute("edit.clear", &json!({"ids": [a.0]}))?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, redo));
+    assert!(st.doc.node(a).is_some());
+}
+
+/// A panic rolls back every document the command touched, and the active one stays the same.
+#[test]
+fn a_panic_rolls_back_other_documents_and_keeps_the_active_one() {
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let second = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let first_uid = s.doc().unwrap().uid;
+    let second_before = s.docs[1].doc.clone();
+    let steps = s.docs[1].history.undo.len();
+    let r = s.run_guarded("test.panic", |s| {
+        s.docs[1].history.undo.clear();
+        Arc::make_mut(&mut s.docs[1].doc).remove(second)?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    assert!(Arc::ptr_eq(&s.docs[1].doc, &second_before));
+    assert_eq!(s.docs[1].history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().uid, first_uid);
 }
 
 /// New layers and sublayers share one "Layer N" numbering, whatever art the document holds, and

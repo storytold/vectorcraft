@@ -143,7 +143,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.vertical(|ui| {
             let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
-            // Make Mask is off in isolation mode for one object, which it would take into mask editing.
+            // Make Mask is off in isolation mode and pattern editing mode for one object, which it would take into mask editing.
             let enabled = mask.is_some() || (has && editing.is_none() && crate::menus::enabled(app, "transparency.makeOpacityMask"));
             let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
             if r.on_disabled_hover_text(tl!("Select the art (and, on top of it, the mask object)")).clicked() {
