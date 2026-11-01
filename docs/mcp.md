@@ -1640,8 +1640,7 @@ already walks Image Trace. Short agent entry points:
   `dataset.export {path?}` (CSV: `name`, then one column per variable). `dataset.import` also reads tab-separated
   files, and files whose first header cell isn't `name`: every header cell is then a variable, and the rows take the
   first free names `Data Set 1`, `Data Set 2` and so on. An import error about a row's values or name gives the file
-  line the row starts on, and an error about a value says why it was refused: a visibility value other than true,
-  false, 1, 0, yes or no, or a graph value longer than 262,144 bytes. A header cell that names no variable defines one, unbound, in the same undo step as the
+  line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
   rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
   a prefix defines a text variable. A prefixed cell whose name is already a variable of the prefix's kind names it;
   one whose name is a variable of another kind fails the import. A `%` cell that isn't a variable's exact name (graph
@@ -1764,6 +1763,9 @@ new variables without binding them, `dataset.select`, `dataset.next` and `datase
 `warning`, which the app's status bar shows: "nothing in data set A was applied: no object is bound to a variable it
 has a value for". A data set with a value for a bound variable gives no warning even when every object bound to it is
 locked; `skipped` counts those objects.
+
+A `dataset.import` error about a value says why it was refused: a visibility value other than true, false, 1, 0, yes
+or no, or a graph value longer than 262,144 bytes.
 
 `dataset.update {all?}` writes what the bound objects hold now into the active data set, for each variable that the
 data set holds. A variable whose objects report no value, because they are locked, inside a locked layer or group,
