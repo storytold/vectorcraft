@@ -770,3 +770,40 @@ fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
     assert_eq!(tile(&app), app.session.active().unwrap().doc.global_color("Ink").unwrap());
     assert!(matches!(tile(&app), Color::Cmyk { .. }));
 }
+
+/// One frame of the panel menu at `time`; its painted labels.
+fn menu_labels(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, time: f64) -> Vec<(String, Rect)> {
+    let input =
+        egui::RawInput { events, time: Some(time), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 900.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+}
+
+/// #4919: the menu's Create Swatch Legend draws the selected colour swatches, or every one when
+/// none is selected.
+#[test]
+fn create_swatch_legend_draws_the_selected_swatches_or_all() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Ink 185", "color": "#e4002b", "spot": true})).unwrap();
+    let ctx = context();
+    let click = |app: &mut VectorcraftApp, ctx: &egui::Context, t: f64| {
+        let labels = menu_labels(app, ctx, vec![], t);
+        let at = labels.iter().find(|(l, _)| l.trim() == "Create Swatch Legend").map(|(_, r)| r.center()).expect("Create Swatch Legend");
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        menu_labels(app, ctx, vec![Event::PointerMoved(at), button(true)], t + 0.1);
+        menu_labels(app, ctx, vec![button(false)], t + 0.2);
+    };
+    let count = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let id = *st.selection.objects.first().expect("the legend is selected");
+        st.doc.node(id).unwrap().children().unwrap().len() / 2
+    };
+    set_pstate(&ctx, "swatch-selected", vec!["Ink 185".to_string(), "[None]".to_string()]);
+    click(&mut app, &ctx, 0.0);
+    assert_eq!(count(&app), 1, "the selected colour swatch alone");
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    click(&mut app, &ctx, 1.0);
+    let colours = app.session.active().unwrap().doc.swatches_iter().filter(|w| w.paint.color().is_some()).count();
+    assert_eq!(count(&app), colours, "every colour swatch");
+}

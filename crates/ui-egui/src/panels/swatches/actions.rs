@@ -164,6 +164,19 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Add Used Colors"), true, false) {
         app.run("swatch.addUsedColors", json!({})).ok();
     }
+    // Create Swatch Legend (#4919): the selected colour swatches, else every one.
+    if menu_item(ui, tl!("Create Swatch Legend"), app.session.active().is_some(), false) {
+        let picked = deletable(&selected);
+        let colours: Vec<String> = app
+            .session
+            .active()
+            .map(|st| st.doc.swatches_iter().filter(|w| w.paint.color().is_some() && picked.contains(&w.name)).map(|w| w.name.clone()).collect())
+            .unwrap_or_default();
+        let p = if colours.is_empty() { json!({}) } else { json!({ "names": colours }) };
+        if let Err(e) = app.run("swatch.legend", p) {
+            app.status(e);
+        }
+    }
     ui.separator();
     if menu_item(ui, tl!("Sort by Name"), true, false) {
         app.run("swatch.sortByName", json!({})).ok();
