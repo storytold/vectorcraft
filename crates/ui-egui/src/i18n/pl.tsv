@@ -242,6 +242,9 @@
 	Hide Live Paint Gaps	Ukryj przerwy aktywnego malowania
 	Select Fills	Zaznaczaj wypełnienia
 	Select Strokes	Zaznaczaj obrysy
+	Paint Fills	Maluj wypełnienia
+	Paint Strokes	Maluj obrysy
+	Highlight	Podświetlenie
 	Image Trace	Obrys obrazu
 	Text Wrap	Oblewanie tekstem
 	Text Wrap Options…	Opcje oblewania tekstem…
@@ -5908,6 +5911,9 @@ breakText	Glyphs	Glify
 	Gap 4	Odstęp 4
 	Dash 5	Kreska 5
 	Gap 5	Odstęp 5
+
+@msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
 @msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru
 @msg	no pattern named `{choice}`	nie ma wzoru o nazwie `{choice}`
@@ -5938,6 +5944,9 @@ breakText	Glyphs	Glify
 	Remove Gaps	Usuń odstępy
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje za dużo części (najwyżej 100000): wydłuż kreski
 @msg	select paths, or segments, to divide	zaznacz ścieżki lub segmenty do podzielenia
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Rozszerz kreski na ścieżki
+@msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Narzędzia dokumentu
 	Save a Timestamped Copy	Zapisz kopię z datą i godziną
@@ -5960,6 +5969,11 @@ breakText	Glyphs	Glify
 	Odia	Orija
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i nowsze (wersja {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Eksportuj wszystkie otwarte dokumenty jako PDF
+	Export All Open Documents as SVG	Eksportuj wszystkie otwarte dokumenty jako SVG
+@msgplural	Exported {n} document|Exported {n} documents	Wyeksportowano {n} dokument|Wyeksportowano {n} dokumenty|Wyeksportowano {n} dokumentów
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Wyeksportowano {n} dokument; nie zapisano {title}: {error}|Wyeksportowano {n} dokumenty; nie zapisano {title}: {error}|Wyeksportowano {n} dokumentów; nie zapisano {title}: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Symbol dynamiczny

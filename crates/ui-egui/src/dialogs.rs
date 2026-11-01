@@ -56,6 +56,7 @@ pub mod justification;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
+pub mod live_paint_bucket;
 pub mod live_paint_gaps;
 pub mod live_paint_selection;
 pub mod missing_fonts;
@@ -389,6 +390,7 @@ registry! {
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     LivePaintGaps: [live_paint_gaps::KIND] => live_paint_gaps::SPEC,
     LivePaintSelectionOptions: [live_paint_selection::KIND] => live_paint_selection::SPEC,
+    LivePaintBucketOptions: [live_paint_bucket::KIND] => live_paint_bucket::SPEC,
     BrushOptions: [brush_options::KIND] => brush_options::SPEC,
     NewBrush: [new_brush::KIND] => new_brush::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,

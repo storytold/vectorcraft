@@ -1206,6 +1206,44 @@ fn tate_chu_yoko_is_a_character_attribute_saved_only_when_on() {
     assert!(runs(&s).iter().all(|r| !r.style.tate_chu_yoko));
 }
 
+/// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
+/// attribute, off by default and saved only when on. Documents written before it read as off; a
+/// character style captured from the characters carries it.
+#[test]
+fn standard_vertical_roman_is_a_character_attribute_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ABC年"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(!runs(&s)[0].style.standard_vertical_roman);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("standardVerticalRoman").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"standardVerticalRoman": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.standard_vertical_roman));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["standardVerticalRoman"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!runs(&s)[0].style.standard_vertical_roman);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "standardVerticalRoman": true})).unwrap();
+    let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman)).collect();
+    assert_eq!(on, [("ABC".to_string(), true), ("年".to_string(), false)]);
+    let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert!(old.get("standardVerticalRoman").is_none());
+    assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().standard_vertical_roman);
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman)).collect();
+    assert_eq!(reopened, on);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["standardVerticalRoman"], true);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["standardVerticalRoman"], false);
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "standardVerticalRoman": "true"})).is_err());
+    s.execute("text.setFormat", &json!({"standardVerticalRoman": false})).unwrap();
+    assert!(runs(&s).iter().all(|r| !r.style.standard_vertical_roman));
+}
+
 /// No Break is a character attribute, saved only when on.
 #[test]
 fn no_break_is_a_character_attribute_saved_only_when_on() {

@@ -267,6 +267,9 @@
 	Hide Live Paint Gaps	Sakrij praznine živog bojenja
 	Select Fills	Odaberi ispune
 	Select Strokes	Odaberi poteze
+	Paint Fills	Boji ispune
+	Paint Strokes	Boji poteze
+	Highlight	Isticanje
 	Image Trace	Praćenje slike
 	Image Trace (Make and Expand)	Praćenje slike (napravi i proširi)
 	Release Image Trace	Oslobodi praćenje slike
@@ -5969,6 +5972,8 @@ shape	Open	Otvoren
 @msg	`follow` must be "average", "a" or "b"	`follow` mora biti "average", "a" ili "b"
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
+@msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.
 @msg	invalid pattern tile choice	nevažeći izbor pločice uzorka
 @msg	no pattern named `{choice}`	nema uzorka pod nazivom `{choice}`
@@ -5999,6 +6004,9 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Proširi crtice u putanje
+@msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom
@@ -6021,6 +6029,11 @@ shape	Open	Otvoren
 	Odia	Odija
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i novije (verzija {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Izvezi sve otvorene dokumente kao PDF
+	Export All Open Documents as SVG	Izvezi sve otvorene dokumente kao SVG
+@msgplural	Exported {n} document|Exported {n} documents	Izvezen je {n} dokument|Izvezena su {n} dokumenta|Izvezeno je {n} dokumenata
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Izvezen je {n} dokument; {title} nije zapisan: {error}|Izvezena su {n} dokumenta; {title} nije zapisan: {error}|Izvezeno je {n} dokumenata; {title} nije zapisan: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Vrsta simbola:
 	Dynamic Symbol	Dinamički simbol

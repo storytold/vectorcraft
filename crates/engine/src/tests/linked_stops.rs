@@ -192,3 +192,78 @@ fn linked_stops_round_trip() {
     assert_eq!(old, GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)));
     assert!(!serde_json::to_string(&old).unwrap().contains("tint"));
 }
+
+/// `stops` with `extra` (method, dither…) as a gradient edit.
+fn with(mut stops: Value, extra: Value) -> Value {
+    if let (Some(g), Some(e)) = (stops.as_object_mut(), extra.as_object()) {
+        g.extend(e.clone());
+    }
+    stops
+}
+
+#[test]
+fn perceptual_spot_gradients_export_as_separation_shadings() {
+    let (mut s, _) = setup();
+    let ink_to_tint = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "swatch": "Ink", "tint": 20}]});
+    for (what, stops) in [("Ink → paper", ink_to_white(80.0)), ("Ink → Ink 20 %", ink_to_tint)] {
+        run(&mut s, "paint.editGradient", with(stops, json!({"method": "perceptual"})));
+        let (pdf, warnings) = pdf_of(&s);
+        assert!(!pdf.contains("/Subtype/Image"), "{what}: no image");
+        assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Separation/Ink/DeviceCMYK"), "{what}: a Separation shading");
+        // The curve's stops: a stitching function of more than the two ends.
+        assert!(pdf.contains("/FunctionType 3"), "{what}: tints on the curve");
+        assert!(!warnings.iter().any(|w| w.contains("spot")), "{what}: {warnings:?}");
+    }
+    // A radial one, and one on a stroke, too.
+    run(&mut s, "paint.editGradient", with(ink_to_white(100.0), json!({"method": "perceptual", "kind": "radial"})));
+    let (pdf, _) = pdf_of(&s);
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/Separation/Ink/DeviceCMYK"), "radial");
+    run(&mut s, "paint.setFill", json!({"color": "#ffffff"}));
+    run(&mut s, "paint.setStroke", json!({"color": "#000000"}));
+    run(&mut s, "stroke.set", json!({"weight": 6}));
+    run(&mut s, "paint.editGradient", with(ink_to_white(100.0), json!({"method": "perceptual", "stroke": true})));
+    let (pdf, _) = pdf_of(&s);
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/Separation/Ink/DeviceCMYK"), "stroke");
+    // A white spot ink has paper white's lightness at every tint: the stops keep their own tints.
+    run(&mut s, "swatch.new", json!({"name": "Opaque", "color": "#ffffff", "spot": true}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let white =
+        json!({"stops": [{"offset": 0, "swatch": "Opaque"}, {"offset": 1, "swatch": "Opaque", "tint": 40}], "method": "perceptual", "stroke": false});
+    run(&mut s, "paint.editGradient", white);
+    let (pdf, _) = pdf_of(&s);
+    let at = pdf.find("/FunctionType").unwrap_or(0);
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/Separation/Opaque"), "white ink: {}", &pdf[at..(at + 200).min(pdf.len())]);
+    assert!(pdf.contains("/C0[1]") && pdf.contains("/C1[0.4"), "white ink at 100% to 40%: {}", &pdf[at..(at + 200).min(pdf.len())]);
+}
+
+#[test]
+fn spot_gradients_drawn_as_images_warn() {
+    let (mut s, _) = setup();
+    let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
+    let ink_to_cyan = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": {"c": 1, "m": 0, "y": 0, "k": 0}}]});
+    // More stops than the export finds tints for: an image, as before.
+    let n = 4097;
+    let stops: Vec<Value> = (0..n)
+        .map(|i| {
+            let offset = i as f64 / (n - 1) as f64;
+            if i % 2 == 0 { json!({"offset": offset, "swatch": "Ink"}) } else { json!({"offset": offset, "color": "#ffffff"}) }
+        })
+        .collect();
+    for (what, edit) in [
+        ("Perceptual Ink → cyan", with(ink_to_cyan, json!({"method": "perceptual"}))),
+        ("dithered Classic Ink → paper", with(ink_to_white(100.0), json!({"dither": true, "method": "classic"}))),
+        ("dithered Perceptual Ink → paper", with(ink_to_white(100.0), json!({"dither": true, "method": "perceptual"}))),
+        ("Perceptual Ink and paper, 4,097 stops", json!({"stops": stops, "dither": false, "method": "perceptual"})),
+    ] {
+        run(&mut s, "paint.editGradient", edit);
+        let (pdf, warnings) = pdf_of(&s);
+        assert!(pdf.contains("/Subtype/Image"), "{what}: an image");
+        assert!(spot_warning(&warnings), "{what}: {warnings:?}");
+    }
+    // A Perceptual gradient without spot inks is an image, without the warning.
+    let blue_yellow = json!({"stops": [{"offset": 0, "color": "#0000ff"}, {"offset": 1, "color": "#ffff00"}]});
+    run(&mut s, "paint.editGradient", with(blue_yellow, json!({"method": "perceptual", "dither": false})));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/Subtype/Image") && !pdf.contains("/Separation"), "a process Perceptual gradient");
+    assert!(!spot_warning(&warnings), "{warnings:?}");
+}

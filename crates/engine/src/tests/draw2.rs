@@ -1463,6 +1463,36 @@ fn rectangular_grid_options_frame_fill_and_skew() {
     assert!(most.iter().all(|v| *v > 0.0 && *v < 100.0), "{most:?}");
 }
 
+/// F, V, X and C pressed while a grid is dragged out change its divider skews by 10 each: the
+/// grid drawn on release is the one `shape.rectangularGrid` / `shape.polarGrid` draws with those
+/// skews, and they stay as the tool's options.
+#[test]
+fn grid_drag_keys_skew_the_grid_drawn() {
+    let v = view();
+    for (tool, keys, skews) in [
+        ("rectangularGrid", "vvvfcc", json!({"rows": 5, "columns": 5, "rowSkew": 20.0, "columnSkew": 20.0})),
+        ("polarGrid", "fffxvc", json!({"concentric": 5, "radial": 5, "radialSkew": -20.0, "concentricSkew": 0.0})),
+    ] {
+        let mut s = session();
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+        for c in keys.chars() {
+            assert!(s.tool_claims_key(ToolKey::Letter(c), v), "{tool}: {c}");
+            s.tool_key(ToolKey::Letter(c), Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0), v).unwrap();
+        let drawn = s.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().children().unwrap().to_vec();
+        let want = grid(&mut s, &format!("shape.{tool}"), with(&json!({"x": 100, "y": 100, "width": 100, "height": 100}), skews.clone()));
+        let geometry = |g: &[std::sync::Arc<vectorcraft_doc::Node>]| g.iter().map(|n| format!("{:?}", n.geometric_bounds())).collect::<Vec<_>>();
+        assert_eq!(geometry(&drawn), geometry(&want), "{tool}");
+        let o = s.tool_options();
+        for (k, value) in skews.as_object().unwrap() {
+            assert_eq!(&o[k], value, "{tool}: {k}");
+        }
+    }
+}
+
 /// #1377: the Polar Grid options. The ellipses lie under the radial dividers, largest first;
 /// `compound` pairs them into compound-path rings, `fill` paints the current fill and the skews
 /// crowd the ellipses outward and the radial dividers clockwise of the top one (positive).
