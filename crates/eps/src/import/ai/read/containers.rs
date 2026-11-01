@@ -195,8 +195,19 @@ impl<'a> Reader<'a> {
             1 => clip.pop().map(|(_, n)| n),
             _ => {
                 let rule = clip.first().map_or(FillRule::NonZero, |(_, n)| path_rule(n));
+                // The compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same
+                // ones: it has one appearance for all its paths.
+                let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
+                let shared =
+                    clip.split_first().and_then(|((_, first), others)| others.iter().all(|(_, n)| look(n) == look(first)).then(|| look(first)));
                 let children = clip.into_iter().map(|(_, n)| Arc::new(n)).collect();
-                Some(Node::new(self.doc.alloc_id(), NodeKind::Compound { children, rule }))
+                let mut n = Node::new(self.doc.alloc_id(), NodeKind::Compound { children, rule });
+                if let Some((appearance, opacity, blend)) = shared {
+                    n.appearance = appearance;
+                    n.opacity = opacity;
+                    n.blend = blend;
+                }
+                Some(n)
             }
         };
         let clips = clip_node.is_some();
