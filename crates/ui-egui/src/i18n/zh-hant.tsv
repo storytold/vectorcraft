@@ -4459,6 +4459,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Lock Variables	鎖定變數
 	Unlock Variables	解除鎖定變數
 @msg	variables are locked	變數已鎖定
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	資料集超過 {MAX_CSV_ROWS} 個：「匯入資料集」最多讀取 {MAX_CSV_ROWS} 個
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	變數超過 {MAX_CSV_COLS} 個：「匯入資料集」最多讀取 {MAX_CSV_COLS} 個
 @msg	variables that aren't text were left out: {kinds}	已略過非文字變數：{kinds}
 	List Variables	列出變數
 	Bind Variable	綁定變數

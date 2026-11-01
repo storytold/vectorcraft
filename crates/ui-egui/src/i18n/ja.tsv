@@ -4076,6 +4076,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Make Guides: select paths	ガイドを作成: パスを選択してください
 @msg	Release Guides: no guides	ガイドを解除: ガイドがありません
 @msg	variables are locked	変数がロックされています
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	データセットが {MAX_CSV_ROWS} 個を超えています: 「データセットを読み込み」が読み込めるのは {MAX_CSV_ROWS} 個までです
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	変数が {MAX_CSV_COLS} 個を超えています: 「データセットを読み込み」が読み込めるのは {MAX_CSV_COLS} 個までです
 @msg	variables that aren't text were left out: {kinds}	テキスト以外の変数は除外されました: {kinds}
 @msg	guides are locked	ガイドがロックされています
 @msg	handle must be in or out	handle には in または out を指定してください

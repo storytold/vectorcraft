@@ -4003,6 +4003,8 @@ theme	Appearance	외관
 @msg	Make Guides: select paths	안내선 만들기: 패스를 선택하세요
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	variables are locked	변수가 잠겨 있습니다
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	데이터 세트가 {MAX_CSV_ROWS}개보다 많습니다: 데이터 세트 가져오기는 최대 {MAX_CSV_ROWS}개를 읽습니다
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	변수가 {MAX_CSV_COLS}개보다 많습니다: 데이터 세트 가져오기는 최대 {MAX_CSV_COLS}개를 읽습니다
 @msg	variables that aren't text were left out: {kinds}	텍스트가 아닌 변수는 제외되었습니다: {kinds}
 @msg	guides are locked	안내선이 잠겨 있습니다
 @msg	handle must be in or out	handle은 in 또는 out이어야 합니다

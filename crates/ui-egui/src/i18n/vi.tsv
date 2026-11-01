@@ -4912,6 +4912,8 @@ theme	Appearance	Giao diện
 @msg	unsupported native docking operation	thao tác neo gốc không được hỗ trợ
 @msg	unsupported: {0}	không được hỗ trợ: {0}
 @msg	variables are locked	biến số bị khóa
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	hơn {MAX_CSV_ROWS} tập dữ liệu: Nhập tập dữ liệu chỉ đọc tối đa {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	hơn {MAX_CSV_COLS} biến số: Nhập tập dữ liệu chỉ đọc tối đa {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	các biến số không phải văn bản đã bị bỏ qua: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft không tìm kiếm trong thư mục của ứng dụng khác hoặc hệ thống: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft không tìm kiếm thư mục Shared hoặc Public trong Users: {path}
