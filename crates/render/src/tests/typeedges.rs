@@ -154,6 +154,69 @@ fn the_methods_keep_the_opacity_of_the_paint() {
     }
 }
 
+/// Crisp and Strong reshape the edges of each of the type's paints on its own: where two
+/// half-opaque fills of the object overlap, each edge pixel shows the first fill with the
+/// method's share of the pixel under the second fill with that share.
+#[test]
+fn the_methods_reshape_each_paint_on_its_own() {
+    let half = FillLayer { opacity: 0.5, ..FillLayer::new(Paint::solid(Color::BLACK)) };
+    let opts = RenderOptions::default();
+    let coverage = alphas(&page(TypeAntiAlias::Sharp, None), &opts);
+    assert!(partial(&coverage) > 200, "{} partial pixels", partial(&coverage));
+    for m in [TypeAntiAlias::Crisp, TypeAntiAlias::Strong] {
+        let mut d = page(m, Some(half.clone()));
+        let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+        d.node_mut(id).unwrap().appearance.items.push(AppearanceItem::Fill(half.clone()));
+        let drawn = alphas(&d, &opts);
+        // Two half-opaque layers that each show `e` of the pixel, within a step of rounding in the
+        // coverage and in the result.
+        let both = |c: u8| {
+            let e = f64::from(edge_coverage(m, c)) / 255.0;
+            255.0 * (1.0 - (1.0 - 0.5 * e).powi(2))
+        };
+        let wrong: Vec<_> = coverage
+            .iter()
+            .zip(&drawn)
+            .enumerate()
+            .filter(|(_, (c, v))| {
+                let near = [c.saturating_sub(1), **c, c.saturating_add(1)].map(both);
+                let (lo, hi) = (near.iter().copied().fold(f64::MAX, f64::min), near.iter().copied().fold(0.0, f64::max));
+                f64::from(**v) < lo - 1.5 || f64::from(**v) > hi + 1.5
+            })
+            .map(|(i, (c, v))| (i, *c, *v))
+            .take(5)
+            .collect();
+        assert!(wrong.is_empty(), "{m:?}: (pixel, coverage, drawn) {wrong:?}");
+    }
+}
+
+/// Crisp and Strong type with several faint fills of the object draws the pixels inside the
+/// characters as Sharp draws them: the fills are composited there before their colors are rounded.
+#[test]
+fn the_methods_keep_faint_fills_inside_the_characters() {
+    let faint = FillLayer { opacity: 0.01, ..FillLayer::new(Paint::solid(Color::BLACK)) };
+    let draw = |m: TypeAntiAlias| {
+        let mut d = page(m, Some(faint.clone()));
+        let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+        let n = d.node_mut(id).unwrap();
+        for _ in 0..7 {
+            n.appearance.items.push(AppearanceItem::Fill(faint.clone()));
+        }
+        alphas(&d, &RenderOptions::default())
+    };
+    let sharp = draw(TypeAntiAlias::Sharp);
+    // The pixels the characters cover wholly.
+    let coverage = alphas(&page(TypeAntiAlias::Sharp, None), &RenderOptions::default());
+    let inside: Vec<usize> = coverage.iter().enumerate().filter(|(_, c)| **c == 255).map(|(i, _)| i).collect();
+    assert!(inside.len() > 200, "{} pixels inside the characters", inside.len());
+    assert!(inside.iter().all(|i| sharp[*i] > 0), "the faint fills show inside the characters");
+    for m in [TypeAntiAlias::Crisp, TypeAntiAlias::Strong] {
+        let drawn = draw(m);
+        let wrong: Vec<_> = inside.iter().filter(|i| drawn[**i] != sharp[**i]).take(5).map(|i| (*i, sharp[*i], drawn[*i])).collect();
+        assert!(wrong.is_empty(), "{m:?}: (pixel, Sharp, drawn) {wrong:?}");
+    }
+}
+
 /// In an export that composites with floating point, None, Crisp and Strong type composite its
 /// translucent fills as precisely as Sharp type: inside the characters each method draws the
 /// pixels Sharp draws, within the one step of rounding that keeping the type's pixels as 8-bit

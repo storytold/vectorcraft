@@ -211,11 +211,13 @@ impl Renderer {
     /// Draw type `t` of node `n` (laid out in `g`) with its anti-aliasing method, None, Crisp or
     /// Strong, on the pixels of the output ([`Frame::output`]): the type is drawn offscreen on those
     /// pixels and placed back pixel for pixel. With None it is drawn with hard edges, so a pixel
-    /// takes the type's color where the type covers at least half of it. With Crisp and Strong it
-    /// is drawn as Sharp draws it, and again with the characters and the object's own fills and
-    /// strokes in opaque black, which gives the share `c` of each pixel they cover; the pixel's
-    /// color and opacity are then scaled by [`edge_coverage`] of `c` divided by `c`, so the opacity
-    /// of the paints is kept. Where the output's pixels would number more than the frame's there
+    /// takes the type's color where the type covers at least half of it. With Crisp and Strong each
+    /// group of its paints ([`type_paints`]: the object's own fills and strokes one at a time, and
+    /// the characters' fills and strokes) is drawn on its own as Sharp draws it, and again in
+    /// opaque black, which gives the share `c` of each pixel the group covers; the pixel's color and
+    /// opacity are then scaled by [`edge_coverage`] of `c` divided by `c`, so the opacity of the
+    /// paints is kept, and the groups are composited in the order they are drawn. A pixel that
+    /// every group covers wholly or not at all is the pixel Sharp draws. Where the output's pixels would number more than the frame's there
     /// and more than [`fx::PIXEL_BUDGET`], or be more than [`MAX_RASTER_SIDE`] a side (a frame
     /// drawn coarser than the output), the frame's own pixels are used.
     ///
@@ -364,19 +366,27 @@ impl Renderer {
             pm
         };
         let sharp = TextObject { anti_alias: TypeAntiAlias::Sharp, ..t.clone() };
-        let mut pm = draw(self, frame, n, &sharp);
-        if t.anti_alias != TypeAntiAlias::None {
-            let black = |p: &mut vectorcraft_color::Paint| {
-                if !p.is_none() {
-                    *p = vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK);
-                }
+        if t.anti_alias == TypeAntiAlias::None {
+            return draw(self, frame, n, &sharp);
+        }
+        let black = |p: &mut vectorcraft_color::Paint| {
+            if !p.is_none() {
+                *p = vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK);
+            }
+        };
+        // A group of paints drawn on its own, its pixels taking the method from its own coverage,
+        // and that coverage.
+        let reshaped = |r: &mut Self, group: Option<&[TypePaint]>| {
+            let (pn, pt) = match group {
+                Some(keep) => type_paint_only(n, &sharp, keep),
+                None => (n.clone(), sharp.clone()),
             };
-            let mut ink = sharp;
+            let mut pm = draw(r, frame, &pn, &pt);
+            let (mut inked, mut ink) = (pn, pt);
             for r in &mut ink.runs {
                 black(&mut r.style.fill);
                 black(&mut r.style.stroke);
             }
-            let mut inked = n.clone();
             for item in &mut inked.appearance.items {
                 black(item.paint_mut());
                 match item {
@@ -384,9 +394,38 @@ impl Renderer {
                     AppearanceItem::Stroke(st) => st.opacity = 1.0,
                 }
             }
-            let covered = draw(self, frame, &inked, &ink);
+            let covered = draw(r, frame, &inked, &ink);
             for (p, c) in pm.data_mut().iter_mut().zip(covered.data()) {
                 *p = edge_pixel(*p, c.a, t.anti_alias);
+            }
+            (pm, covered)
+        };
+        let groups: Vec<Option<Vec<TypePaint>>> = match type_paints(n, &sharp, g, self.alpha >= 1.0) {
+            Some(groups) => groups.into_iter().map(Some).collect(),
+            None => vec![None],
+        };
+        if groups.len() <= 1 {
+            return groups.first().map_or_else(|| Pixmap::new(w, h), |group| reshaped(self, group.as_deref()).0);
+        }
+        // Where every group covers a pixel wholly or not at all, the pixel is the type's as Sharp
+        // draws it. Elsewhere it is the groups composited in the order they are drawn, source over.
+        let mut pm = draw(self, frame, n, &sharp);
+        let mut sum = vec![[0.0f32; 4]; usize::from(w) * usize::from(h)];
+        let mut edge = vec![false; sum.len()];
+        for group in &groups {
+            let (layer, covered) = reshaped(self, group.as_deref());
+            for (((s, e), p), c) in sum.iter_mut().zip(&mut edge).zip(layer.data()).zip(covered.data()) {
+                *e |= c.a != 0 && c.a != 255;
+                let keep = 1.0 - f32::from(p.a) / 255.0;
+                for (v, c) in s.iter_mut().zip([p.r, p.g, p.b, p.a]) {
+                    *v = f32::from(c) + *v * keep;
+                }
+            }
+        }
+        for ((p, s), e) in pm.data_mut().iter_mut().zip(&sum).zip(&edge) {
+            if *e {
+                let [red, green, blue, a] = s.map(|v| v.round().clamp(0.0, 255.0) as u8);
+                *p = vello_cpu::color::PremulRgba8 { r: red.min(a), g: green.min(a), b: blue.min(a), a };
             }
         }
         pm
@@ -495,6 +534,72 @@ pub(crate) fn edge_grid(on: Rect, grid: Affine) -> Affine {
     let area = |r: Rect| r.width() * r.height();
     let (out, side) = (grid.transform_rect_bbox(on), f64::from(MAX_RASTER_SIDE));
     if area(out) > area(on).max(fx::PIXEL_BUDGET) || out.width() > side || out.height() > side { Affine::IDENTITY } else { grid }
+}
+
+/// One paint of type: one of the object's own fills and strokes (its index), or the fill or the
+/// stroke of a run (its index).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum TypePaint {
+    Item(usize),
+    Fill(usize),
+    Stroke(usize),
+}
+
+/// Most groups of paints [`Renderer::draw_type_pixels`] draws one at a time ([`type_paints`]).
+const MAX_TYPE_PAINTS: usize = 8;
+
+/// The paints of type `t` of node `n` (laid out in `g`) in groups that
+/// [`Renderer::draw_type_pixels`] draws one at a time, in the order they are drawn: the object's
+/// own fills and strokes below the characters, the runs' fills and strokes, then the object's own
+/// fills and strokes above the characters. Each of the object's own fills and strokes is a group,
+/// and so is each fill and stroke of a run, except that fills and strokes of runs one after
+/// another in solid colors are one group when colors are drawn opaque (`opaque`). Paints that
+/// draw nothing are left out. `None` for type with more than [`MAX_TYPE_PAINTS`] groups, which is
+/// drawn as one.
+fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<Vec<Vec<TypePaint>>> {
+    let shown = |i: &AppearanceItem| i.visible() && !i.paint().is_none() && !matches!(i, AppearanceItem::Stroke(st) if st.width <= 0.0);
+    let items = &n.appearance.items;
+    let k = n.appearance.contents_at();
+    let mut groups: Vec<Vec<TypePaint>> = (0..k).filter(|j| shown(&items[*j])).map(|j| vec![TypePaint::Item(j)]).collect();
+    // Whether the last group holds run paints in opaque solid colors, which the next such paint joins.
+    let mut joins = false;
+    for (i, run) in t.runs.iter().enumerate() {
+        if g.run(i).elements().is_empty() {
+            continue;
+        }
+        let fill = (!run.style.fill.is_none()).then_some((TypePaint::Fill(i), &run.style.fill));
+        let stroke = run.style.has_stroke().then_some((TypePaint::Stroke(i), &run.style.stroke));
+        for (p, paint) in [fill, stroke].into_iter().flatten() {
+            let solid = opaque && matches!(paint, vectorcraft_color::Paint::Solid { .. });
+            match groups.last_mut() {
+                Some(last) if joins && solid => last.push(p),
+                _ => groups.push(vec![p]),
+            }
+            joins = solid;
+        }
+    }
+    groups.extend((k..items.len()).filter(|j| shown(&items[*j])).map(|j| vec![TypePaint::Item(j)]));
+    (groups.len() <= MAX_TYPE_PAINTS).then_some(groups)
+}
+
+/// Node `n` and type `t` with every paint but those in `keep` taken away.
+fn type_paint_only(n: &Node, t: &TextObject, keep: &[TypePaint]) -> (Node, TextObject) {
+    let keep: std::collections::HashSet<TypePaint> = keep.iter().copied().collect();
+    let (mut n, mut t) = (n.clone(), t.clone());
+    for (j, item) in n.appearance.items.iter_mut().enumerate() {
+        if !keep.contains(&TypePaint::Item(j)) {
+            *item.paint_mut() = vectorcraft_color::Paint::None;
+        }
+    }
+    for (i, run) in t.runs.iter_mut().enumerate() {
+        if !keep.contains(&TypePaint::Fill(i)) {
+            run.style.fill = vectorcraft_color::Paint::None;
+        }
+        if !keep.contains(&TypePaint::Stroke(i)) {
+            run.style.stroke = vectorcraft_color::Paint::None;
+        }
+    }
+    (n, t)
 }
 
 /// Pixel `p` of type the anti-aliasing method `m` draws, where the type covers `c` (out of 255) of
