@@ -1893,9 +1893,9 @@ fn transform_each_sliders_step_the_numbers_their_fields_show() {
     set(&mut app, "scaleH", json!(300));
     f.key(&mut app, ArrowLeft, M::NONE);
     assert_eq!(get(&app, "scaleH"), 199.0);
-    // Tab goes through the Scale fields and sliders to the Move slider.
+    // Tab goes through the Scale fields, link control and sliders to the Move slider.
     set(&mut app, "moveH", json!(0));
-    for _ in 0..4 {
+    for _ in 0..5 {
         f.key(&mut app, Tab, M::NONE);
     }
     f.key(&mut app, ArrowRight, M::NONE);
