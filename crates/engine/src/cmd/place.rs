@@ -283,7 +283,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
 /// one) as art to place: clipped to the box `opts.crop` names, or (`bounding`) the bounds of its
 /// art; read with `opts.password`. Only the page placed is read. A .ai saved without PDF
 /// compatibility is read from its editing data, as it opens, and placed as an EPS is: the art on
-/// artboard `page`, its linked images found from its folder.
+/// artboard `page`, its linked images found from its folder. So is page 1 of a .ai or PDF whose
+/// PDF part can't be read.
 pub(crate) fn pdf_art(
     src: &str,
     bytes: &[u8],
@@ -305,8 +306,7 @@ pub(crate) fn pdf_art(
     {
         read = Err(e);
     }
-    let (mut doc, warnings, alone) =
-        fileio::page_or_editing_data(src, bytes, o.password.as_deref(), read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
+    let (mut doc, warnings, alone) = fileio::page_or_editing_data(src, bytes, &o, index, read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
     if alone {
         // Linked images show their files, found from its folder.
         super::links::resolve(&mut doc, path, false, false);

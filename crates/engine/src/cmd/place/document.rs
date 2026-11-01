@@ -44,15 +44,17 @@ pub(crate) fn is_pdf(name: &str, bytes: &[u8]) -> bool {
     fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "pdf" | "ai" | "ait")) && !vectorcraft_pdf::is_postscript(bytes)
 }
 
-/// The editing data of the `.ai` file `name` (`bytes`) when its PDF part is only a placeholder:
+/// The editing data of the `.ai` file `name` (`bytes`) when its PDF part is only a placeholder, or
+/// can't be read:
 /// the document its pages are read from ([`super::pdf_art`]), with the files it links. `None` for
 /// other files.
 pub(crate) fn editing_data(name: &str, bytes: &[u8]) -> Option<Document> {
     if !is_pdf(name, bytes) {
         return None;
     }
-    let read = fileio::page_document(bytes, 0, &fileio::LoadOptions::default());
-    match fileio::page_or_editing_data(name, bytes, None, read) {
+    let opts = fileio::LoadOptions::default();
+    let read = fileio::page_document(bytes, 0, &opts);
+    match fileio::page_or_editing_data(name, bytes, &opts, 0, read) {
         Ok((doc, _, true)) => Some(doc),
         _ => None,
     }
