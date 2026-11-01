@@ -677,8 +677,8 @@ fn lo() -> Lang {
 fn lao_reads_as_lao() {
     for (en, want) in [
         ("Artboard Tool", "ເຄື່ອງມືອາດບອດ"),
-        ("Swatches", "ຈານສີ"),
-        ("Pathfinder", "Pathfinder"),
+        ("Swatches", "ຕົວຢ່າງສີ"),
+        ("Pathfinder", "ພາທໄຟນ໌ເດີ"),
         ("Stroke", "ເສັ້ນຂອບ"),
         ("Fill", "ສີພື້ນ"),
         ("Direct Selection Tool", "ເຄື່ອງມືເລືອກໂດຍກົງ"),
