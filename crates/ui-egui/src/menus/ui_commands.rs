@@ -1125,6 +1125,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{sets?: [index], ids?: [id]} delete the Actions panel's sets at these indexes (0 is the top set), with their actions (default: the current set). ids holds the panel's own set ids, which its question passes: the sets with these ids are deleted wherever they are now, sets is not read, and when one of them no longer exists nothing is deleted. The panel's Delete Selection on selected sets (Shift-click adds a range) asks first, and OK runs this. A recording into a deleted set stops and keeps nothing. An index past the last set is an error → {deleted: n}",
     ),
+    (
+        crate::panels::actions::DUPLICATE,
+        "Duplicate Action or Action Set",
+        "",
+        "{set?: index, action?: index} copy the Actions panel's action at action in set (0 is the top set) to right after it in the same set; without action, copy set with all its actions to right after it (default: the current set). The copy is named after the original with \" copy\" added, a copied set gets an id of its own, and the copy is selected. The panel menu's Duplicate runs this for the selected action, else the current set. An index past the last set or action is an error → {set, action?}",
+    ),
     ("file.showPackage", "Show Package", "", "{folder} show a package folder (file.package's folder) in the file manager → {folder}"),
     (
         "docInfo.save",

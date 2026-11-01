@@ -785,6 +785,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::dialogs::action_batch::open(app, set, action)
         }
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
+        crate::panels::actions::DUPLICATE => crate::panels::actions::duplicate(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,
     };

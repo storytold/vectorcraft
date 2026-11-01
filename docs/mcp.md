@@ -1677,6 +1677,11 @@ already walks Image Trace. Short agent entry points:
   goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) asks before it runs
   this for the selected sets, and Shift-click on a set's name selects the sets from the current one to it. Undo does
   not restore a deleted set.
+  `ui.actionSet.duplicate {set?: index, action?: index}` copies the action at `action` in set `set` to right after it
+  in the same set, and returns `{set, action}`; without `action` it copies the set with all its actions to right after
+  it, by default the current set, and returns `{set}`. The copy is named after the original with " copy" added, a
+  copied set gets an id of its own, and the copy is selected. An index past the last set or action is an error. The
+  panel menu's Duplicate runs this for the selected action, else the current set.
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
   settings, such as `colours`, is an error that names it and the nearest setting (`colors`), as for a command's own keys.

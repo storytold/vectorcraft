@@ -882,6 +882,7 @@ font-technology	Variable	Biến thiên
 	Delete Tab	Xóa tab
 	Delete the graphic style “{name}”?	Xóa kiểu đồ họa “{name}”?
 	Delete Action Sets	Xóa các bộ hành động
+	Duplicate Action or Action Set	Nhân bản hành động hoặc bộ hành động
 	Delete the action set “{name}” and its actions?	Xóa bộ hành động “{name}” và các hành động của nó?
 	Delete the selected action sets and their actions?	Xóa các bộ hành động đã chọn và các hành động của chúng?
 	Delete the library “{name}”?	Xóa thư viện “{name}”?
