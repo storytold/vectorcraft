@@ -1178,28 +1178,6 @@ fn datasets_csv_reads_tab_separated_files() {
     assert!(unclosed.contains("unclosed quote"), "{unclosed}");
 }
 
-/// A CSV that isn't UTF-8 is read as Windows-1252. UTF-8 files, with or without a byte-order mark,
-/// read as before, and a file that starts with the UTF-8 byte-order mark but isn't UTF-8 is refused.
-#[test]
-fn datasets_csv_reads_windows_1252_files() {
-    let mut s = session();
-    s.execute("variable.define", &json!({"name": "City", "kind": "text"})).unwrap();
-    let import = |s: &mut Session, bytes: &[u8]| s.execute("dataset.import", &json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}));
-    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("City")).cloned();
-    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
-    let imp = import(&mut s, b"name,City\r\nA,Jos\xe9\r\nB,\x80 5 \x96 \x93Caf\xe9\x94\r\n").unwrap();
-    assert_eq!(imp["names"], json!(["A", "B"]));
-    assert_eq!(value(&s, "A"), text_value("José"));
-    assert_eq!(value(&s, "B"), text_value("€ 5 – “Café”"));
-    import(&mut s, "name,City\nC,José\n".as_bytes()).unwrap();
-    assert_eq!(value(&s, "C"), text_value("José"));
-    import(&mut s, "\u{feff}name,City\nD,Zoë\n".as_bytes()).unwrap();
-    assert_eq!(value(&s, "D"), text_value("Zoë"));
-    let e = import(&mut s, b"\xef\xbb\xbfname,City\nE,Jos\xe9\n").unwrap_err().to_string();
-    assert!(e.contains("CSV is not UTF-8"), "{e}");
-    assert_eq!(value(&s, "E"), None);
-}
-
 /// Without a `name` column every header cell is a variable, and the rows take the first free
 /// names Data Set 1, 2 and so on. A first header cell `name`, in any case, still holds the names.
 #[test]
@@ -1395,6 +1373,28 @@ fn datasets_csv_round_trips_and_rejects_bad_input() {
 
     // One undo undoes the last import's replacements.
     s.execute("edit.undo", &json!({})).unwrap();
+}
+
+/// A CSV that isn't UTF-8 is read as Windows-1252. UTF-8 files, with or without a byte-order mark,
+/// read as before, and a file that starts with the UTF-8 byte-order mark but isn't UTF-8 is refused.
+#[test]
+fn datasets_csv_reads_windows_1252_files() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "City", "kind": "text"})).unwrap();
+    let import = |s: &mut Session, bytes: &[u8]| s.execute("dataset.import", &json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}));
+    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("City")).cloned();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    let imp = import(&mut s, b"name,City\r\nA,Jos\xe9\r\nB,\x80 5 \x96 \x93Caf\xe9\x94\r\n").unwrap();
+    assert_eq!(imp["names"], json!(["A", "B"]));
+    assert_eq!(value(&s, "A"), text_value("José"));
+    assert_eq!(value(&s, "B"), text_value("€ 5 – “Café”"));
+    import(&mut s, "name,City\nC,José\n".as_bytes()).unwrap();
+    assert_eq!(value(&s, "C"), text_value("José"));
+    import(&mut s, "\u{feff}name,City\nD,Zoë\n".as_bytes()).unwrap();
+    assert_eq!(value(&s, "D"), text_value("Zoë"));
+    let e = import(&mut s, b"\xef\xbb\xbfname,City\nE,Jos\xe9\n").unwrap_err().to_string();
+    assert!(e.contains("CSV is not UTF-8"), "{e}");
+    assert_eq!(value(&s, "E"), None);
 }
 
 /// A data set of [`library`]: its name, and each variable's name with its paragraphs.
