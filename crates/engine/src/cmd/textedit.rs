@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Touch Type",
             [],
             None,
-            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first character of a line and for a right-to-left character; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, along its own up axis when it is rotated); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
+            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first character of a line and for a right-to-left character; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
             has_doc,
             touch_type
         ),
@@ -184,6 +184,48 @@ pub(crate) fn set_plain_text(d: &mut vectorcraft_doc::Document, id: NodeId, text
     edit::replace_range(&mut t.runs, 0, len, text);
     refresh_bounds(t);
     Ok(())
+}
+
+/// Replace the whole story of the type object `id` as [`set_plain_text`] replaces one type
+/// object's content: for a frame of threaded text, every frame's text. The new text goes into the
+/// thread's first frame and the other frames are emptied; the edit's reflow then pours it through
+/// them. → the story's last frame, which holds any text that does not fit.
+pub(crate) fn set_story_text(d: &mut vectorcraft_doc::Document, id: NodeId, text: &str) -> Result<NodeId> {
+    let story = d.story_of(id);
+    let (Some((&first, rest)), Some(&last)) = (story.split_first(), story.last()) else {
+        return Err(EngineError::NoNode(id));
+    };
+    if rest.is_empty() {
+        set_plain_text(d, id, text)?;
+        return Ok(id);
+    }
+    let frames: Vec<TextObject> = story
+        .iter()
+        .filter_map(|f| match d.node(*f).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some((**t).clone()),
+            _ => None,
+        })
+        .collect();
+    let refs: Vec<&TextObject> = frames.iter().collect();
+    // The first frame takes the whole story first, so the replace keeps the story's first style
+    // and paragraph styles follow as for one type object.
+    let t = text_mut(d, first).ok_or(EngineError::NoNode(first))?;
+    t.runs = vectorcraft_text::thread::story(&refs);
+    t.set_paragraph_styles(vectorcraft_text::thread::story_paras(&refs, &[]));
+    set_plain_text(d, first, text)?;
+    // An emptied frame's paragraph takes the new text's last paragraph style, so it does not
+    // restyle that paragraph when the story is joined again.
+    let tail = match d.node(first).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => t.paragraph_styles().last().cloned().unwrap_or_default(),
+        _ => Default::default(),
+    };
+    for f in rest {
+        let t = text_mut(d, *f).ok_or(EngineError::NoNode(*f))?;
+        t.runs.clear();
+        t.set_paragraph_styles(vec![tail.clone()]);
+        refresh_bounds(t);
+    }
+    Ok(last)
 }
 
 /// The byte offset that `k` holds, read with [`index`].
@@ -325,6 +367,7 @@ pub(crate) struct CharChange {
     /// The language to set: a tag, or `None` for the default.
     language: Option<Option<String>>,
     font_axes: Option<AxisChange>,
+    font_height_reference: Option<vectorcraft_doc::FontHeightReference>,
 }
 
 /// `charDirection: "default"|"leftToRight"|"rightToLeft"` → the Character Direction to set (`None`
@@ -452,6 +495,20 @@ pub(crate) fn char_align_param(p: &Value, cmd: &str) -> Result<Option<vectorcraf
     }))
 }
 
+/// `fontHeightReference: "emBox"|"capHeight"|"xHeight"|"icfBox"` (Character panel › Set Font Height
+/// Reference): the height of the font that the font size measures.
+pub(crate) fn font_height_reference_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_doc::FontHeightReference>> {
+    use vectorcraft_doc::FontHeightReference;
+    let Some(v) = p.get("fontHeightReference").filter(|v| !v.is_null()) else { return Ok(None) };
+    Ok(Some(match v.as_str() {
+        Some("emBox") => FontHeightReference::EmBox,
+        Some("capHeight") => FontHeightReference::CapHeight,
+        Some("xHeight") => FontHeightReference::XHeight,
+        Some("icfBox") => FontHeightReference::IcfBox,
+        _ => return Err(bad(cmd, "`fontHeightReference` must be \"emBox\", \"capHeight\", \"xHeight\" or \"icfBox\"")),
+    }))
+}
+
 fn paint_param(p: &Value, k: &str, cmd: &str) -> Result<Option<Paint>> {
     match p.get(k) {
         None | Some(Value::Null) => Ok(None),
@@ -523,6 +580,7 @@ impl CharChange {
             digits: digits_param(p, cmd)?,
             language: language_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
+            font_height_reference: font_height_reference_param(p, cmd)?,
         };
         if c.size.is_some_and(|v| v <= 0.0) {
             return Err(bad(cmd, "size must be positive"));
@@ -570,6 +628,7 @@ impl CharChange {
             && self.digits.is_none()
             && self.language.is_none()
             && self.font_axes.is_none()
+            && self.font_height_reference.is_none()
     }
 
     fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
@@ -679,6 +738,9 @@ impl CharChange {
         }
         if let Some(v) = self.digits {
             st.digits = v;
+        }
+        if let Some(v) = self.font_height_reference {
+            st.font_height_reference = v;
         }
         if let Some(v) = &self.language {
             st.language.clone_from(v);
@@ -896,9 +958,8 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
         });
     };
     // The baseline shift that raises the character `dy` document points. Baseline shift moves it
-    // along its own up axis, turned with its rotation (the new one, when the call sets it), by a
-    // length that the object transform, Shrink Text to Fit and a path effect such as Skew scale:
-    // two layouts with the call's other changes and shifts one step apart, both within the range,
+    // up from its line, whatever its rotation, by a length that the object transform, Shrink Text
+    // to Fit and a path effect such as Skew scale: two layouts with the call's other changes and shifts one step apart, both within the range,
     // measure that length. Neither shift is one that a run already has, so the character's run
     // splits off alike in both.
     let raise = if dy == 0.0 {
@@ -1216,7 +1277,11 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
                     match step {
                         Step::Size => st.size = super::typecmd::local_type_value(t, st.size * points + inc, (0.1, 1296.0), false, C)?,
                         Step::Leading => {
-                            let leading = t.para_at(paras.get(i).copied().unwrap_or(0)).effective_leading(st);
+                            // With Auto leading the step starts from the leading the lines are set with:
+                            // the paragraph's Auto Leading share of the em size the font height reference
+                            // gives the characters. An inline graphic keeps its size.
+                            let em = if run.inline.is_some() { st.size } else { vectorcraft_text::FontDb::global().em_size(st, t.vertical) };
+                            let leading = t.para_at(paras.get(i).copied().unwrap_or(0)).effective_leading(&CharStyle { size: em, ..st.clone() });
                             st.leading = Some(super::typecmd::local_type_value(t, leading * points + inc, (0.1, 5000.0), false, C)?);
                         }
                         Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),

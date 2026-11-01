@@ -334,13 +334,27 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
-    // Opacity mask editing and pattern editing isolate their editing layer. Leaving isolation mode
-    // then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's Done do.
+    // Opacity mask editing, pattern editing and symbol editing isolate their editing layer. Leaving
+    // isolation mode then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's
+    // Done do. A group isolated inside the symbol's art goes back to the symbol's layer.
     let st = s.doc()?;
+    if let Some(layer) = st.doc.symbol_edit.as_ref().map(|e| e.layer)
+        && let Some(inner) = st.isolation.filter(|i| *i != layer)
+    {
+        crate::cmd::settle_interaction(s)?;
+        let st = s.doc_mut()?;
+        crate::cmd::distortcmds::finish_edit_text(st, inner);
+        st.isolation = Some(layer);
+        st.selection.set([inner]);
+        st.revision += 1;
+        return ok();
+    }
     let leave_mode: Option<fn(&mut Session, &Value) -> Result<Value>> = if st.doc.mask_edit.is_some() {
         Some(crate::cmd::maskedit::leave)
     } else if st.doc.pattern_edit.is_some() {
         Some(crate::cmd::patterncmds::pattern_done)
+    } else if st.doc.symbol_edit.is_some() {
+        Some(crate::cmd::symboledit::leave)
     } else {
         None
     };

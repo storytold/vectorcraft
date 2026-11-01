@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::clipnest::MAX_NEST;
 use vectorcraft_doc::{LayerColor, LineCap, Node, NodeKind};
 use vectorcraft_geom::Rect;
@@ -25,6 +26,16 @@ fn ai(header: &str, ugroup: &str, body: &str) -> Vec<u8> {
 /// header says they are in that format (`%AI…` comments or the creator, which the format's
 /// published specification documents; see the `import` module docs).
 const AI8: &str = "%%Creator: Adobe Illustrator(R) 8.0\n%AI5_FileFormat 4.0\n";
+
+/// The editing text of a version 7 file (`%AI5_FileFormat 3`), no prolog: `setup` in its setup,
+/// then `body`.
+fn stream7(setup: &str, body: &str) -> Vec<u8> {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 100 100\n%AI5_FileFormat 3\n%AI3_Cropmarks: 0 0 100 100\n%%EndComments\n\
+         %%BeginProlog\n%%EndProlog\n%%BeginSetup\n{setup}%%EndSetup\n{body}%%PageTrailer\n%%Trailer\n%%EOF\n"
+    )
+    .into_bytes()
+}
 
 /// A triangle filled at `x`.
 fn tri(x: u32) -> String {
@@ -207,6 +218,32 @@ fn a_legacy_file_with_its_prolog_comes_in_through_its_layers() {
     // Without the editing data, it is its page.
     let page = crate::import::import_with(file.as_bytes(), false).unwrap();
     assert_eq!(page.document.layers[0].name.as_deref(), Some("Layer 1"));
+}
+
+/// A version 7 palette writes no swatch names (the AI7 spec's §11 example): its swatches come in
+/// named by their paint, in its order, in place of the defaults.
+#[test]
+fn a_version_7_palette_keeps_its_swatches_without_names() {
+    let setup = "%AI5_BeginGradient: (B&W)\n(B&W) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                 %AI5_BeginPalette\n0 0 Pb\nPn\nPc\n1 g\nPc\n0 g\nPc\n0 0 0 0 k\nPc\n0.75 g\nPc\n\
+                 Bb\n2 (B&W) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\nPc\n0.25 0 0 0 k\nPc\n0 1 1 0 (Spot A) 0 x\nPc\n0.75 g\nPc\nPc\nPB\n%AI5_EndPalette\n";
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 1 -1 79 128 255 0 50 0 Lb\n(Art) Ln\n0 A\n0 Xw\n0 0 0 1 k\n{}\nLB\n%AI5_EndLayer--\n", tri(10));
+    let r = import(&stream7(setup, &body)).unwrap();
+    let d = &r.document;
+    assert_eq!(d.layers.len(), 1, "{:?}", r.warnings);
+    let names: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["[None]", "Gray K=0", "Gray K=100", "C=0 M=0 Y=0 K=0", "Gray K=25", "B&W", "C=25 M=0 Y=0 K=0", "Spot A", "Gray K=25"],
+        "{:?}",
+        r.warnings
+    );
+    assert!(d.swatch_groups.is_empty());
+    let spot = d.swatch("Spot A").unwrap();
+    assert!(spot.spot && spot.global, "{spot:?}");
+    assert!(d.swatches.iter().filter(|s| s.name != "Spot A").all(|s| !s.spot && !s.global));
+    assert!(matches!(&d.swatch("B&W").unwrap().paint, Paint::Gradient(g) if g.swatch.as_deref() == Some("B&W")));
+    assert_eq!(d.swatch("Gray K=0").unwrap().paint.color(), Some(Color::gray(0.0)), "1 g is white");
 }
 
 #[test]
