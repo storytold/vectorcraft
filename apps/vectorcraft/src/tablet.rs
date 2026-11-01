@@ -118,6 +118,8 @@ impl Axis {
 #[derive(Clone, Debug, PartialEq)]
 struct Device {
     id: u16,
+    /// The name the X server lists, so that another device under the same id compares unequal.
+    name: String,
     /// The pen's valuators: a pen has a pressure valuator, a mouse, a touchpad or a touchscreen
     /// has none (and keeps none).
     axes: Vec<Axis>,
@@ -144,7 +146,7 @@ impl Device {
             axes.clear();
         }
         let eraser = [Some(name), kind].into_iter().flatten().any(|s| s.to_ascii_lowercase().contains("eraser"));
-        Self { id, axes, eraser }
+        Self { id, name: name.to_string(), axes, eraser }
     }
 
     /// The valuator of `kind`, if the device is a pen that has one.
