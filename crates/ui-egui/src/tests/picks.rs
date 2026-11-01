@@ -238,8 +238,8 @@ fn load_profile_asks_off_the_ui_thread() {
 }
 
 /// The Variables panel menu's Import Data Sets… and Export Data Sets… ask off the UI thread: the
-/// data sets in the file picked are loaded, and the header and data set `B` are written to the
-/// path the dialog answers.
+/// data sets in the file picked are loaded, and the header and the data set's row are written to
+/// the path the dialog answers.
 #[test]
 fn variables_panel_data_sets_ask_off_the_ui_thread() {
     let (mut app, shown, _) = app();
@@ -250,20 +250,20 @@ fn variables_panel_data_sets_ask_off_the_ui_thread() {
     }
     std::fs::create_dir_all(&dir).unwrap();
     let (csv, out) = (dir.join("sets.csv"), dir.join("out.csv"));
-    std::fs::write(&csv, "name,Name\nB,y\n").unwrap();
+    std::fs::write(&csv, "Name\ny\n").unwrap();
     let sets = |app: &VectorcraftApp| app.session.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
 
     click(&mut app, "Import Data Sets…", crate::panels::variables::menu);
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]));
     shown.answer(&[&csv.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(sets(&app), ["B"], "{}", app.ui.status);
+    assert_eq!(sets(&app), ["Data Set 1"], "{}", app.ui.status);
 
     click(&mut app, "Export Data Sets…", crate::panels::variables::menu);
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
     shown.answer(&[&out.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("name,Name\nB,y\n"), "{}", app.ui.status);
+    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("Name\ny\n"), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }
 

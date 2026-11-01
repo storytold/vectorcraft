@@ -413,23 +413,24 @@ mod tests {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
         let t = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "x"})).unwrap()["id"].as_u64().unwrap();
-        app.run("dataset.import", json!({"csv": "name,Name\nA,Ann\nB,Bob\n"})).unwrap();
+        app.run("dataset.import", json!({"csv": "Name\nAnn\nBob\n"})).unwrap();
+        let (a, b) = ("Data Set 1", "Data Set 2");
         let message = |row: &str| format!("nothing in data set {row} was applied: no object is bound to a variable it has a value for");
-        app.run("dataset.select", json!({"name": "A"})).unwrap();
-        assert_eq!(app.ui.status, message("A"));
+        app.run("dataset.select", json!({"name": a})).unwrap();
+        assert_eq!(app.ui.status, message(a));
         app.run("dataset.next", json!({})).unwrap();
-        assert_eq!(app.ui.status, message("B"));
+        assert_eq!(app.ui.status, message(b));
         app.run("dataset.prev", json!({})).unwrap();
-        assert_eq!(app.ui.status, message("A"));
+        assert_eq!(app.ui.status, message(a));
 
         app.run("variable.bind", json!({"variable": "Name", "ids": [t]})).unwrap();
-        app.run("dataset.select", json!({"name": "B"})).unwrap();
+        app.run("dataset.select", json!({"name": b})).unwrap();
         assert_eq!(app.ui.status, "");
         // Stepping to a data set that applies clears the message as well.
         for step in ["dataset.next", "dataset.prev"] {
             app.run("variable.unbind", json!({"variable": "Name", "ids": [t]})).unwrap();
-            app.run("dataset.select", json!({"name": "A"})).unwrap();
-            assert_eq!(app.ui.status, message("A"));
+            app.run("dataset.select", json!({"name": a})).unwrap();
+            assert_eq!(app.ui.status, message(a));
             app.run("variable.bind", json!({"variable": "Name", "ids": [t]})).unwrap();
             app.run(step, json!({})).unwrap();
             assert_eq!(app.ui.status, "", "{step}");
