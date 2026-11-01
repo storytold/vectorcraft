@@ -53,6 +53,11 @@ const SHADOW: &str = "Adobe Drop Shadow"; // brand-ok: the filter's name in the 
 const DEFORM: &str = "Adobe Deform"; // brand-ok: the filter's name in the files
 const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the files
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
+const FREE_DISTORT: &str = "Adobe Free Distort"; // brand-ok: the filter's name in the files
+const PUCKER_BLOAT: &str = "Adobe Punk and Bloat"; // brand-ok: the filter's name in the files
+const TWEAK: &str = "Adobe Scribble and Tweak"; // brand-ok: the filter's name in the files
+const TWIST: &str = "Adobe Twirl"; // brand-ok: the filter's name in the files
+const ZIG_ZAG: &str = "Adobe Zigzag"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
 
@@ -156,6 +161,9 @@ struct Filter {
     parent: Option<usize>,
     compound: bool,
     params: HashMap<String, f64>,
+    /// Its dictionary's numbers by key, with the kind each is written as; `None` where the entry
+    /// has no number.
+    entries: HashMap<String, (Kind, Option<f64>)>,
     /// Its dictionary's arrays (`/Array : v /Real , … ; (key) ,`), by key.
     arrays: HashMap<String, Vec<f64>>,
     fill: Option<Paint>,
@@ -184,6 +192,7 @@ impl Default for Filter {
             parent: None,
             compound: false,
             params: HashMap::new(),
+            entries: HashMap::new(),
             arrays: HashMap::new(),
             fill: None,
             stroke: None,
@@ -265,6 +274,11 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 b"Array" => dict_array = Some(vec![]),
                 b"Int" | b"Real" | b"Bool" => {
+                    let kind = match n {
+                        b"Int" => Kind::Int,
+                        b"Real" => Kind::Real,
+                        _ => Kind::Bool,
+                    };
                     let value = operands.iter().rev().find_map(V::num);
                     operands.clear();
                     if let Some(a) = dict_array.as_mut() {
@@ -272,10 +286,12 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                         continue;
                     }
                     // The key follows: `value /Real (key) ,`.
-                    if let (Some(value), Some(Tok::Str(key))) = (value, lex.next_token().map(|t| t.tok))
-                        && let Some(f) = filters.last_mut()
-                    {
-                        f.params.insert(String::from_utf8_lossy(&key).into_owned(), value);
+                    if let (Some(Tok::Str(key)), Some(f)) = (lex.next_token().map(|t| t.tok), filters.last_mut()) {
+                        let key = String::from_utf8_lossy(&key).into_owned();
+                        if let Some(value) = value {
+                            f.params.insert(key.clone(), value);
+                        }
+                        f.entries.insert(key, (kind, value));
                     }
                     continue;
                 }
@@ -428,8 +444,196 @@ fn width_profile(arrays: &HashMap<String, Vec<f64>>) -> Option<WidthProfile> {
     (!uniform).then_some(WidthProfile { points })
 }
 
-/// The live effect filter `f` is, when it is one read here.
-fn effect(f: &Filter) -> Option<Effect> {
+/// How a dictionary entry is written: `value /Int (key) ,`, `/Real` or `/Bool`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Kind {
+    Int,
+    Real,
+    Bool,
+}
+
+/// Entry `key` of `f`'s dictionary, written as `kind`: `Ok(None)` when the dictionary doesn't hold
+/// it, `Err` when it holds it as another kind, without a finite number, or as an `/Int` that isn't
+/// whole or a `/Bool` other than 0 and 1.
+fn entry(f: &Filter, key: &str, kind: Kind) -> Result<Option<f64>, ()> {
+    let Some((k, v)) = f.entries.get(key) else { return Ok(None) };
+    match v {
+        Some(v)
+            if *k == kind
+                && v.is_finite()
+                && match kind {
+                    Kind::Real => true,
+                    Kind::Int => v.fract() == 0.0,
+                    Kind::Bool => *v == 0.0 || *v == 1.0,
+                } =>
+        {
+            Ok(Some(*v))
+        }
+        _ => Err(()),
+    }
+}
+
+/// Entry `key` as a switch, 0 or 1 written as `kind`: `Ok(None)` when it is missing.
+fn switch(f: &Filter, key: &str, kind: Kind) -> Result<Option<bool>, ()> {
+    match entry(f, key, kind)? {
+        None => Ok(None),
+        Some(0.0) => Ok(Some(false)),
+        Some(1.0) => Ok(Some(true)),
+        Some(_) => Err(()),
+    }
+}
+
+/// Real entry `key` within `range`, `missing` when the dictionary doesn't hold it.
+fn real(f: &Filter, key: &str, missing: f64, range: std::ops::RangeInclusive<f64>) -> Option<f64> {
+    entry(f, key, Kind::Real).ok()?.map_or(Some(missing), |v| range.contains(&v).then_some(v))
+}
+
+/// What an effect in a style could change the paint of, for the Transform options whose value,
+/// when the dictionary leaves it out, comes from the app's settings rather than the file.
+#[derive(Clone, Copy, Debug)]
+struct Under {
+    /// A stroke, or other effects with distances that Scale Strokes & Effects would scale.
+    strokes: bool,
+    /// A pattern.
+    patterns: bool,
+}
+
+/// Anything: an effect on the whole object, whose contents can paint in any way.
+const ANYTHING: Under = Under { strokes: true, patterns: true };
+
+/// The Transform effect `f` (the factor and radian entries; the percent and degree ones are what
+/// its dialog shows). `None` keeps the drawn look: an entry not read, Random (the file holds no
+/// seed), or a missing Scale Strokes & Effects or Transform Patterns that would change `under`.
+fn transform(f: &Filter, under: Under) -> Option<serde_json::Value> {
+    for key in ["scaleH_Percent", "scaleV_Percent", "rotate_Degrees"] {
+        entry(f, key, Kind::Real).ok()?;
+    }
+    // The renderer's limits on scales and moves (`vectorcraft_effects`' `MAX_SCALE` and `MAX_MOVE`).
+    let scale = |key: &str| real(f, key, 1.0, -1000.0..=1000.0).map(|v| v * 100.0);
+    let (h, v) = (scale("scaleH_Factor")?, scale("scaleV_Factor")?);
+    let (move_h, move_v) = (real(f, "moveH_Pts", 0.0, -1e7..=1e7)?, real(f, "moveV_Pts", 0.0, -1e7..=1e7)?);
+    let rotate = Some(entry(f, "rotate_Radians", Kind::Real).ok()?.unwrap_or(0.0).to_degrees()).filter(|d| d.is_finite())?;
+    let copies = entry(f, "numCopies", Kind::Int).ok()?.unwrap_or(0.0);
+    let reference = entry(f, "pinPoint", Kind::Int).ok()?.unwrap_or(4.0);
+    if !(0.0..=1000.0).contains(&copies) || !(0.0..=8.0).contains(&reference) {
+        return None;
+    }
+    let on = |key: &str| switch(f, key, Kind::Bool);
+    let (reflect_x, reflect_y) = (on("reflectX").ok()?.unwrap_or(false), on("reflectY").ok()?.unwrap_or(false));
+    let objects = on("transformObjects").ok()?.unwrap_or(true);
+    let (strokes, patterns) = (on("scaleLines").ok()?, on("transformPatterns").ok()?);
+    if on("randomize").ok()?.unwrap_or(false) {
+        return None;
+    }
+    let moves = h != 100.0 || v != 100.0 || move_h != 0.0 || move_v != 0.0 || rotate != 0.0 || reflect_x || reflect_y;
+    let scales = ((h * v).abs().sqrt() - 100.0).abs() > 1e-9;
+    if (strokes.is_none() && scales && under.strokes) || (patterns.is_none() && moves && under.patterns) {
+        return None;
+    }
+    // Art space has y up: a move up is a negative `moveV` in the document.
+    Some(json!({
+        "scaleH": h,
+        "scaleV": v,
+        "moveH": move_h,
+        "moveV": 0.0 - move_v,
+        "rotate": rotate,
+        "copies": copies as i64,
+        "reflectX": reflect_x,
+        "reflectY": reflect_y,
+        "reference": reference as i64,
+        "objects": objects,
+        "patterns": patterns.unwrap_or(false),
+        "strokes": strokes.unwrap_or(false),
+    }))
+}
+
+/// Free Distort's corners: the destination corners `dst0h`… measured in the source frame `src0h`…
+/// (top left, top right, bottom left, bottom right, y up), as the catalog's unit-box corners (top
+/// left, top right, bottom right, bottom left, y down). The source frame is only the unit the
+/// corners are measured in: the distorted box is laid over the object's own bounds, as the catalog
+/// effect lays it, also when the frame is another size (a unit square, or bounds with the stroke).
+/// No corners is no change; some but not all, or a frame that isn't an upright rectangle, isn't read.
+fn free_distort(f: &Filter) -> Option<serde_json::Value> {
+    let mut corners = [[[0.0; 2]; 4]; 2];
+    let mut held = 0;
+    for (which, c) in ["src", "dst"].into_iter().zip(&mut corners) {
+        for (i, corner) in c.iter_mut().enumerate() {
+            for (axis, v) in ["h", "v"].into_iter().zip(corner.iter_mut()) {
+                if let Some(x) = entry(f, &format!("{which}{i}{axis}"), Kind::Real).ok()? {
+                    *v = x;
+                    held += 1;
+                }
+            }
+        }
+    }
+    if held == 0 {
+        return Some(json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}));
+    }
+    let [[tl, tr, bl, br], dst] = corners;
+    let (left, top) = (tl[0], tl[1]);
+    let (width, height) = (tr[0] - left, top - bl[1]);
+    let tolerance = 1e-5 * width.abs().max(height.abs());
+    let upright = (tr[1] - top).abs() <= tolerance
+        && (br[1] - bl[1]).abs() <= tolerance
+        && (bl[0] - left).abs() <= tolerance
+        && (br[0] - tr[0]).abs() <= tolerance;
+    let extent = |d: f64| d.is_finite() && d > 0.0;
+    if held < 16 || !upright || !extent(width) || !extent(height) {
+        return None;
+    }
+    let mut out = vec![];
+    for i in [0, 1, 3, 2] {
+        let [h, v] = *dst.get(i)?;
+        let (x, y) = ((h - left) / width, (top - v) / height);
+        if !(x.is_finite() && y.is_finite() && x.abs() <= 1e4 && y.abs() <= 1e4) {
+            return None;
+        }
+        out.push([x, y]);
+    }
+    Some(json!({ "corners": out }))
+}
+
+/// A `0` relative, `1` absolute switch (`absoluteness`), `absolute` when it is missing, and the size
+/// it picks: `relative_key` in percent or `absolute_key` in points, 0 when missing.
+fn sized(f: &Filter, absolute: bool, relative_key: &str, absolute_key: &str) -> Option<(bool, f64)> {
+    let absolute = switch(f, "absoluteness", Kind::Real).ok()?.unwrap_or(absolute);
+    let relative = real(f, relative_key, 0.0, 0.0..=1e4)?;
+    let points = real(f, absolute_key, 0.0, 0.0..=1e4)?;
+    Some((absolute, if absolute { points } else { relative }))
+}
+
+/// Corner (`roundness` 0, or missing) or Smooth (1).
+fn points(f: &Filter) -> Option<&'static str> {
+    Some(if switch(f, "roundness", Kind::Real).ok()?.unwrap_or(false) { "smooth" } else { "corner" })
+}
+
+/// The Tweak effect `f` (`Adobe Scribble and Tweak`): relative unless `absoluteness` says otherwise,
+/// moving anchors and both handles unless the dictionary turns them off.
+fn tweak(f: &Filter) -> Option<serde_json::Value> {
+    let (absolute, h) = sized(f, false, "horz", "ahor")?;
+    let (_, v) = sized(f, false, "vert", "aver")?;
+    let on = |key: &str| switch(f, key, Kind::Bool).map(|v| v.unwrap_or(true));
+    let (anchors, ins, outs) = (on("anch").ok()?, on("in").ok()?, on("out").ok()?);
+    Some(json!({"h": h, "v": v, "relative": !absolute, "anchors": anchors, "in": ins, "out": outs}))
+}
+
+/// The Zig Zag effect `f`: absolute unless `absoluteness` says otherwise, 4 ridges and Corner points
+/// when they are missing.
+fn zig_zag(f: &Filter) -> Option<serde_json::Value> {
+    let (absolute, size) = sized(f, true, "relAmount", "amount")?;
+    let ridges = real(f, "ridges", 4.0, 0.0..=100.0).filter(|r| r.fract() == 0.0)?;
+    Some(json!({"size": size, "relative": !absolute, "ridges": ridges as i64, "points": points(f)?}))
+}
+
+/// Whether Tweak params `p` leave the outline as it is: its random outline isn't in the file, so any
+/// other keeps the drawn look.
+fn still(p: &serde_json::Value) -> bool {
+    (p["h"].as_f64() == Some(0.0) && p["v"].as_f64() == Some(0.0)) || ["anchors", "in", "out"].iter().all(|k| p[k] == json!(false))
+}
+
+/// The live effect filter `f` is, when it is one read here; `under` is what it could change the
+/// paint of.
+fn effect(f: &Filter, under: Under) -> Option<Effect> {
     let param = |k: &str| f.params.get(k).copied().filter(|v| v.is_finite());
     let flag = |k: &str| param(k).is_some_and(|v| v != 0.0);
     let mode = |default: usize| super::read::blend_name(param("blnd").map_or(default, |v| v.max(0.0) as usize));
@@ -486,22 +690,14 @@ fn effect(f: &Filter) -> Option<Effect> {
                 "miterLimit": param("mlim").unwrap_or(4.0).clamp(1.0, 500.0),
             }),
         ),
-        // Art space has y up: a move up is a negative `moveV` in the document.
-        TRANSFORM => (
-            "distort.transform",
-            json!({
-                "scaleH": param("scaleH_Percent").unwrap_or(100.0),
-                "scaleV": param("scaleV_Percent").unwrap_or(100.0),
-                "moveH": param("moveH_Pts").unwrap_or(0.0),
-                "moveV": -param("moveV_Pts").unwrap_or(0.0),
-                "rotate": param("rotate_Degrees").unwrap_or(0.0),
-                "copies": param("numCopies").unwrap_or(0.0).clamp(0.0, 1000.0) as i64,
-                "reflectX": flag("reflectX"),
-                "reflectY": flag("reflectY"),
-                "reference": param("pinPoint").unwrap_or(4.0).clamp(0.0, 8.0) as i64,
-                "random": flag("randomize"),
-            }),
-        ),
+        TRANSFORM => ("distort.transform", transform(f, under)?),
+        FREE_DISTORT => ("distort.freeDistort", free_distort(f)?),
+        // Negative puckers (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+        PUCKER_BLOAT => ("distort.puckerBloat", json!({"amount": real(f, "d_factor", 0.0, -200.0..=200.0)?})),
+        TWEAK => ("distort.tweak", tweak(f).filter(still)?),
+        // The file's positive angle turns clockwise, the catalog's counterclockwise.
+        TWIST => ("distort.twist", json!({"angle": 0.0 - real(f, "angle", 0.0, -3600.0..=3600.0)?})),
+        ZIG_ZAG => ("distort.zigZag", zig_zag(f)?),
         GAUSSIAN => ("blur.gaussian", json!({"radius": param("blur").unwrap_or(5.0).clamp(0.0, 1000.0)})),
         // Its settings are in a Photoshop plug-in's binary block: the effect's defaults stand in.
         BAS_RELIEF => ("sketch.basRelief", json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"})),
@@ -574,7 +770,25 @@ impl Builder<'_> {
         let mut look = ItemLook { visible: f.visible, ..ItemLook::default() };
         let mut painted: Option<StyleItem> = None;
         let mut paints = 0;
-        for k in self.children(id) {
+        let kids = self.children(id);
+        // What this item's effects could change: its own paint, and its other effects' distances.
+        let mut under = Under { strokes: false, patterns: false };
+        let mut effects = 0;
+        for &k in &kids {
+            let c = &filters[k];
+            match c.name.as_str() {
+                _ if c.compound => {}
+                FILL | STROKE => match paint_item(c) {
+                    Ok(Some(StyleItem::Stroke { .. })) => under.strokes = true,
+                    Ok(Some(StyleItem::Pattern { .. })) => under.patterns = true,
+                    _ => {}
+                },
+                BLEND => {}
+                _ => effects += 1,
+            }
+        }
+        under.strokes |= effects > 1;
+        for k in kids {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => self.plain = false,
@@ -591,7 +805,7 @@ impl Builder<'_> {
                         (look.blend, look.opacity) = (super::read::blend_mode(mode), opacity);
                     }
                 }
-                _ => match effect(c) {
+                _ => match effect(c, under) {
                     Some(e) => look.effects.push(e),
                     None => self.plain = false,
                 },
@@ -644,7 +858,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
             CONDUIT => {}
             // The object's own transparency, which its look carries too.
             BLEND => {}
-            _ => match effect(f) {
+            _ => match effect(f, ANYTHING) {
                 Some(e) => st.effects.push(e),
                 None => b.plain = false,
             },

@@ -2956,6 +2956,57 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     check(&r.document, &r.warnings);
 }
 
+/// An art style section with style `Bent`: a blue fill over the characters, and effect `name`, its
+/// dictionary holding `keys`, on the whole object.
+fn whole_object_style(name: &str, keys: &str) -> String {
+    let basic = |name: &str, body: &str| {
+        format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n")
+    };
+    let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+    let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+    let stack = compound("Stack Style Filter", &[fill, basic("Conduit Filter", "")]);
+    let root = compound("Chain Style Filter", &[stack, basic(name, keys)]);
+    format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Bent) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n")
+}
+
+#[test]
+fn type_with_a_distort_effect_comes_in_as_type_with_it_live() {
+    // GUARDS: Free Distort, Pucker & Bloat, Twist and Zig Zag weren't read, and type with them came in
+    // without its art style, the style's drawing beside it as paths.
+    use serde_json::json;
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let open = |name: &str, keys: &str| {
+        let art = native_with_text(&(whole_object_style(name, keys) + &layer("Art", true, &format!("{look}{own}1 (Bent) XW\n"))), &doc);
+        let (d, _) = crate::ai_alone(&private(&art)).unwrap();
+        let (mut texts, mut paths) = (vec![], 0);
+        d.walk(|n| match &n.kind {
+            NodeKind::Text(t) => texts.push((t.plain_text(), n.appearance.effects.clone())),
+            NodeKind::Path { .. } => paths += 1,
+            _ => {}
+        });
+        (texts, paths)
+    };
+    for (name, keys, id, param, want) in [
+        ("Adobe Twirl", "45 /Real (angle) ,\n", "distort.twist", "angle", json!(-45.0)),
+        ("Adobe Punk and Bloat", "-50 /Real (d_factor) ,\n", "distort.puckerBloat", "amount", json!(-50.0)),
+        ("Adobe Zigzag", "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n7 /Real (ridges) ,\n", "distort.zigZag", "ridges", json!(7)),
+        ("Adobe Free Distort", "", "distort.freeDistort", "corners", json!([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])),
+    ] {
+        let (texts, paths) = open(name, keys);
+        let [(text, effects)] = texts.as_slice() else { panic!("{name}: {texts:?}") };
+        assert_eq!((text.as_str(), paths), ("Bang", 0), "{name}");
+        let [e] = effects.as_slice() else { panic!("{name}: {effects:?}") };
+        assert_eq!((e.id.as_str(), &e.params[param]), (id, &want), "{name}");
+    }
+    // An angle that isn't a number: the drawing as paths, and no effect on the type.
+    let (texts, paths) = open("Adobe Twirl", "NaN /Real (angle) ,\n");
+    assert_eq!(paths, 1, "{texts:?}");
+    assert!(texts.iter().all(|(_, effects)| effects.is_empty()), "{texts:?}");
+}
+
 #[test]
 fn point_type_without_a_matrix_is_placed_by_its_layout() {
     // GUARDS: Illustrator 24 leaves an unturned, unscaled point type's matrix out of its frame; such
