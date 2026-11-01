@@ -4255,6 +4255,9 @@ theme	Appearance	외관
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	그레이디언트 “{name}”이(가) 파일에 정의되어 있지 않아 단색으로 대체했습니다
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	칠이나 선이 여러 개인 개체, 효과, 브러시가 있는 개체는 그려진 모양({_1})으로 가져왔습니다: 모양새는 아직 편집할 수 없습니다
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	이름 `{name}`은(는) UTF-8이 아니어서 {label}(으)로 읽었습니다: 잘못 보이면 다른 legacyNameEncoding으로 파일을 여세요
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	이름 `{name}`은(는) UTF-8이 아니고 일부는 {label}에서도 올바르지 않습니다: 다른 legacyNameEncoding으로 파일을 여세요
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8이 아닌 다른 이름도 {label}(으)로 읽었습니다({count})
 @msg	patterns nested too deeply are filled with mid-grey	너무 깊게 중첩된 패턴은 중간 회색으로 채웁니다
 @msg	shadings of an unknown type were left out	알 수 없는 종류의 셰이딩은 제외했습니다
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	함수 종류를 알 수 없는 셰이딩은 중간 색상으로 채웁니다

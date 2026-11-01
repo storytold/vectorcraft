@@ -8,13 +8,14 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why, with the swatches of the
 /// editing copy's palette ([`use_palette`]) when it could be read, and with its layer tree, empty,
-/// below the page's layer when that could be read (#2033).
-pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Imported {
+/// below the page's layer when that could be read (#2033). `names`: the encoding of names that
+/// aren't UTF-8.
+pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, names: ai::NameEncoding) -> Imported {
     let Some(data) = editing_copy(ps) else { return visible };
     // The layer tree is kept from the structure read, for the page to come in on when the layers
     // can't be used.
     let (tree, result) = match data.as_deref() {
-        Ok(d) => match ai::read(d, true) {
+        Ok(d) => match ai::read_with(d, true, names) {
             Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },
@@ -32,7 +33,8 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
         Err(why) => {
             let mut v = visible;
             if let Ok(data) = &data {
-                use_palette(data, &mut v.document);
+                let notes = use_palette(data, &mut v.document, names);
+                add_notes(&mut v.warnings, notes);
             }
             if tree.is_empty() {
                 v.warnings.push(format!("{LAYERS_UNREAD} ({why}): it comes in as its page, in one layer"));
@@ -87,8 +89,21 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// `unit`: the size in points of a unit of the PDF part's user space, its first page's `UserUnit`,
 /// by which its art came in scaled. Editing data whose artboard matches the page only in those
 /// units comes in `unit` times as large, and so does the artboard layout `place_pages` takes from
-/// it.
+/// it. Names that aren't UTF-8 are read as Windows-1252 ([`layered_ai_with`]).
 pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool, trust: bool, unit: f64) -> (Document, Vec<String>, bool) {
+    layered_ai_with(private, visible, warnings, outlined, trust, unit, ai::NameEncoding::default())
+}
+
+/// [`layered_ai`], with the names that aren't UTF-8 read in `names`.
+pub fn layered_ai_with(
+    private: &[u8],
+    visible: Document,
+    warnings: Vec<String>,
+    outlined: bool,
+    trust: bool,
+    unit: f64,
+    names: ai::NameEncoding,
+) -> (Document, Vec<String>, bool) {
     let unread = |mut all: Vec<String>, why: &str| {
         all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
         all
@@ -99,19 +114,25 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
     };
     if !has_layers(&data) {
         let mut visible = visible;
-        use_palette(&data, &mut visible);
+        let mut warnings = warnings;
+        add_notes(&mut warnings, use_palette(&data, &mut visible, names));
         return (visible, warnings, false);
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
     let from_pdf_part = |mut visible: Document, warnings: Vec<String>, why: &str| {
-        place_pages(&ai::artboards(&data), &mut visible, unit);
-        use_palette(&data, &mut visible);
+        let (boards, board_notes) = ai::artboards(&data, names);
+        let named = place_pages(&boards, &mut visible, unit);
+        let palette_notes = use_palette(&data, &mut visible, names);
         let mut all = unread(warnings, why);
         all.extend(ai::variables(&data).note());
+        if named {
+            add_notes(&mut all, board_notes);
+        }
+        add_notes(&mut all, palette_notes);
         (visible, all, false)
     };
-    match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
+    match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit, names) {
         // An image too large for the editing data's reader would be missing from the layers, while
         // the PDF part has it: the file comes in as its PDF part instead (#1479).
         Ok((_, notes)) if notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => {
@@ -132,9 +153,10 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
 /// document read from the layers. The spot and pattern swatches of the PDF part's art that the
 /// palette doesn't have follow the palette's swatches. The patterns that the editing data defines and
 /// the PDF part lacks come in for the palette's pattern swatches, with the images they show. Left as
-/// it is when the palette is empty.
-fn use_palette(data: &[u8], doc: &mut Document) {
-    let Some(ai::PaletteSwatches { swatches, groups, patterns, images }) = ai::palette(data, &doc.patterns) else { return };
+/// it is when the palette is empty. `names`: the encoding of names that aren't UTF-8; the notes on
+/// those the swatches take are returned.
+fn use_palette(data: &[u8], doc: &mut Document, names: ai::NameEncoding) -> Vec<String> {
+    let Some(ai::PaletteSwatches { swatches, groups, patterns, images, notes }) = ai::palette(data, &doc.patterns, names) else { return vec![] };
     for (key, blob) in images {
         doc.images.entry(key).or_insert(blob);
     }
@@ -148,6 +170,16 @@ fn use_palette(data: &[u8], doc: &mut Document) {
     let mut swatches = swatches;
     swatches.extend(art);
     (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+    notes
+}
+
+/// `notes` added to `warnings`, those it already has left out.
+fn add_notes(warnings: &mut Vec<String>, notes: Vec<String>) {
+    for n in notes {
+        if !warnings.contains(&n) {
+            warnings.push(n);
+        }
+    }
 }
 
 /// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
@@ -155,10 +187,10 @@ fn use_palette(data: &[u8], doc: &mut Document) {
 /// each, to where they are, so the artboards keep their names and layout when the layers can't be
 /// read (#1068). Left as they are unless there are as many artboards as pages, each the size of its
 /// page in points, or, when `unit` is above 1, each the size of its page in units of `unit` points:
-/// then the layout is drawn `unit` times as large.
-fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
+/// then the layout is drawn `unit` times as large. Whether the pages took the artboards' names.
+fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) -> bool {
     if boards.is_empty() || boards.len() != doc.artboards.len() {
-        return;
+        return false;
     }
     let differ = |k: f64| {
         boards
@@ -171,12 +203,12 @@ fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
     } else if unit.is_finite() && unit > 1.0 && !differ(unit) {
         unit
     } else {
-        return;
+        return false;
     };
     for ((name, _), a) in boards.iter().zip(&mut doc.artboards) {
         a.name.clone_from(name);
     }
-    let [(_, first), _, ..] = boards else { return };
+    let [(_, first), _, ..] = boards else { return true };
     // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it,
     // `k` points a unit.
     let to_doc = Affine::new([k, 0.0, 0.0, -k, -first.x0 * k, first.y1 * k]);
@@ -188,6 +220,7 @@ fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
     for (a, v) in doc.artboards.iter_mut().zip(&moves) {
         a.rect = a.rect + *v;
     }
+    true
 }
 
 /// The objects in `layer` (and its sublayers) moved by the move of the page they are on.
@@ -211,9 +244,15 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 
 /// A `.ai` saved without its PDF part (its pages show only a placeholder) from its editing copy
 /// alone (`private`, the joined `AIPrivateData` streams) → the document and the import's notes.
+/// Names that aren't UTF-8 are read as Windows-1252 ([`ai_alone_with`]).
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
+    ai_alone_with(private, ai::NameEncoding::default())
+}
+
+/// [`ai_alone`], with the names that aren't UTF-8 read in `names`.
+pub fn ai_alone_with(private: &[u8], names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
-    build(&data, None, Page::Artboard, false, false, 1.0)
+    build(&data, None, Page::Artboard, false, false, 1.0, names)
 }
 
 /// Does the editing data (or a program in the legacy format) have layers?
@@ -236,15 +275,16 @@ fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
 /// but whose program has no layers (Illustrator 3 had none; image editors still export their
 /// paths so, storytold/photocraft#6036) is read with its art on one layer. `None` when the program
 /// has no layers and isn't in the format: other PostScript isn't read as the format's operators.
-pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool) -> Option<Result<(Document, Vec<String>), String>> {
+/// `names`: the encoding of names that aren't UTF-8.
+pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool, names: ai::NameEncoding) -> Option<Result<(Document, Vec<String>), String>> {
     if ai::has_eps_data(ps) {
         return None;
     }
     if has_layers(ps) {
-        return Some(build(ps, None, Page::Art, false, false, 1.0));
+        return Some(build(ps, None, Page::Art, false, false, 1.0, names));
     }
     let program = one_layer(ps).filter(|_| illustrator)?;
-    Some(build(&program, None, Page::Art, false, false, 1.0))
+    Some(build(&program, None, Page::Art, false, false, 1.0, names))
 }
 
 /// `ps` with its art (from its `%%EndSetup` to its `%%PageTrailer`, else its `%%Trailer`, else its

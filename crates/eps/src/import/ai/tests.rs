@@ -1775,7 +1775,7 @@ fn artboards_after_what_stops_the_reading() {
     let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board("one", 0), board("two", 200));
     // Art in the document's own data that the reader can't follow comes before the artboards.
     let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n%_/Dictionary :\nLB\n{array}%_; /NotRecorded ,\n%_;\n");
-    let boards: Vec<_> = super::artboards(data.as_bytes()).into_iter().map(|(n, r)| (n, r.x0)).collect();
+    let boards: Vec<_> = super::artboards(data.as_bytes(), NameEncoding::default()).0.into_iter().map(|(n, r)| (n, r.x0)).collect();
     assert_eq!(boards, [("one".to_string(), 0.0), ("two".to_string(), 200.0)]);
 }
 
@@ -3101,4 +3101,120 @@ fn an_objects_on_path_group_in_versioned_content_opens_once() {
     assert_eq!(kids.len(), 1);
     assert_eq!(kids[0].children().unwrap().len(), 5);
     assert!(kids[0].extras().objects_on_path.is_some());
+}
+
+/// `body` read with its names that aren't UTF-8 in `encoding`.
+fn read_names(body: &str, encoding: &str) -> Structure {
+    let encoding = NameEncoding::from_label(encoding).unwrap();
+    match super::read_with(stream(body).as_bytes(), true, encoding) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// The notes on names that weren't UTF-8.
+fn name_notes(s: &Structure) -> Vec<&str> {
+    s.warnings.iter().map(String::as_str).filter(|w| w.contains("isn't UTF-8") || w.contains("aren't UTF-8")).collect()
+}
+
+/// A layer's name in a legacy code page (`(name) Ln`, the bytes as octal escapes) is read in the
+/// encoding picked, with a note that names it and the encoding; one in UTF-8 is read as it is in
+/// every encoding, without a note.
+#[test]
+fn layer_names_are_read_in_the_legacy_encoding_picked() {
+    let layer_named = |name: &str| {
+        format!(
+            "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{RED}{}f\nLB\n%AI5_EndLayer--\n",
+            rect_path(0.0, 0.0, 10.0, 10.0)
+        )
+    };
+    for (encoding, bytes, want) in [
+        ("windows-949", r"\267\271\300\314\276\356 1", "레이어 1"),
+        ("shift_jis", r"\203\214\203C\203\204\201[ 1", "レイヤー 1"),
+        ("gbk", r"\315\274\262\343 1", "图层 1"),
+        ("big5", r"\271\317\274h 1", "圖層 1"),
+        ("macintosh", r"Caf\216", "Café"),
+        ("windows-1252", r"Caf\351", "Café"),
+    ] {
+        let s = read_names(&layer_named(bytes), encoding);
+        assert_eq!(s.doc.layers[0].name.as_deref(), Some(want), "{encoding}");
+        assert_eq!(
+            name_notes(&s),
+            [format!("the name `{want}` isn't UTF-8 and was read as {encoding}: if it looks wrong, open the file with another legacyNameEncoding")],
+            "{encoding}"
+        );
+        let utf8 = read_names(&layer_named(r"\353\240\210\354\235\264\354\226\264 1"), encoding);
+        assert_eq!(utf8.doc.layers[0].name.as_deref(), Some("레이어 1"), "{encoding}");
+        assert!(name_notes(&utf8).is_empty(), "{encoding}: {:?}", utf8.warnings);
+    }
+    // By default the Korean bytes come in as Windows-1252, as before, now with the note. A comment
+    // in UTF-8 doesn't change how the names are read.
+    let s = read_names(&format!("%%Title: 레이어\n{}", layer_named(r"\267\271\300\314\276\356 1")), "windows-1252");
+    assert_eq!(s.doc.layers[0].name.as_deref(), Some("·¹ÀÌ¾î 1"));
+    assert_eq!(
+        name_notes(&s),
+        ["the name `·¹ÀÌ¾î 1` isn't UTF-8 and was read as windows-1252: if it looks wrong, open the file with another legacyNameEncoding"]
+    );
+    // Bytes the encoding doesn't define come in as U+FFFD, and the note says so.
+    let s = read_names(&layer_named(r"\267\271\300 1"), "windows-949");
+    assert_eq!(s.doc.layers[0].name.as_deref(), Some("레\u{fffd} 1"));
+    assert_eq!(
+        name_notes(&s),
+        ["the name `레\u{fffd} 1` isn't UTF-8, and parts of it aren't valid windows-949 either: open the file with another legacyNameEncoding"]
+    );
+}
+
+/// An object's name, an artboard's, a spot colour's and a pattern's are read in the encoding
+/// picked too, and a fill names the pattern as its definition does, whichever encoding is picked.
+#[test]
+fn object_artboard_colour_and_pattern_names_are_read_in_the_encoding_picked() {
+    // 그라 (a pattern and a group), 빨강 (an artboard and a spot colour), 레이어 1 (the layer).
+    let (pattern, red, layer_name) = (r"\261\327\266\363", r"\273\241\260\255", r"\267\271\300\314\276\356 1");
+    let boards = format!(
+        "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+         %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_200 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_({red}) /UnicodeString (Name) ,\n%_; ,\n\
+         %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n"
+    );
+    let tile = DOTS.replace("(Dots)", &format!("({pattern})"));
+    let art_ = format!(
+        "0 Ae\nu\n0 1 1 0 ({red}) 0 x\n{}f\n({pattern}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\nU\n%_/ArtDictionary :\n%_({pattern}) /String (AIArtName) ,\n%_;\n9 () XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(20.0, 0.0, 30.0, 10.0),
+    );
+    let body = format!("{boards}{tile}%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({layer_name}) Ln\n{art_}LB\n%AI5_EndLayer--\n");
+    for (encoding, [pattern, red, layer_name]) in [("windows-949", ["그라", "빨강", "레이어 1"]), ("windows-1252", ["±×¶ó", "»¡°\u{ad}", "·¹ÀÌ¾î 1"])]
+    {
+        let s = read_names(&body, encoding);
+        let doc = &s.doc;
+        assert_eq!(doc.layers[0].name.as_deref(), Some(layer_name), "{encoding}");
+        assert_eq!(doc.artboards.first().map(|a| a.name.as_str()), Some(red), "{encoding}");
+        let group = &art(doc)[0];
+        assert_eq!(group.name.as_deref(), Some(pattern), "{encoding}");
+        let kids = group.children().unwrap();
+        assert!(matches!(fill(&kids[0]), Paint::Solid { swatch: Some(s), .. } if s == red), "{encoding}: {:?}", fill(&kids[0]));
+        assert!(doc.swatch(red).is_some_and(|s| s.spot), "{encoding}");
+        assert!(matches!(fill(&kids[1]), Paint::Pattern { pattern: p, .. } if p == pattern), "{encoding}: {:?}", fill(&kids[1]));
+        assert!(doc.pattern(pattern).is_some(), "{encoding}");
+        assert!(s.unread.is_empty(), "{encoding}: {:?}", s.unread);
+        assert_eq!(name_notes(&s).len(), 3, "{encoding}: {:?}", s.warnings);
+    }
+}
+
+/// Past three names, the notes count the others in one.
+#[test]
+fn notes_on_names_that_arent_utf8_are_capped() {
+    let layers: String = (0..6)
+        .map(|i| {
+            format!(
+                "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L{i} Caf\\216) Ln\n{RED}{}f\nLB\n%AI5_EndLayer--\n",
+                rect_path(0.0, 0.0, 10.0, 10.0)
+            )
+        })
+        .collect();
+    let s = read_names(&layers, "macintosh");
+    let names: Vec<_> = s.doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert!(names.iter().all(|n| n.ends_with(" Café")), "{names:?}");
+    let notes = name_notes(&s);
+    assert_eq!(notes.len(), 4, "{notes:?}");
+    assert_eq!(notes[3], "more names that aren't UTF-8 were read as macintosh (3)");
 }

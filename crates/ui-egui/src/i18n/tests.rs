@@ -1736,6 +1736,28 @@ fn saved_tracing_preset_errors_are_translated() {
     }
 }
 
+/// The notes on names in a `.ai`'s editing data that aren't UTF-8 are translated in every language
+/// that translates every message, keeping the name, the encoding and the param.
+#[test]
+fn legacy_name_notes_are_translated() {
+    let notes = [
+        "the name `·¹ÀÌ¾î 1` isn't UTF-8 and was read as windows-1252: if it looks wrong, open the file with another legacyNameEncoding",
+        "the name `레\u{fffd} 1` isn't UTF-8, and parts of it aren't valid windows-949 either: open the file with another legacyNameEncoding",
+        "more names that aren't UTF-8 were read as macintosh (7)",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for note in notes {
+            let shown = message(lang, note);
+            assert_ne!(shown, note, "{code}");
+            assert!(shown.contains("UTF-8"), "{code}: {shown}");
+        }
+        let shown = message(lang, notes[0]);
+        assert!(shown.contains("`·¹ÀÌ¾î 1`") && shown.contains("windows-1252") && shown.contains("legacyNameEncoding"), "{code}: {shown}");
+        assert!(message(lang, notes[2]).contains("macintosh") && message(lang, notes[2]).contains('7'), "{code}");
+    }
+}
+
 /// The status bar's line for an EPS file whose PostScript stops on an error, opened partly or
 /// refused, and the refusal's dialog keep the error's name as PostScript spells it and its meaning,
 /// which each language shows as its catalog translates the meaning.

@@ -2911,6 +2911,23 @@ fn the_shown_stories_fixture_opens_with_its_layers() {
     assert!(texts.iter().all(|t| t.contains('\u{2028}') && t.contains('\n')), "{texts:?}");
 }
 
+/// The fuzzed editing data with its layer, pattern and global colour named in code page 949 opens
+/// with those names, read in that encoding, from its layers.
+#[test]
+fn the_editing_fixture_reads_names_in_a_legacy_encoding() {
+    // 레이어 1, then 빨강.
+    let text = editing_text()
+        .replace("(One) Ln", r"(\267\271\300\314\276\356 1) Ln")
+        .replace("(Dots)", r"(\273\241\260\255)")
+        .replace("(Black global)", r"(\273\241\260\255 global)");
+    let bytes = editing_eps(&text);
+    let r = vectorcraft_eps::import_names(&bytes, true, true, vectorcraft_eps::NameEncoding::Korean).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["레이어 1", "Two"], "{:?}", r.warnings);
+    assert!(r.document.pattern("빨강").is_some(), "{:?}", r.warnings);
+    assert!(r.document.swatch("빨강 global").is_some_and(|s| s.global), "{:?}", r.warnings);
+}
+
 proptest! {
     #![proptest_config(config())]
 
@@ -2952,6 +2969,26 @@ proptest! {
         let text = mutate_text(&editing_text(), cut, &edits);
         let bytes = editing_eps(&text);
         survive("mutated EPS editing data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// Names of any bytes (a layer's, a pattern's, a global colour's) read in any legacy name
+    /// encoding: each byte written as an octal escape, so every code page sees bytes it doesn't
+    /// define, cut sequences and UTF-8 alike.
+    #[test]
+    fn eps_editing_data_names_in_any_encoding_never_panic(
+        name in prop::collection::vec(any::<u8>(), 0..24),
+        encoding in prop::sample::select(vectorcraft_eps::NameEncoding::LABELS.to_vec()),
+    ) {
+        let escaped: String = name.iter().map(|b| format!("\\{b:03o}")).collect();
+        let text = editing_text()
+            .replace("(One) Ln", &format!("({escaped}) Ln"))
+            .replace("(Dots)", &format!("({escaped})"))
+            .replace("(Black global)", &format!("({escaped} global)"));
+        let bytes = editing_eps(&text);
+        let encoding = vectorcraft_eps::NameEncoding::from_label(encoding).unwrap();
+        survive("EPS editing data names in a legacy encoding", || {
+            vectorcraft_eps::import_names(&bytes, true, false, encoding).ok().map(|r| r.document)
+        })?;
     }
 
     /// A `.ai` whose envelopes are damaged or hostile: any kind, warp style, options word,

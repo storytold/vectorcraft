@@ -63,12 +63,12 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
-            self.styles = crate::import::ai::style::art_styles(section);
+            self.styles = crate::import::ai::style::art_styles_in(section, &mut self.names);
             return Ok(());
         }
         if m == "BeginPalette" {
             let section = self.section("EndPalette")?;
-            self.palette = crate::import::ai::palette::palette(section);
+            self.palette = crate::import::ai::palette::palette(section, &mut self.names);
             return Ok(());
         }
         if m == "BeginEncoding" {
@@ -198,6 +198,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let mut sub = Reader::new(section);
+        sub.names = super::obj::Names::new(self.names.encoding);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
         // The gradients defined so far, lent (and those it defines kept).
@@ -207,6 +208,7 @@ impl<'a> Reader<'a> {
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
+        self.names.absorb(std::mem::take(&mut sub.names));
         // Unread art in the definition, hidden or not, leaves the tile incomplete.
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
@@ -248,6 +250,7 @@ impl<'a> Reader<'a> {
             _ => return,
         };
         let mut sub = Reader::new(section);
+        sub.names = super::obj::Names::new(self.names.encoding);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.cropmarks = self.cropmarks;
         sub.template = self.template;
@@ -272,7 +275,8 @@ impl<'a> Reader<'a> {
         head.taken = true;
         let Some(at) = vals.iter().position(|v| matches!(v, V::Str(_))) else { return vals };
         let tile = Self::nums(vals.get(at + 1..at + 5).unwrap_or_default());
-        let ([x0, y0, x1, y1], Some(name)) = (tile.as_slice(), vals.get(at).and_then(V::text)) else { return vals };
+        let [x0, y0, x1, y1] = tile.as_slice() else { return vals };
+        let Some(name) = vals.get(at).and_then(|v| self.names.text(v)) else { return vals };
         head.name = name;
         head.tile = Some(Rect::new(*x0, *y0, *x1, *y1));
         vals.split_off(at + 5)

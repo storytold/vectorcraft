@@ -4528,6 +4528,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	its objects are nested too deeply	τα αντικείμενά του έχουν υπερβολικά βαθιά ένθεση
 @msg	its section ending with `%{end}` doesn't end	η ενότητά του που τελειώνει σε `%{end}` δεν τερματίζεται
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	τα αντικείμενα με πολλαπλά γεμίσματα, περιγράμματα, εφέ ή πινέλα εισήχθησαν ως απεικονίσεις ({_1}): η εμφάνισή τους δεν είναι ακόμη επεξεργάσιμη
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	το όνομα `{name}` δεν είναι UTF-8 και διαβάστηκε ως {label}: αν φαίνεται λάθος, ανοίξτε το αρχείο με άλλο legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	το όνομα `{name}` δεν είναι UTF-8 και τμήματά του δεν είναι έγκυρα ούτε σε {label}: ανοίξτε το αρχείο με άλλο legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	περισσότερα ονόματα που δεν είναι UTF-8 διαβάστηκαν ως {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	το ντεγκραντέ «{name}» δεν ορίζεται στο αρχείο: χρησιμοποιείται στη θέση του ένα συμπαγές χρώμα
 @msg	an image VectorCraft can't read was left out	παραλείφθηκε εικόνα που δεν μπορεί να διαβάσει το VectorCraft
 @msg	an image whose data is cut short was left out	παραλείφθηκε εικόνα με περικομμένα δεδομένα

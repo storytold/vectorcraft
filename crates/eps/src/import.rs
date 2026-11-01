@@ -69,7 +69,8 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
-pub use native::{ai_alone, is_loss, layered_ai};
+pub use ai::NameEncoding;
+pub use native::{ai_alone, ai_alone_with, is_loss, layered_ai, layered_ai_with};
 pub use text::family_style;
 
 /// The page of a PostScript file without a bounding box (US Letter).
@@ -239,6 +240,12 @@ pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String>
 /// [`import_with`]; `trust`: an Illustrator EPS's layers are used even where they draw differently
 /// from its page, with a note (`editingData: "always"`, as for a `.ai`).
 pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<Imported, String> {
+    import_names(bytes, editing_data, trust, NameEncoding::default())
+}
+
+/// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
+/// colors, gradients, patterns, graphic styles, swatches) read in `names`.
+pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
@@ -246,7 +253,7 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
     // printed).
     if editing_data
         && dsc.own_legacy
-        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator)
+        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, names)
     {
         return Ok(Imported { document, warnings, preview: false });
     }
@@ -266,7 +273,7 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust)),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, names)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
@@ -274,7 +281,7 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
     // A file in the legacy Illustrator format whose program can't be run (a `.ai` that names the
     // prolog defining its operators without including it): its layers, which the program has, or
     // its art on one layer when it has none (Illustrator 3).
-    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator)).flatten() {
+    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, names)).flatten() {
         Some(Ok((document, warnings))) => return Ok(Imported { document, warnings, preview: false }),
         Some(Err(e)) => format!("{why}; its layers couldn't be read either ({e})"),
         None => why,

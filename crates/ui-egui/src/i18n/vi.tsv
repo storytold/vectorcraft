@@ -4627,6 +4627,9 @@ theme	Appearance	Giao diện
 @msg	object {id} is not a path	đối tượng {id} không phải là đường dẫn
 @msg	object {id} is not a selected top-level object	đối tượng {id} không phải là đối tượng cấp cao nhất đã chọn
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	đối tượng có nhiều tô hoặc nét, hiệu ứng hoặc cọ đã vào dưới dạng bề ngoài ({_1}): diện mạo chưa thể chỉnh sửa
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	tên `{name}` không phải UTF-8 và đã được đọc theo {label}: nếu trông sai, hãy mở tệp với legacyNameEncoding khác
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	tên `{name}` không phải UTF-8, và một số phần cũng không hợp lệ trong {label}: hãy mở tệp với legacyNameEncoding khác
+@msg	more names that aren't UTF-8 were read as {label} ({count})	thêm các tên không phải UTF-8 đã được đọc theo {label} ({count})
 @msg	Offset Path: select paths	Đường dẫn độ lệch: hãy chọn đường dẫn
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Đường dẫn độ lệch: độ lệch không để lại gì từ các đường dẫn đã chọn (độ lệch vào trong lớn hơn hình)
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi

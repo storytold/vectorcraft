@@ -4495,6 +4495,9 @@ theme	Appearance	Erscheinungsbild
 @msg	its objects are nested too deeply	seine Objekte sind zu tief verschachtelt
 @msg	its section ending with `%{end}` doesn't end	sein Abschnitt, der mit `%{end}` enden soll, endet nicht
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	Der Name `{name}` ist kein UTF-8 und wurde als {label} gelesen: Wenn er falsch aussieht, öffnen Sie die Datei mit einer anderen legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	Der Name `{name}` ist kein UTF-8, und Teile davon sind auch kein gültiges {label}: Öffnen Sie die Datei mit einer anderen legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	Weitere Namen, die kein UTF-8 sind, wurden als {label} gelesen ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
 @msg	an image VectorCraft can't read was left out	ein Bild, das VectorCraft nicht lesen kann, wurde ausgelassen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen

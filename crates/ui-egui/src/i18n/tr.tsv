@@ -4322,6 +4322,9 @@ axis	Both	Her İkisi
 @msg	its objects are nested too deeply	nesneleri çok derin bir şekilde iç içe geçmiş
 @msg	its section ending with `%{end}` doesn't end	`%{end}` ile biten bölümü bitmiyor
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	çeşitli dolgulara veya konturlara, efektlere veya fırçalara sahip nesneler çizilmiş görünümleri olarak geldi ({_1}): görünümleri henüz düzenlenemez
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	`{name}` adı UTF-8 değil ve {label} olarak okundu: yanlış görünüyorsa dosyayı başka bir legacyNameEncoding ile açın
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	`{name}` adı UTF-8 değil ve bazı bölümleri {label} olarak da geçerli değil: dosyayı başka bir legacyNameEncoding ile açın
+@msg	more names that aren't UTF-8 were read as {label} ({count})	UTF-8 olmayan diğer adlar {label} olarak okundu ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	“{name}” degradesi dosyada tanımlı değil: onun yerine düz bir renk geliyor
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı

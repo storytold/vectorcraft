@@ -85,7 +85,7 @@ impl<'a> Reader<'a> {
         }
         if let Some(d) = self.gradient_def.as_mut() {
             match w {
-                "Bs" => d.stop(&vals, &mut self.stop_spots),
+                "Bs" => d.stop(&vals, &mut self.stop_spots, &mut self.names),
                 "BD" => {
                     if let Some((name, g)) = self.gradient_def.take().and_then(GradientDef::finish) {
                         self.gradients.insert(name, g);
@@ -133,7 +133,7 @@ impl<'a> Reader<'a> {
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {
-                    a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
+                    a.name = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
                 }
             }
             "LB" => self.end_layer()?,
@@ -216,12 +216,12 @@ impl<'a> Reader<'a> {
                 self.style_marker(&vals, hidden)
             }
             // Gradients.
-            "Bd" => self.gradient_def = GradientDef::begin(&vals),
+            "Bd" => self.gradient_def = GradientDef::begin(&vals, &mut self.names),
             "Bs" | "BD" => {}
             "Bb" => self.instance = Some(Instance::begin(&vals)),
             "Bg" => {
                 if let Some(i) = self.instance.as_mut() {
-                    i.bg(&vals);
+                    i.bg(&vals, &mut self.names);
                 }
             }
             "Bm" => {
@@ -344,7 +344,7 @@ impl<'a> Reader<'a> {
         if self.frames.is_empty() {
             return;
         }
-        let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
+        let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| self.names.text(v));
         let Some(tile) = name.as_deref().and_then(|n| self.pattern_tiles.get(n)).copied() else {
             self.unread_pattern(w);
             return;
@@ -379,7 +379,7 @@ impl<'a> Reader<'a> {
     }
 
     fn color(&mut self, w: &str, vals: &[V]) {
-        let Some((p, named)) = paint::color_op(w, vals) else { return };
+        let Some((p, named)) = paint::color_op_in(w, vals, &mut self.names) else { return };
         // Registration (`Xs`, `Xz`) says nothing of the document's colour model.
         let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ");
         match p.color().filter(|_| !registration) {
@@ -499,7 +499,7 @@ impl<'a> Reader<'a> {
     /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
-        let style = vals.iter().rev().find_map(V::text).unwrap_or_default();
+        let style = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
         // An object's own state block ends `6 () XW` (a layer's `7 () XW`): an `Xy` before it isn't the layer's.
         if code == 6.0 {

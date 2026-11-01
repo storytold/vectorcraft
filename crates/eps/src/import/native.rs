@@ -51,7 +51,7 @@ use build::{Frame, MADE, prune_unseen};
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
 };
-pub use layers::{ai_alone, layered_ai};
+pub use layers::{ai_alone, ai_alone_with, layered_ai, layered_ai_with};
 pub(super) use layers::{layered, program_alone};
 pub use slots::is_loss;
 #[cfg(test)]

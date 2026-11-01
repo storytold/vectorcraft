@@ -5267,6 +5267,9 @@ digits	Malayalam	Malaiàlam
 @msg	objects can't be nested more than 32 deep	els objectes no es poden niar més de 32 nivells
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	els objectes dins d’una fusió, un embolcall, una repetició o un grup Intertwine no es poden adjuntar a un traçat
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	els objectes amb diversos farciments o traços, efectes o pinzells han arribat amb el seu aspecte dibuixat ({_1}): la seva aparença encara no és editable
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	el nom `{name}` no és UTF-8 i s’ha llegit com a {label}: si sembla incorrecte, obriu el fitxer amb un altre legacyNameEncoding
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	el nom `{name}` no és UTF-8, i algunes parts tampoc no són {label} vàlid: obriu el fitxer amb un altre legacyNameEncoding
+@msg	more names that aren't UTF-8 were read as {label} ({count})	s’han llegit com a {label} més noms que no són UTF-8 ({count})
 @msg	Offset Path: select paths	Desplaça el traçat: selecciona traçats
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Desplaça el traçat: el desplaçament no deixa res dels traçats seleccionats (una retracció més gran que les formes)
 @msg	only a dock group above or below others collapses, not one beside another	només es plega un grup d’acoblament situat a sobre o a sota d’altres, no un al costat d’un altre

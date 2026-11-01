@@ -4973,6 +4973,9 @@ imageTrace	Outline	Körvonal
 @msg	object {id} is not a path	az objektum nem útvonal: {id}
 @msg	object {id} is not a selected top-level object	az objektum nem kijelölt legfelső szintű objektum: {id}
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	a(z) `{name}` név nem UTF-8, ezért {label} kódolással lett beolvasva: ha hibásnak tűnik, nyissa meg a fájlt másik legacyNameEncoding értékkel
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	a(z) `{name}` név nem UTF-8, és egyes részei {label} kódolásban sem érvényesek: nyissa meg a fájlt másik legacyNameEncoding értékkel
+@msg	more names that aren't UTF-8 were read as {label} ({count})	további nem UTF-8 nevek lettek {label} kódolással beolvasva ({count})
 @msg	Offset Path: select paths	Útvonal eltolása: jelölj ki útvonalakat
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen

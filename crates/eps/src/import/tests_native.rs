@@ -1051,6 +1051,25 @@ fn an_ai_file_that_comes_in_as_its_pdf_part_keeps_the_swatches_of_its_palette() 
     assert!(d.swatch("Red ink").is_some_and(|s| s.spot));
 }
 
+/// Such a file's palette names that aren't UTF-8 are read in the encoding picked, with the notes on
+/// them; a layer name that isn't UTF-8, in layers that aren't used, gets none.
+#[test]
+fn an_ai_file_that_comes_in_as_its_pdf_part_notes_its_palette_names_in_a_legacy_encoding() {
+    let image = "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] 6000 6000 0 Xh\n\
+         [ 1 0 0 1 0 100 ] 0 0 6000 6000 6000 6000 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN";
+    // 빨강 (red) in code page 949, for the group and its ink; 그라 for the layer.
+    let palette = PALETTE.replace("Inks", r"\273\241\260\255").replace("Red ink", r"\273\241\260\255 ink");
+    let art = native(&format!("{palette}{}", layer(r"\261\327\266\363", true, &format!("{}\n{image}", square(10, 10)))));
+    let (d, warnings, read) = crate::layered_ai_with(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0, crate::NameEncoding::Korean);
+    assert!(!read, "the PDF part is used: {warnings:?}");
+    let groups: Vec<&str> = d.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["빨강"]);
+    assert!(d.swatch("빨강 ink").is_some_and(|s| s.spot));
+    let notes: Vec<&String> = warnings.iter().filter(|w| w.contains("isn't UTF-8")).collect();
+    assert_eq!(notes.len(), 2, "{warnings:?}");
+    assert!(notes.iter().all(|n| n.contains("windows-949") && !n.contains("그라")), "{notes:?}");
+}
+
 /// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
 /// pattern gets the patterns its editing data defines with the palette's pattern swatches.
 #[test]

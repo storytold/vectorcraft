@@ -4538,6 +4538,9 @@ imageTrace	Outline	Kontur
 @msg	its objects are nested too deeply	objeknya bersarang terlalu dalam
 @msg	its section ending with `%{end}` doesn't end	bagian yang berakhir dengan `%{end}` tidak berakhir
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	nama `{name}` bukan UTF-8 dan dibaca sebagai {label}: jika terlihat salah, buka file dengan legacyNameEncoding lain
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	nama `{name}` bukan UTF-8, dan sebagiannya juga bukan {label} yang valid: buka file dengan legacyNameEncoding lain
+@msg	more names that aren't UTF-8 were read as {label} ({count})	nama lain yang bukan UTF-8 dibaca sebagai {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradien “{name}” tidak didefinisikan dalam berkas: warna polos dipakai sebagai pengganti
 @msg	an image VectorCraft can't read was left out	gambar yang tidak dapat dibaca VectorCraft tidak disertakan
 @msg	an image whose data is cut short was left out	gambar yang datanya terpotong tidak disertakan

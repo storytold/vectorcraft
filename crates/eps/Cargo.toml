@@ -31,6 +31,8 @@ hayro-ccitt = { workspace = true }
 serde_json = { workspace = true }
 # Substring search for PostScript `search`.
 memchr = { workspace = true }
+# Names in legacy .ai files that aren't UTF-8, read in the encoding the user picks.
+encoding_rs = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

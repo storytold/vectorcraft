@@ -4051,6 +4051,9 @@ imageTrace	Outline	轮廓
 @msg	an image whose data is cut short was left out	已略去数据不完整的图像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
+@msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	名称 `{name}` 不是 UTF-8，已按 {label} 读取：如果显示不正确，请使用其他 legacyNameEncoding 打开文件
+@msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	名称 `{name}` 不是 UTF-8，且部分内容在 {label} 中也无效：请使用其他 legacyNameEncoding 打开文件
+@msg	more names that aren't UTF-8 were read as {label} ({count})	其他非 UTF-8 名称已按 {label} 读取 ({count})
 @msg	patterns nested too deeply are filled with mid-grey	嵌套过深的图案以中灰色填充
 @msg	shadings of an unknown type were left out	已略去未知类型的着色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函数类型未知的着色以其中间颜色填充
