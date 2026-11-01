@@ -5987,6 +5987,7 @@ breakText	Glyphs	Glifs
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` ha de ser `fileNumber`, `fileDataSetName` o `dataSetName`
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	«Desa i tanca» no pot processar conjunts de dades: trieu «Carpeta» per desar cada conjunt de dades en un fitxer propi
 @msg	no free data set file name in destination folder	No hi ha cap nom de fitxer de conjunt de dades lliure a la carpeta de destinació
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

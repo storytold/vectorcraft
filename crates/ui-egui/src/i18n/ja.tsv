@@ -5684,6 +5684,7 @@ breakText	Glyphs	字形
 	File + Data Set Name	ファイル名 + データセット名
 	Data Set Name	データセット名
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` は `fileNumber`、`fileDataSetName`、`dataSetName` のいずれかである必要があります
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	「保存して閉じる」ではデータセットをバッチ処理できません：各データセットを個別のファイルに保存するには「フォルダー」を選択してください
 @msg	no free data set file name in destination folder	保存先フォルダーに使用可能なデータセットのファイル名がありません
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

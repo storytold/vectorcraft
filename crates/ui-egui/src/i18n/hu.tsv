@@ -5985,6 +5985,7 @@ breakText	Glyphs	Glifák
 	File + Data Set Name	Fájl + adatkészlet neve
 	Data Set Name	Adatkészlet neve
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	A `datasetFileNaming` értéke `fileNumber`, `fileDataSetName` vagy `dataSetName` lehet
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	A „Mentés és bezárás” nem dolgozhat fel adatkészleteket: válassza a „Mappa” lehetőséget, hogy minden adatkészlet külön fájlba kerüljön
 @msg	no free data set file name in destination folder	Nincs szabad adatkészlet-fájlnév a célmappában
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

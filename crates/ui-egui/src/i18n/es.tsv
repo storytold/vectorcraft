@@ -5941,6 +5941,7 @@ breakText	Glyphs	Glifos
 	File + Data Set Name	Archivo + nombre del conjunto de datos
 	Data Set Name	Nombre del conjunto de datos
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` debe ser `fileNumber`, `fileDataSetName` o `dataSetName`
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	«Guardar y cerrar» no puede procesar conjuntos de datos: elija «Carpeta» para guardar cada conjunto de datos en su propio archivo
 @msg	no free data set file name in destination folder	No hay un nombre de archivo libre para el conjunto de datos en la carpeta de destino
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

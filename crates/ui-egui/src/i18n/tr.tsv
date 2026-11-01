@@ -5956,6 +5956,7 @@ breakText	Glyphs	Glifler
 	File + Data Set Name	Dosya + veri kümesi adı
 	Data Set Name	Veri kümesi adı
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` değeri `fileNumber`, `fileDataSetName` veya `dataSetName` olmalıdır
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	"Kaydet ve Kapat" veri kümelerini toplu işleyemez: her veri kümesini ayrı bir dosyaya kaydetmek için "Klasör" seçeneğini seçin
 @msg	no free data set file name in destination folder	Hedef klasörde veri kümesi için boş bir dosya adı yok
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

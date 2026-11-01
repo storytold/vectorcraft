@@ -73,6 +73,10 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
     if !matches!(destination, "none" | "saveAndClose" | "folder") {
         return Err(bad(C, "`destination` must be `none`, `saveAndClose` or `folder`"));
     }
+    // Data sets share one open document, so Save and Close would write every row over one file.
+    if source == "datasets" && destination == "saveAndClose" {
+        return Err(bad(C, "Save and Close cannot batch data sets: choose Folder to save each data set to its own file"));
+    }
     let dest_folder = str_param(p, "destinationFolder").map(absolute_path);
     if destination == "folder" {
         let Some(ref folder) = dest_folder else {
@@ -1290,6 +1294,78 @@ mod tests {
             .unwrap();
         assert_eq!(r["failed"], 0, "{r}");
         assert_eq!(file_names(&dest), ["Untitled_A-B-3.vectorcraft", "Untitled_a-b-2.vectorcraft", "Untitled_a-b.vectorcraft"], "{r}");
+    }
+
+    /// A saved document with a text object bound to `Name` and two data sets, `A` and `B`.
+    fn saved_with_two_data_sets(path: &std::path::Path) -> Session {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "A"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+        s.execute("variable.bind", &json!({"variable": "Name", "ids": [id]})).unwrap();
+        s.execute("dataset.capture", &json!({"name": "A"})).unwrap();
+        s.execute("text.setText", &json!({"ids": [id], "text": "B"})).unwrap();
+        s.execute("dataset.capture", &json!({"name": "B"})).unwrap();
+        s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+        s
+    }
+
+    fn save_and_close_over_data_sets(s: &mut Session) -> Result<Value> {
+        s.execute(
+            "action.batch",
+            &json!({"source": "datasets", "destination": "saveAndClose", "commands": [{"command": "object.unlockAll", "params": {}}]}),
+        )
+    }
+
+    #[test]
+    fn batch_refuses_save_and_close_over_data_sets_before_writing() {
+        let path = tmp("save-close-sets").join("template.vectorcraft");
+        let mut s = saved_with_two_data_sets(&path);
+        let bytes = std::fs::read(&path).unwrap();
+        let (active, revision) = {
+            let st = s.doc().unwrap();
+            (st.doc.variables.active_dataset.clone(), st.revision)
+        };
+        let msg = save_and_close_over_data_sets(&mut s).unwrap_err().to_string();
+        assert!(msg.contains("choose Folder"), "{msg}");
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "the template is not written");
+        let st = s.doc().unwrap();
+        assert_eq!(st.doc.variables.active_dataset, active, "no data set is selected");
+        assert_eq!(st.revision, revision, "no step runs");
+        assert_eq!(st.path.as_deref(), Some(path.to_string_lossy().as_ref()), "the template stays open");
+    }
+
+    #[test]
+    fn batch_refuses_save_and_close_over_data_sets_of_an_unsaved_document() {
+        let mut s = with_data_sets(&["a", "b"]);
+        let (active, revision) = {
+            let st = s.doc().unwrap();
+            (st.doc.variables.active_dataset.clone(), st.revision)
+        };
+        let msg = save_and_close_over_data_sets(&mut s).unwrap_err().to_string();
+        assert!(msg.contains("choose Folder"), "{msg}");
+        let st = s.doc().unwrap();
+        assert_eq!(st.doc.variables.active_dataset, active, "no data set is selected");
+        assert_eq!(st.revision, revision, "no step runs");
+        assert!(st.path.is_none());
+    }
+
+    #[test]
+    fn batch_save_and_close_saves_and_closes_each_source_file() {
+        let src = tmp("save-close-src");
+        let a = write_svg(&src, "a.svg", "#f00");
+        let before = std::fs::read(&a).unwrap();
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({"folder": src.to_string_lossy(), "destination": "saveAndClose", "commands": [{"command": "object.unlockAll", "params": {}}]}),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_ne!(std::fs::read(&a).unwrap(), before, "the source file is saved over");
+        assert_eq!(file_names(&src), ["a.svg"], "{r}");
+        assert!(s.doc().is_err(), "the source file is closed");
     }
 
     #[test]

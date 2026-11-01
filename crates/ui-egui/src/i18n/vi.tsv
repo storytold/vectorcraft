@@ -5600,6 +5600,7 @@ breakText	Glyphs	Glyph
 	File + Data Set Name	Tệp + tên tập dữ liệu
 	Data Set Name	Tên tập dữ liệu
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` phải là `fileNumber`, `fileDataSetName` hoặc `dataSetName`
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	"Lưu và đóng" không thể xử lý các tập dữ liệu: chọn "Thư mục" để lưu mỗi tập dữ liệu vào một tệp riêng
 @msg	no free data set file name in destination folder	Không có tên tệp tập dữ liệu còn trống trong thư mục đích
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

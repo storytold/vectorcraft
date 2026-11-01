@@ -5841,6 +5841,7 @@ breakText	Glyphs	字形
 	File + Data Set Name	文件 + 数据集名称
 	Data Set Name	数据集名称
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` 必须是 `fileNumber`、`fileDataSetName` 或 `dataSetName`
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	“存储并关闭”无法批处理数据集：请选择“文件夹”，将每个数据集存储为单独的文件
 @msg	no free data set file name in destination folder	目标文件夹中没有可用的数据集文件名
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

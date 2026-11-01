@@ -71,7 +71,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     ui.add_space(8.0);
 
-    form::choice(ui, d, "destination", "Destination:", (LABEL, 200.0), &[("none", "None"), ("saveAndClose", "Save and Close"), ("folder", "Folder")]);
+    let choices = destinations(&source);
+    let destination = d.str("destination");
+    if !choices.iter().any(|(value, _)| *value == destination) {
+        d.fields.insert("destination".into(), json!("folder"));
+    }
+    form::choice(ui, d, "destination", "Destination:", (LABEL, 200.0), choices);
     if d.str("destination") == "folder" {
         widgets::label_row(ui, tl!("Destination Folder:"), LABEL, |ui| {
             form::text(ui, d, "destinationFolder", 200.0);
@@ -87,6 +92,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::check(ui, d, "overrideExport", "Override Action \"Export\" Commands");
     form::check(ui, d, "stopOnError", "Stop on Errors");
     false
+}
+
+/// The Destination choices for `source`. Data sets share one open document, so Save and Close is
+/// offered for a Folder source only.
+fn destinations(source: &str) -> &'static [(&'static str, &'static str)] {
+    if source == "datasets" {
+        &[("none", "None"), ("folder", "Folder")]
+    } else {
+        &[("none", "None"), ("saveAndClose", "Save and Close"), ("folder", "Folder")]
+    }
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -149,6 +164,13 @@ mod tests {
     use vectorcraft_engine::Session;
 
     fn shown(source: &str) -> Vec<String> {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!(source);
+        render(&mut d)
+    }
+
+    /// Draws `d` once and returns the texts it shows.
+    fn render(d: &mut Dialog) -> Vec<String> {
         fn collect(shape: &egui::Shape, out: &mut Vec<String>) {
             match shape {
                 egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
@@ -157,12 +179,10 @@ mod tests {
             }
         }
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
-        d.fields["source"] = json!(source);
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let mut frame = ctx.run_ui(Default::default(), |ui| {
-            body(&mut app, ui, &mut d);
+            body(&mut app, ui, d);
         });
         frame.textures_delta.clear();
         let mut labels = vec![];
@@ -188,5 +208,19 @@ mod tests {
         }
         d.fields["source"] = json!("folder");
         assert!(params(&d, "Test", vec![]).get("datasetFileNaming").is_none());
+    }
+
+    #[test]
+    fn data_sets_do_not_offer_save_and_close() {
+        assert!(!destinations("datasets").iter().any(|(value, _)| *value == "saveAndClose"));
+        assert!(destinations("folder").iter().any(|(value, _)| *value == "saveAndClose"));
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["destination"] = json!("saveAndClose");
+        assert!(render(&mut d).iter().any(|label| label == "Save and Close"));
+        d.fields["source"] = json!("datasets");
+        let labels = render(&mut d);
+        assert!(!labels.iter().any(|label| label == "Save and Close"), "{labels:?}");
+        assert!(labels.iter().any(|label| label == "Destination Folder:"), "{labels:?}");
+        assert_eq!(params(&d, "Test", vec![])["destination"], "folder");
     }
 }

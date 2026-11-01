@@ -6051,6 +6051,7 @@ breakText	Glyphs	Glyfer
 	File + Data Set Name	Fil + datauppsättningens namn
 	Data Set Name	Datauppsättningens namn
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` måste vara `fileNumber`, `fileDataSetName` eller `dataSetName`
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	”Spara och stäng” kan inte köras på datauppsättningar: välj ”Mapp” för att spara varje datauppsättning i en egen fil
 @msg	no free data set file name in destination folder	Inget ledigt filnamn för datauppsättningen i målmappen
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

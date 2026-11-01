@@ -5580,6 +5580,7 @@ breakText	Glyphs	글리프
 	File + Data Set Name	파일 + 데이터 세트 이름
 	Data Set Name	데이터 세트 이름
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming`은 `fileNumber`, `fileDataSetName` 또는 `dataSetName`이어야 합니다
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	'저장 후 닫기'로는 데이터 세트를 일괄 처리할 수 없습니다: 각 데이터 세트를 별도의 파일로 저장하려면 '폴더'를 선택하세요
 @msg	no free data set file name in destination folder	대상 폴더에 사용할 수 있는 데이터 세트 파일 이름이 없습니다
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
