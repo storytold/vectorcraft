@@ -1,6 +1,6 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
 //! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Divide into
-//! Dashes ([`dashes`]) and Convert to Parametric Shape; the Anchor Inspector panel (the selected
+//! Dashes ([`dashes`]), Expand Dashes into Paths and Convert to Parametric Shape; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
@@ -65,6 +65,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Add Points at Crossings", "addon.pathtools.crossings", json!({})),
         Item::Cmd("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
         Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
+        Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
         Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
     ]
 }

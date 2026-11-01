@@ -6003,6 +6003,9 @@ breakText	Glyphs	Γλύφοι
 	Gap 4	Διάκενο 4
 	Dash 5	Παύλα 5
 	Gap 5	Διάκενο 5
+
+@msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.
 @msg	invalid pattern tile choice	μη έγκυρη επιλογή πλακιδίου μοτίβου
 @msg	no pattern named `{choice}`	δεν υπάρχει μοτίβο με όνομα `{choice}`
@@ -6033,6 +6036,9 @@ breakText	Glyphs	Γλύφοι
 	Remove Gaps	Αφαίρεση κενών
 @msg	that makes too many pieces (at most 100000): make the dashes longer	αυτό δίνει πάρα πολλά κομμάτια (το πολύ 100000): κάντε τις παύλες μεγαλύτερες
 @msg	select paths, or segments, to divide	επιλέξτε διαδρομές ή τμήματα για διαίρεση
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
+@msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Εργαλεία εγγράφου
 	Save a Timestamped Copy	Αποθήκευση αντιγράφου με ημερομηνία και ώρα
@@ -6055,6 +6061,11 @@ breakText	Glyphs	Γλύφοι
 	Odia	Όντια
 	Urdu	Ούρντου
 	VectorCraft {release} and later (version {n})	VectorCraft {release} και νεότερες (έκδοση {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Εξαγωγή όλων των ανοιχτών εγγράφων ως PDF
+	Export All Open Documents as SVG	Εξαγωγή όλων των ανοιχτών εγγράφων ως SVG
+@msgplural	Exported {n} document|Exported {n} documents	Εξήχθη {n} έγγραφο|Εξήχθησαν {n} έγγραφα
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Εξήχθη {n} έγγραφο; το {title} δεν γράφτηκε: {error}|Εξήχθησαν {n} έγγραφα; το {title} δεν γράφτηκε: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Τύπος συμβόλου:
 	Dynamic Symbol	Δυναμικό σύμβολο

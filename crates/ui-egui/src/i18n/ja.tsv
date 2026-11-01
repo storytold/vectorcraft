@@ -5737,6 +5737,9 @@ breakText	Glyphs	字形
 	Gap 4	間隔 4
 	Dash 5	線分 5
 	Gap 5	間隔 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+
 @msg	You must choose a side pattern.	側面パターンを選択してください。
 @msg	invalid pattern tile choice	パターンタイルの選択が無効です
 @msg	no pattern named `{choice}`	`{choice}` というパターンはありません
@@ -5767,6 +5770,9 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	破線をパスに拡張
+@msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	ドキュメントツール
 	Save a Timestamped Copy	日時付きのコピーを保存
@@ -5789,6 +5795,11 @@ breakText	Glyphs	字形
 	Odia	オディア語
 	Urdu	ウルドゥー語
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
+	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
+@msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	シンボルの種類:
 	Dynamic Symbol	ダイナミックシンボル
