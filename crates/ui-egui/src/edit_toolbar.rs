@@ -156,13 +156,15 @@ fn edit(app: &mut VectorcraftApp, f: impl FnOnce(&mut Vec<ToolbarCategory>) -> R
     Ok(slots_json(app))
 }
 
-/// Change the toolbar made with New Toolbar called `name` with `f`. Returns its slots.
+/// Change the toolbar made with New Toolbar called `name` with `f`, and the groups torn off it with
+/// it ([`crate::custom_toolbars::keep_strips`]). Returns its slots.
 fn edit_custom(app: &mut VectorcraftApp, name: &str, f: impl FnOnce(&mut Vec<ToolbarCategory>) -> Result<(), String>) -> Result<Value, String> {
     let bar = crate::custom_toolbars::find_mut(&mut app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
     let mut cats = vec![ToolbarCategory { name: None, slots: bar.slots.clone() }];
     f(&mut cats)?;
     prune(&mut cats);
     bar.slots = cats.into_iter().flat_map(|c| c.slots).collect();
+    crate::custom_toolbars::keep_strips(bar);
     Ok(json!(bar.slots))
 }
 

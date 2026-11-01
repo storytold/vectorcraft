@@ -475,7 +475,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.new",
         "New Toolbar…",
         "",
-        "{name?: string} make a blank toolbar called `name` (omitted: a dialog asks for the name), floating beside the Tools panel and listed under Window › Toolbars; its ••• button opens the All Tools drawer to fill it (window.editToolbar with `toolbar`); it is kept with the current workspace; returns {toolbar: name}",
+        "{name?: string} make a blank toolbar called `name`, of at most 200 characters (omitted: a dialog asks for the name), floating beside the Tools panel and listed under Window › Toolbars; its ••• button opens the All Tools drawer to fill it (window.editToolbar with `toolbar`); it is kept with the current workspace; returns {toolbar: name}",
     ),
     (
         "window.toolbar.custom",

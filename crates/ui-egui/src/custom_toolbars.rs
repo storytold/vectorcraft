@@ -24,6 +24,8 @@ use crate::{VectorcraftApp, icons, widgets};
 
 /// The most toolbars a workspace keeps.
 pub(crate) const MAX: usize = 64;
+/// The most characters a toolbar's name has.
+const MAX_NAME: usize = 200;
 /// Width of a toolbar of one column of tool buttons, inside its border.
 const WIDTH: f32 = 44.0;
 /// Width a second column of tool buttons adds.
@@ -82,6 +84,9 @@ pub(crate) fn create(ui: &mut UiState, name: &str) -> Result<String, String> {
     if name.is_empty() {
         return Err("toolbar name can't be empty".into());
     }
+    if name.chars().count() > MAX_NAME {
+        return Err(format!("a toolbar name has at most {MAX_NAME} characters"));
+    }
     if find(ui, name).is_some() {
         return Err(format!("there is already a toolbar named `{name}`"));
     }
@@ -102,9 +107,9 @@ pub(crate) fn create(ui: &mut UiState, name: &str) -> Result<String, String> {
     Ok(name.to_string())
 }
 
-/// Keep named toolbars, each name once whatever its case, of known tools, each once in its
-/// toolbar, at a position that is a number, with one strip per group torn off them (a hand-edited
-/// preferences file or workspace).
+/// Keep named toolbars, each name once whatever its case and at most [`MAX_NAME`] characters, of
+/// known tools, each once in its toolbar, at a position that is a number, with one strip per group
+/// torn off them (a hand-edited preferences file or workspace).
 pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
     let mut names = std::collections::BTreeSet::new();
     bars.retain_mut(|b| {
@@ -115,12 +120,27 @@ pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
         }
         b.slots.retain(|s| !s.is_empty());
         crate::state::FloatingFlyout::sanitize(&mut b.floating);
+        keep_strips(b);
         if !b.pos.iter().all(|v| v.is_finite()) {
             b.pos = NEW_AT;
         }
-        !b.name.is_empty() && names.insert(key(&b.name))
+        !b.name.is_empty() && b.name.chars().count() <= MAX_NAME && names.insert(key(&b.name))
     });
     bars.truncate(MAX);
+}
+
+/// Keep the strips torn off `bar` whose group it still holds, each with the group's tools as they
+/// are now; a strip whose group is gone, now starts with another tool or holds one tool alone goes
+/// back.
+pub(crate) fn keep_strips(bar: &mut CustomToolbar) {
+    let slots = &bar.slots;
+    bar.floating.retain_mut(|f| match f.tools.first().and_then(|k| slots.iter().find(|s| s.len() > 1 && s.first() == Some(k))) {
+        Some(slot) => {
+            f.tools.clone_from(slot);
+            true
+        }
+        None => false,
+    });
 }
 
 /// The commands of the toolbars made with New Toolbar; `None` for other ids.
@@ -809,6 +829,38 @@ mod tests {
         assert!(find(&app.ui, "Mine").unwrap().floating.is_empty());
     }
 
+    /// A tool taken off a toolbar made with New Toolbar leaves the group torn off it too, and the
+    /// strip of a group the toolbar no longer holds goes, as Reset blanks the toolbar.
+    #[test]
+    fn groups_torn_off_follow_the_toolbars_tools() {
+        let mut app = app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        for tool in ["curvature", "rectangle"] {
+            app.run("toolbar.addTool", json!({"tool": tool, "toolbar": "Mine", "slot": 0, "place": "group"})).unwrap();
+        }
+        app.run("window.floatTools", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        let strips = |app: &VectorcraftApp| find(&app.ui, "Mine").unwrap().floating.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>();
+        assert_eq!(strips(&app), ["pen,curvature,rectangle"]);
+        app.run("toolbar.removeTool", json!({"tool": "curvature", "toolbar": "Mine"})).unwrap();
+        assert_eq!(strips(&app), ["pen,rectangle"]);
+        app.run("toolbar.reset", json!({"toolbar": "Mine"})).unwrap();
+        assert!(strips(&app).is_empty() && !crate::toolbar::is_floating(&app, Some("Mine"), "pen"));
+    }
+
+    /// A toolbar's name has at most [`MAX_NAME`] characters.
+    #[test]
+    fn a_toolbar_name_past_the_limit_is_refused() {
+        let mut app = app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let long = "x".repeat(MAX_NAME + 1);
+        assert!(app.run("window.toolbar.new", json!({ "name": long })).is_err());
+        assert!(app.ui.custom_toolbars.is_empty());
+        app.run("window.toolbar.new", json!({ "name": &long[1..] })).unwrap();
+        assert_eq!(app.ui.custom_toolbars.len(), 1);
+    }
+
     /// A toolbar with more tools than the window's height holds stays in the window: its tools
     /// scroll.
     #[test]
@@ -935,12 +987,15 @@ mod tests {
                 .map(|id| crate::state::FloatingFlyout { tools: vec![id.to_string(), "curvature".into()], pos: [0.0, 0.0] })
                 .collect(),
         };
-        let mut bars = vec![bar("A", &[&["pen", "nope"], &["pen"], &["nope"]]), bar("a", &[]), bar(" ", &[]), bar("B", &[])];
+        let long = "x".repeat(MAX_NAME + 1);
+        let mut bars =
+            vec![bar("A", &[&["pen", "nope", "curvature"], &["pen"], &["nope"]]), bar("a", &[]), bar(" ", &[]), bar(&long, &[]), bar("B", &[])];
         sanitize(&mut bars);
-        assert_eq!(bars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["A", "B"]);
-        assert_eq!(bars[0].slots, [["pen"]]);
+        assert_eq!(bars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["A", "B"], "a name past {MAX_NAME} characters goes too");
+        assert_eq!(bars[0].slots, [["pen", "curvature"]]);
         assert_eq!(bars[0].pos, NEW_AT);
-        // One strip per group, of known tools.
-        assert_eq!(bars[0].floating.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), ["pen,curvature", "curvature"]);
+        // One strip per group, of known tools, for a group the toolbar holds.
+        assert_eq!(bars[0].floating.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), ["pen,curvature"]);
+        assert!(bars[1].floating.is_empty(), "B holds no group");
     }
 }
