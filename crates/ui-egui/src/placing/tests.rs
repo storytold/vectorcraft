@@ -253,6 +253,49 @@ fn a_pasted_bitmap_that_cant_be_read_off_the_ui_thread_reports_as_at_once() {
     }
 }
 
+/// A pasted bitmap whose header asks for more than the decoder allows, and a PNG cut short, are
+/// refused off the UI thread with a message, as at once, and leave the document as it was.
+#[test]
+fn a_pasted_bitmap_too_large_or_cut_short_is_refused_with_a_message() {
+    // A BMP whose header says 30000 × 30000 pixels (2.7 GB of samples), with one pixel's bytes.
+    let mut huge = picture(Bmp, 1, 1);
+    huge[18..22].copy_from_slice(&30_000i32.to_le_bytes());
+    huge[22..26].copy_from_slice(&30_000i32.to_le_bytes());
+    let png = picture(Png, 600, 300);
+    let cut = png[..png.len() / 2].to_vec();
+    for (bitmap, why) in [(Flavour { mime: "image/bmp", data: huge }, "too large to draw"), (Flavour { mime: PNG, data: cut }, "can't be read")] {
+        let (mut at_once, _) = pasting_app(false, Some(bitmap.clone()), None, false);
+        crate::menus::invoke(&mut at_once, "edit.paste", json!({}));
+        let (mut app, _) = pasting_app(true, Some(bitmap.clone()), None, false);
+        let before = state(&app);
+        crate::menus::invoke(&mut app, "edit.paste", json!({}));
+        assert_eq!(app.placing.pending.len(), 1, "{why}");
+        placed(&mut app);
+        assert!(app.ui.status.starts_with("Couldn't paste from the clipboard: ") && app.ui.status.contains(why), "{}", app.ui.status);
+        assert_eq!(app.ui.status, at_once.ui.status);
+        assert!(state(&app) == before, "{why}: nothing is pasted");
+    }
+}
+
+/// A bitmap pasted off the UI thread is one undo step: Undo leaves the document as it was before
+/// the paste, and Redo pastes it again.
+#[test]
+fn a_bitmap_pasted_off_the_ui_thread_undoes_in_one_step() {
+    let (mut app, _) = pasting_app(true, Some(Flavour { mime: PNG, data: picture(Png, 60, 40) }), None, true);
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let before = state(&app).0;
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    placed(&mut app);
+    let pasted = state(&app).0;
+    assert!(pasted != before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(state(&app).0 == before, "Undo removes the picture");
+    app.run("edit.redo", json!({})).unwrap();
+    assert!(state(&app).0 == pasted, "Redo pastes it again");
+}
+
 #[test]
 fn a_failed_bitmap_paste_keeps_the_document_the_user_switched_to() {
     let (mut app, _) = pasting_app(true, None, None, true);
