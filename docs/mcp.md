@@ -2996,8 +2996,10 @@ Actions panel plays an action as a `command.batch`. The Actions panel menu's Bat
 destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. With a Data Sets source,
 `saveAndClose` saves the open document over its own file after each data set, so the file keeps only the last one,
 and a document that was never saved, was converted from an older version or was restored by Data Recovery is
-refused before a data set is selected. The result carries `warning` when every data set saves over the same file:
-with `saveAndClose`, or with a Save, Save a Copy, Save as Template or export step (PDF, EPS, DXF, Save for Web and
+refused before a data set is selected. When `destinationFolder` is set and Override Save points a recorded Save or
+Save As step into it, that step makes each data set's file the document's own, and `saveAndClose` saves each data
+set to its own file. The result carries `warning` when every data set saves over the same file:
+with `saveAndClose` without such a step, or with a Save, Save a Copy, Save as Template or export step (PDF, EPS, DXF, Save for Web and
 Save for Office Documents included) that writes a file and that the batch does not point into `destinationFolder`. The dialog shows the same
 warning. For a Data Sets source,
 `datasetFileNaming?: fileNumber | fileDataSetName | dataSetName` chooses File + Number (`source001`),

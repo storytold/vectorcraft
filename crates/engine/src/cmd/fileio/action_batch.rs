@@ -113,7 +113,8 @@ const ONE_FILE_WARNING: &str = "each data set saves over the same file, which ke
 
 /// Whether an `action.batch` with params `p` plays on data sets of the open document in `s` and
 /// writes each data set to the same file. Save and Close saves the open document over its own file
-/// after every data set. A step that the batch does not point into `destinationFolder` writes the
+/// after every data set, unless a Save step that Override Save points into `destinationFolder`
+/// first makes each data set's file the document's own. A step that the batch does not point into `destinationFolder` writes the
 /// same file every time when it writes one: a Save, Save As, Save a Copy, Save as Template, Export,
 /// Export Selection, PDF, EPS, DXF, Save for Web or Save for Office Documents step that gives a
 /// `path`; a Save step without a `path` when the document has a file of its own (saved, and not
@@ -125,36 +126,42 @@ pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
     if p.get("source").and_then(Value::as_str) != Some("datasets") {
         return false;
     }
-    if p.get("destination").and_then(Value::as_str) == Some("saveAndClose") {
-        return true;
-    }
     let folder = p.get("destinationFolder").and_then(Value::as_str).is_some();
     let redirected = |key: &str| folder && p.get(key).and_then(Value::as_bool).unwrap_or(true);
     let (save, export) = (redirected("overrideSave"), redirected("overrideExport"));
+    let steps = p.get("commands").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    if p.get("destination").and_then(Value::as_str) == Some("saveAndClose") && !saves_move_to_each_file(steps, save) {
+        return true;
+    }
     // The format of the open document's own file, which a Save step without a `path` writes.
     let own_format = s.active().filter(|st| st.path.is_some() && !st.converted && !st.recovered).map(|st| st.format);
     let names = |v: Option<&Value>| v.and_then(Value::as_str).is_some_and(|s| !s.is_empty());
-    p.get("commands").and_then(Value::as_array).is_some_and(|cmds| {
-        cmds.iter().any(|c| {
-            let params = c.get("params").cloned().unwrap_or_else(|| Value::Object(Default::default()));
-            let path = names(params.get("path"));
-            let own_file = || match params.get("format").and_then(Value::as_str).filter(|f| !f.is_empty()) {
-                None => own_format.is_some(),
-                Some(f) => own_format.is_some_and(|own| super::format(f).is_some_and(|f| f.id == own)),
-            };
-            match c.get("command").and_then(Value::as_str).unwrap_or("") {
-                "document.save" | "file.save" => !save && (path || own_file()),
-                "file.saveAs" => !save && path,
-                "file.saveCopy" | "file.saveAsTemplate" => path,
-                "document.export" | "document.exportSelection" => !export && path,
-                // The batch does not point these exports into `destinationFolder`.
-                "document.exportPdf" | "document.exportEps" | "document.exportDxf" | "document.exportForWeb" | "document.exportForOffice" => path,
-                // Override Export sets `path`, which Export for Screens does not read: its `folder` stays.
-                "document.exportForScreens" => super::screens::with_preset(s, &params).is_ok_and(|p| names(p.get("folder"))),
-                _ => false,
-            }
-        })
+    steps.iter().any(|c| {
+        let params = c.get("params").cloned().unwrap_or_else(|| Value::Object(Default::default()));
+        let path = names(params.get("path"));
+        let own_file = || match params.get("format").and_then(Value::as_str).filter(|f| !f.is_empty()) {
+            None => own_format.is_some(),
+            Some(f) => own_format.is_some_and(|own| super::format(f).is_some_and(|f| f.id == own)),
+        };
+        match c.get("command").and_then(Value::as_str).unwrap_or("") {
+            "document.save" | "file.save" => !save && (path || own_file()),
+            "file.saveAs" => !save && path,
+            "file.saveCopy" | "file.saveAsTemplate" => path,
+            "document.export" | "document.exportSelection" => !export && path,
+            // The batch does not point these exports into `destinationFolder`.
+            "document.exportPdf" | "document.exportEps" | "document.exportDxf" | "document.exportForWeb" | "document.exportForOffice" => path,
+            // Override Export sets `path`, which Export for Screens does not read: its `folder` stays.
+            "document.exportForScreens" => super::screens::with_preset(s, &params).is_ok_and(|p| names(p.get("folder"))),
+            _ => false,
+        }
     })
+}
+
+/// Whether `steps` hold a Save, Save As or `document.save` step that Override Save points at each
+/// data set's own file in the destination folder (`redirected`). Such a step makes that file the
+/// document's own, so Save and Close then saves each data set to its own file.
+fn saves_move_to_each_file(steps: &[Value], redirected: bool) -> bool {
+    redirected && steps.iter().any(|c| matches!(c.get("command").and_then(Value::as_str), Some("document.save" | "file.save" | "file.saveAs")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -202,7 +209,7 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     if names.len() > MAX_BATCH_FILES {
         return Err(bad(cmd, format!("more than {MAX_BATCH_FILES} data sets")));
     }
-    if run.destination == "saveAndClose" {
+    if run.destination == "saveAndClose" && !saves_move_to_each_file(run.steps, run.override_save && run.dest_folder.is_some()) {
         if st.path.is_none() {
             return Err(bad(cmd, "the document has never been saved"));
         }
@@ -1411,6 +1418,38 @@ mod tests {
         let unlock = json!({"source": "datasets", "commands": [{"command": "object.unlockAll", "params": {}}]});
         let r = s.execute("action.batch", &unlock).unwrap();
         assert!(r.get("warning").is_none(), "{r}");
+    }
+
+    #[test]
+    fn batch_save_and_close_after_a_redirected_save_writes_each_data_set_to_its_own_file() {
+        let save_close = |dest: &std::path::Path| {
+            json!({
+                "source": "datasets",
+                "destination": "saveAndClose",
+                "destinationFolder": dest.to_string_lossy(),
+                "commands": [{"command": "document.save", "params": {}}]
+            })
+        };
+        let path = tmp("redirected-save-close").join("template.vectorcraft");
+        let mut s = saved_with_two_data_sets(&path);
+        let bytes = std::fs::read(&path).unwrap();
+        let dest = tmp("redirected-save-close-dest");
+        let p = save_close(&dest);
+        let mut kept = p.clone();
+        kept["overrideSave"] = json!(false);
+        assert!(batch_overwrites_one_file(&s, &kept), "without Override Save the save stays on the template");
+        let r = s.execute("action.batch", &p).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert!(r.get("warning").is_none(), "{r}");
+        assert_eq!(file_names(&dest), ["template_A.vectorcraft", "template_B.vectorcraft"], "{r}");
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "the template's file stays as it was");
+        // A document never saved gets its files from the redirected save too.
+        let mut unsaved = with_data_sets(&["a", "b"]);
+        let dest = tmp("redirected-save-close-unsaved");
+        let r = unsaved.execute("action.batch", &save_close(&dest)).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert!(r.get("warning").is_none(), "{r}");
+        assert_eq!(file_names(&dest), ["Untitled_a.vectorcraft", "Untitled_b.vectorcraft"], "{r}");
     }
 
     #[test]
