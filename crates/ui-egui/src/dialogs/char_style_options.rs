@@ -793,6 +793,7 @@ mod tests {
         {
             let d = app.ui.dialog.as_mut().unwrap();
             d.fields.insert("h_scale".into(), json!("80"));
+            d.fields.insert("v_scale".into(), json!("60"));
             d.fields.insert("baseline_shift".into(), json!("2"));
             d.fields.insert("rotation".into(), json!("45"));
             d.fields.insert("language".into(), json!("Turkish"));
@@ -802,12 +803,15 @@ mod tests {
         assert_eq!(state.history.undo.len(), undo + 1);
         assert_eq!(
             state.doc.char_styles[0].attrs,
-            attrs(json!({"size": 18.0, "h_scale": 80.0, "baseline_shift": 2.0, "rotation": 45.0, "language": "tr"}))
+            attrs(json!({"size": 18.0, "h_scale": 80.0, "v_scale": 60.0, "baseline_shift": 2.0, "rotation": 45.0, "language": "tr"}))
         );
         let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(
-            t.runs.iter().map(|r| (r.style.h_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone())).collect::<Vec<_>>(),
-            [(80.0, 2.0, 45.0, Some("tr".to_string())), (80.0, 5.0, 45.0, Some("tr".to_string()))]
+            t.runs
+                .iter()
+                .map(|r| (r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone()))
+                .collect::<Vec<_>>(),
+            [(80.0, 60.0, 2.0, 45.0, Some("tr".to_string())), (80.0, 60.0, 5.0, 45.0, Some("tr".to_string()))]
         );
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.doc().unwrap().doc, before);
