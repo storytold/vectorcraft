@@ -1689,7 +1689,7 @@ already walks Image Trace. Short agent entry points:
   `preset` (Default by default; with `expand`, as Make and Expand), saves it into `destinationFolder` as
   `<name>.<ext>` in `format` (`vectorcraft` by default; `svg`, `pdf`, `ai`, `eps`), with `-2`, `-3`… added when the
   name is taken so no file is replaced, and closes it again whether it traced or not; the active document stays
-  active. Up to 500 images and 8 folder levels; not on the web. The app asks for both folders (#4921).
+  active. Up to 500 images and 8 folder levels (a folder with more than 1,000 entries is refused); not on the web. The app asks for both folders (#4921).
   → `{traced: [{path, output}], failed: [{path, error}], format}`
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
