@@ -372,6 +372,107 @@ fn outlines_keep_the_random_transforms_the_canvas_drew() {
     assert_eq!(differ, none_differ);
 }
 
+/// For each command in [`outlining`] on a stroke-only square with `effects` on appearance item
+/// `item`: the pixels that differ by more than 64 from the canvas before, whether a geometry
+/// effect is left on the result, and (for Outline Stroke) the outline's box and area.
+fn outlined_square(item: Value, effects: &[(&str, Value)], hide: bool) -> (Vec<(&'static str, usize, bool)>, Rect, f64) {
+    let mut results = vec![];
+    let mut shape = (Rect::ZERO, 0.0);
+    for (command, p) in outlining() {
+        let mut s = session();
+        square_with(&mut s, json!({"none": true}), item.clone(), effects);
+        if hide {
+            for index in 0..effects.len() {
+                s.execute("effect.setParams", &json!({"index": index, "visible": false, "item": item})).unwrap();
+            }
+        }
+        let before = render(&s);
+        let n = outlined_by(&mut s, command, &p);
+        if command == "object.path.outlineStroke" {
+            shape = (n.geometric_bounds().unwrap(), area(&n));
+        }
+        results.push((command, differing(&before, &render(&s), 64), has_geometry_effects(&n)));
+    }
+    (results, shape.0, shape.1)
+}
+
+/// What [`outlined_square`] gives for each command when the outline draws as the canvas did and
+/// keeps no geometry effect.
+fn drawn_plain() -> Vec<(&'static str, usize, bool)> {
+    outlining().map(|(command, _)| (command, 0, false)).into_iter().collect()
+}
+
+/// A path with no effects outlines its own stroke: 4 pt wide around the 100 pt square.
+#[test]
+fn a_path_without_effects_outlines_its_own_stroke() {
+    let (results, bounds, a) = outlined_square(Value::Null, &[], false);
+    assert_eq!(results, drawn_plain());
+    assert!(close(bounds, Rect::new(148.0, 98.0, 252.0, 202.0), 0.01), "{bounds:?}");
+    assert!(near(a, 104.0 * 104.0 - 96.0 * 96.0, 0.5), "{a}");
+}
+
+/// Round Corners on the object rounds the path whose stroke is outlined, with the radius in
+/// points as the canvas draws it: corners of radius 12 outside and 8 inside.
+#[test]
+fn round_corners_on_the_object_round_the_stroke_it_outlines() {
+    let (results, bounds, a) = outlined_square(Value::Null, &[("stylize.roundCorners", json!({"radius": 10}))], false);
+    assert_eq!(results, drawn_plain());
+    assert!(close(bounds, Rect::new(148.0, 98.0, 252.0, 202.0), 0.01), "{bounds:?}");
+    let rounded = 104.0 * 104.0 - 96.0 * 96.0 - (4.0 - std::f64::consts::PI) * (12.0 * 12.0 - 8.0 * 8.0);
+    assert!(near(a, rounded, 2.0), "{a}, rounded {rounded}");
+}
+
+/// A hidden geometry effect, on the object or on the stroke, does not draw on the canvas and does
+/// not shape the outline.
+#[test]
+fn a_hidden_geometry_effect_does_not_shape_the_outline() {
+    for item in [Value::Null, json!(1)] {
+        let (results, bounds, a) = outlined_square(item.clone(), &geometry_effects(), true);
+        let drawn: Vec<_> = results.iter().map(|(command, differ, _)| (*command, *differ)).collect();
+        assert_eq!(drawn, drawn_plain().into_iter().map(|(command, differ, _)| (command, differ)).collect::<Vec<_>>(), "item {item}");
+        assert!(close(bounds, Rect::new(148.0, 98.0, 252.0, 202.0), 0.01), "item {item}: {bounds:?}");
+        assert!(near(a, 104.0 * 104.0 - 96.0 * 96.0, 0.5), "item {item}: {a}");
+    }
+}
+
+/// An effect on the object that is not a geometry effect, such as a Gaussian Blur, stays on the
+/// result of Outline Stroke and Expand while the geometry effect shapes the path. Flatten
+/// Transparency renders raster effects into an image instead.
+#[test]
+fn an_effect_that_is_not_geometry_stays_on_the_result() {
+    for (command, p) in outlining().into_iter().filter(|(command, _)| *command != "object.flattenTransparency") {
+        let mut s = session();
+        square_with(
+            &mut s,
+            json!({"color": "#33aa55"}),
+            Value::Null,
+            &[("distort.zigZag", json!({"size": 6, "ridges": 3})), ("blur.gaussian", json!({}))],
+        );
+        let n = outlined_by(&mut s, command, &p);
+        let kept: Vec<&str> = n.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(kept, ["blur.gaussian"], "{command}");
+        assert!(!has_geometry_effects(&n), "{command}: {n:?}");
+    }
+}
+
+/// Undo after outlining a path with geometry effects on the object and on its stroke gives back
+/// the path as it was, effects included, and its selection.
+#[test]
+fn undo_gives_back_the_path_with_its_effects() {
+    for (command, p) in outlining() {
+        let mut s = session();
+        square_with(&mut s, json!({"color": "#33aa55"}), Value::Null, &[("distort.zigZag", json!({"size": 6, "ridges": 3}))]);
+        s.execute("effect.apply", &json!({"effect": "path.offsetPath", "params": {"offset": 10}, "item": 1})).unwrap();
+        let before = s.doc().unwrap().doc.layers.clone();
+        let selected = s.doc().unwrap().selection.objects.clone();
+        outlined_by(&mut s, command, &p);
+        assert_ne!(s.doc().unwrap().doc.layers, before, "{command} changed nothing");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.layers, before, "{command}");
+        assert_eq!(s.doc().unwrap().selection.objects, selected, "{command}");
+    }
+}
+
 #[test]
 fn brushed_strokes_outline_to_their_brush_art() {
     let mut s = session();
