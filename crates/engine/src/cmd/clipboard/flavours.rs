@@ -10,9 +10,9 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageObject, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Point};
 
-use super::super::fileio;
 use super::super::place::pt_per_px;
-use super::*;
+use super::super::{fileio, links};
+use super::{Clipboard, CommandSpec, Result, Session, always, bad, cmd, f64_or, has_doc, looks_like_svg, point_param, str_param};
 
 /// Plain text: a type-only copy's text, else the SVG markup (Include SVG Code).
 pub const TEXT: &str = "text/plain";
@@ -30,6 +30,10 @@ pub const EMF: &str = "image/emf";
 /// An EPS (or other PostScript) picture: what drawing and typesetting apps copy as vector art
 /// beside, or instead of, a PDF (#1499).
 pub const EPS: &str = "application/postscript";
+/// A `.ai` or `.ait` file whose bytes are a PDF, copied in a file manager ([`file_flavour`]): Paste
+/// reads it as `document.open` does, from its editing data. The type is VectorCraft's own: no
+/// system clipboard carries it, and Paste asks for [`PDF`] to get it.
+pub const AI: &str = "application/x-ai";
 /// What Paste reads from other apps, best first: vector art before text, text before bitmaps
 /// (word processors offer a picture of copied text too).
 pub const PASTE_ORDER: [&str; 6] = [SVG, PDF, EPS, EMF, TEXT, BITMAP];
@@ -71,18 +75,45 @@ pub const FILE_HEAD: usize = 4096;
 
 /// What a file copied in a file manager pastes as, if one of `mimes` (`image/*`: any bitmap):
 /// SVG, PDF, EPS, a Windows metafile or a bitmap (its own `image/…` type), told from its first
-/// [`FILE_HEAD`] bytes and its name. The file's bytes are that flavour's data.
+/// [`FILE_HEAD`] bytes and its name. A `.ai` or `.ait` file is [`AI`] when its bytes are a PDF (it
+/// pastes when PDF is asked for) and EPS when they are PostScript. The file's bytes are that
+/// flavour's data.
 pub fn file_flavour(name: &str, head: &[u8], mimes: &[&str]) -> Option<&'static str> {
     let f = fileio::detect(name, head)?;
     let (asked, mime) = match f.id {
         "svg" => (SVG, SVG),
+        // `detect` names gzip data SVGZ (a compressed native file aside); `clipboard.importSvg`
+        // reads SVGZ data.
+        "svgz" if unpacks_to_svg(head) => (SVG, SVG),
         "pdf" => (PDF, PDF),
+        "ps" => (EPS, EPS),
         "eps" => (EPS, EPS),
+        "ai" | "ait" if head.starts_with(b"%PDF") => (PDF, AI),
+        "ai" | "ait" if vectorcraft_pdf::is_postscript(head) => (EPS, EPS),
         "emf" | "wmf" => (EMF, EMF),
         _ if f.raster => (BITMAP, f.mime),
         _ => return None,
     };
     mimes.contains(&asked).then_some(mime)
+}
+
+/// Does gzip data `head` (a file's first bytes, often a stream cut short) unpack to SVG markup?
+/// The first [`FILE_HEAD`] bytes it unpacks to are read as UTF-16 after a UTF-16 byte order mark,
+/// else as UTF-8, and checked with [`looks_like_svg`].
+fn unpacks_to_svg(head: &[u8]) -> bool {
+    use std::io::Read as _;
+    let mut raw = Vec::with_capacity(FILE_HEAD);
+    // A stream cut short ends in an error after the bytes that unpacked: judge those.
+    let _ = flate2::read::GzDecoder::new(head).take(FILE_HEAD as u64).read_to_end(&mut raw);
+    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| -> String {
+        char::decode_utf16(rest.as_chunks::<2>().0.iter().map(|u| unit(*u))).map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER)).collect()
+    };
+    let text = match raw.as_slice() {
+        [0xfe, 0xff, rest @ ..] => utf16(rest, u16::from_be_bytes),
+        [0xff, 0xfe, rest @ ..] => utf16(rest, u16::from_le_bytes),
+        _ => String::from_utf8_lossy(&raw).into_owned(),
+    };
+    looks_like_svg(&text)
 }
 
 /// One representation of the clipboard's contents.
@@ -96,6 +127,13 @@ pub struct Flavour {
 const COPY_PNG_SIDE: f64 = 4096.0;
 /// Most bytes of text `clipboard.importText` takes.
 const MAX_TEXT: usize = 1 << 20;
+/// Most bytes of images the SVG markup may embed and still go out as plain text. A paste reads the
+/// clipboard's text first (eframe reads it on every paste key; on Linux and macOS it is the one
+/// format the app writes, and checking that the clipboard still holds our copy reads it again), so
+/// a placed photo in it made each paste move megabytes of base64 through the system clipboard on
+/// the UI thread, and on a GNOME desktop the app stopped responding (#2213). A copy with more image
+/// data than this offers its SVG under its own type and its PNG, not as text.
+const COPY_TEXT_IMAGE_BYTES: usize = 1 << 20;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -104,7 +142,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard as PNG",
             [],
             None,
-            "{scale?: 1 (pixels per point, up to 64)} → {dataBase64, width, height (px)} the copied objects cropped to their visual bounds, transparent around them (dataBase64 null when the clipboard is empty)",
+            "{scale?: 1 (pixels per point, up to 64)} → {dataBase64, width, height (px), warnings} the copied objects cropped to their visual bounds, transparent around them (dataBase64 null when the clipboard is empty); warnings as for document.export (an image that couldn't be decoded, type in the fallback font or that doesn't fit its frame)",
             always,
             export_png
         ),
@@ -113,7 +151,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard as PDF",
             [],
             None,
-            "{} → {dataBase64} a one-page PDF of the copied objects, the page their visual bounds (null when the clipboard is empty)",
+            "{} → {dataBase64, warnings} a one-page PDF of the copied objects, the page their visual bounds (dataBase64 null when the clipboard is empty); warnings as for document.export",
             always,
             export_pdf
         ),
@@ -131,7 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard Formats",
             [],
             None,
-            "{} → {flavours: [mime…]} what Copy offers other apps for the current clipboard, best first, by the Clipboard Handling preferences: text/plain (a type-only copy's text, else the SVG markup with copyAsSvg), image/svg+xml (copyAsSvg), application/pdf (copyAsPdf), image/png (always; PDF and PNG only for objects with an area); the app publishes them on Copy and Cut",
+            "{} → {flavours: [mime…]} what Copy offers other apps for the current clipboard, best first, by the Clipboard Handling preferences: text/plain (a type-only copy's text, else the SVG markup with copyAsSvg when the images it embeds total at most 1 MiB), image/svg+xml (copyAsSvg), application/pdf (copyAsPdf), image/png (always; PDF and PNG only for objects with an area); the app publishes them on Copy and Cut",
             always,
             flavours
         ),
@@ -140,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Image into Clipboard",
             [],
             None,
-            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste",
+            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
             has_doc,
             import_image
         ),
@@ -158,7 +196,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load PDF into Clipboard",
             [],
             None,
-            "{dataBase64, page?: 1, password? (an encrypted PDF), center?: [x, y]} replace the clipboard with the objects of one PDF page (with the images, patterns and swatches they use), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
+            "{dataBase64, page?: 1, password? (an encrypted PDF), editingData?: false (true: the data is a .ai or .ait file, read as document.open reads it; when document.open would use its editing data, every object of that data comes in, each layer's objects in stacking order and a hidden layer's objects hidden; else page `page`), center?: [x, y]} replace the clipboard with the objects of one PDF page, or of a .ai file's editing data (with the images, patterns and swatches they use; a .ai saved without PDF compatibility: every object of its editing data, as document.open reads it, with or without editingData), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
             has_doc,
             import_pdf
         ),
@@ -176,7 +214,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load EPS into Clipboard",
             [],
             None,
-            "{dataBase64 (EPS or other PostScript bytes), center?: [x, y]} replace the clipboard with the picture's objects as document.open reads an EPS (editable paths, type and images, with the images, patterns and swatches they use), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
+            "{dataBase64 (EPS or other PostScript bytes), center?: [x, y]} replace the clipboard with the picture's objects as document.open reads an EPS (editable paths, type and images, with the images, patterns and swatches they use; a hidden layer's objects hidden), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
             has_doc,
             import_eps
         ),
@@ -192,11 +230,13 @@ fn type_only(n: &Node) -> bool {
     }
 }
 
-impl Session {
-    /// The copied type objects' text, one object per line (`None` unless the clipboard holds type
-    /// only).
-    pub fn clipboard_text(&self) -> Option<String> {
-        let nodes = &self.clipboard.nodes;
+/// A PNG of the copied objects: (bytes, width, height in pixels, the encoder's warnings).
+pub type Png = (Vec<u8>, u32, u32, Vec<String>);
+
+impl Clipboard {
+    /// The copied type objects' text, one object per line (`None` unless it holds type only).
+    pub fn text(&self) -> Option<String> {
+        let nodes = &self.nodes;
         if nodes.is_empty() || !nodes.iter().all(type_only) {
             return None;
         }
@@ -211,63 +251,113 @@ impl Session {
         Some(lines.join("\n"))
     }
 
-    /// The clipboard as a document whose one artboard is the objects' visual bounds (`None` when
-    /// it is empty or has no extent).
-    fn clipboard_cropped(&self) -> Option<(Document, vectorcraft_geom::Rect)> {
-        let b = self.clipboard.bounds().filter(|b| b.width() > 0.0 && b.height() > 0.0)?;
-        Some((fileio::with_single_artboard(self.clipboard.to_document(), b, "Clipboard"), b))
+    /// The objects as a document whose one artboard is their visual bounds (`None` when there are
+    /// none or they have no extent).
+    fn cropped(&self) -> Option<(Document, vectorcraft_geom::Rect)> {
+        let b = self.bounds().filter(|b| b.width() > 0.0 && b.height() > 0.0)?;
+        Some((fileio::with_single_artboard(self.to_document(), b, "Clipboard"), b))
     }
 
-    /// A PNG of the copied objects at `scale` pixels per point → (bytes, width, height); `None`
-    /// when the clipboard is empty.
-    pub fn clipboard_png(&self, scale: f64) -> Result<Option<(Vec<u8>, u32, u32)>> {
+    /// A PNG of the objects at `scale` pixels per point → (bytes, width, height, the warnings
+    /// [`fileio::encode_with_warnings`] gives); `None` when there are none.
+    pub fn png(&self, scale: f64) -> Result<Option<Png>> {
         const C: &str = "clipboard.exportPng";
-        let Some((doc, b)) = self.clipboard_cropped() else { return Ok(None) };
+        let Some((doc, b)) = self.cropped() else { return Ok(None) };
         let (w, h) = vectorcraft_render::raster_size(b, scale).map_err(|e| bad(C, e))?;
-        let png = fileio::encode(&doc, "png", &json!({ "scale": scale, "background": "transparent" }))?;
-        Ok(Some((png, w, h)))
+        let (png, warnings) = fileio::encode_with_warnings(&doc, "png", &json!({ "scale": scale, "background": "transparent" }))?;
+        Ok(Some((png, w, h, warnings)))
     }
 
-    /// A one-page PDF of the copied objects (without the native document inside); `None` when the
-    /// clipboard is empty.
-    pub fn clipboard_pdf(&self) -> Result<Option<Vec<u8>>> {
-        let Some((doc, _)) = self.clipboard_cropped() else { return Ok(None) };
-        fileio::encode(&doc, "pdf", &json!({ "preserveEditing": false })).map(Some)
+    /// A one-page PDF of the objects (without the native document inside) → (bytes, the encoder's
+    /// warnings); `None` when there are none.
+    pub fn pdf(&self) -> Result<Option<(Vec<u8>, Vec<String>)>> {
+        let Some((doc, _)) = self.cropped() else { return Ok(None) };
+        fileio::encode_with_warnings(&doc, "pdf", &json!({ "preserveEditing": false })).map(Some)
     }
 
-    /// The MIME types of [`Self::clipboard_flavours`], without making them.
-    pub fn clipboard_flavour_types(&self) -> Vec<&'static str> {
-        if self.clipboard.is_empty() {
+    /// Bytes of the encoded images the objects show (what their SVG embeds as base64).
+    fn image_bytes(&self) -> usize {
+        self.images.values().fold(0usize, |sum, b| sum.saturating_add(b.bytes.len()))
+    }
+
+    /// The MIME types of [`Self::flavours`], without making them.
+    pub fn flavour_types(&self, svg: bool, pdf: bool) -> Vec<&'static str> {
+        if self.is_empty() {
             return vec![];
         }
-        let (svg, pdf) = (self.prefs.copy_as_svg, self.prefs.copy_as_pdf);
-        let text = svg || self.clipboard.nodes.iter().all(type_only);
+        let text = (svg && self.image_bytes() <= COPY_TEXT_IMAGE_BYTES) || self.nodes.iter().all(type_only);
         // Art without an area (a lone guide-like line) has no page or picture.
-        let area = self.clipboard.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
+        let area = self.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
         [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area)].into_iter().filter_map(|(m, on)| on.then_some(m)).collect()
     }
 
-    /// What Copy offers other apps, best first (see `clipboard.flavours`). A flavour that can't be
-    /// made (art too large to render) is left out; the PNG is scaled down to at most
-    /// [`COPY_PNG_SIDE`] pixels a side.
-    pub fn clipboard_flavours(&self) -> Vec<Flavour> {
-        let types = self.clipboard_flavour_types();
-        let svg = types.contains(&SVG).then(|| self.clipboard_svg()).flatten();
+    /// What Copy offers other apps, best first, with Include SVG Code (`svg`) and On Copy: PDF
+    /// (`pdf`) as given (see `clipboard.flavours`). A [`Flavour`] that can't be made (art too large
+    /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side.
+    pub fn flavours(&self, svg: bool, pdf: bool) -> Vec<Flavour> {
+        self.flavours_with_warnings(svg, pdf).0
+    }
+
+    /// [`Self::flavours`], with the warnings of the PDF and PNG encoders, each once (an image that
+    /// couldn't be decoded, type in the fallback font).
+    pub fn flavours_with_warnings(&self, svg: bool, pdf: bool) -> (Vec<Flavour>, Vec<String>) {
+        let types = self.flavour_types(svg, pdf);
+        let svg = types.contains(&SVG).then(|| self.svg()).flatten();
         let mut out = vec![];
+        let mut warnings: Vec<String> = vec![];
+        let mut keep = |(bytes, notes): (Vec<u8>, Vec<String>)| {
+            for w in notes {
+                if !warnings.contains(&w) {
+                    warnings.push(w);
+                }
+            }
+            bytes
+        };
         for mime in types {
             let data = match mime {
-                TEXT => self.clipboard_text().or_else(|| svg.clone()).map(String::into_bytes),
+                TEXT => self.text().or_else(|| svg.clone()).map(String::into_bytes),
                 SVG => svg.clone().map(String::into_bytes),
-                PDF => self.clipboard_pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten(),
+                PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten().map(&mut keep),
                 _ => {
-                    let side = self.clipboard.bounds().map_or(1.0, |b| b.width().max(b.height()));
+                    let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
                     let scale = (COPY_PNG_SIDE / side).clamp(0.01, 1.0);
-                    self.clipboard_png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, ..)| png)
+                    self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, _, _, notes)| keep((png, notes)))
                 }
             };
             out.extend(data.map(|data| Flavour { mime, data }));
         }
-        out
+        (out, warnings)
+    }
+}
+
+impl Session {
+    /// The copied type objects' text, one object per line (`None` unless the clipboard holds type
+    /// only).
+    pub fn clipboard_text(&self) -> Option<String> {
+        self.clipboard.text()
+    }
+
+    /// A PNG of the copied objects at `scale` pixels per point → (bytes, width, height, the
+    /// encoder's warnings); `None` when the clipboard is empty.
+    pub fn clipboard_png(&self, scale: f64) -> Result<Option<Png>> {
+        self.clipboard.png(scale)
+    }
+
+    /// A one-page PDF of the copied objects (without the native document inside) → (bytes, the
+    /// encoder's warnings); `None` when the clipboard is empty.
+    pub fn clipboard_pdf(&self) -> Result<Option<(Vec<u8>, Vec<String>)>> {
+        self.clipboard.pdf()
+    }
+
+    /// The MIME types of [`Self::clipboard_flavours`], without making them.
+    pub fn clipboard_flavour_types(&self) -> Vec<&'static str> {
+        self.clipboard.flavour_types(self.prefs.copy_as_svg, self.prefs.copy_as_pdf)
+    }
+
+    /// What Copy offers other apps, best first (see `clipboard.flavours`): [`Clipboard::flavours`]
+    /// by the Clipboard Handling preferences.
+    pub fn clipboard_flavours(&self) -> Vec<Flavour> {
+        self.clipboard.flavours(self.prefs.copy_as_svg, self.prefs.copy_as_pdf)
     }
 
     /// Replace the clipboard with `clip`, centred on `p`'s `center` (default: the first
@@ -301,13 +391,18 @@ fn export_png(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("clipboard.exportPng", "scale must be a number above 0, at most 64"));
     }
     Ok(match s.clipboard_png(scale)? {
-        Some((png, w, h)) => json!({ "dataBase64": vectorcraft_format::base64_encode(&png), "width": w, "height": h }),
+        Some((png, w, h, warnings)) => {
+            json!({ "dataBase64": vectorcraft_format::base64_encode(&png), "width": w, "height": h, "warnings": warnings })
+        }
         None => json!({ "dataBase64": null }),
     })
 }
 
 fn export_pdf(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "dataBase64": s.clipboard_pdf()?.map(|b| vectorcraft_format::base64_encode(&b)) }))
+    Ok(match s.clipboard_pdf()? {
+        Some((pdf, warnings)) => json!({ "dataBase64": vectorcraft_format::base64_encode(&pdf), "warnings": warnings }),
+        None => json!({ "dataBase64": null }),
+    })
 }
 
 fn export_text(s: &mut Session, _: &Value) -> Result<Value> {
@@ -323,11 +418,20 @@ fn import_image(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(m) = str_param(p, "mime").filter(|m| !m.starts_with("image/") || *m == SVG) {
         return Err(bad(C, format!("`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText")));
     }
-    let img = fileio::raster_image(&data_param(p, C)?).map_err(|e| bad(C, e.to_string()))?;
+    let data = data_param(p, C)?;
+    let mut img = fileio::raster_image(&data).map_err(|e| bad(C, e.to_string()))?;
+    img.blob = links::readable_and_kept(img.blob, links::kept_unread(&data), false).map_err(|e| bad(C, e.to_string()))?;
     let (sx, sy) = pt_per_px(img.ppi);
     let (w, h) = (img.width, img.height);
-    let image =
-        ImageObject { key: img.key.clone(), width: w, height: h, xf: Affine::scale_non_uniform(sx, sy), link: None, placement: Default::default() };
+    let image = ImageObject {
+        key: img.key.clone(),
+        width: w,
+        height: h,
+        xf: Affine::scale_non_uniform(sx, sy),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
     let mut clip = Clipboard { nodes: vec![Node::new(NodeId(1), NodeKind::Image(Box::new(image)))], ..Default::default() };
     clip.images.insert(img.key, img.blob);
     let count = s.load_clipboard(clip, p)?;
@@ -346,6 +450,7 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "the text is empty"));
     }
     let mut t = TextObject::point(Point::ZERO, text, super::super::create::new_type_style(s, &Value::Null));
+    t.system_layout = s.doc()?.doc.setup.system_layout;
     crate::cmd::typecmd::refresh_bounds(&mut t);
     let n = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
     let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
@@ -364,7 +469,8 @@ fn import_emf(s: &mut Session, p: &Value) -> Result<Value> {
 fn import_eps(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "clipboard.importEps";
     let bytes = data_param(p, C)?;
-    if !vectorcraft_pdf::is_postscript(&bytes) {
+    // Programs whose header is only `%!` are read too, as they are when a `.ps` or `.eps` file opens.
+    if !bytes.starts_with(b"%!") && !vectorcraft_pdf::is_postscript(&bytes) {
         return Err(bad(C, "the data isn't an EPS or PostScript picture"));
     }
     import_picture(s, p, C, "Clipboard.eps", &bytes)
@@ -373,8 +479,19 @@ fn import_eps(s: &mut Session, p: &Value) -> Result<Value> {
 /// Replace the clipboard with the objects of the picture `bytes`, read as the file `name` is
 /// opened (command `cmd`).
 fn import_picture(s: &mut Session, p: &Value, cmd: &str, name: &str, bytes: &[u8]) -> Result<Value> {
-    let mut loaded = fileio::load(name, bytes).map_err(|e| bad(cmd, e.to_string()))?;
+    let loaded = fileio::load(name, bytes).map_err(|e| bad(cmd, e.to_string()))?;
+    import_loaded(s, p, cmd, loaded)
+}
+
+/// Replace the clipboard with every object of `loaded`, a file read as `document.open` reads it
+/// (command `cmd`). The layers are left out, and the objects of a hidden layer come in hidden.
+fn import_loaded(s: &mut Session, p: &Value, cmd: &str, mut loaded: fileio::Loaded) -> Result<Value> {
     loaded.doc.drop_edit_modes();
+    for layer in loaded.doc.layers.iter_mut().filter(|l| !l.visible) {
+        for object in std::sync::Arc::make_mut(layer).children_mut().into_iter().flatten() {
+            std::sync::Arc::make_mut(object).visible = false;
+        }
+    }
     let clip = Clipboard::from_document(&loaded.doc);
     if clip.is_empty() {
         return Err(bad(cmd, "the picture has no objects"));
@@ -390,8 +507,28 @@ fn import_pdf(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => 1,
         Some(v) => v.as_u64().filter(|n| (1..=100_000).contains(n)).ok_or_else(|| bad(C, "page must be a whole number from 1"))? as usize,
     };
+    let editing = match p.get("editingData").filter(|v| !v.is_null()) {
+        None => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad(C, "editingData must be true or false"))?,
+    };
     let opts = fileio::LoadOptions { password: str_param(p, "password").map(str::to_string), ..Default::default() };
-    let (mut doc, warnings) = fileio::page_document(&bytes, page - 1, &opts).map_err(|e| bad(C, e.to_string()))?;
+    // A copied .ai file pastes every object of its editing data, as document.open reads the file.
+    // When document.open would not use that copy, the file pastes its page, as a PDF does.
+    if editing
+        && let Ok(loaded) = fileio::load_with("Clipboard.ai", &bytes, &opts)
+        && (loaded.editing_data || loaded.restored)
+    {
+        return import_loaded(s, p, C, loaded);
+    }
+    let (mut doc, warnings) = match fileio::page_document(&bytes, page - 1, &opts) {
+        // For a .ai saved without PDF compatibility, the clipboard takes every object of its
+        // editing data, as document.open reads it.
+        Err(e) if fileio::is_placeholder(&e) => {
+            let loaded = fileio::load_with("Clipboard.ai", &bytes, &opts).map_err(|e| bad(C, e.to_string()))?;
+            return import_loaded(s, p, C, loaded);
+        }
+        read => read.map_err(|e| bad(C, e.to_string()))?,
+    };
     doc.drop_edit_modes();
     let clip = Clipboard::from_document(&doc);
     if clip.is_empty() {

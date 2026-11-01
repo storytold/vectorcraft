@@ -1,26 +1,35 @@
 //! Scatter, Art and Pattern Brush Options: the [`super::brush_options`] of the brushes made of
 //! art. Each has the brush's own values, Colorization (Method, and Key Color for Hue Shift, picked
-//! from the art's colours) and a live preview of a stroke.
+//! from the art's colors), a Tips button beside Method that opens Colorization Tips (what each
+//! method does, beside a sample of the brush painted with it) and a live preview of a stroke.
 //!
 //! Fields (besides `__brush`, `__type` and `name`): `__def` (the brush definition, for the preview),
 //! `__colors` (the art's colours, most used first), `colorization` (`none` | `tints` |
-//! `tintsAndShades` | `hueShift`), `keyColor` (a colour).
+//! `tintsAndShades` | `hueShift`), `keyColor` (a color), `tips` (whether Colorization Tips is
+//! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure`), `rotationRelativeTo` (`page` | `path`).
-//! Art: `width` (%), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
-//! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`.
+//! Art: `width` (%), `widthMode` (`fixed` | `pressure`), `widthMax` (the width at the heaviest pen
+//! pressure, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
+//! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
+//! `overlap` (bend on each run between sharp corners).
 //! Pattern: `scale`, `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
-//! `flipAcross`, `__tiles` (slot → preview key, for the tiles the brush has).
+//! `flipAcross`, `outerCornerTile` and `innerCornerTile` (`original`: the corner art the brush
+//! draws there | `none` | `autoCentered` | `autoBetween` | `autoSliced` | `autoOverlap`: a tile
+//! made from the side tile),
+//! `__tiles` (slot → preview key, for the tiles the brush has).
 
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
-use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, Direction, PatternBrush, PatternFit, Scatter, Variation};
+use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Document, Node};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PatternDef};
 
 use super::brush_options::{clamped, mode_key, stroke_preview};
+use crate::VectorcraftApp;
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets;
@@ -35,6 +44,92 @@ const DIRECTIONS: [Direction; 4] = [Direction::LeftToRight, Direction::RightToLe
 const TILES: [(&str, &str); 5] =
     [("outer_corner", "outerCorner"), ("side", "side"), ("inner_corner", "innerCorner"), ("start", "start"), ("end", "end")];
 
+fn tile_key(field: &str) -> String {
+    match field {
+        "outer_corner" => "outerCornerTile".into(),
+        "inner_corner" => "innerCornerTile".into(),
+        _ => format!("{field}Tile"),
+    }
+}
+
+pub(super) fn pattern_names(d: &Dialog) -> Vec<String> {
+    d.fields
+        .get("__patterns")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.get("name").and_then(Value::as_str).map(str::to_string))
+        .collect()
+}
+
+fn pattern_choice(d: &Dialog, choice: &str) -> Option<String> {
+    let name = choice.strip_prefix("pattern:").unwrap_or(choice);
+    let reserved = choice == "none" || choice == "original" || CornerSource::parse(choice).is_some();
+    (!reserved && pattern_names(d).iter().any(|candidate| candidate == name)).then(|| name.to_string())
+}
+
+pub(super) fn original_available(d: &Dialog, field: &str) -> bool {
+    let choice = d.str(&tile_key(field));
+    let drawn = if field.ends_with("corner") { corner_art_field(d.fields.get("__def"), field) } else { Some(field) };
+    drawn.is_some() && pattern_choice(d, &choice).is_none()
+}
+
+pub(super) fn reconcile_pattern_choices(f: &mut Map<String, Value>) {
+    let names: Vec<String> = f
+        .get("__patterns")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.get("name").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let def = f.get("__def").cloned().unwrap_or_default();
+    for (art, _) in TILES {
+        let swatch = def.get(format!("{art}_swatch")).and_then(Value::as_str);
+        if let Some(name) = swatch.filter(|name| names.iter().any(|n| n == name)) {
+            f.insert(tile_key(art), json!(format!("pattern:{name}")));
+        } else if !art.ends_with("corner") {
+            f.insert(tile_key(art), json!(if def.get(art).is_some_and(|v| !v.is_null()) { "original" } else { "none" }));
+        }
+    }
+}
+
+/// Pattern brush corner tiles: (dialog field, art field of the definition, source field, art field
+/// of the other kind of corner).
+const CORNER_TILES: [(&str, &str, &str, &str); 2] =
+    [("outerCornerTile", "outer_corner", "outer_source", "inner_corner"), ("innerCornerTile", "inner_corner", "inner_source", "outer_corner")];
+
+/// The art field that corner tile `field` draws with in definition `def`: its own art, or, with
+/// neither art nor a source, the other kind of corner's art (as [`PatternBrush`] draws it).
+fn corner_art_field<'a>(def: Option<&Value>, field: &'a str) -> Option<&'a str> {
+    let set = |f: &str| def.and_then(|d| d.get(f)).is_some_and(|v| !v.is_null());
+    let (_, art, source, other) = CORNER_TILES.into_iter().find(|(_, art, _, _)| *art == field)?;
+    if set(art) {
+        Some(art)
+    } else if !set(source) && set(other) {
+        Some(other)
+    } else {
+        None
+    }
+}
+
+/// The dialog field that records that tile `key`'s menu was set.
+fn corner_set_key(key: &str) -> String {
+    format!("__{key}Set")
+}
+
+/// Sets tile `key` to `choice` from its menu.
+pub(super) fn choose_corner(d: &mut Dialog, key: &str, choice: &str) {
+    d.fields.insert(key.into(), json!(choice));
+    note_set(d, key);
+}
+
+/// Records that a tile field was set from its menu or `ui.dialog.set`.
+pub(super) fn note_set(d: &mut Dialog, field: &str) {
+    if CORNER_TILES.iter().any(|(key, ..)| *key == field) || TILES.iter().any(|(art, _)| tile_key(art) == field) {
+        d.fields.insert(corner_set_key(field), json!(true));
+    }
+}
+
 /// The most key colours offered.
 const MAX_COLORS: usize = 16;
 
@@ -43,6 +138,15 @@ const LABEL_W: f32 = 132.0;
 
 /// Width of the stroke preview.
 const PREVIEW_W: f32 = 420.0;
+
+/// The color of the stroke the Colorization Tips samples are painted on.
+pub(super) const TIP_STROKE: Color = Color::Rgb { r: 0.18, g: 0.44, b: 0.86 };
+
+/// Size of a Colorization Tips sample.
+const TIP_SAMPLE: egui::Vec2 = vec2(120.0, 44.0);
+
+/// Width of the text beside a Colorization Tips sample.
+const TIP_TEXT_W: f32 = 250.0;
 
 pub(super) fn heading(ty: &str) -> &'static str {
     match ty {
@@ -90,12 +194,15 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
                 ArtScale::BetweenGuides { start, end } => ("betweenGuides", start, end),
             };
             f.insert("width".into(), json!(a.width));
+            f.insert("widthMode".into(), json!(a.width_mode.unwrap_or_default().id()));
+            f.insert("widthMax".into(), json!(a.width_range().1));
             f.insert("scaleMode".into(), json!(mode));
             f.insert("guideStart".into(), json!(start * 100.0));
             f.insert("guideEnd".into(), json!(end * 100.0));
             f.insert("direction".into(), json!(id_of(&a.direction)));
             f.insert("flipAlong".into(), json!(a.flip_along));
             f.insert("flipAcross".into(), json!(a.flip_across));
+            f.insert("overlap".into(), json!(a.overlap));
         }
         BrushKind::Pattern(p) => {
             f.insert("scale".into(), json!(p.scale));
@@ -103,6 +210,10 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
             f.insert("fit".into(), json!(id_of(&p.fit)));
             f.insert("flipAlong".into(), json!(p.flip_along));
             f.insert("flipAcross".into(), json!(p.flip_across));
+            for ((key, art, _, _), source) in CORNER_TILES.into_iter().zip([p.outer_source, p.inner_source]) {
+                let choice = if corner_art_field(Some(&def), art).is_some() { "original" } else { source.map_or("none", CornerSource::id) };
+                f.insert(key.into(), json!(choice));
+            }
             // A preview key per tile the brush has: its art's hash, so a changed tile redraws.
             let tiles: Map<String, Value> = TILES
                 .iter()
@@ -142,6 +253,14 @@ fn scatter_mode(d: &Dialog, key: &str) -> Variation {
     Variation::parse(&d.str(&mode_key(key))).unwrap_or_default()
 }
 
+/// How an art brush's width varies: Fixed or Pressure.
+fn art_width_mode(d: &Dialog) -> Variation {
+    match Variation::parse(&d.str("widthMode")) {
+        Some(Variation::Pressure) => Variation::Pressure,
+        _ => Variation::Fixed,
+    }
+}
+
 /// `brush.options` params from the fields.
 pub(super) fn params(d: &Dialog) -> Value {
     let mut p = match d.str("__type").as_str() {
@@ -162,21 +281,65 @@ pub(super) fn params(d: &Dialog) -> Value {
                 },
                 _ => ArtScale::Stretch,
             };
+            let pressure = art_width_mode(d) == Variation::Pressure;
             json!({
                 "width": clamped(d, "width", ArtBrush::WIDTH_RANGE),
+                "width_mode": if pressure { json!(Variation::Pressure.id()) } else { Value::Null },
+                "width_max": if pressure { json!(clamped(d, "widthMax", ArtBrush::WIDTH_RANGE)) } else { Value::Null },
                 "scale": serde_json::to_value(scale).unwrap_or_default(),
                 "direction": id_of(&parse_field::<Direction>(d, "direction")),
                 "flip_along": d.bool("flipAlong"),
                 "flip_across": d.bool("flipAcross"),
+                "overlap": d.bool("overlap"),
             })
         }
-        _ => json!({
-            "scale": clamped(d, "scale", PatternBrush::SCALE_RANGE),
-            "spacing": clamped(d, "spacing", PatternBrush::SPACING_RANGE),
-            "fit": id_of(&parse_field::<PatternFit>(d, "fit")),
-            "flip_along": d.bool("flipAlong"),
-            "flip_across": d.bool("flipAcross"),
-        }),
+        _ => {
+            let mut p = json!({
+                "scale": clamped(d, "scale", PatternBrush::SCALE_RANGE),
+                "spacing": clamped(d, "spacing", PatternBrush::SPACING_RANGE),
+                "fit": id_of(&parse_field::<PatternFit>(d, "fit")),
+                "flip_along": d.bool("flipAlong"),
+                "flip_across": d.bool("flipAcross"),
+            });
+            // None or an automatic tile replaces the corner art. Original keeps the art the corner
+            // draws, the other kind of corner's art included, so changing the other kind leaves it.
+            // A None the menu was not set to, on a corner without art or a source, leaves the
+            // definition as it is: that corner still draws the other kind's art when it gets some.
+            let def = d.fields.get("__def");
+            for (key, art, source, other) in CORNER_TILES {
+                let choice = d.str(key);
+                if let Some(name) = pattern_choice(d, &choice) {
+                    if d.bool(&corner_set_key(key)) {
+                        p[format!("{art}_tile")] = json!({"pattern": name});
+                    }
+                    continue;
+                }
+                let unset = |f: &str| def.and_then(|d| d.get(f)).is_none_or(Value::is_null);
+                if choice == CornerSource::None.id() && !d.bool(&corner_set_key(key)) && unset(source) && corner_art_field(def, art).is_none() {
+                    continue;
+                }
+                if let Some(s) = CornerSource::parse(&choice) {
+                    p[format!("{art}_tile")] = json!(s.id());
+                } else if choice == "original"
+                    && let Some(from) = corner_art_field(def, art).filter(|f| *f != art)
+                    && CORNER_TILES.iter().find(|(_, a, _, _)| *a == other).is_some_and(|(k, ..)| d.str(k) != "original")
+                {
+                    p[art] = def.and_then(|d| d.get(from)).cloned().unwrap_or_default();
+                    p[format!("{art}_frame")] = def.and_then(|d| d.get(format!("{from}_frame"))).cloned().unwrap_or(Value::Null);
+                }
+                if choice == "original" && d.bool(&corner_set_key(key)) {
+                    p[format!("{art}_tile")] = json!("original");
+                }
+            }
+            for art in ["side", "start", "end"] {
+                let key = tile_key(art);
+                if d.bool(&corner_set_key(&key)) {
+                    let choice = d.str(&key);
+                    p[format!("{art}_tile")] = pattern_choice(d, &choice).map_or_else(|| json!(choice), |name| json!({"pattern": name}));
+                }
+            }
+            p
+        }
     };
     p["colorization"] = serde_json::to_value(colorization(d)).unwrap_or_default();
     p
@@ -184,22 +347,56 @@ pub(super) fn params(d: &Dialog) -> Value {
 
 // ---------- body ----------
 
-pub(super) fn body(ui: &mut egui::Ui, d: &mut Dialog) {
+pub(super) fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     match d.str("__type").as_str() {
         "scatter" => scatter_body(ui, d),
         "art" => art_body(ui, d),
         _ => pattern_body(ui, d),
     }
     ui.add_space(6.0);
-    colorization_body(ui, d);
+    colorization_body(app, ui, d);
     ui.add_space(10.0);
     // The brush as OK would make it, on a sample stroke.
+    let ty = d.str("__type");
+    stroke_preview(app, ui, &ty, edited_def(d), vec2(PREVIEW_W, 64.0));
+}
+
+/// The brush definition as OK would make it: `__def` with the fields' params.
+pub(super) fn edited_def(d: &Dialog) -> Value {
     let mut def = d.fields.get("__def").cloned().unwrap_or_default();
     if let (Some(o), Value::Object(p)) = (def.as_object_mut(), params(d)) {
         o.extend(p);
     }
-    let ty = d.str("__type");
-    stroke_preview(ui, &ty, def, vec2(PREVIEW_W, 64.0));
+    if d.str("__type") == "pattern" {
+        for (art, _) in TILES {
+            let key = tile_key(art);
+            if !d.bool(&corner_set_key(&key)) {
+                continue;
+            }
+            let choice = d.str(&key);
+            if choice == "none" || (art.ends_with("corner") && CornerSource::parse(&choice).is_some()) {
+                def[art] = Value::Null;
+                def[format!("{art}_frame")] = Value::Null;
+                def[format!("{art}_swatch")] = Value::Null;
+                if art.ends_with("corner") {
+                    def[if art == "outer_corner" { "outer_source" } else { "inner_source" }] = json!(choice);
+                }
+            } else if choice == "original" {
+                def[format!("{art}_swatch")] = Value::Null;
+            } else if let Some(name) = pattern_choice(d, &choice)
+                && let Some(pattern) = d.fields.get("__patterns").and_then(Value::as_array).and_then(|a| a.iter().find(|p| p["name"] == name))
+                && let Ok(pattern) = serde_json::from_value::<PatternDef>(pattern.clone())
+            {
+                def[art] = serde_json::to_value(Node::new(NodeId(0), NodeKind::Group { children: pattern.art, clip: false })).unwrap_or_default();
+                def[format!("{art}_frame")] = json!(pattern.tile);
+                def[format!("{art}_swatch")] = json!(name);
+                if art.ends_with("corner") {
+                    def[if art == "outer_corner" { "outer_source" } else { "inner_source" }] = Value::Null;
+                }
+            }
+        }
+    }
+    def
 }
 
 /// A whole-number field (`suffix`: % or °) bound to `d.fields[key]`, kept within `range`.
@@ -209,6 +406,13 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, range: (f64, f64), suffi
             d.fields.insert(key.into(), json!(v));
         }
     });
+}
+
+/// A row labeled `label` with a slider and a whole-number field (%) bound to `d.fields[key]`, both
+/// kept within `range`; screen readers call the slider `label`.
+fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, range: (f64, f64)) {
+    let rail = Tokens::get(ui.ctx()).input_border;
+    widgets::label_row(ui, label, LABEL_W, |ui| super::form::slider_field_named(ui, d, key, label, range.0..=range.1, "%", &|_| rail));
 }
 
 /// A row of radio buttons bound to the string field `key`: (value, label).
@@ -257,7 +461,18 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| number(ui, d, "width", ArtBrush::WIDTH_RANGE, "%", true));
+    // Width, then the width at the heaviest pen pressure (only with Pressure) and how it varies.
+    let rail = Tokens::get(ui.ctx()).input_border;
+    let range = ArtBrush::WIDTH_RANGE;
+    widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
+        super::form::slider_field_named(ui, d, "width", tl!("Width:"), range.0..=range.1, "%", &|_| rail);
+        let mode = art_width_mode(d);
+        number(ui, d, "widthMax", range, "%", mode == Variation::Pressure);
+        let modes = [Variation::Fixed, Variation::Pressure];
+        if let Some(m) = widgets::dropdown(ui, "brush-art-width-mode", mode.label(), &modes.map(Variation::label), 104.0).and_then(|i| modes.get(i)) {
+            d.fields.insert("widthMode".into(), json!(m.id()));
+        }
+    });
     ui.add_space(4.0);
     widgets::section_header(ui, tl!("Brush Scale Options"));
     let scales = [
@@ -284,6 +499,8 @@ fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
         }
     });
     flips(ui, d);
+    ui.add_space(4.0);
+    super::form::check(ui, d, "overlap", tl!("Overlap"));
 }
 
 /// A toggle button showing an arrow pointing the way `dir` runs. Whether it was clicked.
@@ -313,7 +530,7 @@ fn arrow_button(ui: &mut egui::Ui, dir: Direction, selected: bool, tip: &str) ->
 }
 
 fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, tl!("Scale:"), LABEL_W, |ui| number(ui, d, "scale", PatternBrush::SCALE_RANGE, "%", true));
+    slider_row(ui, d, "scale", tl!("Scale:"), PatternBrush::SCALE_RANGE);
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| number(ui, d, "spacing", PatternBrush::SPACING_RANGE, "%", true));
     ui.add_space(6.0);
     tiles(ui, d);
@@ -324,21 +541,60 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     radios(ui, d, "fit", &fits);
 }
 
-/// The pattern's five tiles, each with its art (or None when the brush has no such tile).
-fn tiles(ui: &mut egui::Ui, d: &Dialog) {
+/// Built-in corner choices. Original is disabled when the slot has no retained art or a listed
+/// swatch was selected.
+fn corner_choices() -> [(&'static str, &'static str); 6] {
+    [
+        (CornerSource::None.id(), tl!("None")),
+        ("original", tl!("Original")),
+        (CornerSource::AutoCentered.id(), tl!("Auto-Centered")),
+        (CornerSource::AutoBetween.id(), tl!("Auto-Between")),
+        (CornerSource::AutoSliced.id(), tl!("Auto-Sliced")),
+        (CornerSource::AutoOverlap.id(), tl!("Auto-Overlap")),
+    ]
+}
+
+pub(super) fn tile_choices(d: &Dialog, corner: bool) -> Vec<(String, String)> {
+    let mut choices: Vec<(String, String)> = if corner {
+        corner_choices().into_iter().map(|(id, label)| (id.into(), label.into())).collect()
+    } else {
+        vec![("none".into(), tl!("None").into()), ("original".into(), tl!("Original").into())]
+    };
+    choices.extend(pattern_names(d).into_iter().map(|name| (format!("pattern:{name}"), name)));
+    choices
+}
+
+/// The pattern's five tiles, each with its art (or None when the brush has no such tile). A menu
+/// below each preview selects retained art, no art, or a document pattern; corners also offer
+/// generated choices.
+fn tiles(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let names = [tl!("Outer Corner Tile"), tl!("Side Tile"), tl!("Inner Corner Tile"), tl!("Start Tile"), tl!("End Tile")];
-    let keys = d.fields.get("__tiles");
+    let preview_def = edited_def(d);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        for ((field, slot), name) in TILES.into_iter().zip(names) {
+        for ((field, _slot), name) in TILES.into_iter().zip(names) {
+            let corner = CORNER_TILES.iter().find(|(_, art, _, _)| *art == field).map(|(key, ..)| *key);
+            // The art the tile draws with: its own, or a corner's that falls back on the other's.
+            let drawn = if corner.is_some() { corner_art_field(Some(&preview_def), field) } else { Some(field) };
+            let choice = d.str(&tile_key(field));
+            let original_enabled = original_available(d, field);
+            let choices = tile_choices(d, corner.is_some());
+            // The label of the corner's choice when it shows no art.
+            let shown = (choice != "original" && pattern_choice(d, &choice).is_none()).then_some(choice.as_str());
+            let label = shown.and_then(|c| choices.iter().find(|(id, _)| id == c)).map_or(tl!("None"), |(_, l)| l.as_str());
             ui.vertical(|ui| {
                 let (r, resp) = ui.allocate_exact_size(vec2(76.0, 44.0), Sense::hover());
                 ui.painter().rect_filled(r, 0.0, Color32::WHITE);
-                let key = keys.and_then(|k| k.get(slot)).and_then(Value::as_str);
-                let tex = key.and_then(|key| {
+                let art_value = drawn.and_then(|f| preview_def.get(f)).filter(|_| shown.is_none());
+                let key = art_value.map(|art| {
+                    let mut h = std::collections::hash_map::DefaultHasher::new();
+                    art.to_string().hash(&mut h);
+                    format!("brush-tile:{:x}", h.finish())
+                });
+                let tex = key.as_deref().and_then(|key| {
                     widgets::doc_preview(ui, key, r.size(), |w, h| {
-                        let art: Node = serde_json::from_value(d.fields.get("__def")?.get(field)?.clone()).ok()?;
+                        let art: Node = serde_json::from_value(art_value?.clone()).ok()?;
                         tile_doc(&art, w, h)
                     })
                 });
@@ -347,21 +603,104 @@ fn tiles(ui: &mut egui::Ui, d: &Dialog) {
                         ui.painter().image(tex.id(), r, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
                     }
                     None => {
-                        ui.painter().text(
-                            r.center(),
-                            egui::Align2::CENTER_CENTER,
-                            tl!("None"),
-                            egui::FontId::proportional(11.5),
-                            Color32::from_gray(140),
-                        );
+                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(10.5), Color32::from_gray(140));
                     }
                 }
                 ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
                 resp.on_hover_text(name);
                 ui.add_sized(vec2(76.0, 14.0), egui::Label::new(egui::RichText::new(name).size(10.5).color(t.text_dim)).truncate());
+                let current = choices.iter().find(|(id, _)| id == &choice).map_or(tl!("None"), |(_, l)| l.as_str());
+                if let Some(id) = widgets::combo_named(ui, ("brush-pattern-tile", field), Some(name), current, 76.0, |ui| {
+                    choices.iter().enumerate().find_map(|(i, (id, label))| {
+                        ui.add_enabled(id != "original" || original_enabled, egui::Button::selectable(id == &choice, label.as_str()))
+                            .clicked()
+                            .then_some(i)
+                    })
+                })
+                .and_then(|i| choices.get(i).map(|(id, _)| id.clone()))
+                {
+                    let key = corner.unwrap_or_else(|| {
+                        if field == "side" {
+                            "sideTile"
+                        } else if field == "start" {
+                            "startTile"
+                        } else {
+                            "endTile"
+                        }
+                    });
+                    choose_corner(d, key, &id);
+                }
             });
         }
     });
+}
+
+/// Colorization Tips: for each method, a sample of the brush as OK would make it, painted with
+/// that method on a [`TIP_STROKE`] stroke (Hue Shift with the dialog's Key Color), beside the
+/// method's name and what it does. Screen readers call the popover "Colorization Tips" and each
+/// sample by its method's name.
+fn tips(ui: &mut egui::Ui, d: &Dialog) {
+    let t = Tokens::get(ui.ctx());
+    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_role(egui::accesskit::Role::Dialog);
+        node.set_label(tl!("Colorization Tips"));
+    });
+    ui.label(egui::RichText::new(tl!("Colorization Tips")).strong().color(t.text_strong));
+    ui.label(egui::RichText::new(tl!("The samples show this brush on a blue stroke.")).color(t.text_dim));
+    ui.add_space(4.0);
+    let names = [tl!("None"), tl!("Tints"), tl!("Tints and Shades"), tl!("Hue Shift")];
+    let about = [
+        tl!("The art keeps its own colors."),
+        tl!("Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness."),
+        tl!("Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it."),
+        tl!("The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness."),
+    ];
+    let (def, ty, key) = (edited_def(d), d.str("__type"), key_color(d));
+    for ((id, name), about) in Colorization::IDS.into_iter().zip(names).zip(about) {
+        let Some(method) = Colorization::parse(id, key) else { continue };
+        ui.horizontal(|ui| {
+            tip_sample(ui, &def, &ty, method, name);
+            ui.vertical(|ui| {
+                ui.set_width(TIP_TEXT_W);
+                ui.label(egui::RichText::new(name).strong().color(t.text_strong));
+                ui.label(egui::RichText::new(about).color(t.text));
+            });
+        });
+        ui.add_space(4.0);
+    }
+}
+
+/// A Colorization Tips sample: [`tip_doc`] on white, which screen readers call `name`.
+fn tip_sample(ui: &mut egui::Ui, def: &Value, ty: &str, method: Colorization, name: &str) {
+    let t = Tokens::get(ui.ctx());
+    let (r, resp) = ui.allocate_exact_size(TIP_SAMPLE, Sense::hover());
+    ui.painter().rect_filled(r, 0.0, Color32::WHITE);
+    let key = format!("brush-tip:{}:{def}", json!(method));
+    if let Some(tex) = widgets::doc_preview(ui, &key, r.size(), |w, h| tip_doc(def, ty, method, w, h)) {
+        ui.painter().image(tex.id(), r, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    }
+    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, name));
+}
+
+/// A document of `w` × `h` showing brush definition `def` (of type `ty`) with colorization
+/// `method`, drawn by [`vectorcraft_brush::stroke_pieces`] along a gentle S-curve stroked
+/// [`TIP_STROKE`] 1 pt wide, and scaled to fit, centered.
+pub(super) fn tip_doc(def: &Value, ty: &str, method: Colorization, w: f64, h: f64) -> Option<Document> {
+    let mut def = match def {
+        Value::Object(o) => o.clone(),
+        _ => Map::new(),
+    };
+    def.insert("name".into(), json!("tip"));
+    def.insert("type".into(), json!(ty));
+    def.insert("colorization".into(), serde_json::to_value(method).ok()?);
+    let brush: Brush = serde_json::from_value(Value::Object(def)).ok()?;
+    let ap = Appearance::basic(Paint::None, Paint::solid(TIP_STROKE), 1.0);
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((0.0, 20.0));
+    bp.curve_to((35.0, 6.0), (65.0, 34.0), (100.0, 20.0));
+    let pieces = vectorcraft_brush::stroke_pieces(&Document::new(w, h), &brush, &bp, ap.stroke()?);
+    tile_doc(&Node::group(NodeId(0), pieces.into_iter().map(Arc::new).collect()), w, h)
 }
 
 /// A document of `w` × `h` showing `art` scaled to fit, centred.
@@ -382,7 +721,15 @@ fn tile_doc(art: &Node, w: f64, h: f64) -> Option<Document> {
     Some(doc)
 }
 
-fn colorization_body(ui: &mut egui::Ui, d: &mut Dialog) {
+/// Key Color eyedropper: sample the next click on the art into this dialog's `keyColor`.
+fn key_color_eyedropper(app: &mut VectorcraftApp) {
+    let back = app.session.tool_id();
+    app.select_tool("eyedropper");
+    app.session.set_tool_option("brushKeyColor", &json!(true));
+    app.session.set_tool_option("stop", &json!(back));
+}
+
+fn colorization_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     widgets::section_header(ui, tl!("Colorization"));
     let methods = [tl!("None"), tl!("Tints"), tl!("Tints and Shades"), tl!("Hue Shift")];
     let cur = d.str("colorization");
@@ -392,6 +739,14 @@ fn colorization_body(ui: &mut egui::Ui, d: &mut Dialog) {
             .and_then(|i| Colorization::IDS.get(i))
         {
             d.fields.insert("colorization".into(), json!(id));
+        }
+        // Tips opens and closes Colorization Tips; Escape and a click outside it close it too.
+        ui.add_space(6.0);
+        let button = widgets::flat_button(ui, tl!("Tips"), 64.0);
+        let mut open = d.bool("tips") != button.clicked();
+        egui::Popup::from_response(&button).open_bool(&mut open).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| tips(ui, d));
+        if open != d.bool("tips") {
+            d.fields.insert("tips".into(), json!(open));
         }
     });
     // Hue Shift's key colour: the art colour that becomes the stroke colour.
@@ -408,6 +763,19 @@ fn colorization_body(ui: &mut egui::Ui, d: &mut Dialog) {
                     d.fields.insert("keyColor".into(), serde_json::to_value(c).unwrap_or_default());
                 }
             }
+            if widgets::icon_button(ui, "pipette", tl!("Eyedropper: click the art to sample the key color"), false, 22.0).clicked() {
+                key_color_eyedropper(app);
+            }
         });
     });
+}
+
+/// Apply a sampled colour to the open Brush Options dialog (`brushKeyColor` tool request).
+pub(super) fn apply_key_color_sample(app: &mut VectorcraftApp, color: &Value) {
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == super::brush_options::KIND) else { return };
+    if d.str("colorization") != "hueShift" {
+        return;
+    }
+    let Some(c) = vectorcraft_engine::cmd::color_value(color) else { return };
+    d.fields.insert("keyColor".into(), serde_json::to_value(c).unwrap_or_default());
 }

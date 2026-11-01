@@ -1,35 +1,47 @@
 //! What the interpreter doesn't tell the import, read from the file itself: the optional content
 //! groups (layers) with their states and nesting, which group each marked-content sequence belongs
-//! to, the isolate and knockout flags of transparency groups, the overprint parameters each path
-//! and each stretch of text is painted with, and the names of the fonts.
+//! to, the overprint parameters each path and each stretch of text is painted with, the Separation
+//! and DeviceN inks they are painted in (by their colorant names, which the interpreter drops), and
+//! the names of the fonts.
 //!
-//! hayro-interpret reports a marked-content sequence by its tag alone and a transparency group
-//! without its flags, and skips the content of groups that are off. So each page's content is
-//! walked here in the interpreter's order (page content, then form XObjects as they are drawn,
-//! skipping what it skips): the k-th `BDC`/`BMC` it reports is the k-th one found here (its tag
-//! checks that), the k-th form transparency group is the k-th group found here, and the k-th
-//! path it fills or strokes is the k-th one painted here (the page's count checks that). To import
-//! content that is off as hidden layers, [`all_on`] gives the file an update that turns every
-//! group on.
+//! hayro-interpret reports a marked-content sequence by its tag alone and skips the content of
+//! groups that are off. So each page's content is walked here in the interpreter's order (page
+//! content, then form XObjects as they are drawn, skipping what it skips): the k-th `BDC`/`BMC` it
+//! reports is the k-th one found here (its tag checks that), and the k-th path it fills or strokes
+//! is the k-th one painted here (the page's count checks that). To import content that is off as
+//! hidden layers, [`all_on`] gives the file an update that turns every group on.
 
 use std::collections::{HashMap, HashSet};
 
+use crate::import_color::items;
 use craft_pdf::interpret::CacheKey;
 use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::content::TypedIter;
 use craft_pdf::syntax::content::ops::TypedInstruction;
-use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, dict_or_stream};
+use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
 use craft_pdf::syntax::page::{Page, Resources};
 
 use crate::PdfError;
+use crate::import_color::ink_names;
 
 /// The interpreter's limit on nested form XObjects.
 const MAX_DEPTH: u32 = 50;
+
+/// The most graphics states saved at once (PDF's own limit for nesting is 28; files nest far deeper).
+const MAX_STATES: usize = 65_536;
 /// The most content operators walked per page (a guard against forms drawn within each other
 /// many times over): the art past it can't be told apart by group. A drawing of a million paths
 /// takes a few million; the walk reads about 15 million a second, twice as fast as the
 /// interpreter draws them.
 const MAX_OPS: usize = 64_000_000;
+/// The most bytes of form XObject content walked per page, a form drawn again counted again:
+/// [`MAX_OPS`] guards content that is mostly operators, this content that isn't (a form of long
+/// strings, inline image data or spaces). An operator takes some 10 to 40 bytes (a curve's six
+/// numbers about 40), so a page of ordinary content within `MAX_OPS` walks up to about this much;
+/// a page that draws a form decoding to 64 MiB a thousand times (#3569, which hung) stops at its
+/// 33rd reading. The interpreter reads every form again too, and nothing else bounds what it
+/// decodes. (2 GiB: within a 32-bit `usize`, for the web build.)
+const MAX_FORM_CONTENT: usize = 2 << 30;
 /// The most marked-content sequences noted per page (24 bytes each): past it the rest of the
 /// page isn't told apart either.
 const MAX_TAGS: usize = 4_000_000;
@@ -38,6 +50,10 @@ const MAX_GROUPS: usize = 10_000;
 /// Match the interpreter's ordinary content window and maximum incomplete instruction.
 const CONTENT_WINDOW: usize = 64 << 10;
 const MAX_WINDOW: usize = 256 << 20;
+/// The most Separation and DeviceN inks noted per page.
+const MAX_INKS: usize = 4096;
+/// The most changes of ink noted per page in the paths, and in the text (24 bytes each).
+const MAX_INK_CHANGES: usize = 2_000_000;
 /// The deepest layers nest in the configuration's `/Order`.
 pub(crate) const MAX_NESTING: usize = 32;
 
@@ -78,7 +94,7 @@ impl Ocgs {
         let config = props.get::<Dict<'_>>(b"D").unwrap_or_default();
         let refs = |d: &Dict<'_>, key: &[u8]| -> Vec<ObjectIdentifier> {
             d.get::<Array<'_>>(key)
-                .map(|a| a.raw_iter().filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).take(MAX_GROUPS).collect())
+                .map(|a| items(&a).filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).take(MAX_GROUPS).collect())
                 .unwrap_or_default()
         };
         let all = refs(&props, b"OCGs");
@@ -111,7 +127,7 @@ impl Ocgs {
     /// stays where it is first listed. `seen`: the entries read so far.
     fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &craft_pdf::syntax::xref::XRef, seen: &mut usize) {
         let mut prev = None;
-        for item in order.raw_iter() {
+        for item in items(order) {
             *seen += 1;
             if *seen > 4 * MAX_GROUPS {
                 return;
@@ -130,7 +146,7 @@ impl Ocgs {
             if let Some(sub) = sub
                 && depth < MAX_NESTING
             {
-                let label = matches!(sub.raw_iter().next(), Some(MaybeRef::NotRef(Object::String(_))));
+                let label = matches!(items(&sub).next(), Some(MaybeRef::NotRef(Object::String(_))));
                 let under = prev.take().filter(|_| !label).or(parent);
                 self.nest(&sub, under, depth + 1, xref, seen);
             }
@@ -177,7 +193,7 @@ impl Ocgs {
     /// object) belongs to: a membership dictionary's first group.
     fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &craft_pdf::syntax::xref::XRef) -> Option<usize> {
         if d.get::<Name<'_>>(b"Type").is_some_and(|t| t.as_ref() == b"OCMD") {
-            let first = d.get::<Array<'_>>(b"OCGs").and_then(|a| a.raw_iter().find_map(|i| i.as_obj_ref())).or_else(|| d.get_ref(b"OCGs"))?;
+            let first = d.get::<Array<'_>>(b"OCGs").and_then(|a| items(&a).find_map(|i| i.as_obj_ref())).or_else(|| d.get_ref(b"OCGs"))?;
             let id = ObjectIdentifier::from(first);
             return self.note(id, &xref.get::<Dict<'_>>(id)?);
         }
@@ -204,7 +220,7 @@ fn usage(d: &Dict<'_>, category: &[u8], key: &[u8]) -> Option<bool> {
 }
 
 /// A PDF text string: UTF-16 (with its byte order mark), UTF-8 (with one) or PDFDocEncoding
-/// (read as Latin-1, which it matches for letters).
+/// (ISO 32000-1 Annex D, Table D.2).
 pub(crate) fn text_string(b: &[u8]) -> String {
     if let Some(rest) = b.strip_prefix(&[0xFE, 0xFF]) {
         let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).collect();
@@ -213,7 +229,25 @@ pub(crate) fn text_string(b: &[u8]) -> String {
     if let Some(rest) = b.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
         return String::from_utf8_lossy(rest).into_owned();
     }
-    b.iter().map(|&c| c as char).collect()
+    b.iter().map(|&c| pdf_doc_char(c)).collect()
+}
+
+/// Byte `c` of a PDFDocEncoding string. It matches Latin-1 except at 0x18 to 0x1F (accents) and
+/// 0x80 to 0xA0 (punctuation, ligatures, letters and the euro sign); 0x9F has no character and
+/// stays as it is.
+fn pdf_doc_char(c: u8) -> char {
+    const ACCENTS: [char; 8] = ['\u{2D8}', '\u{2C7}', '\u{2C6}', '\u{2D9}', '\u{2DD}', '\u{2DB}', '\u{2DA}', '\u{2DC}'];
+    const HIGH: [char; 33] = [
+        '\u{2022}', '\u{2020}', '\u{2021}', '\u{2026}', '\u{2014}', '\u{2013}', '\u{192}', '\u{2044}', '\u{2039}', '\u{203A}', '\u{2212}',
+        '\u{2030}', '\u{201E}', '\u{201C}', '\u{201D}', '\u{2018}', '\u{2019}', '\u{201A}', '\u{2122}', '\u{FB01}', '\u{FB02}', '\u{141}', '\u{152}',
+        '\u{160}', '\u{178}', '\u{17D}', '\u{131}', '\u{142}', '\u{153}', '\u{161}', '\u{17E}', '\u{9F}', '\u{20AC}',
+    ];
+    let mapped = match c {
+        0x18..=0x1F => ACCENTS.get(usize::from(c - 0x18)),
+        0x80..=0xA0 => HIGH.get(usize::from(c - 0x80)),
+        _ => None,
+    };
+    mapped.copied().unwrap_or(char::from(c))
 }
 
 /// One page as the interpreter walks it.
@@ -222,8 +256,6 @@ pub(crate) struct Scan {
     /// Each marked-content sequence: its tag ([`tag_key`]) and the group (index into
     /// [`Ocgs::list`]) it marks.
     pub tags: Vec<(u64, Option<usize>)>,
-    /// Each form transparency group: isolated, knockout.
-    pub groups: Vec<(bool, bool)>,
     /// Content was incomplete or a scan limit was reached. No document may be returned from
     /// this scan, since its routing no longer describes every object the interpreter draws.
     pub cut: bool,
@@ -233,11 +265,115 @@ pub(crate) struct Scan {
     /// How the text shown before each of [`Self::paints`] (since the one before it) overprints,
     /// and last the text after them all: one more entry than `paints`.
     pub texts: Vec<TextOverprint>,
-    /// Something on the page overprints (when nothing does, `paints` and `texts` aren't used).
+    /// Something on the page overprints (when nothing does, the overprint flags in `paints` and
+    /// `texts` aren't read).
     pub overprints: bool,
     /// Something overprints with overprint mode 0, where a `DeviceCMYK` colour's zero components
     /// knock out; the document's overprint is the nonzero one (mode 1).
     pub zero_mode: bool,
+    /// The colorant names of the Separation and DeviceN spaces the page sets (`cs`, `CS`), and of
+    /// those of the shading patterns it sets (`scn`, `SCN`) and of the shadings it draws (`sh`),
+    /// each once (none when the page uses more than [`MAX_INKS`] inks or changes ink more than
+    /// [`MAX_INK_CHANGES`] times).
+    pub inks: Vec<Vec<String>>,
+    /// The inks each of [`Self::paints`] is painted in.
+    paint_inks: Changes<Inks>,
+    /// The inks of the text before each of [`Self::paints`], counted as [`Self::texts`] is: of its
+    /// fills and of its strokes (indices into [`Self::inks`]), where all of its text shown in an
+    /// ink is shown in the same one.
+    text_inks: Changes<[Option<u32>; 2]>,
+}
+
+impl Scan {
+    /// The colorant names of the ink the walk found `at` painted in: a path's, or the fills' (the
+    /// `stroke`s') of the text before a path. `pattern`: the interpreter paints with a pattern,
+    /// whose shading's ink it is (text painted with one isn't followed); else the color space's.
+    pub fn ink(&self, at: Walked, stroke: bool, pattern: bool) -> Option<&[String]> {
+        let i = match at {
+            Walked::Path(k) => {
+                let inks = self.paint_inks.at(k);
+                if pattern { inks.pattern } else { inks.space }
+            }
+            Walked::Text(_) if pattern => None,
+            Walked::Text(k) => self.text_inks.at(k)[usize::from(stroke)],
+        }?;
+        self.inks.get(usize::try_from(i).ok()?).map(Vec::as_slice)
+    }
+}
+
+/// The inks a fill or a stroke paints in (indices into [`Scan::inks`]): that of the color space
+/// set last (`cs`, `CS`), and that of the shading of the pattern named last (`scn`, `SCN`). The
+/// interpreter's paint, a color or a pattern, says which of the two it is.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Inks {
+    space: Option<u32>,
+    pattern: Option<u32>,
+}
+
+/// What the interpreter draws, counted as the walk counts it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Walked {
+    /// The `k`-th path ([`Scan::paints`]).
+    Path(usize),
+    /// The text shown before the `k`-th path ([`Scan::texts`]).
+    Text(usize),
+}
+
+/// A value for each index from 0, kept as the indices where it changes (the default before the
+/// first).
+#[derive(Default)]
+struct Changes<T>(Vec<(usize, T)>);
+
+impl<T: Copy + Default + PartialEq> Changes<T> {
+    /// The value is `v` from index `at` on (`at` past the indices set before). `false`: the value
+    /// changes there and [`MAX_INK_CHANGES`] changes are kept already, so this one isn't kept.
+    fn set(&mut self, at: usize, v: T) -> bool {
+        if self.0.last().map_or(T::default(), |(_, last)| *last) == v {
+            return true;
+        }
+        if self.0.len() >= MAX_INK_CHANGES {
+            return false;
+        }
+        self.0.push((at, v));
+        true
+    }
+
+    /// The value at index `k`.
+    fn at(&self, k: usize) -> T {
+        let n = self.0.partition_point(|(at, _)| *at <= k);
+        n.checked_sub(1).and_then(|i| self.0.get(i)).map_or(T::default(), |(_, v)| *v)
+    }
+}
+
+/// The ink of the text shown between two painted paths: of its fills, or of its strokes.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum RunInk {
+    /// No text is shown in an ink.
+    #[default]
+    None,
+    /// All of the text shown in an ink is shown in this one.
+    One(u32),
+    /// Text is shown in several inks, which can't be told apart by glyph.
+    Several,
+}
+
+impl RunInk {
+    /// With more text shown in `ink` (`None`: in no ink).
+    fn and(self, ink: Option<u32>) -> Self {
+        match (self, ink) {
+            (_, None) => self,
+            (Self::None, Some(i)) => Self::One(i),
+            (Self::One(j), Some(i)) if i == j => self,
+            _ => Self::Several,
+        }
+    }
+
+    fn ink(self) -> Option<u32> {
+        match self {
+            Self::One(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 
 /// How the text shown between two painted paths overprints.
@@ -252,14 +388,16 @@ pub(crate) enum TextOverprint {
     Mixed,
 }
 
-/// The overprint parameters of the graphics state (ISO 32000-1 §8.6.7; `OP`, `op` and `OPM` in
-/// Table 58).
+/// What the walk follows of the graphics state: the overprint parameters (ISO 32000-1 §8.6.7;
+/// `OP`, `op` and `OPM` in Table 58) and the inks fills and strokes paint in.
 #[derive(Clone, Copy, Default)]
-struct Overprint {
+struct State {
     stroke: bool,
     fill: bool,
     /// Overprint mode 1 (nonzero overprint).
     nonzero: bool,
+    /// The inks of fills and of strokes.
+    inks: [Inks; 2],
 }
 
 /// A marked-content tag as [`Scan::tags`] keeps it: its FNV-1a hash (the tags are only compared,
@@ -327,14 +465,24 @@ struct Walker<'w, 'p> {
     ops: usize,
     max_ops: usize,
     max_form_bytes: usize,
+    /// The bytes of form content walked so far ([`MAX_FORM_CONTENT`]).
+    form_content: usize,
     out: Scan,
     /// A form XObject hidden by its own optional content was met.
     hidden_form: bool,
-    /// The saved graphics states' overprint parameters, the current one last, pushed and popped
-    /// as the interpreter does its states.
-    states: Vec<Overprint>,
+    /// The saved graphics states' overprint parameters and inks, the current one last, pushed and
+    /// popped as the interpreter does its states.
+    states: Vec<State>,
+    /// The `q`s past [`MAX_STATES`] whose `Q` has not come.
+    unkept: usize,
     /// The text shown since the last painted path.
     text: TextOverprint,
+    /// The inks of the text shown since the last painted path: of its fills, of its strokes.
+    text_inks: [RunInk; 2],
+    /// The index in [`Scan::inks`] of each list of colorant names.
+    ink_index: HashMap<Vec<String>, u32>,
+    /// More inks or changes of ink than are kept: the page's inks are left out.
+    inks_cut: bool,
 }
 
 impl Walker<'_, '_> {
@@ -355,7 +503,7 @@ impl Walker<'_, '_> {
             Some(id) if !membership => !self.off.contains(&id),
             _ => {
                 let ids: Vec<ObjectIdentifier> = match d.get::<Array<'_>>(b"OCGs") {
-                    Some(a) => a.raw_iter().filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).collect(),
+                    Some(a) => items(&a).filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).collect(),
                     None => d.get_ref(b"OCGs").map(ObjectIdentifier::from).into_iter().collect(),
                 };
                 let on = |i: &ObjectIdentifier| !self.off.contains(i);
@@ -371,17 +519,25 @@ impl Walker<'_, '_> {
         self.begin(on);
     }
 
-    fn state(&self) -> Overprint {
+    fn state(&self) -> State {
         self.states.last().copied().unwrap_or_default()
     }
 
     fn save(&mut self) {
+        // Past this many nested states the new ones are not kept (a stream of `q` is cheap to write
+        // and holds a state each); their `Q`s are counted off first.
+        if self.states.len() >= MAX_STATES {
+            self.unkept = self.unkept.saturating_add(1);
+            return;
+        }
         self.states.push(self.state());
     }
 
     /// The interpreter never pops its first state.
     fn restore(&mut self) {
-        if self.states.len() > 1 {
+        if self.unkept > 0 {
+            self.unkept -= 1;
+        } else if self.states.len() > 1 {
             self.states.pop();
         }
     }
@@ -399,8 +555,11 @@ impl Walker<'_, '_> {
         let s = self.state();
         let on = if stroke { s.stroke } else { s.fill };
         self.overprinting(on);
+        let k = self.out.paints.len();
         self.out.paints.push(on);
         self.out.texts.push(std::mem::take(&mut self.text));
+        self.inks_cut |= !self.out.paint_inks.set(k, s.inks[usize::from(stroke)]);
+        self.inks_cut |= !self.out.text_inks.set(k, std::mem::take(&mut self.text_inks).map(RunInk::ink));
     }
 
     /// The interpreter shows text.
@@ -412,14 +571,75 @@ impl Walker<'_, '_> {
         self.overprinting(s.fill || s.stroke);
         let now = TextOverprint::All { fill: s.fill, stroke: s.stroke };
         self.text = if self.text == TextOverprint::None || self.text == now { now } else { TextOverprint::Mixed };
+        // Text painted with a pattern isn't followed, so only the color spaces' inks count.
+        for (run, inks) in self.text_inks.iter_mut().zip(s.inks) {
+            *run = run.and(inks.space);
+        }
+    }
+
+    /// The color space of fills (or of `stroke`s) is in ink `ink` from now on.
+    fn set_space(&mut self, stroke: bool, ink: Option<u32>) {
+        if let Some(s) = self.states.last_mut() {
+            s.inks[usize::from(stroke)].space = ink;
+        }
+    }
+
+    /// The pattern of fills (or of `stroke`s) is in ink `ink` from now on.
+    fn set_pattern(&mut self, stroke: bool, ink: Option<u32>) {
+        if let Some(s) = self.states.last_mut() {
+            s.inks[usize::from(stroke)].pattern = ink;
+        }
+    }
+
+    /// The ink of color space `name` (`cs`, `CS`): a Separation or DeviceN space of the resources.
+    /// The names the interpreter reads as device and pattern spaces come first, as it reads them.
+    fn space_ink(&mut self, name: &Name<'_>, res: &Resources<'_>) -> Option<u32> {
+        if matches!(name.as_ref(), b"DeviceRGB" | b"RGB" | b"DeviceGray" | b"G" | b"DeviceCMYK" | b"CMYK" | b"CalCMYK" | b"Pattern") {
+            return None;
+        }
+        self.ink_of(&res.get_color_space(name)?)
+    }
+
+    /// The ink pattern `name` paints in (`scn`, `SCN`): a shading pattern's (a dictionary, where a
+    /// tiling pattern is a stream) is its shading's.
+    fn pattern_ink(&mut self, name: &Name<'_>, res: &Resources<'_>) -> Option<u32> {
+        let Object::Dict(p) = res.get_pattern(name)? else { return None };
+        self.shading_ink(&p.get::<Object<'_>>(b"Shading")?)
+    }
+
+    /// The ink of a shading (a dictionary or a stream): its color space's.
+    fn shading_ink(&mut self, shading: &Object<'_>) -> Option<u32> {
+        let (d, _) = dict_or_stream(shading)?;
+        self.ink_of(&d.get::<Object<'_>>(b"ColorSpace")?)
+    }
+
+    /// The index in [`Scan::inks`] of color space `o` when it is a Separation or DeviceN array, its
+    /// colorant names noted when new.
+    fn ink_of(&mut self, o: &Object<'_>) -> Option<u32> {
+        let Object::Array(a) = o else { return None };
+        let (_, names) = ink_names(&mut a.flex_iter())?;
+        if let Some(i) = self.ink_index.get(&names) {
+            return Some(*i);
+        }
+        if self.out.inks.len() >= MAX_INKS {
+            self.inks_cut = true;
+            return None;
+        }
+        let i = u32::try_from(self.out.inks.len()).ok()?;
+        self.ink_index.insert(names.clone(), i);
+        self.out.inks.push(names);
+        Some(i)
     }
 
     fn note_fonts(&mut self, res: &Resources<'_>) {
-        for (key, _) in res.fonts.entries() {
+        for key in res.fonts.keys() {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
-                && let Some(name) = f.get::<Name<'_>>(b"BaseFont")
+                && let Some(name) = font_name(&f)
             {
-                self.fonts.entry(f.cache_key()).or_insert_with(|| (String::from_utf8_lossy(name.as_ref()).into_owned(), embeds_glyphs(&f)));
+                self.fonts.entry(f.cache_key()).or_insert_with(|| {
+                    let embedded = embeds_glyphs(&f);
+                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded) }
+                });
             }
         }
     }
@@ -544,11 +764,45 @@ impl Walker<'_, '_> {
                     self.painted(false);
                     self.painted(true);
                 }
-                // Drawn when the interpreter can read the shading: the page's count tells.
+                // Drawn when the interpreter can read the shading (the page's count tells), as a
+                // fill in a state of its own, in the shading's ink.
                 TypedInstruction::Shading(s) => {
-                    if res.get_shading(s.0).is_some() {
+                    if let Some(sh) = res.get_shading(s.0) {
+                        let ink = self.shading_ink(&sh);
+                        self.save();
+                        self.set_pattern(false, ink);
                         self.painted(false);
+                        self.restore();
                     }
+                }
+                TypedInstruction::ColorSpaceNonStroke(cs) => {
+                    let ink = self.space_ink(cs.0, res);
+                    self.set_space(false, ink);
+                }
+                TypedInstruction::ColorSpaceStroke(cs) => {
+                    let ink = self.space_ink(cs.0, res);
+                    self.set_space(true, ink);
+                }
+                // A pattern by name; without one, `scn` sets a color in the space set before.
+                TypedInstruction::NonStrokeColorNamed(c) => {
+                    if let Some(name) = c.1 {
+                        let ink = self.pattern_ink(name, res);
+                        self.set_pattern(false, ink);
+                    }
+                }
+                TypedInstruction::StrokeColorNamed(c) => {
+                    if let Some(name) = c.1 {
+                        let ink = self.pattern_ink(name, res);
+                        self.set_pattern(true, ink);
+                    }
+                }
+                TypedInstruction::NonStrokeColorDeviceGray(_)
+                | TypedInstruction::NonStrokeColorDeviceRgb(_)
+                | TypedInstruction::NonStrokeColorCmyk(_) => {
+                    self.set_space(false, None);
+                }
+                TypedInstruction::StrokeColorDeviceGray(_) | TypedInstruction::StrokeColorDeviceRgb(_) | TypedInstruction::StrokeColorCmyk(_) => {
+                    self.set_space(true, None);
                 }
                 TypedInstruction::ShowText(_)
                 | TypedInstruction::ShowTexts(_)
@@ -571,6 +825,11 @@ impl Walker<'_, '_> {
                         self.out.cut = true;
                         return;
                     };
+                    self.form_content = self.form_content.saturating_add(data.len());
+                    if self.form_content > MAX_FORM_CONTENT {
+                        self.out.cut = true;
+                        return;
+                    }
                     // Ordinary filtered form decoders may return a prefix at their limit.
                     // Reaching that bound cannot certify a complete form, even at an operator boundary.
                     if !s.filters().is_empty() && data.len() >= self.max_form_bytes {
@@ -583,13 +842,6 @@ impl Walker<'_, '_> {
                         self.hidden_form |= !self.is_visible();
                     }
                     if self.is_visible() {
-                        if let Some(g) = d.get::<Dict<'_>>(b"Group") {
-                            if self.out.groups.len() >= MAX_GROUPS {
-                                self.out.cut = true;
-                                return;
-                            }
-                            self.out.groups.push((g.get::<bool>(b"I").unwrap_or(false), g.get::<bool>(b"K").unwrap_or(false)));
-                        }
                         // (Its own resources, or without any those of what draws it: as the interpreter reads them.)
                         let inner = Resources::from_scope(d.get::<Dict<'_>>(b"Resources"), res.clone());
                         self.save();
@@ -609,9 +861,171 @@ impl Walker<'_, '_> {
     }
 }
 
-/// The fonts of a document by cache key: base font name, and whether the file carries the glyphs
-/// ([`embeds_glyphs`]).
-pub(crate) type FontNames = HashMap<u128, (String, bool)>;
+/// The fonts of a document by cache key.
+pub(crate) type FontNames = HashMap<u128, FontNote>;
+
+/// What a document says of one of its fonts.
+#[derive(Debug)]
+pub(crate) struct FontNote {
+    /// Its base (PostScript) font name.
+    pub name: String,
+    /// The file carries its glyphs ([`embeds_glyphs`]).
+    pub embedded: bool,
+    /// A composite font written vertically: its descendant's metrics.
+    pub vertical: Option<Vertical>,
+}
+
+/// The most CIDs a vertical font's widths are read for (the most a CID-keyed font has).
+const MAX_CIDS: u32 = 65_536;
+
+/// A vertical composite font's metrics (ISO 32000-1 §9.7.4.3), in glyph space (1000 units an em):
+/// where each glyph's position vector puts the column's centre.
+#[derive(Debug, Default)]
+pub(crate) struct Vertical {
+    /// The default width (`DW`, w0).
+    default: f64,
+    /// Widths by CID (`W`).
+    widths: HashMap<u32, f64>,
+    /// The position vector's x by CID (`W2`'s vx).
+    vx: HashMap<u32, f64>,
+    /// The CID of each glyph: `None` when they can't be told (a CID-keyed CFF font's charset
+    /// decides, or a font the file doesn't carry is drawn with a stand-in's glyphs).
+    cids: Option<Cids>,
+}
+
+/// How glyph ids map back to CIDs.
+#[derive(Debug)]
+enum Cids {
+    /// The same (`CIDToGIDMap` `/Identity`, or none).
+    Identity,
+    /// The first CID of each glyph a `CIDToGIDMap` stream maps.
+    Map(HashMap<u32, u32>),
+}
+
+impl Vertical {
+    /// How far right of glyph `gid`'s origin (glyph space) the column's centre is: the position
+    /// vector's vx from `W2`, else half the glyph's width (w0 from `W`, or `DW`).
+    pub fn centre(&self, gid: u32) -> f64 {
+        let cid = match &self.cids {
+            Some(Cids::Identity) => Some(gid),
+            Some(Cids::Map(m)) => m.get(&gid).copied(),
+            None => None,
+        };
+        let w0 = |cid: Option<u32>| cid.and_then(|c| self.widths.get(&c)).copied().unwrap_or(self.default) * 0.5;
+        cid.and_then(|c| self.vx.get(&c)).copied().unwrap_or_else(|| w0(cid))
+    }
+}
+
+/// The vertical metrics of font `f` when it is a composite font written vertically (its CMap's
+/// writing mode is 1), from its descendant CIDFont. `embedded`: the file carries its glyphs.
+pub(crate) fn vertical_metrics(f: &Dict<'_>, embedded: bool) -> Option<Vertical> {
+    if f.get::<Name<'_>>(b"Subtype")?.as_ref() != b"Type0" {
+        return None;
+    }
+    let vertical = match f.get::<Name<'_>>(b"Encoding") {
+        Some(n) => n.as_ref().ends_with(b"-V"),
+        None => f.get::<Stream<'_>>(b"Encoding").is_some_and(|s| s.dict().get::<i32>(b"WMode") == Some(1)),
+    };
+    if !vertical {
+        return None;
+    }
+    let d = f.get::<Array<'_>>(b"DescendantFonts").and_then(|a| a.iter::<Dict<'_>>().next())?;
+    let finite = |v: f64| v.is_finite() && v.abs() < 1e5;
+    let default = d.get::<f64>(b"DW").filter(|w| finite(*w)).unwrap_or(1000.0);
+    let mut widths = HashMap::new();
+    if let Some(w) = d.get::<Array<'_>>(b"W") {
+        cid_ranges(&w, 1, |cid, v| {
+            if let [w0] = v {
+                widths.insert(cid, *w0);
+            }
+        });
+    }
+    let mut vx = HashMap::new();
+    if let Some(w2) = d.get::<Array<'_>>(b"W2") {
+        cid_ranges(&w2, 3, |cid, v| {
+            if let [_, x, _] = v {
+                vx.insert(cid, *x);
+            }
+        });
+    }
+    widths.retain(|_, w| finite(*w));
+    vx.retain(|_, x| finite(*x));
+    let true_type = d.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"CIDFontType2");
+    let cids = if !embedded || !true_type {
+        None
+    } else if let Some(s) = d.get::<Stream<'_>>(b"CIDToGIDMap") {
+        // Two bytes a CID, the glyph it maps to.
+        let data = s.decoded().ok()?;
+        let mut m = HashMap::new();
+        for (cid, g) in (0..MAX_CIDS).zip(data.as_chunks::<2>().0) {
+            m.entry(u32::from(u16::from_be_bytes(*g))).or_insert(cid);
+        }
+        Some(Cids::Map(m))
+    } else {
+        Some(Cids::Identity)
+    };
+    Some(Vertical { default, widths, vx, cids })
+}
+
+/// Each CID a `W` or `W2` array (`per` numbers a CID) gives values for, and its values: `c [v…]`
+/// gives CIDs from c on their values in turn, `c_first c_last v…` the same values to each of the
+/// range. At most [`MAX_CIDS`] CIDs are read.
+fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
+    let mut it = a.flex_iter();
+    let mut read = 0;
+    loop {
+        if let Some((first, list)) = it.next::<(u32, Array<'_>)>() {
+            let values: Vec<f64> = list.iter::<f64>().collect();
+            for (cid, v) in (first..=u32::MAX).zip(values.chunks_exact(per)) {
+                read += 1;
+                if read > MAX_CIDS {
+                    return;
+                }
+                each(cid, v);
+            }
+        } else if per == 1
+            && let Some((first, last, w)) = it.next::<(u32, u32, f64)>()
+        {
+            for cid in first..=last.min(first.saturating_add(MAX_CIDS)) {
+                read += 1;
+                if read > MAX_CIDS {
+                    return;
+                }
+                each(cid, &[w]);
+            }
+        } else if per == 3
+            && let Some((first, last, w, x, y)) = it.next::<(u32, u32, f64, f64, f64)>()
+        {
+            for cid in first..=last.min(first.saturating_add(MAX_CIDS)) {
+                read += 1;
+                if read > MAX_CIDS {
+                    return;
+                }
+                each(cid, &[w, x, y]);
+            }
+        } else {
+            return;
+        }
+    }
+}
+
+/// The PostScript name of font `f`: its `BaseFont`. A composite (Type 0) font's `BaseFont` is its
+/// CIDFont's name, a hyphen and its CMap's (`Name-Identity-H`, ISO 32000-1 §9.7.6.1), so its
+/// descendant CIDFont's `BaseFont` is taken, the font program's own name (§9.7.4.1); without one,
+/// the `BaseFont` without the CMap's name on its end.
+fn font_name(f: &Dict<'_>) -> Option<String> {
+    let base = String::from_utf8_lossy(f.get::<Name<'_>>(b"BaseFont")?.as_ref()).into_owned();
+    if f.get::<Name<'_>>(b"Subtype").is_none_or(|s| s.as_ref() != b"Type0") {
+        return Some(base);
+    }
+    let descendant = f.get::<Array<'_>>(b"DescendantFonts").and_then(|a| a.iter::<Dict<'_>>().next());
+    if let Some(name) = descendant.and_then(|d| d.get::<Name<'_>>(b"BaseFont")).filter(|n| !n.as_ref().is_empty()) {
+        return Some(String::from_utf8_lossy(name.as_ref()).into_owned());
+    }
+    let cmap = f.get::<Name<'_>>(b"Encoding").map(|n| String::from_utf8_lossy(n.as_ref()).into_owned());
+    let stripped = cmap.and_then(|c| base.strip_suffix(c.as_str())?.strip_suffix('-').filter(|b| !b.is_empty()).map(str::to_string));
+    Some(stripped.unwrap_or(base))
+}
 
 /// Whether font `f` carries its own glyphs: a font program in its descriptor (a composite font's in
 /// its descendant's), or a Type 3 font's glyph procedures. A font that doesn't is drawn with a
@@ -646,12 +1060,21 @@ fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &
         ops: 0,
         max_ops: max_ops(),
         max_form_bytes,
+        form_content: 0,
         out: Scan::default(),
         hidden_form: false,
-        states: vec![Overprint::default()],
+        states: vec![State::default()],
+        unkept: 0,
         text: TextOverprint::None,
+        text_inks: [RunInk::None; 2],
+        ink_index: HashMap::new(),
+        inks_cut: false,
     };
     w.page(page);
+    w.inks_cut |= !w.out.text_inks.set(w.out.paints.len(), w.text_inks.map(RunInk::ink));
+    if w.inks_cut {
+        w.out.inks.clear();
+    }
     w.out.texts.push(w.text);
     w
 }

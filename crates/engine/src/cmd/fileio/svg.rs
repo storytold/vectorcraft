@@ -120,7 +120,9 @@ pub fn options_map(p: &Value) -> Result<Map<String, Value>, String> {
     match o.get("svg") {
         None | Some(Value::Null) => {}
         Some(Value::Object(svg)) => m.extend(svg.clone()),
-        Some(_) => return Err("`svg` must be an object of SVG options (see document.formats)".into()),
+        Some(_) => {
+            return Err("`svg` must be an object of SVG options (see document.formats)".into());
+        }
     }
     Ok(m)
 }
@@ -147,6 +149,17 @@ fn plan(doc: &Document, p: &Value) -> Result<(ExportOptions, Vec<Option<usize>>,
     Ok((opts, named.unwrap_or_else(|| vec![0]).into_iter().map(Some).collect(), chosen))
 }
 
+/// What a save of `doc` as SVG (format `label`) with options `p` loses of several artboards: the
+/// file is one artboard and reopens as one, unless it carries the native document (Preserve
+/// Editing Capabilities).
+pub(super) fn lost_artboards_warning(doc: &Document, p: &Value, label: &str) -> Option<String> {
+    let n = doc.artboards.len();
+    let preserved = plan(doc, p).is_ok_and(|(opts, ..)| opts.preserve_editing);
+    (n > 1 && !preserved).then(|| {
+        format!("{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.")
+    })
+}
+
 /// Encode `doc` as SVG (or gzipped, SVGZ): one file per chosen artboard, with the images they
 /// link to and the writer's warnings.
 pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Encoded, String> {
@@ -156,15 +169,22 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
     // Draw linked files as vectors when available, or their previews with a warning. Keep
     // that preparation out of the native attachment so missing links remain relinkable.
     let (full, warnings) = crate::cmd::place::document::full_documents(doc);
-    let doc = &*full;
-    // SVG has no filters for the Photoshop-style effects: their objects go in as images.
+    // The artboards' background colors, behind the art (the editing data keeps them as colors).
+    let filled = super::export::with_artboard_fills(&full, p, boards.iter().flatten().copied())?;
+    let doc = &*filled;
+    // A chosen artboard's file holds the art over it; otherwise the file holds all of it.
+    let regions: Option<Vec<vectorcraft_geom::Rect>> =
+        chosen.then(|| boards.iter().flatten().filter_map(|b| doc.artboards.get(*b)).map(|a| a.rect).collect());
+    let overflow = crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, regions.as_deref());
+    // Render effects SVG cannot represent faithfully, including source-model Darkness shadows.
     let flat = crate::cmd::rasterfx::flatten_pixel_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);
     let mut enc = Encoded { warnings, ..Encoded::default() };
     for artboard in boards {
-        // A chosen artboard's file holds the art over it (#550).
+        // A chosen artboard's file holds the art over it (#550) and is named after it (#3544).
         let over = artboard.filter(|_| chosen).and_then(|b| doc.artboards.get(b)).map(|a| super::export::art_over(doc, a.rect));
-        let mut out = vectorcraft_svg::export_full(over.as_ref().unwrap_or(doc), &ExportOptions { artboard, ..opts.clone() }, native.as_deref());
+        let file = ExportOptions { artboard, artboard_title: chosen, ..opts.clone() };
+        let mut out = vectorcraft_svg::export_full(over.as_ref().unwrap_or(doc), &file, native.as_deref());
         let bytes = out.take_bytes();
         for l in out.linked {
             if !enc.linked.iter().any(|e| e.name == l.name) {
@@ -184,5 +204,6 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
     {
         enc.warnings.push(w);
     }
+    enc.warnings.extend(overflow);
     Ok(enc)
 }

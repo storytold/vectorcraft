@@ -11,13 +11,20 @@ use serde_json::Value;
 /// Most nesting [`resolve`] walks into: deeper parameters are left as they are.
 const MAX_DEPTH: usize = 64;
 
+/// The most the values references copy in may weigh together ([`weight`]: about their JSON size),
+/// for one step's parameters. Each reference copies its value, so a short list of references to
+/// one large result multiplied it.
+const MAX_COPIED: usize = 256 << 20;
+
 /// `params` with every step reference replaced from `results` (the results of the steps run so
-/// far, in order); an error names a reference that resolves to nothing.
+/// far, in order); an error names a reference that resolves to nothing, or the reference past
+/// which the copied values weigh more than [`MAX_COPIED`].
 pub fn resolve(params: &Value, results: &[Value]) -> Result<Value, String> {
-    resolve_at(params, results, 0)
+    let mut allowance = MAX_COPIED;
+    resolve_at(params, results, 0, &mut allowance)
 }
 
-fn resolve_at(v: &Value, results: &[Value], depth: usize) -> Result<Value, String> {
+fn resolve_at(v: &Value, results: &[Value], depth: usize, allowance: &mut usize) -> Result<Value, String> {
     if depth > MAX_DEPTH {
         return Ok(v.clone());
     }
@@ -25,14 +32,47 @@ fn resolve_at(v: &Value, results: &[Value], depth: usize) -> Result<Value, Strin
         Value::String(s) => match s.strip_prefix("$$") {
             Some(rest) => Value::String(format!("${rest}")),
             None => match parse(s) {
-                Some((step, path)) => lookup(s, step, &path, results)?,
+                Some((step, path)) => {
+                    let found = lookup(s, step, &path, results)?;
+                    *allowance = weight(found, *allowance)
+                        .and_then(|w| allowance.checked_sub(w))
+                        .ok_or_else(|| format!("`{s}`: the step's references copy in more than {} MB of values", MAX_COPIED >> 20))?;
+                    found.clone()
+                }
                 None => v.clone(),
             },
         },
-        Value::Array(a) => Value::Array(a.iter().map(|x| resolve_at(x, results, depth + 1)).collect::<Result<_, _>>()?),
-        Value::Object(o) => Value::Object(o.iter().map(|(k, x)| Ok((k.clone(), resolve_at(x, results, depth + 1)?))).collect::<Result<_, String>>()?),
+        Value::Array(a) => Value::Array(a.iter().map(|x| resolve_at(x, results, depth + 1, allowance)).collect::<Result<_, _>>()?),
+        Value::Object(o) => {
+            Value::Object(o.iter().map(|(k, x)| Ok((k.clone(), resolve_at(x, results, depth + 1, allowance)?))).collect::<Result<_, String>>()?)
+        }
         _ => v.clone(),
     })
+}
+
+/// About the bytes `v` takes as JSON (8 per value, plus its strings and keys); `None` once that
+/// passes `limit`, without looking further.
+fn weight(v: &Value, limit: usize) -> Option<usize> {
+    let mut total = 0usize;
+    let mut todo = vec![v];
+    while let Some(v) = todo.pop() {
+        total = total.checked_add(8)?;
+        match v {
+            Value::String(s) => total = total.checked_add(s.len())?,
+            Value::Array(a) => todo.extend(a),
+            Value::Object(o) => {
+                for (k, x) in o {
+                    total = total.checked_add(k.len())?;
+                    todo.push(x);
+                }
+            }
+            _ => {}
+        }
+        if total > limit {
+            return None;
+        }
+    }
+    Some(total)
 }
 
 /// Which step a reference names.
@@ -71,6 +111,9 @@ fn parse(s: &str) -> Option<(Step, Vec<Seg>)> {
             rest = r;
         } else {
             let (n, r) = rest.strip_prefix('[')?.split_once(']')?;
+            if n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
             path.push(Seg::Index(n.parse().ok()?));
             rest = r;
         }
@@ -78,7 +121,7 @@ fn parse(s: &str) -> Option<(Step, Vec<Seg>)> {
     Some((step, path))
 }
 
-fn lookup(text: &str, step: Step, path: &[Seg], results: &[Value]) -> Result<Value, String> {
+fn lookup<'a>(text: &str, step: Step, path: &[Seg], results: &'a [Value]) -> Result<&'a Value, String> {
     let (i, found) = match step {
         Step::Index(i) => (i, results.get(i)),
         Step::Last => (results.len().saturating_sub(1), results.last()),
@@ -93,7 +136,7 @@ fn lookup(text: &str, step: Step, path: &[Seg], results: &[Value]) -> Result<Val
         };
         cur = next.ok_or_else(|| format!("`{text}`: step {i}'s result has no such value (write $$ for a literal $)"))?;
     }
-    Ok(cur.clone())
+    Ok(cur)
 }
 
 #[cfg(test)]
@@ -107,6 +150,28 @@ mod tests {
         let results = [json!({"index": 0}), json!({"id": 2}), json!({"ids": [5, 6]})];
         let p = json!({"id": "$1.id", "ids": ["$2.ids.1", "$last.ids[0]"], "nested": {"all": "$2"}, "n": 3, "flag": true});
         assert_eq!(resolve(&p, &results).unwrap(), json!({"id": 2, "ids": [6, 5], "nested": {"all": {"ids": [5, 6]}}, "n": 3, "flag": true}));
+    }
+
+    /// References may copy one result many times, but not past [`MAX_COPIED`] together.
+    #[test]
+    fn copies_of_a_large_result_are_bounded() {
+        let big = json!({"text": "x".repeat(MAX_COPIED / 16)});
+        let results = [big];
+        let few = json!(["$0", "$0", "$0"]);
+        assert!(resolve(&few, &results).is_ok());
+        let many = Value::Array(vec![json!("$0"); 32]);
+        let e = resolve(&many, &results).unwrap_err();
+        assert!(e.contains("MB of values"), "{e}");
+    }
+
+    #[test]
+    fn array_index_must_be_plain_digits() {
+        let results = [json!({"ids": [5, 6]})];
+        assert_eq!(resolve(&json!("$0.ids[1]"), &results).unwrap(), json!(6));
+        for s in ["$0.ids[+1]", "$0.ids[]", "$0.ids[ 1]", "$0.ids[-1]"] {
+            let p = json!(s);
+            assert!(resolve(&p, &results).map_or(true, |v| v == p), "{s}");
+        }
     }
 
     #[test]

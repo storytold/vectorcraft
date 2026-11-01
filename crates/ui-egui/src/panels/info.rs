@@ -48,13 +48,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let units = app.session.general_unit();
     let p = app.hover_doc.unwrap_or_default();
+    // X and Y count from the rulers' zero point, as the rulers and the Transform panel do.
+    let origin = app.ruler_origin();
     let bounds = app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false));
     let mono = |ui: &mut Ui, s: String| {
         ui.label(egui::RichText::new(s).monospace().color(t.text));
     };
     ui.columns(2, |cols| {
-        mono(&mut cols[0], format!("X: {}", units.format(p.x)));
-        mono(&mut cols[0], format!("Y: {}", units.format(p.y)));
+        mono(&mut cols[0], format!("X: {}", units.format(p.x - origin.x)));
+        mono(&mut cols[0], format!("Y: {}", units.format(p.y - origin.y)));
         let (w, h) = bounds.map(|b| (units.format(b.width()), units.format(b.height()))).unwrap_or_default();
         mono(&mut cols[1], format!("W: {w}"));
         mono(&mut cols[1], format!("H: {h}"));
@@ -78,7 +80,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let vectorcraft_doc::NodeKind::Text(tx) = &n.kind
     {
         widgets::divider(ui);
-        let st = tx.first_style();
+        let raw = tx.first_style();
+        // The size in document points, as the Character panel shows it (#1034); a collapsed
+        // transform has none, so the stored size stands.
+        let st = tx.effective_char_style(&raw).unwrap_or(raw);
         mono(ui, format!("{} {}", st.font_family, st.font_style));
         mono(
             ui,
@@ -107,5 +112,19 @@ mod tests {
         assert_eq!(v[0], ("R", "230".to_string()));
         assert_eq!(color_values(&Color::cmyk(0.1, 0.0, 0.0, 0.5))[3].1, "50%");
         assert_eq!(color_values(&Color::gray(0.25)).len(), 1);
+    }
+
+    /// #1882: scaled type shows its size in document points, as the Character panel does (#1034).
+    #[test]
+    fn scaled_type_shows_its_scaled_size() {
+        use super::super::tests_appearance::{app_with_rect, frame_events, run};
+        use serde_json::json;
+        let mut app = app_with_rect();
+        let id = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 12}))["id"].clone();
+        run(&mut app, "select.set", json!({ "ids": [id] }));
+        run(&mut app, "object.scale", json!({"sx": 200}));
+        let texts = frame_events(&egui::Context::default(), &mut app, vec![], show);
+        let size = texts.iter().find(|(t, _)| t.starts_with("Size:")).map(|(t, _)| t.as_str());
+        assert_eq!(size, Some("Size: 24 pt  Tracking: 0"), "{texts:?}");
     }
 }

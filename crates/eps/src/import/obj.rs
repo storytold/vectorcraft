@@ -231,11 +231,11 @@ impl Obj {
         Self::Dict(DictRef::new(d))
     }
 
-    /// The number this is (integers and reals).
+    /// The number this is (integers and finite reals: a NaN or infinite real is not a number).
     pub fn as_num(&self) -> Option<f64> {
         match *self {
             Self::Int(i) => Some(i as f64),
-            Self::Real(r) => Some(r),
+            Self::Real(r) if r.is_finite() => Some(r),
             _ => None,
         }
     }
@@ -405,6 +405,13 @@ pub(crate) enum PsError {
 }
 
 pub(crate) type Res<T = ()> = Result<T, PsError>;
+
+/// `v` limited to the range between `a` and `b` (in either order). Unlike `f64::clamp` this never
+/// panics: when one bound is NaN the range collapses to the other bound (both NaN gives `v`), and a
+/// NaN `v` gives the lower bound.
+pub(crate) fn clamp_between(v: f64, a: f64, b: f64) -> f64 {
+    v.max(a.min(b)).min(a.max(b))
+}
 
 /// A PostScript error raised at `at`.
 pub(crate) fn ps_err<T>(name: &'static str, at: &str) -> Res<T> {

@@ -8,6 +8,12 @@ description = "VectorCraft MCP server: JSON-RPC 2.0 over stdio, driving a runnin
 [lints]
 workspace = true
 
+[features]
+default = ["bundled-fonts"]
+# The fonts vectorcraft-text bundles for documents, through the engine's `bundled-fonts`, as
+# vectorcraft-ui-egui's. Off, for an embedder that supplies every document font at run time.
+bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
+
 [dependencies]
 vectorcraft-engine = { workspace = true }
 vectorcraft-render = { workspace = true }

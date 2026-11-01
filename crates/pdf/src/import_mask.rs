@@ -10,6 +10,7 @@ use std::sync::Arc;
 use kurbo::{Rect, Shape};
 use vectorcraft_color::blend::MASK_LUM;
 use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::node::whiten;
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind, OpacityMask};
 
 /// What a soft mask does to what it masks.
@@ -50,38 +51,6 @@ pub(crate) fn white_cover(n: &Node, page: Rect) -> bool {
 /// Does `outer` contain `inner`?
 pub(crate) fn contains(outer: Rect, inner: Rect) -> bool {
     outer.x0 <= inner.x0 && outer.y0 <= inner.y0 && outer.x1 >= inner.x1 && outer.y1 >= inner.y1
-}
-
-/// Every paint of `n` (and its children) white, opacities kept: an alpha mask's art as a
-/// luminosity mask's.
-fn whiten(n: &mut Node) {
-    let white = |p: &mut Paint| match p {
-        Paint::Solid { color, swatch, tint } => {
-            (*color, *swatch, *tint) = (Color::WHITE, None, 1.0);
-        }
-        Paint::Gradient(g) => {
-            for s in &mut g.gradient.stops {
-                (s.color, s.swatch, s.tint) = (Color::WHITE, None, 1.0);
-            }
-        }
-        Paint::None | Paint::Pattern { .. } => {}
-    };
-    for item in &mut n.appearance.items {
-        white(item.paint_mut());
-    }
-    match &mut n.kind {
-        NodeKind::Mesh(m) => m.points.iter_mut().for_each(|p| p.color = Color::WHITE),
-        NodeKind::Text(t) => t.runs.iter_mut().for_each(|r| {
-            white(&mut r.style.fill);
-            white(&mut r.style.stroke);
-        }),
-        _ => {}
-    }
-    if let Some(ch) = n.children_mut() {
-        for c in ch {
-            whiten(Arc::make_mut(c));
-        }
-    }
 }
 
 /// How a soft mask drawing `art` acts: `alpha` for an alpha mask, `backdrop` the luminance outside

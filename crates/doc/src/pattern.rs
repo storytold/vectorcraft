@@ -11,12 +11,15 @@
 //! **Repeats.** A [`RepeatSpec`] holds source art and a radial / grid / mirror arrangement; the
 //! instances are the source under [`repeat_transforms`] (evaluated on demand like blends).
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::Paint;
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
+use crate::Document;
 use crate::appearance::AppearanceItem;
 use crate::node::{Node, NodeId, NodeKind};
 
@@ -248,9 +251,20 @@ impl PatternDef {
         let ab = self.art_bounds().unwrap_or(self.tile).union(self.tile) - self.tile.origin().to_vec2();
         let (sx, sy) = self.tile_type.steps(w, h);
         // Shifts of brick/hex rows or columns are < one tile.
-        let (i0, i1) = (((region.x0 - ab.x1 - w) / sx).floor() as i64 - 1, ((region.x1 - ab.x0 + w) / sx).ceil() as i64 + 1);
-        let (j0, j1) = (((region.y0 - ab.y1 - h) / sy).floor() as i64 - 1, ((region.y1 - ab.y0 + h) / sy).ceil() as i64 + 1);
-        if (i1 - i0).saturating_mul(j1 - j0) > 250_000 {
+        // A region whose tile indices do not fit in integers (or are not finite) gives none, as does
+        // one with more than 250,000 positions or none.
+        let index = |v: f64| (v.abs() < 9.0e18).then_some(v as i64);
+        let (Some(i0), Some(i1), Some(j0), Some(j1)) = (
+            index(((region.x0 - ab.x1 - w) / sx).floor()),
+            index(((region.x1 - ab.x0 + w) / sx).ceil()),
+            index(((region.y0 - ab.y1 - h) / sy).floor()),
+            index(((region.y1 - ab.y0 + h) / sy).ceil()),
+        ) else {
+            return vec![];
+        };
+        let (i0, i1, j0, j1) = (i0 - 1, i1 + 1, j0 - 1, j1 + 1);
+        let (ni, nj) = (i1.saturating_sub(i0), j1.saturating_sub(j0));
+        if ni < 1 || nj < 1 || ni.saturating_mul(nj) > 250_000 {
             return vec![];
         }
         let mut out = vec![];
@@ -268,7 +282,7 @@ impl PatternDef {
         out
     }
     /// Offsets of the pattern-editing preview copies (`copies`×`copies` around the tile, the
-    /// centre `(0, 0)` excluded).
+    /// centre `(0, 0)` excluded), in row-major order (not paint order).
     pub fn preview_offsets(&self) -> Vec<Vec2> {
         let k = (self.copies.clamp(1, 15) / 2) as i64;
         let mut out = vec![];
@@ -281,9 +295,48 @@ impl PatternDef {
         }
         out
     }
+    /// Offsets of every pattern-editing preview copy, including the centre tile, in the same paint
+    /// order [`offsets_covering`] uses for [`Overlap`].
+    pub fn preview_offsets_in_paint_order(&self) -> Vec<Vec2> {
+        let k = (self.copies.clamp(1, 15) / 2) as i64;
+        let (i0, i1, j0, j1) = (-k, k, -k, k);
+        let mut out = vec![];
+        let rows: Vec<i64> = if self.overlap.bottom_in_front { (j0..=j1).collect() } else { (j0..=j1).rev().collect() };
+        for &j in &rows {
+            let cols: Vec<i64> = if self.overlap.right_in_front { (i0..=i1).collect() } else { (i0..=i1).rev().collect() };
+            for i in cols {
+                out.push(self.offset(i, j));
+            }
+        }
+        out
+    }
+    /// Preview copies drawn before and after the centre tile in [`Self::preview_offsets_in_paint_order`],
+    /// for one dimmed composite each (the centre tile is drawn at full strength between them).
+    pub fn preview_offsets_dimmed_sides(&self) -> (Vec<Vec2>, Vec<Vec2>) {
+        let mut before = vec![];
+        let mut after = vec![];
+        let mut past_center = false;
+        for o in self.preview_offsets_in_paint_order() {
+            if o.x == 0.0 && o.y == 0.0 {
+                past_center = true;
+            } else if past_center {
+                after.push(o);
+            } else {
+                before.push(o);
+            }
+        }
+        (before, after)
+    }
     /// Instances covering `region` (document space) as plain nodes for a pattern painted with
-    /// `paint_xf` (pattern space → document), fresh-id-less (id 0). Used by exporters and Expand.
+    /// `paint_xf` (pattern space → document), fresh-id-less (id 0). Used by exporters and Distort
+    /// Pattern Fills; Expand uses [`Self::instances_in_with`].
     pub fn instances_in(&self, paint_xf: Affine, region: Rect) -> Vec<Node> {
+        self.instances_in_with(paint_xf, region, false)
+    }
+    /// [`Self::instances_in`], each instance placed with `scaling` (what scales with `paint_xf`
+    /// besides geometry).
+    pub fn instances_in_with(&self, paint_xf: Affine, region: Rect, scaling: impl Into<crate::node::Scaling>) -> Vec<Node> {
+        let scaling = scaling.into();
         let inv = paint_xf.inverse();
         let pr = inv.transform_rect_bbox(region);
         let mut out = vec![];
@@ -291,12 +344,37 @@ impl PatternDef {
             let m = paint_xf * self.instance_xf(o);
             for a in &self.art {
                 let mut n = (**a).clone();
-                n.transform(m, false);
+                place_art(&mut n, m, scaling);
                 zero_ids(&mut n);
                 out.push(n);
             }
         }
         out
+    }
+}
+
+/// Transform pattern art `n` by `m` with `scaling`, as a pattern places its art: the opacity masks
+/// in it move with it, unlinked ones included (the canvas draws a tile's art and masks together).
+pub fn place_art(n: &mut Node, m: Affine, scaling: impl Into<crate::node::Scaling>) {
+    let scaling = scaling.into();
+    n.transform(m, scaling);
+    place_unlinked_masks(n, m, scaling);
+}
+
+/// Transform the art of the unlinked opacity masks of `n` and its descendants by `m`, the masks
+/// inside mask art included.
+fn place_unlinked_masks(n: &mut Node, m: Affine, scaling: crate::node::Scaling) {
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        let linked = mask.linked;
+        let art = Arc::make_mut(&mut mask.art);
+        // A linked mask's art moved with `n`; an unlinked one's moves here.
+        if !linked {
+            art.transform(m, scaling);
+        }
+        place_unlinked_masks(art, m, scaling);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        place_unlinked_masks(Arc::make_mut(c), m, scaling);
     }
 }
 
@@ -424,12 +502,71 @@ impl RepeatKind {
             RepeatKind::Mirror { .. } => "Mirror Repeat",
         }
     }
+    /// How many instances [`repeat_transforms`] makes (with its clamps).
+    fn count(&self) -> usize {
+        match self {
+            RepeatKind::Radial { instances, .. } => (*instances).clamp(1, 1000) as usize,
+            RepeatKind::Grid { rows, cols, .. } => (*rows).clamp(1, 500) as usize * (*cols).clamp(1, 500) as usize,
+            RepeatKind::Mirror { .. } => 2,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RepeatSpec {
     pub kind: RepeatKind,
     pub source: Vec<Arc<Node>>,
+}
+
+/// Most instances a Repeat makes in all, those of the Repeats nested in its source included: as
+/// many as one 500 × 500 grid, the budget [`PatternDef::offsets_covering`] also keeps.
+const MAX_REPEAT_INSTANCES: usize = 250_000;
+
+/// Counts the instances Repeats make in all, following symbol instances into their symbol's art
+/// in `doc`: each symbol's art is counted once, and a missing symbol, or an instance of a symbol
+/// inside its own art, counts as none.
+///
+/// Limitation: symbols that show each other (A's art holds an instance of B and B's holds one of
+/// A) are counted along the first path that reaches them. While A is counted, the instance of A
+/// in B's art counts as none, and B keeps that count; had B been counted first, A's count would
+/// include B's Repeats and B's would not. So within one count, what such symbols add can depend on
+/// which of them came first. A symbol whose art reaches no such loop always counts the same.
+struct NestedCount<'a> {
+    doc: Option<&'a Document>,
+    /// The counts made so far, by symbol name (`None` while that symbol's art is being counted).
+    symbols: RefCell<HashMap<String, Option<usize>>>,
+}
+
+impl<'a> NestedCount<'a> {
+    fn new(doc: Option<&'a Document>) -> Self {
+        Self { doc, symbols: RefCell::default() }
+    }
+
+    /// Instances the Repeats in the art of symbol `name` make in all.
+    fn symbol(&self, name: &str) -> usize {
+        if let Some(known) = self.symbols.borrow().get(name) {
+            return known.unwrap_or(0);
+        }
+        let Some(sym) = self.doc.and_then(|d| d.symbols.iter().find(|s| s.name == name)) else { return 0 };
+        self.symbols.borrow_mut().insert(name.to_owned(), None);
+        let n = self.nodes(std::slice::from_ref(&sym.art));
+        self.symbols.borrow_mut().insert(name.to_owned(), Some(n));
+        n
+    }
+
+    /// Instances the Repeats in `nodes` make in all (0 when there are none).
+    fn nodes(&self, nodes: &[Arc<Node>]) -> usize {
+        let mut sum = 0usize;
+        for n in nodes {
+            sum = sum.saturating_add(match (&n.kind, n.children()) {
+                (NodeKind::Repeat(r), _) => r.instances_in_all(self),
+                (NodeKind::SymbolInstance { symbol, .. }, _) => self.symbol(symbol),
+                (_, Some(c)) => self.nodes(c),
+                _ => 0,
+            });
+        }
+        sum
+    }
 }
 
 /// Reflection across the line through `c` with direction angle `deg`.
@@ -492,12 +629,40 @@ impl RepeatSpec {
     pub fn source_bounds(&self) -> Option<Rect> {
         crate::live::nodes_bounds(&self.source)
     }
-    pub fn transforms(&self) -> Vec<Affine> {
-        repeat_transforms(&self.kind, self.source_bounds())
+    /// Where the instances go, counting toward the budget the Repeats in the art of the symbols
+    /// of `doc` that instances in the source show (none without a document).
+    pub fn transforms(&self, doc: Option<&Document>) -> Vec<Affine> {
+        self.transforms_from(doc, self.source_bounds())
     }
-    /// Evaluated instances: one group of the (transformed) source per instance (ids 0).
-    pub fn expand(&self) -> Vec<Node> {
-        self.transforms()
+    /// [`Self::transforms`] with the source's bounds (as [`Self::source_bounds`] measures them)
+    /// already at hand: measuring them again, at every level of nested Repeats, doubles the work.
+    fn transforms_from(&self, doc: Option<&Document>, bounds: Option<Rect>) -> Vec<Affine> {
+        let mut v = repeat_transforms(&self.kind, bounds);
+        // Each instance draws the Repeats in the source again, so nested ones multiply (a 500 × 500
+        // grid of one is 62.5 billion instances): keep the first that fit the budget.
+        v.truncate(self.kept(NestedCount::new(doc).nodes(&self.source)));
+        v
+    }
+    /// How many of its instances this Repeat keeps when each makes `nested` instances of the
+    /// Repeats in its source: as many as fit in [`MAX_REPEAT_INSTANCES`], at least one.
+    fn kept(&self, nested: usize) -> usize {
+        self.kind.count().min(MAX_REPEAT_INSTANCES / nested.max(1)).max(1)
+    }
+    /// How many instances this Repeat draws ([`Self::transforms`] for `doc`): as many as its
+    /// options make, fewer when the Repeats in its source would take it past
+    /// [`MAX_REPEAT_INSTANCES`].
+    pub fn instances(&self, doc: Option<&Document>) -> usize {
+        self.kept(NestedCount::new(doc).nodes(&self.source))
+    }
+    /// Instances made in all, those of the Repeats nested in the source included.
+    fn instances_in_all(&self, count: &NestedCount) -> usize {
+        let nested = count.nodes(&self.source);
+        self.kept(nested).saturating_mul(nested.max(1))
+    }
+    /// Evaluated instances: one group of the (transformed) source per instance (ids 0), as many
+    /// as [`Self::transforms`] keeps for `doc`.
+    pub fn expand(&self, doc: Option<&Document>) -> Vec<Node> {
+        self.transforms(doc)
             .into_iter()
             .map(|m| {
                 let children = self
@@ -514,14 +679,16 @@ impl RepeatSpec {
             })
             .collect()
     }
-    /// Geometric bounds of all instances.
-    pub fn bounds(&self) -> Option<Rect> {
-        self.copies_bounds(self.source_bounds()?)
+    /// Geometric bounds of all instances ([`Self::transforms`] for `doc`).
+    pub fn bounds(&self, doc: Option<&Document>) -> Option<Rect> {
+        self.copies_bounds(self.source_bounds()?, doc)
     }
     /// The bounds of all instances of a source measuring `source`, each placed by its transform
-    /// ([`Self::transforms`]).
-    pub(crate) fn copies_bounds(&self, source: Rect) -> Option<Rect> {
-        self.transforms().into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(source))))
+    /// ([`Self::transforms`] for `doc`).
+    pub(crate) fn copies_bounds(&self, source: Rect, doc: Option<&Document>) -> Option<Rect> {
+        // Without a document the source's bounds are the ones `source` is: not measured twice.
+        let transforms = if doc.is_none() { self.transforms_from(None, Some(source)) } else { self.transforms(doc) };
+        transforms.into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(source))))
     }
     /// Apply a document transform (source + arrangement parameters).
     pub fn transform(&mut self, a: Affine, scaling: impl Into<crate::node::Scaling>) {
@@ -658,6 +825,20 @@ mod tests {
     }
 
     #[test]
+    fn preview_paint_order_respects_overlap() {
+        let mut def = PatternDef::new("p", vec![sq(0.0, 0.0, 10.0)]);
+        def.copies = 3;
+        assert!(close(*def.preview_offsets_in_paint_order().last().unwrap(), Vec2::new(-10.0, -10.0)));
+        let mut d2 = def.clone();
+        d2.overlap = Overlap { right_in_front: true, bottom_in_front: true };
+        assert!(close(*d2.preview_offsets_in_paint_order().last().unwrap(), Vec2::new(10.0, 10.0)));
+        assert_eq!(def.preview_offsets_in_paint_order().len(), 9);
+        let (before, after) = def.preview_offsets_dimmed_sides();
+        assert_eq!(before.len() + after.len(), 8);
+        assert!(before.iter().all(|o| *o != Vec2::ZERO) && after.iter().all(|o| *o != Vec2::ZERO));
+    }
+
+    #[test]
     fn covering_offsets_and_overlap_order() {
         let def = PatternDef::new("p", vec![sq(0.0, 0.0, 10.0)]);
         let offs = def.offsets_covering(Rect::new(0.0, 0.0, 30.0, 20.0));
@@ -671,12 +852,51 @@ mod tests {
     }
 
     #[test]
+    fn a_region_too_large_to_count_has_no_offsets() {
+        // A pattern scaled by 1e-20 covers a 100 pt square with a region of 1e22 pt.
+        let def = PatternDef::new("p", vec![sq(0.0, 0.0, 10.0)]);
+        assert!(def.offsets_covering(Rect::new(-1e22, -1e22, 1e22, 1e22)).is_empty());
+        assert!(def.offsets_covering(Rect::new(f64::NEG_INFINITY, 0.0, f64::INFINITY, 10.0)).is_empty());
+        // Far out, a region one tile wide and 1e12 pt tall still counts its rows.
+        assert!(def.offsets_covering(Rect::new(1e18, 0.0, 1e18, 1e12)).is_empty());
+        let tiny = Affine::scale(1e-20);
+        assert!(def.instances_in(tiny, Rect::new(0.0, 0.0, 100.0, 100.0)).is_empty());
+    }
+
+    #[test]
     fn instances_follow_paint_xf() {
         let def = PatternDef::new("p", vec![sq(100.0, 100.0, 10.0)]);
         let n = def.instances_in(Affine::translate((3.0, 0.0)), Rect::new(0.0, 0.0, 20.0, 10.0));
         let xs: Vec<f64> = n.iter().filter_map(|n| n.geometric_bounds()).map(|b| b.x0).collect();
         assert!(xs.contains(&3.0) && xs.contains(&-7.0) && xs.contains(&13.0), "{xs:?}");
         assert!(n.iter().all(|n| n.id == NodeId(0)));
+    }
+
+    #[test]
+    fn instances_carry_unlinked_masks_with_them() {
+        let mut art = (*sq(100.0, 100.0, 10.0)).clone();
+        let mut mask = crate::node::OpacityMask::new((*sq(100.0, 100.0, 5.0)).clone(), true);
+        mask.linked = false;
+        art.extras_mut().mask = Some(Box::new(mask));
+        let def = PatternDef::new("p", vec![Arc::new(art)]);
+        for n in def.instances_in(Affine::translate((3.0, 0.0)), Rect::new(0.0, 0.0, 20.0, 10.0)) {
+            let (b, m) = (n.geometric_bounds().unwrap(), n.extras().mask.as_ref().unwrap());
+            assert_eq!(m.art.geometric_bounds().unwrap().origin(), b.origin(), "the mask moves with its art");
+            assert!(!m.linked, "the mask stays unlinked");
+        }
+        // An unlinked mask inside a linked mask's art moves too.
+        let mut inner = (*sq(100.0, 100.0, 5.0)).clone();
+        let mut nested = crate::node::OpacityMask::new((*sq(100.0, 100.0, 2.0)).clone(), true);
+        nested.linked = false;
+        inner.extras_mut().mask = Some(Box::new(nested));
+        let mut art = (*sq(100.0, 100.0, 10.0)).clone();
+        art.extras_mut().mask = Some(Box::new(crate::node::OpacityMask::new(inner, true)));
+        let def = PatternDef::new("p", vec![Arc::new(art)]);
+        for n in def.instances_in(Affine::translate((3.0, 0.0)), Rect::new(0.0, 0.0, 20.0, 10.0)) {
+            let outer = n.extras().mask.as_ref().unwrap();
+            let nested = outer.art.extras().mask.as_ref().unwrap();
+            assert_eq!(nested.art.geometric_bounds().unwrap().origin(), n.geometric_bounds().unwrap().origin());
+        }
     }
 
     #[test]
@@ -692,11 +912,11 @@ mod tests {
         let r = RepeatSpec::radial(vec![sq(-5.0, -105.0, 10.0)], 4, Some(100.0));
         let RepeatKind::Radial { center, .. } = r.kind else { panic!() };
         assert!((center - Point::new(0.0, -0.0)).hypot() < 1e-9, "{center:?}");
-        let cs: Vec<Point> = r.transforms().iter().map(|m| *m * Point::new(0.0, -100.0)).collect();
+        let cs: Vec<Point> = r.transforms(None).iter().map(|m| *m * Point::new(0.0, -100.0)).collect();
         assert!((cs[0] - Point::new(0.0, -100.0)).hypot() < 1e-9);
         assert!((cs[1] - Point::new(100.0, 0.0)).hypot() < 1e-9, "{cs:?}");
         assert!((cs[2] - Point::new(0.0, 100.0)).hypot() < 1e-9);
-        assert_eq!(r.expand().len(), 4);
+        assert_eq!(r.expand(None).len(), 4);
     }
 
     #[test]
@@ -705,18 +925,18 @@ mod tests {
         if let RepeatKind::Radial { radius, .. } = &mut r.kind {
             *radius = 50.0;
         }
-        let m = r.transforms()[0];
+        let m = r.transforms(None)[0];
         assert!((m * Point::new(0.0, -100.0) - Point::new(0.0, -50.0)).hypot() < 1e-9);
     }
 
     #[test]
     fn grid_repeat_transforms() {
         let g = RepeatSpec::grid(vec![sq(0.0, 0.0, 10.0)], 5.0, 2.0);
-        let t = g.transforms();
+        let t = g.transforms(None);
         assert_eq!(t.len(), 9);
         assert!((t[1] * Point::ZERO - Point::new(15.0, 0.0)).hypot() < 1e-9);
         assert!((t[3] * Point::ZERO - Point::new(0.0, 12.0)).hypot() < 1e-9);
-        assert_eq!(g.bounds(), Some(Rect::new(0.0, 0.0, 40.0, 34.0)));
+        assert_eq!(g.bounds(None), Some(Rect::new(0.0, 0.0, 40.0, 34.0)));
     }
 
     #[test]
@@ -725,7 +945,7 @@ mod tests {
         if let RepeatKind::Grid { flip_cols, .. } = &mut g.kind {
             *flip_cols = true;
         }
-        let t = g.transforms();
+        let t = g.transforms(None);
         // Column 1 is mirrored about the source centre, then moved one tile right.
         assert!((t[1] * Point::new(0.0, 0.0) - Point::new(20.0, 0.0)).hypot() < 1e-9);
     }
@@ -733,10 +953,10 @@ mod tests {
     #[test]
     fn mirror_transforms() {
         let m = RepeatSpec::mirror(vec![sq(0.0, 0.0, 10.0)], 90.0, 5.0);
-        let t = m.transforms();
+        let t = m.transforms(None);
         assert_eq!(t.len(), 2);
         assert!((t[1] * Point::new(0.0, 3.0) - Point::new(30.0, 3.0)).hypot() < 1e-9);
-        let b = m.bounds().unwrap();
+        let b = m.bounds(None).unwrap();
         assert!((b.x1 - 30.0).abs() < 1e-9 && b.x0.abs() < 1e-9 && (b.y1 - 10.0).abs() < 1e-9, "{b:?}");
         // Horizontal axis.
         let h = reflect_about(Point::new(0.0, 10.0), 0.0);
@@ -746,14 +966,43 @@ mod tests {
     #[test]
     fn repeat_transform_moves_arrangement() {
         let mut r = RepeatSpec::radial(vec![sq(-5.0, -105.0, 10.0)], 4, Some(100.0));
-        let before = r.bounds().unwrap();
+        let before = r.bounds(None).unwrap();
         r.transform(Affine::translate((50.0, 0.0)), false);
-        let after = r.bounds().unwrap();
+        let after = r.bounds(None).unwrap();
         assert!((after.x0 - before.x0 - 50.0).abs() < 1e-9);
         let mut m = RepeatSpec::mirror(vec![sq(0.0, 0.0, 10.0)], 90.0, 5.0);
         m.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), false);
         let RepeatKind::Mirror { angle, .. } = m.kind else { panic!() };
         assert!((angle.rem_euclid(180.0) - 0.0).abs() < 1e-9 || (angle.rem_euclid(180.0) - 180.0).abs() < 1e-9, "{angle}");
+    }
+
+    #[test]
+    fn nested_repeats_share_one_instance_budget() {
+        // Instances made in all, counted from the transforms without drawing any.
+        fn made(r: &RepeatSpec) -> usize {
+            let each: usize = r.source.iter().map(|s| if let NodeKind::Repeat(n) = &s.kind { made(n) } else { 1 }).sum();
+            r.transforms(None).len().saturating_mul(each)
+        }
+        let grid = |source: Arc<Node>| {
+            let mut g = RepeatSpec::grid(vec![source], 0.0, 0.0);
+            if let RepeatKind::Grid { rows, cols, .. } = &mut g.kind {
+                *rows = 500;
+                *cols = 500;
+            }
+            g
+        };
+        let repeat = |r: RepeatSpec| Arc::new(Node::new(NodeId(2), NodeKind::Repeat(r)));
+        // One grid keeps all its instances.
+        let inner = grid(sq(0.0, 0.0, 1.0));
+        assert_eq!(made(&inner), 250_000);
+        // A 500 × 500 grid of it made 62.5 billion.
+        let outer = grid(repeat(inner.clone()));
+        assert!(made(&outer) <= 250_000, "{} instances", made(&outer));
+        assert_eq!(outer.expand(None).len(), outer.transforms(None).len());
+        assert!(made(&RepeatSpec::mirror(vec![repeat(inner)], 90.0, 5.0)) <= 250_000);
+        // Small nests are left as they are.
+        let small = RepeatSpec::mirror(vec![repeat(RepeatSpec::grid(vec![sq(0.0, 0.0, 10.0)], 1.0, 1.0))], 90.0, 5.0);
+        assert_eq!(made(&small), 18);
     }
 
     #[test]

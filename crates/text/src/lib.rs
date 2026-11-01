@@ -1,7 +1,8 @@
 //! VectorCraft text: font database, shaping, layout, glyph outlines.
 //!
 //! API contract used by `vectorcraft-render`, `vectorcraft-tools` and the UI:
-//! - [`FontDb::global`]: process-wide database preloaded with the bundled OFL fonts.
+//! - [`FontDb::global`]: process-wide database preloaded with the bundled OFL fonts (feature
+//!   `bundled-fonts`, on by default; without it the embedder adds fonts with [`FontDb::add_font`]).
 //! - [`layout`]: lays out a [`TextObject`] into glyph outlines in *text space* (apply `t.xf` to
 //!   get document coordinates), plus line and caret information.
 //! - [`caret_position`] / [`hit_byte`]: caret geometry and hit testing for the Type tool.
@@ -9,6 +10,8 @@
 //! Frames (`TextKind::Area`) and paths (`TextKind::OnPath`) are interpreted in text space.
 #![forbid(unsafe_code)]
 
+mod bitmap;
+mod colr;
 mod composer;
 pub mod craft_fonts;
 pub mod edit;
@@ -17,26 +20,34 @@ mod features;
 mod fontconfig;
 mod fontdb;
 pub mod hyphen;
+mod justify;
+mod kashida;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod suitcase;
+mod svg_glyph;
 #[cfg(any(test, feature = "test-fonts"))]
 pub mod test_fonts;
 pub mod thread;
 
+pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
     FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, WantedFont, WantedFonts, app_font_dir,
-    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, style_weight, system_font_dirs, user_font_dirs,
+    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
+    system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
-use kurbo::{Affine, BezPath, Point, Rect, Vec2};
-pub use layout::{decorations, fit_first_line, layout, layout_with};
+use std::sync::Arc;
+pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
+
+use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
+pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
+pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
 
 /// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
 pub use vectorcraft_doc::Composer;
@@ -45,7 +56,8 @@ pub use vectorcraft_doc::Composer;
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LayoutOptions {
-    /// Area type rows and columns (text flows down each column, then across).
+    /// Area type rows and columns (text fills them in [`LayoutOptions::flow`] order). Layout clamps each
+    /// count to 1..=[`vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS`].
     pub rows: usize,
     pub columns: usize,
     /// Gutter between rows/columns in points.
@@ -57,6 +69,8 @@ pub struct LayoutOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
     pub vertical_align: VerticalAlign,
+    /// Area Type Options "Text Flow": by columns (down each column, then across) or by rows.
+    pub flow: TextFlow,
     /// Area type only: Shrink Text to Fit scales overflowing text down at layout time (see
     /// [`TextLayout::fit_scale`]); the other fits are the engine's business and lay out as `None`.
     pub fit: AreaFit,
@@ -75,6 +89,7 @@ impl Default for LayoutOptions {
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            flow: TextFlow::Columns,
             fit: AreaFit::None,
             composer: None,
             features: OtFeatures::default(),
@@ -110,6 +125,70 @@ pub struct PositionedGlyph {
     pub xf: Affine,
     /// True when the logical leading edge is the glyph’s right edge.
     pub rtl: bool,
+    /// How much wider than its font draws it the glyph is drawn by its paragraph's Glyph Scaling
+    /// (Justification…), Desired and justification together: 1 at 100%. Horizontal Scale isn't
+    /// included.
+    pub scale: f64,
+    /// A colour bitmap glyph (emoji), drawn through `xf` instead of an outline: its `outline` is
+    /// empty. Also a COLR glyph whose paints documents have no form for, drawn as an image.
+    pub image: Option<Arc<GlyphImage>>,
+    /// A colour glyph's art (COLR layers, an SVG document's art), drawn through `xf` instead of an
+    /// outline: a group in font units (y down). Its `outline` is empty.
+    pub colour: Option<Arc<vectorcraft_doc::Node>>,
+    /// Type on a curved path in a script whose letters join: the glyph's `outline` is bent along
+    /// the path ([`GlyphBend`]) so it meets its neighbours, and `xf` is only the straight glyph
+    /// nearest it (for the caret, hit testing and tools). `None`: the glyph is drawn through `xf`.
+    pub bend: Option<GlyphBend>,
+    /// Font units → font units: `xf * unturned` places the glyph as it would be placed without
+    /// its Character Rotation. The identity for a glyph without one.
+    pub unturned: Affine,
+    /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
+    /// position on the baseline moved by its baseline shift.
+    pub pivot: Point,
+}
+
+/// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
+/// left end, y down from the baseline) goes to `P(s + x · step / advance) + (y + rise) · N` there,
+/// `P` the path's point at a distance along it and `N` its normal on the glyph's lower side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlyphBend {
+    /// Where the glyph's left end is along the path.
+    pub s: f64,
+    /// How far along the path the glyph runs.
+    pub step: f64,
+    /// The glyph's advance.
+    pub advance: f64,
+    /// How far down the type moves off the path (Align to Path).
+    pub rise: f64,
+}
+
+impl PositionedGlyph {
+    /// The glyph's colour bitmap, and the transform from its pixels to text space.
+    pub fn placed_image(&self) -> Option<(&Arc<GlyphImage>, Affine)> {
+        self.image.as_ref().map(|i| (i, self.xf * i.xf))
+    }
+    /// The glyph's colour bitmap as an image object placed through `to_doc` (text space → where it
+    /// goes), holding its pixels ([`vectorcraft_doc::ImageObject::pixels`]), without an id.
+    pub fn placed_image_node(&self, to_doc: Affine) -> Option<vectorcraft_doc::Node> {
+        let (image, to_text) = self.placed_image()?;
+        let im = vectorcraft_doc::ImageObject {
+            key: image.blob.content_key(),
+            width: image.width,
+            height: image.height,
+            xf: to_doc * to_text,
+            link: None,
+            placement: Default::default(),
+            pixels: Some(Arc::new(image.blob.clone())),
+        };
+        Some(vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(u64::MAX), vectorcraft_doc::NodeKind::Image(Box::new(im))))
+    }
+    /// The glyph's colour art placed through `to_doc` (text space → where they go): a copy of
+    /// [`Self::colour`], transformed, its nodes without ids.
+    pub fn placed_colour(&self, to_doc: Affine) -> Option<vectorcraft_doc::Node> {
+        let mut art = (**self.colour.as_ref()?).clone();
+        art.transform(to_doc * self.xf, true);
+        Some(art)
+    }
 }
 
 /// One line of laid-out text.
@@ -127,6 +206,14 @@ pub struct LineInfo {
     pub x1: f64,
     pub ascent: f64,
     pub descent: f64,
+    /// Area type: how far the line's baseline sits below the top of its frame cell (inside the
+    /// inset, with the lines aligned to the top) when the line starts the cell: the metric of the
+    /// line that Area Type Options › First Baseline picks (the em box top with top-to-top leading),
+    /// at least the First Baseline minimum. When layout moves a line on from the cell before and
+    /// the line's first character has smaller metrics than the rest of it, or moves the line down
+    /// to where it has room (in a frame that is not a rectangle, or beside wrap objects), the line
+    /// can sit elsewhere. It is 0 for type on a path.
+    pub first_baseline: f64,
     /// Byte range of the line in the plain text (excludes the paragraph's `\n`).
     pub start: usize,
     pub end: usize,
@@ -156,6 +243,21 @@ pub struct InlineGlyph {
     pub bounds: Rect,
 }
 
+/// A list marker (Paragraph panel › Bullets) the layout drew before the first line of a list
+/// paragraph: glyphs of [`TextLayout::glyphs`] that stand for no characters of the text (`len`
+/// 0, at the paragraph's first byte, in the run of its first character).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListMarker {
+    /// The marker's glyphs, in the order they are drawn: those of its characters and the tab that
+    /// takes the text to the next tab stop.
+    pub glyphs: std::ops::Range<usize>,
+    /// The tab's glyph, which draws nothing: the last of [`Self::glyphs`], or the first in a
+    /// right-to-left paragraph.
+    pub tab: usize,
+    /// The marker's characters ("•").
+    pub text: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct TextLayout {
     /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
@@ -164,6 +266,10 @@ pub struct TextLayout {
     /// turn clockwise for vertical type (point type also centres its first column on the anchor).
     pub line_xf: Affine,
     pub glyphs: Vec<PositionedGlyph>,
+    /// Ruby (furigana) glyphs, laid out over their base text: geometry like [`Self::glyphs`], but
+    /// they are not characters of the text (their `len` is 0 and their `run` is the base text's
+    /// run, for the fill and stroke). Empty when the type has no ruby.
+    pub ruby: Vec<PositionedGlyph>,
     pub lines: Vec<LineInfo>,
     /// Ink/advance bounds in text space.
     pub bounds: Rect,
@@ -179,6 +285,8 @@ pub struct TextLayout {
     pub fit_scale: f64,
     /// Inline graphics, in text order.
     pub inlines: Vec<InlineGlyph>,
+    /// List markers, in text order.
+    pub markers: Vec<ListMarker>,
 }
 
 impl Default for TextLayout {
@@ -187,6 +295,7 @@ impl Default for TextLayout {
             vertical: false,
             line_xf: Affine::IDENTITY,
             glyphs: Vec::new(),
+            ruby: Vec::new(),
             lines: Vec::new(),
             bounds: Rect::ZERO,
             overflow: false,
@@ -194,11 +303,31 @@ impl Default for TextLayout {
             frames: Vec::new(),
             fit_scale: 1.0,
             inlines: Vec::new(),
+            markers: Vec::new(),
         }
     }
 }
 
 impl TextLayout {
+    /// The list marker that glyph `i` of [`Self::glyphs`] belongs to, if any.
+    pub fn marker_of(&self, i: usize) -> Option<&ListMarker> {
+        let at = self.markers.partition_point(|m| m.glyphs.end <= i);
+        self.markers.get(at).filter(|m| m.glyphs.contains(&i))
+    }
+    /// The text glyph `i` of [`Self::glyphs`] stands for when it belongs to a list marker: a tab
+    /// for its tab, the marker's characters for the first of its other glyphs, nothing for the
+    /// rest.
+    pub fn marker_text(&self, i: usize) -> Option<&str> {
+        let m = self.marker_of(i)?;
+        let first = if m.tab == m.glyphs.start { m.glyphs.start + 1 } else { m.glyphs.start };
+        Some(if i == m.tab {
+            "\t"
+        } else if i == first {
+            &m.text
+        } else {
+            ""
+        })
+    }
     /// Convert physical text coordinates to inline/block coordinates.
     pub fn logical_point(&self, p: Point) -> Point {
         if self.vertical { self.line_xf.inverse() * p } else { p }
@@ -218,10 +347,25 @@ impl TextLayout {
         };
         self.lines.iter().filter(|l| l.x1 > l.x0).map(line).collect()
     }
+    /// The ink of the type in text space: its glyphs (and ruby) as drawn, colour glyphs, images and
+    /// inline graphics included, without the lines' em boxes that [`Self::bounds`] also covers.
+    /// What Align to Glyph Bounds aligns. `None` when nothing draws (only spaces, or no text).
+    pub fn ink_bounds(&self) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| g.outline.bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| xf.transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| g.xf.transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        // Ruby is covered by its line's ascent, but its ink can overhang sideways past the line.
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(i.bounds));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
+    }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
-        for g in &self.glyphs {
+        for g in self.glyphs.iter().chain(&self.ruby) {
             p.extend(g.outline.iter());
         }
         p
@@ -271,15 +415,37 @@ fn dir(angle: f64) -> Vec2 {
     Vec2::new(angle.cos(), angle.sin())
 }
 
-/// Caret for byte offset `byte`, as a (top, bottom) segment in text space.
+/// The left and right x of the cluster of `glyphs[i]` (glyphs of one line of horizontal type
+/// that is not on a path): the glyphs next to it with its byte offset and length, and the
+/// tatweels of a kashida after it (length 0 and no advance, the same byte offset). A list marker
+/// next to it (length 0 and an advance, the same byte offset) is not part of it. None for
+/// vertical type and type on a path.
+fn cluster_extent(layout: &TextLayout, glyphs: &[PositionedGlyph], i: usize) -> Option<(f64, f64)> {
+    let g = glyphs.get(i).filter(|_| !layout.vertical && !layout.on_path)?;
+    let same = |o: &PositionedGlyph| o.byte == g.byte && (o.len == g.len || (o.len == 0 && o.advance == 0.0));
+    let start = glyphs.get(..i)?.iter().rposition(|o| !(o.byte == g.byte && o.len == g.len)).map_or(0, |p| p + 1);
+    let end = glyphs.get(i..)?.iter().position(|o| !same(o)).map_or(glyphs.len(), |p| i + p);
+    let span = glyphs.get(start..end)?;
+    let left = span.iter().map(|o| o.origin.x).fold(f64::INFINITY, f64::min);
+    let right = span.iter().map(|o| o.origin.x + o.advance).fold(f64::NEG_INFINITY, f64::max);
+    (left.is_finite() && right.is_finite()).then_some((left, right))
+}
+
+/// Caret for byte offset `byte`, as a (top, bottom) segment in text space. In horizontal type, a
+/// cluster drawn with several glyphs is measured whole ([`cluster_extent`]).
 pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     let Some(line) = layout.lines.get(layout.line_of(byte)) else {
         return (Point::ZERO, Point::ZERO);
     };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    let (pos, angle) = if let Some(g) = glyphs.iter().find(|g| g.byte <= byte && g.byte + g.len > byte) {
+    let (pos, angle) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
+        let g = &glyphs[i];
         let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
-        (g.origin + dir(g.angle) * (g.advance * if g.rtl { 1.0 - frac } else { frac }), g.angle)
+        let (origin, advance) = match cluster_extent(layout, glyphs, i) {
+            Some((left, right)) => (Point::new(left, g.origin.y), right - left),
+            None => (g.origin, g.advance),
+        };
+        (origin + dir(g.angle) * (advance * if g.rtl { 1.0 - frac } else { frac }), g.angle)
     } else if let Some(g) = glyphs.iter().max_by_key(|g| g.byte + g.len) {
         (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle)
     } else {
@@ -294,16 +460,20 @@ pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
 /// Byte offset nearest to the text-space point `p` (for clicking/dragging with the Type tool).
 pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
     if layout.on_path {
-        let best = layout.glyphs.iter().min_by(|a, b| {
+        let best = layout.glyphs.iter().enumerate().min_by(|(_, a), (_, b)| {
             let ca = a.origin + dir(a.angle) * (a.advance * 0.5);
             let cb = b.origin + dir(b.angle) * (b.advance * 0.5);
             (p - ca).hypot2().total_cmp(&(p - cb).hypot2())
         });
-        return match best {
-            Some(g) if ((p - g.origin).dot(dir(g.angle)) < g.advance * 0.5) != g.rtl => g.byte,
-            Some(g) => g.byte + g.len,
-            None => layout.lines.first().map_or(0, |l| l.start),
-        };
+        let Some((i, g)) = best else { return layout.lines.first().map_or(0, |l| l.start) };
+        // `first` and `last` are the first and last glyphs of the cluster. A click before the middle of
+        // the cluster, measured along the first glyph's direction, goes to the cluster's start.
+        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len;
+        let first = layout.glyphs[..=i].iter().rev().take_while(same).last().unwrap_or(g);
+        let last = layout.glyphs[i..].iter().take_while(same).last().unwrap_or(g);
+        let along = dir(first.angle);
+        let span = (last.origin + dir(last.angle) * last.advance - first.origin).dot(along);
+        return if ((p - first.origin).dot(along) < span * 0.5) != g.rtl { g.byte } else { g.byte + g.len };
     }
     let p = layout.logical_point(p);
     // Nearest line band (vertical distance first, then distance to the line's column).
@@ -339,13 +509,23 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
 pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
     let Some(line) = layout.lines.get(li) else { return 0 };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    let nearest = glyphs
+    // A cluster drawn with several adjacent glyphs (a Devanagari pre-base matra and its consonant,
+    // a consonant and its reph) has one caret stop at each end of its glyphs taken together. The
+    // tatweels of a kashida have no source length or advance and come after the glyphs of the
+    // letter after the kashida in the text; they belong to that letter's cluster. A list marker's
+    // glyphs (no source length, an advance) are a cluster of their own.
+    let mut clusters: Vec<(f64, f64, &PositionedGlyph)> = Vec::with_capacity(glyphs.len());
+    for g in glyphs {
+        let left = layout.logical_point(g.origin).x;
+        let right = left + g.advance;
+        match clusters.last_mut() {
+            Some((l, r, c)) if c.byte == g.byte && (c.len == g.len || (g.len == 0 && g.advance == 0.0)) => (*l, *r) = (l.min(left), r.max(right)),
+            _ => clusters.push((left, right, g)),
+        }
+    }
+    let nearest = clusters
         .iter()
-        .flat_map(|g| {
-            let left = layout.logical_point(g.origin).x;
-            let right = left + g.advance;
-            if g.rtl { [(right, g.byte), (left, g.byte + g.len)] } else { [(left, g.byte), (right, g.byte + g.len)] }
-        })
+        .flat_map(|&(left, right, g)| if g.rtl { [(right, g.byte), (left, g.byte + g.len)] } else { [(left, g.byte), (right, g.byte + g.len)] })
         .min_by(|a, b| (a.0 - x).abs().total_cmp(&(b.0 - x).abs()));
     nearest.map_or(line.start, |(_, byte)| byte)
 }
@@ -376,9 +556,11 @@ pub fn line_end_of(layout: &TextLayout, byte: usize) -> usize {
 fn x_in_line(layout: &TextLayout, li: usize, byte: usize) -> f64 {
     let line = &layout.lines[li];
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    if let Some(g) = glyphs.iter().find(|g| g.byte <= byte && g.byte + g.len > byte) {
+    if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
+        let g = &glyphs[i];
         let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
-        return layout.logical_point(g.origin).x + g.advance * if g.rtl { 1.0 - frac } else { frac };
+        let (left, advance) = cluster_extent(layout, glyphs, i).map_or((layout.logical_point(g.origin).x, g.advance), |(l, r)| (l, r - l));
+        return left + advance * if g.rtl { 1.0 - frac } else { frac };
     }
     glyphs.iter().max_by_key(|g| g.byte + g.len).map_or(line.x0, |g| layout.logical_point(g.origin).x + if g.rtl { 0.0 } else { g.advance })
 }
@@ -407,7 +589,8 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         return out;
     }
     if layout.on_path {
-        for g in layout.glyphs.iter().filter(|g| g.byte >= a && g.byte < b) {
+        // A list marker's glyphs stand for no characters.
+        for g in layout.glyphs.iter().filter(|g| g.byte >= a && g.byte < b && g.len > 0) {
             let li = &layout.lines[0];
             let d = dir(g.angle);
             let up = Vec2::new(d.y, -d.x);
@@ -417,7 +600,9 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         return out;
     }
     if layout.glyphs.iter().any(|g| g.rtl) {
-        for g in layout.glyphs.iter().filter(|g| g.byte < b && g.byte + g.len > a) {
+        // A list marker's glyphs stand for no characters.
+        let glyphs = layout.glyphs.iter().enumerate().filter(|(i, g)| g.byte < b && g.byte + g.len > a && layout.marker_of(*i).is_none());
+        for (_, g) in glyphs {
             let Some(l) = layout.lines.get(g.line) else { continue };
             let p = layout.logical_point(g.origin);
             let (x0, x1) = (p.x, p.x + g.advance);
@@ -437,7 +622,10 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         if l.start > b || l.end < a || (l.end == a && l.start < a && layout.lines.get(li + 1).is_some_and(|n| n.start == l.end)) {
             continue;
         }
-        let xa = if a <= l.start { l.x0.min(x_in_line(layout, li, l.start)) } else { x_in_line(layout, li, a) };
+        // A list marker before the line's first character is not part of the selection.
+        let next = layout.markers.partition_point(|m| m.glyphs.start < l.glyph_start);
+        let marked = layout.markers.get(next).is_some_and(|m| m.glyphs.start < l.glyph_end);
+        let xa = if a <= l.start && !marked { l.x0.min(x_in_line(layout, li, l.start)) } else { x_in_line(layout, li, a.max(l.start)) };
         let mut xb = x_in_line(layout, li, b.min(l.end));
         if b > l.end {
             // The selection continues past the line: include the line break / trailing space.
@@ -453,23 +641,54 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
     out
 }
 
-/// Move horizontally through visual caret stops; source offsets stay in logical order.
+/// Move horizontally through visual caret stops; source offsets stay in logical order. Stops at
+/// one x (both ends of a cluster drawn with no advance) are visited one at a time in byte order.
+/// Going right, the caret takes them in increasing order on left-to-right glyphs and in
+/// decreasing order on right-to-left glyphs; going left, it takes them in the reverse order.
 pub fn caret_horizontal(layout: &TextLayout, byte: usize, right: bool) -> usize {
+    caret_horizontal_filtered(layout, byte, right, |_| true)
+}
+
+/// Like [`caret_horizontal`], but exclude glyph stops and line edges inside a grapheme of `text`.
+pub fn caret_horizontal_cluster(layout: &TextLayout, text: &str, byte: usize, right: bool) -> usize {
+    use unicode_segmentation::GraphemeCursor;
+    let valid = |b| text.is_char_boundary(b) && GraphemeCursor::new(b, text.len(), true).is_boundary(text, 0).unwrap_or(false);
+    let to = caret_horizontal_filtered(layout, byte, right, valid);
+    if to == byte || valid(to) {
+        return to;
+    }
+    // Wrapping can split a grapheme; normalize only the fallback in its logical direction.
+    let Some(line) = layout.lines.get(layout.line_of(byte)) else { return byte };
+    if right != line.rtl { edit::next_cluster(text, to) } else { edit::prev_cluster(text, to) }
+}
+
+fn caret_horizontal_filtered(layout: &TextLayout, byte: usize, right: bool, valid: impl Fn(usize) -> bool) -> usize {
     let li = layout.line_of(byte);
     let Some(line) = layout.lines.get(li) else { return byte };
-    let x = layout.logical_point(caret_position(layout, byte).0).x;
-    let mut stops: Vec<_> =
-        layout.glyphs.get(line.glyph_start..line.glyph_end).unwrap_or_default().iter().flat_map(|g| [g.byte, g.byte + g.len]).collect();
+    let glyphs = layout.glyphs.get(line.glyph_start..line.glyph_end).unwrap_or_default();
+    // Returns a stop's x and its place among the stops at that x (larger is further right),
+    // taken from the glyph that `caret_position` puts it on.
+    let stop = |b: usize| {
+        let rtl =
+            glyphs.iter().find(|g| g.byte <= b && g.byte + g.len > b).or_else(|| glyphs.iter().max_by_key(|g| g.byte + g.len)).is_some_and(|g| g.rtl);
+        (layout.logical_point(caret_position(layout, b).0).x, if rtl { -(b as f64) } else { b as f64 })
+    };
+    let (x, order) = stop(byte);
+    let mut stops: Vec<_> = glyphs.iter().flat_map(|g| [g.byte, g.byte + g.len]).collect();
     stops.sort_unstable();
     stops.dedup();
     stops
         .into_iter()
+        .filter(|&b| valid(b))
         .filter_map(|b| {
-            let bx = layout.logical_point(caret_position(layout, b).0).x;
-            let d = if right { bx - x } else { x - bx };
-            (d > 1e-6).then_some((d, b))
+            // Both the distance and the place among stops at one x are counted in the step's direction.
+            let (bx, bo) = stop(b);
+            let (d, o) = if right { (bx - x, bo - order) } else { (x - bx, order - bo) };
+            // The end of a soft-wrapped line is measured on the next line: it never wins a tie.
+            let o = if layout.line_of(b) == li { o } else { f64::INFINITY };
+            if d.abs() <= 1e-6 { (o > 0.0 && o.is_finite()).then_some((0.0, o, b)) } else { (d > 1e-6).then_some((d, o, b)) }
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .min_by(|a, b| if (a.0 - b.0).abs() <= 1e-6 { a.1.total_cmp(&b.1) } else { a.0.total_cmp(&b.0) })
         .map_or_else(
             || {
                 if right != line.rtl {
@@ -478,7 +697,7 @@ pub fn caret_horizontal(layout: &TextLayout, byte: usize, right: bool) -> usize 
                     li.checked_sub(1).and_then(|previous| layout.lines.get(previous)).map_or(byte, |previous| previous.end)
                 }
             },
-            |(_, b)| b,
+            |(_, _, b)| b,
         )
 }
 
@@ -503,30 +722,6 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_bidi;
-#[cfg(test)]
-mod tests_combos;
-#[cfg(test)]
-mod tests_embed;
-#[cfg(test)]
-mod tests_fit;
-#[cfg(test)]
-mod tests_inline;
-#[cfg(test)]
-mod tests_scripts;
-#[cfg(test)]
-mod tests_snap;
-#[cfg(test)]
-mod tests_sysfonts;
-#[cfg(test)]
-mod tests_typo;
-#[cfg(test)]
-mod tests_variable;
-#[cfg(test)]
-mod tests_versions;
-#[cfg(test)]
-mod tests_vertical;
 #[cfg(test)]
 #[path = "../build/web_fonts.rs"]
 mod web_fonts_build;

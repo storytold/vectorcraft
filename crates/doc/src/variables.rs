@@ -17,15 +17,21 @@ pub enum VariableKind {
     Text,
     /// Whether bound objects show.
     Visibility,
+    /// A linked image's file path (the pixels swap; the object's bounds stay).
+    Image,
+    /// A graph object's data (CSV of categories and series, as Graph Data uses).
+    Graph,
 }
 
 impl VariableKind {
-    /// Parse the `kind` of `variable.define`: `text` or `visibility` (`visible` is accepted
-    /// as the same thing, as the panel and the docs call it both).
+    /// Parse the `kind` of `variable.define`: `text`, `visibility` (`visible` is accepted
+    /// as the same thing, as the panel and the docs call it both), `image` or `graph`.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "text" => Some(Self::Text),
             "visibility" | "visible" => Some(Self::Visibility),
+            "image" => Some(Self::Image),
+            "graph" => Some(Self::Graph),
             _ => None,
         }
     }
@@ -35,6 +41,8 @@ impl VariableKind {
         match self {
             Self::Text => "text",
             Self::Visibility => "visibility",
+            Self::Image => "image",
+            Self::Graph => "graph",
         }
     }
 }
@@ -52,13 +60,23 @@ pub struct Variable {
 pub enum DataValue {
     Text(String),
     Visible(bool),
+    /// Absolute path of the image file an image variable should show.
+    Image(String),
+    /// CSV of a graph's categories and series (same shape as Graph Data / `graph.setData`).
+    Graph(String),
 }
 
 impl DataValue {
     /// Whether this value fits the variable's kind (a dataset may carry values for
     /// variables of either kind; each binding takes what fits it).
     pub fn fits(&self, kind: VariableKind) -> bool {
-        matches!((self, kind), (Self::Text(_), VariableKind::Text) | (Self::Visible(_), VariableKind::Visibility))
+        matches!(
+            (self, kind),
+            (Self::Text(_), VariableKind::Text)
+                | (Self::Visible(_), VariableKind::Visibility)
+                | (Self::Image(_), VariableKind::Image)
+                | (Self::Graph(_), VariableKind::Graph)
+        )
     }
 }
 
@@ -84,9 +102,10 @@ impl DataSet {
 ///
 /// An object may be driven by several variables — the reference app binds the selected object
 /// to the selected variable, one click at a time, and never says a second binding replaces the
-/// first — so a binding is a set. `dataset.select` applies them in the order the variables are
-/// defined, which is what makes two text variables on one object deterministic: the last one
-/// wins, and `applied` counts both.
+/// first — so a binding is a set. `dataset.select` applies the text values in the order the
+/// variables are defined, which is what makes two text variables on one object deterministic:
+/// the last one wins, and `applied` counts both. Of two visibility variables on one object, the
+/// last one defined wins too.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Variables {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -97,6 +116,10 @@ pub struct Variables {
     pub bindings: BTreeMap<NodeId, BTreeSet<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_dataset: Option<String>,
+    /// Lock Variables: while set, variables can't be defined, deleted or renamed. Objects can
+    /// still be bound to them and unbound, and datasets still change and apply.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
 }
 
 impl Variables {
@@ -165,33 +188,43 @@ impl Document {
         self.variables.bindings = bindings;
     }
 
-    /// Whether a variable may read and rewrite the object `id`: it is in the document, neither
-    /// it nor anything above it is locked, and nothing above it is hidden. Its own visibility
-    /// doesn't count, as that is what a visibility variable drives: a row that hid it must be
-    /// able to show it again, and a capture must record it hidden.
+    /// Whether a variable may be bound to the object `id`: it is in the document, neither it nor
+    /// anything above it is locked, and nothing above it is hidden. Its own visibility doesn't
+    /// count, as that is what a visibility variable drives.
     pub fn variable_target(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked && (n.visible || *i == id))))
     }
 
-    /// What the object `id` holds for the variable of `kind`: its characters, or whether it
-    /// shows. `None` when the object is gone, is not of that kind, or is locked or on a hidden
-    /// or locked layer (the document's value is whatever it was left at).
+    /// Whether a data set reads and rewrites the bound object `id`: it is in the document and
+    /// neither it nor anything above it is locked. Hidden objects count, and so do objects in a
+    /// hidden layer or group.
+    pub fn dataset_target(&self, id: NodeId) -> bool {
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked)))
+    }
+
+    /// What the object `id` holds for the variable of `kind`: its characters, whether it shows,
+    /// or a linked image's path. `None` when the object is gone, is not of that kind, has no
+    /// link path yet (an embedded image), or is locked or in a locked layer or group (the
+    /// document's value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
-        if !self.variable_target(id) {
+        if !self.dataset_target(id) {
             return None;
         }
         let node = self.node(id)?;
         match (kind, &node.kind) {
             (VariableKind::Text, NodeKind::Text(t)) => Some(DataValue::Text(t.plain_text())),
             (VariableKind::Visibility, _) => Some(DataValue::Visible(node.visible)),
-            (VariableKind::Text, _) => None,
+            (VariableKind::Image, NodeKind::Image(im)) => im.link.as_ref().map(|l| DataValue::Image(l.path.clone())),
+            (VariableKind::Graph, _) => node.extras().graph.as_ref().map(|g| DataValue::Graph(g.to_csv())),
+            (VariableKind::Text | VariableKind::Image, _) => None,
         }
     }
 
     /// The values a dataset captured right now: what each bound object holds, in the order the
     /// variables are defined. `dataset.capture` writes these into a new row and
-    /// `dataset.update` into the active one; the Variables panel compares the active row with
-    /// them to tell whether the art still matches what it says.
+    /// `dataset.update` into the active one, for the variables that row holds (`all: true` adds
+    /// the rest); the Variables panel compares the active row with them to tell whether the art
+    /// still matches what it says.
     pub fn captured_values(&self) -> BTreeMap<String, DataValue> {
         let mut out = BTreeMap::new();
         for v in &self.variables.variables {

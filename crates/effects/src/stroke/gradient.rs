@@ -15,7 +15,7 @@
 
 use kurbo::{BezPath, Point, Shape, Vec2};
 use vectorcraft_doc::color::{Gradient, GradientGeom, GradientPaint, Paint};
-use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP, lerp_color};
+use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP};
 use vectorcraft_doc::{GradientMesh, LineJoin, MeshPoint, StrokeAlign, StrokeGradientMode, StrokeLayer};
 use vectorcraft_geom::FillRule;
 
@@ -375,7 +375,7 @@ pub fn written_slices(bp: &BezPath, rule: FillRule, st: &StrokeLayer, outlines: 
 /// stroke's outline), coloured as [`gradient_slices`] paint it.
 pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradient) -> Vec<GradientMesh> {
     let across = st.gradient_mode == StrokeGradientMode::Across;
-    let color = |t: f64| g.sample_with(t.clamp(0.0, 1.0) as f32, lerp_color);
+    let color = |t: f64| g.sample_keep_model(t.clamp(0.0, 1.0) as f32);
     // Along: a column at each stop (colours are linear between columns), close enough to look smooth.
     let marks: Vec<f64> = if across { vec![] } else { g.expanded_stops().iter().map(|s| s.0 as f64).collect() };
     let max_dt = match (across, st.profile.is_some()) {

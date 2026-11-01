@@ -109,6 +109,11 @@ impl Compatibility {
     pub fn has_layers(self) -> bool {
         matches!(self, Self::Pdf15 | Self::Pdf16 | Self::Pdf17 | Self::Pdf20)
     }
+
+    /// The version has a page's `UserUnit` (PDF 1.6).
+    pub fn has_user_unit(self) -> bool {
+        matches!(self, Self::Pdf16 | Self::Pdf17 | Self::Pdf20)
+    }
 }
 
 choice! {
@@ -342,12 +347,17 @@ impl BleedSettings {
     }
 }
 
+/// The Output destination that names the CMYK profile of the colour settings in effect, in an RGB
+/// document as in a CMYK one (Illustrator's "Document CMYK"; #2950).
+pub const DOCUMENT_CMYK: &str = "Document CMYK";
+
 /// The Output section.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OutputSettings {
     pub conversion: ColorConversion,
-    /// Destination profile name (empty: the document's profile).
+    /// Destination profile name (empty: the document's profile; [`DOCUMENT_CMYK`]: the CMYK
+    /// profile in effect, whatever the document's colour mode).
     pub destination: String,
     pub profiles: ProfileInclusion,
     /// PDF/X output intent profile name.

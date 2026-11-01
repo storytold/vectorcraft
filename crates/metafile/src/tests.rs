@@ -4,10 +4,14 @@
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::{
+    Appearance, CharStyle, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeId, NodeKind, PatternDef, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
 use crate::*;
+
+mod import;
 
 /// Add `n` (with a fresh id) on top of `d`'s first layer.
 pub(crate) fn add(d: &mut Document, mut n: Node) {
@@ -44,12 +48,39 @@ pub(crate) fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
     out
 }
 
+/// CRC-32 of a PNG chunk.
+pub(crate) fn crc32(data: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+        }
+    }
+    !crc
+}
+
+/// A 1 × 1 PNG whose IHDR claims `w` × `h` (and whose CRC matches): its size reads from the header,
+/// but its pixel data no longer matches, so decoding it fails.
+pub(crate) fn png_claiming(w: u32, h: u32) -> Vec<u8> {
+    let mut png = vec![];
+    image::GrayImage::new(1, 1).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png[16..20].copy_from_slice(&w.to_be_bytes());
+    png[20..24].copy_from_slice(&h.to_be_bytes());
+    let crc = crc32(&png[12..29]);
+    png[29..33].copy_from_slice(&crc.to_be_bytes());
+    png
+}
+
 /// An image node of `bytes` placed by `xf`, its blob added to `d`.
 pub(crate) fn image_node(d: &mut Document, bytes: Vec<u8>, w: u32, h: u32, xf: Affine) -> Node {
     let blob = ImageBlob::new("image/png", bytes);
     let key = blob.content_key();
     d.images.insert(key.clone(), blob);
-    Node::new(NodeId(0), NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })))
+    Node::new(
+        NodeId(0),
+        NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
+    )
 }
 
 pub(crate) fn u32_at(b: &[u8], at: usize) -> u32 {
@@ -251,9 +282,35 @@ fn emf_clips_gradients_and_images() {
 fn type_is_written_as_outlines() {
     let t = TextObject::point(Point::new(10.0, 50.0), "Hi", CharStyle { fill: red(), ..CharStyle::default() });
     let d = doc_with(100.0, 100.0, vec![Node::new(NodeId(0), NodeKind::Text(Box::new(t)))]);
-    let k = kinds(&emf_records(&emf(&d).bytes));
+    let out = emf(&d);
+    let k = kinds(&emf_records(&out.bytes));
     assert!(k.contains(&62), "glyphs are filled paths");
     assert!(!k.contains(&84) && !k.contains(&83), "no text records");
+    // Said so (#3850).
+    assert!(out.warnings.iter().any(|w| w.contains("type is written as outlines")), "{:?}", out.warnings);
+}
+
+/// Ruby (furigana) is written with its base text, as the canvas draws it: one more `MoveToEx`
+/// per contour of the reading's glyphs in EMF, more polygons in WMF.
+#[test]
+fn ruby_is_written_with_its_type() {
+    let typed = |ruby: bool| {
+        let mut t = TextObject::point(Point::new(10.0, 60.0), "AB", CharStyle { size: 30.0, fill: red(), ..CharStyle::default() });
+        if ruby {
+            t.ruby = vec![vectorcraft_doc::RubySpan::new(0, 2, "xyz")];
+        }
+        t
+    };
+    let contours = |gs: &[vectorcraft_text::PositionedGlyph]| {
+        gs.iter().flat_map(|g| g.outline.elements()).filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count()
+    };
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &typed(true));
+    let reading = contours(&lay.ruby);
+    assert!(reading >= 3, "the reading has ink: {reading}");
+    let doc = |ruby: bool| doc_with(100.0, 100.0, vec![Node::new(NodeId(0), NodeKind::Text(Box::new(typed(ruby))))]);
+    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), crate::emf::MOVETOEX);
+    assert_eq!(moves(&doc(true)), moves(&doc(false)) + reading, "the reading's contours are written");
+    assert!(wmf(&doc(true)).bytes.len() > wmf(&doc(false)).bytes.len(), "WMF writes the reading too");
 }
 
 #[test]
@@ -336,7 +393,132 @@ fn an_instance_whose_art_reaches_the_artboard_is_written() {
     let inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) });
     let mut d = doc_with(100.0, 100.0, vec![inst]);
     let art = path(shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), red(), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let k = kinds(&emf_records(&emf(&d).bytes));
     assert!(k.contains(&39), "a brush fills the art: {k:?}");
+}
+
+/// A pattern `name` repeating `art` every point.
+fn point_tiles(name: &str, art: Node) -> PatternDef {
+    let mut def = PatternDef::new(name, vec![Arc::new(art)]);
+    def.tile = Rect::new(0.0, 0.0, 1.0, 1.0);
+    def
+}
+
+fn pattern(name: &str) -> Paint {
+    Paint::Pattern { pattern: name.into(), xf: Affine::IDENTITY }
+}
+
+#[test]
+fn patterns_inside_pattern_tiles_share_one_tile_budget() {
+    // About 3,700 tiles of a 12 pt square, each filled with about 140 tiles of a dot: over half a
+    // million fills when every tile is written.
+    let square = path(shapes::rectangle(Rect::new(0.0, 0.0, 12.0, 12.0)), pattern("dots"), Paint::None, 0.0);
+    let mut d = doc_with(50.0, 50.0, vec![path(shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), pattern("squares"), Paint::None, 0.0)]);
+    d.patterns.push(point_tiles("dots", path(shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), red(), Paint::None, 0.0)));
+    d.patterns.push(point_tiles("squares", square));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(ops.len() < 300_000, "{} operations", ops.len());
+    assert!(warnings.iter().any(|w| w.contains("one colour")), "{warnings:?}");
+    // The tiles that were written are reported too (#3850).
+    assert!(warnings.iter().any(|w| w.contains("written as their tiles")), "{warnings:?}");
+
+    // A tile filled with its own pattern multiplies at every level down to the nesting limit.
+    let square = path(shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 4.0)), pattern("self"), Paint::None, 0.0);
+    let mut d = doc_with(10.0, 10.0, vec![path(shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), pattern("self"), Paint::None, 0.0)]);
+    d.patterns.push(point_tiles("self", square));
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(ops.len() < 300_000, "{} operations", ops.len());
+}
+
+/// A 24 pt tile clipped to itself, red on its left half and white on its right: the striped
+/// pattern of #3911.
+fn stripes(name: &str, extra: Option<Node>) -> PatternDef {
+    let cell = Rect::new(0.0, 0.0, 24.0, 24.0);
+    let clip = Node::new(
+        NodeId(0),
+        NodeKind::Path { path: shapes::rectangle(cell), rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: true, guide: false },
+    );
+    let mut children = vec![
+        Arc::new(clip),
+        Arc::new(path(shapes::rectangle(Rect::new(0.0, 0.0, 12.0, 24.0)), red(), Paint::None, 0.0)),
+        Arc::new(path(shapes::rectangle(Rect::new(12.0, 0.0, 24.0, 24.0)), Paint::solid(Color::rgb8(255, 255, 255)), Paint::None, 0.0)),
+    ];
+    children.extend(extra.map(Arc::new));
+    let group = Node::new(NodeId(0), NodeKind::Group { children, clip: true });
+    let mut def = PatternDef::new(name, vec![Arc::new(group)]);
+    def.tile = cell;
+    def
+}
+
+/// A 360 × 260 pt rectangle filled with `def`, turned 45°.
+fn striped_doc(def: PatternDef) -> Document {
+    let paint = Paint::Pattern { pattern: def.name.clone(), xf: Affine::rotate(std::f64::consts::FRAC_PI_4) };
+    let mut d = doc_with(400.0, 300.0, vec![path(shapes::rectangle(Rect::new(20.0, 20.0, 380.0, 280.0)), paint, Paint::None, 0.0)]);
+    d.patterns.push(def);
+    d
+}
+
+fn fills(ops: &[crate::scene::Op]) -> Vec<(&vectorcraft_geom::BezPath, [u8; 3])> {
+    ops.iter()
+        .filter_map(|op| match op {
+            crate::scene::Op::Fill { path, rgb, .. } => Some((path, *rgb)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn clips(ops: &[crate::scene::Op]) -> usize {
+    ops.iter().filter(|op| matches!(op, crate::scene::Op::Clip { .. })).count()
+}
+
+/// #3911: a pattern whose tiles stay apart is written as one shape for each part of its tile,
+/// clipped once to what it fills, instead of every tile's parts in a clip of their own.
+#[test]
+fn pattern_tiles_that_stay_apart_are_one_shape_for_each_part() {
+    let d = striped_doc(stripes("stripes", None));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    let f = fills(&ops);
+    assert_eq!(f.iter().map(|(_, rgb)| *rgb).collect::<Vec<_>>(), [[255, 0, 0], [255, 255, 255]], "red, then white");
+    assert_eq!(clips(&ops), 2, "the page's clip and one to the filled rectangle");
+    // Every tile's half is in the merged shape: one figure for each tile, red and white alike.
+    let figures = |bp: &vectorcraft_geom::BezPath| bp.elements().iter().filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+    let tiles = d.pattern("stripes").unwrap().instances_in(Affine::rotate(std::f64::consts::FRAC_PI_4), Rect::new(20.0, 20.0, 380.0, 280.0)).len();
+    assert!(tiles > 200, "{tiles} tiles");
+    assert_eq!((figures(f[0].0), figures(f[1].0)), (tiles, tiles));
+    assert!(warnings.iter().any(|w| w.contains("one shape for each part of the tile")), "{warnings:?}");
+    // The EMF: two fills and one saved clip, about half the bytes the tiles took apart.
+    let bytes = emf(&d).bytes;
+    let k = kinds(&emf_records(&bytes));
+    assert_eq!((count(&k, 62), count(&k, 33)), (2, 2), "FILLPATH and SAVEDC records");
+}
+
+/// Art reaching past its tile overlaps the next tile's, so the tiles keep their own shapes and
+/// clips, in paint order.
+#[test]
+fn pattern_art_past_its_tile_keeps_each_tile_apart() {
+    let mut def = stripes("wide", None);
+    // The tile is smaller than the art: neighbours overlap.
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let d = striped_doc(def);
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400, "{} fills", fills(&ops).len());
+    assert!(clips(&ops) > 200, "each tile's clip stays");
+    assert!(warnings.iter().any(|w| w.contains("one shape each")), "{warnings:?}");
+}
+
+/// Hex tilings overlap their tiles' boxes, and a stroke may reach past a clip: both keep each
+/// tile apart.
+#[test]
+fn hex_tilings_and_stroked_tiles_keep_each_tile_apart() {
+    let mut hex = stripes("hex", None);
+    hex.tile_type = vectorcraft_doc::TileType::HexByRow;
+    let d = striped_doc(hex);
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400, "hex: {} fills", fills(&ops).len());
+
+    let line = path(shapes::rectangle(Rect::new(4.0, 4.0, 20.0, 20.0)), Paint::None, blue(), 2.0);
+    let d = striped_doc(stripes("stroked", Some(line)));
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400 && clips(&ops) > 200, "stroked: {} fills, {} clips", fills(&ops).len(), clips(&ops));
 }

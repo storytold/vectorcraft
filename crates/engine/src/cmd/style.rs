@@ -20,7 +20,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, id_param, index, ok, str_param, unique_name};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -456,7 +456,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     let look = GraphicStyle::of(String::new(), captured(n), n);
     let name = d.graphic_styles[i].name.clone();
     let chars = s.prefs.override_char_color;
-    s.edit(&format!("Redefine Graphic Style \u{201c}{name}\u{201d}"), |d, _| {
+    s.edit_named("Redefine Graphic Style “{name}”", &name, false, |d, _| {
         let id = d.graphic_style_id(i);
         let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name: name.clone(), id, ..look });
         // Objects still linked follow the new definition; edited ones are unlinked (they keep
@@ -547,7 +547,7 @@ fn style_move(s: &mut Session, p: &Value) -> Result<Value> {
     let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
     let d = &s.doc()?.doc;
     let from = style_index(d, name)?;
-    let to = (to as usize).min(d.graphic_styles.len() - 1);
+    let to = index(to).min(d.graphic_styles.len() - 1);
     if from == to {
         return ok();
     }

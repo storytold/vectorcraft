@@ -76,6 +76,13 @@ fn close_now(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
         app.views.remove(i);
     }
     app.sync_views();
+    if app.session.tool_id() == "artboard"
+        && let Some(n) = app.session.active().map(|d| d.doc.artboards.len())
+    {
+        // Closing recreates the tool; restore the surviving document's displayed board.
+        let selected = crate::panels::artboards::selected(app, n);
+        crate::panels::artboards::select(app, selected);
+    }
     Ok(r)
 }
 

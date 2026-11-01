@@ -12,7 +12,7 @@ use vectorcraft_color::cms;
 use vectorcraft_doc::Document;
 use vectorcraft_format::{PREVIEW_MAX, SaveOptions};
 
-use super::super::*;
+use super::super::{EngineError, Result, bad};
 use super::{Format, FormatOption};
 
 /// The options `document.save` and the native encoder read.
@@ -99,6 +99,30 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         default: "true",
         description: "compress the PDF's content and the native document it carries (the PDF option compression.compressText)",
     },
+    FormatOption {
+        name: "aiVersion",
+        ty: "string",
+        default: "\"pdf\"",
+        description: "pdf (a PDF-compatible .ai carrying the VectorCraft document) or 7 (the legacy, PostScript-form .ai of version 7, which keeps layers, groups, compound paths and clipping groups in apps that read it; one file per artboard, transparent objects opaque; the other .ai options don't apply; an error for a .ait template)",
+    },
+    FormatOption {
+        name: "transparentImages",
+        ty: "string",
+        default: "\"flatten\"",
+        description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity or a blending mode): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
+    },
+    FormatOption {
+        name: "hiddenObjects",
+        ty: "string",
+        default: "\"layer\"",
+        description: "with aiVersion 7, hidden objects, which version 7 can't hide (it hides only layers): layer (the default: each layer's hidden objects in a hidden layer of their own just above it, out of their groups), omit (left out) or visible (shown where they are)",
+    },
+    FormatOption {
+        name: "outlineText",
+        ty: "boolean",
+        default: "false",
+        description: "with aiVersion 7, type as its outlines instead of text (which apps reading the file set in the fonts it names: they need them installed); type 8-bit text can't hold (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is always outlines",
+    },
 ];
 
 #[derive(Default, Deserialize)]
@@ -122,10 +146,13 @@ pub(super) struct Extras {
 /// are left to [`encode`]).
 pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<(SaveOptions, Extras)> {
     let o: NativeOptions = super::encode::options(f, p)?;
-    let mut so = SaveOptions::for_doc(doc);
-    so.compress = o.compress.unwrap_or(false);
-    so.version = o.version.unwrap_or(vectorcraft_format::VERSION);
-    so.include_linked = o.include_linked;
+    // Pretty or compact is decided by [`encode_to`] on the document it writes.
+    let mut so = SaveOptions {
+        compress: o.compress.unwrap_or(false),
+        version: o.version.unwrap_or(vectorcraft_format::VERSION),
+        include_linked: o.include_linked,
+        ..SaveOptions::default()
+    };
     if o.embed_profiles.unwrap_or(true) {
         so.profiles = embedded_profiles(doc);
     }
@@ -166,6 +193,7 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
         }
         other => other,
     };
+    so.pretty = so.pretty_fits(&native);
     vectorcraft_format::save_to(&native, &so, w).map_err(|e| bad(cmd, e.to_string()))
 }
 

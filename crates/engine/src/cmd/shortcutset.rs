@@ -13,7 +13,7 @@
 
 use serde_json::{Value, json};
 
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, importmatches, str_param};
 
 /// The most bytes of a file read.
 const MAX_BYTES: usize = 4 << 20;

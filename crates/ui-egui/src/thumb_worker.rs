@@ -174,5 +174,12 @@ mod tests {
         assert!(!s.settled(&ctx, 2, 2, 10.25), "so does another document");
         assert!(s.settled(&ctx, 2, 2, 1.0), "a clock that went back doesn't hold it up");
         assert!(!s.settled(&ctx, 2, 2, f64::NAN), "an unknown elapsed time is still unsettled");
+
+        let mut s = Settle::default();
+        assert!(!s.settled(&ctx, 1, 1, 0.0));
+        for (now, expected) in [(f64::NEG_INFINITY, true), (-0.0, false), (0.0, false), (SETTLE_SECS, true), (f64::INFINITY, true), (f64::NAN, false)]
+        {
+            assert_eq!(s.settled(&ctx, 1, 1, now), expected, "clock boundary {now}");
+        }
     }
 }

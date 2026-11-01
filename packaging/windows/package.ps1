@@ -5,7 +5,7 @@
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
     vectorcraft-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    vectorcraft-<version>-windows-<arch>-portable.zip   vectorcraft.exe + vectorcraft-cli.exe
+    vectorcraft-<version>-windows-<arch>-portable.zip   vectorcraft.exe + vectorcraft-cli.exe + portable.txt
 
   The binaries link the C runtime statically (+crt-static), so neither the MSI nor the portable
   zip needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a
@@ -155,6 +155,8 @@ Invoke-Native 'wix build' {
     -d "DocsDir=$Docs" -d "BannerBmp=$Banner" -d "DialogBmp=$Dialog" `
     -o $Msi
 }
+# Check the compiled scope, path and registration contract before signing.
+& (Join-Path $PSScriptRoot 'check-install-policy.ps1') -MsiPath $Msi
 # wix writes its debug symbols (.wixpdb) next to the MSI; keep them out of the release assets.
 Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Msi, '.wixpdb'))
 & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
@@ -165,6 +167,9 @@ Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
 Copy-Item -Recurse (Join-Path $Docs '*') $Portable
+# portable.txt beside vectorcraft.exe switches on portable mode: settings, libraries, recovery
+# files and logs go to VectorCraftData\ next to the exe instead of %APPDATA% (#1366; see profile.rs).
+Copy-Item (Join-Path $PSScriptRoot 'portable.txt') $Portable
 $Zip = Join-Path $Dist "vectorcraft-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip

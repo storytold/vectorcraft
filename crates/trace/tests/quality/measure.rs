@@ -56,7 +56,7 @@ pub fn fidelity(src: &Raster, out: &Raster) -> (f64, f64) {
 }
 
 /// A traced path as the shape it paints: stroked paths become their stroke's outline.
-fn painted(tp: &TracedPath) -> BezPath {
+pub(super) fn painted(tp: &TracedPath) -> BezPath {
     let bez = tp.path.to_bezpath();
     match tp.stroke {
         Some(width) => {

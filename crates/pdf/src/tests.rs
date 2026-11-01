@@ -8,6 +8,44 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
 
 use crate::*;
 
+mod blend;
+mod charstroke;
+mod cmykblend;
+mod cmykimages;
+mod colorize;
+mod compression;
+mod dashalign;
+mod editing;
+mod encrypt;
+mod file_info;
+mod focal;
+mod fx;
+mod import_color;
+pub(super) mod import_fidelity;
+mod import_layers;
+mod import_lines;
+mod import_options;
+mod import_overprint;
+mod layers;
+pub(super) mod live_text;
+mod marks;
+mod mesh_export;
+mod output;
+mod pdf13;
+mod pdfx;
+mod presets;
+mod print;
+mod printadvanced;
+mod reader_compat;
+mod reader_streaming;
+mod realtext;
+mod settings;
+pub(super) mod stroke;
+mod strokeout;
+mod text_placement;
+mod textstroke;
+mod webview;
+
 fn doc(w: f64, h: f64) -> Document {
     Document::new(w, h)
 }
@@ -37,13 +75,18 @@ fn close(a: Rect, b: Rect, tol: f64) -> bool {
     (a.x0 - b.x0).abs() < tol && (a.y0 - b.y0).abs() < tol && (a.x1 - b.x1).abs() < tol && (a.y1 - b.y1).abs() < tol
 }
 
+/// `d` exported with the default options and imported back: the document a round trip through a PDF
+/// gives.
 fn roundtrip(d: &Document) -> Document {
     let bytes = export(d, &PdfOptions::default()).expect("export");
     import(&bytes).expect("import")
 }
 
+/// `d` exported uncompressed, dated `created: Some(0)` rather than by the clock: two exports of one
+/// document are then the same bytes, where the clock's dates, in whole seconds, differ whenever a
+/// second ticks between them.
 fn uncompressed(d: &Document) -> String {
-    let bytes = export(d, &PdfOptions::uncompressed()).expect("export");
+    let bytes = export(d, &PdfOptions { created: Some(0), ..PdfOptions::uncompressed() }).expect("export");
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
@@ -79,15 +122,23 @@ fn one_page_per_artboard_with_sizes() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
     });
     d.artboards.push(Artboard {
         id: 3,
         name: "C".into(),
         rect: Rect::new(0.0, 500.0, 612.0, 1292.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
     let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
@@ -102,8 +153,12 @@ fn artboard_range_and_bad_index() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
     let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
@@ -139,7 +194,7 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     // the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc(200.0, 100.0);
     let red = rect_node(Rect::new(100.0, 50.0, 140.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
-    let far = vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(red) };
+    let far = vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(red) };
     d.symbols.push(far.clone());
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) });
     add(&mut d, instance.clone());
@@ -173,7 +228,7 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
     stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
     let line = Node::path(NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(line) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(line) });
     add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-5.0, 0.0)) }));
     let out = roundtrip(&d);
     let l = leaves(&out);
@@ -286,6 +341,32 @@ fn gradients_exported_as_shadings_and_reimported() {
 }
 
 #[test]
+fn smooth_revolve_exports_axial_vector_shading_without_images_and_keeps_the_source_live() {
+    let mut d = doc(200.0, 200.0);
+    let bp = vectorcraft_geom::BezPath::from_svg("M100 30 C140 50 140 120 100 160").unwrap();
+    let mut n = Node::path(NodeId(0), PathData::from_bezpath(&bp), Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+    n.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "threeD.revolve".into(),
+        visible: true,
+        params: serde_json::json!({"offset":20,"rotationX":-25,"cap":true,"segments":16}),
+    });
+    add(&mut d, n);
+    let before = d.clone();
+    let pdf = uncompressed(&d).replace(' ', "");
+    assert!(pdf.matches("/ShadingType2").count() > 50);
+    assert!(!pdf.contains("/Subtype/Image"));
+    assert_eq!(d, before);
+    let back = roundtrip(&d);
+    let strokes: Vec<_> = leaves(&back)
+        .into_iter()
+        .flat_map(|n| n.appearance.items.iter())
+        .filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None })
+        .collect();
+    assert!(strokes.len() >= 2, "continuous cap rims remain vector strokes");
+    assert!(strokes.iter().all(|s| s.join == LineJoin::Round), "seam strokes keep round joins in PDF");
+}
+
+#[test]
 fn hidden_objects_and_template_layers_skipped() {
     let mut d = doc(200.0, 200.0);
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
@@ -347,6 +428,7 @@ fn art_reaching_beyond_a_billion_points_is_left_out() {
         xf: Affine::new([5.5e8, 0.0, 0.0, 10.0, far, 60.0]),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     for (what, n) in [
         ("path", rect_node(Rect::new(far, 60.0, 90.0, 90.0), Color::BLACK)),
@@ -477,6 +559,30 @@ fn text_exported_as_outlines() {
     assert!(b.x0 >= 9.0 && b.x1 < 120.0 && b.y1 <= 56.0 && b.y0 > 25.0, "{b:?}");
 }
 
+/// Colour bitmap glyphs (emoji) are images in the PDF: in their font's Type 3 glyphs with real
+/// text, else drawn where the glyphs are.
+#[test]
+fn colour_bitmap_glyphs_export_as_images() {
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colour_bitmap_family, colour_bitmap_font};
+    for sbix in [true, false] {
+        vectorcraft_text::FontDb::global().add_font(colour_bitmap_font(sbix).unwrap());
+        let mut d = doc(300.0, 100.0);
+        let st = CharStyle { font_family: colour_bitmap_family(sbix).into(), size: 24.0, ..CharStyle::default() };
+        add(&mut d, Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 50.0), &format!("{COLOUR_CHAR}F"), st)))));
+        let text = uncompressed(&d).replace(' ', "");
+        assert!(text.contains("/Type3") && text.contains("/Subtype/Image"), "an image in a Type 3 glyph (sbix {sbix})");
+        let mut outlined = PdfOptions::uncompressed();
+        outlined.settings.advanced.outline_text = true;
+        let r = import_with_report(&export(&d, &outlined).unwrap(), &ImportOptions::default()).unwrap();
+        let l = leaves(&r.document);
+        let images: Vec<_> = l.iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).collect();
+        assert_eq!(images.len(), 1, "outlined, the glyph is an image (sbix {sbix})");
+        let b = images[0].geometric_bounds().unwrap();
+        assert!((b.width() - 24.0).abs() < 0.1 && (b.height() - 24.0).abs() < 0.1, "one em: {b:?}");
+        assert!(l.iter().any(|n| matches!(n.kind, NodeKind::Path { .. })), "the other glyph stays an outline");
+    }
+}
+
 fn tiny_png() -> Vec<u8> {
     let mut img = image::RgbaImage::new(4, 2);
     for (x, _, p) in img.enumerate_pixels_mut() {
@@ -498,6 +604,7 @@ fn image_roundtrip() {
         xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     add(&mut d, Node::new(NodeId(0), NodeKind::Image(Box::new(im))));
     let out = roundtrip(&d);
@@ -510,6 +617,109 @@ fn image_roundtrip() {
     let decoded = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
     assert_eq!(decoded.get_pixel(0, 0).0, [255, 0, 0, 255]);
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
+}
+
+/// Images are written with /Interpolate true, so viewers may smooth them; a pixelated image (an
+/// envelope's with Anti-Alias off) is written without it.
+#[test]
+fn a_pixelated_image_asks_viewers_not_to_smooth_it() {
+    for pixelated in [false, true] {
+        let mut d = doc(200.0, 200.0);
+        d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
+        let im = ImageObject {
+            key: "img1".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(0), NodeKind::Image(Box::new(im)));
+        n.extras_mut().pixelated = pixelated;
+        add(&mut d, n);
+        let pdf = uncompressed(&d);
+        assert_eq!(pdf.matches("/Width 4").count(), 1, "the image is written");
+        assert_eq!(pdf.matches("/Interpolate").count(), usize::from(!pixelated), "pixelated: {pixelated}");
+    }
+}
+
+/// A 4 × 2 red image encoded as `format`, cut short `keep` bytes past the first `tag` in it: its
+/// header reads, and its pixel data can't be decoded.
+fn cut_image(format: image::ImageFormat, tag: &[u8], keep: usize) -> Vec<u8> {
+    let mut out = vec![];
+    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    let at = out.windows(tag.len()).position(|w| w == tag).expect("tag");
+    out.truncate(at + tag.len() + keep);
+    out
+}
+
+/// An image whose pixel data can't be decoded (a PNG, GIF or WebP whose header reads) is left out
+/// of the PDF and of a print job, with one note however many there are, and the rest of the page is
+/// written.
+#[test]
+fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let mut d = doc(200.0, 300.0);
+    let blobs = [
+        ("good", ImageBlob::new("image/png", tiny_png())),
+        ("png", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 4))),
+        ("png2", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 6))),
+        ("gif", ImageBlob::new("image/gif", cut_image(image::ImageFormat::Gif, b"GIF89a", 7))),
+        ("webp", ImageBlob::new("image/webp", cut_image(image::ImageFormat::WebP, b"VP8L", 9))),
+    ];
+    for (i, (key, blob)) in blobs.into_iter().enumerate() {
+        d.images.insert(key.into(), blob);
+        let xf = Affine::translate((20.0, 20.0 + 50.0 * i as f64)) * Affine::scale(10.0);
+        let im = ImageObject { key: key.into(), width: 4, height: 2, xf, link: None, placement: Default::default(), pixels: None };
+        add(&mut d, Node::new(NodeId(0), NodeKind::Image(Box::new(im))));
+    }
+    add(&mut d, rect_node(Rect::new(100.0, 100.0, 150.0, 150.0), Color::BLACK));
+    let written = |bytes: &[u8]| {
+        let back = import(bytes).expect("import");
+        let l = leaves(&back);
+        let images: Vec<Rect> = l.iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).filter_map(|n| n.geometric_bounds()).collect();
+        (images, l.iter().filter(|n| n.path_data().is_some()).count())
+    };
+    let r = export_with_report(&d, &PdfOptions::default()).expect("export");
+    assert_eq!(r.warnings, [NOTE]);
+    let (images, paths) = written(&r.bytes);
+    assert!(images.len() == 1 && close(images[0], Rect::new(20.0, 20.0, 60.0, 40.0), 0.01), "{images:?}");
+    assert_eq!(paths, 1);
+    let p = print(&d, &PrintOptions::default()).expect("print");
+    assert_eq!(p.warnings.iter().filter(|w| *w == NOTE).count(), 1, "{:?}", p.warnings);
+    assert_eq!(written(&p.bytes).0.len(), 1);
+}
+
+/// #2023: a group's Transform effect copies an image among its members as it does the paths: the
+/// PDF draws the image three times, where the effect put it.
+#[test]
+fn a_group_transform_effect_exports_its_image_copies() {
+    let mut d = doc(200.0, 100.0);
+    d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
+    let im = ImageObject {
+        key: "img1".into(),
+        width: 4,
+        height: 2,
+        xf: Affine::translate((20.0, 30.0)) * Affine::scale(5.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = Arc::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))));
+    let mut square = rect_node(Rect::new(20.0, 60.0, 30.0, 70.0), Color::BLACK);
+    square.id = d.alloc_id();
+    let mut g = Node::group(NodeId(0), vec![Arc::new(square), image]);
+    g.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 50, "copies": 2}),
+        visible: true,
+    });
+    add(&mut d, g);
+    let out = roundtrip(&d);
+    let lefts: Vec<f64> =
+        leaves(&out).iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).filter_map(|n| n.geometric_bounds()).map(|b| b.x0.round()).collect();
+    assert_eq!(lefts, [20.0, 70.0, 120.0]);
 }
 
 /// Build a PDF with a correct xref table from object bodies.
@@ -620,8 +830,12 @@ fn import_max_pages_and_multi_page() {
         id: 2,
         name: "B".into(),
         rect: Rect::new(300.0, 0.0, 400.0, 400.0),
+        locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
     });
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
     add(&mut d, rect_node(Rect::new(310.0, 10.0, 350.0, 50.0), Color::BLACK));
@@ -723,6 +937,30 @@ fn creation_date_written() {
 }
 
 #[test]
+fn a_later_modification_date_is_written_beside_the_creation_date() {
+    let d = doc(100.0, 100.0);
+    // 2020-01-01 00:00:00 and 2026-10-17 14:03:00 UTC.
+    let (created, modified) = (1_577_836_800, 1_792_245_780);
+    for standard in [Standard::None, Standard::PdfX1a, Standard::PdfX3, Standard::PdfX4, Standard::PdfA2b] {
+        let mut o = PdfOptions { created: Some(created), modified: Some(modified), ..PdfOptions::uncompressed() };
+        (o.settings.standard, o.settings.compatibility) = (standard, standard.version());
+        let bytes = export(&d, &o).unwrap();
+        let t = String::from_utf8_lossy(&bytes);
+        assert!(t.contains("/CreationDate(D:20200101000000Z)") && t.contains("/ModDate(D:20261017140300Z)"), "{standard:?}: document information");
+        let info = file_info(&bytes, None).unwrap();
+        assert_eq!((info.created, info.modified), (Some(created), Some(modified)), "{standard:?}: XMP");
+        // PDF/A files record when they were saved and converted: at the time of writing too.
+        assert_eq!(t.contains("<stEvt:when>2026-10-17T14:03:00"), standard == Standard::PdfA2b, "{standard:?}");
+        assert!(!t.contains("<stEvt:when>2020"), "{standard:?}");
+        assert_eq!(import(&bytes).unwrap().artboards.len(), 1, "{standard:?}: the file reads back");
+    }
+    // Without a modification date, the file is modified when it was created.
+    let bytes = export(&d, &PdfOptions { created: Some(created), ..PdfOptions::uncompressed() }).unwrap();
+    assert!(String::from_utf8_lossy(&bytes).contains("/ModDate(D:20200101000000Z)"));
+    assert_eq!(file_info(&bytes, None).unwrap().modified, Some(created));
+}
+
+#[test]
 fn opacity_mask_exports_as_luminosity_soft_mask() {
     let mut d = doc(100.0, 100.0);
     let mut n = rect_node(Rect::new(10.0, 10.0, 90.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
@@ -735,6 +973,77 @@ fn opacity_mask_exports_as_luminosity_soft_mask() {
     assert!(text.contains("/Luminosity"));
 }
 
+/// The warnings and path count after exporting an image mask and a separate rectangle.
+fn image_mask_report(colorized: bool, available: bool, nested: bool, unwritable: bool) -> (Vec<String>, usize) {
+    let mut d = doc(100.0, 100.0);
+    if available {
+        d.images.insert("mask-image".into(), ImageBlob::png(tiny_png()));
+    }
+    let im = ImageObject {
+        key: "mask-image".into(),
+        width: 4,
+        height: 2,
+        xf: Affine::translate(if unwritable { (1e10, 1e10) } else { (10.0, 10.0) }) * Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut art = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    if colorized {
+        art.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))));
+    }
+    if nested {
+        let mut outer_art = rect_node(Rect::new(10.0, 10.0, 50.0, 30.0), Color::WHITE);
+        outer_art.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, false)));
+        art = outer_art;
+    }
+    let mut masked = rect_node(Rect::new(10.0, 10.0, 50.0, 30.0), Color::rgb(1.0, 0.0, 0.0));
+    masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, false)));
+    add(&mut d, masked);
+    add(&mut d, rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::BLACK));
+    let report = export_with_report(&d, &PdfOptions::uncompressed()).expect("export");
+    let imported = import(&report.bytes).expect("import");
+    let paths = leaves(&imported).into_iter().filter(|n| n.path_data().is_some()).count();
+    (report.warnings, paths)
+}
+
+#[test]
+fn missing_colorized_image_in_unclipped_mask_omits_masked_object() {
+    let (warnings, paths) = image_mask_report(true, false, false, false);
+    assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert_eq!(paths, 1);
+}
+
+#[test]
+fn missing_plain_image_in_unclipped_mask_omits_masked_object() {
+    let (warnings, paths) = image_mask_report(false, false, false, false);
+    assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert_eq!(paths, 1);
+}
+
+#[test]
+fn missing_image_in_nested_mask_omits_outer_masked_object() {
+    let (warnings, paths) = image_mask_report(false, false, true, false);
+    assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert_eq!(paths, 1);
+}
+
+#[test]
+fn writable_colorized_image_in_unclipped_mask_keeps_masked_object() {
+    let (warnings, paths) = image_mask_report(true, true, false, false);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(paths, 2);
+}
+
+#[test]
+fn unwritable_images_in_unclipped_masks_omit_masked_objects() {
+    for colorized in [false, true] {
+        let (warnings, paths) = image_mask_report(colorized, true, false, true);
+        assert!(warnings.iter().any(|w| w == "an image couldn't be written and is missing from the picture"), "{warnings:?}");
+        assert_eq!(paths, 1, "colorized: {colorized}");
+    }
+}
+
 #[test]
 fn empty_and_populated_file_info_preserve_key_presence() {
     let mut d = doc(100.0, 100.0);
@@ -743,15 +1052,17 @@ fn empty_and_populated_file_info_preserve_key_presence() {
     for key in ["/Title", "/Author", "/Keywords", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
         assert!(!s.contains(key), "unexpected empty metadata {key}");
     }
+    assert!(!s.contains("/DisplayDocTitle true"), "the default export does not request displaying its metadata title");
     d.title = "Synthetic title".into();
     d.metadata.author = " Test author ".into();
     d.metadata.keywords = vec!["test keyword".into()];
-    let bytes = export(&d, &PdfOptions { created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap();
+    let bytes = export(&d, &PdfOptions { display_doc_title: true, created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap();
     let s = String::from_utf8_lossy(&bytes);
     for key in ["/Title", "/Author", "/Keywords", "/CreationDate", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
         assert!(s.contains(key), "missing populated metadata {key}");
     }
     assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
+    assert!(s.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "viewers should show the document title (#3646)");
 }
 
 /// A function or colour space built on itself is refused before the interpreter builds it (by
@@ -780,10 +1091,16 @@ fn functions_and_colour_spaces_built_on_themselves_are_refused() {
         ("procedures in procedures", &shaded, vec![calculator(&format!("{}{}", "{".repeat(100), "}".repeat(100)))]),
         ("a colour space on itself", &filled, vec![indexed(&me)]),
         ("two colour spaces on each other", &filled, vec![indexed(&next), indexed(&me)]),
+        // Its leading items are read by the interpreter all the same: an item that can't be read
+        // (a stream of an external file) after them doesn't hide them.
+        ("a function stitching itself, then an item that can't be read", &shaded, vec![stitch(&format!("{me} << /F (x) >> stream"))]),
+        ("a colour space on itself, then an item that can't be read", &filled, vec![format!("[/Indexed {me} 1 <000000ffffff> << /F (x) >> stream]")]),
     ] {
         let objects: Vec<&str> = objects.iter().map(String::as_str).collect();
         let e = import(&pdf_with(std::slice::from_ref(page), &objects, None)).err().map(|e| e.to_string());
-        assert!(e.as_deref().is_some_and(|e| e.contains("built on one another without end")), "{what}: {e:?}");
+        // A damaged array is refused as damaged: what it holds can't be looked at whole.
+        let refused = |e: &str| e.contains("built on one another without end") || e.contains("is damaged and can't be read");
+        assert!(e.as_deref().is_some_and(refused), "{what}: {e:?}");
     }
     for (what, page, objects) in [
         ("a function stitching one", &shaded, vec![stitch(&next), ramp.to_string()]),
@@ -795,4 +1112,141 @@ fn functions_and_colour_spaces_built_on_themselves_are_refused() {
         let d = import(&pdf_with(std::slice::from_ref(page), &objects, None)).unwrap_or_else(|e| panic!("{what}: {e}"));
         assert!(d.layers.iter().any(|l| l.children().is_some_and(|c| !c.is_empty())), "{what}: its art is read");
     }
+}
+
+/// A dictionary value the reader can't parse (a name with a broken `#` escape, a number with a
+/// stray `-`) is left out of the nesting check, which goes on with the rest of the file: a file
+/// whose shading has a plain function is read, and one whose function stitches itself is refused.
+#[test]
+fn dictionary_values_the_reader_cannot_parse_are_skipped() {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
+    let me = format!("{} 0 R", first_extra(1));
+    let shaded = PdfPage {
+        resources: format!("/Shading << /S << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function {me} >> >>"),
+        ..PdfPage::new(100.0, 100.0, "/S sh")
+    };
+    let ramp = "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >>";
+    let stitch = format!("<< /FunctionType 3 /Domain [0 1] /Functions [{me}] /Bounds [] /Encode [0 1] >>");
+    for junk in ["<< /A /#zz >>", "<< /A 12-.5 >>"] {
+        let [plain, looped] = [ramp, stitch.as_str()].map(|f| pdf_with(std::slice::from_ref(&shaded), &[f, junk], None));
+        assert_eq!(info(&plain, None).map(|i| i.pages.len()).ok(), Some(1), "{junk}");
+        let d = import(&plain).unwrap_or_else(|e| panic!("{junk}: {e}"));
+        assert!(d.layers.iter().any(|l| l.children().is_some_and(|c| !c.is_empty())), "{junk}: its art is read");
+        let e = import(&looped).err().map(|e| e.to_string());
+        assert!(e.as_deref().is_some_and(|e| e.contains("built on one another without end")), "{junk}: {e:?}");
+    }
+}
+
+/// Illustrator's documentation describes dither as the gradient converted to pixels with subtle
+/// noise, at the Document Raster Effects resolution
+/// (https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-dither-in-gradients.html):
+/// a dithered gradient fill is drawn as an image at that resolution, clipped to the shape; a
+/// stroke (dither applies to fills only) and an undithered fill stay shadings.
+#[test]
+fn dithered_gradient_fills_export_as_images_and_strokes_as_shadings() {
+    let grad = |dither| Paint::Gradient(Box::new(GradientPaint::new(Gradient { dither, ..Default::default() })));
+    let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
+    let mut d = doc(200.0, 100.0);
+    d.raster_effects_ppi = 144.0;
+    add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(grad(true), grad(true), 4.0)));
+    let pdf = uncompressed(&d).replace(' ', "");
+    assert!(pdf.contains("/Subtype/Image"), "the fill is an image");
+    assert!(pdf.contains("/Width200") && pdf.contains("/Height100"), "two pixels a point at 144 ppi");
+    assert!(pdf.contains("/ShadingType2"), "the stroke keeps its shading");
+    let mut plain = doc(200.0, 100.0);
+    add(&mut plain, Node::path(NodeId(0), shape, Appearance::basic(grad(false), Paint::None, 0.0)));
+    let pdf = uncompressed(&plain).replace(' ', "");
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType2"));
+}
+
+/// Illustrator's documentation: perceptual gradients aren't supported in PDF exports, and are
+/// rasterised when saved that way
+/// (https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html).
+/// A Perceptual fill and stroke are drawn as images at the raster effects resolution, clipped to
+/// what they paint; a Classic gradient stays a shading, and so does a gradient along a stroke
+/// (slices through stops on the perceptual curve, as the canvas draws it).
+#[test]
+fn perceptual_gradients_export_as_images_and_classic_ones_as_shadings() {
+    let grad = |method| Paint::Gradient(Box::new(GradientPaint::new(Gradient { method, ..Default::default() })));
+    let p = grad(vectorcraft_color::GradientMethod::Perceptual);
+    let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
+    let mut d = doc(200.0, 100.0);
+    d.raster_effects_ppi = 144.0;
+    add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(p.clone(), p.clone(), 4.0)));
+    let pdf = uncompressed(&d).replace(' ', "");
+    assert_eq!(pdf.matches("/Subtype/Image").count(), 2, "the fill and the stroke are images");
+    assert!(pdf.contains("/Width200") && pdf.contains("/Height100"), "two pixels a point at 144 ppi");
+    assert!(!pdf.contains("/ShadingType2"), "no shading");
+    let mut along = Appearance::basic(Paint::None, p, 4.0);
+    if let Some(AppearanceItem::Stroke(st)) = along.items.get_mut(1) {
+        st.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
+    }
+    let mut a = doc(200.0, 100.0);
+    add(&mut a, Node::path(NodeId(0), shape.clone(), along));
+    let pdf = uncompressed(&a).replace(' ', "");
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType2"), "along the stroke: slices");
+    let c = grad(vectorcraft_color::GradientMethod::Classic);
+    let mut plain = doc(200.0, 100.0);
+    add(&mut plain, Node::path(NodeId(0), shape, Appearance::basic(c.clone(), c, 4.0)));
+    let pdf = uncompressed(&plain).replace(' ', "");
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType2"));
+}
+
+/// A dithered Perceptual gradient: the fill and the stroke are images (Perceptual), and dither
+/// adds its noise to the fill's pixels only.
+#[test]
+fn dithered_perceptual_gradients_export_as_images_with_noise_on_the_fill() {
+    let grad = |dither| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient {
+            dither,
+            method: vectorcraft_color::GradientMethod::Perceptual,
+            ..Default::default()
+        })))
+    };
+    let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
+    let export_with = |dither, stroke: bool| {
+        let mut d = doc(200.0, 100.0);
+        let (fill, stroke) = if stroke { (Paint::None, grad(dither)) } else { (grad(dither), Paint::None) };
+        add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(fill, stroke, 4.0)));
+        uncompressed(&d).replace(' ', "")
+    };
+    for stroke in [false, true] {
+        let pdf = export_with(true, stroke);
+        assert_eq!(pdf.matches("/Subtype/Image").count(), 1, "stroke {stroke}: an image");
+        assert!(!pdf.contains("/ShadingType"), "stroke {stroke}: no shading");
+    }
+    assert_ne!(export_with(true, false), export_with(false, false), "the fill's pixels carry the noise");
+    assert_eq!(export_with(true, true), export_with(false, true), "a stroke has no dither");
+}
+
+/// COLR glyphs in the PDF: as real text, in their font's Type 3 glyphs (the foreground layer in
+/// the fill); outlined, as vector art, a sweep glyph as an image.
+#[test]
+fn colr_glyphs_export_as_vector_art() {
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, COLR_SWEEP_CHAR, colr_family, colr_font};
+    for v1 in [false, true] {
+        vectorcraft_text::FontDb::global().add_font(colr_font(v1).unwrap());
+    }
+    let page = |v1: bool, ch: char, outline_text: bool| {
+        let mut d = doc(300.0, 100.0);
+        let fill = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+        let st = CharStyle { font_family: colr_family(v1).into(), size: 24.0, fill, ..CharStyle::default() };
+        add(&mut d, Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 50.0), &ch.to_string(), st)))));
+        let mut o = PdfOptions::uncompressed();
+        o.settings.advanced.outline_text = outline_text;
+        import_with_report(&export(&d, &o).unwrap(), &ImportOptions::default()).unwrap().document
+    };
+    let fills = |d: &Document| -> Vec<Paint> { leaves(d).iter().map(|n| n.appearance.fill_paint()).collect() };
+    let near =
+        |p: &Paint, rgb: [f32; 3]| matches!(p, Paint::Solid { color, .. } if color.to_rgb().iter().zip(rgb).all(|(a, b)| (a - b).abs() < 0.02));
+    for outline_text in [false, true] {
+        let v0 = fills(&page(false, COLOUR_CHAR, outline_text));
+        assert!(v0.iter().any(|p| near(p, [1.0, 0.0, 0.0])), "the red layer (outlined {outline_text}): {v0:?}");
+        assert!(v0.iter().any(|p| near(p, [0.0, 0.0, 1.0])), "the foreground layer in the fill (outlined {outline_text}): {v0:?}");
+    }
+    let v1 = page(true, COLOUR_CHAR, true);
+    assert!(!leaves(&v1).iter().any(|n| matches!(n.kind, NodeKind::Image(_))), "vector art");
+    assert!(fills(&v1).iter().any(|p| matches!(p, Paint::Gradient(_))), "with its gradients");
+    let sweep = page(true, COLR_SWEEP_CHAR, true);
+    assert!(leaves(&sweep).iter().any(|n| matches!(n.kind, NodeKind::Image(_))), "a sweep glyph is an image");
 }

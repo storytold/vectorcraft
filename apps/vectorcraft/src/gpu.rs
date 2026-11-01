@@ -37,9 +37,23 @@
 //! and the app stayed in the background without a window (#964). [`watch_first_frame`] gives the
 //! first frame [`FIRST_FRAME_TIMEOUT`] once the app is created and, when it doesn't come, starts
 //! the app again without that adapter in the same way.
+//!
+//! A driver can also crash the whole process, and then no code in it runs to start it again:
+//! Intel's Direct3D 12 driver (`igd12umd64.dll`) ended 0.9.0 before its window appeared (#2243).
+//! So each start writes [`START_FILE`] in the log folder before the graphics start, adds the
+//! adapter once one is picked, and clears both once the first frame reaches the screen or the app
+//! ends without crashing ([`Startup::track`]). The next start that finds a start still recorded
+//! there leaves that adapter out, as a restart does, and keeps leaving it out; when the crash came
+//! while the adapters were being listed, before one was picked, it lists OpenGL's adapters alone
+//! (except on macOS, where wgpu has none). A start that `WGPU_BACKEND` or `WGPU_ADAPTER_NAME`
+//! chooses leaves nothing out, and the crashes are forgotten when the app version or
+//! Preferences › Performance › Graphics Processor changes, when a start shows its first frame on
+//! the adapter that crashed, or when no adapter is left to show the window.
 
+use std::io::{Read as _, Seek as _, Write as _};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use eframe::egui_wgpu::NativeAdapterSelectorMethod;
@@ -49,6 +63,14 @@ use eframe::wgpu::{self, Backend, Backends, DeviceType, PowerPreference};
 /// (`Vulkan:1002:164e`, `Metal:Intel Iris Pro Graphics`). Set by the app itself when it starts
 /// again.
 pub const SKIP_ENV: &str = "VECTORCRAFT_GPU_SKIP";
+
+/// The file in the log folder that records each start of the window until its first frame
+/// reaches the screen, and the adapters earlier starts crashed on ([`Startup::track`]).
+pub const START_FILE: &str = "graphics-start.json";
+
+/// The most bytes of [`START_FILE`] read, and the most crashed adapters it keeps.
+const START_FILE_LIMIT: u64 = 64 * 1024;
+const CRASHED_LIMIT: usize = 16;
 
 /// wgpu's variable for choosing an adapter by (part of) its name, any case.
 const NAME_ENV: &str = "WGPU_ADAPTER_NAME";
@@ -104,20 +126,70 @@ pub fn preferred_compositor(pref: Option<&str>, env: Option<PowerPreference>) ->
     if automatic(pref, env) { crate::compositor_gpu::compositor_gpu() } else { None }
 }
 
-/// The graphics backends the window starts with: on Windows Direct3D 12, falling back to OpenGL,
-/// unless `WGPU_BACKEND` names others (`env_set`; `default` then holds them). Creating a Vulkan
-/// instance loads every installed Vulkan driver into the process, and a faulty one (Intel's
-/// `igvk64.dll`, #806) crashed the app before its window appeared. DX12 is Windows' own backend,
-/// as in PdfCraft. Elsewhere, `default`.
-pub fn backends(default: Backends, env_set: bool) -> Backends {
-    if cfg!(windows) && !env_set { Backends::DX12 | Backends::GL } else { default }
+/// The graphics backends the window starts with: on Windows Direct3D 12, with OpenGL beside it
+/// only when `opengl` ([`windows_opengl`]), unless `WGPU_BACKEND` names others (`env_set`;
+/// `default` then holds them). Creating a Vulkan instance loads every installed Vulkan driver into
+/// the process, and a faulty one (Intel's `igvk64.dll`, #806) crashed the app before its window
+/// appeared. DX12 is Windows' own backend, as in PdfCraft. Elsewhere, `default`.
+pub fn backends(default: Backends, env_set: bool, opengl: bool) -> Backends {
+    match (cfg!(windows) && !env_set, opengl) {
+        (true, true) => Backends::DX12 | Backends::GL,
+        (true, false) => Backends::DX12,
+        (false, _) => default,
+    }
 }
 
-/// The largest texture side to ask the device for, which bounds the window's surface: the
-/// adapter's own limit when it is above eframe's `default` (8192 px), so a window larger than
-/// that keeps its surface (#1459). Never below `default`, which is what was asked for before.
-pub fn surface_limit(default: u32, adapter: u32) -> u32 {
-    default.max(adapter)
+/// Whether a Windows start lists OpenGL's adapters beside Direct3D 12's: only when it leaves an
+/// adapter out (an earlier start crashed on it, or a restart failed on it), when
+/// `WGPU_ADAPTER_NAME` names one (it may be an OpenGL adapter), or when DX12 lists no hardware
+/// adapter (Windows 7, or a GPU without a DX12 driver, which then draws through OpenGL as before
+/// rather than on the CPU with WARP). wgpu's OpenGL backend keeps a hidden window on a thread that
+/// pumps no messages, and Windows waits on it when the input language changes, so the whole app
+/// hung on a switch to another keyboard layout (#4150, gfx-rs/wgpu#10504), even drawing with DX12.
+pub fn windows_opengl(left_out: &LeftOut) -> bool {
+    opengl_needed(left_out, !skipped().is_empty(), std::env::var_os(NAME_ENV).is_some(), dx12_lists_hardware)
+}
+
+/// [`windows_opengl`], with a restart leaving adapters out (`skipping`) and an adapter named
+/// (`named`): `dx12_hardware` is asked only when nothing else decides.
+fn opengl_needed(left_out: &LeftOut, skipping: bool, named: bool, dx12_hardware: impl FnOnce() -> bool) -> bool {
+    left_out.opengl_only || !left_out.adapters.is_empty() || skipping || named || !dx12_hardware()
+}
+
+/// Whether Direct3D 12 lists a hardware adapter; WARP, its software one, doesn't count. A driver
+/// that crashes here crashes a start while it lists the adapters, which the next start answers with
+/// OpenGL alone.
+#[cfg(windows)]
+fn dx12_lists_hardware() -> bool {
+    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    descriptor.backends = Backends::DX12;
+    // The shader compiler the window's own instance takes (#1194).
+    descriptor.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::Fxc);
+    let instance = wgpu::Instance::new(descriptor);
+    let kinds: Vec<DeviceType> = pollster::block_on(instance.enumerate_adapters(Backends::DX12)).iter().map(|a| a.get_info().device_type).collect();
+    log::info!("Direct3D 12 lists these graphics adapters: {kinds:?}");
+    any_hardware(&kinds)
+}
+
+#[cfg(not(windows))]
+fn dx12_lists_hardware() -> bool {
+    false
+}
+
+/// Is one of the adapters of these kinds hardware, not software such as WARP?
+#[cfg(any(windows, test))]
+fn any_hardware(kinds: &[DeviceType]) -> bool {
+    kinds.iter().any(|k| *k != DeviceType::Cpu)
+}
+
+/// The limits to ask the device for: what eframe `asked` for, lowered to what the `adapter` offers
+/// wherever it offers less, so a GPU short of one of them still gets a device (#2105). The texture
+/// side, which bounds the window's surface, is the adapter's own, above eframe's 8192 px when the
+/// adapter allows more, so a window larger than that keeps its surface (#1459).
+pub fn device_limits(asked: wgpu::Limits, adapter: &wgpu::Limits) -> wgpu::Limits {
+    let mut limits = asked.or_worse_values_from(adapter);
+    limits.max_texture_dimension_2d = adapter.max_texture_dimension_2d;
+    limits
 }
 
 /// One adapter, as [`adapter_order`] sees it.
@@ -348,6 +420,226 @@ fn parse_skip(v: &str) -> Vec<String> {
     v.split(',').map(str::trim).filter(|k| !k.is_empty()).map(String::from).collect()
 }
 
+/// Whether `WGPU_BACKEND` or `WGPU_ADAPTER_NAME` is set: then a start uses the backends and the
+/// adapter they name, and leaves out none that earlier starts crashed on.
+pub fn explicit_choice() -> bool {
+    std::env::var_os("WGPU_BACKEND").is_some() || std::env::var_os(NAME_ENV).is_some()
+}
+
+/// How the last start ended when it ended before the window's first frame reached the screen,
+/// with no error or panic to report: a crash in the graphics driver (#2243), or the process was
+/// ended from outside.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Crash {
+    /// While the adapters were being listed, before one was picked.
+    Listing,
+    /// On the adapter with this [`key`] and name.
+    Adapter { key: String, name: String },
+}
+
+/// What a start leaves out because earlier starts crashed ([`Startup::track`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LeftOut {
+    /// The adapters ([`key`]s) that crashed a start.
+    pub adapters: Vec<String>,
+    /// A start crashed while listing the adapters: list OpenGL's alone. Never on macOS, where wgpu
+    /// has no OpenGL adapters to fall back to.
+    pub opengl_only: bool,
+    /// The crash the last start ended in, when this start leaves something out for it.
+    pub crash: Option<Crash>,
+}
+
+impl LeftOut {
+    /// `backends` to list: OpenGL alone after a crash while listing, when it is among them;
+    /// otherwise `backends`.
+    pub fn backends(&self, backends: Backends) -> Backends {
+        if self.opengl_only && backends.contains(Backends::GL) { Backends::GL } else { backends }
+    }
+}
+
+/// An adapter in [`START_FILE`]: its [`key`] and name.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Recorded {
+    key: String,
+    name: String,
+}
+
+/// The start in progress, in [`START_FILE`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Starting {
+    /// The adapter picked; `None` while the adapters are being listed.
+    adapter: Option<Recorded>,
+    /// The listing found an adapter of a backend other than OpenGL.
+    native: bool,
+}
+
+/// What [`START_FILE`] holds.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct StartRecord {
+    /// The app version and the Graphics Processor preference (`gpuPreference`) it was written
+    /// under: the crashes count only for the same ones.
+    version: String,
+    preference: String,
+    /// The start in progress, from before the graphics start until its first frame reaches the
+    /// screen or the app ends without crashing.
+    starting: Option<Starting>,
+    /// The adapters that crashed a start, oldest first.
+    crashed: Vec<Recorded>,
+    /// A start crashed while listing the adapters.
+    listing_crashed: bool,
+}
+
+impl StartRecord {
+    /// This start's record, made from the one the last start left (`previous`; `None` when there
+    /// is none or it can't be read), and the crash that start ended in, if it did. A record
+    /// written by another version or under another `preference` is dropped.
+    fn begin(previous: Option<Self>, version: &str, preference: &str) -> (Self, Option<Crash>) {
+        let mut record = previous.filter(|r| r.version == version && r.preference == preference).unwrap_or_default();
+        let crash = record.starting.take().map(|s| match s.adapter {
+            Some(Recorded { key, name }) => Crash::Adapter { key, name },
+            None => Crash::Listing,
+        });
+        match &crash {
+            Some(Crash::Adapter { key, name }) if !record.crashed.iter().any(|c| &c.key == key) => {
+                record.crashed.push(Recorded { key: key.clone(), name: name.clone() });
+                if record.crashed.len() > CRASHED_LIMIT {
+                    record.crashed.remove(0);
+                }
+            }
+            Some(Crash::Listing) => record.listing_crashed = true,
+            _ => {}
+        }
+        record.version = version.to_string();
+        record.preference = preference.to_string();
+        record.starting = Some(Starting::default());
+        (record, crash)
+    }
+
+    /// What this start leaves out: nothing when `explicit` ([`explicit_choice`]). `crash` is the
+    /// one [`begin`](Self::begin) found.
+    fn left_out(&self, crash: Option<Crash>, explicit: bool) -> LeftOut {
+        if explicit {
+            return LeftOut::default();
+        }
+        let opengl_only = self.listing_crashed && !cfg!(target_os = "macos");
+        let crash = crash.filter(|c| matches!(c, Crash::Adapter { .. }) || opengl_only);
+        LeftOut { adapters: self.crashed.iter().map(|c| c.key.clone()).collect(), opengl_only, crash }
+    }
+
+    /// The adapter this start picked, after a listing that found one of a backend other than
+    /// OpenGL when `native`.
+    fn picked(&mut self, key: &str, name: &str, native: bool) {
+        self.starting = Some(Starting { adapter: Some(Recorded { key: key.to_string(), name: name.trim().to_string() }), native });
+    }
+
+    /// The listing found no adapter that can show the window: nothing is left to leave out, so the
+    /// crashes are forgotten and the next start tries every adapter again.
+    fn none_left(&mut self) {
+        self.crashed.clear();
+        self.listing_crashed = false;
+    }
+
+    /// The window's first frame reached the screen: the adapter it was drawn on, and the listing
+    /// when it found an adapter of a backend other than OpenGL, no longer count as crashed.
+    fn presented(&mut self) {
+        let Some(starting) = self.starting.take() else { return };
+        if let Some(adapter) = starting.adapter {
+            self.crashed.retain(|c| c.key != adapter.key);
+        }
+        if starting.native {
+            self.listing_crashed = false;
+        }
+    }
+
+    /// The start ended without crashing: a normal exit, an error, or a restart on another adapter.
+    fn ended(&mut self) {
+        self.starting = None;
+    }
+
+    fn to_json(&self) -> String {
+        let recorded = |r: &Recorded| serde_json::json!({ "key": r.key, "name": r.name });
+        let mut v = serde_json::json!({
+            "version": self.version,
+            "gpuPreference": self.preference,
+            "crashed": self.crashed.iter().map(recorded).collect::<Vec<_>>(),
+            "listingCrashed": self.listing_crashed,
+        });
+        if let (Some(s), Some(map)) = (&self.starting, v.as_object_mut()) {
+            map.insert("starting".into(), serde_json::json!({ "adapter": s.adapter.as_ref().map(recorded), "native": s.native }));
+        }
+        v.to_string()
+    }
+
+    /// The record in `text`; `None` when it isn't one.
+    fn parse(text: &str) -> Option<Self> {
+        let v: serde_json::Value = serde_json::from_str(text).ok()?;
+        let recorded = |v: &serde_json::Value| -> Option<Recorded> {
+            Some(Recorded { key: v.get("key")?.as_str()?.to_string(), name: v.get("name")?.as_str()?.to_string() })
+        };
+        let starting = match v.get("starting") {
+            None => None,
+            Some(s) => Some(Starting {
+                adapter: match s.get("adapter") {
+                    None | Some(serde_json::Value::Null) => None,
+                    Some(a) => Some(recorded(a)?),
+                },
+                native: s.get("native")?.as_bool()?,
+            }),
+        };
+        let crashed = v.get("crashed")?.as_array()?;
+        Some(Self {
+            version: v.get("version")?.as_str()?.to_string(),
+            preference: v.get("gpuPreference")?.as_str()?.to_string(),
+            starting,
+            crashed: crashed.iter().take(CRASHED_LIMIT).map(recorded).collect::<Option<_>>()?,
+            listing_crashed: v.get("listingCrashed")?.as_bool()?,
+        })
+    }
+}
+
+/// [`START_FILE`], open and locked while the start runs, so that a second copy of the app starting
+/// at the same time doesn't take it for the record of a start that crashed.
+struct StartFile {
+    file: std::fs::File,
+    record: StartRecord,
+}
+
+impl StartFile {
+    /// Open `dir`'s [`START_FILE`], with the record the last start left in it (`None` when there is
+    /// none or it can't be read). `Ok(None)` when another copy of the app holds it.
+    fn open(dir: &Path) -> std::io::Result<Option<(std::fs::File, Option<StartRecord>)>> {
+        std::fs::create_dir_all(dir)?;
+        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(dir.join(START_FILE))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(std::fs::TryLockError::WouldBlock) => return Ok(None),
+            Err(std::fs::TryLockError::Error(e)) => return Err(e),
+        }
+        let mut text = String::new();
+        // Text that isn't UTF-8, or is longer than any record, is ignored like a damaged record.
+        let previous = (&file).take(START_FILE_LIMIT).read_to_string(&mut text).ok().and_then(|_| StartRecord::parse(&text));
+        Ok(Some((file, previous)))
+    }
+
+    fn write(&mut self) {
+        let text = self.record.to_json();
+        let written = self.file.set_len(0).and_then(|()| self.file.rewind()).and_then(|()| self.file.write_all(text.as_bytes()));
+        if let Err(e) = written {
+            log::warn!("{START_FILE}: {e}");
+        }
+    }
+}
+
+/// The value of `gpuPreference` the crashes are recorded under: any value this version doesn't
+/// know reads as `automatic`, as in [`power_preference`].
+fn preference_name(pref: Option<&str>) -> &'static str {
+    match pref {
+        Some("highPerformance") => "highPerformance",
+        Some("lowPower") => "lowPower",
+        _ => "automatic",
+    }
+}
+
 /// What the window's start-up leaves for [`finish`].
 #[derive(Default)]
 pub struct Startup {
@@ -357,6 +649,8 @@ pub struct Startup {
     ui: OnceLock<egui::Context>,
     /// When the app was created, the files named at the start opened: the first frame is due.
     ready: OnceLock<Instant>,
+    /// [`START_FILE`] while the start runs ([`Self::track`]).
+    start: Mutex<Option<StartFile>>,
 }
 
 impl Startup {
@@ -370,6 +664,82 @@ impl Startup {
     pub fn ready(&self) {
         // Set once, like `created`.
         let _ = self.ready.set(Instant::now());
+    }
+
+    /// Record this start in `dir`'s [`START_FILE`] until the window's first frame reaches the
+    /// screen or the app ends without crashing, and say what it leaves out for the starts that
+    /// crashed before (see the module docs). `preference` is Preferences › Performance › Graphics
+    /// Processor, and `explicit` is [`explicit_choice`]. When the file can't be used (it can't be
+    /// written, or another copy of the app is starting), nothing is recorded or left out.
+    pub fn track(&self, dir: &Path, preference: Option<&str>, explicit: bool) -> LeftOut {
+        let (file, previous) = match StartFile::open(dir) {
+            Ok(Some(opened)) => opened,
+            Ok(None) => {
+                log::info!("{START_FILE}: another VectorCraft is starting, so this start isn't recorded");
+                return LeftOut::default();
+            }
+            Err(e) => {
+                log::warn!("{START_FILE}: {e}");
+                return LeftOut::default();
+            }
+        };
+        let (record, crash) = StartRecord::begin(previous, env!("CARGO_PKG_VERSION"), preference_name(preference));
+        let left_out = record.left_out(crash.clone(), explicit);
+        match &crash {
+            Some(Crash::Adapter { key, name }) => {
+                log::warn!("the last start ended on graphics adapter {name} ({key}) before the window's first frame reached the screen")
+            }
+            Some(Crash::Listing) => log::warn!("the last start ended while it listed the graphics adapters"),
+            None => {}
+        }
+        if explicit && (!record.crashed.is_empty() || record.listing_crashed) {
+            log::info!("WGPU_BACKEND or WGPU_ADAPTER_NAME is set: no adapter is left out for the starts that crashed");
+        }
+        if !left_out.adapters.is_empty() {
+            log::warn!("leaving out the graphics adapters earlier starts crashed on: {}", left_out.adapters.join(", "));
+        }
+        if left_out.opengl_only {
+            log::warn!("an earlier start crashed while it listed the graphics adapters: listing OpenGL's alone");
+        }
+        let mut file = StartFile { file, record };
+        file.write();
+        *self.start.lock().unwrap_or_else(PoisonError::into_inner) = Some(file);
+        left_out
+    }
+
+    /// [`selector`] picked the adapter with this [`key`] and name; `native` when the listing found
+    /// an adapter of a backend other than OpenGL.
+    fn picked(&self, key: &str, name: &str, native: bool) {
+        // Set once; eframe picks the adapter once.
+        let _ = self.adapter.set(key.to_string());
+        self.update(|r| r.picked(key, name, native), false);
+    }
+
+    /// [`selector`] found no adapter that can show the window.
+    fn none_left(&self) {
+        self.update(StartRecord::none_left, false);
+    }
+
+    /// The window's first frame reached the screen, or the window started minimized.
+    fn presented(&self) {
+        self.update(StartRecord::presented, true);
+    }
+
+    /// The app ends, or starts again, without crashing.
+    fn ended(&self) {
+        self.update(StartRecord::ended, true);
+    }
+
+    /// Change the record and write it; `last` releases the file for the next start.
+    fn update(&self, change: impl FnOnce(&mut StartRecord), last: bool) {
+        let mut start = self.start.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(file) = start.as_mut() {
+            change(&mut file.record);
+            file.write();
+        }
+        if last {
+            *start = None;
+        }
     }
 }
 
@@ -396,10 +766,10 @@ fn first_frame(frames: u64, since: Duration, minimized: bool) -> FirstFrame {
     }
 }
 
-/// Watch the window's first frame from another thread: when it hasn't reached the screen
-/// [`FIRST_FRAME_TIMEOUT`] after the app was created ([`Startup::ready`]), start the app again
-/// without the adapter, as [`finish`] does for one that failed, and end this process, whose UI
-/// thread is stuck in the graphics driver.
+/// Watch the window's first frame from another thread: once it reaches the screen, clear the start
+/// from [`START_FILE`]; when it hasn't reached the screen [`FIRST_FRAME_TIMEOUT`] after the app was
+/// created ([`Startup::ready`]), start the app again without the adapter, as [`finish`] does for
+/// one that failed, and end this process, whose UI thread is stuck in the graphics driver.
 pub fn watch_first_frame(startup: Arc<Startup>) {
     let watch = move || loop {
         std::thread::sleep(Duration::from_millis(250));
@@ -409,7 +779,10 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
         let minimized = ui.and_then(|c| c.input(|i| i.viewport().minimized)).unwrap_or(false);
         match first_frame(frames, due.elapsed(), minimized) {
             FirstFrame::Wait => continue,
-            FirstFrame::Shown => return,
+            FirstFrame::Shown => {
+                startup.presented();
+                return;
+            }
             FirstFrame::Hung => {}
         }
         let mut skip = skipped();
@@ -418,6 +791,8 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
             "the window's first frame didn't reach the screen in {}s on graphics adapter {failed}: starting again without it",
             FIRST_FRAME_TIMEOUT.as_secs()
         );
+        // The new app records its own start.
+        startup.ended();
         skip.push(failed.to_string());
         match restart(&skip.join(",")) {
             Ok(()) => std::process::exit(0),
@@ -433,20 +808,22 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
 }
 
 /// eframe's adapter choice: the first of [`adapter_order`] for `power`, the GPU the `compositor`
-/// draws with, the GPUs that drive a `displays`, `WGPU_ADAPTER_NAME` and the adapters a restart
-/// left out. Every adapter, the displays and the choice are logged: which GPU draws is the first
-/// question in every black-window report.
+/// draws with, the GPUs that drive a `displays`, `WGPU_ADAPTER_NAME`, the adapters a restart
+/// left out and those `crashed` ([`LeftOut::adapters`]). Every adapter, the displays and the
+/// choice are logged: which GPU draws is the first question in every black-window report.
 pub fn selector(
     power: PowerPreference,
     displays: Vec<DisplayGpu>,
     compositor: Option<(u32, u32)>,
+    crashed: Vec<String>,
     startup: Arc<Startup>,
 ) -> NativeAdapterSelectorMethod {
     let named = std::env::var(NAME_ENV).ok();
     let skip = skipped();
+    let left_out: Vec<String> = skip.iter().chain(&crashed).cloned().collect();
     Arc::new(move |adapters, surface| {
         let candidates: Vec<Candidate> = adapters.iter().map(|a| Candidate::new(a, surface)).collect();
-        let order = adapter_order(&candidates, power, &displays, compositor, named.as_deref(), &skip);
+        let order = adapter_order(&candidates, power, &displays, compositor, named.as_deref(), &left_out);
         let listed: Vec<String> = candidates
             .iter()
             .map(|c| {
@@ -455,6 +832,8 @@ pub fn selector(
                     ", can't show the window"
                 } else if skip.contains(&c.key) {
                     ", failed before"
+                } else if crashed.contains(&c.key) {
+                    ", crashed an earlier start"
                 } else if c.composites(compositor) {
                     ", the compositor draws with it"
                 } else if drives_primary {
@@ -470,6 +849,7 @@ pub fn selector(
         log::info!("graphics adapters: {}", listed.join("; "));
         let first = order.first().and_then(|&i| adapters.get(i).zip(candidates.get(i)));
         let Some((adapter, chosen)) = first else {
+            startup.none_left();
             return Err(format!("no graphics adapter can show the window (power preference {power:?}, {} adapters)", adapters.len()));
         };
         let why = match chosen.drives(&displays) {
@@ -480,8 +860,7 @@ pub fn selector(
             (false, false) => format!("no adapter matches a display GPU, so power preference {power:?}"),
         };
         log::info!("drawing on {} ({:?}, {:?}): {why}", chosen.name.trim(), chosen.backend, chosen.device_type);
-        // Set once; eframe picks the adapter once.
-        let _ = startup.adapter.set(chosen.key.clone());
+        startup.picked(&chosen.key, &chosen.name, candidates.iter().any(|c| c.backend != Backend::Gl));
         Ok(adapter.clone())
     })
 }
@@ -514,6 +893,8 @@ fn restart_without<'a>(graphics_failed: bool, frames: u64, picked: Option<&'a st
 /// docs), otherwise why it failed. `outcome` is eframe's result, or the message of a panic that
 /// ended it.
 pub fn finish(outcome: Result<eframe::Result, String>, startup: &Startup) -> Result<(), String> {
+    // Whatever follows, this start didn't crash; a new app records its own start.
+    startup.ended();
     let (why, graphics_failed) = match outcome {
         Ok(Ok(())) => return Ok(()),
         Ok(Err(e @ eframe::Error::Wgpu(_))) => (e.to_string(), true),
@@ -547,558 +928,4 @@ fn restart(skip: &str) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn gpu(name: &str, backend: Backend, device_type: DeviceType) -> Candidate {
-        Candidate { key: format!("{backend:?}:{name}"), name: name.into(), backend, device_type, pci: (0, 0), presents: true }
-    }
-
-    /// #1459: a 9048 px wide window (two display scales' ratio past 8192) fits an adapter that
-    /// takes 16384 px textures; an adapter with less than eframe asks for changes nothing.
-    #[test]
-    fn the_surface_may_be_as_large_as_the_adapter_allows() {
-        assert_eq!(surface_limit(8192, 16384), 16384);
-        assert_eq!(surface_limit(8192, 4096), 8192);
-    }
-
-    fn names(c: &[Candidate], order: &[usize]) -> Vec<String> {
-        order.iter().map(|&i| c[i].name.clone()).collect()
-    }
-
-    const NVIDIA_3090: (u32, u32) = (0x10de, 0x2204);
-    const AMD_IGPU: (u32, u32) = (0x1002, 0x164e);
-    const INTEL_IGPU: (u32, u32) = (0x8086, 0xa780);
-    const WARP: (u32, u32) = (0x1414, 0x008c);
-
-    fn pci_gpu(name: &str, backend: Backend, device_type: DeviceType, pci: (u32, u32)) -> Candidate {
-        Candidate { key: key(backend, pci.0, pci.1, name), name: name.into(), backend, device_type, pci, presents: true }
-    }
-
-    fn monitor(pci: (u32, u32)) -> DisplayGpu {
-        DisplayGpu { pci, primary: false }
-    }
-
-    fn primary(pci: (u32, u32)) -> DisplayGpu {
-        DisplayGpu { pci, primary: true }
-    }
-
-    /// The desktop of pdfcraft#378 as wgpu lists it on Windows: a Ryzen's integrated GPU without a
-    /// monitor and an RTX 3090 driving both monitors, each under Vulkan and DX12, then WARP and
-    /// OpenGL (which reports no device id).
-    fn ryzen_desktop() -> Vec<Candidate> {
-        vec![
-            pci_gpu("NVIDIA GeForce RTX 3090", Backend::Vulkan, DeviceType::DiscreteGpu, NVIDIA_3090),
-            pci_gpu("AMD Radeon(TM) Graphics", Backend::Vulkan, DeviceType::IntegratedGpu, AMD_IGPU),
-            pci_gpu("NVIDIA GeForce RTX 3090", Backend::Dx12, DeviceType::DiscreteGpu, NVIDIA_3090),
-            pci_gpu("AMD Radeon(TM) Graphics", Backend::Dx12, DeviceType::IntegratedGpu, AMD_IGPU),
-            pci_gpu("Microsoft Basic Render Driver", Backend::Dx12, DeviceType::Cpu, WARP),
-            pci_gpu("NVIDIA GeForce RTX 3090/PCIe/SSE2", Backend::Gl, DeviceType::Other, (NVIDIA_3090.0, 0)),
-        ]
-    }
-
-    /// pdfcraft#378: power saving picked the integrated GPU, whose driver reset when Windows had to
-    /// present its frames on the monitors of the NVIDIA card. The GPU that drives the displays now
-    /// comes first, through DX12 (#545); the integrated GPU stays the fallback a restart reaches.
-    #[test]
-    fn a_desktop_draws_on_the_gpu_that_drives_its_monitors() {
-        let c = ryzen_desktop();
-        for displays in [vec![primary(NVIDIA_3090)], vec![monitor(NVIDIA_3090)]] {
-            assert_eq!(adapter_order(&c, PowerPreference::LowPower, &displays, None, None, &[]), [2, 0, 3, 1, 5, 4], "{displays:?}");
-            assert_eq!(adapter_order(&c, PowerPreference::None, &displays, None, None, &[]), [2, 0, 3, 1, 5, 4], "{displays:?}");
-        }
-        // Without the display information the order is power saving's, as before.
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[], None, None, &[]), [3, 1, 2, 0, 5, 4]);
-        // After the NVIDIA adapters failed, the integrated GPU is next.
-        let skip = vec![c[2].key.clone(), c[0].key.clone()];
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[primary(NVIDIA_3090)], None, None, &skip), [3, 1, 5, 4]);
-    }
-
-    /// A hybrid laptop: the panel (primary) on the integrated GPU, an external monitor on the
-    /// discrete one. Power saving and the display agree, in either enumeration order.
-    #[test]
-    fn a_hybrid_laptop_draws_on_the_integrated_gpu_that_drives_its_panel() {
-        let c = ryzen_desktop();
-        for displays in [vec![primary(AMD_IGPU), monitor(NVIDIA_3090)], vec![monitor(NVIDIA_3090), primary(AMD_IGPU)], vec![primary(AMD_IGPU)]] {
-            assert_eq!(adapter_order(&c, PowerPreference::LowPower, &displays, None, None, &[]), [3, 1, 2, 0, 5, 4], "{displays:?}");
-        }
-        // Linux names no primary unless there is a built-in panel: a monitor on each GPU keeps the
-        // system's order among them (Mesa puts the compositor's GPU first), and a GPU without one
-        // comes after both.
-        let linux = vec![
-            pci_gpu("AMD Radeon Graphics (RADV RAPHAEL_MENDOCINO)", Backend::Vulkan, DeviceType::IntegratedGpu, AMD_IGPU),
-            pci_gpu("NVIDIA GeForce RTX 3090", Backend::Vulkan, DeviceType::DiscreteGpu, NVIDIA_3090),
-            pci_gpu("Intel(R) Arc(TM) A380", Backend::Vulkan, DeviceType::DiscreteGpu, INTEL_IGPU),
-            pci_gpu("llvmpipe (LLVM 20.1.8, 256 bits)", Backend::Vulkan, DeviceType::Cpu, (0x10005, 0)),
-        ];
-        let both = [monitor(AMD_IGPU), monitor(NVIDIA_3090)];
-        assert_eq!(adapter_order(&linux, PowerPreference::None, &both, None, None, &[]), [0, 1, 2, 3]);
-        assert_eq!(adapter_order(&linux, PowerPreference::None, &[monitor(INTEL_IGPU)], None, None, &[]), [2, 0, 1, 3]);
-        assert_eq!(adapter_order(&linux, PowerPreference::None, &[monitor(NVIDIA_3090), primary(AMD_IGPU)], None, None, &[]), [0, 1, 2, 3]);
-    }
-
-    /// A hybrid laptop whose Wayland compositor runs on the discrete GPU (Hyprland with
-    /// `AQ_DRM_DEVICES` naming it first), as Vulkan lists it there: the integrated GPU drives the
-    /// built-in panel, yet the compositor shows nothing it draws, and reports no error. The GPU the
-    /// compositor draws with comes first; without it, the panel's, as before.
-    #[test]
-    fn the_gpu_the_compositor_draws_with_comes_before_the_panels() {
-        const RTX_3050: (u32, u32) = (0x10de, 0x25ac);
-        const INTEL_RPL: (u32, u32) = (0x8086, 0xa7a8);
-        let mut c = vec![
-            pci_gpu("NVIDIA GeForce RTX 3050 6GB Laptop GPU", Backend::Vulkan, DeviceType::DiscreteGpu, RTX_3050),
-            pci_gpu("Intel(R) Graphics (RPL-P)", Backend::Vulkan, DeviceType::IntegratedGpu, INTEL_RPL),
-            pci_gpu("NVIDIA GeForce RTX 3050 6GB Laptop GPU/PCIe/SSE2", Backend::Gl, DeviceType::Other, (RTX_3050.0, 0)),
-        ];
-        c[2].presents = false;
-        let panel = [primary(INTEL_RPL)];
-        assert_eq!(adapter_order(&c, PowerPreference::None, &panel, Some(RTX_3050), None, &[]), [0, 1]);
-        assert_eq!(adapter_order(&c, PowerPreference::None, &panel, None, None, &[]), [1, 0]);
-        // The usual hybrid laptop, with the compositor on the integrated GPU: the panel's GPU.
-        assert_eq!(adapter_order(&c, PowerPreference::None, &[primary(INTEL_RPL), monitor(RTX_3050)], Some(INTEL_RPL), None, &[]), [1, 0]);
-        // `WGPU_ADAPTER_NAME` still comes first, and a restart after a failure still moves on.
-        assert_eq!(adapter_order(&c, PowerPreference::None, &panel, Some(RTX_3050), Some("intel"), &[]), [1, 0]);
-        assert_eq!(adapter_order(&c, PowerPreference::None, &panel, Some(RTX_3050), None, &[c[0].key.clone()]), [1]);
-        // A compositor GPU no adapter matches (a virtual one) leaves the displays in charge.
-        assert_eq!(adapter_order(&c, PowerPreference::None, &panel, Some((0x1af4, 0x1050)), None, &[]), [1, 0]);
-    }
-
-    /// A Windows desktop with a monitor on each GPU: the window opens on the primary display, so
-    /// its GPU draws, whichever kind it is.
-    #[test]
-    fn the_primary_display_decides_between_gpus_that_both_drive_a_monitor() {
-        let c = ryzen_desktop();
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[monitor(AMD_IGPU), primary(NVIDIA_3090)], None, None, &[]), [2, 0, 3, 1, 5, 4]);
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[primary(AMD_IGPU), monitor(NVIDIA_3090)], None, None, &[]), [3, 1, 2, 0, 5, 4]);
-        // The displays only matter among adapters that can show the window; a GPU driving no
-        // display still loses to one that does.
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[monitor(AMD_IGPU), monitor(INTEL_IGPU)], None, None, &[]), [3, 1, 2, 0, 5, 4]);
-    }
-
-    /// Display GPUs none of the adapters match (another driver's ids, OpenGL's missing device id,
-    /// Metal's zeros) change nothing: power saving's order, the old behaviour.
-    #[test]
-    fn displays_no_adapter_matches_leave_the_power_preference_in_charge() {
-        let c = ryzen_desktop();
-        let low = adapter_order(&c, PowerPreference::LowPower, &[], None, None, &[]);
-        for displays in [vec![monitor(INTEL_IGPU)], vec![primary((0x8086, 0x1234)), monitor((0x8086, 0x5678))], vec![primary((0, 0))]] {
-            assert_eq!(adapter_order(&c, PowerPreference::LowPower, &displays, None, None, &[]), low, "{displays:?}");
-        }
-        assert_eq!(
-            names(&c, &adapter_order(&c, PowerPreference::HighPerformance, &[monitor(INTEL_IGPU)], None, None, &[]))[0],
-            "NVIDIA GeForce RTX 3090"
-        );
-        // The #502 machine's adapters report no ids in these tests: the primary display never matches.
-        let c = issue_502();
-        assert_eq!(
-            adapter_order(&c, PowerPreference::None, &[primary(NVIDIA_3090)], None, None, &[]),
-            adapter_order(&c, PowerPreference::None, &[], None, None, &[])
-        );
-        assert!(adapter_order(&[], PowerPreference::LowPower, &[primary(NVIDIA_3090)], None, None, &[]).is_empty());
-    }
-
-    /// `WGPU_ADAPTER_NAME` and "can't present" still come before the displays.
-    #[test]
-    fn a_named_adapter_comes_before_the_one_driving_the_display() {
-        let mut c = ryzen_desktop();
-        let displays = [primary(NVIDIA_3090)];
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &displays, None, Some("radeon"), &[]), [3, 1, 2, 0, 5, 4]);
-        c[2].presents = false;
-        c[0].presents = false;
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &displays, None, None, &[]), [3, 1, 5, 4]);
-    }
-
-    /// A user's own choice (Preferences or `WGPU_POWER_PREF`) is kept as it is; only Automatic
-    /// looks at the displays.
-    #[test]
-    fn only_automatic_considers_which_gpu_drives_the_display() {
-        assert!(automatic(None, None));
-        assert!(automatic(Some("automatic"), None));
-        assert!(automatic(Some("powerSaving"), None));
-        assert!(!automatic(Some("lowPower"), None));
-        assert!(!automatic(Some("highPerformance"), None));
-        assert!(!automatic(None, Some(PowerPreference::None)));
-        assert!(!automatic(Some("automatic"), Some(PowerPreference::LowPower)));
-        assert!(preferred_displays(Some("lowPower"), None).is_empty());
-        assert!(preferred_displays(None, Some(PowerPreference::HighPerformance)).is_empty());
-        // Automatic reports whatever this machine has (nothing on macOS, in CI, or under Remote Desktop).
-        assert_eq!(preferred_displays(None, None), display_gpus());
-        assert_eq!(preferred_compositor(Some("lowPower"), None), None);
-        assert_eq!(preferred_compositor(None, Some(PowerPreference::HighPerformance)), None);
-        assert_eq!(preferred_compositor(None, None), crate::compositor_gpu::compositor_gpu());
-    }
-
-    #[test]
-    fn pci_ids_come_from_windows_device_ids() {
-        assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_2204&SUBSYS_40421458&REV_A1"), Some(NVIDIA_3090));
-        assert_eq!(pci_ids("PCI\\VEN_1002&DEV_164E&SUBSYS_88771043&REV_C1"), Some(AMD_IGPU));
-        assert_eq!(pci_ids("pci\\ven_1002&dev_164e"), Some(AMD_IGPU));
-        // Remote Desktop and other non-PCI display devices, and malformed ids.
-        assert_eq!(pci_ids("ROOT\\BasicDisplay\\0000"), None);
-        assert_eq!(pci_ids("PCI\\VEN_10DE&SUBSYS_40421458"), None);
-        assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_ZZZZ"), None);
-        assert_eq!(pci_ids("VEN_&DEV_"), None);
-        assert_eq!(pci_ids(""), None);
-    }
-
-    /// Whatever this machine has: every GPU listed is a PCI device, at most one drives the primary
-    /// display, and none is listed twice. (A headless CI runner may list none.)
-    #[cfg(windows)]
-    #[test]
-    fn windows_lists_each_gpu_with_a_monitor_once() {
-        let gpus = windows_display_gpus();
-        assert!(gpus.iter().filter(|g| g.primary).count() <= 1, "{gpus:?}");
-        for (i, g) in gpus.iter().enumerate() {
-            assert_ne!(g.pci.0, 0, "{gpus:?}");
-            assert!(!gpus[..i].iter().any(|h| h.pci == g.pci), "{gpus:?}");
-        }
-    }
-
-    #[test]
-    fn internal_panels_are_edp_lvds_and_dsi_connectors() {
-        for name in ["eDP-1", "LVDS-1", "DSI-1"] {
-            assert!(is_internal_panel(name), "{name}");
-        }
-        for name in ["DP-3", "HDMI-A-1", "DVI-D-1", "VGA-1", "Writeback-1", ""] {
-            assert!(!is_internal_panel(name), "{name}");
-        }
-    }
-
-    /// A sysfs like a hybrid laptop's with an external monitor: the panel and a disconnected port
-    /// on the integrated GPU (card0), the monitor on the discrete one (card1), and a card without
-    /// PCI ids. Each GPU is listed once, the one with the panel as primary.
-    #[test]
-    fn linux_display_gpus_come_from_the_connected_connectors() -> std::io::Result<()> {
-        let dir = std::env::temp_dir().join(format!("vectorcraft-drm-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let card = |name: &str, (vendor, device): (u32, u32)| -> std::io::Result<()> {
-            std::fs::create_dir_all(dir.join(name).join("device"))?;
-            std::fs::write(dir.join(name).join("device/vendor"), format!("{vendor:#06x}\n"))?;
-            std::fs::write(dir.join(name).join("device/device"), format!("{device:#06x}\n"))
-        };
-        let connector = |name: &str, status: &str| -> std::io::Result<()> {
-            std::fs::create_dir_all(dir.join(name))?;
-            std::fs::write(dir.join(name).join("status"), format!("{status}\n"))
-        };
-        card("card0", AMD_IGPU)?;
-        card("card1", NVIDIA_3090)?;
-        std::fs::create_dir_all(dir.join("card2"))?;
-        connector("card0-eDP-1", "connected")?;
-        connector("card0-HDMI-A-1", "disconnected")?;
-        connector("card1-DP-1", "connected")?;
-        connector("card1-DP-2", "connected")?;
-        connector("card2-Virtual-1", "connected")?;
-        std::fs::write(dir.join("renderD128"), "")?;
-        let mut gpus = linux_display_gpus(&dir);
-        gpus.sort_by_key(|g| g.pci);
-        assert_eq!(gpus, [primary(AMD_IGPU), monitor(NVIDIA_3090)]);
-        assert!(linux_display_gpus(&dir.join("no such dir")).is_empty());
-        std::fs::remove_dir_all(&dir)
-    }
-
-    #[test]
-    fn display_gpus_are_logged_as_pci_ids() {
-        assert_eq!(primary(NVIDIA_3090).to_string(), "10de:2204 (primary)");
-        assert_eq!(monitor(AMD_IGPU).to_string(), "1002:164e");
-        let mut gpus = vec![];
-        add_display_gpu(&mut gpus, NVIDIA_3090, false);
-        add_display_gpu(&mut gpus, NVIDIA_3090, true);
-        add_display_gpu(&mut gpus, AMD_IGPU, false);
-        assert_eq!(gpus, [primary(NVIDIA_3090), monitor(AMD_IGPU)]);
-    }
-
-    /// The machine of #502 as Vulkan lists it with Mesa's device-select layer: the GPU KDE's
-    /// compositor runs on (NVIDIA) first, then the Ryzen's integrated GPU, Mesa's software
-    /// renderer, and OpenGL.
-    fn issue_502() -> Vec<Candidate> {
-        vec![
-            gpu("NVIDIA GeForce RTX 5070", Backend::Vulkan, DeviceType::DiscreteGpu),
-            gpu("AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)", Backend::Vulkan, DeviceType::IntegratedGpu),
-            gpu("llvmpipe (LLVM 20.1.8, 256 bits)", Backend::Vulkan, DeviceType::Cpu),
-            gpu("NVIDIA GeForce RTX 5070/PCIe/SSE2", Backend::Gl, DeviceType::Other),
-        ]
-    }
-
-    #[test]
-    fn automatic_keeps_the_systems_order_on_linux_and_saves_power_elsewhere() {
-        let c = issue_502();
-        let order = adapter_order(&c, power_preference(None, None), &[], None, None, &[]);
-        let first = &c[order[0]].name;
-        if cfg!(any(windows, target_os = "macos")) {
-            assert_eq!(first, "AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)");
-        } else {
-            // #502: the integrated GPU couldn't show frames to a compositor on the NVIDIA GPU.
-            assert_eq!(first, "NVIDIA GeForce RTX 5070");
-        }
-    }
-
-    #[test]
-    fn each_preference_orders_the_adapters_then_falls_back_to_opengl_and_software() {
-        let c = issue_502();
-        let order = |power| names(&c, &adapter_order(&c, power, &[], None, None, &[]));
-        assert_eq!(
-            order(PowerPreference::None),
-            [
-                "NVIDIA GeForce RTX 5070",
-                "AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)",
-                "NVIDIA GeForce RTX 5070/PCIe/SSE2",
-                "llvmpipe (LLVM 20.1.8, 256 bits)"
-            ]
-        );
-        assert_eq!(
-            order(PowerPreference::LowPower),
-            [
-                "AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)",
-                "NVIDIA GeForce RTX 5070",
-                "NVIDIA GeForce RTX 5070/PCIe/SSE2",
-                "llvmpipe (LLVM 20.1.8, 256 bits)"
-            ]
-        );
-        assert_eq!(
-            order(PowerPreference::HighPerformance),
-            [
-                "NVIDIA GeForce RTX 5070",
-                "AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)",
-                "NVIDIA GeForce RTX 5070/PCIe/SSE2",
-                "llvmpipe (LLVM 20.1.8, 256 bits)"
-            ]
-        );
-    }
-
-    /// A restart leaves out the adapter the window failed on, so Power Saving on the machine of
-    /// #502 ends up on the NVIDIA GPU, and once every adapter failed there is nothing to try.
-    /// A dual-GPU Mac reports both GPUs under Metal with no PCI ids (#651): their keys still
-    /// differ, so when the integrated GPU fails, the restart renders on the discrete one.
-    #[test]
-    fn gpus_without_pci_ids_are_told_apart_by_name() {
-        let mac = |name: &str, device_type| Candidate {
-            key: key(Backend::Metal, 0, 0, name),
-            name: name.into(),
-            backend: Backend::Metal,
-            device_type,
-            pci: (0, 0),
-            presents: true,
-        };
-        let c = vec![mac("NVIDIA GeForce GT 750M", DeviceType::DiscreteGpu), mac("Intel Iris Pro Graphics", DeviceType::IntegratedGpu)];
-        assert_eq!((c[0].key.as_str(), c[1].key.as_str()), ("Metal:NVIDIA GeForce GT 750M", "Metal:Intel Iris Pro Graphics"));
-        let first = adapter_order(&c, PowerPreference::LowPower, &[], None, None, &[]);
-        assert_eq!(names(&c, &first)[0], "Intel Iris Pro Graphics");
-        let skip = parse_skip(&c[first[0]].key);
-        assert_eq!(names(&c, &adapter_order(&c, PowerPreference::LowPower, &[], None, None, &skip)), ["NVIDIA GeForce GT 750M"]);
-        // A comma in a name can't split the list.
-        assert_eq!(parse_skip(&key(Backend::Gl, 0, 0, "Mesa, llvmpipe")), ["Gl:Mesa  llvmpipe"]);
-    }
-
-    #[test]
-    fn a_first_frame_that_never_reaches_the_screen_hangs_its_adapter() {
-        let s = Duration::from_secs;
-        // The second frame began: the first was presented.
-        assert_eq!(first_frame(2, s(60), false), FirstFrame::Shown);
-        // Still drawing (or presenting) the first frame: waited for, then given up on (#964).
-        for frames in [0, 1] {
-            assert_eq!(first_frame(frames, s(3), false), FirstFrame::Wait);
-            assert_eq!(first_frame(frames, FIRST_FRAME_TIMEOUT, false), FirstFrame::Hung);
-        }
-        // A window minimized at the start may not draw again until restored.
-        assert_eq!(first_frame(1, s(60), true), FirstFrame::Shown);
-        // A hung adapter is left out once, like one that failed.
-        let skip = vec!["Dx12:10de:28a0".to_string()];
-        assert_eq!(restart_without(true, 1, Some("Dx12:10de:28a0"), &skip), None);
-        assert_eq!(restart_without(true, 1, Some("Dx12:8086:a7a8"), &skip), Some("Dx12:8086:a7a8"));
-    }
-
-    #[test]
-    fn a_restart_tries_the_next_adapter() {
-        let c = issue_502();
-        let mut skip = vec![];
-        let mut tried = vec![];
-        while let Some(&i) = adapter_order(&c, PowerPreference::LowPower, &[], None, None, &skip).first() {
-            tried.push(c[i].name.clone());
-            skip.push(c[i].key.clone());
-        }
-        assert_eq!(
-            tried,
-            [
-                "AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)",
-                "NVIDIA GeForce RTX 5070",
-                "NVIDIA GeForce RTX 5070/PCIe/SSE2",
-                "llvmpipe (LLVM 20.1.8, 256 bits)"
-            ]
-        );
-    }
-
-    #[test]
-    fn adapters_that_cannot_present_to_the_window_are_never_tried() {
-        let mut c = issue_502();
-        c[0].presents = false;
-        c[3].presents = false;
-        for power in [PowerPreference::None, PowerPreference::LowPower, PowerPreference::HighPerformance] {
-            let order = adapter_order(&c, power, &[], None, None, &[]);
-            assert!(!order.contains(&0) && !order.contains(&3), "{power:?}: {order:?}");
-            assert_eq!(order.len(), 2);
-        }
-        for p in &mut c {
-            p.presents = false;
-        }
-        assert!(adapter_order(&c, PowerPreference::None, &[], None, None, &[]).is_empty());
-        assert!(adapter_order(&[], PowerPreference::HighPerformance, &[], None, None, &[]).is_empty());
-    }
-
-    #[test]
-    fn wgpu_adapter_name_picks_an_adapter_first_and_the_rest_stay_as_fallbacks() {
-        let c = issue_502();
-        let order = adapter_order(&c, PowerPreference::HighPerformance, &[], None, Some("radv"), &[]);
-        assert_eq!(c[order[0]].name, "AMD Ryzen 9 7900X (RADV RAPHAEL_MENDOCINO)");
-        assert_eq!(order.len(), 4);
-        // Any case; every match comes before the rest, natively first.
-        let order = adapter_order(&c, PowerPreference::LowPower, &[], None, Some("GeForce"), &[]);
-        assert_eq!(names(&c, &order[..2]), ["NVIDIA GeForce RTX 5070", "NVIDIA GeForce RTX 5070/PCIe/SSE2"]);
-        // An empty name or one nothing matches changes nothing.
-        for named in ["", "no such gpu"] {
-            assert_eq!(
-                adapter_order(&c, PowerPreference::LowPower, &[], None, Some(named), &[]),
-                adapter_order(&c, PowerPreference::LowPower, &[], None, None, &[])
-            );
-        }
-        // A named adapter that failed is left out like any other.
-        let skip = vec![c[1].key.clone()];
-        assert_eq!(adapter_order(&c, PowerPreference::None, &[], None, Some("radv"), &skip)[0], 0);
-    }
-
-    /// A Windows machine lists every GPU twice (Vulkan and DX12): power saving still takes the
-    /// integrated GPU first, as wgpu's own choice did (#306), each GPU through DX12 first (#545).
-    #[test]
-    fn hybrid_laptop_on_windows_renders_on_the_integrated_gpu_with_power_saving() {
-        let c = vec![
-            gpu("Intel(R) Arc(TM) A370M", Backend::Vulkan, DeviceType::DiscreteGpu),
-            gpu("Intel(R) Iris(R) Xe Graphics", Backend::Vulkan, DeviceType::IntegratedGpu),
-            gpu("Intel(R) Arc(TM) A370M", Backend::Dx12, DeviceType::DiscreteGpu),
-            gpu("Intel(R) Iris(R) Xe Graphics", Backend::Dx12, DeviceType::IntegratedGpu),
-            gpu("Microsoft Basic Render Driver", Backend::Dx12, DeviceType::Cpu),
-        ];
-        let order = adapter_order(&c, PowerPreference::LowPower, &[], None, None, &[]);
-        assert_eq!(order, [3, 1, 2, 0, 4]);
-        assert_eq!(adapter_order(&c, PowerPreference::HighPerformance, &[], None, None, &[]), [2, 0, 3, 1, 4]);
-    }
-
-    /// The machine of #545: one Intel GPU, whose Vulkan driver made the window flicker black.
-    /// DX12 comes first whatever the preference; Vulkan stays a fallback, and `WGPU_ADAPTER_NAME`
-    /// or a restart leaving DX12 out still reach it.
-    #[test]
-    fn a_windows_gpu_renders_through_dx12_before_vulkan() {
-        let c = vec![
-            gpu("Intel(R) Graphics", Backend::Vulkan, DeviceType::IntegratedGpu),
-            gpu("Intel(R) Graphics", Backend::Dx12, DeviceType::IntegratedGpu),
-            gpu("Microsoft Basic Render Driver", Backend::Dx12, DeviceType::Cpu),
-            gpu("Intel(R) Graphics", Backend::Gl, DeviceType::Other),
-        ];
-        for power in [PowerPreference::LowPower, PowerPreference::HighPerformance, PowerPreference::None] {
-            assert_eq!(adapter_order(&c, power, &[], None, None, &[]), [1, 0, 3, 2], "{power:?}");
-        }
-        assert_eq!(adapter_order(&c, PowerPreference::LowPower, &[], None, None, &[c[1].key.clone()]), [0, 3, 2], "DX12 failed: Vulkan next");
-    }
-
-    #[test]
-    fn windows_never_loads_vulkan_drivers_unless_asked() {
-        let all = Backends::all();
-        let start = backends(all, false);
-        if cfg!(windows) {
-            assert_eq!(start, Backends::DX12 | Backends::GL, "#806");
-        } else {
-            assert_eq!(start, all);
-        }
-        assert_eq!(backends(Backends::VULKAN, true), Backends::VULKAN, "WGPU_BACKEND=vulkan still picks it");
-    }
-
-    #[test]
-    fn power_preference_follows_the_environment_then_the_preference() {
-        assert_eq!(power_preference(None, None), AUTOMATIC);
-        assert_eq!(power_preference(Some("automatic"), None), AUTOMATIC);
-        assert_eq!(power_preference(Some("lowPower"), None), PowerPreference::LowPower);
-        assert_eq!(power_preference(Some("highPerformance"), None), PowerPreference::HighPerformance);
-        // 0.5.0's default, and values this version doesn't know (a newer or damaged file).
-        for old in ["powerSaving", "turbo", ""] {
-            assert_eq!(power_preference(Some(old), None), AUTOMATIC, "{old}");
-        }
-        // WGPU_POWER_PREF wins over the preference, either way.
-        assert_eq!(power_preference(Some("lowPower"), Some(PowerPreference::HighPerformance)), PowerPreference::HighPerformance);
-        assert_eq!(power_preference(Some("highPerformance"), Some(PowerPreference::LowPower)), PowerPreference::LowPower);
-        assert_eq!(power_preference(Some("lowPower"), Some(PowerPreference::None)), PowerPreference::None);
-        assert_eq!(AUTOMATIC, if cfg!(any(windows, target_os = "macos")) { PowerPreference::LowPower } else { PowerPreference::None });
-    }
-
-    /// The preference the engine saves is the one the app reads back before the window opens.
-    #[test]
-    fn the_saved_engine_preference_is_found() {
-        let mut prefs = vectorcraft_engine::Prefs::default();
-        let saved = prefs.to_json();
-        assert_eq!(saved.get("gpuPreference").and_then(serde_json::Value::as_str), Some("automatic"));
-        for (value, power) in [("lowPower", PowerPreference::LowPower), ("highPerformance", PowerPreference::HighPerformance)] {
-            prefs.gpu_preference = value.into();
-            let saved = prefs.to_json();
-            assert_eq!(power_preference(saved.get("gpuPreference").and_then(serde_json::Value::as_str), None), power);
-        }
-        // Every choice Preferences offer means something here.
-        for (value, _) in vectorcraft_engine::cmd::prefscmds::GPU_PREFERENCES {
-            assert!(["automatic", "lowPower", "highPerformance"].contains(value), "{value}");
-        }
-    }
-
-    #[test]
-    fn skipped_adapters_parse_from_a_comma_separated_list() {
-        assert_eq!(parse_skip("Vulkan:1002:164e, Gl:10de:2f04,,"), ["Vulkan:1002:164e", "Gl:10de:2f04"]);
-        assert!(parse_skip("").is_empty());
-        assert_eq!(key(Backend::Vulkan, 0x1002, 0x164e, "AMD Radeon"), "Vulkan:1002:164e");
-        assert_eq!(key(Backend::Gl, 0x10de, 0x2f04, "NVIDIA"), "Gl:10de:2f04");
-    }
-
-    #[test]
-    fn panics_in_wgpu_egui_wgpu_and_naga_are_graphics_failures() {
-        for file in [
-            "/home/u/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui-wgpu-0.36.2/src/winit.rs",
-            r"C:\Users\u\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wgpu-core-30.0.1\src\device\mod.rs",
-            "/rustc/deps/wgpu-hal-30.0.1/src/vulkan/adapter.rs",
-            "naga-30.0.0/src/back/spv/writer.rs",
-        ] {
-            assert!(in_graphics_stack(file), "{file}");
-        }
-        for file in [
-            "apps/vectorcraft/src/main.rs",
-            "/home/wgpu/vectorcraft/crates/ui-egui/src/lib.rs",
-            "egui-0.36.2/src/context.rs",
-            "winit-0.30.12/src/x.rs",
-        ] {
-            assert!(!in_graphics_stack(file), "{file}");
-        }
-    }
-
-    #[test]
-    fn only_a_graphics_failure_while_starting_up_restarts_without_the_adapter() {
-        let amd = Some("Vulkan:1002:164e");
-        assert_eq!(restart_without(true, 0, amd, &[]), amd);
-        assert_eq!(restart_without(true, STARTUP_FRAMES - 1, amd, &[]), amd);
-        // After start-up the adapter has shown frames; a lost window is something else.
-        assert_eq!(restart_without(true, STARTUP_FRAMES, amd, &[]), None);
-        // A bug outside the graphics, or no adapter picked: nothing another adapter would change.
-        assert_eq!(restart_without(false, 0, amd, &[]), None);
-        assert_eq!(restart_without(true, 0, None, &[]), None);
-        // Never the same adapter twice, so restarts end.
-        assert_eq!(restart_without(true, 0, amd, &["Vulkan:1002:164e".into()]), None);
-    }
-
-    #[test]
-    fn a_normal_exit_or_another_failure_does_not_restart() {
-        let startup = Startup::default();
-        assert_eq!(finish(Ok(Ok(())), &startup), Ok(()));
-        // No adapter was picked (none can show the window): the error is returned, nothing restarts.
-        let none =
-            eframe::Error::Wgpu(eframe::egui_wgpu::WgpuError::CustomNativeAdapterSelectionError("no graphics adapter can show the window".into()));
-        assert_eq!(
-            finish(Ok(Err(none)), &startup),
-            Err(format!("WGPU error: Adapter selection failed: no graphics adapter can show the window ({HELP})"))
-        );
-        let _ = startup.adapter.set("Vulkan:1002:164e".into());
-        GRAPHICS_PANIC.store(false, Ordering::Relaxed);
-        assert_eq!(finish(Err("a bug".into()), &startup), Err("a bug".into()));
-    }
-}
+mod tests;

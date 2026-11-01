@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_pdf::{PdfPreset, builtin_preset, builtin_presets};
 
 use super::fileio::pdf::{find_preset, resolve};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param, unique_name};
 
 /// The `format` of a PDF presets file, also its extension.
 pub const PRESET_FORMAT: &str = "vcpdfpresets";
@@ -18,10 +18,16 @@ pub const PRESET_EXTS: &[&str] = &[PRESET_FORMAT];
 
 /// What `pdf.preset.export` writes and `pdf.preset.import` reads.
 #[derive(Serialize, Deserialize)]
-struct PresetFile {
-    format: String,
+pub(crate) struct PresetFile {
+    pub(crate) format: String,
     #[serde(default)]
-    presets: Vec<PdfPreset>,
+    pub(crate) presets: Vec<PdfPreset>,
+}
+
+impl PresetFile {
+    pub(crate) fn new(presets: Vec<PdfPreset>) -> Self {
+        Self { format: PRESET_FORMAT.into(), presets }
+    }
 }
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -112,6 +118,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let at = s.pdf_saved_index(&name);
     let saved = at.and_then(|i| s.prefs.pdf_presets.get(i)).cloned();
+    let old_name = saved.as_ref().map(|old| old.name.clone());
     // A saved preset changes from its own settings unless `preset` says where to start.
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let (Some(old), None) = (&saved, str_param(p, "preset")) {
@@ -127,6 +134,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let description = str_param(p, "description").map(str::to_string).or_else(|| saved.map(|old| old.description)).unwrap_or_default();
     let preset = PdfPreset { name: name.clone(), description, settings: settings.clone() };
+    s.store_pdf_preset(old_name.as_deref(), &preset);
     match at.and_then(|i| s.prefs.pdf_presets.get_mut(i)) {
         Some(slot) => *slot = preset,
         None => s.prefs.pdf_presets.push(preset),
@@ -141,7 +149,9 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("`{name}` is a built-in preset and stays")));
     }
     let i = s.pdf_saved_index(name).ok_or_else(|| bad(C, format!("no saved PDF preset named `{name}`")))?;
-    Ok(json!({ "deleted": s.prefs.pdf_presets.remove(i).name }))
+    let deleted = s.prefs.pdf_presets.remove(i).name;
+    s.unstore_pdf_preset(&deleted);
+    Ok(json!({ "deleted": deleted }))
 }
 
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
@@ -196,12 +206,14 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(slot) = s.prefs.pdf_presets.get_mut(i) {
                     preset.name = slot.name.clone();
                     imported.push(preset.name.clone());
-                    *slot = preset;
+                    *slot = preset.clone();
+                    s.store_pdf_preset(Some(&preset.name), &preset);
                 }
             }
             None => {
                 preset.name = unique_name(&base, |n| s.pdf_preset_taken(n, None));
                 imported.push(preset.name.clone());
+                s.store_pdf_preset(None, &preset);
                 s.prefs.pdf_presets.push(preset);
             }
         }

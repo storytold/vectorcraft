@@ -94,6 +94,7 @@ impl SymbolismTool {
             && let Some(c) = cx.paint.fill.color()
         {
             v["color"] = serde_json::to_value(c).unwrap_or(Value::Null);
+            v["keepModel"] = json!(true);
         }
         if let Some(s) = &self.style {
             v["style"] = json!(s);
@@ -170,7 +171,16 @@ impl Tool for SymbolismTool {
         vec![Overlay::Path { path: circle, color: FEEDBACK, width: 1.0, dashed: false }]
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Crosshair
+        match self.id {
+            "symbolShifter" => Cursor::SymbolShifter,
+            "symbolScruncher" => Cursor::SymbolScruncher,
+            "symbolSizer" => Cursor::SymbolSizer,
+            "symbolSpinner" => Cursor::SymbolSpinner,
+            "symbolStainer" => Cursor::SymbolStainer,
+            "symbolScreener" => Cursor::SymbolScreener,
+            "symbolStyler" => Cursor::SymbolStyler,
+            _ => Cursor::SymbolSprayer,
+        }
     }
     fn options(&self) -> Value {
         json!({"diameter": self.diameter, "intensity": self.intensity, "density": self.density, "symbol": self.symbol, "style": self.style})
@@ -251,6 +261,9 @@ impl Tool for BrushPaintTool {
             self.inner.set_option(key, v);
         }
     }
+    fn wants_samples(&self) -> bool {
+        self.inner.wants_samples()
+    }
     fn busy(&self) -> bool {
         self.inner.busy()
     }
@@ -292,6 +305,10 @@ mod tests {
             let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0).with_mods(Mods { alt: true, ..Default::default() }));
             assert!(matches!(&a[1], Action::Preview(c, v) if c == "symbol.adjust" && v["tool"] == tool && v["alt"] == true), "{a:?}");
         }
+        // The Symbol Stainer sends the fill color in its own model.
+        let fill = serde_json::to_value(p.fill.color().unwrap()).unwrap();
+        let a = create("symbolStainer").unwrap().pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0));
+        assert!(matches!(&a[1], Action::Preview(_, v) if v["color"] == fill && v["keepModel"] == true), "{a:?}");
     }
 
     #[test]

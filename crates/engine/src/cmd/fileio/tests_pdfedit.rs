@@ -69,6 +69,33 @@ fn pages_changed_elsewhere_open_as_artwork_with_a_warning() {
     assert_eq!(r["warnings"][0], load::EDITING_DAMAGED, "{r}");
 }
 
+/// `pdf` with its editing file's description rewritten by another app in UTF-16BE with a byte
+/// order mark: "hash " and the hash it held, padded with spaces to its length.
+fn utf16_described(pdf: &[u8]) -> Vec<u8> {
+    let from = b"(VectorCraft editing data; page hash ";
+    let at = pdf.windows(from.len()).position(|w| w == from).unwrap_or_else(|| panic!("no description"));
+    let (hash, len) = (&pdf[at + from.len()..at + from.len() + 16], from.len() + 17);
+    let mut desc = b"(\xFE\xFF".to_vec();
+    desc.extend(b"hash ".iter().chain(hash).flat_map(|&c| [0, c]));
+    desc.push(b')');
+    desc.resize(len, b' ');
+    patched(pdf, &pdf[at..at + len], &desc)
+}
+
+#[test]
+fn pages_changed_elsewhere_are_noticed_with_a_utf16_description() {
+    let mut s = rich();
+    let pdf = b64(&s.execute("document.exportPdf", &json!({"compression": {"compressText": false}})).unwrap());
+    let ai = b64(&s.execute("document.export", &json!({"format": "ai", "compress": false})).unwrap());
+    for (name, file) in [("edited.pdf", pdf), ("edited.ai", ai)] {
+        let r = open(&mut s, name, &utf16_described(&file));
+        assert_eq!((&r["warnings"], &r["restored"]), (&json!([]), &json!(true)), "{name}: the same pages: {r}");
+        let edited = patched(&file, b"/MediaBox[0 0 300 200]", b"/MediaBox[0 0 300 201]");
+        let r = open(&mut s, name, &utf16_described(&edited));
+        assert_eq!((&r["warnings"][0], &r["restored"]), (&json!(load::EDITING_STALE), &json!(false)), "{name}: {r}");
+    }
+}
+
 #[test]
 fn the_legacy_payload_name_is_accepted() {
     let mut s = rich();
@@ -139,6 +166,27 @@ fn exports_write_ai_as_save_as_does() {
     assert!(b64(&r).starts_with(b"%PDF"));
 }
 
+/// A `.ai` with an artboard larger than 14,400 pt has its PDF page written with a `UserUnit`,
+/// and reopens at its size from its editing data and from its PDF part.
+#[test]
+fn an_ai_with_an_artboard_past_14400_pt_reopens_at_its_size() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20000, "height": 10000})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 5000, "height": 3000})).unwrap();
+    let ai = b64(&s.execute("document.export", &json!({"format": "ai", "compress": false})).unwrap());
+    assert!(String::from_utf8_lossy(&ai).contains("/UserUnit 1.389"), "20,000 / 14,400 rounded up to the next thousandth");
+    let size = |s: &Session| {
+        let r = s.doc().unwrap().doc.artboards[0].rect;
+        (r.width().round(), r.height().round())
+    };
+    assert_eq!(open(&mut s, "big.ai", &ai)["restored"], true);
+    assert_eq!(size(&s), (20_000.0, 10_000.0));
+    // Picking its page opens the PDF part.
+    let r = s.execute("document.open", &json!({"name": "big.ai", "dataBase64": vectorcraft_format::base64_encode(&ai), "pages": "1"})).unwrap();
+    assert_eq!(r["restored"], false, "{r}");
+    assert_eq!(size(&s), (20_000.0, 10_000.0));
+}
+
 #[test]
 fn ait_templates_open_their_document_untitled() {
     let mut s = rich();
@@ -151,6 +199,110 @@ fn ait_templates_open_their_document_untitled() {
     assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
     assert_eq!(s.doc().unwrap().path, None);
     assert_eq!(comparable(&s.doc().unwrap().doc), before);
+}
+
+/// Save as Template writes a PDF-compatible `.ait` for a `.ait` path or `format: ait`, and New
+/// from Template opens it as an untitled copy of the document, layers and art included.
+#[test]
+fn save_as_template_writes_an_ait_that_new_from_template_opens_untitled() {
+    let mut s = rich();
+    s.execute("layer.new", &json!({"name": "Notes"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 20, "y": 120, "width": 40, "height": 30})).unwrap();
+    let before = comparable(&s.doc().unwrap().doc);
+    assert_eq!(before.layers.len(), 2);
+    let path = tmp("brochure template.ait");
+    let r = s.execute("file.saveAsTemplate", &json!({"path": path})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(bytes.starts_with(b"%PDF") && vectorcraft_pdf::editing(&bytes).is_some_and(|e| e.intact), "PDF-compatible, carrying the document");
+    assert_eq!((s.doc().unwrap().path.as_deref(), s.doc().unwrap().is_dirty()), (None, true), "the document is unchanged");
+    let r = s.execute("file.newFromTemplate", &json!({"path": path})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
+    assert_eq!(s.doc().unwrap().path, None);
+    assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    // Without a path: the bytes and a name for the Templates folder.
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "ait"})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    assert!(r["name"].as_str().is_some_and(|n| n.ends_with(" template.ait")), "{r}");
+    assert!(vectorcraft_pdf::editing(&b64(&r)).is_some_and(|e| e.intact));
+}
+
+/// Save as Template writes a file named with its template format's extension: another format's
+/// extension is replaced and a name without one gets it; Save and Save As name the command that
+/// writes a `.ait`.
+#[test]
+fn save_as_template_names_its_file_after_the_template_format() {
+    let mut s = rich();
+    for (name, format, saved) in [
+        ("card.png", None, "card.vctemplate"),
+        ("card.vectorcraft", None, "card.vctemplate"),
+        ("card.ait", Some("template"), "card.vctemplate"),
+        ("card.pdf", Some("ait"), "card.ait"),
+        ("card v1.2", None, "card v1.2.vctemplate"),
+    ] {
+        let (typed, want) = (tmp(&format!("named/{name}")), tmp(&format!("named/{saved}")));
+        let _ = std::fs::create_dir_all(std::path::Path::new(&typed).parent().unwrap());
+        let _ = std::fs::remove_file(&typed);
+        let _ = std::fs::remove_file(&want);
+        let r = s.execute("file.saveAsTemplate", &json!({"path": typed, "format": format})).unwrap();
+        assert_eq!(r["path"], want.as_str(), "{name}: {r}");
+        let bytes = std::fs::read(&want).unwrap_or_else(|e| panic!("{name}: {saved} not written: {e}"));
+        let ait = saved.ends_with(".ait");
+        assert_eq!(bytes.starts_with(b"%PDF"), ait, "{name}");
+        assert!(ait || vectorcraft_format::load(&bytes).is_ok_and(|d| d.template), "{name}: a native template");
+        assert!(!std::path::Path::new(&typed).exists(), "{name}: nothing written under the typed name");
+    }
+    for (cmd, p) in [("file.saveAs", json!({"format": "ait"})), ("document.save", json!({"path": tmp("card.ait")}))] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("file.saveAsTemplate") && !e.contains("document.export"), "{cmd}: {e}");
+    }
+}
+
+/// Exports don't write a `.ait`: each export asked for one, by its path or `format`, answers an
+/// error that names `file.saveAsTemplate`, which writes it, and writes nothing. A format that
+/// nothing writes keeps its own error.
+#[test]
+fn exports_of_an_ait_name_save_as_template() {
+    let mut s = rich();
+    let path = tmp("exported.ait");
+    let _ = std::fs::remove_file(&path);
+    for (cmd, p) in [
+        ("document.export", json!({"path": path})),
+        ("document.export", json!({"format": "ait"})),
+        ("document.serialize", json!({"format": "ait"})),
+        ("document.exportSelection", json!({"path": path})),
+        ("document.exportForScreens", json!({"formats": [{"format": "ait"}]})),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("PDF-compatible .ait template files are written by file.saveAsTemplate"), "{cmd} {p}: {e}");
+    }
+    assert!(!std::path::Path::new(&path).exists(), "nothing written");
+    assert_eq!(writable_format(Some("ps"), None).unwrap_err(), "PostScript files can be opened but not written (see document.formats)");
+}
+
+/// Save as Template refuses `aiVersion` 7 for a `.ait`, given in `options` or flat, and writes no
+/// file; `aiVersion` "pdf" writes the PDF-compatible template.
+#[test]
+fn save_as_template_refuses_a_legacy_ait() {
+    let mut s = rich();
+    let path = tmp("legacy-ait/card.ait");
+    let dir = std::path::Path::new(&path).parent().unwrap().to_path_buf();
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for p in [
+        json!({"path": path, "options": {"aiVersion": "7"}}),
+        json!({"path": path, "format": "ait", "aiVersion": 7}),
+        json!({"format": "ait", "options": {"aiVersion": "7"}}),
+    ] {
+        let e = s.execute("file.saveAsTemplate", &p).unwrap_err().to_string();
+        assert!(e.contains("aiVersion 7 writes legacy .ai files"), "{p}: {e}");
+    }
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "nothing written");
+    let r = s.execute("file.saveAsTemplate", &json!({"path": path, "options": {"aiVersion": "pdf"}})).unwrap();
+    assert_eq!(r["format"], "ait", "{r}");
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(bytes.starts_with(b"%PDF") && vectorcraft_pdf::editing(&bytes).is_some_and(|e| e.intact), "PDF-compatible, carrying the document");
 }
 
 #[test]

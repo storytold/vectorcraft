@@ -321,14 +321,14 @@ pub(super) fn key(cx: &ToolContext, a: &Annotator, lines: &mut Lines, key: ToolK
 pub(super) fn cursor(cx: &ToolContext, a: &Annotator, g: Option<&Gesture>, p: Point) -> Cursor {
     match g.filter(|g| g.began).map(|g| (&g.grab, g.out)) {
         Some((Grab::Point(_), true)) => return Cursor::RemoveStop,
-        Some((Grab::Spread { .. }, _)) => return Cursor::ResizeH,
+        Some((Grab::Spread { .. }, _)) => return Cursor::ResizeH.turned(cx.view_angle()),
         Some(_) => return Cursor::Move,
         None => {}
     }
     if a.point_at(cx, p).is_some() {
         Cursor::Move
     } else if a.ring_at(cx, p).is_some() {
-        Cursor::ResizeH
+        Cursor::ResizeH.turned(cx.view_angle())
     } else if a.line_at(cx, p).is_some() || on_art(cx, p) {
         Cursor::AddStop
     } else {
@@ -486,6 +486,11 @@ mod tests {
         // Spread 0.2 of half the 100 pt box: a 10 pt ring around (150, 180), its handle on it.
         assert_eq!(t.cursor(&cx, Point::new(150.0, 170.0), Default::default()), Cursor::ResizeH);
         assert!(t.overlays(&cx).contains(&Overlay::Handle { p: Point::new(166.0, 180.0), color: LINE }), "at least 16 px out");
+        // In a view turned 90° the handle shows below the point and drags up and down on screen.
+        let mut turned = crate::testutil::cx(&d, &s, &p);
+        turned.freeform_point = Some(2);
+        turned.screen = turned_view(90.0);
+        assert_eq!(t.cursor(&turned, Point::new(166.0, 180.0), Default::default()), Cursor::ResizeV);
         assert!(t.pointer(&cx, &ev(PointerKind::Down, 160.0, 180.0)).is_empty());
         let spread = |a: &[Action]| match a.last() {
             Some(Action::Preview(c, v)) if c == "paint.freeform.setPoint" && v["index"] == 2 => (v["spread"].as_f64().unwrap() * 1e4).round() / 1e4,

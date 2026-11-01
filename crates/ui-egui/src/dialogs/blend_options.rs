@@ -25,7 +25,7 @@ const CMD: &str = "object.blend.options";
 const LABEL_W: f32 = 82.0;
 
 /// Spacing modes: (value, label).
-const SPACING: [(&str, &str); 3] = [("smooth", "Smooth Color"), ("steps", "Specified Steps"), ("distance", "Specified Distance")];
+pub(crate) const SPACING: [(&str, &str); 3] = [("smooth", "Smooth Color"), ("steps", "Specified Steps"), ("distance", "Specified Distance")];
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| tl!("Blend Options").into(), body, confirm, preview: true, min_width: 300.0, ..DialogSpec::FORM };
@@ -76,8 +76,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             m => {
                 let steps = d.f64("steps", 5.0);
                 ui.add_enabled_ui(m == "steps", |ui| {
-                    if let Some(n) = widgets::plain_field(ui, "blend-steps", steps, "", 0, 72.0) {
-                        d.fields.insert("steps".into(), json!(n.round().clamp(1.0, 1000.0)));
+                    if let Some(n) = widgets::range_field(ui, "blend-steps", steps, 1.0..=1000.0, "", 0, 72.0) {
+                        d.fields.insert("steps".into(), json!(n));
                     }
                 });
             }
@@ -100,8 +100,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// An orientation toggle drawn in code: three bars on a curve, upright (Align to Page) or square
-/// to the curve (Align to Path), in a pressed well when `selected`. Returns clicked.
-fn orientation_button(ui: &mut egui::Ui, along: bool, selected: bool, tip: &str) -> bool {
+/// to the curve (Align to Path), in a pressed well when `selected`. Screen readers name it `tip`.
+/// Returns clicked.
+pub(crate) fn orientation_button(ui: &mut egui::Ui, along: bool, selected: bool, tip: &str) -> bool {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
     let bg = if selected {
@@ -124,6 +125,7 @@ fn orientation_button(ui: &mut egui::Ui, along: bool, selected: bool, tip: &str)
         let n = if along { vec2(-12.0 * x / 9.0, -1.0).normalized() } else { vec2(0.0, -1.0) };
         ui.painter().line_segment([p, p + n * 7.0], Stroke::new(2.0, color));
     }
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, tip));
     resp.on_hover_text(tip).clicked()
 }
 

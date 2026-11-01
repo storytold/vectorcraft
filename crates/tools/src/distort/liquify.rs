@@ -5,7 +5,8 @@
 //! pointer sample so far (and its pen pressure while Use Pressure Pen is on), so the result is a
 //! pure function of the parameters (replay reproduces it exactly). Holding the brush still with
 //! Twirl, Pucker or Bloat repeats the last sample every [`HOLD_EVERY`] seconds of [`Tool::tick`]
-//! time: one more dab there each time.
+//! time: one more dab there each time. Escape during a stroke cancels it, and Escape during an
+//! Alt-drag that sizes the brush puts the brush size back.
 //!
 //! The kernel resamples the stroke into dabs spaced a fraction of the brush apart ([`Dabber`]:
 //! more samples only add dabs, so a growing stroke can be applied as it grows). For each dab it
@@ -19,7 +20,7 @@ use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, Rect, SubPath, Vec2};
 
 use super::ellipse_path;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiquifyKind {
@@ -388,7 +389,8 @@ fn subdivide(sp: &mut SubPath, prm: &LiquifyParams, c: Point, spacing: f64) {
             continue;
         }
         let len = cub.arclen(1e-3);
-        let k = (len / spacing).ceil() as usize;
+        // (No more pieces than the anchors left under the ceiling.)
+        let k = ((len / spacing).ceil() as usize).min(MAX_ANCHORS.saturating_sub(sp.anchors.len()) + 1);
         if k <= 1 {
             seg += 1;
             continue;
@@ -666,12 +668,14 @@ pub struct LiquifyTool {
     hover: Option<Point>,
     /// Time held still since the last sample or repeat (seconds).
     held: f64,
+    /// How many samples the last preview of the stroke had.
+    previewed: usize,
 }
 
 impl LiquifyTool {
     pub fn new(id: &str) -> Self {
         let kind = LiquifyKind::parse(id).unwrap_or(LiquifyKind::Warp);
-        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None, held: 0.0 }
+        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None, held: 0.0, previewed: 0 }
     }
 
     /// The command + params for the stroke so far (with each sample's pressure while Use Pressure
@@ -684,6 +688,26 @@ impl LiquifyTool {
             v["ids"] = crate::json_ids(&cx.selection.objects);
         }
         ("object.liquify".into(), v)
+    }
+
+    /// The preview of the stroke so far, when [`crate::previews_at`] its length.
+    fn preview(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if !crate::previews_at(self.points.len()) {
+            return vec![];
+        }
+        self.previewed = self.points.len();
+        let (c, v) = self.command(cx);
+        vec![Action::Preview(c, v)]
+    }
+
+    /// The preview of the whole stroke, when samples came after the last one shown: what is
+    /// committed is the last preview.
+    fn stale_preview(&mut self, cx: &ToolContext) -> Option<Action> {
+        (self.previewed != self.points.len() && !self.points.is_empty()).then(|| {
+            self.previewed = self.points.len();
+            let (c, v) = self.command(cx);
+            Action::Preview(c, v)
+        })
     }
 
     /// Alt-drag from `s` to `p`: the brush grows or shrinks from its size at the press (its edge
@@ -719,6 +743,7 @@ impl Tool for LiquifyTool {
                 self.points = vec![sample];
                 self.active = true;
                 self.held = 0.0;
+                self.previewed = self.points.len();
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.params.kind.label().into()), Action::Preview(c, v)]
             }
@@ -728,13 +753,15 @@ impl Tool for LiquifyTool {
                     self.hover = Some(s.start);
                     return vec![];
                 }
-                if !self.active || self.points.last().is_some_and(|(l, _)| l.distance(p) < cx.tol(2.0)) {
+                if !self.active
+                    || self.points.last().is_some_and(|(l, _)| l.distance(p) < cx.tol(2.0))
+                    || self.points.len() >= crate::MAX_STROKE_SAMPLES
+                {
                     return vec![];
                 }
                 self.points.push(sample);
                 self.held = 0.0;
-                let (c, v) = self.command(cx);
-                vec![Action::Preview(c, v)]
+                self.preview(cx)
             }
             PointerKind::Up => {
                 if self.sizing.take().is_some() {
@@ -744,8 +771,9 @@ impl Tool for LiquifyTool {
                     return vec![];
                 }
                 self.active = false;
+                let out = self.stale_preview(cx).into_iter().chain([Action::Commit]).collect();
                 self.points.clear();
-                vec![Action::Commit]
+                out
             }
             _ => vec![],
         }
@@ -786,13 +814,39 @@ impl Tool for LiquifyTool {
             }
         }
     }
+    /// The tool claims Escape during an Alt-drag that sizes the brush.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.sizing.is_some()
+    }
+    /// Escape during a stroke cancels it: the art goes back to how the press found it. During an
+    /// Alt-drag sizing the brush, Escape puts the brush size back.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape {
+            return vec![];
+        }
+        if let Some(s) = self.sizing.take() {
+            (self.params.width, self.params.height) = (s.width, s.height);
+            return vec![];
+        }
+        if !std::mem::take(&mut self.active) {
+            return vec![];
+        }
+        self.points.clear();
+        (self.held, self.previewed) = (0.0, 0);
+        vec![Action::Cancel]
+    }
     fn busy(&self) -> bool {
         self.active
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.hover = None;
         self.sizing = None;
-        if std::mem::take(&mut self.active) { vec![Action::Commit] } else { vec![] }
+        if !std::mem::take(&mut self.active) {
+            return vec![];
+        }
+        let out = self.stale_preview(cx).into_iter().chain([Action::Commit]).collect();
+        self.points.clear();
+        out
     }
     /// Held still: every [`HOLD_EVERY`] the last sample repeats (one more dab there).
     fn tick(&mut self, cx: &ToolContext, dt: f64) -> Vec<Action> {
@@ -808,9 +862,13 @@ impl Tool for LiquifyTool {
         }
         self.held = self.held.clamp(0.0, HOLD_EVERY);
         let Some(&last) = self.points.last().filter(|_| n > 0) else { return vec![] };
-        self.points.extend(std::iter::repeat_n(last, n as usize));
-        let (c, v) = self.command(cx);
-        vec![Action::Preview(c, v)]
+        let room = crate::MAX_STROKE_SAMPLES.saturating_sub(self.points.len());
+        // A full stroke takes no sample: the preview it already has stands.
+        if room == 0 {
+            return vec![];
+        }
+        self.points.extend(std::iter::repeat_n(last, (n as usize).min(room)));
+        self.preview(cx)
     }
     fn wants_ticks(&self) -> bool {
         self.active && self.params.kind.holds()
@@ -923,5 +981,42 @@ mod tests {
         assert_eq!(p, q);
         let r = LiquifyParams::from_json(&json!({"tool": "warp", "diameter": 40, "intensity": 80})).unwrap();
         assert_eq!((r.width, r.height, r.intensity), (40.0, 40.0, 0.8));
+    }
+
+    #[test]
+    fn escape_cancels_a_stroke_or_a_brush_size_drag() {
+        use crate::testutil::{cx, doc_with_rect, paint};
+        let (d, id) = doc_with_rect();
+        let s = vectorcraft_doc::Selection { objects: vec![id], ..Default::default() };
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let ev = |kind, x, y, mods| PointerEvent::new(kind, x, y).with_mods(mods);
+        for tool in ["warp", "twirl"] {
+            let mut t = LiquifyTool::new(tool);
+            assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "{tool}: no stroke, Escape is the shortcut's");
+            assert!(!t.claims_key(&c, ToolKey::Escape), "{tool}");
+            assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 190.0, 150.0, Mods::default()))[0], Action::Begin(_)), "{tool}");
+            t.pointer(&c, &ev(PointerKind::Drag, 220.0, 150.0, Mods::default()));
+            assert!(t.busy(), "{tool}");
+            assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{tool}");
+            assert!(!t.busy() && !t.wants_ticks(), "{tool}");
+            // The rest of the stroke does nothing.
+            assert!(t.tick(&c, 1.0).is_empty(), "{tool}");
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, 240.0, 150.0, Mods::default())).is_empty(), "{tool}");
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 240.0, 150.0, Mods::default())).is_empty(), "{tool}");
+            // Alt-drag sizes the brush; Escape puts the size back and the rest of that drag does nothing.
+            let size = (t.params.width, t.params.height);
+            t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0, alt));
+            t.pointer(&c, &ev(PointerKind::Drag, 180.0, 170.0, alt));
+            assert_ne!((t.params.width, t.params.height), size, "{tool}");
+            assert!(t.claims_key(&c, ToolKey::Escape), "{tool}");
+            assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "{tool}");
+            assert_eq!((t.params.width, t.params.height), size, "{tool}");
+            assert!(!t.claims_key(&c, ToolKey::Escape), "{tool}");
+            t.pointer(&c, &ev(PointerKind::Drag, 200.0, 200.0, alt));
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0, alt)).is_empty(), "{tool}");
+            assert_eq!((t.params.width, t.params.height), size, "{tool}");
+        }
     }
 }

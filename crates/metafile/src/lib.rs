@@ -109,6 +109,3 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod tests_import;

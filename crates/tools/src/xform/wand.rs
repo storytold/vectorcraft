@@ -41,7 +41,7 @@ impl Tool for MagicWandTool {
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Crosshair
+        Cursor::MagicWand
     }
 }
 
@@ -103,9 +103,9 @@ impl Tool for LassoTool {
                 if poly.len() < 3 {
                     return if add || sub { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                // Anchors inside the loop for every editable path.
+                // Anchors inside the loop for every editable path the Lasso may pick.
                 let mut hits: Vec<(NodeId, BTreeSet<AnchorRef>)> = vec![];
-                cx.doc.walk(|n| {
+                crate::draw2::walk_pickable(cx, |n| {
                     if let NodeKind::Path { path, .. } = &n.kind {
                         let v: BTreeSet<AnchorRef> =
                             path.anchors().filter(|(_, _, a)| point_in_polygon(&poly, a.p)).map(|(s, i, _)| (s, i)).collect();
@@ -114,7 +114,8 @@ impl Tool for LassoTool {
                         }
                     }
                 });
-                hits.retain(|(id, _)| cx.doc.is_editable(*id) && cx.doc.is_visible(*id));
+                let editable = cx.doc.editable();
+                hits.retain(|(id, _)| editable(*id) && cx.doc.is_visible(*id));
                 let items: Vec<Value> = hits.iter().map(|(id, v)| json!({ "id": id.0, "anchors": anchors_json(v) })).collect();
                 let mode = if sub {
                     "subtract"
@@ -145,7 +146,7 @@ impl Tool for LassoTool {
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Crosshair
+        Cursor::Lasso
     }
 }
 
@@ -169,6 +170,36 @@ mod tests {
         assert_eq!(r, vec![Action::Exec("select.magicWand".into(), json!({"id": a.0, "mode": "add"}))]);
         let miss = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 900.0, 900.0));
         assert_eq!(miss, vec![Action::Exec("select.none".into(), json!({}))]);
+    }
+
+    /// The Lasso selects anchor points only on the art a click can pick: not on a Shaper Group's
+    /// original shapes unless they are isolated (Construction mode), and in isolation mode only on
+    /// the isolated object.
+    #[test]
+    fn lasso_leaves_out_shaper_sources_and_art_outside_isolation() {
+        let (d, _, sources, face) = doc_with_shaper_group();
+        let rect = d.layers[0].children().unwrap()[0].id;
+        let b = d.node(sources).and_then(|n| n.children()).unwrap()[1].id;
+        let (s, p) = (Selection::default(), paint());
+        let lasso = |isolation: Option<NodeId>, poly: [(f64, f64); 3]| {
+            let cx = ToolContext { isolation, ..cx(&d, &s, &p) };
+            let mut t = LassoTool::default();
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, poly[0].0, poly[0].1));
+            for (x, y) in &poly[1..] {
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, *x, *y));
+            }
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, poly[2].0, poly[2].1));
+            let Some(Action::Exec(_, v)) = a.first() else { panic!("a selection command: {a:?}") };
+            v["items"].as_array().unwrap().iter().map(|it| NodeId(it["id"].as_u64().unwrap())).collect::<Vec<_>>()
+        };
+        // Around the top right corner of the second square, which only its original shape has.
+        let corner = [(130.0, 280.0), (180.0, 280.0), (150.0, 320.0)];
+        assert_eq!(lasso(None, corner), vec![]);
+        assert_eq!(lasso(Some(sources), corner), vec![b]);
+        // Around the face's top left corner, where the first original shape has an anchor too.
+        let shared = [(-20.0, 280.0), (30.0, 280.0), (0.0, 320.0)];
+        assert_eq!(lasso(None, shared), vec![face]);
+        assert_eq!(lasso(Some(rect), shared), vec![]);
     }
 
     #[test]

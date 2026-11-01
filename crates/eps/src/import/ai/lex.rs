@@ -3,7 +3,9 @@
 //! - A line starting with `%_` holds tokens like any other line (they are marked [`Token::hidden`]:
 //!   readers of the printed format skip them as comments).
 //! - Any other line starting with `%` is a [`Tok::Comment`] (the section markers).
-//! - `%` later in a line starts a comment that is skipped.
+//! - `%_` later in a line starts tokens too, hidden (a pseudo-comment operator after its
+//!   operands, as a gradient stop's `… 50 100 %_Bs`: AI7 spec §1.4.3); any other `%` later in a
+//!   line starts a comment that is skipped.
 //! - The binary image data after `%%BeginData:` is one [`Tok::Data`]; the binary preview of a placed
 //!   file is one [`Tok::Preview`].
 
@@ -38,6 +40,8 @@ pub(super) struct Token<'a> {
 
 /// A placed file's preview (binary): (begin, end) markers.
 const PREVIEW: (&[u8], &[u8]) = (b"%AI26_BeginPlacedObjectPreview", b"%AI26_EndPlacedObjectPreview");
+/// A placed file's markers, which a hidden one has on `%_` lines.
+const PLACE: [&[u8]; 2] = [b"%AI5_BeginPlace", b"%AI5_EndPlace"];
 /// A binary section skipped whole: (begin, end) markers.
 const DOCUMENT: (&[u8], &[u8]) = (b"%%BeginDocument", b"%%EndDocument");
 
@@ -90,6 +94,11 @@ impl<'a> Lexer<'a> {
         self.pos
     }
 
+    /// Look for the next token at `pos` again (the end of the data at most).
+    pub fn seek(&mut self, pos: usize) {
+        self.pos = pos.min(self.src.len());
+    }
+
     /// The data from `from` to `to` (empty where that isn't in it).
     pub fn slice(&self, from: usize, to: usize) -> &'a [u8] {
         self.src.get(from..to).unwrap_or_default()
@@ -118,7 +127,8 @@ impl<'a> Lexer<'a> {
             }
             if b == b'%' {
                 let start = self.at_line_start();
-                if start && self.rest().starts_with(b"%_") {
+                // A pseudo-comment: `%_` at the line's start, or after operands.
+                if self.rest().starts_with(b"%_") && (start || self.rest().get(2).is_some_and(|b| b.is_ascii_alphabetic())) {
                     self.pos += 2;
                     self.hidden = true;
                     continue;
@@ -133,6 +143,10 @@ impl<'a> Lexer<'a> {
                 }
                 if start {
                     return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: false });
+                }
+                // So does a hidden placed file: its `~` ends what `%_%AI5_BeginPlace` begins.
+                if prefixed && PLACE.iter().any(|m| line.starts_with(m)) {
+                    return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: true });
                 }
                 // A comment later in a line.
                 continue;
@@ -313,9 +327,18 @@ mod tests {
                 t(Tok::Word(b":"), true),
                 t(Tok::Word(b";"), true),
                 t(Tok::Num(0.0), false),
+                // A pseudo-comment operator after its operands.
+                t(Tok::Word(b"BS"), true),
                 t(Tok::Hex(b"AB".to_vec()), false),
             ]
         );
+    }
+
+    #[test]
+    fn a_percent_later_in_a_line_is_a_comment_unless_an_operator_follows_it() {
+        let toks = all(b"1 % a note (\n2 %_Bs\n3 %_ 4\n");
+        let words: Vec<_> = toks.iter().map(|t| (t.tok.clone(), t.hidden)).collect();
+        assert_eq!(words, [(Tok::Num(1.0), false), (Tok::Num(2.0), false), (Tok::Word(b"Bs"), true), (Tok::Num(3.0), false)]);
     }
 
     #[test]
