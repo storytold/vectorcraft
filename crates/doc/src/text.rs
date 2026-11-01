@@ -99,8 +99,8 @@ pub struct TextObject {
     pub list_count: u32,
     /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
     /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
-    /// and the file saves them only when not empty.
-    #[serde(default, rename = "listLevelCounts", skip_serializing_if = "Vec::is_empty")]
+    /// and the file saves them only when not empty. A file's longer list opens with the first 8.
+    #[serde(default, rename = "listLevelCounts", skip_serializing_if = "Vec::is_empty", deserialize_with = "tabs_lists::read_level_counts")]
     pub list_level_counts: Vec<u32>,
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]

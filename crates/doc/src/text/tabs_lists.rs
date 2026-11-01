@@ -221,6 +221,30 @@ fn read_level<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
     Ok(level as u8)
 }
 
+/// Reads a type object's saved counts at list levels 2 on ([`ListCounts::from_parts`]), keeping
+/// the first `LIST_LEVELS - 1` and skipping the rest of a longer list without storing it.
+pub(super) fn read_level_counts<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<u32>, D::Error> {
+    struct Counts;
+    impl<'de> serde::de::Visitor<'de> for Counts {
+        type Value = Vec<u32>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list of list counts")
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<u32>, A::Error> {
+            let mut out = Vec::new();
+            while out.len() < LIST_LEVELS - 1 {
+                match seq.next_element::<u32>()? {
+                    Some(c) => out.push(c),
+                    None => return Ok(out),
+                }
+            }
+            while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+            Ok(out)
+        }
+    }
+    d.deserialize_seq(Counts)
+}
+
 /// How many levels a list has (Bullets and Numbering…'s Level: 1 to 9).
 pub const LIST_LEVELS: usize = 9;
 

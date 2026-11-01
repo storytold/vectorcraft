@@ -311,6 +311,10 @@ fn list_levels_count_their_own_numbers_and_save_only_past_the_first() {
     assert_eq!((&saved["listCount"], &saved["listLevelCounts"]), (&serde_json::json!(5), &serde_json::json!([0, 2])));
     t.set_list_counts(ListCounts::default());
     assert!(serde_json::to_value(&t).unwrap().get("listLevelCounts").is_none(), "no counts past level 1 are saved without them");
+    let mut saved = serde_json::to_value(&t).unwrap();
+    saved["listLevelCounts"] = serde_json::json!((1..=20).collect::<Vec<u32>>());
+    let opened = serde_json::from_value::<TextObject>(saved).unwrap();
+    assert_eq!(opened.list_level_counts, (1..=8).collect::<Vec<u32>>(), "a file keeps only the counts of levels 2 to 9");
 }
 
 #[test]
