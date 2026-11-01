@@ -88,3 +88,44 @@ fn guides_paste_in_place_onto_another_artboard_and_cut_removes_them() {
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("edit.copy", &json!({})).is_err());
 }
+
+/// #3226 review: each paste adds guides of its own (a guide is its place and layer; there is no
+/// id to share), on the layer new art goes to, so they take that layer's colour, visibility and
+/// lock; and the SVG put on the system clipboard carries no guides.
+#[test]
+fn two_pastes_add_their_own_guides_on_the_current_layer_and_svg_has_none() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    run(&mut s, "guide.add", json!({"vertical": true, "pos": 120}));
+    run(&mut s, "guide.select", json!({"indexes": [0]}));
+    run(&mut s, "edit.copy", json!({}));
+    // Guides alone: no art for the system clipboard's SVG.
+    assert!(s.clipboard_svg().is_none(), "guides alone put no SVG on the system clipboard");
+    assert!(s.clipboard.flavour_types(true, true).is_empty(), "nor any other format (it keeps what other apps put there)");
+    let layer = NodeId(run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "edit.paste", json!({}));
+    assert_eq!(s.doc().unwrap().selection.guides, [1], "the first paste selects its own guide");
+    run(&mut s, "edit.paste", json!({}));
+    assert_eq!(s.doc().unwrap().selection.guides, [2], "the second paste selects its own guide");
+    let g = guides(&s);
+    assert_eq!(g.len(), 3, "two pastes, two more guides: {g:?}");
+    assert_eq!((g[1].2, g[2].2), (Some(layer), Some(layer)), "on the layer new art goes to");
+    // Moving the second pasted guide leaves the first where it is.
+    run(&mut s, "guide.move", json!({"index": 2, "pos": 200}));
+    assert_eq!(guides(&s).iter().map(|g| g.1).collect::<Vec<_>>(), [120.0, 120.0, 200.0]);
+    // Hiding that layer hides the guides pasted on it: they follow its visibility (and lock).
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "visible": false}));
+    let st = s.doc().unwrap();
+    let shown: Vec<bool> = st.doc.guides.iter().map(|g| st.doc.guide_shown(g)).collect();
+    assert_eq!(shown, [true, false, false]);
+    // With an object, the SVG holds the object and no guide.
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "visible": true}));
+    let rect = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [rect]}));
+    run(&mut s, "guide.select", json!({"indexes": [0], "toggle": true}));
+    let r = run(&mut s, "edit.copy", json!({}));
+    assert_eq!(r["guides"], 1);
+    let svg = s.clipboard_svg().unwrap();
+    assert!(svg.contains("<rect") || svg.contains("<path"), "the object is there");
+    assert!(!svg.to_lowercase().contains("guide"), "no guide in the SVG: {svg}");
+}
