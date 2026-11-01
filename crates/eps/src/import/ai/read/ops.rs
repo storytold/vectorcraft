@@ -130,7 +130,6 @@ impl<'a> Reader<'a> {
                 self.open(Kind::Clip, hidden)?
             }
             "U" | "*U" | "Q" => self.end_container(w, hidden)?,
-            "Mb" | "Mv" | "Md" | "ME" | "MB" | "Mi" => self.multi_mask_op(w)?,
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {
@@ -144,6 +143,7 @@ impl<'a> Reader<'a> {
             // Ends a path that stays open.
             "H" => {}
             "W" => self.clip_next = true,
+            "Mb" | "Mv" | "Md" | "ME" | "MB" | "Mi" => self.multi_mask_op(w)?,
             // A text object's frame or path.
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" if self.in_text_path() => self.text_path(),
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" => self.paint(w, hidden, false)?,

@@ -3104,7 +3104,7 @@ fn an_objects_on_path_group_in_versioned_content_opens_once() {
 }
 
 /// Editing data in the legacy format (`%AI5_FileFormat 2.0`, ten `Lb` operands), then `body`.
-fn stream7(body: &str) -> String {
+fn mask_stream7(body: &str) -> String {
     format!(
         "%!PS-Adobe-3.0\n%%Creator: test\n%%BoundingBox: 0 0 200 200\n%AI5_FileFormat 2.0\n%AI5_ArtSize: 200 200\n\
          %AI3_TemplateBox: 100 100 100 100\n%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{body}\n\
@@ -3145,7 +3145,7 @@ fn mask_tree(nodes: &[Arc<Node>]) -> String {
 }
 
 fn read7(body: &str) -> Structure {
-    match read(stream7(body).as_bytes()) {
+    match read(mask_stream7(body).as_bytes()) {
         Ok(r) => r,
         Err(e) => panic!("{e}"),
     }
@@ -3269,7 +3269,7 @@ fn a_malformed_multi_layer_mask_is_an_error() {
     ];
     for (why, art) in cases {
         let body = format!("{}{art}{END7}", begin7("A", 1));
-        let e = read(stream7(&body).as_bytes()).unwrap_err();
+        let e = read(mask_stream7(&body).as_bytes()).unwrap_err();
         assert!(e.contains("mask"), "{why}: {e}");
     }
     let layered = [
@@ -3278,12 +3278,12 @@ fn a_malformed_multi_layer_mask_is_an_error() {
         ("the end of the file inside the mask", format!("{}{}{sq}{END7}", begin7("A", 1), mask_start())),
     ];
     for (why, body) in layered {
-        let e = read(stream7(&body).as_bytes()).unwrap_err();
+        let e = read(mask_stream7(&body).as_bytes()).unwrap_err();
         assert!(e.contains("mask"), "{why}: {e}");
     }
     // Outside the layers, `Md` has nowhere to take its path from.
     let outside = format!("Mb\nMd\n{}{path}{sq}MB\n{END7}", begin7("A", 1));
-    let e = read(stream7(&outside).as_bytes()).unwrap_err();
+    let e = read(mask_stream7(&outside).as_bytes()).unwrap_err();
     assert!(e.contains("mask"), "{e}");
 }
 
@@ -3320,6 +3320,6 @@ fn copies_of_a_multi_layer_mask_count_toward_the_limit() {
     let one = format!("{}{mask}{}MB\n{END7}", begin7("A", 1), masked(15.0));
     assert_eq!(layer_trees(&read7(&one).doc)[0].1, "k[c p]");
     let two = format!("{}{mask}{}{END7}{}{}MB\n{END7}", begin7("A", 1), masked(15.0), begin7("B", 1), masked(30.0));
-    let e = read(stream7(&two).as_bytes()).unwrap_err();
+    let e = read(mask_stream7(&two).as_bytes()).unwrap_err();
     assert!(e.contains("objects"), "{e}");
 }
