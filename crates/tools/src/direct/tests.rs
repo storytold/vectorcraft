@@ -129,16 +129,25 @@ fn a_press_on_a_clipping_path_takes_its_segment_over_the_art() {
 }
 
 /// #3748: in isolation mode Direct Selection and Group Selection take the art that the
-/// isolated clip group hides outside its mask; outside isolation mode a press there does not.
+/// isolated clip group hides outside its mask, and a drag from there moves it; outside
+/// isolation mode a press there does not take it.
 #[test]
 fn isolation_lets_direct_selection_take_the_art_a_clip_group_hides() {
     let (d, g, _, art) = doc_with_masked_square();
     let (s, p) = (Selection::default(), paint());
+    let mut picked = Selection::default();
+    picked.add(art);
     let names = |actions: &[Action]| actions.iter().any(|a| matches!(a, Action::Exec(_, v) if v["id"] == json!(art.0) || v["ids"] == json!([art.0])));
     for group in [false, true] {
         let isolated = ToolContext { isolation: Some(g), ..cx(&d, &s, &p) };
-        let a = DirectSelectionTool::new(group).pointer(&isolated, &PointerEvent::new(PointerKind::Down, 530.0, 450.0));
+        let mut t = DirectSelectionTool::new(group);
+        let a = t.pointer(&isolated, &PointerEvent::new(PointerKind::Down, 530.0, 450.0));
         assert!(names(&a), "group {group}: {a:?}");
+        // The press selected the art: the drag that follows moves it.
+        let isolated = ToolContext { isolation: Some(g), ..cx(&d, &picked, &p) };
+        let a = t.pointer(&isolated, &PointerEvent::new(PointerKind::Drag, 510.0, 470.0));
+        assert!(a.iter().any(|a| matches!(a, Action::Begin(n) if n == "Move")), "group {group}: {a:?}");
+        assert!(a.iter().any(|a| matches!(a, Action::Preview(..))), "group {group}: {a:?}");
         let a = DirectSelectionTool::new(group).pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 530.0, 450.0));
         assert!(!names(&a), "group {group}, not isolated: {a:?}");
     }
