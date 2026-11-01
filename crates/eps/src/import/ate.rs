@@ -275,8 +275,8 @@ struct AreaFrame {
     first_baseline: Option<(vectorcraft_doc::FirstBaseline, f64)>,
 }
 
-/// Longest gutter or first-baseline minimum read (units of the text document), as
-/// `text.areaOptions` caps them.
+/// Longest gutter or first-baseline minimum, as `text.areaOptions` caps them: read in the units of
+/// the text document, and again in document points once scaled.
 const MAX_AREA_LENGTH: f64 = 10_000.0;
 
 impl AreaFrame {
@@ -319,12 +319,13 @@ impl AreaFrame {
         }
         // A gutter the frame leaves out stays as it was.
         let (row, column) = (area.row_gutter.unwrap_or(area.gutter), area.gutter);
-        let row = self.row_gutter.map_or(row, |g| g * scale);
-        area.gutter = self.column_gutter.map_or(column, |g| g * scale);
+        let scaled = |g: f64| (g * scale).min(MAX_AREA_LENGTH);
+        let row = self.row_gutter.map_or(row, scaled);
+        area.gutter = self.column_gutter.map_or(column, scaled);
         area.row_gutter = (row != area.gutter).then_some(row);
         if let Some((kind, min)) = self.first_baseline {
             area.first_baseline = kind;
-            area.first_baseline_min = min * scale;
+            area.first_baseline_min = scaled(min);
         }
     }
 }
@@ -1521,6 +1522,9 @@ mod tests {
         // Too many rows and columns, and too long gutters, are capped.
         let a = area_of(vec![area_frame("/3 1e9 /4 101 /7 1e300 /8 5e4")], 0, 1.0);
         assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (100, 100, MAX_AREA_LENGTH, None));
+        // The cap holds after the lengths scale with the art's units.
+        let a = area_of(vec![area_frame("/7 1e4 /8 2e3 /10 << /0 0 /1 1e4 >>")], 0, 10.0);
+        assert_eq!((a.gutter, a.row_gutter, a.first_baseline_min), (MAX_AREA_LENGTH, None, MAX_AREA_LENGTH));
         // One that can be read is read beside one that can't.
         let a = area_of(vec![area_frame("/3 2 /4 -3 /8 12 /7 NaN")], 0, 1.0);
         assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (2, 1, 12.0, Some(18.0)));
