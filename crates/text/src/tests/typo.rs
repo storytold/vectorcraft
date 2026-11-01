@@ -477,6 +477,19 @@ fn text_flow_fills_the_cells_by_columns_or_by_rows() {
     assert_eq!(layout(db(), &by_rows).frames.get(1).map(|f| (f.x0, f.y0)), Some((220.0, 0.0)));
 }
 
+/// A gutter between rows of its own: the rows are that far apart, and the columns keep the gutter.
+#[test]
+fn rows_can_have_a_gutter_of_their_own() {
+    let mut t = area(&COPY.repeat(8), style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (2, 2, 20.0, Some(40.0));
+    let cells: Vec<(f64, f64, f64, f64)> = layout(db(), &t).frames.iter().map(|f| (f.x0, f.y0, f.x1, f.y1)).collect();
+    // By columns: down the first column, then the second; (300 − 40) / 2 tall, (420 − 20) / 2 wide.
+    assert_eq!(cells, [(0.0, 0.0, 200.0, 130.0), (0.0, 170.0, 200.0, 300.0), (220.0, 0.0, 420.0, 130.0), (220.0, 170.0, 420.0, 300.0)]);
+    // Without one, the rows take the gutter too.
+    t.area.row_gutter = None;
+    assert_eq!(layout(db(), &t).frames.get(1).map(|f| f.y0), Some(160.0));
+}
+
 // ---------- area flow ----------
 
 #[test]

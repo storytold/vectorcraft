@@ -18,7 +18,17 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
         // Area Type Options › Text Flow is a pair of radio buttons after the other options.
         let flow = if command == "text.areaOptions" { d.fields.remove("flow") } else { None };
+        // Area Type Options: a Row Gutter still as it opened, on rows without a gutter of their own,
+        // follows the Gutter as it is changed.
+        let linked = d.fields.get("__rowGutterLinked").is_some() && d.fields.get("__rowGutterLinked") == d.fields.get("rowGutter");
         form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &rank, app.session.general_unit());
+        if linked
+            && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
+            && let Some(g) = d.fields.get("gutter").cloned()
+        {
+            d.fields.insert("rowGutter".into(), g.clone());
+            d.fields.insert("__rowGutterLinked".into(), g);
+        }
         if let Some(v) = flow {
             let mut rows = v.as_str() == Some("rows");
             ui.add_space(4.0);
@@ -62,6 +72,13 @@ fn call(d: &Dialog) -> (String, Value) {
     if let (Some(o), Some(Value::Object(fixed))) = (params.as_object_mut(), d.fields.get("__params")) {
         o.extend(fixed.clone());
     }
+    // Area Type Options: a Row Gutter left as it opened, on rows without a gutter of their own,
+    // isn't sent, so the rows take the Gutter.
+    if let (Some(o), Some(linked)) = (params.as_object_mut(), d.fields.get("__rowGutterLinked"))
+        && d.fields.get("rowGutter") == Some(linked)
+    {
+        o.remove("rowGutter");
+    }
     (d.str("__command"), params)
 }
 
@@ -78,7 +95,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "shape.flare" => &["diameter", "pathLength"],
         "perspective.grid.set" => &["cell", "distance"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
-        "text.areaOptions" => &["width", "height", "gutter", "inset", "firstBaselineMin"],
+        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin"],
         "type.pathOptions" => &["spacing"],
         "object.pathfinder.trap" => &["thickness"],
         _ => &[],
@@ -197,6 +214,48 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    }
+
+    /// Area Type Options shows the gutter between rows beside the gutter, and OK sets a gutter
+    /// between rows of its own.
+    #[test]
+    fn area_type_options_dialog_sets_the_gutter_between_rows() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("rowGutter"), Some(&json!(18.0)));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        app.ui.dialog.as_mut().unwrap().fields.insert("rowGutter".into(), json!(30.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let area = |app: &VectorcraftApp| {
+            let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+            (t.area.gutter, t.area.row_gutter)
+        };
+        assert_eq!(area(&app), (18.0, Some(30.0)));
+        // Rows with a gutter of their own keep it when only the Gutter changes.
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        app.ui.dialog.as_mut().unwrap().fields.insert("gutter".into(), json!(12.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(area(&app), (12.0, Some(30.0)));
+        // Without one, a changed Gutter is the rows' too.
+        app.run("text.areaOptions", json!({"gutter": 18})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        app.ui.dialog.as_mut().unwrap().fields.insert("gutter".into(), json!(10.0));
+        // The Row Gutter shown follows it.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("rowGutter"), Some(&json!(10.0)));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(area(&app), (10.0, None));
     }
 
     /// Area Type Options › Text Flow (#4978): two radio buttons, By Columns as new area type has

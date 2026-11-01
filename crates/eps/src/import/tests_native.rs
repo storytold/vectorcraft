@@ -2350,6 +2350,33 @@ fn area_type_and_type_on_a_path_come_from_the_text_document() {
     assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
 }
 
+/// Area type keeps the rows, columns, gutters and first baseline its frame keeps, and so does
+/// each frame of a thread; a frame without them keeps the defaults.
+#[test]
+fn area_type_keeps_its_area_type_options() {
+    let frame = |rect: (f64, f64, f64, f64), options: &str| {
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 {options} >> >> >>", canvas_rect(rect.0, rect.1, rect.2, rect.3))
+    };
+    let frames = [
+        frame((10.0, 50.0, 90.0, 90.0), "/3 2 /4 3 /7 6 /8 4 /10 << /0 0 /1 9 >>"),
+        frame((10.0, 10.0, 40.0, 40.0), "/4 2 /7 5 /8 5 /10 << /0 2 /1 0 >>"),
+        frame((50.0, 10.0, 90.0, 40.0), ""),
+    ];
+    let doc = document_of(&frames, &[story("Area type in cells\\r", &[0, 1], "/0 0", "/1 6.0"), story("Plain\\r", &[2], "/0 0", "/1 6.0")]);
+    let objects = frame_object(0, 0) + &frame_object(0, 1) + &text_object(1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &objects)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 3, "{:?}", r.warnings);
+    let a = &texts[0].area;
+    assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (2, 3, 4.0, Some(6.0)));
+    assert_eq!((a.first_baseline, a.first_baseline_min), (vectorcraft_doc::FirstBaseline::Fixed, 9.0));
+    let b = &texts[1].area;
+    assert_eq!((b.rows, b.columns, b.gutter, b.row_gutter), (1, 2, 5.0, None));
+    assert_eq!(b.first_baseline, vectorcraft_doc::FirstBaseline::CapHeight);
+    assert_eq!(texts[2].area, vectorcraft_doc::AreaOptions::default());
+}
+
 /// A point type frame at the point (`x`, `y`) of the art.
 fn point_frame(x: f64, y: f64) -> String {
     let (cx, cy) = canvas(x, y);
