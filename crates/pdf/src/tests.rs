@@ -261,6 +261,35 @@ fn a_scaled_nine_slice_instance_keeps_its_corners() {
     assert!(close(boxes[2], Rect::new(105.0, 85.0, 135.0, 105.0), 0.01), "{boxes:?}");
 }
 
+/// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`
+/// objects, opacity-mask art included, as on the canvas: of two instances whose art placed through
+/// the guides holds about 9,009,000 objects each (a gradient square in all nine cells, each copy
+/// with a disabled opacity mask of 1,001,001 objects), the first is written in its nine cells and
+/// the second is left out. With a small mask both are written.
+#[test]
+fn nine_slice_instances_share_one_object_limit_in_an_export() {
+    let doc = |mask_objects: usize| {
+        let mut d = doc(300.0, 200.0);
+        let leaf = Arc::new(rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK));
+        let inner = Arc::new(Node::group(NodeId(0), vec![leaf; mask_objects]));
+        let mut mask = vectorcraft_doc::OpacityMask::new(Node::group(NodeId(0), vec![inner; mask_objects]), true);
+        (mask.linked, mask.disabled) = (false, true);
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let mut square = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(mask));
+        let art = Node::group(NodeId(0), vec![Arc::new(square)]);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+        d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        for x in [20.0, 40.0] {
+            let xf = Affine::translate((x, 20.0)) * Affine::scale_non_uniform(2.0, 1.5);
+            add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Panel".into(), xf }));
+        }
+        d
+    };
+    assert_eq!(leaves(&roundtrip(&doc(2))).len(), 18);
+    assert_eq!(leaves(&roundtrip(&doc(1_000))).len(), 9);
+}
+
 #[test]
 fn roundtrip_colours_preserved() {
     let mut d = doc(300.0, 100.0);

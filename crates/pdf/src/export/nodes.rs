@@ -237,7 +237,8 @@ impl Exporter<'_> {
                                 a
                             }
                         };
-                        let count = art.count() as u64;
+                        // As `most_placed`, placed art counts its opacity-mask art.
+                        let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
                         (art, count)
                     });
                     if let Some(art) = placed {
