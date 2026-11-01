@@ -1009,6 +1009,16 @@ font-technology	Variable	可變
 	Delete Export Preset	刪除轉存預設集
 	Export Presets	轉存預設集
 	Save Export Preset	儲存轉存預設集
+	Export Export Presets	匯出轉存預設集
+	Export Preset…	匯出預設集…
+	Import Export Presets	匯入轉存預設集
+	Import Preset…	匯入預設集…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` 是 document.exportPresets.list 中某個預設集的名稱
+@msg	no export preset `{n}` (see document.exportPresets.list)	沒有轉存預設集 `{n}` (請參閱 document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	沒有可轉存的已儲存轉存預設集 (內建預設集請在 `names` 中指定)
+@msg	not an export presets file (format `{_1}`)	不是轉存預設集檔案 (格式為 `{_1}`)
+@msg	not an export presets file: {e}	不是轉存預設集檔案：{e}
+@msg	`{_1}`: {msg}	`{_1}`：{msg}
 	Export Layer	轉存圖層
 	Export Selection	轉存選取範圍
 	All in One Folder	全部放在一個資料夾
@@ -1183,6 +1193,7 @@ file-filter	Swatch libraries	色票資料庫
 file-filter	Flattener presets	平面化預設集
 file-filter	PDF presets	PDF 預設集
 file-filter	Print presets	列印預設集
+file-filter	Export presets	轉存預設集
 file-filter	SVG Compressed	壓縮 SVG
 file-filter	PDF-compatible .ai	PDF 相容 .ai
 file-filter	VectorCraft Template	VectorCraft 範本
@@ -3639,11 +3650,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Save a Copy	儲存拷貝
 	Save a Copy…	儲存拷貝…
 	Save As	另存新檔
+	Save As Preset…	儲存為預設集…
 	Save as PDF…	儲存為 PDF…
 	Save as preset:	儲存為預設集：
 	Save as Template	另存範本
 	Save as Template…	另存範本…
 	Save As…	另存新檔…
+	Save Changes	儲存變更
 	Save changes to {name}	儲存對 {name} 的變更
 	Save color group to Swatch panel	將顏色群組儲存至色票面板
 	Save Colors as Swatches	將顏色儲存為色票

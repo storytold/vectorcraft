@@ -4127,7 +4127,18 @@ Batch exports (#1935):
 - **Formats:** rows may also be `eps`, `ai` and `vectorcraft` (a document of the item alone). A PDF row with
   `marks` (`{trim, registration, colorBars, pageInfo}`) and a suffix such as `-print` sits next to a plain PDF row.
 - **Presets:** `document.exportPresets.list` (built-in: Logo Package, Print-Ready PDF), `.save {name, settings}`
-  (kept with the preferences) and `.delete {name}`; `exportPreset: "<name>"` uses one under the call's own params.
+  (kept with the preferences; a saved name is replaced) and `.delete {name}`; `exportPreset: "<name>"` uses one under
+  the call's own params. `.export {names?, path?}` writes presets (every saved one, or the named ones, built-in ones too)
+  as a `.vcexportpresets` JSON file (without `path` it returns `data`; more than 1000 presets or a file larger than 4194304 bytes is an error), and `.import {path? | data? | dataBase64?,
+  replace?}` adds a file's presets (a name in use gets a number unless `replace`; a built-in name always gets one; a
+  name that already ends in a number gets the next free one, so `Web 2` comes in as `Web 3`; a file with settings
+  `.save` refuses, with more than 1000 presets, or larger than 4194304 bytes adds none). A preset name, saved or imported, keeps its first 255
+  characters. Opening a `.vcexportpresets` file imports it.
+  The Asset Export panel menu lists presets and holds Save As Preset…, Save Changes, Delete Preset, Import Preset…
+  and Export Preset…. `assets.settings.set {exportPreset}` applies a preset to the settings the panel shares: its rows or
+  `preset`, its format settings, its prefix (none when it has none), its `folders` (Create Sub-folders is on for `rows`
+  only) and anti-aliasing. With Create Sub-folders off, `assets.export` writes every file into the folder itself,
+  mobile and density rows included.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForScreens","params":{"range":"1-3","name":"COMPANY-Logo-<filename>-####-YYYYMMDD","folders":"format","formats":[{"format":"svg"},{"format":"png"},{"format":"pdf"},{"format":"pdf","suffix":"-print","marks":{"trim":true,"registration":true,"colorBars":true,"pageInfo":true}}]}}}
@@ -4370,7 +4381,8 @@ moving the art moves the crop, and deleting it removes it from its asset (an ass
 `assets.export {assets?, folder?, zip?}` writes each asset's art alone, cropped to it and named after it, in every
 format row of the document's export settings, the ones Export for Screens remembers (`document.exportSettings`); any
 `formats`, `preset`, `settings`, `prefix` or `subfolders` given win for that export. `assets.settings.set` changes
-those shared settings (not an undo step). `document.exportForScreens {assets: [id…]}` does the same with its own params
+those shared settings (not an undo step); its `subfolders: true` sets Export for Screens' Folders to a folder per row,
+and `subfolders: false` sets a folder per row back to All in One Folder. `document.exportForScreens {assets: [id…]}` does the same with its own params
 (the dialog's Assets tab). An asset's crop, and the crop of `export` with `selection: true`, is the bounds the
 renderer measures for what the art draws, its effects included.
 

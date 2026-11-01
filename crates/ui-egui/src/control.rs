@@ -326,10 +326,20 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
+                // In order: a field that sets others (an export preset) goes before the fields after it.
+                // A field that fails leaves the dialog as it was before the request.
+                let before = app.ui.dialog.clone();
                 for (f, value) in fields {
-                    crate::dialogs::set_field(d, f, value);
+                    let old = app.ui.dialog.as_ref().and_then(|d| d.fields.get(&f).cloned());
+                    if let Some(d) = app.ui.dialog.as_mut() {
+                        crate::dialogs::set_field(d, f.clone(), value);
+                    }
+                    if let Err(e) = crate::dialogs::field_set(app, &f, old.as_ref()) {
+                        app.ui.dialog = before;
+                        return err(e);
+                    }
                 }
-                ok(serde_json::to_value(&*d).unwrap_or_default())
+                ok(app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default())
             }
             None => err("no dialog open"),
         },

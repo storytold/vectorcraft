@@ -2304,6 +2304,8 @@ digits	Malayalam	Malajalam
 	Preserve Overprints and Spot Colors	Säilytä päällepainatukset ja spottivärit
 	Rasters	Rasterit
 	Replaces the saved preset of that name.	Korvaa samannimisen tallennetun esiasetuksen.
+	Save As Preset…	Tallenna esiasetuksena…
+	Save Changes	Tallenna muutokset
 	Save Preset…	Tallenna esiasetus…
 	Vectors	Vektorit
 	A saved copy of the selected preset	Tallennettu kopio valitusta esiasetuksesta
@@ -2895,6 +2897,16 @@ digits	Malayalam	Malajalam
 	Delete Export Preset	Poista vientiesiasetus
 	Export Presets	Vientiesiasetukset
 	Save Export Preset	Tallenna vientiesiasetus
+	Export Export Presets	Vie vientiesiasetukset
+	Export Preset…	Vie esiasetus…
+	Import Export Presets	Tuo vientiesiasetukset
+	Import Preset…	Tuo esiasetus…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` on luettelon document.exportPresets.list esiasetuksen nimi
+@msg	no export preset `{n}` (see document.exportPresets.list)	ei vientiesiasetusta `{n}` (katso document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	ei tallennettuja vientiesiasetuksia vietäväksi (anna sisäänrakennetut parametrissa `names`)
+@msg	not an export presets file (format `{_1}`)	ei vientiesiasetustiedosto (muoto `{_1}`)
+@msg	not an export presets file: {e}	ei vientiesiasetustiedosto: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Vie taso
 	Export Selection	Vie valinta
 	All in One Folder	Kaikki yhteen kansioon
@@ -5186,6 +5198,7 @@ file-filter	Swatch libraries	Värimallikirjastot
 file-filter	Flattener presets	Litistyksen esiasetukset
 file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
+file-filter	Export presets	Vientiesiasetukset
 file-filter	SVG Compressed	Pakattu SVG
 file-filter	PDF-compatible .ai	PDF-yhteensopiva .ai
 file-filter	VectorCraft Template	VectorCraft-malli

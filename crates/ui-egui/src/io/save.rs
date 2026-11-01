@@ -127,6 +127,7 @@ const FILE_TYPES: &[(&str, &[&str])] = &[
     ("PDF presets", vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS),
     ("Perspective grid presets", vectorcraft_engine::cmd::perspgrid::PRESET_EXTS),
     ("Print presets", vectorcraft_engine::cmd::printpresets::PRESET_EXTS),
+    ("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS),
     ("CSS", &["css"]),
     ("PostScript", &["ps"]),
 ];

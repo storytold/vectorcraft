@@ -1023,6 +1023,16 @@ font-technology	Variable	Variabla
 	Delete Export Preset	Ta bort exportförinställning
 	Export Presets	Exportförinställningar
 	Save Export Preset	Spara exportförinställning
+	Export Export Presets	Exportera exportförinställningar
+	Export Preset…	Exportera förinställning…
+	Import Export Presets	Importera exportförinställningar
+	Import Preset…	Importera förinställning…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` är namnet på en förinställning i document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	ingen exportförinställning `{n}` (se document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	inga sparade exportförinställningar att exportera (ange inbyggda i `names`)
+@msg	not an export presets file (format `{_1}`)	inte en fil med exportförinställningar (format `{_1}`)
+@msg	not an export presets file: {e}	inte en fil med exportförinställningar: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportera lager
 	Export Selection	Exportera markering
 	All in One Folder	Allt i en mapp
@@ -2723,11 +2733,13 @@ digits	Malayalam	Malayalam
 	Save a Copy	Spara en kopia
 	Save a Copy…	Spara en kopia…
 	Save As	Spara som
+	Save As Preset…	Spara som förinställning…
 	Save as PDF…	Spara som PDF…
 	Save as preset:	Spara som förinställning:
 	Save as Template	Spara som mall
 	Save as Template…	Spara som mall…
 	Save As…	Spara som…
+	Save Changes	Spara ändringar
 	Save changes to {name}	Spara ändringar i {name}
 	Save color group to Swatch panel	Spara färggruppen i panelen Färgrutor
 	Save Colors as Swatches	Spara färger som färgrutor
@@ -5261,6 +5273,7 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
 file-filter	Swatch libraries	Färgrutebibliotek
 file-filter	Templates	Mallar

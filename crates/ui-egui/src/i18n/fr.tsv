@@ -1039,6 +1039,16 @@ font-technology	Variable	Variables
 	Delete Export Preset	Supprimer le paramètre prédéfini d’export
 	Export Presets	Paramètres prédéfinis d’export
 	Save Export Preset	Enregistrer le paramètre prédéfini d’export
+	Export Export Presets	Exporter les paramètres prédéfinis d’export
+	Export Preset…	Exporter le paramètre prédéfini…
+	Import Export Presets	Importer des paramètres prédéfinis d’export
+	Import Preset…	Importer un paramètre prédéfini…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` est le nom d’un paramètre prédéfini de document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	aucun paramètre prédéfini d’export `{n}` (voir document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	aucun paramètre prédéfini d’export enregistré à exporter (indiquez les paramètres intégrés dans `names`)
+@msg	not an export presets file (format `{_1}`)	ce n’est pas un fichier de paramètres prédéfinis d’export (format `{_1}`)
+@msg	not an export presets file: {e}	ce n’est pas un fichier de paramètres prédéfinis d’export : {e}
+@msg	`{_1}`: {msg}	`{_1}` : {msg}
 	Export Layer	Exporter le calque
 	Export Selection	Exporter la sélection
 	All in One Folder	Tout dans un dossier
@@ -2779,11 +2789,13 @@ digits	Malayalam	Malayalam
 	Save a Copy	Enregistrer une copie
 	Save a Copy…	Enregistrer une copie…
 	Save As	Enregistrer sous
+	Save As Preset…	Enregistrer comme paramètre prédéfini…
 	Save as PDF…	Enregistrer au format PDF…
 	Save as preset:	Enregistrer comme paramètre prédéfini :
 	Save as Template	Enregistrer comme modèle
 	Save as Template…	Enregistrer comme modèle…
 	Save As…	Enregistrer sous…
+	Save Changes	Enregistrer les modifications
 	Save changes to {name}	Enregistrer les modifications de {name}
 	Save color group to Swatch panel	Enregistrer le groupe de couleurs dans le panneau Nuancier
 	Save Colors as Swatches	Enregistrer les couleurs comme nuances
@@ -5359,6 +5371,7 @@ file-filter	Flattener presets	Paramètres prédéfinis d’aplatissement
 file-filter	PDF presets	Paramètres prédéfinis PDF
 file-filter	PDF-compatible .ai	.ai compatible PDF
 file-filter	Print presets	Paramètres prédéfinis d’impression
+file-filter	Export presets	Paramètres prédéfinis d’export
 file-filter	SVG Compressed	SVG compressé
 file-filter	Swatch libraries	Bibliothèques de nuances
 file-filter	Templates	Modèles

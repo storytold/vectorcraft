@@ -1319,6 +1319,16 @@ font-technology	Variable	Változó
 	Delete Export Preset	Exportálási előbeállítás törlése
 	Export Presets	Exportálási előbeállítások
 	Save Export Preset	Exportálási előbeállítás mentése
+	Export Export Presets	Exportálási előbeállítások exportálása
+	Export Preset…	Előbeállítás exportálása…
+	Import Export Presets	Exportálási előbeállítások importálása
+	Import Preset…	Előbeállítás importálása…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`: a document.exportPresets.list egyik előbeállításának neve kell
+@msg	no export preset `{n}` (see document.exportPresets.list)	nincs ilyen exportálási előbeállítás: `{n}` (lásd: document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	nincs exportálható mentett exportálási előbeállítás (a beépítetteket a `names` paraméterben add meg)
+@msg	not an export presets file (format `{_1}`)	nem exportálási előbeállítás-fájl (formátum: `{_1}`)
+@msg	not an export presets file: {e}	nem exportálási előbeállítás-fájl: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Réteg exportálása
 	Export Selection	Kijelölés exportálása
 	All in One Folder	Mind egy mappába
@@ -1506,6 +1516,7 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
 file-filter	PDF-compatible .ai	PDF-kompatibilis .ai
 file-filter	VectorCraft Template	VectorCraft-sablon
@@ -3364,11 +3375,13 @@ mark-style	Japanese	Japán
 	Save a Copy	Másolat mentése
 	Save a Copy…	Másolat mentése…
 	Save As	Mentés másként
+	Save As Preset…	Mentés készletként…
 	Save as PDF…	Mentés PDF-ként…
 	Save as preset:	Mentés előbeállításként:
 	Save as Template	Mentés sablonként
 	Save as Template…	Mentés sablonként…
 	Save As…	Mentés másként…
+	Save Changes	Módosítások mentése
 	Save changes to {name}	Módosítások mentése: {name}
 	Save color group to Swatch panel	Színcsoport mentése a Színminták panelre
 	Save Colors as Swatches	Színek mentése színmintaként

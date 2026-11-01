@@ -21,7 +21,7 @@ pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, e
 pub(crate) use export::{export_files, exported_with_notes, file_url, open_in_app, reveal_path, run_to_file, save_command_output_named};
 #[cfg(test)]
 pub(crate) use open::open_file;
-pub(crate) use open::opened;
+pub(crate) use open::{EXPORT_PRESETS, import_presets, opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
     open_path, open_recent_reporting, open_reporting, opens_as, place_bytes, recent_files, report_open_error,
@@ -261,5 +261,28 @@ mod tests {
         let png = vectorcraft_format::base64_decode(r["result"]["dataBase64"].as_str().unwrap()).unwrap();
         assert_eq!(&png[16..20], 60u32.to_be_bytes(), "30 pt at scale 2");
         assert!(written.borrow().is_empty(), "no file and no save dialog");
+    }
+
+    /// A presets file, a Libraries panel file or a graphic style library that is opened or dropped
+    /// goes to its importer as the file's bytes: a byte that is not UTF-8 is refused instead of
+    /// read as a replacement character.
+    #[test]
+    fn opened_preset_and_library_files_keep_their_bytes() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+        app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}]}})).unwrap();
+        let presets = app.run("document.exportPresets.export", json!({"names": ["Pack"]})).unwrap()["data"].as_str().unwrap().to_string();
+        let lib = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
+        let library = app.run("library.export", json!({ "library": lib })).unwrap()["data"].as_str().unwrap().to_string();
+        let styles = app.run("graphicStyle.saveLibrary", json!({"name": "Kit"})).unwrap()["data"].as_str().unwrap().to_string();
+        for (file, text, name) in [("pack.vcexportpresets", presets, "Pack"), ("brand.vclibrary", library, "Brand"), ("kit.vcstyles", styles, "Kit")]
+        {
+            let mut bytes = text.as_bytes().to_vec();
+            bytes.insert(text.find(name).unwrap() + 2, 0xFF);
+            assert!(open_bytes(&mut app, file, &bytes, None).is_err(), "{file}: {}", app.ui.status);
+            // The file as it was still opens.
+            open_bytes(&mut app, file, text.as_bytes(), None).unwrap();
+        }
+        assert_eq!(app.session.prefs.screen_export_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Pack", "Pack 2"]);
     }
 }

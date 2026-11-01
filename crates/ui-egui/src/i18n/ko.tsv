@@ -1512,6 +1512,16 @@ digits	Malayalam	말라얄람어
 	Delete Export Preset	내보내기 사전 설정 삭제
 	Export Presets	내보내기 사전 설정
 	Save Export Preset	내보내기 사전 설정 저장
+	Export Export Presets	내보내기 사전 설정 내보내기
+	Export Preset…	사전 설정 내보내기…
+	Import Export Presets	내보내기 사전 설정 가져오기
+	Import Preset…	사전 설정 가져오기…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`은(는) document.exportPresets.list에 있는 사전 설정의 이름입니다
+@msg	no export preset `{n}` (see document.exportPresets.list)	내보내기 사전 설정 `{n}`이(가) 없습니다(document.exportPresets.list 참조)
+@msg	no saved export presets to export (name built-in ones in `names`)	내보낼 저장된 내보내기 사전 설정이 없습니다(기본 제공 사전 설정은 `names`에 지정하세요)
+@msg	not an export presets file (format `{_1}`)	내보내기 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not an export presets file: {e}	내보내기 사전 설정 파일이 아닙니다: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	레이어 내보내기
 	Export Selection	선택 영역 내보내기
 	All in One Folder	모두 폴더 하나에
@@ -2753,6 +2763,7 @@ mark-style	Japanese	일본식
 	Saturate	채도 높이기
 	Saturation	채도
 	Save As	다른 이름으로 저장
+	Save As Preset…	사전 설정으로 저장…
 	Save Colors as Swatches	색상을 견본으로 저장
 	Save Document	문서 저장
 	Save Document Info…	문서 정보 저장…
@@ -2776,6 +2787,7 @@ mark-style	Japanese	일본식
 	Save a Copy	사본 저장
 	Save as Template	템플릿으로 저장
 	Save as preset:	사전 설정으로 저장:
+	Save Changes	변경 사항 저장
 	Save changes to {name}	{name}의 변경 내용 저장
 	Save color group to Swatch panel	색상 그룹을 견본 패널에 저장
 	Save each artboard to a separate file	아트보드별로 별도 파일에 저장
@@ -3484,6 +3496,7 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
 file-filter	PDF-compatible .ai	PDF 호환 .ai
 file-filter	VectorCraft Template	VectorCraft 템플릿

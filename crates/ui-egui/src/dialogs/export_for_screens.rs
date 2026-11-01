@@ -170,6 +170,7 @@ pub fn open(app: &mut VectorcraftApp) {
         "openLocation": flag("openLocation", true),
         "subfolders": subfolders,
         "subfolderBy": if folders == Some("format") { "format" } else { "scale" },
+        "__itemFolders": folders.filter(|f| matches!(*f, "item" | "itemFormat")).unwrap_or_default(),
         "pdfs": if get("pdfs").and_then(Value::as_str) == Some("single") { "single" } else { "multiple" },
         "prefix": get("prefix").and_then(Value::as_str).unwrap_or_default(),
         "preset": preset.unwrap_or_default(),
@@ -262,7 +263,7 @@ pub(super) fn export_presets(app: &mut VectorcraftApp) -> Value {
 
 /// The `document.exportForScreens` params the dialog describes (the web: no folder, one ZIP for
 /// several files).
-fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+pub(super) fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (mut p, files) = settings_params(app, d)?;
     if io::is_web(app) {
         p.insert("zip".into(), json!(files > 1));
@@ -327,11 +328,7 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
     let files = if single { (rows.len() - pdf_rows) * pieces + pdf_rows } else { rows.len() * pieces };
     p.insert("includeBleed".into(), json!(d.bool("includeBleed")));
     p.insert("includeArtboardFill".into(), json!(d.bool("includeArtboardFill")));
-    let folders = match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
-        (false, _) => "none",
-        (true, "format") => "format",
-        (true, _) => "rows",
-    };
+    let folders = folders(d);
     // Create Sub-folders, as the Asset Export panel (which shares these settings) names it.
     p.insert("subfolders".into(), json!(folders == "rows"));
     p.insert("folders".into(), json!(folders));
@@ -340,6 +337,21 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
     p.insert("formats".into(), Value::Array(rows));
     p.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
     Ok((p, files, pieces))
+}
+
+/// The `folders` the dialog's sub-folder controls give: `none`, `format`, or a folder per scale
+/// (`rows`), or the `item` or `itemFormat` of an applied preset (`__itemFolders`) while the
+/// controls have not changed.
+fn folders(d: &Dialog) -> &'static str {
+    match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
+        (false, _) => "none",
+        (true, "format") => "format",
+        (true, _) => match d.str("__itemFolders").as_str() {
+            "item" => "item",
+            "itemFormat" => "itemFormat",
+            _ => "rows",
+        },
+    }
 }
 
 /// Export; the dialog stays open when the export fails.
@@ -627,6 +639,7 @@ fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         });
         form::check(ui, d, "openLocation", tl!("Open Location after Export"));
     }
+    let before = (d.bool("subfolders"), d.str("subfolderBy"));
     form::check(ui, d, "subfolders", tl!("Create Sub-folders"));
     ui.horizontal(|ui| {
         ui.add_space(22.0);
@@ -639,6 +652,10 @@ fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("subfolderBy".into(), json!("format"));
         }
     });
+    // A change to the sub-folder controls replaces an applied preset's item folders.
+    if (d.bool("subfolders"), d.str("subfolderBy")) != before {
+        d.fields.remove("__itemFolders");
+    }
 }
 
 /// Export PDFs As: one file of every chosen artboard, or a file each; only for artboards (not
@@ -662,20 +679,40 @@ fn pdf_mode(ui: &mut egui::Ui, d: &mut Dialog, artboards: bool) {
     });
 }
 
+/// What the format presets menu (or the Asset Export panel's menu) asked for.
+#[derive(Debug, PartialEq)]
+pub(crate) enum PresetPick {
+    /// Use this preset (`{name, builtIn, settings}`).
+    Apply(Value),
+    /// Save the settings as the preset of this name (Save, after a name was typed).
+    Save(String),
+    /// Delete this saved preset.
+    Delete(String),
+    /// Import Preset…: add the presets of a file.
+    Import,
+    /// Export Preset…: write this preset to a file.
+    Export(String),
+}
+
 /// The format presets (the ☰ by iOS and Android): apply a built-in or saved one (its rows, their
 /// settings, the prefix and the sub-folders), save the dialog's rows as one, or delete the saved
 /// one applied last.
 fn preset_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let list: Vec<Value> = d.fields.get("__exportPresets").and_then(Value::as_array).cloned().unwrap_or_default();
+    // Presets saved, deleted or imported elsewhere (a command, a file opened) show at once.
+    let mut list = d.fields.remove("__exportPresets").unwrap_or_default();
+    preset_list(&mut list, &app.session.prefs.screen_export_presets);
+    let rows: Vec<Value> = list.as_array().cloned().unwrap_or_default();
+    d.fields.insert("__exportPresets".into(), list);
     let current = d.str("exportPreset");
-    let saved = list.iter().any(|p| p["name"] == current && p["builtIn"] == false);
+    let saved = rows.iter().any(|p| p["name"] == current && p["builtIn"] == false);
+    let mut pick = None;
     let resp = widgets::icon_button(ui, "menu", tl!("Format Presets"), false, 24.0);
     let clicked = resp.clicked();
     let _ = widgets::popover(&resp, clicked, |ui| {
-        for p in &list {
+        for p in &rows {
             let name = p["name"].as_str().unwrap_or_default();
             if widgets::menu_item_name(ui, name, true, name == current) {
-                apply_preset(d, p);
+                pick = Some(PresetPick::Apply(p.clone()));
                 ui.close();
             }
         }
@@ -684,12 +721,14 @@ fn preset_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("__savePreset".into(), json!(if saved { current.clone() } else { String::new() }));
             ui.close();
         }
-        if widgets::menu_item(ui, tl!("Delete Preset"), saved, false) && app.run("document.exportPresets.delete", json!({"name": current})).is_ok() {
-            d.fields.insert("exportPreset".into(), json!(""));
-            d.fields.insert("__exportPresets".into(), export_presets(app));
+        if widgets::menu_item(ui, tl!("Delete Preset"), saved, false) {
+            pick = Some(PresetPick::Delete(current.clone()));
             ui.close();
         }
     });
+    if let Some(pick) = pick {
+        preset_pick(app, d, pick);
+    }
 }
 
 /// The row that names a format preset being saved (Save Preset… in the ☰ menu).
@@ -697,39 +736,148 @@ fn save_preset_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     if !d.fields.contains_key("__savePreset") {
         return;
     }
+    let mut pick = None;
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Name:"));
         form::text(ui, d, "__savePreset", 150.0);
         let name = d.str("__savePreset").trim().to_string();
         if ui.add_enabled(!name.is_empty(), egui::Button::new(tl!("Save"))).clicked() {
-            let settings = json!({
-                "formats": d.fields.get("formats").cloned().unwrap_or(json!([])),
-                "settings": d.fields.get("settings").cloned().unwrap_or(json!({})),
-                "prefix": d.str("prefix"),
-                "folders": if !d.bool("subfolders") { "none" } else if d.str("subfolderBy") == "format" { "format" } else { "rows" },
-            });
-            match app.run("document.exportPresets.save", json!({"name": name, "settings": settings})) {
-                Ok(_) => {
-                    d.fields.remove("__savePreset");
-                    d.fields.insert("exportPreset".into(), json!(name));
-                    d.fields.insert("__exportPresets".into(), export_presets(app));
-                }
-                Err(e) => app.ui.status = e,
-            }
+            pick = Some(PresetPick::Save(name));
         }
         if ui.small_button(tl!("Cancel")).clicked() {
             d.fields.remove("__savePreset");
         }
     });
+    if let Some(pick) = pick {
+        preset_pick(app, d, pick);
+    }
 }
 
-/// Set the dialog to format preset `preset` (`{name, settings}`): its rows, their settings, the
-/// prefix and the sub-folders; what it doesn't name keeps the dialog's value.
+/// Import Preset… (the Asset Export panel's): the presets of a picked file are added to the saved
+/// ones → the names added
+/// (none on the web, where the picked file arrives later and imports through `io::open_bytes`).
+pub(crate) fn import_presets(app: &mut VectorcraftApp) -> Result<Vec<String>, String> {
+    if let Some(f) = app.services.open_async.as_mut() {
+        f();
+        return Ok(vec![]);
+    }
+    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS)], ..Default::default() };
+    let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
+    let r = io::import_presets(app, "document.exportPresets.import", io::EXPORT_PRESETS, json!({ "path": path }))?;
+    Ok(r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect())
+}
+
+/// Export Preset… (the Asset Export panel's): preset `name` written to a picked file named after
+/// it (the web downloads it) → where it went.
+pub(crate) fn export_preset(app: &mut VectorcraftApp, name: &str) -> Result<String, String> {
+    io::save_command_output_named(app, "document.exportPresets.export", &preset_file_name(name), json!({ "names": [name] }))
+}
+
+/// The file name Export Preset… suggests for preset `name`: the name made safe as a file name, as
+/// Export Library… makes a library's (`library::file_stem_for`), with the `.vcexportpresets`
+/// extension.
+pub(crate) fn preset_file_name(name: &str) -> String {
+    format!("{}.{}", vectorcraft_engine::cmd::library::file_stem_for(name), fileio::SCREEN_EXPORT_PRESET_FORMAT)
+}
+
+/// `list` (the rows of `document.exportPresets.list`) made the rows for the saved presets `saved`:
+/// built again only when it does not list them as they are, so that a frame that changes nothing
+/// builds nothing → whether it was built again.
+pub(crate) fn preset_list(list: &mut Value, saved: &[fileio::ScreenExportPreset]) -> bool {
+    // The built-in rows never change; the saved ones are compared in place.
+    let current = list.as_array().is_some_and(|rows| {
+        let mut mine = rows.iter().filter(|p| p["builtIn"] == false);
+        rows.iter().any(|p| p["builtIn"] == true)
+            && saved.iter().all(|q| mine.next().is_some_and(|row| row["name"] == q.name.as_str() && row["settings"].as_object() == Some(&q.settings)))
+            && mine.next().is_none()
+    });
+    if !current {
+        *list = fileio::screen_export_preset_list(saved);
+    }
+    !current
+}
+
+/// `ui.dialog.set` of `exportPreset` in the open dialog: the preset it names is applied as a pick
+/// in the ☰ menu applies it, and `""` is none. A name that is not a preset's is an error, and
+/// `ui.dialog.set` then leaves the dialog as it was.
+pub(super) fn preset_set(app: &mut VectorcraftApp) -> Result<(), String> {
+    let Some(mut d) = app.ui.dialog.take() else { return Ok(()) };
+    let list = fileio::screen_export_preset_list(&app.session.prefs.screen_export_presets);
+    let name = d.str("exportPreset");
+    let preset = list.as_array().and_then(|l| l.iter().find(|p| p["name"] == name.as_str())).cloned();
+    let r = match preset {
+        Some(preset) => {
+            preset_pick(app, &mut d, PresetPick::Apply(preset));
+            Ok(())
+        }
+        None => {
+            d.fields.insert("exportPreset".into(), json!(""));
+            d.fields.insert("__exportPresets".into(), list);
+            if name.is_empty() { Ok(()) } else { Err(format!("no export preset `{name}` (see document.exportPresets.list)")) }
+        }
+    };
+    app.ui.dialog = Some(d);
+    r
+}
+
+/// Act on what the format presets menu of dialog `d` asked for. Save keeps the applied preset's
+/// keys that the dialog does not show (a file name pattern, Full Document, a folder).
+pub(super) fn preset_pick(app: &mut VectorcraftApp, d: &mut Dialog, pick: PresetPick) {
+    let done = match pick {
+        PresetPick::Apply(preset) => {
+            apply_preset(d, &preset);
+            Ok(())
+        }
+        // The name as saved (trimmed and capped).
+        PresetPick::Save(name) => {
+            let mut settings = fileio::screen_export_preset_list(&app.session.prefs.screen_export_presets)
+                .as_array()
+                .and_then(|rows| rows.iter().find(|p| p["name"] == d.str("exportPreset")))
+                .and_then(|p| p["settings"].as_object())
+                .cloned()
+                .unwrap_or_default();
+            for key in ["formats", "preset", "settings", "prefix", "folders", "subfolders", "includeBleed", "includeArtboardFill"] {
+                settings.remove(key);
+            }
+            settings.insert("formats".into(), d.fields.get("formats").cloned().unwrap_or(json!([])));
+            settings.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
+            settings.insert("prefix".into(), json!(d.str("prefix")));
+            settings.insert("folders".into(), json!(folders(d)));
+            for key in ["includeBleed", "includeArtboardFill"] {
+                settings.insert(key.into(), json!(d.bool(key)));
+            }
+            app.run("document.exportPresets.save", json!({"name": name, "settings": settings})).map(|r| {
+                d.fields.remove("__savePreset");
+                d.fields.insert("exportPreset".into(), r["name"].clone());
+            })
+        }
+        PresetPick::Delete(name) => app.run("document.exportPresets.delete", json!({ "name": name })).map(|_| {
+            d.fields.insert("exportPreset".into(), json!(""));
+        }),
+        // The dialog's menu has no Import Preset… or Export Preset….
+        PresetPick::Import | PresetPick::Export(_) => Ok(()),
+    };
+    if let Err(e) = done
+        && e != "cancelled"
+    {
+        app.ui.status = e;
+    }
+    let list = d.fields.entry("__exportPresets".to_string()).or_insert(Value::Null);
+    preset_list(list, &app.session.prefs.screen_export_presets);
+}
+
+/// Set the dialog to format preset `preset` (`{name, settings}`): its rows (or the mobile or
+/// density rows it names), their settings, the prefix and the sub-folders; what it doesn't name
+/// keeps the dialog's value.
 pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
     let st = &preset["settings"];
     if let Some(rows) = st["formats"].as_array() {
         d.fields.insert("formats".into(), json!(rows.iter().filter(|r| r.is_object()).map(editable_row).collect::<Vec<_>>()));
         d.fields.insert("preset".into(), json!(""));
+    } else if let Some((p, rows)) = st["preset"].as_str().and_then(|p| Some((p, fileio::screen_preset_rows(p)?))) {
+        // A preset saved with the mobile or density rows (the Asset Export panel's).
+        d.fields.insert("formats".into(), json!(rows));
+        d.fields.insert("preset".into(), json!(p));
     }
     if let (Some(all), Some(given)) = (d.fields.get_mut("settings").and_then(Value::as_object_mut), st["settings"].as_object()) {
         for (id, o) in given {
@@ -739,10 +887,15 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
             }
         }
     }
-    let folders = st["folders"].as_str().or_else(|| st["subfolders"].as_bool().map(|b| if b { "rows" } else { "none" }));
+    // An empty `folders` is none, as an export reads it.
+    let folders = st["folders"]
+        .as_str()
+        .map(|f| if f.is_empty() { "none" } else { f })
+        .or_else(|| st["subfolders"].as_bool().map(|b| if b { "rows" } else { "none" }));
     if let Some(f) = folders {
         d.fields.insert("subfolders".into(), json!(f != "none"));
         d.fields.insert("subfolderBy".into(), json!(if f == "format" { "format" } else { "scale" }));
+        d.fields.insert("__itemFolders".into(), json!(if matches!(f, "item" | "itemFormat") { f } else { "" }));
     }
     if let Some(prefix) = st["prefix"].as_str() {
         d.fields.insert("prefix".into(), json!(prefix));
@@ -793,6 +946,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog, mut menu: Option<Format
                     rows = preset_rows;
                     d.fields.insert("subfolders".into(), json!(true));
                     d.fields.insert("subfolderBy".into(), json!("scale"));
+                    d.fields.remove("__itemFolders");
                     d.fields.insert("formats".into(), json!(rows));
                     d.fields.insert("preset".into(), json!(id));
                 }
