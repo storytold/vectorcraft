@@ -4250,6 +4250,7 @@ theme	Appearance	외관
 @msg	its objects are nested too deeply	개체가 너무 깊게 중첩되어 있습니다
 @msg	its section ending with `%{end}` doesn't end	`%{end}`로 끝나는 구역이 끝나지 않습니다
 @msg	an image VectorCraft can't read was left out	VectorCraft가 읽을 수 없는 이미지는 제외했습니다
+@msg	graphs come in as plain art, without their data or settings	그래프는 데이터와 설정 없이 일반 아트로 가져왔습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
