@@ -194,3 +194,26 @@ fn the_layers_highlighted_in_the_layers_panel_are_the_default() {
     let r = s.execute("addon.document.symbolsFromLayers", &json!({})).unwrap();
     assert_eq!((r["symbols"].clone(), r["skipped"].as_array().unwrap().len()), (json!(["Icons"]), 1));
 }
+
+/// #4920: Export All Open Documents writes an SVG of each open document; a folder that can't be
+/// written lists every document in `failed`, and either way the active document stays active.
+#[test]
+fn export_all_open_documents_writes_each_and_reports_failures() {
+    let dir = std::env::temp_dir().join(format!("vc-export-all-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "name": "one"})).unwrap();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "name": "two"})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let r = s.execute("addon.document.exportAllOpen", &json!({"folder": dir, "format": "svg"})).unwrap();
+    assert_eq!(r["files"].as_array().unwrap().len(), 2, "{r}");
+    assert!(dir.join("one.svg").exists() && dir.join("two.svg").exists());
+    assert_eq!(s.active_index(), Some(0));
+    assert!(s.documents().iter().all(|d| d.path.is_none()), "the documents stay unsaved");
+    let missing = dir.join("missing").join("deeper");
+    let r = s.execute("addon.document.exportAllOpen", &json!({"folder": missing, "format": "svg"})).unwrap();
+    assert_eq!((r["files"].as_array().unwrap().len(), r["failed"].as_array().unwrap().len()), (0, 2), "{r}");
+    assert_eq!(s.active_index(), Some(0));
+    let _ = std::fs::remove_dir_all(&dir);
+}

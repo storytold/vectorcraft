@@ -195,7 +195,10 @@ impl Exporter<'_> {
             Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
             Paint::Gradient(g) => {
                 let geom = g.resolve(bounds);
-                let spot = (g.gradient.kind != GradientKind::Freeform).then(|| self.spot_stops(&g.gradient)).flatten();
+                let spot = match g.gradient.kind {
+                    GradientKind::Freeform => None,
+                    _ => self.perceptual_spot_stops(&g.gradient).or_else(|| self.spot_stops(&g.gradient)),
+                };
                 let colored = match spot {
                     Some(v) => v,
                     None => {
@@ -333,6 +336,50 @@ impl Exporter<'_> {
         Some(krilla::paint::Pattern { stream: sb.finish(), transform: xf(at), width: pw as f32, height: ph as f32 }.into())
     }
 
+    /// The spot swatch whose tints are every stop of `g` that isn't paper white, unlinked; `None`
+    /// when no stop is linked to a spot swatch or a stop has another color.
+    fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
+        let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
+        let ink = g.stops.iter().find_map(spot)?;
+        let paper = |s: &vectorcraft_color::GradientStop| s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3];
+        g.stops.iter().all(|s| spot(s) == Some(ink) || paper(s)).then_some(ink)
+    }
+
+    /// Is `g` a Perceptual linear or radial gradient of tints of one spot ink that paints a fill
+    /// (`fill`) without dither or a stroke, with a curve short enough for
+    /// [`vectorcraft_color::Gradient::fits_ink_tints`], which [`Self::perceptual_spot_stops`]
+    /// writes as a Separation shading rather than an image?
+    pub(super) fn perceptual_spot(&self, g: &vectorcraft_color::GradientPaint, fill: bool) -> bool {
+        let gr = &g.gradient;
+        !gr.method.is_classic() && gr.kind != GradientKind::Freeform && !(fill && gr.dither) && self.one_spot_ink(gr).is_some() && gr.fits_ink_tints()
+    }
+
+    /// The stops of a Perceptual gradient of tints of one spot ink (or paper white, 0% of it) as
+    /// tints of that ink, a Separation shading: the stops on its curve with the tints whose
+    /// lightness is the curve's there ([`vectorcraft_color::Gradient::ink_tints`]). `None` for
+    /// other gradients, and for an ink too light for lightness to tell its tints apart, which
+    /// [`Self::spot_stops`] then writes with the stops' own tints.
+    fn perceptual_spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
+        if g.method.is_classic() {
+            return None;
+        }
+        let ink = self.one_spot_ink(g)?;
+        let doc = self.doc;
+        let full = doc.linked_color(doc.swatch(ink)?.paint.color()?, true);
+        let space = self.separation(ink)?;
+        Some(g.ink_tints(&full)?.into_iter().map(|(o, t, a)| (o, SepColor::new(q(t), space.clone()).into(), a)).collect())
+    }
+
+    /// Warn when gradient `g`, drawn as an image, has stops linked to a spot swatch: the image is
+    /// in process colors, so the spot inks have no plate of their own.
+    fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
+        let doc = self.doc;
+        let from_stops = g.gradient.kind != GradientKind::Freeform || g.freeform.is_none();
+        if from_stops && g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
+            self.warn("spot colors in gradients exported as images (freeform, dithered or Perceptual gradients that mix inks) are written in process colors");
+        }
+    }
+
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
     /// raster effects resolution where it is drawn (`area` as the current transform sizes it, so
     /// scaled type gets its pixels too): a freeform gradient's colour field (at most
@@ -349,6 +396,7 @@ impl Exporter<'_> {
         if !(long > 1e-9 && long.is_finite()) {
             return;
         }
+        self.warn_spot_image(g);
         let freeform = g.gradient.kind == GradientKind::Freeform;
         let max = if freeform { MAX_FIELD_PX } else { MAX_GRADIENT_PX };
         let k = (self.doc.raster_effects_ppi / 72.0).min(max / long);

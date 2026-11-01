@@ -766,6 +766,106 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
 }
 
 #[test]
+fn bucket_options_choose_what_a_click_paints() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let fill = |x: f64| vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [x, 25.0] }))];
+    let stroke = |x: f64| vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 }))];
+    let click = |t: &mut LivePaintBucketTool, x: f64, m: Mods| t.pointer(&cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+    let hovered = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(m));
+        match t.overlays(&cx).as_slice() {
+            [] => None,
+            [Overlay::Path { path, .. }] => Some(path.bounding_box()),
+            ov => panic!("{ov:?}"),
+        }
+    };
+    let (face, edge) = (Some(Rect::new(50.0, 0.0, 100.0, 50.0)), Some(Rect::new(50.0, 0.0, 50.0, 50.0)));
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(t.options(), json!({"paintFills": true, "paintStrokes": false, "highlight": true, "color": "#ff2a2a", "width": 4.0}));
+    // Paint Fills alone: 1 pt from the edge, a click fills the face and Shift-click strokes the edge.
+    assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (fill(51.0), face));
+    assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (stroke(51.0), edge));
+    // Paint Strokes alone: a click strokes the edge in reach and paints nothing farther away;
+    // Shift-click fills the face.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (stroke(51.0), edge));
+    assert_eq!((click(&mut t, 75.0, Mods::default()), hovered(&mut t, 75.0, Mods::default())), (vec![], None));
+    assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (fill(51.0), face));
+    // Both: a click strokes the edge in reach, else fills the face; Shift-click fills the face.
+    t.set_option("paintFills", &json!(true));
+    assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (stroke(51.0), edge));
+    assert_eq!((click(&mut t, 75.0, Mods::default()), hovered(&mut t, 75.0, Mods::default())), (fill(75.0), face));
+    assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (fill(51.0), face));
+    // Both off: nothing is painted or highlighted.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(false));
+    for m in [Mods::default(), shift] {
+        assert_eq!((click(&mut t, 51.0, m), hovered(&mut t, 51.0, m)), (vec![], None));
+    }
+    // A value that is not true or false is ignored.
+    t.set_option("paintFills", &json!("yes"));
+    assert_eq!(t.options()["paintFills"], false);
+}
+
+#[test]
+fn bucket_strokes_alone_paints_and_highlights_no_region_of_the_selection() {
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+    t.poll(&cx, true);
+    assert!(!t.overlays(&cx).is_empty(), "Paint Fills highlights the region");
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(true));
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+    t.poll(&cx, true);
+    assert!(t.overlays(&cx).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+}
+
+#[test]
+fn bucket_options_set_the_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let highlight = |t: &mut LivePaintBucketTool| {
+        t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+        match t.overlays(&cx).as_slice() {
+            [] => None,
+            [Overlay::Path { color, width, .. }] => Some((*color, *width)),
+            ov => panic!("{ov:?}"),
+        }
+    };
+    assert_eq!(highlight(&mut t), Some((HIGHLIGHT_RED, 4.0)));
+    t.set_option("color", &json!("#00FF00"));
+    t.set_option("width", &json!(9));
+    assert_eq!(highlight(&mut t), Some(([0, 0xff, 0], 9.0)));
+    t.set_option("color", &json!("light blue"));
+    t.set_option("width", &json!("wide"));
+    assert_eq!(highlight(&mut t), Some(([0x4f, 0x80, 0xff], 9.0)));
+    t.set_option("width", &json!(100));
+    assert_eq!(t.options()["width"], json!(LP_BUCKET_WIDTH_RANGE.1));
+    t.set_option("width", &json!(0));
+    assert_eq!(t.options()["width"], json!(LP_BUCKET_WIDTH_RANGE.0));
+    // Highlight off: nothing is highlighted, and a click still paints.
+    t.set_option("highlight", &json!(false));
+    assert_eq!(highlight(&mut t), None);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0)).len(), 1);
+    t.set_option("highlight", &json!(true));
+    assert!(highlight(&mut t).is_some());
+}
+
+#[test]
 fn bucket_alt_samples_face_edge_and_selected_region_without_painting() {
     let (mut d, _gid, face, edge) = live_group_doc();
     d.node_mut(face).unwrap().appearance.set_fill(vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE));

@@ -82,6 +82,28 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+#[test]
+fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
+    let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
+    let unread = format!("u\n0 0 1 0 k\n{}f\nZZ\nU\n{}", ai::rect(50.0, 10.0, 54.0, 14.0), ai::named("Unread"));
+    let data = ai::editing_data(200.0, 100.0, &(ai::layer("Live", &live) + &ai::layer("Mixed", &unread)));
+    let page = "0 0 1 0 k 10 10 4 4 re f 1 0 0 0 k 50 10 4 4 re f";
+    let mut session = Session::new();
+    let result = open(&mut session, "unread.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    let doc = &session.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Live", "Mixed"], "{result}");
+    assert!(matches!(doc.layers[0].children().unwrap()[0].kind, NodeKind::Path { .. }), "{result}");
+    assert!(matches!(doc.layers[1].children().unwrap()[0].kind, NodeKind::Group { .. }), "{result}");
+    assert_eq!(doc.layers[1].children().unwrap()[0].name.as_deref(), Some("Unread"), "{result}");
+    let replacement = &doc.layers[1].children().unwrap()[0].children().unwrap()[0];
+    assert!(
+        matches!(replacement.appearance.items.first(), Some(vectorcraft_doc::AppearanceItem::Fill(fill))
+        if fill.paint == vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0))),
+        "{result}"
+    );
+    assert!(result["warnings"].to_string().contains("`ZZ` (1)"), "{result}");
+}
+
 /// A palette of three swatches and a color group `Inks` holding a fourth.
 const INKS_PALETTE: &str = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n0.04 0.3 0 0 81.96 21 -8 (Pink ink) 0 2 Xx\n(Pink ink)\nPc\n\
                             0.06 0.98 1 0 (Red ink) 0 x\n(Red ink)\nPc\n1 (Inks) 1 Pg\n0.02 0.1 1 0 (Yellow ink) 0 x\n(Yellow ink)\nPc\nPB\n%AI5_EndPalette\n";

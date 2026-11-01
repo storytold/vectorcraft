@@ -626,7 +626,6 @@
 	Links	Links
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} linket billede er ændret på disken. Vis den nye version?|{n} linkede billeder er ændret på disken. Vis de nye versioner?
 	Update Changed Links	Opdatér ændrede links
-@msg	Updated {_1} linked file(s) changed on disk	Opdaterede {_1} linket fil(er) ændret på disken
 	Magic Wand	Magisk tryllestav
 	Navigator	Navigator
 	Pattern Options	Mønsterindstillinger
@@ -1622,13 +1621,16 @@ digits	Malayalam	Malayalam
 	Fractions	Brøker
 	Ligatures are off while the text is tracked.	Ligaturer er slået fra, mens der er sporing på teksten.
 	Ordinals	Ordenstal
+	Proportional Lining	Proportionale versalcifre
 	Proportional Oldstyle	Proportionale mediævalcifre
 	Reset OpenType Features	Nulstil OpenType-funktioner
 	Select text to set its OpenType features.	Markér tekst for at angive dens OpenType-funktioner.
 	Standard Ligatures	Standardligaturer
+	Stylistic Alternates	Stilistiske alternativer
 	Swash	Sving
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
+	Titling Alternates	Titelalternativer
 	Every-line Composer	Hverlinjesætter
 	First-line Left Indent	Venstre indrykning af første linje
 	Hyphenation…	Orddeling…
@@ -2853,6 +2855,9 @@ theme	Appearance	Udseende
 	Delete Brush	Slet pensel
 	Delete Symbol	Slet symbol
 	Delete the selected symbol?	Vil du slette det markerede symbol?
+	Delete the selected symbols?	Vil du slette de markerede symboler?
+	No unused symbols	Ingen ubrugte symboler
+	Delete Symbols	Slet symboler
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Et eller flere af symbolerne er i brug og kan ikke slettes, før deres forekomster er udvidet eller slettet.
 	Expand Instances	Udvid forekomster
 	Delete Instances	Slet forekomster
@@ -3920,7 +3925,6 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Kombinér udsnit: udsnittene har ingen grænser
 @msg	Convert to Artboards: selection has no area	Konvertér til tegneflader: markeringen har intet areal
 @msg	Convert to Shape: no rectangles or ellipses selected	Konvertér til figur: ingen rektangler eller ellipser er markeret
-@msg	Copied the CSS of {rules} object(s)	Kopierede CSS fra {rules} objekt(er)
 @msg	Copied the script report	Kopierede scriptrapporten
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
@@ -3937,13 +3941,11 @@ imageTrace	Outline	Kontur
 @msg	direct-select anchor points to cut at (not the end points of open paths)	direkte-markér ankerpunkter, der skal skæres i (ikke endepunkterne på åbne kurver)
 @msg	Divide Objects Below: select a path	Opdel objekter nedenunder: markér en kurve
 @msg	Divide Objects Below: select exactly one path	Opdel objekter nedenunder: markér præcis én kurve
-@msg	Downloaded {_1} file(s)	Downloadede {_1} fil(er)
 @msg	Downloaded {what}	Downloadede {what}
 @msg	Expand Appearance: the selection has a basic appearance	Udvid udseende: markeringen har et grundlæggende udseende
 @msg	Expand: no brush strokes selected	Udvid: ingen penselstrøg er markeret
 @msg	Expand: no gradient fills	Udvid: ingen gradientfyld
 @msg	Expand: nothing to expand	Udvid: intet at udvide
-@msg	Exported {count} file(s) to {folder}	Eksporterede {count} fil(er) til {folder}
 @msg	Exported {path}	Eksporterede {path}
 @msg	Flatten Transparency: select objects to flatten	Fladgør gennemsigtighed: markér objekter, der skal fladgøres
 @msg	Flatten Transparency: {e}	Fladgør gennemsigtighed: {e}
@@ -4445,8 +4447,6 @@ imageTrace	Outline	Kontur
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} er en live-effekt (Effekt › Plug-ins)
 @msg	{_1} is already used by {_2}	{_1} bruges allerede af {_2}
 @msg	{_1} is reserved by the system	{_1} er reserveret af systemet
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} linket(e) fil(er) kan ikke læses her: deres forhåndsvisninger vises
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} linket(e) billede(r) er ændret på disken: Opdatér links viser de nye versioner
 @msg	{_1}: not saved, so not closed	{_1}: ikke gemt, derfor ikke lukket
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bit bitmaps kan ikke læses
 @msg	{command} didn't create an object	{command} oprettede ikke et objekt
@@ -4466,7 +4466,6 @@ imageTrace	Outline	Kontur
 @msg	Couldn't place {name}: {e}	Kunne ikke placere {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Gemte {path} med {_1} note(r): {first}
-@msg	Exported {what} with {_1} note(s): {first}	Eksporterede {what} med {_1} note(r): {first}
 @msg	Exported {what}	Eksporterede {what}
 @msg	Saved {n} files beside {path}	Gemte {n} filer ved siden af {path}
 @msg	Saving	Gemmer
@@ -4477,12 +4476,26 @@ imageTrace	Outline	Kontur
 @msg	Saving recovery data for {_1}	Gemmer gendannelsesdata for {_1}
 @msg	Discarded {_1} recovered document(s)	Forkastede {_1} gendannet(e) dokument(er)
 @msg	Restored {_1} recovered document(s): save them to keep them	Genvandt {_1} gendannet(e) dokument(er): gem dem for at beholde dem
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Indlejrede {n} billede(r); {missing} mangler: link dem igen først
-@msg	Embedded {n} image(s)	Indlejrede {n} billede(r)
-@msg	Relinked {_1} image(s)	Linkede {_1} billede(r) igen
-@msg	Relinked {n} image(s)	Linkede {n} billede(r) igen
-@msg	Relinked {n} image(s); not in that folder: {_1}	Linkede {n} billede(r) igen; ikke i den mappe: {_1}
-@msg	Updated {_1} image(s)	Opdaterede {_1} billede(r)
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
+@msgplural	Embedded {n} image|Embedded {n} images	Indlejrede {n} billede|Indlejrede {n} billeder
+@msgplural	Relinked {n} image|Relinked {n} images	Linkede {n} billede igen|Linkede {n} billeder igen
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Linkede {n} billede igen; ikke i den mappe: {names}|Linkede {n} billeder igen; ikke i den mappe: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Linkede {n} billede igen; {name} kunne ikke linkes igen: {reason}|Linkede {n} billeder igen; {name} kunne ikke linkes igen: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Opdaterede {n} billede|Opdaterede {n} billeder
+@msgplural	Replaced {n} image|Replaced {n} images	Erstattede {n} billede|Erstattede {n} billeder
+@msgplural	Broke {n} link|Broke {n} links	Brød {n} sammenkædning|Brød {n} sammenkædninger
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Brød {n} sammenkædning; {missing} kan ikke læses: link dem igen eller opdatér dem først|Brød {n} sammenkædninger; {missing} kan ikke læses: link dem igen eller opdatér dem først
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} linket fil kan ikke læses her: dens forhåndsvisning vises|{n} linkede filer kan ikke læses her: deres forhåndsvisninger vises
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} billede kunne ikke afkodes og vises som en overkrydset boks|{n} billeder kunne ikke afkodes og vises som overkrydsede bokse
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linket billede er ændret på disken: Opdatér links viser den nye version|{n} linkede billeder er ændret på disken: Opdatér links viser de nye versioner
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Opdaterede {n} linket fil ændret på disken|Opdaterede {n} linkede filer ændret på disken
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Eksporterede {what} med {n} note: {first}|Eksporterede {what} med {n} noter: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} skrifttypefil er nu i {folder}|{n} skrifttypefiler er nu i {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} skrifttypefil er nu i {folder}; {failed} kunne ikke tilføjes: {reason}|{n} skrifttypefiler er nu i {folder}; {failed} kunne ikke tilføjes: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} skrifttype er ikke tilgængelig her: teksten vises i en anden skrifttype|{n} skrifttyper er ikke tilgængelige her: teksten vises i en anden skrifttype
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopierede CSS fra {n} objekt|Kopierede CSS fra {n} objekter
+@msgplural	Downloaded {n} file|Downloaded {n} files	Downloadede {n} fil|Downloadede {n} filer
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Eksporterede {n} fil til {folder}|Eksporterede {n} filer til {folder}
 @msg	Unembedded to {_1}	Fjernede indlejring til {_1}
 @msg	Reset {_1}	Nulstillede {_1}
 @msg	Sent to {_1}	Sendte til {_1}
@@ -4532,9 +4545,6 @@ imageTrace	Outline	Kontur
 @msg	every search thread stopped on an internal error (please report this bug)	alle søgetråde stoppede ved en intern fejl (rapportér venligst denne programfejl)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCrafts Fonts-mappe er ikke angivet her: skrivebordsprogrammet og vectorcraft-cli angiver den
 @msg	choose the font files to add	vælg de skrifttypefiler, der skal tilføjes
-@msg	{n} font file(s) are now in {folder}	{n} skrifttypefil(er) er nu i {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} skrifttypefil(er) er nu i {folder}; {failed} kunne ikke tilføjes: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} skrifttype(r) er ikke tilgængelig(e) her: teksten vises i en anden skrifttype
 @msg	not a file	ikke en fil
 @msg	not a font file	ikke en skrifttypefil
 @msg	that document is no longer open	dokumentet er ikke længere åbent
@@ -4543,7 +4553,6 @@ imageTrace	Outline	Kontur
 @msg	every numbered name for it is taken in the Fonts folder	alle nummererede navne til den er optaget i Fonts-mappen
 @msg	every numbered name for {name} is taken in the document's folder	alle nummererede navne til {name} er optaget i dokumentets mappe
 @msg	No linked files to look for	Ingen linkede filer at lede efter
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Linkede {n} billede(r) igen; {name} kunne ikke linkes igen: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` er trinreferencen {r}, som kun `run` og `command_batch` fortolker
 @msg	`ids` must be an array of object ids, not {v}	`ids` skal være et array af objekt-id'er, ikke {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` skal være et array af ankerindekser, ikke {v}
@@ -5303,6 +5312,9 @@ swatch	Bright Violet	Kraftig violet
 	Close Gaps With Paths	Luk huller med stier
 	Select Fills	Markér udfyldninger
 	Select Strokes	Markér konturer
+	Paint Fills	Mal udfyldninger
+	Paint Strokes	Mal konturer
+	Highlight	Fremhævning
 	Column Type:	Søjletype:
 	Each Design Represents:	Hvert design repræsenterer:
 	Event:	Hændelse:
@@ -5938,6 +5950,9 @@ breakText	Glyphs	Glyffer
 	Gap 4	Mellemrum 4
 	Dash 5	Streg 5
 	Gap 5	Mellemrum 5
+
+@msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.
 @msg	invalid pattern tile choice	ugyldigt valg af mønsterflise
 @msg	no pattern named `{choice}`	intet mønster med navnet `{choice}`
@@ -5968,6 +5983,9 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Udvid streger til stier
+@msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentværktøjer
 	Save a Timestamped Copy	Gem en kopi med dato og klokkeslæt
@@ -5990,6 +6008,11 @@ breakText	Glyphs	Glyffer
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} og nyere (version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Eksportér alle åbne dokumenter som PDF
+	Export All Open Documents as SVG	Eksportér alle åbne dokumenter som SVG
+@msgplural	Exported {n} document|Exported {n} documents	Eksporterede {n} dokument|Eksporterede {n} dokumenter
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Eksporterede {n} dokument; {title} blev ikke skrevet: {error}|Eksporterede {n} dokumenter; {title} blev ikke skrevet: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltype:
 	Dynamic Symbol	Dynamisk symbol
@@ -6005,3 +6028,22 @@ breakText	Glyphs	Glyffer
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
 	By Columns	Efter kolonner
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Tilfældig opacitet…
+	Randomize Opacity	Tilfældig opacitet
+	Minimum:	Minimum:
+	Maximum:	Maksimum:
+	Seed:	Startværdi:
+@msg	`min` is greater than `max`	`min` er større end `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Sortér objekter…
+	Sort Objects	Sortér objekter
+	Sort By:	Sortér efter:
+	Apply To:	Anvend på:
+	Area	Areal
+	X Position	X-position
+	Y Position	Y-position
+	Stacking Order	Stablingsrækkefølge
+	Small to Large	Fra lille til stor
+	Large to Small	Fra stor til lille
+	Distribute Evenly	Fordel jævnt

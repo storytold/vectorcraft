@@ -228,6 +228,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         vertical,
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
+        upright_cluster: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next

@@ -388,7 +388,7 @@ fn an_export_made_at_once_waits_for_one_in_the_background() {
     release.join().unwrap();
     let file = format!("{folder}/Artboard-1.svg");
     assert_eq!((written(&files), r["files"].clone()), (vec![file.clone()], json!([file])));
-    assert_eq!(app.ui.status, format!("Exported 1 file(s) to {folder}"));
+    assert_eq!(app.ui.status, format!("Exported 1 file to {folder}"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -489,7 +489,7 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut desktop, log) = app(1, false);
     desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
-    assert_eq!(desktop.ui.status, format!("Exported 2 file(s) to {folder}"));
+    assert_eq!(desktop.ui.status, format!("Exported 2 files to {folder}"));
     place(&mut desktop);
     desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows, "openLocation": true})).unwrap();
     assert_eq!(desktop.ui.status, format!("Saved {folder} {NOTE}"));

@@ -38,7 +38,7 @@ use symbols::selected_instances;
 pub(crate) use symbols::{instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol};
 use symbols::{
     symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_edit, symbol_list, symbol_new, symbol_options, symbol_place,
-    symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_update,
+    symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
 };
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
@@ -228,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Symbol",
             [],
             None,
-            "{name, expandInstances?: true} delete a symbol; its instances are expanded (or deleted with false)",
+            "{name | names: [name…], expandInstances?: true} delete a symbol (or several, in one undo step); its instances are expanded (or deleted with false)",
             has_doc,
             symbol_delete
         ),
@@ -268,6 +268,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name} the symbol the symbolism tools spray (not an undo step)",
             has_doc,
             symbol_set_current
+        ),
+        cmd!(
+            query "symbol.unused",
+            "Select All Unused",
+            [],
+            None,
+            "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
+            has_doc,
+            symbol_unused
         ),
         cmd!(query "symbol.selectInstances", "Select All Instances", [], None, "{name} select every instance of a symbol → {count}", has_doc, symbol_select_instances),
         cmd!(

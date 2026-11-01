@@ -182,7 +182,7 @@ pub(crate) fn copy(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     let css = r["css"].as_str().filter(|c| !c.is_empty()).ok_or("no CSS to copy: select objects with CSS of their own")?.to_string();
     let rules = r["rules"].as_array().map_or(0, Vec::len);
     app.clipboard_out = Some(css.clone());
-    app.status(format!("Copied the CSS of {rules} object(s)"));
+    app.status(crate::i18n::msg_n(rules as u64, "Copied the CSS of {n} object", "Copied the CSS of {n} objects", &[]));
     Ok(json!({ "css": css, "rules": rules }))
 }
 
@@ -208,7 +208,7 @@ pub(crate) fn export_file(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
     let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     let what = &path;
     app.status(match warnings.first() {
-        Some(first) => format!("Exported {what} with {} note(s): {first}", warnings.len()),
+        Some(first) => io::exported_with_notes(what, warnings.len(), first),
         None => format!("Exported {path}"),
     });
     Ok(json!({ "path": path, "rules": r["rules"], "images": images, "warnings": r["warnings"] }))
