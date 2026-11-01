@@ -255,6 +255,45 @@ fn a_missing_link_renders_its_preview_and_relinks() {
     assert!(s.execute("links.relink", &json!({"ids": [id.0]})).is_err(), "path or folder");
 }
 
+/// A `w`×`h` PNG of noise cut to half its length: its header reads, its pixels don't.
+pub(crate) fn cut_png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbImage::from_fn(w, h, |x, y| {
+        let v = x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503).rotate_left(13);
+        image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
+    });
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out.truncate(out.len() / 2);
+    out
+}
+
+/// A linked file whose pixels can't be read (cut short) isn't shown: Relink is an error, and
+/// Update Links and Open (Update Links: Automatically) count it as missing. The image keeps what
+/// it showed.
+#[test]
+fn a_linked_file_whose_pixels_cant_be_read_is_not_shown() {
+    let dir = Folder::new("cut");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let shown = image(&s, id);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    let cut = dir.file("cut.png");
+    write(&cut, &cut_png(300, 100));
+    let e = s.execute("links.relink", &json!({"ids": [id.0], "path": cut})).unwrap_err();
+    assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    write(&pic, &cut_png(300, 100));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [], "missing": [id.0]}));
+    assert_eq!(image(&s, id), shown);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    s.execute("prefs.set", &json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"][0]["ids"].clone(), r["updatedLinks"].clone()), (json!([id.0]), json!([])), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "the image still shows its preview");
+}
+
 #[test]
 fn a_modified_link_follows_the_update_links_preference() {
     let dir = Folder::new("modified");

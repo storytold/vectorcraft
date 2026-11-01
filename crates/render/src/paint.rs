@@ -75,6 +75,8 @@ thread_local! {
     /// Images that couldn't be decoded (and so drew nothing) on this thread, counted for exports to
     /// report.
     static DECODE_FAILURES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Images decoded, or tried, on this thread ([`image_decodes`]).
+    static DECODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -116,6 +118,12 @@ pub fn decode_failures() -> u64 {
     DECODE_FAILURES.with(std::cell::Cell::get)
 }
 
+/// How many images [`decode_pixmap_or_why`] and [`decode_pixmap_fit`] have decoded on this thread so
+/// far, failed decodes included. Images other threads decode are not counted.
+pub fn image_decodes() -> u64 {
+    DECODES.with(std::cell::Cell::get)
+}
+
 /// [`decode_in_room`]'s image or error.
 #[cfg(test)]
 pub(crate) fn decode_within_allowance(bytes: &[u8]) -> image::ImageResult<image::DynamicImage> {
@@ -155,6 +163,12 @@ fn room_for(rgba: u64, pinned: u64) -> Result<(), Undecoded> {
     } else {
         Ok(())
     }
+}
+
+/// Whether `w`×`h` pixels may be decoded whole ([`room_for`]) beside the images paints hold now.
+pub(crate) fn within_allowance(w: u32, h: u32) -> bool {
+    let bytes = (u64::from(w) * u64::from(h)).saturating_mul(4);
+    room_for(bytes, crate::images::store().pinned_bytes() as u64).is_ok()
 }
 
 /// Whether `bytes` of decoded pixels fit beside the images paints hold, which can't be evicted from
@@ -397,7 +411,7 @@ pub fn decode_pixmap(bytes: &[u8]) -> Option<vello_cpu::Pixmap> {
 /// [`reduced_size`] when it has one; a failure is counted in [`decode_failures`].
 pub(crate) fn decode_pixmap_or_why(bytes: &[u8]) -> Result<vello_cpu::Pixmap, Undecoded> {
     counted(match decode_or_reduction(bytes) {
-        Ok(img) => pixmap_of(fit_pixmap(img).to_rgba8()).ok_or(Undecoded::Unreadable),
+        Ok(img) => decoded_pixmap(img).ok_or(Undecoded::Unreadable),
         Err(r) => r.and_then(|r| reduced_pixmap(bytes, &r)),
     })
 }
@@ -407,6 +421,7 @@ pub(crate) fn decode_pixmap_or_why(bytes: &[u8]) -> Result<vello_cpu::Pixmap, Un
 fn decode_or_reduction(bytes: &[u8]) -> Result<image::DynamicImage, Result<Reduction, Undecoded>> {
     #[cfg(test)]
     DECODE_ATTEMPTS.with(|n| n.set(n.get() + 1));
+    DECODES.with(|n| n.set(n.get() + 1));
     match decode_in_room(bytes) {
         Ok(img) => Ok(img),
         Err((image::ImageError::Limits(_), Undecoded::Unreadable)) => Err(reduction(bytes, allowance()).ok_or(Undecoded::Unreadable)),
@@ -469,6 +484,11 @@ fn pixmap_of(img: image::RgbaImage) -> Option<vello_cpu::Pixmap> {
         })
         .collect();
     Some(vello_cpu::Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// Decoded image `img` as [`decode_pixmap_or_why`] makes it a pixmap.
+pub(crate) fn decoded_pixmap(img: image::DynamicImage) -> Option<vello_cpu::Pixmap> {
+    pixmap_of(fit_pixmap(img).to_rgba8())
 }
 
 /// The substitution highlights' pink: Preferences › Highlight Substituted Fonts and Highlight

@@ -11,6 +11,7 @@ pub mod blend;
 pub mod cancel;
 pub mod clipnest;
 pub mod cmyk;
+pub mod compound_shape;
 pub mod corners;
 pub mod depth;
 pub mod dimension;
@@ -23,11 +24,13 @@ pub mod intertwine;
 pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
+pub mod symbol_overrides;
 mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{SYMBOL_NINE_SLICE, SymbolNineSlice};
+pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -42,7 +45,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::MAX_RASTER_ALLOC;
+pub use pixels::{GraySource, MAX_RASTER_ALLOC};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod profiles;
@@ -76,6 +79,7 @@ pub use appearance::{
     StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
+pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
@@ -105,7 +109,8 @@ pub use style_libs::StyleLibrary;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
-    RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign, WrapShape,
+    RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign,
+    WrapShape,
 };
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};

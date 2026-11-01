@@ -79,6 +79,53 @@ fn a_press_on_a_masks_edge_selects_its_clip_group() {
     assert!(!a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.set")), "{a:?}");
 }
 
+/// The art of a selected clipped object (picked in the Layers panel), pressed where its mask
+/// hides it, is grabbed: a drag moves the selection (the art, not its clip group) and a click
+/// keeps it selected. With nothing of it selected, or with Shift, a press there starts a marquee.
+#[test]
+fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
+    let (d, _, _, art) = doc_with_masked_square();
+    let p = paint();
+    let mut picked = Selection::default();
+    picked.add(art);
+    let shift = |kind, x, y| {
+        let mut e = ev(kind, x, y);
+        e.mods.shift = true;
+        e
+    };
+    let changes_selection = |a: &[Action]| a.iter().any(|a| matches!(a, Action::Exec(c, _) if c.starts_with("select.")));
+    // (370, 450): on the art, outside the mask (400..500).
+    let mut t = SelectionTool::default();
+    let c = cx(&d, &picked, &p);
+    assert!(t.pointer(&c, &ev(PointerKind::Down, 370.0, 450.0)).is_empty());
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 390.0, 470.0));
+    assert!(a.iter().any(|a| matches!(a, Action::Begin(n) if n == "Move")), "{a:?}");
+    assert!(a.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "{a:?}");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 390.0, 470.0)), vec![Action::Commit]);
+    // A click there keeps the selection.
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 370.0, 450.0));
+    assert!(!changes_selection(&t.pointer(&c, &ev(PointerKind::Up, 370.0, 450.0))));
+    // Nothing selected: a marquee, and a click deselects.
+    let none = Selection::default();
+    let c = cx(&d, &none, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 370.0, 450.0));
+    assert!(!t.pointer(&c, &ev(PointerKind::Drag, 390.0, 470.0)).iter().any(|a| matches!(a, Action::Begin(_))));
+    // Shift: a marquee that adds to the selection.
+    let c = cx(&d, &picked, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &shift(PointerKind::Down, 370.0, 450.0));
+    assert!(!t.pointer(&c, &shift(PointerKind::Drag, 390.0, 470.0)).iter().any(|a| matches!(a, Action::Begin(_))));
+    // An object a click hits there wins: a press on a square over that point selects it.
+    let mut d = d;
+    let (front, l) = (d.alloc_id(), d.layers[0].id);
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(350.0, 430.0, 390.0, 470.0));
+    d.insert(Some(l), 2, vectorcraft_doc::Node::path(front, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let a = SelectionTool::default().pointer(&cx(&d, &picked, &p), &ev(PointerKind::Down, 370.0, 450.0));
+    assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([front.0]))), "{a:?}");
+}
+
 /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands
 /// exactly on it with Smart Guides, even where lining the bounds up would leave it beside it.
 #[test]
@@ -522,6 +569,28 @@ fn turned_cursors_step_with_the_view() {
     assert_eq!(Cursor::rotate_about_in_view(Point::ORIGIN, Point::new(0.0, -5.0), 90.0), Cursor::RotateToward(2));
     assert_eq!(Cursor::rotate_about_in_view(Point::ORIGIN, Point::new(0.0, -5.0), f64::NAN), Cursor::RotateToward(0));
     assert_eq!(Cursor::rotate_about_in_view(Point::ORIGIN, Point::ORIGIN, 90.0), Cursor::Rotate, "on the center");
+}
+
+/// #4980: with anchors selected on their own (the end anchor of a path the Pen is drawing, when
+/// Cmd/Ctrl lends the Selection tool) the canvas shows no bounding box, so its handles neither
+/// offer a resize pointer nor scale on a press: the press takes the path, as away from the box.
+#[test]
+fn hidden_box_handles_take_no_press_while_anchors_are_selected() {
+    let (d, id) = doc_with_rect();
+    let p = paint();
+    let top_middle = Point::new(150.0, 100.0);
+    let mut s = Selection::default();
+    s.add(id);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&cx(&d, &s, &p), top_middle, Mods::default()), Cursor::ResizeV, "the shown box's handle");
+    assert_eq!(t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 150.0, 100.0)), vec![Action::Begin("Scale".into())]);
+    s.anchors.entry(id).or_default().insert((0, 1));
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, top_middle, Mods::default()), Cursor::Move);
+    let down = t.pointer(&c, &ev(PointerKind::Down, 150.0, 100.0));
+    assert!(!down.contains(&Action::Begin("Scale".into())), "{down:?}");
+    assert!(!crate::select::bbox_handle_at(&c, top_middle));
 }
 
 /// In a rotated view the resize and rotate cursors turn with the view.
@@ -1252,6 +1321,57 @@ fn handle_drag_scales() {
     let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
     assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+}
+
+#[test]
+fn backquote_move_uses_release_state_and_one_commit() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 170.0, 150.0) });
+    assert!(matches!(drag.as_slice(), [Action::Begin(_), Action::Preview(_, v)] if v["objects"] == false && v["patterns"] == true));
+    let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 170.0, 150.0) });
+    assert!(matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v["objects"] == false && v["patterns"] == true));
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 170.0, 150.0) });
+    let up = t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0));
+    assert!(matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()));
+}
+
+#[test]
+fn backquote_box_scale_and_rotate_use_pattern_matrix_at_release() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+    for (from, to) in [((200.0, 200.0), (300.0, 300.0)), ((210.0, 210.0), (150.0, 230.0))] {
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1));
+        let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.0, to.1) });
+        assert!(
+            matches!(drag.as_slice(), [Action::Preview(c, v)] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+            "{drag:?}"
+        );
+        let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, to.0, to.1) });
+        assert!(
+            matches!(up.as_slice(), [Action::Preview(c, v), Action::Commit] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+            "{up:?}"
+        );
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1));
+        t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.0, to.1) });
+        let up = t.pointer(&cx, &ev(PointerKind::Up, to.0, to.1));
+        assert!(
+            matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()),
+            "{up:?}"
+        );
+    }
 }
 
 /// Escape during a bounding-box scale or rotation cancels it, and the release after it commits

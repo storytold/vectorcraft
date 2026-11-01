@@ -89,8 +89,13 @@ fn about(o: Point, a: Affine) -> Affine {
 
 /// The transform `m` of the selection (of a copy with `copy`): of the anchors selected with Direct
 /// Selection alone, when there are some.
-fn preview(m: Affine, copy: bool) -> Action {
-    Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(m), "copy": copy, "anchors": true }))
+fn preview(m: Affine, copy: bool, backquote: bool) -> Action {
+    let mut params = json!({ "matrix": matrix_json(m), "copy": copy, "anchors": true });
+    if backquote {
+        params["objects"] = json!(false);
+        params["patterns"] = json!(true);
+    }
+    Action::Preview("object.transform".into(), params)
 }
 
 /// Reflection across the line through the origin at angle `theta` (radians, screen space).
@@ -243,14 +248,14 @@ impl Tool for TransformTool {
                 d.last = m;
                 self.drag = Some(d);
                 self.measure = Some((p, text));
-                out.push(preview(m, ev.mods.alt));
+                out.push(preview(m, ev.mods.alt, ev.backquote));
                 out
             }
             PointerKind::Up => {
                 let Some(d) = self.end_drag() else { return vec![] };
                 if d.began {
                     // The Alt state at release decides whether the result is a copy.
-                    vec![preview(d.last, ev.mods.alt), Action::Commit]
+                    vec![preview(d.last, ev.mods.alt, ev.backquote), Action::Commit]
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too.
                     self.origin = Some((d.pick, cx.selection.objects.clone()));
@@ -342,6 +347,51 @@ mod tests {
 
     fn ev(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
         PointerEvent::new(kind, x, y)
+    }
+    #[test]
+    fn backquote_drag_previews_and_commits_pattern_only_for_each_transform_tool() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        for kind in [TransformKind::Rotate, TransformKind::Reflect, TransformKind::Scale, TransformKind::Shear] {
+            let mut t = TransformTool::new(kind);
+            t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+            let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0) });
+            assert!(
+                matches!(drag.as_slice(), [Action::Begin(_), Action::Preview(c, v)] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+                "{kind:?}: {drag:?}"
+            );
+            assert_ne!(matrix(&drag[1]), Affine::IDENTITY, "{kind:?}");
+            let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 290.0, 210.0) });
+            assert!(
+                matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v["objects"] == false && v["patterns"] == true),
+                "{kind:?}: {up:?}"
+            );
+            let mut t = TransformTool::new(kind);
+            t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+            t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0) });
+            let up = t.pointer(&cx, &ev(PointerKind::Up, 290.0, 210.0));
+            assert!(
+                matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()),
+                "{kind:?}: {up:?}"
+            );
+            let mut t = TransformTool::new(kind);
+            t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+            t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0) });
+            assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+            assert!(t.pointer(&cx, &ev(PointerKind::Up, 290.0, 210.0)).is_empty());
+        }
+        let mut t = TransformTool::new(TransformKind::Scale);
+        t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+        let mods = Mods { alt: true, shift: true, ..Default::default() };
+        let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0).with_mods(mods) });
+        assert!(matches!(&drag[1], Action::Preview(_, v) if v["copy"] == true && v["objects"] == false && v["patterns"] == true));
+        let c = matrix(&drag[1]).as_coeffs();
+        assert!((c[0] - c[3]).abs() < 1e-9);
+        let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 290.0, 210.0).with_mods(mods) });
+        assert!(matches!(&up[0], Action::Preview(_, v) if v["copy"] == true && v["objects"] == false));
     }
     fn alt() -> Mods {
         Mods { alt: true, ..Default::default() }

@@ -252,12 +252,15 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let mut unlink =
         |_: &mut Color, link: &mut Option<String>, _: &mut f32| link.as_ref().is_some_and(|l| global.contains(l)) && link.take().is_some();
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let unlinked = s.edit("Delete Swatch", |d, _| {
         d.swatch_groups.retain(|g| !names.contains(&g.name));
         for n in &names {
             d.remove_swatch(n);
         }
-        Ok(map_swatch_links(d, &mut unlink))
+        let unlinked = map_swatch_links(d, &mut unlink);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(unlinked)
     })?;
     map_default_paints(s, &mut unlink);
     Ok(json!({"deleted": names, "unlinked": unlinked}))
@@ -703,6 +706,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let global = spot || bool_or(p, "global", sw.global);
     let to = name_param(p, "newName").filter(|n| *n != name).map_or_else(|| name.clone(), |n| d.free_swatch_name(&n));
     let relink = Relink { from: name.clone(), to: to.clone(), color: color.filter(|_| global).map(|c| d.linked_color(c, spot)), keep: global };
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Swatch Options", |d, _| {
         let w = d.swatch_mut(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
         w.name = to.clone();
@@ -716,7 +720,9 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        Ok(map_swatch_links(d, &mut |c, l, t| relink.apply(c, l, t)))
+        let relinked = map_swatch_links(d, &mut |c, l, t| relink.apply(c, l, t));
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(relinked)
     })?;
     relink.defaults(s);
     Ok(json!({"name": to, "relinked": relinked}))
@@ -867,11 +873,14 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         *l = link.clone();
         true
     };
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Merge Swatches", |d, _| {
         for n in merged {
             d.remove_swatch(n);
         }
-        Ok(map_swatch_links(d, &mut relink))
+        let relinked = map_swatch_links(d, &mut relink);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(relinked)
     })?;
     map_default_paints(s, &mut relink);
     Ok(json!({"name": keep, "merged": merged, "relinked": relinked}))
@@ -980,6 +989,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
     {
         return Err(bad(cmd, format!("`{}` can't be edited or removed", w.name)));
     }
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let mut relinks = vec![];
     let mut swatches = std::mem::take(&mut d.swatch_groups[gi].swatches);
     for gone in swatches.split_off(colors.len().min(swatches.len())) {
@@ -1005,6 +1015,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
     (g.name, g.swatches) = (name.clone(), swatches);
     let names = g.swatches.iter().map(|w| w.name.clone()).collect();
     let relinked = if relinks.is_empty() { 0 } else { map_swatch_links(d, &mut |c, l, t| relinks.iter().any(|r| r.apply(c, l, t))) };
+    super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
     Ok(GroupEdit { name, swatches: names, relinks, relinked })
 }
 

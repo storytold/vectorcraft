@@ -32,8 +32,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Pattern"],
             None,
-            "{ids?, name? (trimmed; blank: New Pattern N), tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode → {name}",
-            has_selection,
+            "{ids?, name? (trimmed; blank: New Pattern N), tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode; refused while an opacity mask is edited → {name}",
+            can_make_pattern,
             pattern_make
         ),
         cmd!(
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Pattern",
             ["Object", "Pattern"],
             Some("Cmd+Shift+F8"),
-            "{name?} edit a pattern (default: the selected object's fill pattern) in pattern editing mode",
+            "{name?} edit a pattern (default: the selected object's fill pattern) in pattern editing mode; refused while an opacity mask is edited",
             can_edit_pattern,
             pattern_edit
         ),
@@ -161,11 +161,20 @@ fn in_pattern_edit(s: &Session) -> std::result::Result<(), String> {
     editing(s).map(|_| ()).ok_or_else(|| "not in pattern editing mode".into())
 }
 
+/// Make: a selection, and no opacity mask is being edited
+/// ([`super::maskedit::outside_mask_editing`]), since the tile layer would replace the mask editing
+/// layer as the isolated layer.
+fn can_make_pattern(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    super::maskedit::outside_mask_editing(s)
+}
+
 fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
     if editing(s).is_some() {
         return Err("already editing a pattern".into());
     }
+    super::maskedit::outside_mask_editing(s)?;
     if s.active().is_some_and(|st| st.doc.patterns.is_empty()) { Err("the document has no patterns".into()) } else { Ok(()) }
 }
 
@@ -355,7 +364,12 @@ fn pattern_name(p: &Paint) -> Option<String> {
     }
 }
 
-fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
+/// Save the edited tile art into the pattern and leave pattern editing mode (`object.pattern.done`).
+/// `object.exitIsolation` runs it too while a pattern is edited.
+pub(crate) fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
+    if editing(s).is_some() {
+        s.end_text_edit();
+    }
     let name = s.edit("Done Editing Pattern", |d, sel| {
         let (pe, art) = leave_edit(d, sel)?;
         if let Some(def) = d.pattern_mut(&pe.pattern) {

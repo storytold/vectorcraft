@@ -1,6 +1,6 @@
 use super::common::{
-    dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, replace_with_pieces, sibling_with, target_paths,
-    usize_opt,
+    dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces, samples_param,
+    sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, ParamCurve, PathData, Point, Result, Session, SubPath,
@@ -264,30 +264,47 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseRegion";
-    let pts = points_param(p, "points", C)?;
+    let samples = samples_param(p, "points", C)?;
     let size = number_or(p, "size", 10.0, C)?;
     if !(size.is_finite() && size > 0.0) {
         return Err(bad(C, "size must be positive"));
     }
     let angle = number_or(p, "angle", 0.0, C)?;
     let roundness = number_or(p, "roundness", 100.0, C)?;
+    let pressure = size_pressure(p, &samples, C)?;
+    let pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
     let r = size / 2.0;
-    // The tip's short axis: an open path is sampled at least every half of it.
-    let short = size * roundness.clamp(1.0, 100.0) / 100.0;
+    // The tip's short axis (its narrowest with Pressure): an open path is sampled at least every half of it.
+    let narrowest = pressure.as_ref().map_or(size, |(_, v)| vectorcraft_tools::draw2::pressure_size(size, *v, 0.0));
+    let short = narrowest * roundness.clamp(1.0, 100.0) / 100.0;
     let st = s.doc()?;
-    let region = eraser_area(&pts, size, angle, roundness);
     // A point is under the tip when, with the tip squashed back into a circle, it is within the
     // circle's radius of the squashed drag.
-    let squash = eraser_tip(angle, roundness).inverse();
+    let stretch = eraser_tip(angle, roundness);
+    let squash = stretch.inverse();
     let round: Vec<Point> = pts.iter().map(|q| squash * *q).collect();
+    // With Size set to Pressure the tip is as wide as the pen pressed: the area is the squashed
+    // drag outlined at those widths, stretched back, and a point is under it when the area holds it.
+    let pressed = match (&pressure, round.len() > 1) {
+        (Some((prof, v)), true) => Some(pressure_region(&PathData::single(SubPath::polyline(&round, false)), size, *v, prof)?.transformed(stretch)),
+        (Some((prof, v)), false) => Some(eraser_area(&pts, vectorcraft_tools::draw2::pressure_size(size, *v, prof.at(0.0)), angle, roundness)),
+        (None, _) => None,
+    };
+    let reach = pressure.as_ref().map_or(r, |(_, v)| (size + v) / 2.0);
+    let region = pressed.clone().unwrap_or_else(|| eraser_area(&pts, size, angle, roundness));
+    let outline = pressed.map(|pd| pd.to_bezpath());
+    let under = |q: Point| match &outline {
+        Some(bp) => fill_contains(bp, FillRule::NonZero, q),
+        None => dist_to_polyline(&round, squash * q) <= r,
+    };
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, r))? {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
         if pd.is_closed() {
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
             plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
-        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &|q| dist_to_polyline(&round, squash * q) <= r) {
+        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &under) {
             plan.push((id, pieces));
         }
     }

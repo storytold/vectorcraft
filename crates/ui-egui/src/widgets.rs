@@ -35,28 +35,31 @@ pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, 
 pub(crate) use color::pointer_phase;
 pub use color::{
     Live, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh, color_slider,
-    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture,
+    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture, stepped_area,
 };
 pub use drag::{PanelDrag, SwatchRows, art_drop, doc_preview, drag_source};
 #[cfg(test)]
 use dropdowns::combo_button_id;
-pub(crate) use dropdowns::{combo, combo_menu};
+pub(crate) use dropdowns::{combo, combo_menu, combo_named};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{label_field, take_previous_label};
+pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, opt_field, opt_field_named, range_field, range_field_named,
-    range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named, spin_field_named,
-    spin_field_stops_named, spin_plain, spin_plain_named,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, num_field_within, opt_field, opt_field_named, range_field,
+    range_field_named, range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named,
+    spin_field_named, spin_field_stops_named, spin_kerning, spin_plain, spin_plain_named,
 };
 #[cfg(test)]
 use numeric::{decimal_point, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
-pub(crate) use numeric::{round_to, set_bare_numbers_are_points, typed_unit};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
-pub(crate) use text::{dialog_focus_flag, enter_modifiers, focus_field, own_field_shift_enter, set_dialog_open, take_dialog_focus};
+pub(crate) use text::{
+    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
+    reject_dialog_commit, set_dialog_open, take_dialog_focus,
+};
 pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
@@ -85,7 +88,7 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 }
 
 /// `parent.with(salt)` for a salt that needs only `Hash`.
-fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
+pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
 }
 
@@ -112,6 +115,19 @@ pub(crate) mod accessibility_tests {
             nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
         }
         nodes
+    }
+
+    /// The widgets that `tabs` presses of Tab give the keyboard focus to, in order. `frame` runs
+    /// one frame of `ctx` with the events it is given.
+    pub(crate) fn tab_stops(ctx: &egui::Context, tabs: usize, mut frame: impl FnMut(Vec<egui::Event>)) -> Vec<egui::Id> {
+        let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        let mut stops = vec![];
+        for _ in 0..tabs {
+            frame(vec![tab.clone()]);
+            frame(vec![]);
+            stops.extend(ctx.memory(|m| m.focused()));
+        }
+        stops
     }
 
     /// The node of `tree` that screen readers name `label`.
@@ -293,6 +309,18 @@ mod spinner_modifier_tests {
         assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &[], &pt), 0.0);
     }
 
+    #[test]
+    fn plain_and_command_steps_go_to_the_next_multiple_as_arrow_keys_do() {
+        // As ↑/↓ in the field (#2881): a plain step goes to the next whole number, Ctrl/Cmd to the
+        // next tenth, rounded to the places fields keep; Shift adds or takes ten.
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::NONE, &[], &pt), 2.0);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, false, egui::Modifiers::NONE, &[], &pt), 1.0);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::COMMAND, &[], &pt), 1.4);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, false, egui::Modifiers::COMMAND, &[], &pt), 1.3);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::SHIFT, &[], &pt), 11.37);
+        assert_eq!(spinner_step(0.37, 1.0, 0.0, false, egui::Modifiers::NONE, &[], &pt), 0.0);
+    }
+
     /// A plain click on the spinner stops at each stop; Shift and Ctrl/Cmd steps do not.
     #[test]
     fn a_plain_spinner_step_stops_at_the_stops() {
@@ -303,7 +331,7 @@ mod spinner_modifier_tests {
         assert_eq!(spinner_step(0.1, 1.0, 0.0, false, plain, &stops, &pt), 0.0);
         assert_eq!(spinner_step(14.0, 1.0, 0.0, true, plain, &stops, &pt), 15.0);
         assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &stops, &pt), 4.0);
-        assert!((spinner_step(0.52, 1.0, 0.0, false, egui::Modifiers::COMMAND, &stops, &pt) - 0.42).abs() < 1e-9);
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, true, egui::Modifiers::COMMAND, &stops, &pt), 0.6);
     }
 
     /// A stop the spinner's text shows as the value counts as reached: 2.004 pt and the 2 pt stop
@@ -480,6 +508,43 @@ mod gradient_chip_tests {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
+    }
+
+    /// At a position and display scale that fall between pixels, the gradient chip covers the same
+    /// pixel rows as a colour or None chip beside it (#3826). Filled rectangles are drawn on whole
+    /// pixels, so the toolbar's Gradient button sat up to half a pixel off its neighbors.
+    #[test]
+    fn gradient_chip_lines_up_with_a_solid_chip() {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(1.5);
+        // Without anti-aliasing, a filled rectangle's mesh is exactly the rectangle it fills.
+        ctx.tessellation_options_mut(|o| o.feathering = false);
+        let chip = |x: f32| Rect::from_min_size(pos2(x, 40.3), vec2(11.0, 11.0));
+        let mut shapes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                paint_chip(ui, chip(10.2), &Paint::solid(Color::BLACK));
+                gradient_chip(ui, chip(23.2), &paint(GradientKind::Linear, 0.0));
+            });
+            out.textures_delta.clear();
+            assert_eq!(out.pixels_per_point, 1.5);
+            shapes = out.shapes;
+        }
+        let bounds = |shape: egui::epaint::ClippedShape| {
+            let mut r = Rect::NOTHING;
+            for p in ctx.tessellate(vec![shape], 1.5) {
+                if let egui::epaint::Primitive::Mesh(m) = p.primitive {
+                    m.vertices.iter().for_each(|v| r.extend_with(v.pos));
+                }
+            }
+            r
+        };
+        let n = shapes.len();
+        assert!(n >= 2, "{n} shapes");
+        let gradient = bounds(shapes.remove(n - 1));
+        let solid = bounds(shapes.remove(n - 2));
+        assert_eq!((gradient.top(), gradient.bottom()), (solid.top(), solid.bottom()), "gradient {gradient:?}, solid {solid:?}");
+        assert_eq!(gradient, egui::emath::GuiRounding::round_to_pixels(chip(23.2), 1.5));
     }
 }
 

@@ -282,16 +282,10 @@ fn a_raster_export_says_nothing_of_images_another_thread_could_not_decode() {
 
 #[test]
 fn a_raster_export_says_when_an_image_could_not_be_decoded() {
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short:
-    // the renderer can't decode it and draws nothing, which the export must say.
+    // A PNG whose header reads but whose pixel data is cut short: the renderer can't decode it
+    // and draws nothing, which the export must say.
     let mut s = session(72.0, 36.0, 1);
-    let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
-    let cut = png_chunk(&png, b"IDAT").map(|d| d.as_ptr() as usize - png.as_ptr() as usize).unwrap() + 4;
-    png.truncate(cut);
-    s.execute("file.place", &json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    crate::tests_menucmds::place_undecodable_png(&mut s);
     let r = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
     let warnings = r["warnings"].as_array().cloned().unwrap_or_default();
     assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("couldn't be decoded"))), "{r}");

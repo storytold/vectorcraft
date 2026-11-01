@@ -129,7 +129,7 @@ fn unused_images_are_pruned() {
     n.extras_mut().mask = Some(Box::new(OpacityMask::new(image_node(&mut d, "in mask"), false)));
     d.insert(Some(layer), 0, n).unwrap();
     let art = image_node(&mut d, "in symbol");
-    d.symbols.push(Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     // Image objects inside foreign data (a brush library kept as JSON) keep theirs too.
     d.unknown.insert("brushes".into(), json!([{"art": {"type": "image", "key": "in brush"}}]));
     let back = load(&save(&d, true)).unwrap();

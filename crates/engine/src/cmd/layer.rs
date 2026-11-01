@@ -29,8 +29,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Layer…",
             ["Window", "Layers"],
             Some("Cmd+L"),
-            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer); `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps → {id}",
-            has_doc,
+            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer); `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
+            super::maskedit::outside_mask_editing,
             new_layer
         ),
         cmd!(
@@ -38,8 +38,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Sublayer…",
             ["Window", "Layers"],
             None,
-            "{parent?: layer id (default: the highlighted row's layer, else the current layer), bottom?: bool, name?, …options as layer.new} a sublayer on top of the parent's contents; `bottom`: under the parent's contents, above a clipping layer's clipping path (Ctrl/Cmd+Alt-click the button) → {id}",
-            has_doc,
+            "{parent?: layer id (default: the highlighted row's layer, else the current layer), bottom?: bool, name?, …options as layer.new} a sublayer on top of the parent's contents; `bottom`: under the parent's contents, above a clipping layer's clipping path (Ctrl/Cmd+Alt-click the button); refused while an opacity mask is edited → {id}",
+            super::maskedit::outside_mask_editing,
             new_sublayer
         ),
         cmd!(

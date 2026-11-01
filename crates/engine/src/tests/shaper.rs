@@ -611,3 +611,162 @@ fn shaper_joined_outline_keeps_its_stroke_paint_after_source_edits() {
         assert_ne!(node(&s, id).appearance.stroke_paint().label(), "#00ff00");
     }
 }
+
+fn source_ids(s: &Session, g: NodeId) -> Vec<NodeId> {
+    node(s, g).children().unwrap()[0].children().unwrap().iter().map(|n| n.id).collect()
+}
+/// A Selection-tool drag from `from` to `to`.
+fn drag(s: &mut Session, v: ViewInfo, from: [f64; 2], to: [f64; 2]) {
+    s.pointer(&PointerEvent::new(PointerKind::Down, from[0], from[1]), v).unwrap();
+    for t in [0.25, 0.5, 1.0] {
+        let p = [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+        s.pointer(&PointerEvent::new(PointerKind::Drag, p[0], p[1]), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, to[0], to[1]), v).unwrap();
+}
+/// Two overlapping rectangles in a Shaper Group, in Construction mode with the left one selected
+/// and the Selection tool chosen → (left, right, group).
+fn construction(s: &mut Session, v: ViewInfo) -> (NodeId, NodeId, NodeId) {
+    let a = rectangle(s, 0.0, "#ff0000");
+    let b = rectangle(s, 50.0, "#0000ff");
+    let g = scribble(s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    (a, b, g)
+}
+
+/// In Construction mode, a Selection-tool drag that drops an original shape wholly outside the
+/// bounds of the group's original shapes takes it out of the group, in one undo step: it becomes a
+/// path just above the group with its own look, and stays selected. Undo puts it back. With
+/// Real-time Drawing off the drop does the same.
+#[test]
+fn shaper_dragging_an_original_shape_out_of_the_bounds_takes_it_out_of_the_group() {
+    for real_time in [true, false] {
+        let mut s = session();
+        s.prefs.real_time_drawing = real_time;
+        let v = ViewInfo { smart_guides: false, ..Default::default() };
+        let (a, b, g) = construction(&mut s, v);
+        let look = node(&s, a).appearance.clone();
+        let steps = s.doc().unwrap().history.undo.len();
+        drag(&mut s, v, [25.0, 50.0], [25.0, 200.0]);
+        let st = s.doc().unwrap();
+        assert_eq!(source_ids(&s, g), vec![b], "real-time {real_time}");
+        let (parent, index, _) = st.doc.position(a).unwrap();
+        assert_eq!((parent, index), { st.doc.position(g).map(|(p, i, _)| (p, i + 1)).unwrap() });
+        assert_eq!(node(&s, a).appearance, look);
+        assert_eq!(node(&s, a).geometric_bounds().unwrap().y0, 150.0);
+        assert_eq!(st.selection.objects, vec![a]);
+        assert_eq!(st.isolation, None);
+        assert_eq!(st.history.undo.len(), steps + 1);
+        assert_eq!(st.history.undo.last().unwrap().label, "Remove from Shaper Group");
+        // The group's result is the right rectangle alone.
+        assert_eq!(fill(&s, g, 25.0, 50.0), None);
+        assert_eq!(fill(&s, g, 125.0, 50.0).as_deref(), Some("#0000ff"));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(source_ids(&s, g), vec![a, b]);
+        assert_eq!(node(&s, a).geometric_bounds().unwrap().y0, 0.0);
+        assert_eq!(fill(&s, g, 25.0, 50.0).as_deref(), Some("#ff0000"));
+    }
+}
+
+/// A drop that leaves the original shape across the bounds of the group's original shapes only
+/// moves it, as before.
+#[test]
+fn shaper_dragging_an_original_shape_across_the_bounds_only_moves_it() {
+    let mut s = session();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let (a, b, g) = construction(&mut s, v);
+    let sources = node(&s, g).children().unwrap()[0].id;
+    drag(&mut s, v, [25.0, 50.0], [25.0, 100.0]);
+    let st = s.doc().unwrap();
+    assert_eq!(source_ids(&s, g), vec![a, b]);
+    assert_eq!(node(&s, a).geometric_bounds().unwrap().y0, 50.0);
+    assert_eq!(st.isolation, Some(sources));
+    assert_eq!(st.history.undo.last().unwrap().label, "Move");
+    // Outside Construction mode the same drop moves the group as usual.
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    drag(&mut s, v, [25.0, 100.0], [25.0, 400.0]);
+    assert_eq!(source_ids(&s, g), vec![a, b]);
+}
+
+/// Taking the last original shape out removes the group, and the native file keeps the result.
+#[test]
+fn shaper_taking_the_last_original_shape_out_removes_the_group_and_saves() {
+    let mut s = session();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let (a, b, g) = construction(&mut s, v);
+    drag(&mut s, v, [25.0, 50.0], [25.0, 200.0]);
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    drag(&mut s, v, [125.0, 50.0], [400.0, 50.0]);
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.node(g).is_none());
+    assert_eq!(doc.parent_of(a), doc.parent_of(b));
+    assert_eq!(node(&s, b).geometric_bounds().unwrap().x0, 325.0);
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(back.layers, doc.layers);
+}
+
+/// Flat bounds of horizontal or vertical lines on the line of a group's flat bounds, and bounds that
+/// touch the group's bounds, are not outside them.
+#[test]
+fn shaper_outside_test_handles_flat_and_touching_bounds() {
+    use crate::cmd::shaper::wholly_outside;
+    use vectorcraft_geom::Rect;
+    let row = Rect::new(0.0, 150.0, 200.0, 150.0);
+    assert!(!wholly_outside(Rect::new(50.0, 150.0, 120.0, 150.0), row));
+    assert!(!wholly_outside(Rect::new(150.0, 150.0, 300.0, 150.0), row));
+    assert!(wholly_outside(Rect::new(250.0, 150.0, 300.0, 150.0), row));
+    assert!(wholly_outside(Rect::new(50.0, 160.0, 120.0, 160.0), row));
+    let column = Rect::new(80.0, 0.0, 80.0, 100.0);
+    assert!(!wholly_outside(Rect::new(80.0, 50.0, 80.0, 150.0), column));
+    assert!(wholly_outside(Rect::new(90.0, 50.0, 90.0, 150.0), column));
+    let square = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert!(!wholly_outside(Rect::new(100.0, 0.0, 200.0, 100.0), square));
+    assert!(wholly_outside(Rect::new(100.5, 0.0, 200.0, 100.0), square));
+}
+
+/// `shaper.releaseSource` takes the named original shape out, refuses a shape of another group or
+/// none, and `object.transform`'s `releaseOutside` makes one undo step outside a drag too.
+#[test]
+fn shaper_release_source_command_and_transform_flag() {
+    let mut s = session();
+    let a = rectangle(&mut s, 0.0, "#ff0000");
+    let b = rectangle(&mut s, 50.0, "#0000ff");
+    let g = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [125.0, 65.0]]);
+    let other = rectangle(&mut s, 300.0, "#00ff00");
+    let untouched = s.doc().unwrap().doc.layers.clone();
+    for p in [json!({"source": other.0}), json!({"source": a.0, "group": other.0}), json!({"source": "x"}), json!({})] {
+        assert!(s.execute("shaper.releaseSource", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().doc.layers, untouched);
+    }
+    s.execute("shaper.releaseSource", &json!({"source": b.0, "group": g.0})).unwrap();
+    assert_eq!(source_ids(&s, g), vec![a]);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![b]);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Remove from Shaper Group");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 150], "ids": [a.0], "releaseOutside": true})).unwrap();
+    assert_eq!(source_ids(&s, g), vec![b]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Remove from Shaper Group");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(source_ids(&s, g), vec![a, b]);
+    assert_eq!(node(&s, a).geometric_bounds().unwrap().y0, 0.0);
+    // With a history of one step, that step still goes back to before the move.
+    s.doc_mut().unwrap().history.limit = 1;
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 150], "ids": [a.0], "releaseOutside": true})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(source_ids(&s, g), vec![a, b]);
+    assert_eq!(node(&s, a).geometric_bounds().unwrap().y0, 0.0);
+    // Shapes taken out together keep their stacking order, whatever order they are named in.
+    for ids in [[a.0, b.0], [b.0, a.0]] {
+        s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 150], "ids": ids, "releaseOutside": true})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert!(doc.node(g).is_none());
+        assert!(doc.position(a).unwrap().1 < doc.position(b).unwrap().1, "{ids:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(source_ids(&s, g), vec![a, b]);
+    }
+}

@@ -157,9 +157,9 @@ fn crop_marks_effect_follows_the_object() {
     run(&mut s, "object.move", json!({"dx": 10, "dy": 0}));
     assert_eq!(mark(&s, 48)[0], 255, "nothing left behind");
     assert!(mark(&s, 88)[0] < 200);
-    // SVG export and Expand Appearance draw the marks as paths.
+    // SVG export and Expand Appearance draw the marks as shapes.
     let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
-    assert_eq!(svg.matches("<path").count(), 9, "{svg}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&svg), 9, "{svg}");
     run(&mut s, "effect.expandAppearance", json!({}));
     let n = node(&s, a);
     assert!(n.appearance.effects.is_empty() && n.children().unwrap().len() == 2, "a group of the object and its marks");

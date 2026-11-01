@@ -1,5 +1,5 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, PatternHead, Place, Raster, SKIPPED};
+use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -68,6 +68,18 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginEncoding" {
             self.type_state.encoding_comment(line);
+        }
+        // Versioned content holds alternatives of the same art, the newest first: the first is
+        // read, and the next one (`%AI17_Alternate_Content`, or `…_if_version_gt:` for a version
+        // in between) starts what is skipped, up to the end of the block, nested blocks included.
+        if m.starts_with("Alternate_Content") {
+            let at = self.lex.offset();
+            if self.skip_to("End_Versioned_Content").is_err() {
+                // A block that doesn't end: the rest of the file is read rather than lost.
+                self.lex.seek(at);
+                self.warn(VERSIONED_UNENDED);
+            }
+            return Ok(());
         }
         if let Some((_, end)) = SKIPPED.iter().find(|(b, _)| *b == m) {
             return self.skip_to(end);

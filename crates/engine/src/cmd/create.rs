@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
             has_doc,
             flare
         ),
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -395,6 +395,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         "rays",
         "longest",
         "rayFuzziness",
+        "rotation",
         "rings",
         "largest",
         "x2",
@@ -413,6 +414,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     let rays = p.get("rays").and_then(Value::as_u64).unwrap_or(15).min(50) as usize;
     let longest = pct("longest", 300.0);
     let ray_fuzz = pct("rayFuzziness", 100.0).min(1.0);
+    let ray_turn = f64_or(p, "rotation", 0.0).to_radians();
     let rings = p.get("rings").and_then(Value::as_u64).unwrap_or(10).min(50) as usize;
     let largest = pct("largest", 50.0);
     let end = match (p.get("x2").and_then(Value::as_f64), p.get("y2").and_then(Value::as_f64)) {
@@ -443,11 +445,12 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     let inner = (1.0 - fuzz as f32 * 0.6).clamp(0.05, 0.95);
     parts.push(("Halo", circle(c, halo_r), radial(c, halo_r, vec![stop(0.0, 0.0), stop(inner * 0.75, 0.0), stop(inner, 0.5), stop(1.0, 0.0)]), 1.0));
     // Rays: thin spikes of random length (Longest = % of the centre radius), fading outwards.
+    // `rotation` turns them clockwise about the center.
     if rays > 0 {
         let mut bp = vectorcraft_geom::BezPath::new();
         let mut reach: f64 = 0.0;
         for i in 0..rays {
-            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64;
+            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64 + ray_turn;
             let len = r * longest * (1.0 - ray_fuzz * 0.75 * rnd()).max(0.1);
             reach = reach.max(len);
             let w = r * 0.035;
@@ -736,7 +739,17 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let made = insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation))?;
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
-    Ok(super::typecmd::with_overflow(s, id.as_slice(), made))
+    let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
+    if p.get("font").is_some() || p.get("style").is_some() {
+        let runs = match id.and_then(|i| s.doc().ok()?.doc.node(i)).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.runs.iter().map(|r| super::fonts::font_of(&r.style)).collect(),
+            _ => Default::default(),
+        };
+        if let Some(w) = super::fonts::set_font_warning(runs) {
+            made["warning"] = json!(w);
+        }
+    }
+    Ok(made)
 }
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
@@ -798,7 +811,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraf
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then).
+/// filled with the current fill unless that is None or white (black then), in the document's
+/// language.
 pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     let mut style = CharStyle::default();
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
@@ -818,5 +832,7 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
         None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
         None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
     };
+    // In the document's language (Document Setup), none for the default.
+    style.language = s.doc().ok().and_then(|d| vectorcraft_doc::setup::char_language(&d.doc.setup.language).ok().flatten()).map(str::to_string);
     style
 }

@@ -127,6 +127,7 @@ impl Node {
             NodeKind::Layer { .. } => "Layer",
             NodeKind::Group { clip: true, .. } => "Clip Group",
             NodeKind::Group { .. } if self.extras().objects_on_path.is_some() => "Objects on Path",
+            NodeKind::Group { .. } if self.extras().compound_shape => "Compound Shape",
             NodeKind::Group { .. } => "Group",
             NodeKind::Path { live: Some(l), .. } => l.label(),
             NodeKind::Path { guide: true, .. } => "Guide",
@@ -495,8 +496,13 @@ impl Node {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
         // The area where an Intertwine member is drawn over the others moves with it.
-        if let Some(area) = self.extras_if_any().and_then(|e| e.intertwine.as_mut()) {
-            area.transform(a);
+        if let Some(e) = self.extras_if_any() {
+            if let Some(area) = e.intertwine.as_mut() {
+                area.transform(a);
+            }
+            for area in &mut e.intertwine_tiers {
+                area.transform(a);
+            }
         }
     }
 
@@ -545,9 +551,16 @@ impl Node {
     /// item) stands in for the topmost fill or stroke when it is of the proxy's kind. Otherwise
     /// type objects paint their runs (the first run speaks for all) in text space, fitted to the
     /// layout bounds; everything else paints its fill or stroke in the document, fitted to the
-    /// geometric bounds. Strokes fit the box grown by half their weight.
+    /// geometric bounds. Strokes fit the box grown by half their weight. A colorized image shows
+    /// its colorize paint as its fill.
     pub fn proxy_paint(&self, stroke: bool, item: Option<usize>) -> Option<(&vectorcraft_color::Paint, Affine, Rect)> {
         let item = self.appearance.item_of_kind(item, !stroke);
+        if item.is_none()
+            && !stroke
+            && let Some(c) = self.extras().colorize.as_deref()
+        {
+            return Some((c, Affine::IDENTITY, self.geometric_bounds().unwrap_or(Rect::ZERO)));
+        }
         if item.is_none()
             && let NodeKind::Text(t) = &self.kind
         {
@@ -675,9 +688,15 @@ impl Node {
 
 impl Node {
     /// Whether this object shows any transparency, itself or anything inside it: object, fill or
-    /// stroke opacity below 100%, a blend mode, an opacity mask, effects or transparent gradient
-    /// stops. Hidden objects show none.
+    /// stroke opacity below 100%, a blend mode, an opacity mask, effects, transparent gradient
+    /// stops or a colorized image. Hidden objects show none.
     pub fn shows_transparency(&self) -> bool {
+        self.shows_transparency_with(&|_| true)
+    }
+
+    /// [`Self::shows_transparency`], counting a colorized image by itself only when `colorize`
+    /// accepts it, for files that write some colorized images in their colorize paint (EPS).
+    pub fn shows_transparency_with(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
         use vectorcraft_color::Paint;
         let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
         let effects = |fx: &[crate::Effect]| fx.iter().any(|e| e.visible);
@@ -685,13 +704,14 @@ impl Node {
             && (self.opacity < 1.0
                 || self.blend != BlendMode::Normal
                 || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+                || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
                 || effects(&self.appearance.effects)
                 || self
                     .appearance
                     .items
                     .iter()
                     .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
-                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency())))
+                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
     }
 }
 

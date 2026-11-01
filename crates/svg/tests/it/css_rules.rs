@@ -228,8 +228,16 @@ fn shared_properties_read_as_svg_export_writes_them() {
         let decl = format!("{k}:{v}").replace('"', "&quot;").replace('\'', "&apos;");
         assert!(style.contains(&decl), "{decl} as in SVG export: {style}");
     }
-    // Lengths are the same numbers, with units on the web.
-    assert!(style.contains("font-size:18") && prop(&r, "font-size") == Some("18px"), "{style}");
+    // Lengths are the same, with units: CSS takes a bare number only for 0, and a browser drops
+    // `font-size:18`, leaving the type at its default size (#3209). Presentation attributes take
+    // bare numbers (`text_layout`).
+    let spacing = prop(&r, "letter-spacing").unwrap_or_default();
+    assert!(prop(&r, "font-size") == Some("18px") && spacing.ends_with("px"), "{r:?}");
+    for decl in ["font-size:18px".to_string(), format!("letter-spacing:{spacing}")] {
+        assert!(style.contains(&decl), "{decl} as in SVG export: {style}");
+    }
+    let inline = export(&d, &ExportOptions { styling: Styling::InlineStyle, ..ExportOptions::default() });
+    assert!(inline.contains("font-size:18px") && inline.contains(&format!("letter-spacing:{spacing}")), "{inline}");
 }
 
 #[test]

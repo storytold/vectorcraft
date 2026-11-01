@@ -445,6 +445,52 @@ fn smooth_level_keeps_corners_it_cannot_round_and_curves_polygons() {
     assert_eq!(smooth_level(&polygon, 0.0), polygon, "0.1 pt is less than the sagitta");
 }
 
+/// The largest distance from a point of `a` to `b` (sampled on `a`, exact on `b`).
+fn one_way_distance(a: &PathData, b: &PathData) -> f64 {
+    use kurbo::ParamCurveNearest;
+    let mut worst = 0.0_f64;
+    for sa in &a.subpaths {
+        for i in 0..sa.segment_count() {
+            let c = sa.segment(i);
+            for k in 0..=64 {
+                let q = c.eval(f64::from(k) / 64.0);
+                let d = b
+                    .subpaths
+                    .iter()
+                    .flat_map(|sb| (0..sb.segment_count()).map(move |j| sb.segment(j).nearest(q, 1e-9).distance_sq))
+                    .fold(f64::INFINITY, f64::min);
+                worst = worst.max(d.sqrt());
+            }
+        }
+    }
+    worst
+}
+
+/// Object › Path › Smooth at level 0 keeps a closed path within 0.1 % of its longer side, a sharp
+/// corner where the path starts included (a drop with a 90° tip at its first anchor).
+#[test]
+fn smooth_level_0_keeps_a_closed_paths_start_corner_within_tolerance() {
+    let n = 24;
+    let step = 1.5 * PI / f64::from(n);
+    let at = |t: f64| {
+        let (r, dr) = (100.0 * (2.0 * t / 3.0).sin(), 200.0 / 3.0 * (2.0 * t / 3.0).cos());
+        (Point::new(r * t.cos(), r * t.sin()), kurbo::Vec2::new(dr * t.cos() - r * t.sin(), dr * t.sin() + r * t.cos()))
+    };
+    let anchors = (0..n)
+        .map(|i| {
+            let (p, d_out) = at(f64::from(i) * step);
+            let d_in = if i == 0 { at(1.5 * PI).1 } else { d_out };
+            vectorcraft_geom::Anchor::with_handles(p, p - d_in * (step / 3.0), p + d_out * (step / 3.0))
+        })
+        .collect();
+    let p = PathData::single(SubPath::new(anchors, true));
+    let b = p.bounds().unwrap();
+    let limit = 0.001 * b.width().max(b.height());
+    let s = smooth_level(&p, 0.0);
+    let moved = one_way_distance(&p, &s).max(one_way_distance(&s, &p));
+    assert!(moved <= limit, "level 0 moved the path by {moved} pt, more than {limit} pt: {:?}", s.subpaths[0].anchors[0]);
+}
+
 #[test]
 fn remove_redundant_collinear_and_curve() {
     let p = PathData::single(SubPath::polyline(

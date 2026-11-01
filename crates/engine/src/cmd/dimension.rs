@@ -197,9 +197,9 @@ fn replace(doc: &mut Document, id: NodeId, dim: Dimension) -> Result<()> {
 
 /// Called inside every edit, so dimensions and their undo history stay in step with the art they
 /// measure. Returns at once in documents without dimensions.
-pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
+pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
     if !doc.dimensions {
-        return Ok(());
+        return Ok(false);
     }
     let mut dimensions = Vec::new();
     doc.walk(|n| {
@@ -208,6 +208,7 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
         }
     });
     doc.dimensions = !dimensions.is_empty();
+    let mut changed = false;
     for (id, old) in dimensions {
         let mut next = old.clone();
         let moved = next.moved.take();
@@ -215,6 +216,7 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
             // A deleted/degenerate source has no valid measurement. Remove its annotation in
             // this same undo step instead of keeping a silently wrong number.
             doc.remove(id)?;
+            changed = true;
             continue;
         }
         // Moved on its own (the art it measures stayed put): it keeps its new place.
@@ -233,9 +235,10 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
             || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next)
         {
             replace(doc, id, next)?;
+            changed = true;
         }
     }
-    Ok(())
+    Ok(changed)
 }
 
 /// Redraw the dimensions of an opened document whose art isn't in its colour mode: files saved

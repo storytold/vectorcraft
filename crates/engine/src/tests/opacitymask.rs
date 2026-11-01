@@ -6,6 +6,7 @@
 use serde_json::{Value, json};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Renderer};
+use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use crate::cmd::maskedit::MASK_EDIT_LAYER;
 use crate::tests::{history, select_with_a_step_to_redo};
@@ -150,6 +151,23 @@ fn mask_options_already_set_record_no_undo_step() {
     assert!(s.execute("transparency.setOpacityMask", &json!({"id": a.0})).is_err(), "no flag given");
 }
 
+/// #4538: while a mask is edited the Layers panel lists only the mask, so New Layer and New
+/// Sublayer are refused instead of adding layers no row shows; they work again afterwards.
+#[test]
+fn new_layers_are_refused_while_a_mask_is_edited() {
+    let mut s = session();
+    editing_mask(&mut s);
+    let layers = doc(&s).layers.len();
+    for cmd in ["layer.new", "layer.newSublayer"] {
+        assert!(s.execute(cmd, &json!({})).is_err(), "{cmd} while the mask is edited");
+    }
+    assert_eq!(doc(&s).layers.len(), layers);
+    s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+    let layers = doc(&s).layers.len();
+    s.execute("layer.new", &json!({})).unwrap();
+    assert_eq!(doc(&s).layers.len(), layers + 1);
+}
+
 #[test]
 fn release_while_editing_leaves_editing_first() {
     let mut s = session();
@@ -168,6 +186,52 @@ fn release_while_editing_leaves_editing_first() {
     // One undo step restores the mask and editing mode.
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(mask(&s, obj).is_some() && doc(&s).mask_edit.is_some());
+}
+
+/// Exit Isolation Mode while a mask is edited leaves mask editing as Stop Editing Opacity Mask
+/// does: the mask keeps the edit, the editing layer is removed, nothing is isolated, the masked
+/// object is selected on its layer, and one undo step returns to mask editing.
+#[test]
+fn exit_isolation_while_editing_leaves_mask_editing() {
+    let mut s = session();
+    let obj = editing_mask(&mut s);
+    s.execute("object.move", &json!({"dx": 50, "dy": 0})).unwrap();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.doc.mask_edit.is_none() && st.isolation.is_none() && !has_edit_layer(&st.doc));
+    assert_eq!(st.selection.objects, vec![obj]);
+    assert_eq!(st.active_layer, Some(st.doc.layers[0].id));
+    assert_eq!(st.history.undo.last().unwrap().label, "Stop Editing Opacity Mask");
+    assert_eq!(mask(&s, obj).unwrap().art.geometric_bounds().unwrap().x0, 50.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.mask_edit.map(|m| m.layer);
+    assert!(layer.is_some() && st.isolation == layer, "back in mask editing");
+}
+
+/// Point type that a Type tool click placed in the mask and left empty is discarded when Stop
+/// Editing Opacity Mask or Exit Isolation Mode leaves mask editing, so the mask does not keep it.
+#[test]
+fn empty_point_type_is_not_saved_into_the_mask() {
+    for cmd in ["transparency.stopEditingOpacityMask", "object.exitIsolation"] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let obj = editing_mask(&mut s);
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 250.0, 250.0), v).unwrap();
+        }
+        assert!(s.tool_wants_text(), "{cmd}: the click places point type to edit");
+        s.execute(cmd, &json!({})).unwrap();
+        assert!(!s.tool_wants_text(), "{cmd}");
+        let art = &mask(&s, obj).unwrap().art;
+        assert!(art.children().is_none() && !matches!(art.kind, vectorcraft_doc::NodeKind::Text(_)), "{cmd}: the mask keeps only the square");
+        assert_eq!(art.geometric_bounds().unwrap().x1, 100.0, "{cmd}");
+        let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
+        // The mask took the type in when it was placed, so its removal is a step of its own.
+        assert_eq!(labels[labels.len() - 3..], ["Type", "Discard Empty Type", "Stop Editing Opacity Mask"], "{cmd}");
+    }
 }
 
 /// Releasing the masks of a group and of an object inside it puts each mask's art directly above
@@ -192,6 +256,76 @@ fn release_of_a_masked_group_and_a_masked_object_inside_it_keeps_order_and_ids()
     assert_eq!(s.doc().unwrap().selection.objects, [group, NodeId(n), a, NodeId(n + 1)]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(*doc(&s) == before, "Undo gives back the document");
+}
+
+/// Opacity mask editing is not entered in pattern editing mode: Edit Opacity Mask and View Opacity
+/// Mask are off for a masked object in the tile, and so is Make Opacity Mask for one object, which
+/// would edit its new empty mask; a single target given in `ids` is refused. Make Opacity Mask with
+/// two objects still masks one with the other. Pattern editing goes on, its layer still isolated.
+/// After Done the mask is edited again.
+#[test]
+fn opacity_mask_editing_is_not_entered_in_pattern_editing_mode() {
+    let mut s = session();
+    let (obj, m) = (rect(&mut s, 0.0, 200.0), rect(&mut s, 0.0, 100.0));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [obj.0, m.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [obj.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let tile = doc(&s).pattern_edit.as_ref().unwrap().layer;
+    let copy = doc(&s).node(tile).unwrap().children().unwrap()[0].id;
+    assert!(mask(&s, copy).is_some(), "the tile's copy has the mask");
+    let why = "finish editing the pattern first";
+    let off = |s: &mut Session, cmd: &str, p: Value| {
+        let err = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&err, EngineError::Disabled(id, w) if id == cmd && w == why), "{cmd} {p}: {err}");
+    };
+    off(&mut s, "transparency.editOpacityMask", json!({}));
+    off(&mut s, "transparency.editOpacityMask", json!({"id": copy.0}));
+    off(&mut s, "transparency.viewOpacityMask", json!({}));
+    off(&mut s, "transparency.viewOpacityMask", json!({"on": true, "id": copy.0}));
+    let one = rect(&mut s, 220.0, 30.0);
+    s.execute("select.set", &json!({"ids": [one.0]})).unwrap();
+    off(&mut s, "transparency.makeOpacityMask", json!({}));
+    off(&mut s, "transparency.makeOpacityMask", json!({"ids": [one.0]}));
+    // With two objects selected the command is on, and one target given in `ids` is refused.
+    s.execute("select.set", &json!({"ids": [copy.0, one.0]})).unwrap();
+    for target in [one, tile] {
+        let err = s.execute("transparency.makeOpacityMask", &json!({"ids": [target.0]})).unwrap_err();
+        assert!(err.to_string().ends_with(why), "{err}");
+    }
+    let st = s.doc().unwrap();
+    assert!(st.doc.mask_edit.is_none() && st.mask_view.is_none() && mask(&s, one).is_none());
+    assert_eq!((st.isolation, st.active_layer), (Some(tile), Some(tile)));
+    // Two objects: the top one masks the other, without mask editing.
+    let top = rect(&mut s, 220.0, 10.0);
+    s.execute("select.set", &json!({"ids": [one.0, top.0]})).unwrap();
+    let r = s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    assert_eq!(r, json!({"id": one.0, "editing": false}));
+    assert_eq!(s.doc().unwrap().isolation, Some(tile));
+    assert!(doc(&s).pattern_edit.is_some());
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    s.execute("transparency.editOpacityMask", &json!({"id": obj.0})).unwrap();
+    assert_eq!(doc(&s).mask_edit.map(|e| e.object), Some(obj));
+}
+
+/// In pattern editing mode a targeted sublayer holding two objects is one target, so Make Opacity
+/// Mask is off for it.
+#[test]
+fn make_opacity_mask_is_off_for_a_targeted_sublayer_in_pattern_editing_mode() {
+    let mut s = session();
+    let obj = rect(&mut s, 0.0, 200.0);
+    s.execute("select.set", &json!({"ids": [obj.0]})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let tile = doc(&s).pattern_edit.as_ref().unwrap().layer;
+    let sub = s.execute("layer.newSublayer", &json!({"parent": tile.0})).unwrap()["id"].as_u64().unwrap();
+    let (a, b) = (rect(&mut s, 220.0, 30.0), rect(&mut s, 260.0, 30.0));
+    s.execute("layer.move", &json!({"ids": [a.0, b.0], "target": sub})).unwrap();
+    let kids = doc(&s).node(NodeId(sub)).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    assert_eq!(kids, vec![a, b], "the new objects are drawn in the sublayer");
+    s.execute("layer.target", &json!({"id": sub})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 2, "the sublayer's two objects are selected");
+    let err = s.execute("transparency.makeOpacityMask", &json!({})).unwrap_err();
+    let why = "finish editing the pattern first";
+    assert!(matches!(&err, EngineError::Disabled(id, w) if id == "transparency.makeOpacityMask" && w == why), "{err}");
 }
 
 #[test]

@@ -867,6 +867,11 @@ impl SaveJob {
     /// its own also ends its Data Recovery copy.
     pub fn complete(self, s: &mut Session, uid: u64) {
         let saved = self.plan.retargets() && self.plan.path.is_some();
+        if saved && self.plan.format.id == "vectorcraft" {
+            let mut last = self.plan.options.clone();
+            last.retain(|k, _| !ARTBOARD_PARAMS.contains(&k.as_str()) && !matches!(k.as_str(), "separateArtboards" | "compress"));
+            s.prefs.native_save_options = last;
+        }
         // The other open documents that place this one show the new version.
         let written = self.plan.path.clone().filter(|_| matches!(self.plan.format.id, "vectorcraft" | "template"));
         if let Some(st) = s.document_mut(uid) {
@@ -892,7 +897,7 @@ pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8])
 }
 
 /// A save command: plan, then write with the file system (a native file as it is encoded).
-fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
+pub(crate) fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
     let plan = save_plan(s, mode, p)?;
     let job = save_job(s, plan)?;
     let uid = s.doc()?.uid;
@@ -932,7 +937,12 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
     let f = format(id)
         .filter(|f| f.write || SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id))
         .ok_or_else(|| bad(C, format!("`{id}` is no writable format (see document.formats)")))?;
-    let saved = st.filter(|d| d.format == f.id).map(remembered_save_options);
+    // A document not yet saved as a native file starts from the native options used last.
+    let saved = st
+        .filter(|d| d.format == f.id)
+        .map(remembered_save_options)
+        .filter(|m| !m.is_empty())
+        .or_else(|| (f.id == "vectorcraft" && !s.prefs.native_save_options.is_empty()).then(|| s.prefs.native_save_options.clone()));
     // A native save compresses as Use Compression says, unless told otherwise.
     let prefs = with_compression_pref(&s.prefs, &json!({}));
     let mut v = f.to_json();
@@ -1008,7 +1018,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Format Options",
             [],
             None,
-            "{format?: a writable format id or ait (default: the document's own)} → {id, label, extensions, mime, read, write, raster, options: {name: {type, default, description, value}}, saveFormats: [{id, label, extensions}]}; value = the document's option as last saved in that format, else the default",
+            "{format?: a writable format id or ait (default: the document's own)} → {id, label, extensions, mime, read, write, raster, options: {name: {type, default, description, value}}, saveFormats: [{id, label, extensions}]}; value = the document's option as last saved in that format, else (native, for a document not yet saved as one) as the last native save used it, else the default",
             always,
             format_options
         ),

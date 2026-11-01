@@ -1,6 +1,8 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::panel_chrome::chevron_cell;
-use super::text::{after_shift_enter, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_dialog_focus};
+use super::text::{
+    after_shift_enter, focus_field, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus, take_dialog_focus,
+};
 use super::{CornerRadius, RangeInclusive, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Unit, id_with, pos2, scrub, vec2};
 
 /// Preferences › Units › Numbers Without Units Are Points (#394; on until set): the app sets it
@@ -47,6 +49,19 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit
     num_field_named(ui, id, None, value, unit, width)
 }
 
+/// [`num_field`] whose value is clamped to `bounds` (points).
+pub fn num_field_within(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[])
+}
+
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
@@ -55,7 +70,7 @@ pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
 }
 
 /// Any number: the bounds of a field that has none.
-const ANY: RangeInclusive<f64> = f64::NEG_INFINITY..=f64::INFINITY;
+pub(crate) const ANY: RangeInclusive<f64> = f64::NEG_INFINITY..=f64::INFINITY;
 
 /// `v` within `bounds` (bounds the wrong way round or not numbers don't panic, as `f64::clamp` would).
 fn within(v: f64, bounds: &RangeInclusive<f64>) -> f64 {
@@ -87,15 +102,33 @@ fn unit_field(
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
     let typed = typed_unit(ui.ctx(), unit);
     let read = |b: &str| typed.parse(&decimal_point(b));
-    let bounds = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
+    let bounds_unit = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
     let stops: Vec<f64> = stops.iter().map(|&s| unit.from_pt(s)).collect();
-    let stepped = step_value(ui, &resp, &mut buf, &bounds, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
-    let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds);
+    let stepped =
+        step_value(ui, &resp, &mut buf, &bounds_unit, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
+    let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if commit {
-        read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None })
+        match read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None }) {
+            Some(v) => {
+                let clamped = within(v, &bounds);
+                let formatted = unit.format(clamped);
+                ui.data_mut(|d| d.insert_temp(id, formatted));
+                Some(clamped)
+            }
+            None => {
+                let end = ui.input(|i| i.time + 0.25);
+                ui.data_mut(|d| {
+                    d.remove::<String>(id);
+                    d.insert_temp(id.with("invalid-flash"), end);
+                });
+                crate::widgets::reject_dialog_commit(ui.ctx());
+                ui.ctx().request_repaint();
+                None
+            }
+        }
     } else {
+        ui.data_mut(|d| d.insert_temp(id, buf.clone()));
         stepped.or(scrubbed).map(|v| unit.to_pt(v))
     }
 }
@@ -313,7 +346,7 @@ pub fn range_field_named(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None, false).map(|v| within(round_to(v, places), &range))
 }
 
 /// [`range_field`] whose ↑/↓ and wheel take `step`'s steps instead of whole numbers (see
@@ -333,7 +366,7 @@ pub fn range_field_stepped(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step)).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step), false).map(|v| within(round_to(v, places), &range))
 }
 
 /// [`plain_field`] for a value the selected objects may not share: `None` shows a blank field.
@@ -352,11 +385,12 @@ pub fn mixed_field_named(
     width: f32,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None)
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, false)
 }
 
 /// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
-/// when it is given (see [`SliderValue::step`]).
+/// when it is given (see [`SliderValue::step`]). Armed with id salt `id` ([`arm_field_focus`]), it
+/// takes the keyboard focus with its value selected.
 #[allow(clippy::too_many_arguments)]
 fn bounded_field(
     ui: &mut Ui,
@@ -369,7 +403,9 @@ fn bounded_field(
     width: f32,
     bounds: &RangeInclusive<f64>,
     step: Option<fn(f64, f64) -> f64>,
+    parentheses: bool,
 ) -> Option<f64> {
+    let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let show = |value: f64| field_text(value, suffix, decimals);
     // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
@@ -377,11 +413,18 @@ fn bounded_field(
         let suffix = suffix.trim();
         let buf = decimal_point(buf);
         let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
-        vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
+        vectorcraft_doc::parse_number(&bare.replace(['%', '°', '(', ')'], ""))
     };
-    let shown = value.map(show).unwrap_or_default();
+    let shown = value.map(|v| if parentheses { format!("({})", show(v)) } else { show(v) }).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
+    if armed {
+        focus_field(ui, id, &shown);
+    }
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
+    if armed {
+        // A field armed while it has focus keeps the text typed into it: select all of that text.
+        select_all(ui, id, &buf);
+    }
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step at the field's precision (a count ignores Ctrl/Cmd's tenth); a drag on
     // its label scrubs it.
@@ -466,7 +509,7 @@ pub fn spin_field_stops_named(
     presets: &[f64],
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
         unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets)
     })
     .and_then(SpinPick::value)
@@ -477,6 +520,7 @@ pub fn spin_field_stops_named(
 pub enum SpinPick {
     Value(f64),
     Auto,
+    Optical,
 }
 
 impl SpinPick {
@@ -485,6 +529,7 @@ impl SpinPick {
         match self {
             SpinPick::Value(v) => Some(v),
             SpinPick::Auto => None,
+            SpinPick::Optical => None,
         }
     }
 }
@@ -521,7 +566,7 @@ pub fn spin_field_auto_named(
     presets: &[f64],
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, auto, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
+    spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
         unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[])
     })
 }
@@ -560,10 +605,41 @@ pub fn spin_plain_named(
     let label = take_previous_label(ui);
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
-        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None)
+    spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
+        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, false)
     })
     .and_then(SpinPick::value)
+}
+
+/// Kerning's numeric field and automatic method choices.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_kerning(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    automatic: Option<bool>,
+    optical: Option<bool>,
+    optical_label: &str,
+    parentheses: bool,
+    width: f32,
+    presets: &[f64],
+) -> Option<SpinPick> {
+    let label = take_previous_label(ui);
+    spin_generic(
+        ui,
+        label,
+        value,
+        automatic,
+        optical,
+        Some(optical_label),
+        width,
+        10.0,
+        -1000.0,
+        presets,
+        &[],
+        &|v| format!("{v}"),
+        &mut |ui, fw, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses),
+    )
 }
 
 type SpinField<'a> = dyn FnMut(&mut Ui, f32, Option<PreviousLabel>) -> Option<f64> + 'a;
@@ -574,6 +650,8 @@ fn spin_generic(
     label: Option<PreviousLabel>,
     value: Option<f64>,
     auto: Option<bool>,
+    optical: Option<bool>,
+    optical_label: Option<&str>,
     width: f32,
     step: f64,
     min: f64,
@@ -609,8 +687,10 @@ fn spin_generic(
             ui.painter().line_segment([m + vec2(0.0, d), m + vec2(3.0, -d)], Stroke::new(1.2, c));
         }
         sresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, tl!("Step up or down")));
-        // A blank field (values that differ) has nothing to step from.
-        if sresp.clicked()
+        // A blank field (values that differ) has nothing to step from. A click steps once; an
+        // arrow held down steps again and again after a pause, as a spin button does (#4267).
+        let repeat = held_repeat(ui, &sresp);
+        if (repeat == Some(true) || (sresp.clicked() && repeat.is_none()))
             && let Some(p) = sresp.interact_pointer_pos()
             && let Some(v) = value
         {
@@ -630,6 +710,11 @@ fn spin_generic(
                 {
                     out = Some(SpinPick::Auto);
                 }
+                if let Some(on) = optical
+                    && ui.selectable_label(on, optical_label.unwrap_or_default()).clicked()
+                {
+                    out = Some(SpinPick::Optical);
+                }
                 let current = value.filter(|_| auto != Some(true));
                 for p in presets {
                     if ui.selectable_label(current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p)).clicked() {
@@ -642,10 +727,35 @@ fn spin_generic(
     out
 }
 
+/// How long a spinner arrow is held before it repeats, and how often it repeats then, in seconds.
+const REPEAT_DELAY: f64 = 0.45;
+const REPEAT_EVERY: f64 = 0.06;
+
+/// A spinner arrow (`resp`) held down. `None` until it has been held for [`REPEAT_DELAY`]: a
+/// click then steps once, on release. After that, `Some(true)` on each frame it steps again
+/// (every [`REPEAT_EVERY`]) and `Some(false)` on the frames between and on the release, which
+/// must not step once more.
+fn held_repeat(ui: &Ui, resp: &egui::Response) -> Option<bool> {
+    let id = resp.id.with("repeat");
+    let now = ui.input(|i| i.time);
+    let state: Option<(f64, f64, bool)> = ui.data(|d| d.get_temp(id));
+    if !resp.is_pointer_button_down_on() {
+        ui.data_mut(|d| d.remove::<(f64, f64, bool)>(id));
+        return state.filter(|(_, _, repeated)| *repeated).map(|_| false);
+    }
+    let (start, last, repeated) = state.unwrap_or((now, now, false));
+    let due = now - start >= REPEAT_DELAY && now - last >= REPEAT_EVERY;
+    ui.data_mut(|d| d.insert_temp(id, (start, if due { now } else { last }, repeated || due)));
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
+    (repeated || due).then_some(due)
+}
+
 /// Spinner buttons follow the same modifier sizes as ↑/↓ in a focused number field:
 /// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step, which also stops at each of
 /// `stops` ([`step_through`]). A stop that `show` writes with the same text as the value counts as
-/// reached, as in the field.
+/// reached, as in the field. As with ↑/↓, a plain or Ctrl/Cmd step goes to the next multiple of its
+/// size ([`step_to_multiple`]), a Shift step adds or takes ten steps, and the result is rounded to
+/// [`STEP_DECIMALS`] places (#4490); a stop keeps its places.
 pub(super) fn spinner_step(
     value: f64,
     step: f64,
@@ -655,12 +765,17 @@ pub(super) fn spinner_step(
     stops: &[f64],
     show: &dyn Fn(f64) -> String,
 ) -> f64 {
-    let (mods, multiplier) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).map_or((egui::Modifiers::NONE, 1.0), |&(m, f)| (m, f));
-    if mods == egui::Modifiers::NONE && !stops.is_empty() {
-        return step_through(value, step, if up { 1.0 } else { -1.0 }, stops, shown_alike(show)).max(min);
-    }
-    let delta = step * multiplier;
-    (value + if up { delta } else { -delta }).max(min)
+    let (mods, multiplier) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).copied().unwrap_or((egui::Modifiers::NONE, 1.0));
+    let size = step * multiplier;
+    let n = if up { 1.0 } else { -1.0 };
+    let v = if mods == egui::Modifiers::SHIFT {
+        value + size * n
+    } else if mods == egui::Modifiers::NONE && !stops.is_empty() {
+        step_through(value, size, n, stops, shown_alike(show))
+    } else {
+        step_to_multiple(value, size, n)
+    };
+    (if stops.contains(&v) { v } else { round_to(v, STEP_DECIMALS) }).max(min)
 }
 
 /// A number field that may be empty (Stroke dash/gap): `value` (points) shows in `unit` without
@@ -703,6 +818,7 @@ pub fn opt_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
                 egui::TextEdit::singleline(&mut buf)
                     .id(id)
                     .frame(egui::Frame::NONE)
+                    .align(egui::Align2::LEFT_CENTER)
                     .desired_width(width - 10.0)
                     .font(egui::FontId::proportional(12.5))
                     .text_color(if enabled { t.text_strong } else { t.text_disabled }),

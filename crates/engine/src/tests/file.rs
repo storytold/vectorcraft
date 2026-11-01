@@ -409,7 +409,7 @@ fn export_selection_crops_to_the_selection() {
     assert_eq!(u32::from_be_bytes([png[16], png[17], png[18], png[19]]), (w * 2.0).round() as u32);
     let svg = s.execute("document.exportSelection", &json!({"format": "svg"})).unwrap();
     let text = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
-    assert_eq!(text.matches("<path").count(), 1, "{text}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&text), 1, "{text}");
 }
 
 /// The crop of a selection export takes in the object's effects: a drop shadow, an outer glow and

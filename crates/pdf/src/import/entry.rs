@@ -25,6 +25,35 @@ pub(super) const MAX_NESTED: u32 = 8;
 /// A tiling pattern read this many times with the same art is taken to always draw it.
 pub(super) const PATTERN_REUSE: u32 = 16;
 
+/// The most objects one import makes (paths, images, lines of type, and the copies of mask art
+/// each masked object takes): half of what a saved document may hold to open again
+/// ([`vectorcraft_doc::node::MAX_READ_NODES`]: 4M, 512K in the web build), leaving room for the
+/// groups, clips and layers around them. A page of a million paths still comes in whole, as an
+/// SVG or CAD drawing of two million objects does. What it stops is a small file drawing one form
+/// over and over, which neither the scan's operator limit nor the interpreter's budgets bound
+/// (#3569: 1 KB drawing 25 squares 32,000 times took 877 MB, about 1 KB an object, so this is
+/// about 2 GB).
+const MAX_OBJECTS: usize = vectorcraft_doc::node::MAX_READ_NODES / 2;
+
+/// Warning: the import reached [`MAX_OBJECTS`].
+pub(super) const TOO_MANY_OBJECTS: &str = "the file draws more objects than can be imported: the rest were left out";
+
+/// [`MAX_OBJECTS`], lowered by tests that need an import past it.
+#[cfg(not(test))]
+pub(super) fn max_objects() -> usize {
+    MAX_OBJECTS
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_MAX_OBJECTS: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_OBJECTS) };
+}
+
+#[cfg(test)]
+pub(super) fn max_objects() -> usize {
+    TEST_MAX_OBJECTS.with(std::cell::Cell::get)
+}
+
 /// Stands for the group of art whose group couldn't be told (see [`Builder::unsure`]): it goes
 /// to a hidden, non-printing layer of its page.
 pub(super) const UNSORTED: usize = usize::MAX;

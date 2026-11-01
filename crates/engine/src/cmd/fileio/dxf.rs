@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export DXF",
         [],
         None,
-        "{path?, version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (every stroke as its filled outline), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}",
+        "{path?, version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (strokes a CAD line can't draw as their filled outlines, with editability too; also strokes wider than 2.11 mm, and every stroke in R13 and R14), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}",
         has_doc,
         export_dxf
     )]
@@ -64,7 +64,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         name: "alterPaths",
         ty: "boolean",
         default: "false",
-        description: "Alter Paths for Appearance: every stroke as its filled outline",
+        description: "Alter Paths for Appearance: strokes a CAD line can't draw as their filled outlines, with editability too; also strokes wider than 2.11 mm, and every stroke in R13 and R14",
     },
     FormatOption { name: "outlineText", ty: "boolean", default: "false", description: "type as glyph outlines (always with preserve: appearance)" },
     FormatOption { name: "selectedOnly", ty: "boolean", default: "false", description: "only the selected objects, in their layers" },
