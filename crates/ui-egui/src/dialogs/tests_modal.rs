@@ -575,6 +575,28 @@ fn smooth_slider_previews_auto_smooth_and_keeps_the_result() {
     assert_ne!(app.session.doc().unwrap().doc, before);
 }
 
+/// Tab goes through the controls of the Simplify and Smooth sliders' strip and does not stop on the
+/// backdrop that takes a click outside it.
+#[test]
+fn tab_skips_the_backdrop_of_the_simplify_and_smooth_sliders() {
+    for (menu, kind) in [("object.path.simplify", simplify_slider::KIND), ("object.path.smooth", smooth_slider::KIND)] {
+        let (ctx, mut app) = (ctx(), app_with_dense_path());
+        crate::menus::invoke(&mut app, menu, json!({}));
+        settle(&ctx, &mut app);
+        let strip = rect_of(&ctx, egui::Id::unique(("dialog", kind)));
+        let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 30, |events| {
+            frame(&ctx, &mut app, events);
+        });
+        let inside = |s: &egui::Id| ctx.read_response(*s).is_some_and(|r| r.rect.is_positive() && strip.contains_rect(r.rect));
+        assert!(stops.iter().any(inside), "{kind}: Tab reaches a control in the strip: {stops:?}");
+        let backdrop: Vec<egui::Id> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().filter(|(l, _)| **l == modal::backdrop()).flat_map(|(_, w)| w.iter()).map(|w| w.id).collect()
+        });
+        assert!(!backdrop.is_empty(), "{kind}: the backdrop is drawn");
+        assert!(!stops.iter().any(|id| backdrop.contains(id)), "{kind}: Tab stops on the backdrop: {stops:?}");
+    }
+}
+
 /// More Options opens the Simplify dialog at the slider's tolerance. With "Open this dialog with
 /// these settings next time" ticked, OK makes the menu item open the dialog on its settings; with
 /// it unticked, the slider again.
