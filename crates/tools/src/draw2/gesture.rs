@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
-use super::{FEEDBACK, eraser_area, points_json, polyline};
+use super::{FEEDBACK, blob_area, eraser_area, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -71,9 +71,9 @@ pub struct GestureTool {
     pub size_pressure: bool,
     /// Blob Brush and Eraser Tool Options' Size Variation, in points.
     pub size_variation: f64,
-    /// The angle of the Eraser tip's long axis, in degrees counter-clockwise from horizontal.
+    /// The angle of the Blob Brush or Eraser tip's long axis, in degrees counter-clockwise from horizontal.
     pub angle: f64,
-    /// The Eraser tip's short axis in percent of its long one (100: round).
+    /// The Blob Brush or Eraser tip's short axis in percent of its long one (100: round).
     pub roundness: f64,
     /// Fill new pencil/brush strokes.
     pub fill: bool,
@@ -439,6 +439,8 @@ impl GestureTool {
                     "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
                     "sizeVariation": self.size_variation,
                     "fidelity": self.fidelity,
+                    "angle": self.angle,
+                    "roundness": self.roundness,
                     "keepSelected": self.keep_selected,
                     "mergeOnlySelection": self.merge_only_selection
                 }),
@@ -691,15 +693,27 @@ impl Tool for GestureTool {
             _ => 1.0,
         };
         let color = if self.id == "eraser" { [0x80, 0x80, 0x80] } else { FEEDBACK };
-        // A tip that is not round shows the outline of the area it covers.
-        // shortcut: at its Size even with Pressure; the release erases at the pen's widths.
-        if self.id == "eraser" && self.roundness < 100.0 {
-            let area = eraser_area(&self.points, self.size, self.angle, self.roundness);
-            o.push(Overlay::Path { path: area.to_bezpath(), color, width: 1.0, dashed: false });
-            return o;
-        }
-        // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
-        if let Some(pressures) = self.size_pressures() {
+        // A tip that is not round shows the outline of the area it covers, each step of the drag
+        // as wide as the pen pressed there with Size set to Pressure.
+        if matches!(self.id, "eraser" | "blobBrush") && self.roundness < 100.0 && !self.smoothing {
+            let area = |pts: &[Point], size| {
+                if self.id == "blobBrush" {
+                    blob_area(pts, size, self.angle, self.roundness)
+                } else {
+                    eraser_area(pts, size, self.angle, self.roundness)
+                }
+            };
+            if let Some(pressures) = self.size_pressures() {
+                for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
+                    let pressure = f64::from(p[0] + p[1]) / 2.0;
+                    let size = super::pressure_size(self.size, self.size_variation, pressure);
+                    o.push(Overlay::Path { path: area(seg, size).to_bezpath(), color, width: 1.0, dashed: false });
+                }
+            } else {
+                o.push(Overlay::Path { path: area(&self.points, self.size).to_bezpath(), color, width: 1.0, dashed: false });
+            }
+        } else if let Some(pressures) = self.size_pressures() {
+            // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
             for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
                 let pressure = f64::from(p[0] + p[1]) / 2.0;
                 let width = super::pressure_size(self.size, self.size_variation, pressure) * cx.zoom;
@@ -785,6 +799,8 @@ impl Tool for GestureTool {
                     "size": self.size,
                     "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
                     "sizeVariation": self.size_variation,
+                    "angle": self.angle,
+                    "roundness": self.roundness,
                     "keepSelected": self.keep_selected,
                     "mergeOnlySelection": self.merge_only_selection
                 })
@@ -810,7 +826,7 @@ impl Tool for GestureTool {
             },
             "sizeVariation" if self.varies_size() => self.size_variation = v.as_f64().unwrap_or(self.size_variation).clamp(0.0, 1000.0),
             "angle" => self.angle = v.as_f64().unwrap_or(self.angle).clamp(-180.0, 180.0),
-            "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(1.0, 100.0),
+            "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(if self.id == "blobBrush" { 0.0 } else { 1.0 }, 100.0),
             "fill" => self.fill = v.as_bool().unwrap_or(self.fill),
             "altSmooth" => self.alt_smooth = v.as_bool().unwrap_or(self.alt_smooth),
             "livePreview" if self.id == "pencil" => self.live_preview = v.as_bool().unwrap_or(self.live_preview),

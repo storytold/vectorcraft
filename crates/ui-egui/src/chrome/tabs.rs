@@ -178,7 +178,8 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
             crumbs.push(Crumb { id: None, is_layer: false, name: pn.clone() });
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
-        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::click_and_drag());
+        // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
+        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());

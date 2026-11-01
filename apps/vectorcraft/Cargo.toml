@@ -54,7 +54,12 @@ pollster = "1"
 # Win32_UI_WindowsAndMessaging has `MSG` and `WM_POINTERDOWN`, which src/windows_stylus.rs uses to
 # read a pen's barrel button from its pointer messages. Win32_UI_Input_Pointer has
 # `GetPointerPenInfo`, which it uses to read the pen's pressure and which end of the pen is down.
-windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi", "Win32_UI_Input_Pointer", "Win32_UI_WindowsAndMessaging"] }
+# Win32_System_Threading has `GetProcessAffinityMask`, which src/windows_cores.rs uses to count the
+# cores the process may run on. Win32_UI_Input_KeyboardAndMouse has `GetKeyState`, which
+# src/caps_lock.rs uses to read whether Caps Lock is on.
+windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Input_Pointer", "Win32_UI_WindowsAndMessaging"] }
+# The renderer's worker count follows those cores (src/windows_cores.rs).
+vectorcraft-render = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # The macOS menu bar (src/mac_menu.rs): Tauri's menu crate, AppKit menus behind a safe API (no GTK
@@ -86,8 +91,8 @@ pollster = "1"
 winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita-notitle"] }
 # A drawing tablet's pen pressure under X11 and XWayland (src/tablet.rs): XInput2 raw events on a
 # second X connection, x11rb's pure-Rust `RustConnection`. MIT OR Apache-2.0, already in the build
-# through winit with the `xinput` feature.
-x11rb = { version = "0.13", default-features = false, features = ["xinput"] }
+# through winit with the `xinput` feature. XKB reads Caps Lock's locked modifier state (src/caps_lock.rs).
+x11rb = { version = "0.13", default-features = false, features = ["xinput", "xkb"] }
 
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
 # so Automatic draws on that one. Both are already in the build through winit.

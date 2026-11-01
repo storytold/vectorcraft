@@ -114,6 +114,41 @@ fn moving_type_in_perspective_moves_its_projection() {
 }
 
 #[test]
+fn moving_type_whose_projection_would_overflow_is_refused() {
+    let (mut s, _) = persp_session();
+    let id = persp_text(&mut s);
+    let NodeKind::Text(t) = &node(&s, id).kind else { panic!("type") };
+    let flat = t.bounds().unwrap();
+    // A stored projection that maps each point p of the type to k·(p − 0.9·q), with q its top-left
+    // corner: a document can hold it (its entries are finite, and its w row is already 1) and the
+    // type draws, but its product with a scale by 2 in perspective overflows, since its move,
+    // 0.9·k·q, is larger than any point it draws.
+    let step = grid(&s).transform_map(Plane::Right, 0.0, vectorcraft_geom::Affine::scale(2.0), 0.0).unwrap();
+    let q = flat.origin();
+    let scaled = |e: i32| {
+        let k = 2f64.powf(f64::from(e) / 16.0);
+        vectorcraft_geom::Homography([[k, 0.0, -0.9 * k * q.x], [0.0, k, -0.9 * k * q.y], [0.0, 0.0, 1.0]])
+    };
+    let finite = |m: &vectorcraft_geom::Homography| m.to_array().iter().all(|v| v.is_finite());
+    let draws = |m: &vectorcraft_geom::Homography| {
+        let drawn = m.map_rect_bbox(flat);
+        drawn.is_some_and(|b| step.map_rect_bbox(b).is_some()) && vectorcraft_geom::Homography::from_array(m.to_array()) == Some(*m)
+    };
+    let e = (0..16 * 1024).find(|e| draws(&scaled(*e)) && !finite(&step.then_after(&scaled(*e)))).unwrap_or_else(|| panic!("{step:?} {flat:?}"));
+    let big = scaled(e);
+    let mut doc = s.doc().unwrap().doc.clone();
+    let mut extras = std::sync::Arc::make_mut(&mut doc).node_mut(id).unwrap().extras_mut();
+    extras.perspective.as_deref_mut().unwrap().projection = Some(big.to_array());
+    drop(extras);
+    s.doc_mut().unwrap().doc = doc;
+    let before = (node(&s, id), undo_len(&s));
+    assert!(s.execute("perspective.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 2, 0, 0]})).is_err());
+    assert_eq!((node(&s, id), undo_len(&s)), before, "the document is unchanged");
+    let stored = node(&s, id).extras().perspective.as_deref().and_then(|p| p.projection).unwrap();
+    assert!(stored.iter().all(|v| v.is_finite()));
+}
+
+#[test]
 fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     let (mut s, _) = persp_session();
     let id = persp_text(&mut s);
@@ -139,6 +174,37 @@ fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     // Not type in perspective: refused.
     let (mut s2, rect) = persp_session();
     assert!(s2.execute("perspective.editText", &json!({"id": rect.0})).is_err());
+}
+
+#[test]
+fn edit_text_whose_flat_view_would_overflow_is_refused() {
+    let (mut s, _) = persp_session();
+    let id = persp_text(&mut s);
+    let NodeKind::Text(t) = &node(&s, id).kind else { panic!("type") };
+    let flat = t.bounds().unwrap();
+    // A stored projection that draws the type `4k` times its size: a document can hold it (its w
+    // row is already 1) and the type draws, but the projection that shows it flat where it is
+    // drawn overflows.
+    let scaled = |e: i32| {
+        let k = 2f64.powf(f64::from(e) / 16.0);
+        vectorcraft_geom::Homography([[4.0 * k, 0.0, 0.0], [0.0, 4.0 * k, 0.0], [0.0, 0.0, 1.0]])
+    };
+    let overflows = |m: &vectorcraft_geom::Homography| {
+        let Some(drawn) = m.map_rect_bbox(flat) else { return false };
+        let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
+        let moved = m.then_after(&vectorcraft_geom::Homography::from_affine(shift.inverse()));
+        vectorcraft_geom::Homography::from_array(m.to_array()) == Some(*m) && moved.to_array().iter().any(|v| !v.is_finite())
+    };
+    let e = (0..16 * 1024).find(|e| overflows(&scaled(*e))).unwrap_or_else(|| panic!("{flat:?}"));
+    let mut doc = s.doc().unwrap().doc.clone();
+    let mut extras = std::sync::Arc::make_mut(&mut doc).node_mut(id).unwrap().extras_mut();
+    extras.perspective.as_deref_mut().unwrap().projection = Some(scaled(e).to_array());
+    drop(extras);
+    s.doc_mut().unwrap().doc = doc;
+    let before = (node(&s, id), undo_len(&s));
+    assert!(s.execute("perspective.editText", &json!({"id": id.0})).is_err());
+    assert_eq!((node(&s, id), undo_len(&s)), before, "the document is unchanged");
+    assert_eq!(s.doc().unwrap().isolation, None, "not in isolation mode");
 }
 
 /// Edit Text, which shows the type in isolation mode, is off while an opacity mask is edited.

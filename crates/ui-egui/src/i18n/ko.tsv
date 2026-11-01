@@ -42,6 +42,15 @@ font-technology	Variable	가변
 	Arabic	아라비아어
 	Hindi	힌디어
 	Farsi	페르시아어
+digits	Devanagari	데바나가리
+digits	Bengali	벵골어
+digits	Gurmukhi	구르무키
+digits	Gujarati	구자라트어
+digits	Odia	오리야어
+digits	Tamil	타밀어
+digits	Telugu	텔루구어
+digits	Kannada	칸나다어
+digits	Malayalam	말라얄람어
 	Favorites	즐겨찾기
 	Flip	뒤집기
 	Japanese	일본어
@@ -949,7 +958,7 @@ font-technology	Variable	가변
 	Apply Last Gradient	마지막 그레이디언트 적용
 	Apply Paragraph Style	단락 스타일 적용
 	Apply to All	모두에 적용
-	Apply to All ({count} more missing)	모두에 적용(누락 {count}개 더 있음)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	모두에 적용(누락 {n}개 더 있음)
 	Arc	호
 	Arc Tool	호 도구
 	Area / Path Type	영역/패스 문자
@@ -1226,6 +1235,13 @@ font-technology	Variable	가변
 	Create Path	패스 만들기
 	Create Slice	슬라이스 만들기
 	Create Sub-folders	하위 폴더 만들기
+	Clear Selection	선택 지우기
+	Export PDFs As:	PDF 내보내기 방식:
+	Single File	단일 파일
+	Multiple Files	여러 파일
+	Format Presets	형식 사전 설정
+	Grid View	격자 보기
+	Selected: {n}, Total number of files to export: {m}	선택됨: {n}, 내보낼 총 파일 수: {m}
 	Create Text	텍스트 만들기
 	Created	만든 날짜
 	Created:	만든 날짜:
@@ -1285,14 +1301,22 @@ font-technology	Variable	가변
 	Delete Stop	정지점 삭제
 	Delete Swatch	견본 삭제
 	Delete Symbol	심볼 삭제
+	Delete the selected symbol?	선택한 심볼을 삭제하시겠습니까?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	하나 이상의 심볼이 사용 중이므로 인스턴스를 확장하거나 삭제하기 전에는 삭제할 수 없습니다.
+	Expand Instances	인스턴스 확장
+	Delete Instances	인스턴스 삭제
+	Yes	예
+	No	아니요
 	Delete Tab	탭 삭제
 	Delete Theme	테마 삭제
 	Delete Transparency Flattener Preset	투명도 병합 프리셋 삭제
 	Delete Width Point	너비 포인트 삭제
 	Delete Workspace	작업 영역 삭제
 	Delete the graphic style “{name}”?	그래픽 스타일 “{name}”을(를) 삭제하시겠습니까?
+	Delete Action Sets	액션 세트 삭제
+	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
+	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제
-	Delete these {count} swatches and groups?	견본과 그룹 {count}개를 삭제하시겠습니까?
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
 	Delete “{name}”?	“{name}”을(를) 삭제하시겠습니까?
@@ -1403,7 +1427,7 @@ font-technology	Variable	가변
 	Edit or Apply Color Group…	색상 그룹 편집 또는 적용…
 	Edit or Apply Colors	색상 편집 또는 적용
 	Edit the applied effect, or add another one?	적용된 효과를 편집하거나 다른 효과를 추가하시겠습니까?
-	Edit the selected point's colour in the Color panel	색상 패널에서 선택한 포인트의 색상 편집
+	Edit the point	포인트 편집
 	Edit the stop	정지점 편집
 	Edit theme	테마 편집
 	Edit…	편집…
@@ -1746,6 +1770,8 @@ font-technology	Variable	가변
 	Objects on Path	패스 위 개체
 	Attach	부착
 	Objects on Path Options	패스 위 개체 옵션
+	Pivot:	피벗:
+	Rotate:	회전:
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
@@ -1867,6 +1893,7 @@ font-technology	Variable	가변
 	In Tangent Handles	안쪽 접선 핸들
 	In the selected objects	선택한 개체 안에서
 	Inches	인치
+	Include Artboard Fill	아트보드 칠 포함
 	Include Bleed	블리드 포함
 	Include CMYK PostScript in RGB Files	RGB 파일에 CMYK PostScript 포함
 	Include Document Thumbnails	문서 미리 보기 이미지 포함
@@ -1901,7 +1928,7 @@ font-technology	Variable	가변
 	Keep Plain Text	일반 텍스트 유지
 	Keep both sides the same width	양쪽 너비를 같게 유지
 	Keep this row's colors (exclude)	이 행의 색상 유지 (제외)
-	Kerning (0 = Auto)	커닝 (0 = 자동)
+	Kerning	커닝
 	Keyboard Increment	키보드 증분
 	Keyboard Shortcut Conflicts	단축키 충돌
 	Keyboard Shortcut Set	단축키 세트
@@ -2329,6 +2356,7 @@ font-technology	Variable	가변
 	Open the URL in the web browser	웹 브라우저에서 URL 열기
 	Optimize for fast web view	빠른 웹 보기용으로 최적화
 	Optimized	최적화됨
+	Optical	광학
 	Options	옵션
 	Options for Selection…	선택 항목 옵션…
 	Options:	옵션:
@@ -2599,9 +2627,11 @@ mark-style	Japanese	일본식
 	Stop	중지
 	Searching…	검색 중…
 	Not found	찾을 수 없음
-	{folders} folder(s) and {files} file(s) searched	폴더 {folders}개, 파일 {files}개 검색함
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	다른 앱과 시스템 폴더, 숨김 폴더 등 {count}개 폴더 건너뜀
-	{count} folder(s) or file(s) couldn't be read	폴더 또는 파일 {count}개를 읽을 수 없음
+	{folders} and {files} searched	{folders}, {files} 검색함
+@plural	{n} folder|{n} folders	폴더 {n}개
+@plural	{n} file|{n} files	파일 {n}개
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	다른 앱과 시스템 폴더, 숨김 폴더 등 {n}개 폴더 건너뜀
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	폴더 또는 파일 {n}개를 읽을 수 없음
 	The search stopped at its limit: search a smaller folder.	검색이 한도에서 중단됨: 더 작은 폴더를 검색하세요.
 	Copy only fonts you own or are licensed to install.	소유했거나 설치 라이선스가 있는 글꼴만 복사하세요.
 	VectorCraft copies the fonts to {folder}.	VectorCraft가 글꼴을 {folder}에 복사합니다.
@@ -2850,6 +2880,7 @@ mark-style	Japanese	일본식
 	Shape Mode	모양 모드
 	Shape Modes:	모양 모드:
 	Shape Properties:	모양 속성:
+	Shape Properties	모양 속성
 	Shaper Tool	셰이퍼 도구
 	Shapes	모양
 	Shear	기울이기
@@ -3285,13 +3316,13 @@ mark-style	Japanese	일본식
 	the preset	프리셋
 	tile {number}	타일 {number}
 	to	~
-	{count} file(s) in {folder} {note}. Show the package folder?	{folder}에 파일 {count}개{note}. 패키지 폴더를 표시하시겠습니까?
-	{count} linked file(s) not found	연결된 파일 {count}개를 찾을 수 없습니다
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder}에 파일 {n}개 {note}. 패키지 폴더를 표시하시겠습니까?
+@plural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
 	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {count}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
-	{count} linked image(s) changed on disk. Show the new versions?	연결된 이미지 {count}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
-	{count} more rules: Export writes every one.	규칙 {count}개 더 있음: 내보내기 시 모두 기록됩니다.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	이름 없는 개체 {count}개가 제외되었습니다. 이름을 지정하거나 패널 메뉴에서 이름 없는 개체를 켜십시오.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {n}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	연결된 이미지 {n}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	규칙 {n}개 더 있음: 내보내기 시 모두 기록됩니다.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	이름 없는 개체 {n}개가 제외되었습니다. 이름을 지정하거나 패널 메뉴에서 이름 없는 개체를 켜십시오.
 	{effect} is already applied	{effect}이(가) 이미 적용되어 있습니다
 	{format} Options	{format} 옵션
 	{kind} Gradient	{kind} 그레이디언트
@@ -3358,7 +3389,7 @@ gradient-kind	Radial	방사형
 	Client-side (.html)	클라이언트 측 (.html)
 	Cmd	Cmd
 	Collect Links in a Separate Folder	링크를 별도 폴더에 모으기
-	Color (, or <)	색상 (, 또는 <)
+	Color (, or Shift+,)	색상 (, 또는 Shift+,)
 	Color Group	색상 그룹
 	Color Library	색상 라이브러리
 	Color Management	색상 관리
@@ -3453,7 +3484,7 @@ file-filter	Templates	템플릿
 	General › Placement › X	일반 › 배치 › X
 	General › Thumbnails	일반 › 축소판
 	Global Process Color, CMYK	글로벌 프로세스 색상, CMYK
-	Gradient (. or >)	그레이디언트 (. 또는 >)
+	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
 	Graph Design	그래프 디자인
@@ -3562,7 +3593,7 @@ file-filter	Templates	템플릿
 	Output Black	출력 검정
 	Output White	출력 흰색
 	Output › Mode	출력 › 모드
-	Packaged {n} file(s) in {folder} {note}	{folder}에 파일 {n}개를 패키지했습니다{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{folder}에 파일 {n}개를 패키지했습니다 {note}
 	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
 	Page information	페이지 정보
 	Paragraph Style	단락 스타일
@@ -3702,6 +3733,8 @@ file-filter	Templates	템플릿
 imageTrace	Outline	윤곽선
 @plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?|브러시 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	견본과 그룹 {n}개를 삭제하시겠습니까?
 @plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개
 @plural	{n} Object|{n} Objects	개체 {n}개|개체 {n}개
 @plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개|강조된 영역 {n}개
@@ -4358,6 +4391,7 @@ theme	Appearance	외관
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	내보낼 항목이 없습니다: 문서에 보이는 아트웍이 없습니다(또는 아트보드 사용을 켜세요)
 @msg	add a format to export	내보낼 형식을 추가하세요
 @msg	check an asset to export	내보낼 자산을 체크하세요
+@msg	check an artboard to export	내보낼 대지를 체크하세요
 @msg	check a layer to export	내보낼 레이어를 선택하십시오
 @msg	select the art to export first	먼저 내보낼 아트를 선택하십시오
 @msg	`{tool}` isn't a freehand tool	`{tool}`은(는) 프리핸드 도구가 아닙니다
@@ -4373,7 +4407,7 @@ theme	Appearance	외관
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	링크된 이미지 {_1}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msg	Updated {_1} linked file(s) changed on disk	디스크에서 바뀐 링크된 파일 {_1}개를 업데이트했습니다
 @msg	pick a colour, gradient or pattern to save as a swatch	견본으로 저장할 색상, 그레이디언트 또는 패턴을 선택하세요
-@msg	Packaged {n} file(s) in {folder} {note}	{folder}에 파일 {n}개를 패키지했습니다{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder}에 파일 {n}개를 패키지했습니다({note})
 @msg	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
 @msg	choose a location for the package	패키지 위치를 선택하세요
 @msg	missing `folder`	`folder`가 없습니다
@@ -4477,6 +4511,7 @@ theme	Appearance	외관
 @msg	no such perspective grid preset	해당 원근 격자 프리셋이 없습니다
 @msg	no such recent file	해당 최근 파일이 없습니다
 @msg	no such recent font	해당 최근 글꼴이 없습니다
+@msg	some text is hidden or locked, so its font wasn't replaced	일부 텍스트가 숨겨져 있거나 잠겨 있어 해당 글꼴을 바꾸지 않았습니다
 @msg	no such saved selection	해당 저장된 선택 영역이 없습니다
 @msg	no such user library	해당 사용자 라이브러리가 없습니다
 @msg	no such view	해당 보기가 없습니다
@@ -4489,6 +4524,7 @@ theme	Appearance	외관
 @msg	choose a folder to export to	내보낼 폴더를 선택하세요
 @msg	the selection has no URL (or they differ)	선택 항목에 URL이 없거나 서로 다릅니다
 @msg	select some type first	먼저 문자를 선택하세요
+@msg	kerning must be a number, "auto", or "optical"	커닝은 숫자, “auto” 또는 “optical”이어야 합니다
 @msg	the selection has no gradient fill	선택 항목에 칠 그레이디언트가 없습니다
 @msg	the selection has no gradient stroke	선택 항목에 선 그레이디언트가 없습니다
 @msg	the selection has no pattern fill	선택 항목에 칠 패턴이 없습니다
@@ -4617,6 +4653,8 @@ theme	Appearance	외관
 @msg	the PCX file is cut short	PCX 파일이 잘려 있습니다
 @msg	the PCX file's header is damaged	PCX 파일의 헤더가 손상되었습니다
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes}개 평면에 {bits}비트 픽셀이 있는 PCX 파일은 읽을 수 없습니다
+@msg	the JPEG 2000 file can't be read	JPEG 2000 파일을 읽을 수 없습니다
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 파일에 지원되지 않는 색 공간 또는 JPX 콘텐츠가 있습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
 @msg	zipped 32-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 32비트 PSD 이미지 데이터는 읽을 수 없습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
@@ -5153,13 +5191,13 @@ lighting	Light	광원
 	Slope:	기울기:
 axis	X Axis	X축
 axis	Y Axis	Y축
-@msg	Packaged {n} file(s) in {folder}	{folder}에 파일 {n}개를 패키지했습니다
-@msg	Packaged {n} file(s) {note}	파일 {n}개를 패키지했습니다 {note}
-@msg	Packaged {n} file(s)	파일 {n}개를 패키지했습니다
-	Packaged {n} file(s)	파일 {n}개를 패키지했습니다
-	Packaged {n} file(s) in {folder}	{folder}에 파일 {n}개를 패키지했습니다
-	Packaged {n} file(s) {note}	파일 {n}개를 패키지했습니다 {note}
-	{count} file(s) in {folder}. Show the package folder?	{folder}에 파일 {count}개. 패키지 폴더를 표시하시겠습니까?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder}에 파일 {n}개를 패키지했습니다
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	파일 {n}개를 패키지했습니다 {note}
+@msgplural	Packaged {n} file|Packaged {n} files	파일 {n}개를 패키지했습니다
+@plural	Packaged {n} file|Packaged {n} files	파일 {n}개를 패키지했습니다
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder}에 파일 {n}개를 패키지했습니다
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	파일 {n}개를 패키지했습니다 {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder}에 파일 {n}개. 패키지 폴더를 표시하시겠습니까?
 	Clockwise	시계 방향
 	Dither	디더
 	Fine noise hides banding in the gradient fill	미세한 노이즈로 그레이디언트 칠의 띠를 감춥니다
@@ -5194,7 +5232,7 @@ axis	Y Axis	Y축
 	Include Objects On Canvas	캔버스의 개체 포함
 	Result(s): {count}	결과: {count}
 @msg	select one object	개체 하나를 선택하십시오
-@msg	Global Edit works on paths, compound paths and symbol instances	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스에서 작동합니다
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
@@ -5446,6 +5484,11 @@ anchor	Points:	포인트:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	아트워크에서 점 색상 가져오기
+	Basic Character Formats	기본 문자 형식
+	Case	대소문자
+@msg	{label} must be a number	{label}은(는) 숫자여야 합니다
+@msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
+@msg	no character style `{name}`	문자 스타일 `{name}`을 찾을 수 없습니다
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	이중톤…
@@ -5496,6 +5539,7 @@ anchor	Points:	포인트:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	텍스트 나누기
 	Combine Point Text	포인트 문자 결합
+	Join Point Text	포인트 문자 연결
 	Remove Breaks	나누기 제거
 	Split Text at Cursor	커서 위치에서 텍스트 나누기
 	Set Alignment, Keep Position	위치를 유지하며 정렬 설정
@@ -5524,6 +5568,7 @@ breakText	Glyphs	글리프
 @msg	Select horizontal point or area type whose text fits	텍스트가 모두 들어가는 가로 포인트 문자 또는 영역 문자를 선택하십시오
 @msg	Nothing to split at the cursor	커서 위치에서 나눌 내용이 없습니다
 @msg	Select two or more one-line point type objects on one baseline to combine	결합하려면 같은 기준선에 있는 한 줄짜리 포인트 문자 오브젝트를 두 개 이상 선택하십시오
+@msg	Select two or more one-line point type objects to join	연결하려면 한 줄짜리 포인트 문자 오브젝트를 두 개 이상 선택하십시오
 @msg	No line breaks to remove	제거할 강제 줄 바꿈이 없습니다
 @msg	No paragraph breaks to remove	제거할 단락 나누기가 없습니다
 @msg	Too many breaks to remove at once	한 번에 제거할 나누기가 너무 많습니다
@@ -5536,6 +5581,11 @@ breakText	Glyphs	글리프
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by`는 lines, paragraphs, words 또는 glyphs여야 합니다({other}는 사용할 수 없음)
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind`는 "line" 또는 "paragraph"여야 합니다({other}는 사용할 수 없음)
 @msg	`align` must be "left", "center" or "right", not {other}	`align`은 "left", "center" 또는 "right"여야 합니다({other}는 사용할 수 없음)
+	File + Number	파일 + 번호
+	File + Data Set Name	파일 + 데이터 세트 이름
+	Data Set Name	데이터 세트 이름
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming`은 `fileNumber`, `fileDataSetName` 또는 `dataSetName`이어야 합니다
+@msg	no free data set file name in destination folder	대상 폴더에 사용할 수 있는 데이터 세트 파일 이름이 없습니다
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	패스 효과
@@ -5577,3 +5627,70 @@ breakText	Glyphs	글리프
 	Gap 4	간격 4
 	Dash 5	대시 5
 	Gap 5	간격 5
+@msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.
+@msg	invalid pattern tile choice	잘못된 패턴 타일 선택
+@msg	no pattern named `{choice}`	`{choice}` 이름의 패턴이 없습니다
+	Delete the selected brushes?	선택한 브러시를 삭제하시겠습니까?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	선에서 이 브러시 중 하나 이상을 사용합니다. 해당 선에서 브러시를 제거하고 브러시를 삭제하시겠습니까?
+	Remove Strokes	선 제거
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	배치 도구
+	Arrange in Grid…	격자로 배치…
+	Arrange in Grid	격자로 배치
+	Swap Objects	개체 맞바꾸기
+	Swap Objects and Sizes	개체와 크기 맞바꾸기
+	Replace with Top Object…	맨 위 개체로 바꾸기…
+	Replace with Top Object	맨 위 개체로 바꾸기
+	Set Size of Each…	각각 크기 설정…
+	Set Size of Each	각각 크기 설정
+@msg	select exactly two objects	개체를 정확히 두 개 선택하세요
+@msg	give `width` or `height`	`width` 또는 `height`를 지정하세요
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	겹치는 개체 그룹화
+@msg	too many objects selected (at most 20000)	선택한 개체가 너무 많습니다(최대 20000개)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	대시로 나누기…
+	Divide into Dashes	대시로 나누기
+	Dash:	대시:
+	Gap:	간격:
+	Fit to Corners and Ends	모퉁이와 끝에 맞추기
+	Remove Gaps	간격 제거
+@msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
+@msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	문서 도구
+	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장
+@msg	there is no clock here	여기에는 시계가 없습니다
+@msg	there is no clock here: give `time` (Unix seconds)	여기에는 시계가 없습니다. `time`(Unix 초)을 지정하십시오
+@msg	the document has never been saved: give `folder`	문서를 저장한 적이 없습니다. `folder`를 지정하십시오
+@msg	every numbered name for the copy is taken	사본에 쓸 번호 붙은 이름이 모두 사용 중입니다
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	레이어에서 새 심볼 만들기
+	Convert Layers to Symbols	레이어를 심볼로 변환
+@msg	{id} is no top-level layer	{id}은(는) 최상위 레이어가 아닙니다
+	Marathi	마라티어
+	Gujarati	구자라트어
+	Bengali	벵골어
+	Punjabi	펀잡어
+	Tamil	타밀어
+	Telugu	텔루구어
+	Kannada	칸나다어
+	Malayalam	말라얄람어
+	Odia	오리야어
+	Urdu	우르두어
+	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	심볼 유형:
+	Dynamic Symbol	동적 심볼
+	Static Symbol	정적 심볼
+	Symbol Instance Appearance	심볼 인스턴스 모양새
+	Reset Symbol Instance	심볼 인스턴스 재설정
+@msg	type must be static or dynamic, not {v}	type은 static 또는 dynamic이어야 합니다({v}는 안 됨)
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}`은(는) 정적 심볼입니다. 먼저 심볼 유형을 동적으로 설정하세요
+@msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
+@msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
+@msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요
+@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
+	Text Flow	텍스트 흐름
+	By Rows	행 방향
+	By Columns	열 방향

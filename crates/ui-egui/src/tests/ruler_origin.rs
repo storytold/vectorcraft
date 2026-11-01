@@ -110,6 +110,20 @@ fn ruler_origin_double_click_resets_to_the_active_artboard() {
     assert_eq!(app.ruler_origin(), Point::new(125.0, 90.0));
 }
 
+/// Tab does not stop on the rulers or on the box where they meet, which only the pointer uses.
+#[test]
+fn tab_skips_the_rulers_and_their_origin_box() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], canvas::show);
+    let rulers = ["ruler-top", "ruler-left", "ruler-corner"].map(egui::Id::unique);
+    assert!(rulers.iter().all(|&id| ctx.read_response(id).is_some()), "the rulers are drawn");
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 20, |events| {
+        frame(&mut app, &ctx, events, canvas::show);
+    });
+    assert!(!stops.iter().any(|id| rulers.contains(id)), "{stops:?}");
+}
+
 #[test]
 fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
     #[derive(Debug, PartialEq)]

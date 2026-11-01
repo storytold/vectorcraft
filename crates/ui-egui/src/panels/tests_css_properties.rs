@@ -61,6 +61,33 @@ fn generate_css_shows_the_document_while_nothing_is_selected() {
     assert!(text.contains(".rectangle {") && text.contains(".ellipse {") && text.contains("border-radius: 50%;"), "{text}");
 }
 
+/// The note on unnamed objects left out uses the form the language's plural rule picks for the
+/// count.
+#[test]
+fn the_unnamed_objects_note_uses_each_count_form() {
+    let note = |code: &str, n: u64| {
+        let (mut app, _) = app();
+        for i in 1..n {
+            app.run("shape.rectangle", json!({"x": 10 + 40 * i, "y": 50, "width": 30, "height": 20})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        let text = painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), OPTIONS, CssOptions { unnamed: false, ..CssOptions::default() });
+            show(app, ui);
+        });
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        text
+    };
+    let text = note("en", 1);
+    assert!(text.contains("1 unnamed object left out: name it,"), "{text}");
+    for (n, want) in [(1, "Vynechán 1 nepojmenovaný objekt."), (2, "Vynechány 2 nepojmenované objekty."), (5, "Vynecháno 5 nepojmenovaných objektů.")]
+    {
+        let text = note("cs", n);
+        assert!(text.contains(want), "{n}: {text}");
+    }
+}
+
 #[test]
 fn the_panel_menu_lists_the_actions_and_options() {
     let (mut app, _) = app();

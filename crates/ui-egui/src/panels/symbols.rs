@@ -137,16 +137,27 @@ fn current(app: &mut VectorcraftApp) -> Option<String> {
     app.run("symbol.list", json!({})).ok().and_then(|v| v["current"].as_str().map(str::to_string))
 }
 
-fn has_instances_selected(app: &VectorcraftApp) -> bool {
+/// Does the selection hold (in it or in its groups) a symbol instance that `wanted` takes?
+fn instance_selected(app: &VectorcraftApp, wanted: impl Fn(&Node) -> bool) -> bool {
     app.session.active().is_some_and(|st| {
         st.selection.objects.iter().any(|id| {
             let mut any = false;
             if let Some(n) = st.doc.node(*id) {
-                n.walk(&mut |c| any |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+                n.walk(&mut |c| any |= matches!(c.kind, NodeKind::SymbolInstance { .. }) && wanted(c));
             }
             any
         })
     })
+}
+
+fn has_instances_selected(app: &VectorcraftApp) -> bool {
+    instance_selected(app, |_| true)
+}
+
+/// Does the selection hold a symbol instance with appearance changes of its own (a dynamic
+/// symbol's), which Reset drops?
+pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
+    instance_selected(app, |c| !c.extras().symbol_overrides.is_empty())
 }
 
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
@@ -242,7 +253,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
     if let Some(ids) = widgets::art_drop(ui, &zone)
-        && let Err(e) = app.run("symbol.new", json!({ "ids": ids }))
+        && let Err(e) = app.run("symbol.new", json!({ "ids": ids, "type": "dynamic" }))
     {
         app.status(e);
     }
@@ -269,14 +280,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
         if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0).clicked() {
-            // Alt skips Symbol Options: the symbol is made under the default name.
-            let cmd = if ui.input(|i| i.modifiers.alt) { "symbol.new" } else { "ui.symbolOptions" };
-            app.run(cmd, json!({})).ok();
+            // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
+            // dialog's default.
+            let (cmd, p) = if ui.input(|i| i.modifiers.alt) { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
+            app.run(cmd, p).ok();
         }
+        // Alt deletes an unused symbol without asking; a symbol with instances still asks.
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some(), 24.0).clicked()
             && let Some(n) = &sel
         {
-            app.run("symbol.delete", json!({"name": n})).ok();
+            crate::dialogs::symbol_delete::ask(app, n, super::alt_held(ui));
         }
     });
 }
@@ -286,16 +299,29 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
-    let items: [(&str, bool, &str, Value); 10] = [
+    let items: [(&str, bool, &str, Value); 3] = [
         (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({})),
         (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone()),
         (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
-        (tl!("Delete Symbol"), sel.is_some(), "symbol.delete", name.clone()),
+    ];
+    for (label, enabled, cmd, params) in items {
+        if menu_item(ui, label, enabled, false) {
+            app.run(cmd, params).ok();
+        }
+    }
+    // Asks first, as the panel's button does; the menu item has no Alt shortcut.
+    if menu_item(ui, tl!("Delete Symbol"), sel.is_some(), false)
+        && let Some(n) = &sel
+    {
+        crate::dialogs::symbol_delete::ask(app, n, false);
+    }
+    let items: [(&str, bool, &str, Value); 7] = [
         (tl!("Symbol Options…"), sel.is_some(), "ui.symbolOptions", json!({"edit": true, "name": sel})),
         (tl!("Edit Symbol"), inst, "symbol.edit", json!({})),
         (tl!("Place Symbol Instance"), sel.is_some(), "symbol.place", name.clone()),
         (tl!("Replace Symbol"), inst && sel.is_some(), "symbol.replace", name.clone()),
         (tl!("Break Link to Symbol"), inst, "symbol.breakLink", json!({})),
+        (tl!("Reset Symbol Instance"), changed_instances_selected(app), "symbol.instance.reset", json!({})),
         (tl!("Select All Instances"), sel.is_some(), "symbol.selectInstances", name),
     ];
     for (label, enabled, cmd, params) in items {
@@ -587,10 +613,12 @@ mod tests {
         assert!(symbols(&mut app).is_empty(), "no symbol before OK");
         assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "New Symbol");
         assert_eq!(app.ui.dialog.as_ref().unwrap().str("exportType"), "movieClip");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("type"), "dynamic", "Symbol Type: a new symbol is dynamic");
         crate::dialogs::confirm(&mut app).unwrap();
         assert!(app.ui.dialog.is_none());
         let list = app.run("symbol.list", json!({})).unwrap();
         assert_eq!(list["symbols"][0]["exportType"], "movieClip");
+        assert_eq!(list["symbols"][0]["type"], "dynamic");
         // The next one is offered a name no symbol has, and OK keeps the name typed and Export Type.
         app.run("shape.rectangle", json!({"x": 60, "y": 10, "width": 30, "height": 20})).unwrap();
         app.run("ui.symbolOptions", json!({})).unwrap();
@@ -601,13 +629,18 @@ mod tests {
         assert_eq!(symbols(&mut app), ["New Symbol", "Badge"]);
         let list = app.run("symbol.list", json!({})).unwrap();
         assert_eq!(list["symbols"][1]["exportType"], "graphic");
-        // Symbol Options on the current symbol renames and keeps Export Type.
+        // Symbol Options on the current symbol renames, keeps Export Type and sets Symbol Type.
         app.run("ui.symbolOptions", json!({"edit": true, "name": "Badge"})).unwrap();
         assert_eq!(app.ui.dialog.as_ref().unwrap().str("exportType"), "graphic");
         app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Mark"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("type".into(), json!("static"));
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(symbols(&mut app), ["New Symbol", "Mark"]);
         assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][1]["exportType"], "graphic");
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][1]["type"], "static");
+        app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("type"), "static");
+        app.ui.dialog = None;
         // Enable Guides for 9-Slice Scaling stores the guides (percent in the dialog) and reopens as set.
         assert!(app.run("symbol.list", json!({})).unwrap()["symbols"][1]["nineSlice"].is_null());
         app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
@@ -736,6 +769,195 @@ mod tests {
             a == 255 && r > 200 && (130..190).contains(&g) && b < 40
         };
         assert!(orange(3, 3) && orange(36, 36), "{:?} {:?}", thumb.pixels[3 * 40 + 3], thumb.pixels[36 * 40 + 36]);
+    }
+
+    /// A document with symbol "Leaf", whose instance stands where its rectangle was, and symbol
+    /// "Dot", which no instance uses; "Dot" is current.
+    fn leaf_and_dot() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        for (name, x) in [("Leaf", 10), ("Dot", 150)] {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 30})).unwrap();
+            app.run("symbol.new", json!({"name": name})).unwrap();
+        }
+        // Dot's instance goes: no art uses Dot.
+        app.run("edit.clear", json!({})).unwrap();
+        app.run("symbol.setCurrent", json!({"name": "Dot"})).unwrap();
+        app
+    }
+
+    /// The instances of symbol `name` in the active document, and the ordinary paths in it.
+    fn art(app: &VectorcraftApp, name: &str) -> (usize, usize) {
+        let (mut instances, mut paths) = (0, 0);
+        for l in &app.session.active().unwrap().doc.layers {
+            l.walk(&mut |n| match &n.kind {
+                NodeKind::SymbolInstance { symbol, .. } if symbol == name => instances += 1,
+                NodeKind::Path { .. } => paths += 1,
+                _ => {}
+            });
+        }
+        (instances, paths)
+    }
+
+    fn dialog_kind(app: &VectorcraftApp) -> Option<&str> {
+        app.ui.dialog.as_ref().map(|d| d.kind.as_str())
+    }
+
+    /// One frame of the panel with `modifiers` held, its output kept.
+    fn frame_held(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>, modifiers: egui::Modifiers) -> egui::FullOutput {
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0)));
+        let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The labels of the clickable accessibility nodes of `out`, with their centers.
+    fn clickable(out: &egui::FullOutput) -> Vec<(String, Pos2)> {
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        nodes
+            .iter()
+            .filter(|(_, n)| n.supports_action(egui::accesskit::Action::Click))
+            .filter_map(|(_, n)| {
+                let b = n.bounds()?;
+                Some((n.label()?.trim().to_string(), pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)))
+            })
+            .collect()
+    }
+
+    /// Clicks the panel's Delete Symbol button with `modifiers` held.
+    fn click_delete(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, app, vec![], modifiers);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == "Delete Symbol").expect("a Delete Symbol button").1;
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+    }
+
+    /// Clicks the panel menu's Delete Symbol item.
+    fn menu_delete(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let labels = menu_frame(&ctx, app, vec![]);
+        let item = labels.iter().find(|(t, _)| t.trim() == "Delete Symbol").map(|(_, r)| r.center()).expect("Delete Symbol in the menu");
+        menu_frame(&ctx, app, vec![egui::Event::PointerMoved(item), button(item, true)]);
+        menu_frame(&ctx, app, vec![button(item, false)]);
+    }
+
+    /// Delete Symbol, from the panel's button or its menu, asks "Delete the selected symbol?" for a
+    /// symbol no instance uses, and the in-use question for one with instances, before changing
+    /// the document; No leaves it as it was and Yes deletes the symbol. Alt-click on the button
+    /// deletes an unused symbol without asking, and still asks for one with instances.
+    #[test]
+    fn delete_symbol_asks_first_and_alt_click_deletes_an_unused_symbol_at_once() {
+        let mut app = leaf_and_dot();
+        let before = app.session.active().unwrap().doc.clone();
+        let unchanged = |app: &VectorcraftApp| Arc::ptr_eq(&before, &app.session.active().unwrap().doc);
+        click_delete(&mut app, egui::Modifiers::NONE);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND));
+        assert!(unchanged(&app), "nothing changes while it asks");
+        crate::dialogs::cancel(&mut app);
+        assert!(app.ui.dialog.is_none());
+        assert!(unchanged(&app), "No changes nothing");
+        menu_delete(&mut app);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND), "the menu item asks too");
+        assert!(unchanged(&app));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(symbols(&mut app), ["Leaf"], "Yes deletes it");
+        // Alt-click on the button: an unused symbol goes without a question.
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("symbol.setCurrent", json!({"name": "Dot"})).unwrap();
+        click_delete(&mut app, egui::Modifiers::ALT);
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(symbols(&mut app), ["Leaf"]);
+        // A symbol with an instance asks, with Alt held too, from the button and from the menu.
+        app.run("symbol.setCurrent", json!({"name": "Leaf"})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        for alt in [egui::Modifiers::NONE, egui::Modifiers::ALT] {
+            click_delete(&mut app, alt);
+            assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::USED), "{alt:?}");
+            crate::dialogs::cancel(&mut app);
+        }
+        menu_delete(&mut app);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::USED));
+        crate::dialogs::cancel(&mut app);
+        assert!(Arc::ptr_eq(&before, &app.session.active().unwrap().doc), "Cancel changes nothing");
+        assert_eq!(art(&app, "Leaf"), (1, 0));
+    }
+
+    /// The in-use question: Expand Instances deletes the symbol and turns its instance into
+    /// ordinary art, Delete Instances deletes the symbol and its instance, each in one undo step.
+    #[test]
+    fn the_in_use_question_expands_or_deletes_the_instances() {
+        for (discard, left) in [(false, (0, 1)), (true, (0, 0))] {
+            let mut app = leaf_and_dot();
+            crate::dialogs::symbol_delete::ask(&mut app, "Leaf", false);
+            assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::USED));
+            if discard {
+                app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+            }
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(symbols(&mut app), ["Dot"], "discard {discard}");
+            assert_eq!(art(&app, "Leaf"), left, "discard {discard}");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!((symbols(&mut app), art(&app, "Leaf")), (vec!["Leaf".to_string(), "Dot".to_string()], (1, 0)), "one undo step");
+        }
+    }
+
+    /// A question asked in one document deletes nothing once another is active, and Yes for a
+    /// symbol that has gained an instance since asks the in-use question instead.
+    #[test]
+    fn a_stale_delete_symbol_question_deletes_nothing() {
+        let mut app = leaf_and_dot();
+        crate::dialogs::symbol_delete::ask(&mut app, "Dot", false);
+        let asked = app.ui.dialog.clone();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+        app.run("symbol.new", json!({"name": "Dot"})).unwrap();
+        app.run("edit.clear", json!({})).unwrap();
+        app.ui.dialog = asked;
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(symbols(&mut app), ["Dot"], "the other document keeps its symbol");
+        // Back in the first document: Dot gains an instance while the question is open.
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        crate::dialogs::symbol_delete::ask(&mut app, "Dot", false);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND));
+        app.run("symbol.place", json!({"name": "Dot"})).unwrap();
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::USED));
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+        assert_eq!(art(&app, "Dot"), (1, 0));
+    }
+
+    /// The questions' buttons: Yes and No for an unused symbol; Expand Instances, Delete Instances
+    /// and Cancel for one with instances.
+    #[test]
+    fn the_delete_symbol_questions_show_their_buttons() {
+        let mut app = leaf_and_dot();
+        for (name, want) in [("Dot", &["Yes", "No"][..]), ("Leaf", &["Expand Instances", "Delete Instances", "Cancel"][..])] {
+            crate::dialogs::symbol_delete::ask(&mut app, name, false);
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            // The window measures itself in its first frame and draws its buttons in the next.
+            let mut out = None;
+            for _ in 0..2 {
+                let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+                let mut o = ctx.run_ui(raw, |ui| crate::dialogs::show(&mut app, ui.ctx()));
+                o.textures_delta.clear();
+                out = Some(o);
+            }
+            let out = out.expect("a frame");
+            let labels: Vec<String> = clickable(&out).into_iter().map(|(l, _)| l).collect();
+            for w in want {
+                assert!(labels.iter().any(|l| l == w), "{name}: {w} in {labels:?}");
+            }
+            assert!(!labels.iter().any(|l| l == "OK"), "{name}: {labels:?}");
+            crate::dialogs::cancel(&mut app);
+        }
     }
 
     /// #4121: with symbol instances selected, the Control bar's Replace menu lists the document's

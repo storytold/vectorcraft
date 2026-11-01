@@ -509,6 +509,21 @@ fn a_masked_gradient_mesh_takes_the_transparency_written_after_its_mask() {
 }
 
 #[test]
+fn a_transparency_set_in_a_dictionary_s_art_stays_after_it() {
+    // GUARDS: an area text's frame (its `/ConfiningPath` art) sets its own transparency; the objects
+    // after the text, with no `Xy` of their own, draw with it. Read as the dictionary's alone, they
+    // drew with the Lighten of the path before the text and vanished on a light background.
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n/Art :\nX=\n0 Ap\n0 1 0 0 0 Xy\n0 w\n100 0 m\n100 10 L\nn\nX+\n\
+                ; /ConfiningPath ,\n2 /TextAntialiasing ,\n;\n";
+    let body = format!("9 0.5 0 0 0 Xy\n{RED}{}f\n{text}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let a = art(&read_ok(&layer(&body)).doc);
+    let paths: Vec<_> = a.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).collect();
+    assert_eq!(paths.len(), 2, "{a:#?}");
+    assert_eq!((paths[0].opacity, paths[0].blend), (0.5, BlendMode::Lighten), "the state before the text");
+    assert_eq!((paths[1].opacity, paths[1].blend), (1.0, BlendMode::Normal), "the state the text's art set");
+}
+
+#[test]
 fn gradients() {
     let defs = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n<00FF>\n0\n0 0 0 0 1 0 0 2 1 6 %_BS\n\
                 %_0 0 0 0 1 0 0 2 1 6 40 0 Bs\n%_0 0 0 0 0 0 1 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
@@ -1457,6 +1472,19 @@ fn many_zstandard_frames_are_read_in_one_pass_and_capped() {
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
 }
 
+/// A Zstandard frame that ends in a zero byte keeps it: only the zeros after the last frame are
+/// padding.
+#[test]
+fn a_zstandard_frame_ending_in_a_zero_byte_is_read_whole() {
+    // Magic number, a single-segment header with a 1-byte content size of 3, and one raw block
+    // (last, 3 bytes) holding `ab` and a zero byte.
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    for padding in [0, 64] {
+        let raw = [&b"%AI24_ZStandard_Data"[..], &frame, &frame, &vec![0; padding]].concat();
+        assert_eq!(decode_private(&raw).unwrap(), b"ab\0ab\0");
+    }
+}
+
 #[test]
 fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let n = 200_000;
@@ -1670,6 +1698,33 @@ fn an_envelope_mesh_is_not_read_as_art() {
     // A mesh in a group with no distortion is still art.
     let doc = read_ok(&layer(&envelope(""))).doc;
     assert!(art(&doc).iter().any(|n| has_mesh(n)), "{:#?}", art(&doc));
+}
+
+/// An envelope whose contents are being edited is written the other way round: its contents, a
+/// group on `%_` lines, then its dictionary, which holds the mesh that shapes them. The contents
+/// aren't drawn as they are, only the distorted art on the plain lines after them.
+#[test]
+fn an_envelope_s_contents_being_edited_are_not_read_as_art() {
+    let corner = |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
+        format!("%_[0.82 0.83 0.83 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1)
+    };
+    let mesh = format!(
+        "%_/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n%_/End X!\n%_0 0 Xd\n%_6 () XW\n",
+        corner(0, 0, (0, 10), (10, 0)),
+        corner(0, 40, (10, 40), (0, 30)),
+        corner(40, 40, (40, 30), (30, 40)),
+        corner(40, 0, (30, 0), (40, 10)),
+    );
+    let contents: String = rect_path(0.0, 0.0, 80.0, 20.0).lines().map(|l| format!("%_{l}\n")).collect();
+    let body = format!(
+        "%_u\n%_u\n%_0 0 1 0 0 0 1 Xa\n{contents}%_f\n%_U\n%_9 () XW\n%_U\n%_/ArtDictionary :\n%_1 /Bool (AIDeformEditModeKey) ,\n\
+         %_3 /Int (AIDeformStyle) ,\n%_X=\n{mesh}%_X+\n%_ (AIDeformArtKey) ,\n%_;\n%_\n%_9 () XW\n{RED}{}f\n",
+        rect_path(0.0, 0.0, 40.0, 40.0)
+    );
+    let doc = read_ok(&layer(&body)).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
 #[test]

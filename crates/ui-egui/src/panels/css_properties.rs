@@ -129,12 +129,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     let notes = (shown.more > 0)
-        .then(|| crate::i18n::fmt(tl!("{count} more rules: Export writes every one."), &[("count", &shown.more.to_string())]))
+        .then(|| crate::i18n::tn(shown.more as u64, "{n} more rule: Export writes it.", "{n} more rules: Export writes every one."))
         .into_iter()
         .chain((shown.skipped > 0).then(|| {
-            crate::i18n::fmt(
-                tl!("{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu."),
-                &[("count", &shown.skipped.to_string())],
+            crate::i18n::tn(
+                shown.skipped,
+                "{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.",
+                "{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.",
             )
         }))
         .chain(shown.warnings.iter().map(|w| sentence(w)));

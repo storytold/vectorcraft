@@ -33,6 +33,7 @@ pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+mod jp2read;
 mod metafile;
 mod naming;
 mod native;
@@ -56,6 +57,7 @@ pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub use export::export_source;
+pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{export_crop, isolated};
 pub(crate) use load::check_not_lossy_overwrite;
 use load::err;
@@ -74,6 +76,7 @@ pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
+pub(crate) use save::save as save_document;
 pub use save::{
     SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, export_folder, reads_option as save_reads_option,
     remembered_save_options, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, template_filters, templates_dialog_folder,
@@ -129,6 +132,8 @@ pub use formats::{
 mod tests;
 #[cfg(test)]
 mod tests_affinity;
+#[cfg(test)]
+mod tests_artboard_fill;
 #[cfg(test)]
 mod tests_pdf;
 #[cfg(test)]
@@ -193,6 +198,8 @@ mod tests_psd;
 #[cfg(test)]
 mod tests_psdread;
 
+#[cfg(test)]
+mod tests_jp2read;
 #[cfg(test)]
 mod tests_pcxread;
 

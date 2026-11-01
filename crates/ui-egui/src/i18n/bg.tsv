@@ -207,7 +207,7 @@ font-technology	Variable	Променливи
 	Apply Paragraph Style	Прилагане на стил на абзац
 	Apply SVG Filter…	Прилагане на SVG филтър…
 	Apply to All	Прилагане към всички
-	Apply to All ({count} more missing)	Прилагане към всички (още {count} липсващи)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Прилагане към всички (още {n} липсващ)|Прилагане към всички (още {n} липсващи)
 	Arc	Дъга
 	Arc Lower…	Дъга надолу…
 	Arc Tool	Инструмент „Дъга“
@@ -499,7 +499,7 @@ font-technology	Variable	Променливи
 	Collect in New Layer	Събиране в нов слой
 	Collect Links in a Separate Folder	Събиране на връзките в отделна папка
 	Color	Цвят
-	Color (, or <)	Цвят (, или <)
+	Color (, or Shift+,)	Цвят (, или Shift+,)
 	Color Adjustments	Цветови корекции
 	Color bars	Цветови скали
 	Color blindness – Deuteranopia-type	Цветна слепота – тип девтеранопия
@@ -653,6 +653,13 @@ font-technology	Variable	Променливи
 	Create Report	Създаване на отчет
 	Create Slice	Създаване на отрязък
 	Create Sub-folders	Създаване на подпапки
+	Clear Selection	Изчистване на избора
+	Export PDFs As:	Експортиране на PDF като:
+	Single File	Един файл
+	Multiple Files	Няколко файла
+	Format Presets	Предварителни настройки на формата
+	Grid View	Изглед на мрежа
+	Selected: {n}, Total number of files to export: {m}	Избрани: {n}, общ брой файлове за експортиране: {m}
 	Create Text	Създаване на текст
 	Create Trim Marks	Създаване на режещи знаци
 	Created	Създадено
@@ -732,11 +739,19 @@ font-technology	Variable	Променливи
 	Delete Stop	Изтриване на репер
 	Delete Swatch	Изтриване на образец
 	Delete Symbol	Изтриване на символ
+	Delete the selected symbol?	Да се изтрие ли избраният символ?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Един или повече от символите се използват и не могат да бъдат изтрити, докато екземплярите им не бъдат разширени или изтрити.
+	Expand Instances	Разширяване на екземплярите
+	Delete Instances	Изтриване на екземплярите
+	Yes	Да
+	No	Не
 	Delete Tab	Изтриване на табулация
 	Delete the graphic style “{name}”?	Изтриване на графичния стил „{name}“?
+	Delete Action Sets	Изтриване на набори от действия
+	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
+	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
 	Delete Theme	Изтриване на тема
 	Delete theme	Изтриване на тема
-	Delete these {count} swatches and groups?	Изтриване на тези {count} образца и групи?
 	Delete these {n} graphic styles?	Изтриване на тези {n} графични стила?
 	Delete this saved preset	Изтриване на тази запазена предварителна настройка
 	Delete this {n} graphic style?	Изтриване на този {n} графичен стил?
@@ -898,7 +913,7 @@ font-technology	Variable	Променливи
 	Edit Symbol	Редактиране на символ
 	Edit Text	Редактиране на текст
 	Edit the applied effect, or add another one?	Да се редактира ли приведеният ефект или да се добави друг?
-	Edit the selected point's colour in the Color panel	Редактиране на цвета на избраната точка в панела Цвят
+	Edit the point	Редактиране на точката
 	Edit the stop	Редактиране на опорната точка
 	Edit Theme	Редактиране на тема
 	Edit theme	Редактиране на тема
@@ -1240,7 +1255,7 @@ font-technology	Variable	Променливи
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
 	Gradient	Градиент
-	Gradient (. or >)	Градиент (. или >)
+	Gradient (. or Shift+.)	Градиент (. или Shift+.)
 	Gradient across stroke	Градиент напречно на щриха
 	Gradient along stroke	Градиент по дължината на щриха
 	Gradient and Mesh Resolution:	Разделителна способност на градиент и мрежа:
@@ -1417,6 +1432,8 @@ font-technology	Variable	Променливи
 	Objects on Path	Обекти по пътя
 	Attach	Прикрепяне
 	Objects on Path Options	Опции за обекти по пътя
+	Pivot:	Опорна точка:
+	Rotate:	Завъртане:
 	Objects on Path Tool	Инструмент „Обекти по пътя“
 	Attach Objects on Path	Прикрепяне на обекти към пътя
 	Expand Objects on Path	Разширяване на обекти по пътя
@@ -1516,6 +1533,7 @@ font-technology	Variable	Променливи
 	In Tangent Handles	Входящи управляващи точки
 	In the selected objects	В избраните обекти
 	Inches	Инчове
+	Include Artboard Fill	Включване на запълването на работната област
 	Include Blacks with CMY:	Включване на черни към CMY:
 	Include Bleed	Включване на изтичане
 	Include Cmy Blacks	Включване на CMYK черни
@@ -1579,7 +1597,7 @@ font-technology	Variable	Променливи
 	Keep the pasted color as a new swatch with a numbered name.	Запазване на поставения цвят като нов образец с номерирано име.
 	Keep this row's colors (exclude)	Запазване на цветовете на този ред (изключване)
 	Keep:	Запазване:
-	Kerning (0 = Auto)	Кернинг (0 = Автоматично)
+	Kerning	Кернинг
 	Keyboard Increment	Стъпка с клавиатурата
 	Keyboard Shortcut Conflicts	Конфликти на клавишни комбинации
 	Keyboard Shortcut Set	Набор клавишни комбинации
@@ -2151,6 +2169,7 @@ font-technology	Variable	Променливи
 	Open the URL in the web browser	Отваряне на URL адреса в уеб браузъра
 	Opened with {} note(s): {}	Отворено с {} бележка(и): {}
 	Open…	Отваряне…
+	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
 	Optimize for fast web view	Оптимизиране за бърз уеб преглед
 	Optimized	Оптимизирано
@@ -2208,7 +2227,7 @@ font-technology	Variable	Променливи
 	Package	Пакет
 	Package collects a saved document with its linked files and fonts.	Пакетът събира запазен документ заедно с неговите свързани файлове и шрифтове.
 	Package created	Пакетът е създаден
-	Packaged {n} file(s) in {folder} {note}	Пакетирани са {n} файла в {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Пакетиран е {n} файл в {folder} {note}|Пакетирани са {n} файла в {folder} {note}
 	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
 	Package…	Пакет…
 	Page	Страница
@@ -2392,6 +2411,15 @@ font-technology	Variable	Променливи
 	Arabic	Арабски
 	Hindi	Хинди
 	Farsi	Фарси
+digits	Devanagari	Деванагари
+digits	Bengali	Бенгалски
+digits	Gurmukhi	Гурмукхи
+digits	Gujarati	Гуджарати
+digits	Odia	Ория
+digits	Tamil	Тамилски
+digits	Telugu	Телугу
+digits	Kannada	Каннада
+digits	Malayalam	Малаялам
 	Proportional Oldstyle	Пропорционални стари цифри
 	Pucker & Bloat…	Свиване и раздуване…
 	Pucker Tool	Инструмент „Свиване“
@@ -2525,9 +2553,11 @@ font-technology	Variable	Променливи
 	Stop	Спиране
 	Searching…	Търсене…
 	Not found	Няма намерени резултати
-	{folders} folder(s) and {files} file(s) searched	Претърсени са {folders} папки и {files} файла
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропуснати са {count} папки (като системни папки, папки на други приложения и скрити папки)
-	{count} folder(s) or file(s) couldn't be read	{count} папки или файла не можаха да бъдат прочетени
+	{folders} and {files} searched	Претърсени са {folders} и {files}
+@plural	{n} folder|{n} folders	{n} папка|{n} папки
+@plural	{n} file|{n} files	{n} файл|{n} файла
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Пропусната е {n} папка (като системни папки, папки на други приложения и скрити папки)|Пропуснати са {n} папки (като системни папки, папки на други приложения и скрити папки)
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} папка или файл не можа да бъде прочетен|{n} папки или файла не можаха да бъдат прочетени
 	The search stopped at its limit: search a smaller folder.	Търсенето спре поради достигане на лимита: потърсете в по-малка папка.
 	Copy only fonts you own or are licensed to install.	Копирайте само шрифтове, които притежавате или имате лиценз да инсталирате.
 	VectorCraft copies the fonts to {folder}.	VectorCraft копира шрифтовете в {folder}.
@@ -2914,6 +2944,7 @@ font-technology	Variable	Променливи
 	Shape Mode	Режим на фигура
 	Shape Modes:	Режими на фигури:
 	Shape Properties:	Свойства на фигурата:
+	Shape Properties	Свойства на фигурата
 	Shaper Tool	Инструмент „Shaper“
 	Shapes	Фигури
 	Shear	Срязване
@@ -3594,13 +3625,13 @@ font-technology	Variable	Променливи
 	Zoom Tool	Инструмент „Мащаб“
 	Zoom with Mouse Wheel	Мащабиране с колелцето на мишката
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} файл(а) в {folder}{note}. Показване на папката на пакета?
-	{count} linked file(s) not found	{count} свързан(и) файл(а) не са намерени
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
+@plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
 	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} свързано(и) изображение(я) е/са променено(и) след запазването на този документ. Показване на новите версии?
-	{count} linked image(s) changed on disk. Show the new versions?	{count} свързано(и) изображение(я) е/са променено(и) на диска. Показване на новите версии?
-	{count} more rules: Export writes every one.	{count} още правила: Експортът записва всяко едно.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} ненаименувани обекта са пропуснати: наименувайте ги или включете „Ненаименувани обекти“ в менюто на панела.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} свързано изображение е променено след запазването на този документ. Показване на новата версия?|{n} свързани изображения са променени след запазването на този документ. Показване на новите версии?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} свързано изображение е променено на диска. Показване на новата версия?|{n} свързани изображения са променени на диска. Показване на новите версии?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	Още {n} правило: Експортът го записва.|Още {n} правила: Експортът записва всяко едно.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} ненаименуван обект е пропуснат: наименувайте го или включете „Ненаименувани обекти“ в менюто на панела.|{n} ненаименувани обекта са пропуснати: наименувайте ги или включете „Ненаименувани обекти“ в менюто на панела.
 	{effect} is already applied	{effect} вече е приложен
 	{format} Options	Опции за {format}
 	{kind} Gradient	{kind} градиент
@@ -3622,6 +3653,8 @@ imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} обект|{n} обекта
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Цветна таблица ({n} цвят)|Цветна таблица ({n} цвята)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Изтриване на този графичен стил ({n})?|Изтриване на тези графични стилове ({n})?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Изтриване на тази четка ({n})?|Изтриване на тези четки ({n})?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Изтриване на този {n} образец или група?|Изтриване на тези {n} образца и групи?
 @plural	{n} Layer|{n} Layers	{n} слой|{n} слоя
 @plural	{n} Object|{n} Objects	{n} обект|{n} обекта
 @plural	{n} area highlighted|{n} areas highlighted	{n} осветена област|{n} осветени области
@@ -3750,6 +3783,7 @@ axis	Both	И двете
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
 @msg	select some type first	първо изберете текст
+@msg	kerning must be a number, "auto", or "optical"	Кернингът трябва да е число, „auto“ или „optical“
 @msg	{_1} has no {_2} style	{_1} няма стил {_2}
 @msg	a layer couldn't be read	слой не можа да бъде прочетен
 @msg	it has more than one artboard	има повече от една работна област
@@ -3818,7 +3852,7 @@ axis	Both	И двете
 @msg	PDF settings are not an object	Настройките за PDF не са обект
 @msg	PDF security settings are not an object	Настройките за сигурност на PDF не са обект
 @msg	PDF writer error: {0}	Грешка на PDF записа: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Пакетирани са {n} файла в {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Пакетиран е {n} файл в {folder} ({note})|Пакетирани са {n} файла в {folder} ({note})
 @msg	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
@@ -3956,6 +3990,7 @@ axis	Both	И двете
 @msg	cannot split an open path at its end point	отворен път не може да бъде разделен в крайната му точка
 @msg	closing needs three anchors	затварянето изисква три опорни точки
 @msg	check an asset to export	изберете актив за експортиране
+@msg	check an artboard to export	изберете монтажна област за експортиране
 @msg	check a layer to export	отметнете слой за експортиране
 @msg	select the art to export first	първо изберете графиката за експортиране
 @msg	choice must be "merge" or "add", not `{choice}`	изборът трябва да бъде "merge" или "add", а не `{choice}`
@@ -4095,6 +4130,7 @@ axis	Both	И двете
 @msg	no such perspective grid preset	няма такава предварителна настройка за перспективна мрежа
 @msg	no such recent file	няма такъв скорошен файл
 @msg	no such recent font	няма такъв скорошен шрифт
+@msg	some text is hidden or locked, so its font wasn't replaced	част от текста е скрит или заключен, затова шрифтът му не беше заменен
 @msg	no such saved selection	няма такава запазена селекция
 @msg	no such segment	няма такъв сегмент
 @msg	no such spine point	няма такава точка от оста
@@ -5487,13 +5523,13 @@ theme	Appearance	Външен вид
 	Slope:	Наклон:
 axis	X Axis	X ос
 axis	Y Axis	Y ос
-@msg	Packaged {n} file(s) in {folder}	Пакетирани са {n} файла в {folder}
-@msg	Packaged {n} file(s) {note}	Пакетирани са {n} файла {note}
-@msg	Packaged {n} file(s)	Пакетирани са {n} файла
-	Packaged {n} file(s)	Пакетирани са {n} файла
-	Packaged {n} file(s) in {folder}	Пакетирани са {n} файла в {folder}
-	Packaged {n} file(s) {note}	Пакетирани са {n} файла {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} файл(а) в {folder}. Показване на папката на пакета?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Пакетиран е {n} файл в {folder}|Пакетирани са {n} файла в {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Пакетиран е {n} файл {note}|Пакетирани са {n} файла {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Пакетиран е {n} файл|Пакетирани са {n} файла
+@plural	Packaged {n} file|Packaged {n} files	Пакетиран е {n} файл|Пакетирани са {n} файла
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Пакетиран е {n} файл в {folder}|Пакетирани са {n} файла в {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Пакетиран е {n} файл {note}|Пакетирани са {n} файла {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} файл в {folder}. Показване на папката на пакета?|{n} файла в {folder}. Показване на папката на пакета?
 	Clockwise	По часовниковата стрелка
 	Dither	Дитъринг
 	Fine noise hides banding in the gradient fill	Фин шум скрива ивиците в градиентната запълка
@@ -5516,6 +5552,7 @@ axis	Y Axis	Y ос
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
 	On Artboards	В работните области
 	All Artboards	Всички работни области
@@ -5803,6 +5840,7 @@ anchor	Points:	Точки:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Разделяне на текст
 	Combine Point Text	Обединяване на точков текст
+	Join Point Text	Съединяване на точков текст
 	Remove Breaks	Премахване на прекъсвания
 	Split Text at Cursor	Разделяне на текст при курсора
 	Set Alignment, Keep Position	Задаване на подравняване със запазване на позицията
@@ -5831,6 +5869,7 @@ breakText	Glyphs	Глифи
 @msg	Select horizontal point or area type whose text fits	Изберете хоризонтален точков текст или текст в зона, чийто текст се побира
 @msg	Nothing to split at the cursor	При курсора няма какво да се раздели
 @msg	Select two or more one-line point type objects on one baseline to combine	Изберете два или повече едноредови обекта с точков текст на една базова линия, за да ги обедините
+@msg	Select two or more one-line point type objects to join	Изберете два или повече едноредови обекта с точков текст, за да ги съедините
 @msg	No line breaks to remove	Няма прекъсвания на редове за премахване
 @msg	No paragraph breaks to remove	Няма прекъсвания на абзаци за премахване
 @msg	Too many breaks to remove at once	Твърде много прекъсвания за премахване наведнъж
@@ -5843,6 +5882,11 @@ breakText	Glyphs	Глифи
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` трябва да е lines, paragraphs, words или glyphs, а не {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` трябва да е "line" или "paragraph", а не {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` трябва да е "left", "center" или "right", а не {other}
+	File + Number	Файл + номер
+	File + Data Set Name	Файл + име на набора от данни
+	Data Set Name	Име на набора от данни
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` трябва да е `fileNumber`, `fileDataSetName` или `dataSetName`
+@msg	no free data set file name in destination folder	Няма свободно име за файл на набор от данни в целевата папка
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Mode	Режим
@@ -5884,3 +5928,70 @@ breakText	Glyphs	Глифи
 	Gap 4	Разстояние 4
 	Dash 5	Тире 5
 	Gap 5	Разстояние 5
+@msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.
+@msg	invalid pattern tile choice	невалиден избор на плочка за шаблон
+@msg	no pattern named `{choice}`	няма шаблон с име `{choice}`
+	Delete the selected brushes?	Да се изтрият избраните четки?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Щрихи използват една или повече от тези четки. Да се премахнат ли четките от тези щрихи и да се изтрият четките?
+	Remove Strokes	Премахване на щрихи
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Инструменти за подреждане
+	Arrange in Grid…	Подреждане в мрежа…
+	Arrange in Grid	Подреждане в мрежа
+	Swap Objects	Размяна на обекти
+	Swap Objects and Sizes	Размяна на обекти и размери
+	Replace with Top Object…	Замяна с горния обект…
+	Replace with Top Object	Замяна с горния обект
+	Set Size of Each…	Задаване на размер на всеки…
+	Set Size of Each	Задаване на размер на всеки
+@msg	select exactly two objects	изберете точно два обекта
+@msg	give `width` or `height`	задайте `width` или `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Групиране на припокриващи се обекти
+@msg	too many objects selected (at most 20000)	избрани са твърде много обекти (най-много 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Разделяне на тирета…
+	Divide into Dashes	Разделяне на тирета
+	Dash:	Тире:
+	Gap:	Разстояние:
+	Fit to Corners and Ends	Напасване към ъгли и краища
+	Remove Gaps	Премахване на разстоянията
+@msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
+@msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Инструменти за документи
+	Save a Timestamped Copy	Запазване на копие с дата и час
+@msg	there is no clock here	тук няма часовник
+@msg	there is no clock here: give `time` (Unix seconds)	тук няма часовник: задайте `time` (Unix секунди)
+@msg	the document has never been saved: give `folder`	документът никога не е запазван: задайте `folder`
+@msg	every numbered name for the copy is taken	всички номерирани имена за копието са заети
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Нови символи от слоевете
+	Convert Layers to Symbols	Превръщане на слоевете в символи
+@msg	{id} is no top-level layer	{id} не е слой от най-горно ниво
+	Marathi	Маратхи
+	Gujarati	Гуджарати
+	Bengali	Бенгалски
+	Punjabi	Пенджабски
+	Tamil	Тамилски
+	Telugu	Телугу
+	Kannada	Каннада
+	Malayalam	Малаялам
+	Odia	Ория
+	Urdu	Урду
+	VectorCraft {release} and later (version {n})	VectorCraft {release} и по-нови (версия {n})
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Тип на символа:
+	Dynamic Symbol	Динамичен символ
+	Static Symbol	Статичен символ
+	Symbol Instance Appearance	Външен вид на екземпляра на символ
+	Reset Symbol Instance	Нулиране на екземпляра на символ
+@msg	type must be static or dynamic, not {v}	type трябва да е static или dynamic, а не {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` е статичен символ: първо задайте типа на символа на „Динамичен“
+@msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
+@msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
+@msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	задайте newName, registration, exportType, nineSlice и/или type
+	Text Flow	Поток на текста
+	By Rows	По редове
+	By Columns	По колони

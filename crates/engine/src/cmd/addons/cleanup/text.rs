@@ -1,5 +1,5 @@
 //! Artwork Cleanup's text tools: Break Text into Lines / Paragraphs / Words / Glyphs, Combine Point
-//! Text, Split Text at Cursor, Remove Line / Paragraph Breaks, Set Alignment, Keep Position, Reset
+//! Text, Join Point Text, Split Text at Cursor, Remove Line / Paragraph Breaks, Set Alignment, Keep Position, Reset
 //! Text Transform and Replace Missing Fonts. Each is one undo step. Pieces keep their characters'
 //! styles and stay where the layout drew them: each is moved so the glyph of its first character
 //! lands where it was.
@@ -56,6 +56,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?: [id…] (default: the selection)} merge one-line horizontal point type into as few objects as it can, every glyph staying where it was: pieces turned and sheared alike whose baselines line up (within 0.4 em; the difference becomes baseline shift) join left to right, a space goes between pieces at least half a space apart, and tracking on the character before each piece keeps the spacing; each object keeps its character styles, and the leftmost piece of each run its place and paint, as one undo step → {ids (the objects made, selected), combined (pieces merged into them)}",
             has_selection,
             combine_text
+        ),
+        cmd!(
+            "addon.cleanup.joinText",
+            "Join Point Text",
+            ["Object", "Plug-ins", "Artwork Cleanup"],
+            None,
+            "{ids?: [id…] (default: the selection)} join one-line horizontal point type into one point type object, as one undo step: pieces turned and sheared like the top-left one are read as lines (baselines within 0.4 em of each other), top to bottom, each line's pieces left to right with a space between them; each line becomes a paragraph, left aligned, and keeps the distance between baselines as its leading. The text keeps its character styles; the object takes the top-left piece's place and paint, and the other pieces go → {id (selected), joined (pieces merged into it), lines}",
+            has_selection,
+            join_text
         ),
         cmd!(
             "addon.cleanup.removeBreaks",
@@ -639,6 +648,85 @@ fn combine_text(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "ids": ids, "combined": combined }))
+}
+
+fn join_text(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "addon.cleanup.joinText";
+    let d = &s.doc()?.doc;
+    let pieces: Vec<Piece> =
+        texts_under(d, &checked_ids_or_selection(s, p, C)?)?.into_iter().filter_map(|id| Piece::of(d, id).map(|p| p.0)).collect();
+    // The piece top-left on the page sets the turn; the others turned like it are read in that frame.
+    let on_page = |p: &Piece| Affine::new([p.turn[0], p.turn[1], p.turn[2], p.turn[3], 0.0, 0.0]) * p.at;
+    let first = pieces.iter().min_by(|x, y| {
+        let (a, b) = (on_page(x), on_page(y));
+        a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
+    });
+    let mut kept: Vec<&Piece> = first.map(|f| pieces.iter().filter(|p| p.turned_like(f)).collect()).unwrap_or_default();
+    kept.sort_by(|x, y| x.at.y.total_cmp(&y.at.y).then(x.at.x.total_cmp(&y.at.x)));
+    // Lines, top to bottom, by baseline; each line's pieces left to right.
+    let mut lines: Vec<Vec<&Piece>> = vec![];
+    for piece in kept {
+        match lines.last_mut().filter(|l| l.first().is_some_and(|f| (f.at.y - piece.at.y).abs() <= SAME_LINE * f.size.min(piece.size))) {
+            Some(l) => l.push(piece),
+            None => lines.push(vec![piece]),
+        }
+    }
+    for line in &mut lines {
+        line.sort_by(|x, y| x.at.x.total_cmp(&y.at.x));
+    }
+    let joined: usize = lines.iter().map(Vec::len).sum();
+    let (Some(top), true) = (lines.first().and_then(|l| l.first()).copied(), joined >= 2) else {
+        return Err(EngineError::Other("Select two or more one-line point type objects to join".into()));
+    };
+    let mut runs: Vec<vectorcraft_doc::TextRun> = vec![];
+    let mut prev_y = None;
+    for line in &lines {
+        let y = line.first().map_or(top.at.y, |p| p.at.y);
+        // The line keeps the distance from the baseline above as its leading.
+        let leading = prev_y.map(|above| y - above).filter(|l: &f64| l.is_finite() && *l > 0.0);
+        prev_y = Some(y);
+        let last = |runs: &[vectorcraft_doc::TextRun]| runs.iter().rev().find(|r| !r.text.is_empty()).map(|r| r.style.clone()).unwrap_or_default();
+        if !runs.is_empty() {
+            runs.push(vectorcraft_doc::TextRun::new("\n", last(&runs)));
+        }
+        let start = runs.len();
+        for (k, piece) in line.iter().enumerate() {
+            let blank = runs.last().is_some_and(|r| r.text.ends_with(char::is_whitespace)) || piece.t.plain_text().starts_with(char::is_whitespace);
+            if k > 0 && !blank {
+                runs.push(vectorcraft_doc::TextRun::new(" ", last(&runs)));
+            }
+            runs.extend(piece.t.runs.iter().cloned());
+        }
+        if let Some(l) = leading {
+            for r in runs.iter_mut().skip(start) {
+                r.style.leading = Some(l);
+            }
+        }
+    }
+    let mut m = top.t.clone();
+    m.set_all_paras(ParaStyle { justify: Justify::Left, ..top.t.para.clone() });
+    m.runs = runs;
+    edit::normalize(&mut m.runs);
+    m.ruby.clear();
+    // The top-left piece's first glyph stays where it was.
+    let [a, b, c, dd] = top.turn;
+    let base = Affine::new([a, b, c, dd, 0.0, 0.0]) * Affine::translate(top.at.to_vec2());
+    m.xf = base;
+    let x0 = glyph_starting(&layout(&m), 0).map_or(0.0, |g| g.x);
+    m.xf = base * Affine::translate((-x0, 0.0));
+    refresh_bounds(&mut m);
+    let id = top.id;
+    let gone: Vec<NodeId> = lines.iter().flatten().map(|p| p.id).filter(|g| *g != id).collect();
+    let count = lines.len();
+    s.edit("Join Point Text", |d, sel| {
+        if let Some(n) = d.node_mut(id) {
+            n.kind = NodeKind::Text(Box::new(m));
+        }
+        d.remove_many(&gone)?;
+        sel.set([id]);
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0, "joined": joined, "lines": count }))
 }
 
 /// Remove the breaks `brk` in bytes `a..b` of `t`: one between two words becomes a space → how many

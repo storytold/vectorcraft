@@ -1391,6 +1391,53 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
     assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
 }
 
+/// The Blob Brush's Angle and Roundness (Blob Brush Tool Options, 0° and 100% by default) go with
+/// its stroke, kept within −180–180° and 0–100%; while it drags, a tip that is not round shows the
+/// outline of the area it covers with the length label, and an Alt drag that smooths shows the
+/// Smooth tool's thin line.
+#[test]
+fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("blobBrush");
+    assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(0.0), Some(100.0)));
+    t.set_option("size", &json!(20));
+    for (angle, roundness, sent) in [(45.0, 25.0, (45.0, 25.0)), (400.0, -5.0, (180.0, 0.0)), (-400.0, 250.0, (-180.0, 100.0))] {
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(sent.0), Some(sent.1)));
+        let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+        assert!(
+            matches!(&acts[2][0], Action::Exec(c, v) if c == "path.blob" && v["size"] == 20.0 && v["angle"] == sent.0 && v["roundness"] == sent.1),
+            "{acts:?}"
+        );
+    }
+    // A tip 20 pt long and 5 pt wide, standing upright: along a horizontal drag from x 50 to
+    // x 150 the outline reaches 2.5 pt either side of the drag and 10 pt above and below its ends.
+    t.set_option("angle", &json!(90));
+    t.set_option("roundness", &json!(25));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+    let o = t.overlays(&cx);
+    let Some(Overlay::Path { path, width, .. }) = o.iter().find(|o| matches!(o, Overlay::Path { .. })) else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    let b = vectorcraft_geom::Shape::bounding_box(path);
+    assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
+    assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { .. })), "{o:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0));
+    let alt = Mods { alt: true, ..Default::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    let o = t.overlays(&cx);
+    let [Overlay::Path { path, width, .. }] = &o[..] else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
+}
+
 #[test]
 fn smooth_needs_selection_and_brackets_resize() {
     let (d, _) = doc_with_rect();

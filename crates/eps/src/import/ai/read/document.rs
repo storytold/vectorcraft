@@ -229,9 +229,10 @@ impl<'a> Reader<'a> {
             self.blend_roles.insert(id, (kind, o.text("ShapeBlendPathID")));
         }
         // An envelope (a distortion, `AIDeformStyle` / `DeformValue`) is written on `%_` lines as
-        // a group holding the mesh that shapes it; the distorted art the file's PDF part draws
-        // follows on plain lines. That mesh isn't art, so it goes (#2405).
-        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_mesh() {
+        // a group holding the mesh that shapes it (or its contents, while they are being edited);
+        // the distorted art the file's PDF part draws follows on plain lines. That group isn't
+        // art, so it goes (#2405).
+        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_art() {
             return;
         }
         if let Some(mask) = o.obj("AI9_Mask").or_else(|| o.obj("Mask")) {

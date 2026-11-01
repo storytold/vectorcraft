@@ -214,7 +214,7 @@ fn type_with_an_inline_graphic_is_drawn_as_sharp() {
         let blue = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
         let mut art = Node::path(d.alloc_id(), rectangle(Rect::new(0.0, -30.0, 30.0, 0.0)), blue);
         art.blend = vectorcraft_color::BlendMode::Multiply;
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
         let style = CharStyle { size: 40.0, ..Default::default() };
         let mut t = TextObject::point(Point::new(10.3, 60.4), "I", style.clone());
         t.runs.push(TextRun::inline(InlineArt::new("S"), style));

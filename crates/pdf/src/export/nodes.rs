@@ -217,7 +217,7 @@ impl Exporter<'_> {
                 let total = sym.map_or(0, |sym| self.symbol_nodes.saturating_add(sym.art.count() as u64));
                 if let Some(sym) = sym.filter(|_| total <= vectorcraft_doc::MAX_SYMBOL_NODES) {
                     self.symbol_nodes = total;
-                    let mut art = (*sym.art).clone();
+                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
                     art.transform(*xf, false);
                     self.node(s, &art, page, true);
                 }

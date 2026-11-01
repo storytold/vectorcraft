@@ -95,6 +95,7 @@ fn the_plugins_submenu_runs_the_text_tools() {
     let cleanup = ["Object", "Plug-ins", "Artwork Cleanup"];
     for (label, id) in [
         ("Combine Point Text", "addon.cleanup.combineText"),
+        ("Join Point Text", "addon.cleanup.joinText"),
         ("Break Text into Lines", "addon.cleanup.breakText"),
         ("Break Text into Paragraphs", "addon.cleanup.breakText"),
         ("Break Text into Glyphs", "addon.cleanup.breakText"),

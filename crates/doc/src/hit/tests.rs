@@ -841,7 +841,7 @@ fn objects_at_matches_repeated_hits_on_random_documents() {
 fn objects_at_finds_symbol_instances_by_their_art() {
     let mut d = Document::new(200.0, 200.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 60.0, 140.0, 80.0)), Appearance::default_art());
-    d.symbols.push(crate::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (layer, top, inner, group) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
     let instance = |id, dy: f64| Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: vectorcraft_geom::Affine::translate((0.0, dy)) });
     d.insert(Some(layer), 0, instance(top, 0.0)).unwrap();

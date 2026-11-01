@@ -18,6 +18,7 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
         vertical_align: a.vertical_align,
+        flow: a.flow,
         fit: a.fit,
         ..LayoutOptions::default()
     };

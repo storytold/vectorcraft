@@ -206,7 +206,7 @@ font-technology	Variable	Değişken
 	Apply Paragraph Style	Paragraf Stilini Uygula
 	Apply SVG Filter…	SVG Filtresini Uygula…
 	Apply to All	Tümüne Uygula
-	Apply to All ({count} more missing)	Tümüne Uygula ({count} daha eksik)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Tümüne Uygula ({n} daha eksik)
 	Arc	Yay
 	Arc Lower…	Ark Alt…
 	Arc Tool	Yay Aracı
@@ -495,7 +495,7 @@ font-technology	Variable	Değişken
 	Collect in New Layer	Yeni Katmanda Topla
 	Collect Links in a Separate Folder	Bağlantıları Ayrı Bir Klasörde Toplayın
 	Color	Renk
-	Color (, or <)	Renk (, veya <)
+	Color (, or Shift+,)	Renk (, veya Shift+,)
 	Color Adjustments	Renk Ayarlamaları
 	Color bars	Renk çubukları
 	Color blindness – Deuteranopia-type	Renk körlüğü – Döteranopi tipi
@@ -647,6 +647,13 @@ font-technology	Variable	Değişken
 	Create Report	Rapor Oluştur
 	Create Slice	Dilim Oluştur
 	Create Sub-folders	Alt Klasörler Oluşturun
+	Clear Selection	Seçimi Temizle
+	Export PDFs As:	PDF'leri Şu Şekilde Dışa Aktar:
+	Single File	Tek Dosya
+	Multiple Files	Birden Fazla Dosya
+	Format Presets	Biçim Ön Ayarları
+	Grid View	Izgara Görünümü
+	Selected: {n}, Total number of files to export: {m}	Seçilen: {n}, dışa aktarılacak toplam dosya sayısı: {m}
 	Create Text	Metin Oluştur
 	Create Trim Marks	Kesim İşaretleri Oluşturun
 	Created	Oluşturuldu
@@ -726,11 +733,19 @@ font-technology	Variable	Değişken
 	Delete Stop	Durdurmayı Sil
 	Delete Swatch	Renk Örneğini Sil
 	Delete Symbol	Sembolü Sil
+	Delete the selected symbol?	Seçili sembol silinsin mi?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Sembollerden biri veya birkaçı kullanımda ve örnekleri genişletilene ya da silinene kadar silinemez.
+	Expand Instances	Örnekleri Genişlet
+	Delete Instances	Örnekleri Sil
+	Yes	Evet
+	No	Hayır
 	Delete Tab	Sekmeyi Sil
 	Delete the graphic style “{name}”?	“{name}” grafik stili silinsin mi?
+	Delete Action Sets	Eylem Setlerini Sil
+	Delete the action set “{name}” and its actions?	“{name}” eylem seti ve eylemleri silinsin mi?
+	Delete the selected action sets and their actions?	Seçili eylem setleri ve eylemleri silinsin mi?
 	Delete Theme	Temayı Sil
 	Delete theme	Temayı sil
-	Delete these {count} swatches and groups?	Bu {count} renk örnekleri ve grupları silinsin mi?
 	Delete these {n} graphic styles?	Bu {n} grafik stilleri silinsin mi?
 	Delete this saved preset	Bu kayıtlı ön ayarı silin
 	Delete this {n} graphic style?	Bu {n} grafik stili silinsin mi?
@@ -892,7 +907,7 @@ font-technology	Variable	Değişken
 	Edit Symbol	Sembolü Düzenle
 	Edit Text	Metni Düzenle
 	Edit the applied effect, or add another one?	Uygulanan efekti düzenlemek veya başka bir efekt eklemek mi istiyorsunuz?
-	Edit the selected point's colour in the Color panel	Seçilen noktanın rengini Renk panelinde düzenleyin
+	Edit the point	Noktayı düzenle
 	Edit the stop	Durağı düzenle
 	Edit Theme	Temayı Düzenle
 	Edit theme	Temayı düzenle
@@ -1219,7 +1234,7 @@ font-technology	Variable	Değişken
 	GPL palettes keep solid colours only, as RGB.	GPL paletleri yalnızca düz renkleri RGB olarak tutar.
 	GPU Performance	GPU Performansı
 	Gradient	Degrade
-	Gradient (. or >)	Gradyan (. veya >)
+	Gradient (. or Shift+.)	Gradyan (. veya Shift+.)
 	Gradient across stroke	Kontur boyunca gradyan
 	Gradient along stroke	Kontur boyunca gradyan
 	Gradient and Mesh Resolution:	Gradyan ve Mesh Çözünürlüğü:
@@ -1404,6 +1419,7 @@ font-technology	Variable	Değişken
 	In Tangent Handles	Teğet Tutamaçlarda
 	In the selected objects	Seçilen nesnelerde
 	Inches	İnç
+	Include Artboard Fill	Çalışma Yüzeyi Dolgusunu Dahil Et
 	Include Blacks with CMY:	CMY ile Siyahları Dahil Et:
 	Include Bleed	Taşmayı Dahil Et
 	Include Cmy Blacks	Cmy Black'leri dahil et
@@ -1466,7 +1482,7 @@ font-technology	Variable	Değişken
 	Keep the pasted color as a new swatch with a numbered name.	Yapıştırılan rengi numaralı bir adla yeni bir renk örneği olarak koruyun.
 	Keep this row's colors (exclude)	Bu satırın renklerini koru (hariç tut)
 	Keep:	Sakla:
-	Kerning (0 = Auto)	Karakter Aralığı (0 = Otomatik)
+	Kerning	Karakter aralığı
 	Keyboard Increment	Klavye Artışı
 	Keyboard Shortcut Conflicts	Klavye Kısayolu Çakışmaları
 	Keyboard Shortcut Set	Klavye Kısayol Seti
@@ -2030,6 +2046,7 @@ shape	Open	Açık
 	Open the URL in the web browser	URL'yi web tarayıcısında açın
 	Opened with {} note(s): {}	{} notla açıldı: {}
 	Open…	Aç…
+	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
@@ -2086,7 +2103,7 @@ shape	Open	Açık
 	Package	Paket
 	Package collects a saved document with its linked files and fonts.	Paket, kayıtlı bir belgeyi bağlantılı dosyaları ve yazı tipleriyle birlikte toplar.
 	Package created	Paket oluşturuldu
-	Packaged {n} file(s) in {folder} {note}	{folder}{note} biçiminde paketlenmiş {n} dosyası/dosyaları
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} dosya {folder} klasörüne paketlendi {note}
 	Packaged {n} file(s){note}	Paketlenmiş {n} dosyası/dosyaları{note}
 	Package…	Paket…
 	Page	Sayfa
@@ -2271,6 +2288,15 @@ shape	Open	Açık
 	Arabic	Arapça
 	Hindi	Hintçe
 	Farsi	Farsça
+digits	Devanagari	Devanagari
+digits	Bengali	Bengalce
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gücerat
+digits	Odia	Oriya
+digits	Tamil	Tamilce
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malayalam
 	Proportional Oldstyle	Orantılı Eski Stil
 	Pucker & Bloat…	Büzüşme ve Şişkinlik…
 	Pucker Tool	Büzme Aracı
@@ -2402,9 +2428,11 @@ shape	Open	Açık
 	Stop	Durdur
 	Searching…	Aranıyor…
 	Not found	Bulunamadı
-	{folders} folder(s) and {files} file(s) searched	{folders} klasör(ler)i ve {files} dosya(lar)ı arandı
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Diğer uygulamaların ve sistemin klasörleri ve gizli klasörleri gibi {count} klasörleri atlandı
-	{count} folder(s) or file(s) couldn't be read	{count} klasör(ler)i veya dosya(lar) okunamadı
+	{folders} and {files} searched	{folders} ve {files} arandı
+@plural	{n} folder|{n} folders	{n} klasör
+@plural	{n} file|{n} files	{n} dosya
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Diğer uygulamaların ve sistemin klasörleri ve gizli klasörler gibi {n} klasör atlandı
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} klasör veya dosya okunamadı
 	The search stopped at its limit: search a smaller folder.	Arama sınırda durdu: daha küçük bir klasörde arama yapın.
 	Copy only fonts you own or are licensed to install.	Yalnızca sahip olduğunuz veya yükleme lisansına sahip olduğunuz yazı tiplerini kopyalayın.
 	VectorCraft copies the fonts to {folder}.	VectorCraft yazı tiplerini {folder}'ye kopyalar.
@@ -2825,6 +2853,7 @@ shape	Open	Açık
 	Shape Mode	Şekil Modu
 	Shape Modes:	Şekil Modları:
 	Shape Properties:	Şekil Özellikleri:
+	Shape Properties	Şekil Özellikleri
 	Shaper Tool	Şekillendirici Aracı
 	Shapes	Şekiller
 	Shear	Kesme
@@ -3488,13 +3517,13 @@ shape	Open	Açık
 	Zoom Tool	Yakınlaştırma Aracı
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
-	{count} file(s) in {folder} {note}. Show the package folder?	{folder}{note} içindeki {count} dosyası/dosyaları. Paket klasörü gösterilsin mi?
-	{count} linked file(s) not found	{count} bağlantılı dosya(lar) bulunamadı
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
+@plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
 	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} bağlantılı görseller bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?
-	{count} linked image(s) changed on disk. Show the new versions?	{count} bağlantılı görseller diskte değiştirildi. Yeni sürümler gösterilsin mi?
-	{count} more rules: Export writes every one.	{count} daha fazla kural: Dışa aktarma her birini yazar.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} adsız nesneler dışarıda bırakıldı: bunlara ad verin veya panel menüsünde Adsız Nesneler'i açın.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} bağlantılı görsel bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} bağlantılı görsel diskte değiştirildi. Yeni sürümler gösterilsin mi?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} kural daha: Dışa aktarma her birini yazar.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} adsız nesne dışarıda bırakıldı: bunlara ad verin veya panel menüsünde Adsız Nesneler'i açın.
 	{effect} is already applied	{effect} zaten uygulandı
 	{format} Options	{format} Seçenekleri
 	{kind} Gradient	{kind} Degrade
@@ -3516,6 +3545,8 @@ imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} öğe
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Renk Tablosu ({n} renk)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Bu {n} grafik stili silinsin mi?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Bu {n} fırça silinsin mi?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Bu {n} renk örneği ve grup silinsin mi?
 @plural	{n} Layer|{n} Layers	{n} Katman
 @plural	{n} Object|{n} Objects	{n} Nesne
 @plural	{n} area highlighted|{n} areas highlighted	{n} alan vurgulandı
@@ -3644,6 +3675,7 @@ axis	Both	Her İkisi
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
 @msg	select some type first	önce bir tür seçin
+@msg	kerning must be a number, "auto", or "optical"	Karakter aralığı sayı, “auto” veya “optical” olmalıdır
 @msg	the selection has no gradient fill	seçimin degrade dolgusu yok
 @msg	the selection has no gradient stroke	seçimin degrade konturu yok
 @msg	the selection has no pattern fill	seçimin desen dolgusu yok
@@ -3720,7 +3752,7 @@ axis	Both	Her İkisi
 @msg	PDF settings are not an object	PDF ayarları bir nesne değildir
 @msg	PDF security settings are not an object	PDF güvenlik ayarları bir nesne değildir
 @msg	PDF writer error: {0}	PDF yazıcı hatası: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	{folder}{note} biçiminde paketlenmiş {n} dosyası/dosyaları
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})
 @msg	Packaged {n} file(s){note}	Paketlenmiş {n} dosyası/dosyaları{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
 @msg	Release Guides: no guides	Sürüm Kılavuzları: kılavuz yok
@@ -3853,6 +3885,7 @@ axis	Both	Her İkisi
 @msg	cannot split an open path at its end point	açık bir yolu bitiş noktasında bölemez
 @msg	closing needs three anchors	Kapanış üç çapaya ihtiyaç duyar
 @msg	check an asset to export	dışa aktarılacak bir varlığı kontrol etme
+@msg	check an artboard to export	dışa aktarılacak bir çalışma yüzeyi işaretleyin
 @msg	check a layer to export	dışa aktarılacak katmanı kontrol edin
 @msg	select the art to export first	önce dışa aktarılacak resmi seçin
 @msg	choice must be "merge" or "add", not `{choice}`	seçim "{choice}" değil "birleştir" veya "ekle" olmalıdır
@@ -3988,6 +4021,7 @@ axis	Both	Her İkisi
 @msg	no such perspective grid preset	böyle bir perspektif ızgarası ön ayarı yok
 @msg	no such recent file	böyle yeni bir dosya yok
 @msg	no such recent font	böyle yeni bir yazı tipi yok
+@msg	some text is hidden or locked, so its font wasn't replaced	bazı metinler gizli veya kilitli olduğundan yazı tipleri değiştirilmedi
 @msg	no such saved selection	böyle kayıtlı bir seçim yok
 @msg	no such segment	öyle bir bölüm yok
 @msg	no such subpath	böyle bir alt yol yok
@@ -4367,6 +4401,8 @@ axis	Both	Her İkisi
 @msg	the PCX file is cut short	PCX dosyası kısa kesildi
 @msg	the PCX file's header is damaged	PCX dosyasının başlığı bozuk
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} düzlemde {bits}-bit pikseller içeren PCX dosyaları okunamaz
+@msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
@@ -5346,6 +5382,8 @@ theme	Appearance	Görünüm
 	Note Paper…	Not Kâğıdı…
 	Objects on Path	Yol Üzerindeki Nesneler
 	Objects on Path Options	Yol Üzerindeki Nesneler Seçenekleri
+	Pivot:	Pivot noktası:
+	Rotate:	Rotasyon:
 	Objects on Path Tool	Yol Üzerindeki Nesneler Aracı
 	Photocopy	Fotokopi
 	Photocopy…	Fotokopi…
@@ -5525,17 +5563,17 @@ theme	Appearance	Görünüm
 axis	X Axis	X ekseni
 axis	Y Axis	Y ekseni
 
-@msg	Packaged {n} file(s) in {folder}	{folder} biçiminde paketlenmiş {n} dosyası/dosyaları
-@msg	Packaged {n} file(s) {note}	Paketlenmiş {n} dosyası/dosyaları {note}
-@msg	Packaged {n} file(s)	Paketlenmiş {n} dosyası/dosyaları
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}
+@msgplural	Packaged {n} file|Packaged {n} files	{n} dosya paketlendi
 # Artwork drag between document tabs.
 	Drop Artwork	Çizimi Bırak
 @msg	{key} must be [x, y] with finite coordinates	{key}, sonlu koordinatlı [x, y] olmalı
 @msg	ids must contain 1–10000 object ids	ids 1–10000 nesne kimliği içermeli
-	Packaged {n} file(s)	Paketlenmiş {n} dosyası/dosyaları
-	Packaged {n} file(s) in {folder}	{folder} biçiminde paketlenmiş {n} dosyası/dosyaları
-	Packaged {n} file(s) {note}	Paketlenmiş {n} dosyası/dosyaları {note}
-	{count} file(s) in {folder}. Show the package folder?	{folder} içindeki {count} dosyası/dosyaları. Paket klasörü gösterilsin mi?
+@plural	Packaged {n} file|Packaged {n} files	{n} dosya paketlendi
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} içinde {n} dosya. Paket klasörü gösterilsin mi?
 	Clockwise	Saat yönünde
 	Dither	Titreme
 	Fine noise hides banding in the gradient fill	İnce gürültü, degrade dolgudaki bantları gizler
@@ -5573,7 +5611,7 @@ axis	Y Axis	Y ekseni
 	Include Objects On Canvas	Tuvaldeki Nesneleri Dahil Et
 	Result(s): {count}	Sonuç(lar): {count}
 @msg	select one object	bir nesne seçin
-@msg	Global Edit works on paths, compound paths and symbol instances	Genel düzenleme yollar, bileşik yollar ve sembol örnekleri üzerinde çalışır
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Genel düzenleme yollar, bileşik yollar, sembol örnekleri ve bunların grupları üzerinde çalışır
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (döndürülmüş veya yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ya da 1, 3-5 gibi bir aralık olmalı, {v} değil
 	Add to Symbols	Sembollere Ekle
@@ -5822,6 +5860,11 @@ anchor	Points:	Noktalar:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Nokta Rengini Sanattan Al
+	Basic Character Formats	Temel karakter biçimleri
+	Case	Büyük küçük harf
+@msg	{label} must be a number	{label} bir sayı olmalıdır
+@msg	{label} must be a number of at least 0.1	{label} en az 0,1 olan bir sayı olmalıdır
+@msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Çift Ton…
@@ -5872,6 +5915,7 @@ anchor	Points:	Noktalar:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Metni Böl
 	Combine Point Text	Nokta Metnini Birleştir
+	Join Point Text	Nokta Metnini Bağla
 	Remove Breaks	Kesmeleri Kaldır
 	Split Text at Cursor	Metni İmleçte Böl
 	Set Alignment, Keep Position	Hizalamayı Ayarla, Konumu Koru
@@ -5900,6 +5944,7 @@ breakText	Glyphs	Glifler
 @msg	Select horizontal point or area type whose text fits	Metni sığan yatay nokta veya alan metni seçin
 @msg	Nothing to split at the cursor	İmleçte bölünecek bir şey yok
 @msg	Select two or more one-line point type objects on one baseline to combine	Birleştirmek için aynı taban çizgisinde iki veya daha fazla tek satırlı nokta metni nesnesi seçin
+@msg	Select two or more one-line point type objects to join	Bağlamak için iki veya daha fazla tek satırlı nokta metni nesnesi seçin
 @msg	No line breaks to remove	Kaldırılacak satır sonu yok
 @msg	No paragraph breaks to remove	Kaldırılacak paragraf sonu yok
 @msg	Too many breaks to remove at once	Bir kerede kaldırılacak çok fazla kesme var
@@ -5912,6 +5957,11 @@ breakText	Glyphs	Glifler
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by`, lines, paragraphs, words veya glyphs olmalı, {other} değil
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind`, "line" veya "paragraph" olmalı, {other} değil
 @msg	`align` must be "left", "center" or "right", not {other}	`align`, "left", "center" veya "right" olmalı, {other} değil
+	File + Number	Dosya + numara
+	File + Data Set Name	Dosya + veri kümesi adı
+	Data Set Name	Veri kümesi adı
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` değeri `fileNumber`, `fileDataSetName` veya `dataSetName` olmalıdır
+@msg	no free data set file name in destination folder	Hedef klasörde veri kümesi için boş bir dosya adı yok
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Yol Efektleri
@@ -5952,3 +6002,70 @@ breakText	Glyphs	Glifler
 	Gap 4	Boşluk 4
 	Dash 5	Çizgi 5
 	Gap 5	Boşluk 5
+@msg	You must choose a side pattern.	Bir yan desen seçmelisiniz.
+@msg	invalid pattern tile choice	geçersiz desen döşemesi seçimi
+@msg	no pattern named `{choice}`	`{choice}` adlı desen yok
+	Delete the selected brushes?	Seçili fırçalar silinsin mi?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturlar bu fırçalardan birini veya daha fazlasını kullanıyor. Fırçalar bu konturlardan kaldırılsın ve fırçalar silinsin mi?
+	Remove Strokes	Konturları Kaldır
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Düzenleme Araçları
+	Arrange in Grid…	Izgarada Düzenle…
+	Arrange in Grid	Izgarada Düzenle
+	Swap Objects	Nesnelerin Yerini Değiştir
+	Swap Objects and Sizes	Nesnelerin Yerini ve Boyutunu Değiştir
+	Replace with Top Object…	En Üstteki Nesneyle Değiştir…
+	Replace with Top Object	En Üstteki Nesneyle Değiştir
+	Set Size of Each…	Her Birinin Boyutunu Ayarla…
+	Set Size of Each	Her Birinin Boyutunu Ayarla
+@msg	select exactly two objects	tam olarak iki nesne seç
+@msg	give `width` or `height`	`width` veya `height` belirt
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Çakışan Nesneleri Grupla
+@msg	too many objects selected (at most 20000)	çok fazla nesne seçili (en fazla 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Tirelere Böl…
+	Divide into Dashes	Tirelere Böl
+	Dash:	Tire:
+	Gap:	Boşluk:
+	Fit to Corners and Ends	Köşelere ve Uçlara Uydur
+	Remove Gaps	Boşlukları Kaldır
+@msg	that makes too many pieces (at most 100000): make the dashes longer	bu çok fazla parça oluşturur (en fazla 100000): tireleri uzatın
+@msg	select paths, or segments, to divide	bölünecek yolları veya bölümleri seçin
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Belge Araçları
+	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
+@msg	there is no clock here	burada saat yok
+@msg	there is no clock here: give `time` (Unix seconds)	burada saat yok: `time` verin (Unix saniyesi)
+@msg	the document has never been saved: give `folder`	belge hiç kaydedilmedi: `folder` verin
+@msg	every numbered name for the copy is taken	kopya için tüm numaralı adlar kullanılıyor
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Katmanlardan Yeni Semboller
+	Convert Layers to Symbols	Katmanları Sembollere Dönüştür
+@msg	{id} is no top-level layer	{id} üst düzey bir katman değil
+	Marathi	Marathi dili
+	Gujarati	Gücerat dili
+	Bengali	Bengalce
+	Punjabi	Pencapça
+	Tamil	Tamilce
+	Telugu	Telugu dili
+	Kannada	Kannada dili
+	Malayalam	Malayalam dili
+	Odia	Oriya dili
+	Urdu	Urduca
+	VectorCraft {release} and later (version {n})	VectorCraft {release} ve sonrası (sürüm {n})
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Sembol Türü:
+	Dynamic Symbol	Dinamik Sembol
+	Static Symbol	Statik Sembol
+	Symbol Instance Appearance	Sembol Örneği Görünümü
+	Reset Symbol Instance	Sembol Örneğini Sıfırla
+@msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
+@msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
+@msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
+@msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
+@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
+	Text Flow	Metin Akışı
+	By Rows	Satırlara Göre
+	By Columns	Sütunlara Göre
