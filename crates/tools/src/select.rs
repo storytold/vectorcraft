@@ -137,6 +137,8 @@ pub struct SelectionTool {
     /// The last hover had Alt held: what it measures depends on what lies under the pointer
     /// ([`Tool::wants_rehover`]).
     alt_hover: bool,
+    /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
+    bracket_hover: Option<Point>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -659,6 +661,7 @@ impl Tool for SelectionTool {
         self.hover = None;
         self.distance = None;
         self.alt_hover = false;
+        self.bracket_hover = None;
     }
 
     fn wants_rehover(&self) -> bool {
@@ -679,6 +682,7 @@ impl Tool for SelectionTool {
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
+        self.bracket_hover = hovering.then_some(ev.pos);
         self.alt_hover = hovering && ev.mods.alt;
         self.distance = hovering.then(|| distance_target(cx, ev.pos, ev.mods)).flatten();
         if let State::Loaded { from, before, press } = self.state
@@ -865,7 +869,9 @@ impl Tool for SelectionTool {
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let mut o = pathtype::overlays(cx);
+        let drag = if let State::Bracket(b) = &self.state { Some(b) } else { None };
+        // Highlighted only where a press would take the bracket, not a nearer port.
+        let mut o = pathtype::overlays(cx, self.bracket_hover.filter(|p| over_bracket(cx, *p)), drag);
         if let Some(source) = cx.isolation.and_then(|id| cx.doc.node(id)).filter(|n| n.name.as_deref() == Some(vectorcraft_doc::shaper::SOURCES)) {
             for n in source.children().into_iter().flatten() {
                 if let Some(path) = n.path_data() {
@@ -1188,7 +1194,7 @@ impl SelectionTool {
     fn press_widgets(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point) -> Option<Vec<Action>> {
         // 0. A port of selected area type or type on a path: the pointer takes its text,
         // to thread on from the out port or back from the in port.
-        if let Some((from, port)) = crate::text::port_at(cx, p) {
+        if let Some((from, port)) = crate::text::port_at(cx, p).filter(|_| !over_bracket(cx, p)) {
             self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
             return Some(vec![]);
         }
