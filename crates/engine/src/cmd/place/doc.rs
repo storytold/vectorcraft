@@ -38,8 +38,12 @@
 //! changed, once: pictures and objects, fields, fields left out (no result, or nested too deep), the
 //! other stories, tracked changes and tables. A stream larger than [`MAX_STREAM`] bytes, a main
 //! text longer than [`text::MAX_TEXT`] characters, more than [`MAX_PIECES`] pieces or
-//! [`MAX_PAGES`] property pages, and placed type of more than [`MAX_PARAGRAPHS`] paragraphs or
-//! [`MAX_RUNS`] runs are refused, and so is a structure that lies outside its stream.
+//! [`MAX_PAGES`] property pages, more than [`MAX_RUNS`] runs of character or of paragraph
+//! properties, more than [`MAX_PRL_BYTES`] bytes of properties in the styles and property runs,
+//! more than [`MAX_PARAGRAPHS`] paragraphs (hidden and deleted ones and those in field
+//! instructions included), and placed type of more than [`MAX_RUNS`] runs are refused, and so are
+//! a structure that lies outside its stream, property pages whose runs are listed twice or
+//! overlap, and styles based on each other in a loop.
 
 use std::io::{Cursor, Read};
 
@@ -69,18 +73,20 @@ const MAX_STREAM: u64 = 64 << 20;
 const MAX_PIECES: usize = 100_000;
 /// The most 512-byte pages of character or of paragraph properties read.
 const MAX_PAGES: usize = 16_384;
-/// The most styles read from the style sheet (`Stshif.cstd` is below 0x0FFE).
+/// The style count `Stshif.cstd` must be below.
 const MAX_STYLES: usize = 0x0FFE;
-/// The most styles one style's chain of `istdBase` takes in.
-const MAX_BASED_ON: usize = 32;
 /// The most fonts read from the font table (SttbfFfn's `cData` is at most 0x7FF0).
 const MAX_FONTS: usize = 0x7FF0;
 /// The most bytes of a font name kept.
 const MAX_NAME: usize = 256;
 /// The most paragraphs placed type takes from one Word document.
 const MAX_PARAGRAPHS: usize = 100_000;
-/// The most runs of one character formatting placed type takes from one Word document.
+/// The most runs of one character formatting placed type takes from one Word document, and the
+/// most runs of character or of paragraph properties read from its property pages.
 const MAX_RUNS: usize = 100_000;
+/// The most bytes of properties (Prls) read from the style sheet's styles and the property runs;
+/// each style's and each run's properties are applied once.
+const MAX_PRL_BYTES: usize = 16 << 20;
 /// The deepest nesting of fields read; deeper ones are left out with their results.
 const MAX_FIELDS: usize = 64;
 /// `istdBase` of a style that is based on none.
@@ -113,16 +119,17 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<(Story, Vec<String>)> {
     let table = stream(&mut file, table_name, cmd)?.ok_or_else(|| damaged(cmd, format!("it has no {table_name} stream")))?;
     let clx = fib.part(&table, CLX, cmd)?.ok_or_else(|| damaged(cmd, "it has no piece table"))?;
     let text = main_text(&wd, &pieces(clx, cmd)?, fib.ccp_text, cmd)?;
+    let mut prl_left = MAX_PRL_BYTES;
     let chpx = match fib.part(&table, PLCF_BTE_CHPX, cmd)? {
-        Some(plc) => runs(&wd, plc, Fkp::Chpx, cmd)?,
+        Some(plc) => runs(&wd, plc, Fkp::Chpx, &mut prl_left, cmd)?,
         None => vec![],
     };
     let papx = match fib.part(&table, PLCF_BTE_PAPX, cmd)? {
-        Some(plc) => runs(&wd, plc, Fkp::Papx, cmd)?,
+        Some(plc) => runs(&wd, plc, Fkp::Papx, &mut prl_left, cmd)?,
         None => vec![],
     };
     let sheet = match fib.part(&table, STSHF, cmd)? {
-        Some(stsh) => Sheet::read(stsh, cmd)?,
+        Some(stsh) => Sheet::read(stsh, &mut prl_left, cmd)?,
         None => Sheet::default(),
     };
     let fonts = match fib.part(&table, STTBF_FFN, cmd)? {
@@ -138,6 +145,15 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<(Story, Vec<String>)> {
 /// The error for a Word document whose structures can't be read.
 fn damaged(cmd: &str, why: impl std::fmt::Display) -> EngineError {
     bad(cmd, format!("can't read this Word document: {why}"))
+}
+
+/// Takes `bytes` of properties from `left`, the bytes of the [`MAX_PRL_BYTES`] not yet read; an
+/// error when fewer are left.
+fn spend(left: &mut usize, bytes: usize, cmd: &str) -> Result<()> {
+    *left = left
+        .checked_sub(bytes)
+        .ok_or_else(|| bad(cmd, format!("the Word document has more than {} MB of formatting properties, too many to place", MAX_PRL_BYTES >> 20)))?;
+    Ok(())
 }
 
 /// The stream `name` of the compound file; None when it has no such stream.
@@ -359,17 +375,22 @@ enum Fkp {
 }
 
 /// The file positions `start..end` and the properties a property page gives them.
-struct Run {
+struct Run<'a> {
     start: u32,
     end: u32,
     /// The paragraph style (Papx only).
     istd: u16,
-    grpprl: Vec<u8>,
+    /// The properties, in their property page.
+    grpprl: &'a [u8],
 }
 
 /// The runs of the property pages the bin table `plc` (PlcBteChpx or PlcBtePapx) points to, in
-/// the WordDocument stream `wd`, ordered by file position.
-fn runs(wd: &[u8], plc: &[u8], kind: Fkp, cmd: &str) -> Result<Vec<Run>> {
+/// the WordDocument stream `wd`, ordered by file position. The bin table's file positions rise
+/// ("MUST be sorted in ascending order", and a PlcBteChpx "MUST NOT contain duplicate stream
+/// offsets"), and so do the runs of its pages one after another: a page listed twice, or pages
+/// whose runs overlap, are damaged. More than [`MAX_RUNS`] runs are refused, and each run's
+/// properties are taken from `prl_left`.
+fn runs<'a>(wd: &'a [u8], plc: &[u8], kind: Fkp, prl_left: &mut usize, cmd: &str) -> Result<Vec<Run<'a>>> {
     let broken = || damaged(cmd, "its character or paragraph properties are damaged");
     if plc.len() < 4 || !(plc.len() - 4).is_multiple_of(8) {
         return Err(broken());
@@ -378,19 +399,32 @@ fn runs(wd: &[u8], plc: &[u8], kind: Fkp, cmd: &str) -> Result<Vec<Run>> {
     if n > MAX_PAGES {
         return Err(bad(cmd, format!("the Word document has more than {MAX_PAGES} pages of properties, too many to place")));
     }
-    let mut out = vec![];
+    let fcs = (0..=n).map(|i| u32_at(plc, 4 * i)).collect::<Option<Vec<_>>>().ok_or_else(broken)?;
+    if fcs.windows(2).any(|w| w.first() >= w.get(1)) {
+        return Err(broken());
+    }
+    let mut out: Vec<Run<'a>> = vec![];
     for i in 0..n {
         // PnFkpChpx and PnFkpPapx: the page number in bits 0 to 21.
         let pn = u32_at(plc, 4 * (n + 1) + 4 * i).ok_or_else(broken)? & 0x003F_FFFF;
         let page = bytes_at(wd, pn as usize * 512, 512).ok_or_else(broken)?;
+        let first = out.len();
         page_runs(page, kind, &mut out).ok_or_else(broken)?;
+        // A page's own runs rise (rgfc); its first starts at or after the end of the page before.
+        let before = first.checked_sub(1).and_then(|k| out.get(k)).map(|r| r.end);
+        if before.zip(out.get(first)).is_some_and(|(end, r)| r.start < end) {
+            return Err(broken());
+        }
+        if out.len() > MAX_RUNS {
+            return Err(bad(cmd, format!("the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place")));
+        }
+        spend(prl_left, out.get(first..).unwrap_or_default().iter().map(|r| r.grpprl.len()).sum(), cmd)?;
     }
-    out.sort_by_key(|r| r.start);
     Ok(out)
 }
 
 /// The runs of one 512-byte property page; None when it is damaged.
-fn page_runs(page: &[u8], kind: Fkp, out: &mut Vec<Run>) -> Option<()> {
+fn page_runs<'a>(page: &'a [u8], kind: Fkp, out: &mut Vec<Run<'a>>) -> Option<()> {
     let count = usize::from(*page.get(511)?);
     let most = if kind == Fkp::Chpx { 0x65 } else { 0x1D };
     if count == 0 || count > most {
@@ -402,10 +436,10 @@ fn page_runs(page: &[u8], kind: Fkp, out: &mut Vec<Run>) -> Option<()> {
         let entry = 4 * (count + 1) + if kind == Fkp::Chpx { i } else { 13 * i };
         let offset = usize::from(*page.get(entry)?) * 2;
         let (istd, grpprl) = match (offset, kind) {
-            (0, _) => (0, vec![]),
+            (0, _) => (0, &[][..]),
             (_, Fkp::Chpx) => {
                 let cb = usize::from(*page.get(offset)?);
-                (0, bytes_at(page, offset + 1, cb).filter(|_| offset + 1 + cb <= 511)?.to_vec())
+                (0, bytes_at(page, offset + 1, cb).filter(|_| offset + 1 + cb <= 511)?)
             }
             (_, Fkp::Papx) => {
                 // PapxInFkp: 2 × cb − 1 bytes, or (cb = 0) 2 × cb′ bytes after cb′.
@@ -414,9 +448,11 @@ fn page_runs(page: &[u8], kind: Fkp, out: &mut Vec<Run>) -> Option<()> {
                     cb => (offset + 1, 2 * cb - 1),
                 };
                 let grp = bytes_at(page, at, len).filter(|_| at + len <= 511 && len >= 2)?;
-                (u16_at(grp, 0)?, grp.get(2..)?.to_vec())
+                (u16_at(grp, 0)?, grp.get(2..)?)
             }
         };
+        // rgfc "MUST be sorted in ascending order and MUST NOT contain duplicates": each run ends
+        // where the next starts.
         if end <= start {
             return None;
         }
@@ -473,50 +509,109 @@ struct Style {
     chpx: Vec<u8>,
 }
 
-/// The style sheet: its styles by istd and its default font.
+/// The style sheet: each style's formatting with that of the styles it is based on, by istd, and
+/// its default font.
 #[derive(Default)]
 struct Sheet {
-    styles: Vec<Option<Style>>,
+    /// Paragraph styles: their paragraph formatting and their text's.
+    paragraph: Vec<Option<(Para, Chars)>>,
+    /// Character styles: what they do to the formatting of the text they are applied to.
+    character: Vec<Option<CharsChange>>,
     /// `Stshif.ftcAsci`.
     font: Option<u16>,
 }
 
 impl Sheet {
-    /// The style sheet STSH (§2.9.271).
-    fn read(stsh: &[u8], cmd: &str) -> Result<Self> {
+    /// The style sheet STSH (§2.9.271); its styles' properties are taken from `prl_left`.
+    fn read(stsh: &[u8], prl_left: &mut usize, cmd: &str) -> Result<Self> {
         let broken = || damaged(cmd, "its style sheet is damaged");
         let size = usize::from(u16_at(stsh, 0).ok_or_else(broken)?);
         let stshi = bytes_at(stsh, 2, size).ok_or_else(broken)?;
-        let count = usize::from(u16_at(stshi, 0).ok_or_else(broken)?).min(MAX_STYLES);
+        let count = usize::from(u16_at(stshi, 0).ok_or_else(broken)?);
+        if count >= MAX_STYLES {
+            return Err(broken());
+        }
         // cbSTDBaseInFile: StdfBase, and StdfPost2000 when it is 18.
         let base_size = usize::from(u16_at(stshi, 2).ok_or_else(broken)?).max(10);
         let font = u16_at(stshi, 12);
         let mut at = 2 + size;
         let mut styles = Vec::with_capacity(count);
         for _ in 0..count {
-            let Some(len) = u16_at(stsh, at) else { break };
+            let len = u16_at(stsh, at).ok_or_else(broken)?;
             let std = bytes_at(stsh, at + 2, usize::from(len)).ok_or_else(broken)?;
             styles.push(if std.is_empty() { None } else { Some(style(std, base_size).ok_or_else(broken)?) });
             // LPStd records start on even offsets.
             at += 2 + usize::from(len) + usize::from(len) % 2;
         }
-        Ok(Self { styles, font })
+        spend(prl_left, styles.iter().flatten().map(|s| s.papx.len() + s.chpx.len()).sum(), cmd)?;
+        let root = (Para::default(), Chars { font, ..Chars::default() });
+        let paragraph = resolve(&styles, 1, root, |(mut para, chars), s| {
+            para.apply(&s.papx);
+            (para, chars.with(&CharsChange::of(&s.chpx)))
+        })
+        .ok_or_else(broken)?;
+        let character = resolve(&styles, 2, CharsChange::default(), |change, s| change.then(&CharsChange::of(&s.chpx))).ok_or_else(broken)?;
+        Ok(Self { paragraph, character, font })
     }
 
-    /// Style `istd` of kind `stk` and the styles it is based on, the first of the chain first.
-    fn chain(&self, istd: u16, stk: u8) -> Vec<&Style> {
-        let mut seen: Vec<u16> = vec![];
-        let mut chain = vec![];
-        let mut next = istd;
-        while next != NO_STYLE && !seen.contains(&next) && seen.len() < MAX_BASED_ON {
-            let Some(s) = self.styles.get(usize::from(next)).and_then(Option::as_ref).filter(|s| s.stk == stk) else { break };
-            seen.push(next);
-            chain.push(s);
-            next = s.base;
-        }
-        chain.reverse();
-        chain
+    /// Paragraph style `istd`'s paragraph formatting and its text's; the document defaults when
+    /// it is no paragraph style.
+    fn paragraph_style(&self, istd: u16) -> (Para, Chars) {
+        self.paragraph.get(usize::from(istd)).copied().flatten().unwrap_or((Para::default(), Chars { font: self.font, ..Chars::default() }))
     }
+
+    /// What character style `istd` does to text; nothing when it is no character style.
+    fn character_style(&self, istd: u16) -> CharsChange {
+        self.character.get(usize::from(istd)).copied().flatten().unwrap_or_default()
+    }
+}
+
+/// The formatting of each style of `styles` of kind `stk` with that of the styles it is based on:
+/// `root` with `own` applied for each style of its chain of `istdBase`, the first of the chain
+/// first. Each style's formatting is worked out once, on that of the style it is based on. A chain
+/// ends at a style of another kind or none. None when `istdBase` makes a loop (which it "MUST
+/// NOT", StdfBase).
+fn resolve<T: Copy>(styles: &[Option<Style>], stk: u8, root: T, own: impl Fn(T, &Style) -> T) -> Option<Vec<Option<T>>> {
+    let of_kind = |istd: usize| styles.get(istd).and_then(Option::as_ref).filter(|s| s.stk == stk);
+    let mut done: Vec<Option<T>> = vec![None; styles.len()];
+    let mut walking = vec![false; styles.len()];
+    for istd in 0..styles.len() {
+        // The styles from `istd` to the first one worked out, `istd` first.
+        let mut walk: Vec<usize> = vec![];
+        let mut value = root;
+        let mut next = istd;
+        while let Some(s) = of_kind(next) {
+            if let Some(v) = done.get(next).copied().flatten() {
+                value = v;
+                break;
+            }
+            if walking.get(next).copied().unwrap_or_default() {
+                return None;
+            }
+            walk.push(next);
+            if let Some(w) = walking.get_mut(next) {
+                *w = true;
+            }
+            if s.base == NO_STYLE {
+                break;
+            }
+            next = usize::from(s.base);
+        }
+        for &i in &walk {
+            if let Some(w) = walking.get_mut(i) {
+                *w = false;
+            }
+        }
+        for &i in walk.iter().rev() {
+            if let Some(s) = of_kind(i) {
+                value = own(value, s);
+            }
+            if let Some(slot) = done.get_mut(i) {
+                *slot = Some(value);
+            }
+        }
+    }
+    Some(done)
 }
 
 /// A style definition (STD, §2.9.258) whose Stdf takes `base_size` bytes; None when it is damaged.
@@ -646,51 +741,154 @@ const ICO: [[u8; 3]; 16] = [
 ];
 
 impl Chars {
-    /// The character properties of `grpprl` applied over this formatting; a toggle operand of
-    /// 0x80 or 0x81 takes or reverses the value of `style`, the formatting its styles give.
-    fn apply(&mut self, grpprl: &[u8], style: &Chars) {
+    /// This formatting with `change` applied.
+    fn with(self, change: &CharsChange) -> Chars {
+        let c = change;
+        Chars {
+            font: c.font.or(self.font),
+            half_points: c.half_points.unwrap_or(self.half_points),
+            bold: c.bold.on(self.bold),
+            italic: c.italic.on(self.italic),
+            caps: c.caps.on(self.caps),
+            small_caps: c.small_caps.on(self.small_caps),
+            strike: c.strike.on(self.strike),
+            dstrike: c.dstrike.on(self.dstrike),
+            hidden: c.hidden.on(self.hidden),
+            underline: c.underline.unwrap_or(self.underline),
+            script: c.script.unwrap_or(self.script),
+            shift: c.shift.unwrap_or(self.shift),
+            color: c.color.unwrap_or(self.color),
+            deleted: c.deleted.on(self.deleted),
+            inserted: c.inserted.on(self.inserted),
+            special: c.special.on(self.special),
+        }
+    }
+}
+
+/// What character properties do to a property that is on or off.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Toggle {
+    #[default]
+    Keep,
+    /// The reverse of the value the properties are applied over (toggle operand 0x81).
+    Reverse,
+    Set(bool),
+}
+
+impl Toggle {
+    /// The value this gives a property that was `value`.
+    fn on(self, value: bool) -> bool {
+        match self {
+            Toggle::Keep => value,
+            Toggle::Reverse => !value,
+            Toggle::Set(v) => v,
+        }
+    }
+
+    /// This, then `later`.
+    fn then(self, later: Toggle) -> Toggle {
+        match (self, later) {
+            (t, Toggle::Keep) => t,
+            (_, Toggle::Set(v)) => Toggle::Set(v),
+            (Toggle::Keep, Toggle::Reverse) => Toggle::Reverse,
+            (Toggle::Reverse, Toggle::Reverse) => Toggle::Keep,
+            (Toggle::Set(v), Toggle::Reverse) => Toggle::Set(!v),
+        }
+    }
+}
+
+/// What a list of character properties does to the formatting it is applied over: each property
+/// it sets (None keeps the property as it was).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct CharsChange {
+    font: Option<u16>,
+    half_points: Option<u16>,
+    bold: Toggle,
+    italic: Toggle,
+    caps: Toggle,
+    small_caps: Toggle,
+    strike: Toggle,
+    dstrike: Toggle,
+    hidden: Toggle,
+    underline: Option<bool>,
+    script: Option<Script>,
+    shift: Option<i16>,
+    color: Option<Option<[u8; 3]>>,
+    deleted: Toggle,
+    inserted: Toggle,
+    special: Toggle,
+}
+
+impl CharsChange {
+    /// What the character properties of `grpprl` do; a toggle operand of 0x80 or 0x81 takes or
+    /// reverses the value of the formatting they are applied over.
+    fn of(grpprl: &[u8]) -> Self {
+        let mut c = Self::default();
         each_prl(grpprl, |sprm, op| {
             let byte = op.first().copied();
             let word = u16_at(op, 0);
-            let toggle = |state: &mut bool, of_style: bool| match byte {
-                Some(0) => *state = false,
-                Some(1) => *state = true,
-                Some(0x80) => *state = of_style,
-                Some(0x81) => *state = !of_style,
+            let toggle = |state: &mut Toggle| match byte {
+                Some(0) => *state = Toggle::Set(false),
+                Some(1) => *state = Toggle::Set(true),
+                Some(0x80) => *state = Toggle::Keep,
+                Some(0x81) => *state = Toggle::Reverse,
                 _ => {}
             };
             match sprm {
-                0x0800 => toggle(&mut self.deleted, style.deleted),
-                0x0801 => toggle(&mut self.inserted, style.inserted),
-                0x0835 => toggle(&mut self.bold, style.bold),
-                0x0836 => toggle(&mut self.italic, style.italic),
-                0x0837 => toggle(&mut self.strike, style.strike),
-                0x083A => toggle(&mut self.small_caps, style.small_caps),
-                0x083B => toggle(&mut self.caps, style.caps),
-                0x083C => toggle(&mut self.hidden, style.hidden),
-                0x0855 => toggle(&mut self.special, style.special),
-                0x2A53 => toggle(&mut self.dstrike, style.dstrike),
-                0x2A3E => self.underline = byte.is_some_and(|k| k != 0),
-                0x2A42 => self.color = byte.and_then(|i| usize::from(i).checked_sub(1)).and_then(|i| ICO.get(i)).copied(),
-                0x4A43 => self.half_points = word.filter(|v| (2..=3276).contains(v)).unwrap_or(self.half_points),
-                0x4845 => self.shift = word.map_or(self.shift, |v| v as i16),
+                0x0800 => toggle(&mut c.deleted),
+                0x0801 => toggle(&mut c.inserted),
+                0x0835 => toggle(&mut c.bold),
+                0x0836 => toggle(&mut c.italic),
+                0x0837 => toggle(&mut c.strike),
+                0x083A => toggle(&mut c.small_caps),
+                0x083B => toggle(&mut c.caps),
+                0x083C => toggle(&mut c.hidden),
+                0x0855 => toggle(&mut c.special),
+                0x2A53 => toggle(&mut c.dstrike),
+                0x2A3E => c.underline = Some(byte.is_some_and(|k| k != 0)),
+                0x2A42 => c.color = Some(byte.and_then(|i| usize::from(i).checked_sub(1)).and_then(|i| ICO.get(i)).copied()),
+                0x4A43 => c.half_points = word.filter(|v| (2..=3276).contains(v)).or(c.half_points),
+                0x4845 => c.shift = word.map(|v| v as i16).or(c.shift),
                 0x2A48 => {
-                    self.script = match byte {
+                    c.script = Some(match byte {
                         Some(1) => Script::Super,
                         Some(2) => Script::Sub,
                         _ => Script::Normal,
-                    }
+                    })
                 }
-                0x4A4F => self.font = word.or(self.font),
+                0x4A4F => c.font = word.or(c.font),
                 // COLORREF: red, green, blue, then 0xFF for the automatic color.
                 0x6870 => {
                     if let [r, g, b, auto] = *op {
-                        self.color = (auto != 0xFF).then_some([r, g, b]);
+                        c.color = Some((auto != 0xFF).then_some([r, g, b]));
                     }
                 }
                 _ => {}
             }
         });
+        c
+    }
+
+    /// This, then `later`.
+    fn then(&self, later: &CharsChange) -> CharsChange {
+        CharsChange {
+            font: later.font.or(self.font),
+            half_points: later.half_points.or(self.half_points),
+            bold: self.bold.then(later.bold),
+            italic: self.italic.then(later.italic),
+            caps: self.caps.then(later.caps),
+            small_caps: self.small_caps.then(later.small_caps),
+            strike: self.strike.then(later.strike),
+            dstrike: self.dstrike.then(later.dstrike),
+            hidden: self.hidden.then(later.hidden),
+            underline: later.underline.or(self.underline),
+            script: later.script.or(self.script),
+            shift: later.shift.or(self.shift),
+            color: later.color.or(self.color),
+            deleted: self.deleted.then(later.deleted),
+            inserted: self.inserted.then(later.inserted),
+            special: self.special.then(later.special),
+        }
     }
 }
 
@@ -718,6 +916,11 @@ struct Para {
     /// The logical start and end indents (`sprmPDxaLeft`, `sprmPDxaRight`).
     start: Option<i16>,
     end: Option<i16>,
+    /// When `left`, `right`, `start` and `end` were last set, counted in [`Para::applied`]: of a
+    /// physical and a logical indent on the same side, the one set later holds.
+    set_at: [u32; 4],
+    /// The indent properties applied so far.
+    applied: u32,
     first: i16,
     before: u16,
     after: u16,
@@ -757,10 +960,19 @@ impl Para {
                         _ => self.align,
                     }
                 }
-                0x840F => self.left = word.map(|v| v as i16),
-                0x840E => self.right = word.map(|v| v as i16),
-                0x845E => self.start = word.map(|v| v as i16),
-                0x845D => self.end = word.map(|v| v as i16),
+                0x840F | 0x840E | 0x845E | 0x845D => {
+                    let (field, slot) = match sprm {
+                        0x840F => (&mut self.left, 0),
+                        0x840E => (&mut self.right, 1),
+                        0x845E => (&mut self.start, 2),
+                        _ => (&mut self.end, 3),
+                    };
+                    *field = word.map(|v| v as i16);
+                    self.applied = self.applied.saturating_add(1);
+                    if let Some(at) = self.set_at.get_mut(slot) {
+                        *at = self.applied;
+                    }
+                }
                 0x8411 | 0x8460 => self.first = word.map_or(self.first, |v| v as i16),
                 0xA413 => self.before = word.unwrap_or(self.before),
                 0xA414 => self.after = word.unwrap_or(self.after),
@@ -775,8 +987,14 @@ impl Para {
     /// The paragraph attributes of this formatting.
     fn style(&self) -> ParaStyle {
         let rtl = self.rtl == Some(true);
-        let (physical_start, physical_end) = if rtl { (self.right, self.left) } else { (self.left, self.right) };
-        let (start, end) = (self.start.or(physical_start).unwrap_or_default(), self.end.or(physical_end).unwrap_or_default());
+        let [left_at, right_at, start_at, end_at] = self.set_at;
+        let (physical_start, physical_end) =
+            if rtl { ((self.right, right_at), (self.left, left_at)) } else { ((self.left, left_at), (self.right, right_at)) };
+        let side = |logical: (Option<i16>, u32), physical: (Option<i16>, u32)| {
+            let (first, second) = if physical.1 > logical.1 { (physical.0, logical.0) } else { (logical.0, physical.0) };
+            first.or(second).unwrap_or_default()
+        };
+        let (start, end) = (side((self.start, start_at), physical_start), side((self.end, end_at), physical_end));
         let (left, right) = if rtl { (end, start) } else { (start, end) };
         let points = |v: f64| (v / 20.0).clamp(-1296.0, 1296.0);
         ParaStyle {
@@ -829,6 +1047,8 @@ struct Reader<'a> {
     cell_tab: bool,
     /// The fields open: true while their instructions are being read.
     fields: Vec<bool>,
+    /// The fields of `fields` whose instructions are being read.
+    in_instructions: usize,
     /// Fields begun past [`MAX_FIELDS`] and not yet ended.
     field_overflow: usize,
     /// The text, in runs of one character formatting; paragraphs end with `\n`.
@@ -853,6 +1073,7 @@ impl<'a> Reader<'a> {
             cell_end: None,
             cell_tab: false,
             fields: vec![],
+            in_instructions: 0,
             field_overflow: 0,
             spans: vec![],
             len: 0,
@@ -865,6 +1086,11 @@ impl<'a> Reader<'a> {
     /// The text `text`, with the character properties of `chpx` and the paragraph properties of
     /// `papx`.
     fn read(&mut self, text: &[Char], chpx: &[Run], papx: &[Run]) {
+        // Each property run's formatting, worked out the first time the text reaches it.
+        let mut paragraphs: Vec<Option<(Para, Chars)>> = vec![None; papx.len()];
+        let mut changes: Vec<Option<CharsChange>> = vec![None; chpx.len()];
+        // The paragraphs read, shown or not: each paragraph's segment and each line break.
+        let mut paragraphs_read = 0usize;
         let mut start = 0;
         while start < text.len() && !self.full {
             // A paragraph runs to its mark: a paragraph or cell mark, or a page or section break at
@@ -875,15 +1101,27 @@ impl<'a> Reader<'a> {
             };
             let end = text.get(start..).and_then(|rest| rest.iter().position(ends)).map_or(text.len(), |at| start + at + 1);
             let segment = text.get(start..end).unwrap_or_default();
+            paragraphs_read += 1 + segment.iter().filter(|&&(c, _, _)| c == '\u{B}').count();
+            if paragraphs_read > MAX_PARAGRAPHS {
+                self.full = true;
+                return;
+            }
             let mark_fc = segment.last().map(|&(_, fc, _)| fc).unwrap_or_default();
-            let (para, base) = self.paragraph(run_at(papx, mark_fc).and_then(|i| papx.get(i)));
+            let run = run_at(papx, mark_fc).and_then(|i| Some((papx.get(i)?, paragraphs.get_mut(i)?)));
+            let (para, base) = match run {
+                Some((r, slot)) => *slot.get_or_insert_with(|| self.paragraph(Some(r))),
+                None => self.paragraph(None),
+            };
             self.para = para;
             let mut cached: Option<(Option<usize>, Chars)> = None;
             for (k, ch) in segment.iter().enumerate() {
                 let run = run_at(chpx, ch.1);
                 let chars = match cached {
                     Some((r, chars)) if r == run => chars,
-                    _ => self.chars(base, run.and_then(|i| chpx.get(i)).map_or(&[][..], |r| r.grpprl.as_slice())),
+                    _ => match run.and_then(|i| Some((chpx.get(i)?, changes.get_mut(i)?))) {
+                        Some((r, slot)) => base.with(slot.get_or_insert_with(|| self.change(r.grpprl))),
+                        None => base,
+                    },
                 };
                 cached = Some((run, chars));
                 self.character(ch.0, chars, k + 1 == segment.len() && ends(ch));
@@ -895,37 +1133,25 @@ impl<'a> Reader<'a> {
     /// A paragraph's formatting and its text's formatting before character styles and direct
     /// formatting, from its properties `run`.
     fn paragraph(&self, run: Option<&Run>) -> (Para, Chars) {
-        let mut para = Para::default();
-        let mut chars = Chars { font: self.sheet.font, ..Chars::default() };
-        for s in self.sheet.chain(run.map_or(0, |r| r.istd), 1) {
-            para.apply(&s.papx);
-            let style = chars;
-            chars.apply(&s.chpx, &style);
-        }
+        let (mut para, chars) = self.sheet.paragraph_style(run.map_or(0, |r| r.istd));
         if let Some(r) = run {
-            para.apply(&r.grpprl);
+            para.apply(r.grpprl);
         }
         (para, chars)
     }
 
-    /// The formatting of text whose paragraph gives `base` and whose properties are `grpprl`: its
-    /// character style (`sprmCIstd`), then its direct formatting.
-    fn chars(&self, base: Chars, grpprl: &[u8]) -> Chars {
-        let mut style = base;
+    /// What the character properties `grpprl` do to the formatting their paragraph gives: their
+    /// character style (`sprmCIstd`), then their direct formatting.
+    fn change(&self, grpprl: &[u8]) -> CharsChange {
+        let mut style = CharsChange::default();
         each_prl(grpprl, |sprm, op| {
             if sprm == 0x4A30
                 && let Some(istd) = u16_at(op, 0)
             {
-                style = base;
-                for s in self.sheet.chain(istd, 2) {
-                    let before = style;
-                    style.apply(&s.chpx, &before);
-                }
+                style = self.sheet.character_style(istd);
             }
         });
-        let mut chars = style;
-        chars.apply(grpprl, &style);
-        chars
+        style.then(&CharsChange::of(grpprl))
     }
 
     /// Character `c` of the main text in formatting `chars`; `mark`: it ends its paragraph's
@@ -941,6 +1167,7 @@ impl<'a> Reader<'a> {
             '\u{13}' => {
                 if self.fields.len() < MAX_FIELDS && self.field_overflow == 0 {
                     self.fields.push(true);
+                    self.in_instructions += 1;
                 } else {
                     self.seen.unread_fields = true;
                     self.field_overflow += 1;
@@ -949,7 +1176,9 @@ impl<'a> Reader<'a> {
             }
             '\u{14}' if self.field_overflow == 0 => {
                 if let Some(instructions) = self.fields.last_mut() {
-                    *instructions = false;
+                    if std::mem::take(instructions) {
+                        self.in_instructions = self.in_instructions.saturating_sub(1);
+                    }
                     self.seen.fields = true;
                 }
                 return;
@@ -959,13 +1188,14 @@ impl<'a> Reader<'a> {
                     self.field_overflow -= 1;
                 } else if self.fields.pop() == Some(true) {
                     // A field that ends without a separator has no result.
+                    self.in_instructions = self.in_instructions.saturating_sub(1);
                     self.seen.unread_fields = true;
                 }
                 return;
             }
             _ => {}
         }
-        if self.field_overflow > 0 || self.fields.contains(&true) || chars.hidden {
+        if self.field_overflow > 0 || self.in_instructions > 0 || chars.hidden {
             return;
         }
         let para = self.para;
@@ -1063,7 +1293,7 @@ impl<'a> Reader<'a> {
             out.push("the Word document's fields were placed as the text of their results".to_string());
         }
         // A field still in its instructions when the text ends has no result either.
-        if self.seen.unread_fields || self.fields.contains(&true) {
+        if self.seen.unread_fields || self.in_instructions > 0 {
             out.push("the Word document's fields without a result that could be read were left out".to_string());
         }
         if self.seen.revisions {
