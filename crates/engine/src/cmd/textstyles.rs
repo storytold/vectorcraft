@@ -474,8 +474,9 @@ fn name_param<'a>(p: &'a Value, kind: Kind, verb: &str) -> Result<&'a str> {
     str_param(p, "name").ok_or_else(|| bad(&kind.cmd(verb), "missing `name`"))
 }
 
-/// The `attrs` of `p`, validated. `kept` holds the style's current attributes (`charStyle.edit`):
-/// a language tag that is not in the list, which a file can give a style, stays when `attrs` keeps it.
+/// The `attrs` of `p`, validated. `kept` holds the style's current attributes (`charStyle.edit`) or
+/// the target text's attributes (`charStyle.new`): a language tag that is not in the list, which a
+/// file can give a style or a run, stays when `attrs` keeps it.
 fn attrs_param(p: &Value, kind: Kind, verb: &str, kept: Option<&Map<String, Value>>) -> Result<Option<Map<String, Value>>> {
     match p.get("attrs") {
         None | Some(Value::Null) => Ok(None),
@@ -535,9 +536,10 @@ fn list(s: &mut Session, kind: Kind) -> Result<Value> {
 
 fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("new");
-    let attrs = match attrs_param(p, kind, "new", None)? {
+    let target = selection_attrs(s, p, kind)?;
+    let attrs = match attrs_param(p, kind, "new", target.as_ref())? {
         Some(a) => a,
-        None => match selection_attrs(s, p, kind)? {
+        None => match target {
             Some(a) => a,
             None => {
                 let a = new_style_attrs(s, kind);
