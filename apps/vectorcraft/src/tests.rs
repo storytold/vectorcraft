@@ -171,6 +171,45 @@ fn every_linux_desktop_gets_the_app_title_bar_unless_system_title_bar_is_on() {
     }
 }
 
+/// `VECTORCRAFT_TITLEBAR` read from the environment at startup, with System Title Bar off and on.
+/// The variable is process-wide and read once, so each value runs in a separate test process.
+#[test]
+fn the_titlebar_variable_decides_the_frame_before_the_window_opens() {
+    const CHILD: &str = "VECTORCRAFT_TEST_TITLEBAR_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        for value in ["app", "system", "desktop", "unknown"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "tests::the_titlebar_variable_decides_the_frame_before_the_window_opens", "--nocapture"])
+                .env(CHILD, "1")
+                .env("VECTORCRAFT_TITLEBAR", value)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "VECTORCRAFT_TITLEBAR={value}\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        return;
+    }
+    let value = std::env::var("VECTORCRAFT_TITLEBAR").unwrap();
+    let expected = match value.as_str() {
+        _ if cfg!(any(target_os = "macos", target_os = "windows")) => None,
+        "app" => Some(true),
+        "system" | "desktop" => Some(false),
+        _ => None,
+    };
+    assert_eq!(super::titlebar_override(), expected, "VECTORCRAFT_TITLEBAR={value}");
+    let off = ui_state_with_prefs(serde_json::json!({"systemTitleBar": false}));
+    let on = ui_state_with_prefs(serde_json::json!({"systemTitleBar": true}));
+    for (saved, opted_into_system) in [(None, false), (Some(&off), false), (Some(&on), true)] {
+        let custom = super::custom_titlebar(saved);
+        assert_eq!(custom, super::custom_titlebar_from(expected, opted_into_system), "{value}, preference {opted_into_system}");
+        assert_eq!(super::native_options(custom).viewport.decorations, Some(!custom), "{value}, preference {opted_into_system}");
+    }
+}
+
 /// The file extensions the macOS bundle declares: its document types and its own exported type.
 fn plist_extensions(plist: &str) -> Vec<&str> {
     ["<key>CFBundleTypeExtensions</key>", "<key>public.filename-extension</key>"]
