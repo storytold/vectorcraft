@@ -19,7 +19,7 @@ use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::swatch::{anchor, names_param};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, color_value, find_command, has_doc, has_selection, id_param, ids_param, number_or, ok,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, color_value, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
     str_param, switch_or,
 };
 use crate::EngineError;
@@ -314,7 +314,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 }
 
 pub(crate) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    match named_ids(p)? {
         Some(mut v) => {
             // Explicit ids: only existing, non-layer objects, none inside another of them.
             let d = &s.doc()?.doc;
