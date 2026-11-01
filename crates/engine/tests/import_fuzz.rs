@@ -3115,7 +3115,7 @@ fn on_path_data(
 /// not included, so its program can't be run and its layers are read from it.
 const NAMED_PROLOG_AI: &str = "%!PS-Adobe-3.0\n%%BoundingBox: 0 0 200 100\n%%DocumentNeededResources: procset Adobe_packedarray 2.0 0\n%AI3_TemplateBox: 288 384 288 384\n%%EndComments\n\
     %%BeginProlog\n%%IncludeResource: procset Adobe_packedarray 2.0 0\nAdobe_packedarray /initialize get exec\n%%EndProlog\n%%BeginSetup\n%AI5_Begin_NonPrinting\nNp\n%AI5_End_NonPrinting--\n%%EndSetup\n\
-    %AI5_BeginLayer\n1 1 1 1 0 0 -1 191 63 255 Lb\n(A::B) Ln\n0 A\n0 R\n0 0 0 1 K\n0 i 1 J 1 j 0.8 w 4 M [2 1]0 d\n0 D\n10 10 m\n90 10 L\n90 90 L\n10 90 L\n10 10 L\nS\n\
+    %AI5_BeginLayer\n1 1 1 1 0 0 -1 191 63 255 Lb\n(A::B) Ln\n0 A\n0 R\n0 0 0 1 K\n0 i 1 J 1 j 0.8 w 4 M [2 1]0 d\n0 D\n%AI3_Note:a (note)\n%AI5_NoteMore:more\n1 Ap\n10 10 m\n90 10 L\n90 90 L\n10 90 L\n10 10 L\nS\n%%Note:\n0 Ap\n\
     u\n0.5 g\n20 20 m\n40 20 L\n40 40 L\nf\nU\n%AI5_BeginLayer\n0 1 1 1 0 0 3 0 0 0 Lb\n(Sub) Ln\n110 10 m\n190 90 L\nS\nLB\n%AI5_EndLayer--\nLB\n%AI5_EndLayer--\n\
     %%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n";
 
@@ -3134,7 +3134,7 @@ proptest! {
     /// A `.ai` in PostScript form whose prolog is named, not included, damaged: read from its
     /// layers, or refused.
     #[test]
-    fn ps_form_ai_never_panics(cut in 0usize..1_200, edits in prop::collection::vec((0usize..1_200, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '%', 'u', 'U', 'L', 'b', 'B', 'i', 'A', 'K'])), 0..12)) {
+    fn ps_form_ai_never_panics(cut in 0usize..1_200, edits in prop::collection::vec((0usize..1_200, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '%', 'u', 'U', 'L', 'b', 'B', 'i', 'A', 'K', 'p', ':', '\u{e9}'])), 0..12)) {
         let text = mutate_text(NAMED_PROLOG_AI, cut, &edits);
         survive("mutated PostScript-form .ai", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
     }
@@ -3209,6 +3209,13 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "O",
             "R",
             "XR",
+            // A path's note and Show Center (version 7 §5.3.1, §12).
+            "Ap",
+            "1 Ap",
+            "\n%AI3_Note: a (note) \n",
+            "\n%AI3_Note:\n",
+            "\n%AI5_NoteMore:more\n",
+            "\n%%Note:old\n",
             "w",
             "J",
             "j",

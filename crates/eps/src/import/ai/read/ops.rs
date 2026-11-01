@@ -158,6 +158,13 @@ impl<'a> Reader<'a> {
             "O" => self.gs.overprint_fill = Self::nums(&vals).last() == Some(&1.0),
             "R" => self.gs.overprint_stroke = Self::nums(&vals).last() == Some(&1.0),
             "XR" => self.gs.rule = if Self::nums(&vals).last() == Some(&1.0) { FillRule::EvenOdd } else { FillRule::NonZero },
+            // Show Center (§12): 1 shows the center point of the paths that follow, and 0 leaves
+            // them at their default, which hides it on an imported path.
+            "Ap" => match Self::nums(&vals).last().copied() {
+                Some(1.0) => self.gs.show_center = Some(true),
+                Some(0.0) => self.gs.show_center = None,
+                _ => {}
+            },
             "w" => {
                 if let Some(v) = Self::nums(&vals).last().filter(|v| v.is_finite() && **v >= 0.0) {
                     self.gs.width = *v;

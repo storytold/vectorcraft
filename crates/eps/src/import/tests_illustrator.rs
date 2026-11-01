@@ -209,6 +209,22 @@ fn a_legacy_file_with_its_prolog_comes_in_through_its_layers() {
     assert_eq!(page.document.layers[0].name.as_deref(), Some("Layer 1"));
 }
 
+/// A version 8 file's paths keep their notes and Show Center.
+#[test]
+fn a_legacy_files_paths_keep_their_notes_and_show_center() {
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Notes) Ln\n0 A\n%AI3_Note:first\n%AI5_NoteMore:second line\n1 Ap\n0 0 0 1 k\n{}\n\
+         %AI3_Note:\n0 Ap\n{}\nLB\n%AI5_EndLayer--\n",
+        tri(10),
+        tri(40)
+    );
+    let r = import(&ai(AI8, "", &body)).unwrap();
+    let kids = r.document.layers[0].children().unwrap();
+    let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.note.clone(), a.show_center))).collect();
+    assert_eq!(attrs, [Some(("first\nsecond line".into(), Some(true))), None], "{:?}", r.warnings);
+    assert!(kids[0].shows_center() && !kids[1].shows_center());
+}
+
 #[test]
 fn unbalanced_and_runaway_groups_are_read_safely() {
     // Ends without a beginning end nothing; groups left open hold the rest.
