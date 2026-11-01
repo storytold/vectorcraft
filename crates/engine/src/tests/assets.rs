@@ -352,6 +352,26 @@ fn create_sub_folders_off_puts_every_asset_file_in_the_folder() {
     assert!(paths(&mut s, json!({})).iter().all(|f| !f.contains('/')));
 }
 
+/// An export preset whose `folders` is empty puts every file in the folder itself, whatever its
+/// `subfolders`: exported with `document.exportForScreens` and applied to the shared settings.
+#[test]
+fn an_export_preset_with_empty_folders_exports_into_the_folder() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let ids = run(&mut s, "assets.add", json!({"ids": [a]}))["assets"].clone();
+    let settings = json!({"formats": [{"format": "svg"}, {"format": "png", "scale": "2x"}], "folders": "", "subfolders": true});
+    run(&mut s, "document.exportPresets.save", json!({"name": "Flat", "settings": settings}));
+    let names = |r: &Value| -> Vec<String> { files(r).into_iter().map(|f| f.0).collect() };
+    let direct = names(&run(&mut s, "document.exportForScreens", json!({"assets": ids, "exportPreset": "Flat"})));
+    assert_eq!(direct.len(), 2, "{direct:?}");
+    assert!(direct.iter().all(|f| !f.contains('/')), "{direct:?}");
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Flat"}));
+    let shared = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert_eq!((shared["folders"].as_str(), shared["subfolders"].as_bool()), (Some("none"), Some(false)), "{shared}");
+    let panel = names(&run(&mut s, "assets.export", json!({})));
+    assert_eq!(panel, direct);
+}
+
 #[test]
 fn export_for_screens_writes_chosen_assets_and_keeps_its_rules() {
     let mut s = session();

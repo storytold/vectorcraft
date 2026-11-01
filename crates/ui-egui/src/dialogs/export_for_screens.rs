@@ -887,7 +887,11 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
             }
         }
     }
-    let folders = st["folders"].as_str().filter(|f| !f.is_empty()).or_else(|| st["subfolders"].as_bool().map(|b| if b { "rows" } else { "none" }));
+    // An empty `folders` is none, as an export reads it.
+    let folders = st["folders"]
+        .as_str()
+        .map(|f| if f.is_empty() { "none" } else { f })
+        .or_else(|| st["subfolders"].as_bool().map(|b| if b { "rows" } else { "none" }));
     if let Some(f) = folders {
         d.fields.insert("subfolders".into(), json!(f != "none"));
         d.fields.insert("subfolderBy".into(), json!(if f == "format" { "format" } else { "scale" }));

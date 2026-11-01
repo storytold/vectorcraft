@@ -990,21 +990,26 @@ fn an_applied_preset_keeps_its_item_folders() {
     }
 }
 
-/// A preset whose `folders` is empty uses its `subfolders`, as the export command does, and
-/// without either it keeps the dialog's sub-folders.
+/// A preset whose `folders` is empty turns Create Sub-folders off whatever its `subfolders`, as
+/// the export command puts every file in the folder itself; without `folders` it uses its
+/// `subfolders`, and without either it keeps the dialog's sub-folders.
 #[test]
-fn a_preset_with_empty_folders_uses_its_subfolders() {
+fn a_preset_with_empty_folders_exports_into_the_folder() {
     let (mut app, _) = app(2, false);
     open(&mut app);
-    set(&mut app, "subfolders", json!(true));
-    set(&mut app, "subfolderBy", json!("format"));
     let apply = |app: &mut VectorcraftApp, settings: Value| {
         export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &json!({"name": "Empty", "settings": settings}));
     };
-    apply(&mut app, json!({"folders": ""}));
+    for settings in [json!({"folders": ""}), json!({"folders": "", "subfolders": true})] {
+        set(&mut app, "subfolders", json!(true));
+        apply(&mut app, settings.clone());
+        assert_eq!(field(&app, "subfolders"), json!(false), "{settings}");
+    }
+    apply(&mut app, json!({"subfolders": true}));
+    assert_eq!(field(&app, "subfolders"), json!(true));
+    set(&mut app, "subfolderBy", json!("format"));
+    apply(&mut app, json!({}));
     assert_eq!((field(&app, "subfolders"), field(&app, "subfolderBy")), (json!(true), json!("format")));
-    apply(&mut app, json!({"folders": "", "subfolders": false}));
-    assert_eq!(field(&app, "subfolders"), json!(false));
 }
 
 /// The Asset Export panel menu's Export Preset… writes a preset to a file and its Import Preset… adds

@@ -883,12 +883,13 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
         Some(prefix) => _ = settings.insert("prefix".into(), prefix.clone()),
         None => _ = settings.remove("prefix"),
     }
-    // Its `folders` (Export for Screens shows it), else its `subfolders` (a folder per row or
-    // none). Create Sub-folders is on for a folder per row, as the dialog sets it.
+    // Its `folders` (Export for Screens shows it; empty is none, as an export reads it), else its
+    // `subfolders` (a folder per row or none). Create Sub-folders is on for a folder per row, as
+    // the dialog sets it.
     let folders = preset
         .get("folders")
         .and_then(Value::as_str)
-        .filter(|f| !f.is_empty())
+        .map(|f| if f.is_empty() { "none" } else { f })
         .or_else(|| preset.get("subfolders").and_then(Value::as_bool).map(|b| if b { "rows" } else { "none" }));
     if let Some(f) = folders {
         settings.insert("folders".into(), json!(f));
