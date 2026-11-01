@@ -165,6 +165,14 @@ pub enum Cursor {
     SymbolStyler,
     /// The vertical type tools: a turned I-beam.
     TypeVertical,
+    /// A type tool over a closed path's outline: a click sets area type inside it.
+    TypeArea,
+    /// ...the vertical type tools.
+    TypeAreaVertical,
+    /// A type tool over a path's outline: a click sets type along it.
+    TypeOnPath,
+    /// ...the vertical type tools.
+    TypeOnPathVertical,
     /// The Scissors over a path segment (a click splits the path there)...
     Scissors,
     /// ...or away from every segment (a click does nothing).
