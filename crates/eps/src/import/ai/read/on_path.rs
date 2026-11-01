@@ -131,13 +131,15 @@ pub(super) fn apply(doc: &mut Document, found: &OnPath) {
     // Where every object with an id is, found in one walk of the tree (setting a record doesn't
     // move anything).
     let at = doc.index_paths(found.tags.keys().copied());
+    // The groups whose path and objects have been measured.
+    let mut tried = HashSet::new();
     for r in &found.records {
         // A record that doesn't match leaves the group as it was read.
-        let _ = apply_one(doc, found, &at, r);
+        let _ = apply_one(doc, found, &at, &mut tried, r);
     }
 }
 
-fn apply_one(doc: &mut Document, found: &OnPath, at: &HashMap<NodeId, Vec<usize>>, r: &Record) -> Option<()> {
+fn apply_one(doc: &mut Document, found: &OnPath, at: &HashMap<NodeId, Vec<usize>>, tried: &mut HashSet<NodeId>, r: &Record) -> Option<()> {
     // The one object still in the document with the id `uuid` (a commented copy may have gone).
     let resolve = |uuid: &str| -> Option<(NodeId, &Vec<usize>)> {
         let mut live = found.ids.get(uuid)?.iter().filter_map(|id| at.get(id).map(|p| (*id, p)));
@@ -150,26 +152,36 @@ fn apply_one(doc: &mut Document, found: &OnPath, at: &HashMap<NodeId, Vec<usize>
         return None;
     }
     let (_, group_at) = path_at.split_last()?;
+    let g = doc.node_at(group_at)?;
+    let NodeKind::Group { children, clip: false } = &g.kind else { return None };
+    if g.extras().objects_on_path.is_some() || children.len() != r.ids.len() {
+        return None;
+    }
     let mut seen = HashSet::from([path]);
-    let mut members = Vec::with_capacity(rest.len());
+    let mut placed = Vec::with_capacity(rest.len());
     for (i, uuid) in rest.iter().enumerate() {
         let (id, place) = resolve(uuid)?;
         let tag = found.tags.get(&id)?;
         if !seen.insert(id) || place.split_last().map(|(_, up)| up) != Some(group_at) || tag.key_path || tag.order != Some(i as f64) {
             return None;
         }
-        // The frame the object is drawn in: turned by its angle (the document's y points down)
-        // about the center of its bounds.
-        let angle = -tag.angle?;
-        let center = doc.node_at(place)?.geometric_bounds()?.center();
-        members.push(Member { id, frame: Affine::rotate_about(angle, center), angle });
+        placed.push((id, place, -tag.angle?));
     }
-    let g = doc.node_at(group_at)?;
-    let NodeKind::Group { children, clip: false } = &g.kind else { return None };
-    if g.extras().objects_on_path.is_some() || children.len() != seen.len() || children.iter().any(|c| !seen.contains(&c.id)) {
+    if children.iter().any(|c| !seen.contains(&c.id)) {
+        return None;
+    }
+    // What is left depends on the group's objects alone, so each group is measured once.
+    if !tried.insert(g.id) {
         return None;
     }
     attachable_path(children.iter().find(|c| c.id == path)?)?;
+    let mut members = Vec::with_capacity(placed.len());
+    for (id, place, angle) in placed {
+        // The frame the object is drawn in: turned by its angle (the document's y points down)
+        // about the center of its bounds.
+        let center = doc.node_at(place)?.geometric_bounds()?.center();
+        members.push(Member { id, frame: Affine::rotate_about(angle, center), angle });
+    }
     let on_path = ObjectsOnPath { path, members, pivot: r.pivot, rotate: r.rotate };
     doc.node_mut_at(group_at)?.extras_mut().objects_on_path = Some(Box::new(on_path));
     Some(())
