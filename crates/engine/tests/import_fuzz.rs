@@ -3385,6 +3385,10 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "(Fill Style Filter) 0 0 /Filter ,",
             "(Adobe Outer Glow) 1 0 /Filter ,",
             "(Adobe Drop Shadow) 1 0 /Filter ,",
+            "(Adobe Pathfinder) 1 0 /Filter ,",
+            "11 /Int (Command) ,",
+            "0.5 /Real (Mix) ,",
+            "(Op) /UnicodeString (DisplayString) ,",
             "1 /Visible ,",
             "2 /FillOrStroke ,",
             "1 /Bool (BSDashAdj) ,",
@@ -3449,6 +3453,53 @@ proptest! {
         // An EPS whose page is its art's box, not its artboard: what prints outside it is compared too.
         let boxed = ai::eps(data.replace("%AI3_Cropmarks: 0 0 200 100", "%AI3_Cropmarks: -50 -50 300 200").as_bytes(), ai::page_ps());
         survive("hostile editing data in an EPS of its art's box", || vectorcraft_engine::cmd::fileio::load("x.eps", &boxed).ok().map(|l| l.doc))?;
+    }
+
+    /// A group with an Effect › Pathfinder style whose dictionary is hostile: any `Command`, keys of
+    /// any type and value (missing, repeated, unknown, not finite), shown or hidden, the style cut
+    /// short anywhere; in editing data, an EPS and a `.ai`. A `Command` outside 0 to 11 never
+    /// becomes a live effect.
+    #[test]
+    fn ai_pathfinder_styles_never_panic(
+        command in prop_oneof![(-3i64..16).prop_map(|c| c.to_string()), arb_num()],
+        keys in prop::collection::vec(
+            (
+                prop::sample::select(vec!["Mix", "Precision", "RemovePoints", "ExtractUnpainted", "ConvertCustom", "TrapTint", "TrapThickness", "Command", "Extra"]),
+                prop::sample::select(vec!["Int", "Real", "Bool", "String"]),
+                arb_num(),
+            ),
+            0..16,
+        ),
+        hidden in any::<bool>(),
+        cut in 0usize..4_000,
+    ) {
+        use vectorcraft_testkit::ai;
+        let dict: String = keys.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+        let styles = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(PF) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Adobe Pathfinder) 1 0 /Filter ,\n{} /Visible ,\n/Dictionary : /NotRecorded ,\n{command} /Int (Command) ,\n{dict}; /Dict ;\n /Part ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n\
+             %AI9_EndArtStyles\n",
+            u8::from(!hidden)
+        );
+        let styles: String = styles.chars().take(cut.max(1)).collect();
+        let group = "0 Ae\nu\n1 0 0 1 0 0 Xa\n10 10 m\n10 60 L\n80 60 L\n80 10 L\nf\nU\n\
+                     %_0 Ae\n%_u\n%_1 0 0 1 0 0 Xa\n%_10 10 m\n%_10 50 L\n%_50 50 L\n%_50 10 L\n%_f\n%_0 0 1 0 0 0 1 Xa\n%_40 20 m\n%_40 60 L\n%_80 60 L\n%_80 20 L\n%_f\n%_U\n1 (PF) XW\n";
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", group)));
+        let live = command.parse::<f64>().is_ok_and(|c| c.fract() == 0.0 && (0.0..=11.0).contains(&c));
+        let check = |d: Option<Document>| {
+            if let Some(d) = &d
+                && !live
+            {
+                d.walk(|n| assert!(!n.appearance.effects.iter().any(|e| e.id.starts_with("pathfinder.")), "Command {command}: {:?}", n.appearance.effects));
+            }
+            d
+        };
+        survive("hostile Pathfinder style", || check(Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0)))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("hostile Pathfinder style in an EPS", || check(vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc)))?;
+        let file = ai::ai(data.as_bytes(), ai::page_pdf());
+        survive("hostile Pathfinder style in a .ai", || check(vectorcraft_engine::cmd::fileio::load("x.ai", &file).ok().map(|l| l.doc)))?;
     }
 
     /// Layer options (`Lb`) of any number of operands with any values, and guide paths (`(N) *`,

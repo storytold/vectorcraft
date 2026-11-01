@@ -652,7 +652,8 @@ fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
 const PATTERN_KEY: &str = "\u{1}pattern ";
 
 /// `object`'s appearance with style `st`, its drawn look `look`: `None` when the style isn't one
-/// this reads, or asks a group for fills or strokes.
+/// this reads, asks a group for fills or strokes, or has Pathfinder effects on anything but a group
+/// with no fills or strokes.
 fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, paints: &StylePaints) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
@@ -660,6 +661,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     if !st.plain
         || (!slot && !st.simple)
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
+        || (st.pathfinder
+            && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
     {
         return None;
     }

@@ -35,13 +35,15 @@
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
 //! with a pattern or gradient too), each with its own transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
-//! effects; others keep their drawn look.
+//! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
+//! object's chain) are read on a group with no fills or strokes of its own, which keeps its members.
 
 use std::collections::HashMap;
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Dash, Effect, LineCap, LineJoin, WidthProfile};
+use vectorcraft_effects::is_pathfinder;
 
 use super::lex::{Lexer, Tok};
 use super::obj::V;
@@ -55,6 +57,7 @@ const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the 
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
+const PATHFINDER: &str = "Adobe Pathfinder"; // brand-ok: the filter's name in the files
 
 const CHAIN: &str = "Chain Style Filter";
 const STACK: &str = "Stack Style Filter";
@@ -82,6 +85,46 @@ const WARPS: [&str; 15] = [
     "warp.twist",
 ];
 
+/// The Effect › Pathfinder effects by their number in `Command`, from 0 (the numbers a public
+/// scripting example lists: <https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/aa727c40b84ad8ecb5a747d14b62ecd5b3fb1a50/scripts/LE_Functions.js>).
+/// Trap (12) is not read here.
+const PATHFINDER_IDS: [&str; 12] = [
+    "pathfinder.add",
+    "pathfinder.intersect",
+    "pathfinder.exclude",
+    "pathfinder.subtract",
+    "pathfinder.minusBack",
+    "pathfinder.divide",
+    "pathfinder.outline",
+    "pathfinder.trim",
+    "pathfinder.merge",
+    "pathfinder.crop",
+    "pathfinder.hardMix",
+    "pathfinder.softMix",
+];
+
+/// `Command`'s number for Soft Mix, the one effect whose `Mix` is its own setting.
+const SOFT_MIX: usize = 11;
+
+/// The Pathfinder Options and Trap values an Effect › Pathfinder filter must hold, each with its
+/// type and the one value read: the effects here have no such settings of their own.
+const PATHFINDER_OPTIONS: [(&str, ParamKind, f64); 11] = [
+    ("ConvertCustom", ParamKind::Bool, 1.0),
+    ("ExtractUnpainted", ParamKind::Bool, 1.0),
+    ("Precision", ParamKind::Real, 10.0),
+    ("RemovePoints", ParamKind::Bool, 0.0),
+    ("TrapAspect", ParamKind::Real, 1.0),
+    ("TrapConvertCustom", ParamKind::Bool, 0.0),
+    ("TrapMaxTint", ParamKind::Real, 1.0),
+    ("TrapReverse", ParamKind::Bool, 0.0),
+    ("TrapThickness", ParamKind::Real, 0.25),
+    ("TrapTint", ParamKind::Real, 0.4),
+    ("TrapTintTolerance", ParamKind::Real, 0.05),
+];
+
+/// The `Mix` every Pathfinder effect but Soft Mix holds.
+const PATHFINDER_MIX: f64 = 0.5;
+
 /// The warp style (`arc`, `arcLower`, …) numbered `n` in `DeformStyle`.
 pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     let id = WARPS.get(usize::try_from(n.checked_sub(1)?).ok()?)?;
@@ -95,7 +138,7 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Outer Glow, Feather and Drop Shadow on the
-    /// object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// object (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -106,6 +149,8 @@ pub(super) struct ArtStyle {
     pub effects: Vec<Effect>,
     /// How many of [`Self::items`] paint below the object's contents (`None`: none do).
     pub contents_index: Option<usize>,
+    /// [`Self::effects`] holds Effect › Pathfinder effects, which only a group is read with.
+    pub pathfinder: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -148,6 +193,14 @@ impl Default for ItemLook {
     }
 }
 
+/// The type a dictionary value is written with (`/Int`, `/Real`, `/Bool`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ParamKind {
+    Int,
+    Real,
+    Bool,
+}
+
 #[derive(Debug)]
 struct Filter {
     name: String,
@@ -156,6 +209,13 @@ struct Filter {
     parent: Option<usize>,
     compound: bool,
     params: HashMap<String, f64>,
+    /// The type each of [`Self::params`] is written with.
+    kinds: HashMap<String, ParamKind>,
+    /// The keys of its dictionary's strings (`(text) /String (key) ,`).
+    texts: Vec<String>,
+    /// Its dictionary has a key twice, a key without a number, or more than [`MAX_TEXT_KEYS`]
+    /// string keys.
+    malformed: bool,
     /// Its dictionary's arrays (`/Array : v /Real , … ; (key) ,`), by key.
     arrays: HashMap<String, Vec<f64>>,
     fill: Option<Paint>,
@@ -184,6 +244,9 @@ impl Default for Filter {
             parent: None,
             compound: false,
             params: HashMap::new(),
+            kinds: HashMap::new(),
+            texts: vec![],
+            malformed: false,
             arrays: HashMap::new(),
             fill: None,
             stroke: None,
@@ -204,6 +267,9 @@ impl Default for Filter {
 /// Most filters read in one style.
 const MAX_FILTERS: usize = 4096;
 
+/// Most string keys kept for one filter.
+const MAX_TEXT_KEYS: usize = 16;
+
 /// The styles of the section `data` (between its markers), by name.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     let mut styles = HashMap::new();
@@ -223,15 +289,28 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     };
     let mut array: Option<Vec<V>> = None;
     let mut dict_array: Option<Vec<f64>> = None;
+    // The last token was `/String` or `/UnicodeString`: a string key may follow.
+    let mut text_key = false;
     let mut lex = Lexer::new(data);
     while let Some(t) = lex.next_token() {
+        let after_text = std::mem::take(&mut text_key);
         if let (Some(a), Tok::Num(v)) = (array.as_mut(), &t.tok) {
             a.push(V::Num(*v));
             continue;
         }
         match t.tok {
             Tok::Num(v) => operands.push(V::Num(v)),
-            Tok::Str(s) | Tok::Hex(s) => operands.push(V::Str(s)),
+            Tok::Str(s) | Tok::Hex(s) => {
+                if after_text && let Some(f) = filters.last_mut() {
+                    let key = String::from_utf8_lossy(&s).into_owned();
+                    // Past MAX_TEXT_KEYS a filter isn't one read here, and the keys aren't kept.
+                    f.malformed |= f.texts.len() >= MAX_TEXT_KEYS || f.texts.contains(&key);
+                    if f.texts.len() < MAX_TEXT_KEYS {
+                        f.texts.push(key);
+                    }
+                }
+                operands.push(V::Str(s));
+            }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
                     finish(name.take(), &mut filters);
@@ -264,18 +343,30 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     }
                 }
                 b"Array" => dict_array = Some(vec![]),
+                b"String" | b"UnicodeString" => text_key = true,
                 b"Int" | b"Real" | b"Bool" => {
-                    let value = operands.iter().rev().find_map(V::num);
+                    let kind = match n {
+                        b"Int" => ParamKind::Int,
+                        b"Real" => ParamKind::Real,
+                        _ => ParamKind::Bool,
+                    };
+                    // The number right before the type: an earlier one isn't this value.
+                    let value = operands.last().and_then(V::num);
                     operands.clear();
                     if let Some(a) = dict_array.as_mut() {
                         a.extend(value);
                         continue;
                     }
                     // The key follows: `value /Real (key) ,`.
-                    if let (Some(value), Some(Tok::Str(key))) = (value, lex.next_token().map(|t| t.tok))
-                        && let Some(f) = filters.last_mut()
-                    {
-                        f.params.insert(String::from_utf8_lossy(&key).into_owned(), value);
+                    if let (Some(Tok::Str(key)), Some(f)) = (lex.next_token().map(|t| t.tok), filters.last_mut()) {
+                        let key = String::from_utf8_lossy(&key).into_owned();
+                        match value {
+                            Some(value) => {
+                                f.malformed |= f.params.insert(key.clone(), value).is_some();
+                                f.kinds.insert(key, kind);
+                            }
+                            None => f.malformed = true,
+                        }
                     }
                     continue;
                 }
@@ -505,9 +596,43 @@ fn effect(f: &Filter) -> Option<Effect> {
         GAUSSIAN => ("blur.gaussian", json!({"radius": param("blur").unwrap_or(5.0).clamp(0.0, 1000.0)})),
         // Its settings are in a Photoshop plug-in's binary block: the effect's defaults stand in.
         BAS_RELIEF => ("sketch.basRelief", json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"})),
+        PATHFINDER => return pathfinder_effect(f),
         _ => return None,
     };
     Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
+/// The Effect › Pathfinder effect filter `f` is: `Command` (an `/Int` from 0 to 11) picks it, and
+/// every option key is there once, with its type and the value [`PATHFINDER_OPTIONS`] reads. `Mix`
+/// is a fraction: 0.5, or Soft Mix's rate from 0.01 to 1. `None` for anything else, which keeps the
+/// drawn look.
+fn pathfinder_effect(f: &Filter) -> Option<Effect> {
+    if f.malformed || !f.arrays.is_empty() || f.texts.iter().any(|k| k != "DisplayString") {
+        return None;
+    }
+    let typed = |key: &str, kind: ParamKind| f.params.get(key).copied().filter(|v| v.is_finite() && f.kinds.get(key) == Some(&kind));
+    let command = typed("Command", ParamKind::Int).filter(|c| c.fract() == 0.0 && (0.0..=SOFT_MIX as f64).contains(c))? as usize;
+    let id = PATHFINDER_IDS.get(command)?;
+    let known = |k: &str| k == "Command" || k == "Mix" || PATHFINDER_OPTIONS.iter().any(|(o, ..)| *o == k);
+    if f.params.len() != PATHFINDER_OPTIONS.len() + 2 || !f.params.keys().all(|k| known(k)) {
+        return None;
+    }
+    if !PATHFINDER_OPTIONS.iter().all(|(key, kind, value)| typed(key, *kind) == Some(*value)) {
+        return None;
+    }
+    let mix = typed("Mix", ParamKind::Real)?;
+    let params = if command == SOFT_MIX {
+        if !(0.01..=1.0).contains(&mix) {
+            return None;
+        }
+        // In percent, to 2 decimal places: 0.3 is 30, not 30.000000000000004.
+        json!({"mixingRate": (mix * 10_000.0).round() / 100.0})
+    } else if mix == PATHFINDER_MIX {
+        json!({})
+    } else {
+        return None;
+    };
+    Some(Effect { id: (*id).into(), params, visible: f.visible })
 }
 
 /// The fill or stroke basic filter `f` paints, `Ok(None)` when it paints nothing, `Err` when it
@@ -591,9 +716,10 @@ impl Builder<'_> {
                         (look.blend, look.opacity) = (super::read::blend_mode(mode), opacity);
                     }
                 }
+                // A fill's or stroke's own Pathfinder effect isn't read.
                 _ => match effect(c) {
-                    Some(e) => look.effects.push(e),
-                    None => self.plain = false,
+                    Some(e) if !is_pathfinder(&e.id) => look.effects.push(e),
+                    _ => self.plain = false,
                 },
             }
         }
@@ -630,6 +756,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
     let mut st = ArtStyle { plain: true, ..ArtStyle::default() };
     let Some(root) = filters.iter().position(|f| f.parent.is_none()) else { return st };
     let mut b = Builder { filters, plain: true };
+    let chained = filters[root].compound && filters[root].name == CHAIN;
     let top = if filters[root].compound { b.children(root) } else { vec![root] };
     for id in top {
         let f = &filters[id];
@@ -644,20 +771,24 @@ fn style(filters: &[Filter]) -> ArtStyle {
             CONDUIT => {}
             // The object's own transparency, which its look carries too.
             BLEND => {}
+            // The object's Pathfinder effects are read only in its own chain.
             _ => match effect(f) {
-                Some(e) => st.effects.push(e),
-                None => b.plain = false,
+                Some(e) if chained || !is_pathfinder(&e.id) => st.effects.push(e),
+                _ => b.plain = false,
             },
         }
     }
     st.plain = b.plain;
+    st.pathfinder = st.effects.iter().any(|e| is_pathfinder(&e.id));
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
     st.simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(|e| matches!(e.id.as_str(), "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow"));
+        && st.effects.iter().all(|e| matches!(e.id.as_str(), "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow") || is_pathfinder(&e.id))
+        // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
+        && (!st.pathfinder || st.items.is_empty());
     st
 }
 
