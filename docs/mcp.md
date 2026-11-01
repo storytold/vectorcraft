@@ -5805,6 +5805,13 @@ use; groups attached before keep their Pivot and Rotate. Reset (or Cancel while 
 `ui.dialogReset`) puts the center and 0 back and keeps the dialog open. The options last across tool switches and are
 saved with the preferences.
 
+With one Objects on Path group selected, the Selection and Objects on Path tools show the Rotate All widget, a round
+handle beyond the top of the group's first object joined by a line to its attachment point. Dragging it turns every
+object about its attachment point by the angle the pointer turns about the first object's attachment point,
+counter-clockwise on the page: the drag previews `object.objectsOnPath.options {ids: [group], rotate}` with the
+group's Rotate plus that angle and keeps it as one undo step on release. Shift turns in steps of 15°, and Escape
+cancels the drag.
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
