@@ -590,7 +590,7 @@ fn unsupported() -> Document {
     let t = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
     doc.insert(Some(layer), usize::MAX, t).unwrap();
     let art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), fill(solid(Color::rgb(0.0, 1.0, 0.0))));
-    doc.symbols.push(Symbol { name: "Dot".into(), art: Arc::new(art) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((150.0, 10.0)) });
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let mut faded = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(170.0, 10.0, 190.0, 30.0)), fill(solid(Color::BLACK)));
@@ -696,7 +696,7 @@ fn inline_graphics_in_type_are_written_as_their_art() {
         shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)),
         Appearance::basic(solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0),
     );
-    doc.symbols.push(Symbol { name: "Mark".into(), art: Arc::new(mark) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(mark) });
     let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
     let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "A", style.clone());
     t.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Mark"), style));
@@ -733,10 +733,10 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
     let square = shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0));
     members.push(Arc::new(Node::path(doc.alloc_id(), square, Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0))));
     let leaves = Node::group(doc.alloc_id(), members);
-    doc.symbols.push(Symbol { name: "Leaf".into(), art: Arc::new(leaves) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaves) });
     let leaf = Arc::new(Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Leaf".into(), xf: Affine::IDENTITY }));
     let trees = Node::group(doc.alloc_id(), vec![leaf; 5000]);
-    doc.symbols.push(Symbol { name: "Tree".into(), art: Arc::new(trees) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Tree".into(), art: Arc::new(trees) });
     let tree = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Tree".into(), xf: Affine::IDENTITY });
     doc.insert(Some(layer), usize::MAX, tree).unwrap();
     let out = export_ai_editing(&doc, &opts()).unwrap();
@@ -755,7 +755,7 @@ fn a_stained_symbol_instance_is_written_in_its_stained_colors() {
         shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)),
         Appearance::basic(solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0),
     );
-    doc.symbols.push(Symbol { name: "Dot".into(), art: Arc::new(art) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let mut instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((50.0, 10.0)) });
     instance.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
     let stained = vectorcraft_brush::instance_art(&doc.symbols[0].art, &instance);
@@ -812,7 +812,7 @@ fn geometry_effects_in_a_symbol_are_written_as_their_result() {
     let mut ap = Appearance::basic(solid(Color::BLACK), Paint::None, 0.0);
     ap.effects.push(vectorcraft_doc::Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 5}), visible: true });
     let art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), ap);
-    doc.symbols.push(Symbol { name: "Dot".into(), art: Arc::new(art) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((50.0, 20.0)) });
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
@@ -836,7 +836,7 @@ fn an_adjusted_image_in_a_symbol_is_written_in_its_adjusted_color() {
     let mut ap = (*im.appearance).clone();
     ap.effects.push(vectorcraft_doc::Effect { id: "adjust.shiftToColor".into(), params: shift, visible: true });
     im.appearance = ap.into();
-    doc.symbols.push(Symbol { name: "Picture".into(), art: Arc::new(im) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Picture".into(), art: Arc::new(im) });
     let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Picture".into(), xf: Affine::translate((50.0, 20.0)) });
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
