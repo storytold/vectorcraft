@@ -622,7 +622,7 @@ impl<'d, 'a> Build<'d, 'a> {
             let label = self.d.blocks.get(name).map_or(name, |b| b.name.as_str());
             let symbol = unique(label, &mut self.next_suffix, &self.symbol_names);
             self.symbol_names.insert(symbol.clone());
-            self.doc.symbols.push(Symbol { name: symbol.clone(), art: Arc::new(art) });
+            self.doc.symbols.push(Symbol { dynamic: false, name: symbol.clone(), art: Arc::new(art) });
             symbol
         });
         self.symbols.insert(key, made.clone());

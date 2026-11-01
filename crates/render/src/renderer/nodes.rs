@@ -157,26 +157,42 @@ impl Renderer {
             self.stats.drawn += 1;
             return;
         }
-        if let Some(m) = a.extras().mask.as_deref()
-            && !m.disabled
-            && !f.opts.outline
-            && !self.is_shape(a)
-        {
-            // A masked object is a non-isolated group of its own, drawn over its own pixels: the
-            // mask is rendered over those only.
-            let bounds = self.bounds_of(f.symbols, a);
-            let Some((r, sub)) = group::area(ctx, f, bounds) else { return };
-            let mask = Some(self.mask_values(&sub, m, r.w, r.h));
-            let blends = a.blend != vectorcraft_color::BlendMode::Normal || (!a.isolate && self.blends_through(a));
-            self.group(ctx, f, Composite { mask, blends, bounds, ..Default::default() }, &mut |r, c, fr| r.draw_arc_body(c, fr, a));
+        if self.draw_masked_arc(ctx, f, a, false) {
             return;
         }
         self.draw_arc_body(ctx, f, a);
     }
 
+    /// Draw `a` through its opacity mask when it has one. Forced roots draw regardless of their
+    /// visibility and bounds.
+    fn draw_masked_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, force: bool) -> bool {
+        let Some(m) = a.extras().mask.as_deref().filter(|m| !m.disabled && !f.opts.outline && !self.is_shape(a)) else { return false };
+        // A masked object is a non-isolated group of its own, drawn over its own pixels: the
+        // mask is rendered over those only.
+        let bounds = self.bounds_of(f.symbols, a);
+        let Some((r, sub)) = group::area(ctx, f, bounds) else { return true };
+        let Some(mask) = self.mask_values(&sub, m, r.w, r.h) else { return true };
+        let blends = a.blend != vectorcraft_color::BlendMode::Normal || (!a.isolate && self.blends_through(a));
+        self.group(ctx, f, Composite { mask: Some(mask), blends, bounds, ..Default::default() }, &mut |r, c, fr| {
+            if force {
+                r.draw_node(c, fr, a, true);
+            } else {
+                r.draw_arc_body(c, fr, a);
+            }
+        });
+        true
+    }
+
+    /// Draw an `Arc` regardless of its visibility and bounds, applying its opacity mask.
+    pub(crate) fn draw_forced_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
+        if !self.draw_masked_arc(ctx, f, a, true) {
+            self.draw_node(ctx, f, a, true);
+        }
+    }
+
     /// The coverage of opacity mask `m` per output pixel (row-major): its art rendered offscreen,
     /// as luminance ([`mask_value`]).
-    pub(super) fn mask_values(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> Vec<u8> {
+    pub(super) fn mask_values(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> Option<Vec<u8>> {
         let mut mctx = f.offscreen_context(w, h);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
         // and its luminance is that of its screen colours.
@@ -187,10 +203,20 @@ impl Renderer {
             std::mem::take(&mut self.clip_paths),
             self.picture.take(),
         );
+        let image_left_out = self.image_left_out.replace(false);
+        let failures = crate::paint::decode_failures();
+        let pattern_images_left_out = crate::pattern::images_left_out();
         self.draw_kept_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, ..*f }, &m.art);
+        let incomplete = self.image_left_out.unwrap_or(false)
+            || crate::pattern::images_left_out() > pattern_images_left_out
+            || (!f.opts.mark_undecoded_images && crate::paint::decode_failures() > failures);
+        self.image_left_out = image_left_out.map(|outer| outer || incomplete);
         let pm = self.finish(&mut mctx, self.raster);
         (self.knockout, self.nested, self.backdrop, self.clip_paths, self.picture) = outer;
-        pm.data().iter().map(|p| mask_value(p.r, p.g, p.b, p.a, m.clip, m.invert)).collect()
+        if incomplete {
+            return None;
+        }
+        Some(pm.data().iter().map(|p| mask_value(p.r, p.g, p.b, p.a, m.clip, m.invert)).collect())
     }
 
     /// Everything [`Self::draw_arc`] does after culling.
@@ -477,7 +503,7 @@ impl Renderer {
         if kept {
             self.draw_kept_node(ctx, f, art);
         } else {
-            self.draw_node(ctx, f, art, true);
+            self.draw_forced_arc(ctx, f, art);
         }
         self.made_again = outer;
     }
@@ -488,7 +514,7 @@ impl Renderer {
     pub(crate) fn draw_kept_node(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
         let live = vectorcraft_doc::live::is_live(a).then(|| a.clone());
         let outer = std::mem::replace(&mut self.live_root, live);
-        self.draw_node(ctx, f, a, true);
+        self.draw_forced_arc(ctx, f, a);
         self.live_root = outer;
     }
 
@@ -506,7 +532,7 @@ impl Renderer {
     fn draw_trace_view(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], view: TraceView, knockout: bool) {
         let Some((source, shapes)) = children.split_first() else { return };
         if view.shows_source() && matches!(source.kind, NodeKind::Image(_)) {
-            self.draw_node(ctx, f, source, true);
+            self.draw_forced_arc(ctx, f, source);
         }
         if view.shows_result() {
             self.draw_children(ctx, f, shapes, knockout);
@@ -591,6 +617,13 @@ impl Renderer {
         let backdrop = self.backdrop.take();
         for c in Node::knockout_elements(children) {
             if self.skipped(f, c) {
+                continue;
+            }
+            // Hard-edge coverage is binary, so an opaque fill replaces its knockout shape exactly.
+            // This also serves supersampled exports. Analytical AA keeps the erase/add passes:
+            // their intermediate rounding can differ from source-over at partially covered edges.
+            if f.opts.anti_alias == crate::AntiAlias::None && crate::node_checks::opaque_knockout_fill(c) {
+                self.draw_arc(ctx, f, c);
                 continue;
             }
             self.knockout_pass(ctx, f, c, Compose::DestOut);

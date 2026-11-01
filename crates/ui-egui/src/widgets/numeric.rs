@@ -346,7 +346,7 @@ pub fn range_field_named(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None, false).map(|v| within(round_to(v, places), &range))
 }
 
 /// [`range_field`] whose ↑/↓ and wheel take `step`'s steps instead of whole numbers (see
@@ -366,7 +366,7 @@ pub fn range_field_stepped(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step)).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step), false).map(|v| within(round_to(v, places), &range))
 }
 
 /// [`plain_field`] for a value the selected objects may not share: `None` shows a blank field.
@@ -385,7 +385,7 @@ pub fn mixed_field_named(
     width: f32,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None)
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, false)
 }
 
 /// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
@@ -403,6 +403,7 @@ fn bounded_field(
     width: f32,
     bounds: &RangeInclusive<f64>,
     step: Option<fn(f64, f64) -> f64>,
+    parentheses: bool,
 ) -> Option<f64> {
     let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
@@ -412,9 +413,9 @@ fn bounded_field(
         let suffix = suffix.trim();
         let buf = decimal_point(buf);
         let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
-        vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
+        vectorcraft_doc::parse_number(&bare.replace(['%', '°', '(', ')'], ""))
     };
-    let shown = value.map(show).unwrap_or_default();
+    let shown = value.map(|v| if parentheses { format!("({})", show(v)) } else { show(v) }).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
     if armed {
         focus_field(ui, id, &shown);
@@ -508,7 +509,7 @@ pub fn spin_field_stops_named(
     presets: &[f64],
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
         unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets)
     })
     .and_then(SpinPick::value)
@@ -519,6 +520,7 @@ pub fn spin_field_stops_named(
 pub enum SpinPick {
     Value(f64),
     Auto,
+    Optical,
 }
 
 impl SpinPick {
@@ -527,6 +529,7 @@ impl SpinPick {
         match self {
             SpinPick::Value(v) => Some(v),
             SpinPick::Auto => None,
+            SpinPick::Optical => None,
         }
     }
 }
@@ -563,7 +566,7 @@ pub fn spin_field_auto_named(
     presets: &[f64],
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, auto, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
+    spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
         unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[])
     })
 }
@@ -602,10 +605,41 @@ pub fn spin_plain_named(
     let label = take_previous_label(ui);
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
-        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None)
+    spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
+        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, false)
     })
     .and_then(SpinPick::value)
+}
+
+/// Kerning's numeric field and automatic method choices.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_kerning(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    automatic: Option<bool>,
+    optical: Option<bool>,
+    optical_label: &str,
+    parentheses: bool,
+    width: f32,
+    presets: &[f64],
+) -> Option<SpinPick> {
+    let label = take_previous_label(ui);
+    spin_generic(
+        ui,
+        label,
+        value,
+        automatic,
+        optical,
+        Some(optical_label),
+        width,
+        10.0,
+        -1000.0,
+        presets,
+        &[],
+        &|v| format!("{v}"),
+        &mut |ui, fw, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses),
+    )
 }
 
 type SpinField<'a> = dyn FnMut(&mut Ui, f32, Option<PreviousLabel>) -> Option<f64> + 'a;
@@ -616,6 +650,8 @@ fn spin_generic(
     label: Option<PreviousLabel>,
     value: Option<f64>,
     auto: Option<bool>,
+    optical: Option<bool>,
+    optical_label: Option<&str>,
     width: f32,
     step: f64,
     min: f64,
@@ -673,6 +709,11 @@ fn spin_generic(
                     && ui.selectable_label(on, tl!("Auto")).clicked()
                 {
                     out = Some(SpinPick::Auto);
+                }
+                if let Some(on) = optical
+                    && ui.selectable_label(on, optical_label.unwrap_or_default()).clicked()
+                {
+                    out = Some(SpinPick::Optical);
                 }
                 let current = value.filter(|_| auto != Some(true));
                 for p in presets {

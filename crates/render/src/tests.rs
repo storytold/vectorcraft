@@ -29,6 +29,7 @@ mod setup;
 mod strokegradient;
 mod tileedge;
 mod viewraster;
+mod widthzoom;
 
 fn rect_node(d: &mut Document, r: Rect, fill: Paint, stroke: Paint, w: f64) -> Node {
     let id = d.alloc_id();
@@ -219,7 +220,7 @@ fn hidden_and_culled() {
 fn far_instance(art: Rect) -> Document {
     let mut d = Document::new(100.0, 100.0);
     let art = rect_node(&mut d, art, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })).unwrap();
     d
@@ -249,7 +250,7 @@ fn an_instance_is_culled_by_the_effects_in_its_art() {
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-5.0, 20.0)) })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
@@ -263,7 +264,7 @@ fn a_repeat_of_an_instance_is_culled_by_the_effects_in_its_art() {
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-5.0, 20.0)) });
     let grid = vectorcraft_doc::TileType::Grid;
     let kind =
@@ -286,11 +287,11 @@ fn past_the_measured_placements_an_instance_is_culled_by_an_estimate_of_its_art_
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Spot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Spot".into(), art: Arc::new(art) });
     for name in ["Dot", "Late"] {
         let spot = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Spot".into(), xf: Affine::IDENTITY });
         let group = Node::group(d.alloc_id(), vec![Arc::new(spot)]);
-        d.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: Arc::new(group) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(group) });
     }
     let l = d.layers[0].id;
     for i in 0..4100 {
@@ -316,7 +317,7 @@ fn nested_instances_are_culled_in_bounded_time(effect: Option<vectorcraft_doc::E
     let mut art = rect_node(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 2, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S30".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S30".into(), art: Arc::new(art) });
     let instance = |d: &mut Document, symbol: String, xf: Affine| {
         let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol, xf });
         n.appearance.effects.extend(effect.clone());
@@ -329,7 +330,7 @@ fn nested_instances_are_culled_in_bounded_time(effect: Option<vectorcraft_doc::E
             pair.push(Arc::new(instance(&mut d, next.clone(), xf)));
         }
         let group = Node::group(d.alloc_id(), pair);
-        d.symbols.push(vectorcraft_doc::Symbol { name: format!("S{i}"), art: Arc::new(group) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(group) });
     }
     let first = instance(&mut d, "S0".into(), Affine::translate((-100_000.0, 0.0)));
     let l = d.layers[0].id;
@@ -368,7 +369,7 @@ fn a_scaled_instance_is_culled_by_the_effects_in_its_art_as_placed() {
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     let double = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"scaleH": 200, "scaleV": 200}), visible: true };
     art.appearance.effects.push(double);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let xf = Affine::translate((-50.0, 50.0)) * Affine::scale(30.0);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
@@ -400,7 +401,7 @@ fn an_instance_with_a_geometry_effect_is_culled_by_the_effects_in_its_reshaped_a
     let effect = || vectorcraft_doc::Effect { id: "distort.transform".into(), params: scale.clone(), visible: true };
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     art.appearance.effects.push(effect());
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let mut instance = Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-11.0, 20.0)) });
     instance.appearance.effects.push(effect());
@@ -663,6 +664,39 @@ fn trace_source_draws_the_source_image_of_the_listed_objects() {
 }
 
 #[test]
+fn trace_source_applies_the_hidden_image_mask() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("trace-source".into(), ImageBlob::new("image/png", png));
+    let image = ImageObject {
+        key: "trace-source".into(),
+        width: 1,
+        height: 1,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale(80.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut source = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    source.visible = false;
+    let mask = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    source.extras_mut().mask = Some(Box::new(OpacityMask::new(mask, true)));
+    let result = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+    let mut trace = Node::group(d.alloc_id(), vec![Arc::new(source), Arc::new(result)]);
+    trace.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": "tracingResult" })));
+    let trace_id = trace.id;
+    d.insert(Some(d.layers[0].id), 0, trace).unwrap();
+
+    let opts = RenderOptions { trace_views: true, trace_source: Some(Arc::new(vec![trace_id])), background: Some([255; 4]), ..Default::default() };
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(30, 50), [255, 0, 0, 255]);
+    assert_eq!(img.pixel(70, 50), [255, 255, 255, 255]);
+}
+
+#[test]
 fn artboards_white_on_pasteboard() {
     let d = Document::new(50.0, 50.0);
     let r = Renderer::new().render(
@@ -745,6 +779,357 @@ fn opacity_mask_without_clip_and_inverted() {
     let img = Renderer::new().render(&masked_doc(true, true), 100, 100, Affine::IDENTITY, &opts);
     assert_eq!(img.pixel(30, 50), [255, 255, 255, 255], "inverted white → hidden");
     assert_eq!(img.pixel(80, 50), [255, 0, 0, 255], "inverted clip background → visible");
+}
+
+#[test]
+fn opacity_mask_art_root_applies_its_own_mask() {
+    use vectorcraft_doc::OpacityMask;
+
+    let mut d = Document::new(100.0, 100.0);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut art = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let inner = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    art.extras_mut().mask = Some(Box::new(OpacityMask::new(inner, true)));
+    art.visible = false;
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, true)));
+    let object_id = object.id;
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut renderer = Renderer::new();
+    let img = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(30, 50), [255, 0, 0, 255]);
+    assert_eq!(img.pixel(70, 50), [255, 255, 255, 255]);
+    let view = renderer.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mask_view: Some(object_id), ..opts });
+    assert_eq!(view.pixel(30, 50), [255, 255, 255, 255]);
+    assert_eq!(view.pixel(70, 50), [0, 0, 0, 255]);
+}
+
+#[test]
+fn undecodable_image_in_mask_art_root_mask_leaves_out_outer_object() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("broken-root-mask-image".into(), ImageBlob::new("image/png", b"not a PNG".to_vec()));
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut art = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let image = ImageObject {
+        key: "broken-root-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    art.extras_mut().mask = Some(Box::new(OpacityMask::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(image))), false)));
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, true)));
+    let object_id = object.id;
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255; 4]), ..Default::default() };
+    let mut renderer = Renderer::new();
+    let img = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(70, 50), [255, 255, 255, 255]);
+    let view = renderer.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mask_view: Some(object_id), ..opts });
+    assert_eq!(view.pixel(70, 50), [0, 0, 0, 255]);
+}
+
+#[test]
+fn placed_symbol_art_root_applies_its_own_mask() {
+    use vectorcraft_doc::{NodeKind, OpacityMask};
+
+    for grouped in [true, false] {
+        let mut d = Document::new(100.0, 100.0);
+        let red = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+        let mut art = if grouped { Node::group(d.alloc_id(), vec![Arc::new(red)]) } else { red };
+        let inner = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+        art.extras_mut().mask = Some(Box::new(OpacityMask::new(inner, true)));
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Masked".into(), art: Arc::new(art) });
+        let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Masked".into(), xf: Affine::IDENTITY });
+        d.insert(Some(d.layers[0].id), 0, instance).unwrap();
+
+        let img = render(&d);
+        assert_eq!(img.pixel(30, 50), [255, 0, 0, 255], "grouped {grouped}");
+        assert_eq!(img.pixel(70, 50), [255, 255, 255, 255], "grouped {grouped}");
+    }
+}
+
+#[test]
+fn node_thumbnail_applies_the_root_mask() {
+    use vectorcraft_doc::OpacityMask;
+
+    let mut d = Document::new(100.0, 100.0);
+    let mut node = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mask = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    node.extras_mut().mask = Some(Box::new(OpacityMask::new(mask, true)));
+
+    let img = Renderer::new().render_node_thumbnail(&d, &node, 100, Some([255; 4])).unwrap();
+    assert_eq!(img.pixel(25, 50), [255, 0, 0, 255]);
+    assert_eq!(img.pixel(75, 50), [255, 255, 255, 255]);
+}
+
+/// #3602: a thumbnail reports the size it was drawn at, and one too small for its 1-pixel margin
+/// still draws the art.
+#[test]
+fn node_thumbnail_reports_the_size_it_draws() {
+    let mut d = Document::new(100.0, 100.0);
+    let node = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut r = Renderer::new();
+    for size in 0..4 {
+        let img = r.render_node_thumbnail(&d, &node, size, None).unwrap();
+        assert_eq!(img.pixels.len(), img.width as usize * img.height as usize * 4, "size {size}");
+        assert_eq!(img.width, size.max(1), "size {size}");
+        assert_eq!(img.height, size.max(1), "size {size}");
+        assert!(img.pixels.chunks(4).any(|p| p[3] > 0), "size {size}: the art is drawn");
+    }
+}
+
+#[test]
+fn opacity_mask_with_undecodable_image_leaves_out_object() {
+    use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("broken-mask-image".into(), ImageBlob::new("image/png", b"not a PNG".to_vec()));
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let image = ImageObject {
+        key: "broken-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 4.0}), visible: true });
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    let object_id = object.id;
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let pending = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { kept_images_only: true, ..opts.clone() });
+    assert_eq!(pending.pixel(70, 70), [255, 0, 0, 255], "an image awaiting decoding does not invalidate the mask");
+    let mut renderer = Renderer::new();
+    let img = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "missing mask image leaves out the object");
+    let again = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(again.pixel(70, 70), [255, 255, 255, 255], "the cached raster keeps the mask incomplete");
+    let mask_view = renderer.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mask_view: Some(object_id), ..opts.clone() });
+    assert_eq!(mask_view.pixel(70, 70), [0, 0, 0, 255], "an incomplete mask view has no coverage");
+    let marked = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mark_undecoded_images: true, ..opts.clone() });
+    assert_eq!(marked.pixel(70, 70), [255, 0, 0, 255], "the undecoded-image mark remains part of the mask");
+    let kept = RenderOptions { kept_images_only: true, ..opts.clone() };
+    for frame in 0..2 {
+        let img = renderer.render(&d, 100, 100, Affine::IDENTITY, &kept);
+        assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "an image already known undecodable leaves out the object on frame {frame}");
+    }
+
+    let working = Renderer::new().render(&masked_doc(false, false), 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(working.pixel(80, 50), [255, 0, 0, 255], "a complete mask still draws the object");
+}
+
+#[test]
+fn opacity_mask_with_missing_image_in_pattern_leaves_out_object() {
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_doc::{ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    let image = ImageObject {
+        key: "missing-pattern-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::IDENTITY,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    let mut pattern = PatternDef::new("Missing image", vec![Arc::new(image)]);
+    pattern.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(pattern);
+    let art = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), pattern_paint("Missing image"), Paint::None, 0.0);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    for frame in 0..2 {
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        assert_eq!(img.pixel(70, 50), [255, 255, 255, 255], "frame {frame}: incomplete pattern mask leaves out the object");
+    }
+}
+
+#[test]
+fn opacity_mask_with_marked_image_in_pattern_draws_object() {
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("cut-mask".into(), ImageBlob::new("image/png", b"not a PNG: pattern mask".to_vec()));
+    let image =
+        ImageObject { key: "cut-mask".into(), width: 20, height: 20, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    let mut pattern = PatternDef::new("Cut mask", vec![Arc::new(image)]);
+    pattern.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(pattern);
+    let art = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), pattern_paint("Cut mask"), Paint::None, 0.0);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let mut r = Renderer::new();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let off = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(off.pixel(70, 50), [255, 255, 255, 255], "an unmarked missing image leaves out the object");
+    let on = r.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mark_undecoded_images: true, ..opts });
+    assert_eq!(on.pixel(70, 50), [255, 0, 0, 255], "the marked image keeps the mask complete");
+    assert!(on.pixel(15, 15)[1] < 255, "the marked pattern contributes mask coverage");
+}
+
+#[test]
+fn complete_image_mask_with_blur_reuses_cached_raster() {
+    use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 255, 255, 255])))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("complete-mask-image".into(), ImageBlob::new("image/png", png));
+    let image = ImageObject {
+        key: "complete-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 4.0}), visible: true });
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(first.pixel(70, 70), [255, 0, 0, 255]);
+    let raster = r.pixel_fx.values().next().unwrap().image.clone();
+    let second = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(second.pixels, first.pixels);
+    assert!(Arc::ptr_eq(&raster, &r.pixel_fx.values().next().unwrap().image), "the second frame draws the image mask from its cached effect raster");
+}
+
+#[test]
+fn missing_image_mask_with_blur_stays_incomplete_from_cached_raster() {
+    use vectorcraft_doc::{Effect, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    let image = ImageObject {
+        key: "missing-blurred-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 4.0}), visible: true });
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(first.pixel(70, 70), [255, 255, 255, 255]);
+    let raster = r.pixel_fx.values().next().unwrap().image.clone();
+    let second = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(second.pixel(70, 70), [255, 255, 255, 255]);
+    assert!(Arc::ptr_eq(&raster, &r.pixel_fx.values().next().unwrap().image), "the incomplete raster is reused");
+}
+
+#[test]
+fn missing_image_mask_with_rasterize_and_shadow_keeps_incomplete_content_raster() {
+    use vectorcraft_doc::{Effect, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    let image = ImageObject {
+        key: "missing-rasterized-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects = [
+        ("rasterize", serde_json::json!({"background": "white"})),
+        ("stylize.dropShadow", serde_json::json!({"mode": "normal", "opacity": 100, "x": 2, "y": 2, "blur": 1, "color": "#0000ff"})),
+        ("blur.gaussian", serde_json::json!({"radius": 4.0})),
+    ]
+    .into_iter()
+    .map(|(id, params)| Effect { id: id.into(), params, visible: true })
+    .collect();
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let mut first_raster = None;
+    for frame in 0..2 {
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "frame {frame}: the incomplete mask leaves out the object");
+        let raster = r.pixel_fx.values().next().unwrap();
+        assert!(raster.image_left_out, "frame {frame}: the content raster records the missing image");
+        if let Some(first) = &first_raster {
+            assert!(Arc::ptr_eq(first, &raster.image), "the second frame reuses the incomplete content raster");
+        } else {
+            first_raster = Some(raster.image.clone());
+        }
+    }
+}
+
+#[test]
+fn undecodable_image_in_nested_opacity_mask_leaves_out_outer_object() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("broken-nested-mask-image".into(), ImageBlob::new("image/png", b"not a nested PNG".to_vec()));
+    let mut outer = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut inner = rect_node(&mut d, Rect::new(20.0, 20.0, 80.0, 80.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let image = ImageObject {
+        key: "broken-nested-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    inner.extras_mut().mask = Some(Box::new(OpacityMask::new(image, false)));
+    let art = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    outer.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, outer).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "the incomplete inner mask invalidates the outer mask");
 }
 
 /// #3580: each opacity mask is rendered over its object's pixels, not over the whole frame. 300
@@ -1142,6 +1527,44 @@ fn an_undecodable_image_is_tried_once_and_marked_on_screen() {
     let export = Renderer::new().render(&d, 80, 60, Affine::IDENTITY, &RenderOptions::default());
     assert_eq!(alpha(&export), 0, "an export draws nothing there");
     assert_eq!((attempts() - tried, decode_failures() - failed), (1, 3), "and counts it without decoding it again");
+}
+
+#[test]
+fn pattern_tile_follows_undecoded_image_mark_in_both_cache_orders() {
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
+
+    let mut d = Document::new(80.0, 80.0);
+    d.images.insert("cut-pattern".into(), ImageBlob::new("image/png", b"not a PNG: pattern fill".to_vec()));
+    let image = ImageObject {
+        key: "cut-pattern".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::IDENTITY,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    let mut pattern = PatternDef::new("Cut pattern", vec![Arc::new(image)]);
+    pattern.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(pattern);
+    let shape = rect_node(&mut d, Rect::new(10.0, 10.0, 70.0, 70.0), pattern_paint("Cut pattern"), Paint::None, 0.0);
+    d.insert(Some(d.layers[0].id), 0, shape).unwrap();
+
+    let mut r = Renderer::new();
+    for order in [[false, true, false], [true, false, true]] {
+        for mark in order {
+            let opts = RenderOptions { mark_undecoded_images: mark, ..Default::default() };
+            let pixel = r.render(&d, 80, 80, Affine::IDENTITY, &opts).pixel(15, 15);
+            assert_eq!(pixel[3] > 0, mark, "mark_undecoded_images {mark}: {pixel:?}");
+            if mark {
+                assert_eq!(pixel[0], pixel[1], "the pattern draws a gray mark");
+                assert_eq!(pixel[1], pixel[2], "the pattern draws a gray mark");
+                assert!((120..=140).contains(&pixel[0]), "the pattern draws a gray mark: {pixel:?}");
+            }
+        }
+    }
 }
 
 /// The rasters a renderer keeps of an object's raster effects are made again when

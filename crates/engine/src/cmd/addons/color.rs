@@ -1,9 +1,13 @@
-//! Color Effects (`addon.color.*`), a built-in add-on: its live effects (Exposure, Desaturate and
-//! Invert Colors, in Effect › Color Effects) are the effects crate's; here, Apply as Filter writes
-//! any colour adjustment into the colours themselves, and Select by Color Kind selects the objects
-//! that use spot colours, carry a live colour adjustment, or are images of a colour model. Its panel
-//! and its submenu, Object › Plug-ins › Color Effects, are the UI's.
+//! Color Effects (`addon.color.*`), a built-in add-on: its live effects (Exposure, Desaturate,
+//! Duotone and Invert Colors, in Effect › Color Effects) are the effects crate's; here, Apply as
+//! Filter writes any colour adjustment into the colours themselves, Select by Color Kind selects the
+//! objects that use spot colours, carry a live colour adjustment, or are images of a colour model,
+//! Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print, and Find Nearest
+//! Swatch ([`nearest`]) matches colours to a swatch library's. Its panel and its submenu, Object ›
+//! Plug-ins › Color Effects, are the UI's.
 
+mod nearest;
+mod print_fixes;
 #[cfg(test)]
 mod tests;
 
@@ -11,7 +15,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_render::effects;
 
-use super::super::colorcmds::recolor;
+use super::super::colorcmds::recolor_links;
 use super::super::select::walk_selectable;
 use super::super::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, text_param};
 use crate::{Result, Session};
@@ -35,9 +39,36 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply as Filter",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{effect: a colour adjustment's effect id (adjust.brightnessContrast, adjust.curves, adjust.hueSaturation, adjust.levels, adjust.shiftToColor, adjust.temperatureTint, addon.color.exposure, addon.color.desaturate or addon.color.invert), params?: {…} (as effect.apply; missing keys take the dialog defaults), fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?: [id…] (default: the selection)} recolour the objects and everything inside them as the live effect would draw them, but in their colours, as edit.colors.invert does (fills, strokes, type, gradient meshes, embedded images and pattern tiles), as one undo step; their effects stay → {changed}",
+            "{effect: a colour adjustment's effect id (adjust.brightnessContrast, adjust.curves, adjust.hueSaturation, adjust.levels, adjust.shiftToColor, adjust.temperatureTint, addon.color.exposure, addon.color.desaturate, addon.color.duotone or addon.color.invert), params?: {…} (as effect.apply; missing keys take the dialog defaults), fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?: [id…] (default: the selection)} recolour the objects and everything inside them as the live effect would draw them, but in their colours, as edit.colors.invert does (fills, strokes, type, gradient meshes, embedded images and pattern tiles), as one undo step; their effects stay. Duotone links a colour to its one tone's swatch as the live effect does → {changed}",
             has_selection,
             filter
+        ),
+        cmd!(
+            "addon.color.printFixes",
+            "Print Ink Fixes",
+            ["Object", "Plug-ins", "Color Effects"],
+            None,
+            "{scope?: \"selection\" (the selection, or `ids`; by default, the document while nothing is selected) | \"document\" (every layer), inkLimit?: total ink % 1..400 (0 or left out: off), excludePureBlack?: true (black-only and grey colours keep their ink), removeWhiteOverprint?: false (white fills and strokes stop overprinting), overprintBlack?: black % 1..100 (black-only and grey fills and strokes this dark or darker overprint, as edit.colors.overprintBlack; 0 or left out: off), textOnly?: false (Overprint Black on type only), fill?: true, stroke?: true, ids?: [id…]} prepare a CMYK document's inks for print as one undo step: CMYK colours (solid, gradient stops, gradient meshes) with more total ink than inkLimit are scaled down to it (colours of spot swatches and Registration stay), white overprint is removed and black overprint set. Refused in RGB documents (File › Document Color Mode › CMYK Color first) → {changed, inkLimited: paints and meshes scaled, whiteOverprintRemoved: objects, blackOverprinted: objects}",
+            has_doc,
+            print_fixes::run
+        ),
+        cmd!(
+            query "addon.color.nearestSwatch",
+            "Find Nearest Swatch",
+            ["Object", "Plug-ins", "Color Effects"],
+            None,
+            "{library?: a swatch library's id or name (swatch.library.list: the built-in ones, and the colour books and libraries the user saved or loaded) or \"document\" (the document's swatches; the default), color?: colour (look this colour up; default: the selection's), fill?: true, stroke?: true (the selected objects' fills and strokes, their type's and those of the objects inside them: solid colours and gradient stops, once each, the first 100), count?: 1..50 (5), ids?: [id…] (default: the selection)} list the library's colour swatches closest to each colour, closest first, by CIEDE2000 difference (ΔE; under 1 hardly tells apart, about 2 to 3 close). Tint swatches, None and Registration aren't matched → {library, colors: [{values, hex, matches: [{name, values, hex, spot, deltaE}]}]}",
+            has_doc,
+            nearest::find
+        ),
+        cmd!(
+            "addon.color.applyNearestSwatch",
+            "Apply Nearest Swatch",
+            ["Object", "Plug-ins", "Color Effects"],
+            None,
+            "{library?: as addon.color.nearestSwatch (default: \"document\"), fill?: true, stroke?: true, ids?: [id…] (default: the selection)} give each solid colour and gradient stop of the selected objects' fills and strokes (their type's and those of the objects inside them; gradient meshes too) the colour of its nearest swatch in the library, as addon.color.nearestSwatch finds it, as one undo step: a global or spot swatch's colour links to it. A library's swatches the colours take are added to the document's first, as swatch.library.add adds them (a spot colour stays spot); images and patterns keep their colours → {changed: paints changed, swatches: [the document swatches the colours took], added: [swatches added to the document]}",
+            has_selection,
+            nearest::apply
         ),
     ]
 }
@@ -116,5 +147,7 @@ fn filter(s: &mut Session, p: &Value) -> Result<Value> {
         o.insert("ids".into(), json!(ids.iter().map(|i| i.0).collect::<Vec<_>>()));
     }
     let label = effects::effect_info(id).map_or("Apply as Filter", |e| e.label.trim_end_matches('…'));
-    recolor(s, &given, label, &|c| map.apply(c))
+    let kinds = effects::addons::duotone::swatch_kinds(&s.doc()?.doc);
+    let swatches = |name: &str| kinds.get(name).copied();
+    recolor_links(s, &given, label, &|c| map.apply(c), &|c, link, tint| map.apply_link(c, link, tint, &swatches))
 }

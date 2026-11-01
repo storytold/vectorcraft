@@ -93,7 +93,7 @@ fn selected_only_exports_the_selection_in_its_layers() {
     let line = s.execute("shape.line", &json!({"x1": 0, "y1": 90, "x2": 90, "y2": 90})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [line]})).unwrap();
     let dxf = text(&s.execute("document.export", &json!({"format": "dxf", "selectedOnly": true})).unwrap());
-    assert_eq!(entities(&dxf), ["LWPOLYLINE"]);
+    assert_eq!(entities(&dxf), ["LINE"]);
     assert!(dxf.contains("\n  2\nTop\n") && !dxf.contains("\n  2\nLayer 1\n"), "only the selection's layer");
     s.execute("select.none", &json!({})).unwrap();
     let e = s.execute("document.export", &json!({"format": "dxf", "selectedOnly": true})).unwrap_err().to_string();

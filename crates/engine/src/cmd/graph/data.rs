@@ -86,7 +86,8 @@ pub(super) fn to_csv(g: &GraphSpec) -> String {
     g.to_csv()
 }
 
-/// Apply CSV graph data to the graph root `id` and rebuild its art (Variables data merge).
+/// Apply CSV graph data to the graph root `id` and rebuild its art (Variables data merge), as `graph.setData` with
+/// `csv` does.
 pub(crate) fn apply_csv(d: &mut Document, id: NodeId, csv: &str) -> Result<()> {
     let Some(node) = d.node(id) else {
         return Err(EngineError::NoNode(id));
@@ -94,11 +95,15 @@ pub(crate) fn apply_csv(d: &mut Document, id: NodeId, csv: &str) -> Result<()> {
     let Some(mut spec) = node.extras().graph.as_deref().cloned() else {
         return Err(bad("graph.applyCsv", format!("node {} is not a graph", id.0)));
     };
-    let (series, categories, rows) = parse_csv(csv);
-    spec.series = series;
-    spec.categories = categories;
-    spec.set_cells(rows);
+    apply_data(&mut spec, &json!({ "csv": csv }));
+    keep_right_series(&mut spec);
     regenerate(d, id, spec)
+}
+
+/// Drop right-axis series the data no longer has, so a series added later starts on the left.
+fn keep_right_series(g: &mut GraphSpec) {
+    let count = g.rows.iter().map(Vec::len).max().unwrap_or(0);
+    g.right_series.retain(|i| *i < count);
 }
 
 pub(super) fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
@@ -131,9 +136,17 @@ pub(super) fn apply_data(g: &mut GraphSpec, p: &Value) -> bool {
     changed
 }
 
-/// Drop rows with neither a value nor a label; a label-only row stays, its values blank.
+/// Drop rows with neither a value nor a label; a label-only row stays, its values blank. Each kept row keeps its own
+/// width, so a dropped row wider than the rest adds no blank series.
 fn drop_empty_rows(g: &mut GraphSpec) {
-    let mut cells = g.cells();
+    let blank: std::collections::HashSet<[usize; 2]> = g.blanks.iter().copied().collect();
+    let mut cells: Vec<Vec<Option<f64>>> = g
+        .rows
+        .iter()
+        .take(vectorcraft_doc::MAX_GRAPH_CATEGORIES)
+        .enumerate()
+        .map(|(c, r)| r.iter().take(vectorcraft_doc::MAX_GRAPH_SERIES).enumerate().map(|(s, v)| (!blank.contains(&[c, s])).then_some(*v)).collect())
+        .collect();
     let keep: Vec<bool> = (0..cells.len())
         .map(|c| cells.get(c).is_some_and(|r| r.iter().any(Option::is_some)) || g.categories.get(c).is_some_and(|l| !l.is_empty()))
         .collect();
@@ -185,10 +198,7 @@ pub(super) fn set_data(s: &mut Session, p: &Value) -> Result<Value> {
         // Blank cells come back as null, so the rows can be edited and sent back as they are.
         return Ok(json!({ "csv": to_csv(&spec), "series": spec.series, "categories": spec.categories, "rows": spec.cells() }));
     }
-    // Series assigned to the right axis that the new data no longer has are dropped, so a series added later starts
-    // on the left.
-    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0);
-    spec.right_series.retain(|i| *i < count);
+    keep_right_series(&mut spec);
     s.edit("Graph Data", |d, _| regenerate(d, id, spec))?;
     Ok(json!({ "id": id.0 }))
 }

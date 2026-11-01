@@ -562,6 +562,43 @@ fn pattern_corner_source_none_leaves_that_kind_of_corner_empty() {
 }
 
 #[test]
+fn pattern_without_start_tile_runs_side_to_path_start() {
+    let path = line(0.0, 0.0, 100.0, 0.0);
+    let doc = Document::new(1.0, 1.0);
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.start = Some(rect_art(20.0, 4.0));
+    }
+    let with_start = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(with_start[0].geometric_bounds().unwrap().width(), 20.0);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.start = None;
+    }
+    let without_start = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(without_start.len(), 10);
+    assert!(near(without_start[0].geometric_bounds().unwrap().x0, 0.0, 1e-6));
+    assert!(near(without_start[0].geometric_bounds().unwrap().width(), 10.0, 1e-6));
+}
+
+#[test]
+fn pattern_without_end_tile_runs_side_to_path_end() {
+    let path = line(0.0, 0.0, 100.0, 0.0);
+    let doc = Document::new(1.0, 1.0);
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.end = Some(rect_art(20.0, 4.0));
+    }
+    let with_end = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert!(with_end.iter().any(|n| near(n.geometric_bounds().unwrap().width(), 20.0, 1e-6)));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.end = None;
+    }
+    let without_end = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(without_end.len(), 10);
+    assert!(near(without_end.last().unwrap().geometric_bounds().unwrap().x1, 100.0, 1e-6));
+}
+
+#[test]
 fn pattern_corner_sources_round_trip_and_stay_out_of_brushes_without_them() {
     let saved = serde_json::to_value(pattern_brush(PatternFit::Stretch, true)).unwrap();
     assert!(saved.get("outer_source").is_none() && saved.get("inner_source").is_none(), "{saved}");
@@ -1097,7 +1134,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     let mut brushed = rect_art(10.0, 4.0);
     brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
     for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed)] {
-        doc.symbols.push(Symbol { name: name.into(), art: std::sync::Arc::new(art.clone()) });
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art.clone()) });
         doc.patterns.push(PatternDef::new(name, vec![std::sync::Arc::new(art)]));
     }
     let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });

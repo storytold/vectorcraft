@@ -86,19 +86,91 @@ fn lp_overlays(h: &LpHover, cache: &RegionCache, color: [u8; 3], width: f32) -> 
     }
 }
 
-/// Live Paint Bucket: click fills the face under the cursor with the current fill; Shift-click
-/// paints the nearest edge with the current stroke. Clicking selected ordinary paths makes them a
-/// Live Paint group first.
+/// The Live Paint Bucket's highlight width (screen pixels) by default.
+pub const LP_BUCKET_WIDTH: f64 = 4.0;
+
+/// The least and greatest highlight width (screen pixels) the Live Paint Bucket takes.
+pub const LP_BUCKET_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
+
+/// What a Live Paint Bucket click paints.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum LpPaint {
+    Nothing,
+    /// The face under the pointer.
+    Fills,
+    /// The edge nearest the pointer.
+    Strokes,
+    /// The edge nearest the pointer when one is in reach, else the face under the pointer.
+    Both,
+}
+
+/// Live Paint Bucket: by default, a click fills the face under the cursor with the current fill,
+/// and Shift-click paints the nearest edge with the current stroke. Alt-click samples a fill or
+/// stroke into the paint defaults; Alt+Shift-click samples only the color under the pointer.
+/// Clicking selected ordinary paths without Alt makes them a Live Paint group first. Its Tool
+/// Options (double-click the tool) are `paintFills` (on) and `paintStrokes` (off), `highlight`
+/// (on), the highlight `color` (`#rrggbb`, red by default) and its `width` ([`LP_BUCKET_WIDTH`]
+/// pixels). With Paint Strokes alone on, a click paints the edge nearest the pointer and
+/// Shift-click fills the face. With both on, a click paints the edge nearest the pointer when one
+/// is within 4 pixels, else it fills the face, and Shift-click fills the face. With both off, a
+/// click paints nothing. With Highlight off, the face or edge under the pointer is not
+/// highlighted.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
-    /// Where the pointer last moved, and whether Shift was held.
-    at: Option<(Point, bool)>,
+    /// Where the pointer last moved, and whether Shift and Alt were held.
+    at: Option<(Point, bool, bool)>,
+    fills: bool,
+    strokes: bool,
+    highlight: bool,
+    color: [u8; 3],
+    width: f64,
 }
 
 impl Default for LivePaintBucketTool {
     fn default() -> Self {
-        Self { cache: RegionCache::live_paint(), hover: LpHover::None, at: None }
+        Self {
+            cache: RegionCache::live_paint(),
+            hover: LpHover::None,
+            at: None,
+            fills: true,
+            strokes: false,
+            highlight: true,
+            color: HIGHLIGHT_RED,
+            width: LP_BUCKET_WIDTH,
+        }
+    }
+}
+
+impl LivePaintBucketTool {
+    /// What a click paints, Shift held or not. Shift switches Paint Fills alone to Paint Strokes
+    /// alone and back, and switches both to Paint Fills alone.
+    fn paints(&self, shift: bool) -> LpPaint {
+        match (self.fills, self.strokes, shift) {
+            (false, false, _) => LpPaint::Nothing,
+            (true, true, false) => LpPaint::Both,
+            (true, false, false) | (_, true, true) => LpPaint::Fills,
+            (true, false, true) | (false, true, false) => LpPaint::Strokes,
+        }
+    }
+
+    /// The highlight at `p` for a pointer with Shift and Alt held as given: none with Alt or with
+    /// Highlight off, else the face or edge a click there paints.
+    fn hover_at(&mut self, cx: &ToolContext, p: Point, shift: bool, alt: bool) -> LpHover {
+        if alt || !self.highlight {
+            return LpHover::None;
+        }
+        let takes = |id| lp_visible(cx, id);
+        match self.paints(shift) {
+            LpPaint::Nothing => LpHover::None,
+            LpPaint::Fills => lp_hover(cx, Some(&mut self.cache), p, false, &takes),
+            // A click paints no region of the selection, so none is highlighted.
+            LpPaint::Strokes => lp_hover(cx, None, p, true, &takes),
+            LpPaint::Both => match lp_part_at(cx.doc, p, cx.tol(4.0), true, &takes) {
+                Some((_, Some(e))) => e.path_data().map(|pd| LpHover::Part(pd.to_bezpath())).unwrap_or_default(),
+                _ => lp_hover(cx, Some(&mut self.cache), p, false, &takes),
+            },
+        }
     }
 }
 
@@ -111,20 +183,43 @@ impl Tool for LivePaintBucketTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Move => {
-                self.at = Some((p, ev.mods.shift));
-                self.hover = lp_hover(cx, Some(&mut self.cache), p, ev.mods.shift, &|id| lp_visible(cx, id));
+                self.at = Some((p, ev.mods.shift, ev.mods.alt));
+                self.hover = self.hover_at(cx, p, ev.mods.shift, ev.mods.alt);
                 vec![]
             }
             PointerKind::Down => {
                 self.hover = LpHover::None;
-                let point = json!([p.x, p.y]);
-                if ev.mods.shift {
-                    return match lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id)) {
-                        Some((g, Some(_))) => {
-                            vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0) }))]
+                if ev.mods.alt {
+                    if ev.mods.shift {
+                        return crate::xform::eyedropper::sample_color_at(cx, p).map_or_else(Vec::new, |color| {
+                            vec![Action::Exec("paint.sampleColor".into(), json!({ "color": crate::params::color_json(&color), "ids": [] }))]
+                        });
+                    }
+                    return crate::xform::eyedropper::sample_source(cx, p).map_or_else(Vec::new, |(source, _)| {
+                        if cx.doc.node(source).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_))) {
+                            return crate::xform::eyedropper::sample_color_at(cx, p).map_or_else(Vec::new, |color| {
+                                vec![Action::Exec(
+                                    "paint.sampleColor".into(),
+                                    json!({ "color": crate::params::color_json(&color), "stroke": false, "ids": [], "clearStroke": true }),
+                                )]
+                            });
                         }
-                        _ => vec![],
-                    };
+                        if crate::xform::eyedropper::has_sampleable_paint(cx, source) {
+                            vec![Action::Exec("appearance.copyFrom".into(), json!({ "source": source.0, "defaultsOnly": true }))]
+                        } else {
+                            vec![]
+                        }
+                    });
+                }
+                let point = json!([p.x, p.y]);
+                let paint = self.paints(ev.mods.shift);
+                if matches!(paint, LpPaint::Strokes | LpPaint::Both)
+                    && let Some((g, Some(_))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
+                {
+                    return vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0) }))];
+                }
+                if !matches!(paint, LpPaint::Fills | LpPaint::Both) {
+                    return vec![];
                 }
                 if let Some(g) = live_paint_at(cx.doc, p) {
                     return vec![Action::Exec("livePaint.fill".into(), json!({ "group": g.0, "point": point }))];
@@ -140,11 +235,37 @@ impl Tool for LivePaintBucketTool {
     }
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        lp_overlays(&self.hover, &self.cache, HIGHLIGHT_RED, 4.0)
+        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32)
     }
 
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::LivePaintBucket
+    fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
+        if m.alt { Cursor::Eyedropper } else { Cursor::LivePaintBucket }
+    }
+
+    fn options(&self) -> Value {
+        let [r, g, b] = self.color;
+        json!({
+            "paintFills": self.fills,
+            "paintStrokes": self.strokes,
+            "highlight": self.highlight,
+            "color": format!("#{r:02x}{g:02x}{b:02x}"),
+            "width": self.width,
+        })
+    }
+
+    fn set_option(&mut self, key: &str, v: &Value) {
+        match key {
+            "paintFills" => self.fills = v.as_bool().unwrap_or(self.fills),
+            "paintStrokes" => self.strokes = v.as_bool().unwrap_or(self.strokes),
+            "highlight" => self.highlight = v.as_bool().unwrap_or(self.highlight),
+            "color" => self.color = lp_color(v).unwrap_or(self.color),
+            "width" => {
+                let (min, max) = LP_BUCKET_WIDTH_RANGE;
+                self.width = v.as_f64().filter(|w| w.is_finite()).map_or(self.width, |w| w.clamp(min, max));
+            }
+            _ => return,
+        }
+        self.hover = LpHover::None;
     }
 
     fn waiting(&self) -> bool {
@@ -159,8 +280,8 @@ impl Tool for LivePaintBucketTool {
         // of a Live Paint group the hover takes no map.
         loop {
             self.cache.settle(wait);
-            if let Some((p, shift)) = self.at {
-                self.hover = lp_hover(cx, Some(&mut self.cache), p, shift, &|id| lp_visible(cx, id));
+            if let Some((p, shift, alt)) = self.at {
+                self.hover = self.hover_at(cx, p, shift, alt);
             }
             if !wait || !self.cache.waiting() {
                 break;

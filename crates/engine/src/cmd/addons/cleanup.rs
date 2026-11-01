@@ -1,10 +1,12 @@
 //! Artwork Cleanup (`addon.cleanup.*`), a built-in add-on: Simplify Anchors (Keep Shape), the
 //! Document Health Check (check, show and fix the issues it finds), Deep Ungroup and Rejoin Path
-//! Pieces. Its panel and its submenu, Object › Plug-ins › Artwork Cleanup, are the UI's.
+//! Pieces, and its text tools ([`text`]). Its panel and its submenu, Object › Plug-ins › Artwork
+//! Cleanup, are the UI's.
 
 mod checks;
 #[cfg(test)]
 mod tests;
+mod text;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
@@ -16,9 +18,8 @@ use super::super::edit::selected_roots;
 use super::super::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, number_or, switch_or, text_param};
 use crate::{EngineError, Result, Session};
 
-/// Simplify Anchors' tolerance by default, and the drift (pt) each step of it allows.
+/// Simplify Anchors' tolerance by default.
 const TOLERANCE: f64 = 20.0;
-pub(super) const PT_PER_TOLERANCE: f64 = 0.02;
 /// Rejoin Path Pieces' gap by default, and the widest (pt).
 const GAP: f64 = 0.1;
 const MAX_GAP: f64 = 6.0;
@@ -30,7 +31,7 @@ const FIX_ROUNDS: usize = 3;
 const MAX_LISTED: usize = 1000;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![
+    let mut v = vec![
         cmd!(
             "addon.cleanup.simplify",
             "Simplify Anchors (Keep Shape)…",
@@ -45,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Health Check",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{scope?: \"selection\"|\"document\" (default: the selection, or the document while nothing is selected), kinds?: [kind…] (default: all: emptyText, strayPoints (paths of one anchor), unpainted, zeroOpacity, duplicateObjects (a path stacked on an identical one), offArtboard, duplicateAnchors (neighbours within 0.01 pt), tinyHandles (under 0.01 pt), collinearAnchors (corners on a straight run, turning less than sine 0.005), nearPoints (anchors within 0.01 pt of other paths' anchors), nearlyClosed (ends within 0.01 pt), filledOpenPaths (filled, unstroked open paths), needlessClipGroups (an unpainted clip that clips nothing, hides everything, or is a rectangle round all its art), needlessCompounds (one path or none), needlessGroups (one member or none, nothing of their own), emptyArtboards (the document only))} find issues without changing anything; locked and hidden objects are left out → {scope, total, findings: [{kind, label, count, ids (the objects, at most 1000), artboards (indexes)}]} for the kinds found",
+            "{scope?: \"selection\"|\"document\" (default: the selection, or the document while nothing is selected), kinds?: [kind…] (default: all: emptyText, strayPoints (paths of one anchor), unpainted, zeroOpacity, duplicateObjects (a path stacked on an identical one, or type on the same type within 1 pt), offArtboard, duplicateAnchors (neighbours within 0.01 pt), tinyHandles (under 0.01 pt), collinearAnchors (corners on a straight run, turning less than sine 0.005), nearPoints (anchors within 0.01 pt of other paths' anchors), nearlyClosed (ends within 0.01 pt), filledOpenPaths (filled, unstroked open paths), needlessClipGroups (an unpainted clip that clips nothing, hides everything, or is a rectangle round all its art), needlessCompounds (one path or none), needlessGroups (one member or none, nothing of their own), emptyArtboards (the document only))} find issues without changing anything; locked and hidden objects are left out → {scope, total, findings: [{kind, label, count, ids (the objects, at most 1000), artboards (indexes)}]} for the kinds found",
             has_doc,
             check
         ),
@@ -85,7 +86,9 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             rejoin
         ),
-    ]
+    ];
+    v.extend(text::specs());
+    v
 }
 
 /// The paths (not guides) under `roots`, compound path members included.
@@ -119,7 +122,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     let changed: Vec<(NodeId, PathData)> = paths
         .iter()
         .filter_map(|(id, path)| {
-            let np = po::simplify_keep_shape(path, tolerance * PT_PER_TOLERANCE, protect);
+            let np = po::simplify_keep_shape(path, tolerance * po::PT_PER_TOLERANCE, protect);
             (np != **path).then_some((*id, np))
         })
         .collect();

@@ -1,7 +1,11 @@
 //! Color Effects' panel and submenu (Object › Plug-ins › Color Effects). The panel picks a colour
 //! adjustment and its values, then adds it to the selection as a live effect or applies it as a
-//! filter, into the colours themselves (`addon.color.filter`). The submenu applies the add-on's
-//! live effects (Effect › Color Effects has them too) and opens the panel.
+//! filter, into the colours themselves (`addon.color.filter`); below, under Inks, it opens Duotone's
+//! dialog and Print Ink Fixes' (`addon.color.printFixes`). The submenu applies the add-on's live
+//! effects, Duotone and Vector Halftone among them (Effect › Color Effects has them too), opens
+//! Print Ink Fixes and Find Nearest Swatch ([`nearest`]) and opens the panel.
+
+pub mod nearest;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
@@ -62,6 +66,21 @@ const ADJUSTMENTS: [(&str, &str, &[Field]); 7] = [
     ("addon.color.invert", "Invert Colors", &[]),
 ];
 
+/// Print Ink Fixes' menu item: its label, command and the options its dialog opens with (the
+/// selection, or the document while nothing is selected).
+fn print_fixes() -> (&'static str, &'static str, Value) {
+    let options = json!({
+        "inkLimit": 300, "excludePureBlack": true, "removeWhiteOverprint": true, "overprintBlack": 100,
+        "textOnly": false, "fill": true, "stroke": true,
+    });
+    ("Print Ink Fixes…", "addon.color.printFixes", options)
+}
+
+/// Duotone's menu item: its label, and its effect's dialog.
+fn duotone() -> (&'static str, &'static str, Value) {
+    ("Duotone…", "effect.dialog", json!({ "effect": vectorcraft_effects::addons::duotone::DUOTONE }))
+}
+
 /// Adjustment `i` of [`ADJUSTMENTS`] (the first past the end).
 fn adjustment(i: usize) -> (&'static str, &'static str, &'static [Field]) {
     ADJUSTMENTS.get(i).copied().unwrap_or(ADJUSTMENTS[0])
@@ -69,12 +88,18 @@ fn adjustment(i: usize) -> (&'static str, &'static str, &'static [Field]) {
 
 /// Object › Plug-ins › Color Effects.
 pub fn menu() -> Vec<Item> {
+    let cmd = |(label, id, p): (&'static str, &'static str, Value)| Item::Cmd(label, id, p);
     vec![
         Item::Cmd("Color Effects Panel", "window.panel", json!({ "panel": ID })),
         Item::Sep,
         Item::Cmd("Exposure…", "effect.dialog", json!({ "effect": "addon.color.exposure" })),
         Item::Cmd("Desaturate", "effect.apply", json!({ "effect": "addon.color.desaturate" })),
+        cmd(duotone()),
         Item::Cmd("Invert Colors", "effect.apply", json!({ "effect": "addon.color.invert" })),
+        Item::Cmd("Vector Halftone…", "effect.dialog", json!({ "effect": "addon.color.halftone" })),
+        Item::Sep,
+        cmd(print_fixes()),
+        Item::Cmd("Find Nearest Swatch…", nearest::COMMAND, Value::Null),
         Item::Sep,
         Item::Sub(
             "Select by Color Kind",
@@ -157,6 +182,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     set_pstate(ui.ctx(), STATE, st);
+    // Inks: Duotone's and Print Ink Fixes' dialogs, as their menu items open them.
+    ui.add_space(8.0);
+    widgets::subheader(ui, tl!("Inks"));
+    let width = ui.available_width();
+    for (label, id, p) in [duotone(), print_fixes()] {
+        if widgets::flat_button(ui, tl!(label), width).clicked() {
+            let (id, p) = crate::menus::click_target(label, id, &p);
+            crate::menus::invoke(app, &id, p);
+        }
+    }
 }
 
 #[cfg(test)]

@@ -146,12 +146,26 @@ fn catalogue() -> Vec<Bindable> {
             if TOGGLES.contains(&e.key.as_str()) {
                 b = b.toggle();
             }
-            match shortcut_editor::default_of(&e.key).and_then(vc_binding) {
-                Some(d) => b.with_default(d),
-                None => b,
+            if let Some(d) = shortcut_editor::default_of(&e.key).and_then(vc_binding) {
+                b = b.with_default(d);
             }
+            for alias in default_aliases(&e.key) {
+                if let Some(d) = vc_binding(alias) {
+                    b = b.with_default(d);
+                }
+            }
+            b
         })
         .collect()
+}
+
+/// Additional defaults for commands whose primary shortcut remains in their command spec.
+fn default_aliases(key: &str) -> &'static [&'static str] {
+    match key {
+        "paint.lastColor" => &["Shift+,"],
+        "paint.lastGradient" => &["Shift+."],
+        _ => &[],
+    }
 }
 
 /// On the web, the browser's operating system once egui reports it ([`note_os`]).
@@ -398,9 +412,33 @@ mod tests {
         let unbound: Vec<(&str, &str)> = shortcut_editor::entries()
             .iter()
             .filter_map(|e| shortcut_editor::default_of(&e.key).map(|d| (e.key.as_str(), d)))
-            .filter(|(key, d)| vc_binding(d).map(|b| vec![b]) != Some(template().default_bindings(&command_of(key))))
+            .filter(|(key, d)| {
+                let mut expected: Vec<Binding> = vc_binding(d).into_iter().collect();
+                expected.extend(default_aliases(key).iter().filter_map(|alias| vc_binding(alias)));
+                expected != template().default_bindings(&command_of(key))
+            })
             .collect();
         assert_eq!(unbound, vec![], "every default text becomes the entry's binding");
+    }
+
+    #[test]
+    fn paint_defaults_have_two_bindings_and_reset_restores_both() {
+        for (key, plain, shifted) in [("paint.lastColor", ",", "Shift+,"), ("paint.lastGradient", ".", "Shift+.")] {
+            let command = command_of(key);
+            let defaults = template().default_bindings(&command);
+            assert_eq!(defaults, vec![vc_binding(plain).unwrap(), vc_binding(shifted).unwrap()], "{key}");
+            assert_eq!(
+                shortcut_editor::entry(key).map(|e| e.label.as_str()),
+                Some(if key == "paint.lastColor" { "Apply Last Color" } else { "Apply Last Gradient" })
+            );
+            assert_eq!(effective_with(template(), key).as_deref(), Some(plain));
+            let mut overrides = Overrides::new();
+            set_override(&mut overrides, key, "Shift+;");
+            assert_eq!(keymap_with(&overrides).bindings(&command), vec![vc_binding("Shift+;").unwrap()]);
+            shortcut_editor::reset_one(&mut overrides, key);
+            assert_eq!(keymap_with(&overrides).bindings(&command), defaults);
+        }
+        assert!(template().conflicts().is_empty());
     }
 
     /// The chords the operating system takes are refused, and no default uses one.

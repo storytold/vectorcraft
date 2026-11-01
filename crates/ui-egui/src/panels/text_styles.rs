@@ -227,6 +227,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     // A highlighted style that is no longer listed (renamed in Style Options, deleted by a command
     // or undone) is no longer highlighted.
     let mut sel = highlighted(app, ui.ctx(), kind, &listed);
+    // A style made by the New style dialog waits for this kind's panel on its own document.
+    app.ui.made_text_style.retain(|(uid, _, _)| app.session.documents().iter().any(|doc| doc.uid == *uid));
+    if let Some(index) = app
+        .ui
+        .made_text_style
+        .iter()
+        .position(|(uid, para, _)| *para == (kind == Kind::Para) && app.session.active().is_some_and(|doc| doc.uid == *uid))
+    {
+        let (_, _, name) = app.ui.made_text_style.remove(index);
+        highlight_made(ui.ctx(), kind, vec![name]);
+        sel = highlighted(app, ui.ctx(), kind, &listed);
+    }
     let scroll_to: Option<String> = pstate(ui.ctx(), kind.scroll_key());
     widgets::list_box(ui, |ui| {
         for (name, attrs, _) in &all {
@@ -330,7 +342,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if menu_item(ui, &crate::i18n::fmt(tl!("New {kind} Style…"), &[("kind", kind.what_label())]), true, false) {
         // A later typing preview must not restore the document from before this capture.
         end_typing(app);
-        app.run(&format!("{p}.new"), target(app, kind, json!({}))).ok();
+        if let Ok(r) = app.run(&format!("{p}.new"), target(app, kind, json!({}))) {
+            highlight_made(ui.ctx(), kind, r["name"].as_str().map(str::to_string).into_iter().collect());
+        }
     }
     if menu_item(ui, &crate::i18n::fmt(tl!("Duplicate {kind} Style"), &[("kind", kind.what_label())]), !many.is_empty(), false) {
         let names: Vec<String> = listed.iter().filter(|n| many.iter().any(|s| s == *n)).map(|n| n.to_string()).collect();
@@ -361,8 +375,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if menu_item(ui, &crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]), user, false)
         && let Some(n) = &sel
     {
-        let label = format!("{} Style Options", kind.what());
-        app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
+        if kind == Kind::Char {
+            app.run("ui.charStyleOptions", json!({ "name": n })).ok();
+        } else {
+            let label = format!("{} Style Options", kind.what());
+            app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
+        }
     }
 }
 

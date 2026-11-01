@@ -49,7 +49,7 @@ pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, w
 
 /// [`length`] whose value is kept within `range` (points): a value typed outside it becomes the
 /// nearer end, so the field shows the distance the command applies (#4637).
-pub(super) fn length_within(
+pub(crate) fn length_within(
     ui: &mut egui::Ui,
     d: &mut Dialog,
     key: &str,
@@ -247,7 +247,7 @@ pub(super) fn text_area_named(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name
 }
 
 /// A checkbox bound to `d.fields[key]` (its box shows while unchecked too).
-pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
+pub(crate) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let b = d.bool(key);
     if crate::widgets::check(ui, label, b, true) {
         d.fields.insert(key.into(), Value::Bool(!b));
@@ -256,7 +256,7 @@ pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
 
 /// A dropdown row bound to the string `d.fields[key]`: `label` in a column `widths.0` wide, the
 /// dropdown `widths.1` wide; `options` are (value, label).
-pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, widths: (f32, f32), options: &[(&str, &str)]) {
+pub(crate) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, widths: (f32, f32), options: &[(&str, &str)]) {
     crate::widgets::label_row(ui, label, widths.0, |ui| dropdown(ui, d, key, widths.1, options, false));
 }
 
@@ -339,7 +339,7 @@ pub(super) fn grid_then(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, more: imp
 }
 
 /// Command/effect parameters from the dialog fields (drop UI-only keys).
-pub(super) fn params(d: &Dialog) -> Value {
+pub(crate) fn params(d: &Dialog) -> Value {
     Value::Object(d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect())
 }
 
@@ -647,6 +647,17 @@ pub(crate) fn humanize(k: &str) -> String {
         "Sy" => "Vertical %".into(),
         "Radius1" => "Radius 1".into(),
         "Radius2" => "Radius 2".into(),
+        "Dash1" => "Dash 1:".into(),
+        "Dash2" => "Dash 2:".into(),
+        "Dash3" => "Dash 3:".into(),
+        "Dash4" => "Dash 4:".into(),
+        "Dash5" => "Dash 5:".into(),
+        "Gap1" => "Gap 1:".into(),
+        "Gap2" => "Gap 2:".into(),
+        "Gap3" => "Gap 3:".into(),
+        "Gap4" => "Gap 4:".into(),
+        "Gap5" => "Gap 5:".into(),
+        "Align Corners" => "Align to Corners and Ends:".into(),
         "Max Radius" => "Max. Radius:".into(),
         "Blur Mode" => "Mode:".into(),
         "Channel1" => "Channel 1:".into(),
@@ -806,7 +817,7 @@ pub(super) const PREVIEWED: &str = "__previewed";
 /// The Preview checkbox of a dialog that previews `cmd` on the canvas: while it is on, `params` run
 /// again on the interaction's snapshot whenever they differ from the last preview (whether a widget
 /// or `ui.dialog.set` changed them); turning it off rolls back.
-pub(super) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, label: &str, cmd: &str, params: Value) {
+pub(crate) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, label: &str, cmd: &str, params: Value) {
     let _ = preview_result(app, ui, d, label, cmd, params);
 }
 
@@ -855,7 +866,7 @@ pub(super) fn preview_now(app: &mut crate::VectorcraftApp, d: &mut Dialog, label
 /// OK of a dialog using [`preview`]: keep the previewed `cmd` as one undo step (or run it when no
 /// preview runs) and close; the command's warning shows in the status bar either way. On an error
 /// the dialog stays open.
-pub(super) fn commit_preview(app: &mut crate::VectorcraftApp, cmd: &str, params: Value) -> Result<Value, String> {
+pub(crate) fn commit_preview(app: &mut crate::VectorcraftApp, cmd: &str, params: Value) -> Result<Value, String> {
     let r = if app.session.in_interaction() {
         match app.session.preview(cmd, &params) {
             Ok(v) => {

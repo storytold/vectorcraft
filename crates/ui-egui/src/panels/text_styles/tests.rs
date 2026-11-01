@@ -291,6 +291,22 @@ fn panel_menu_duplicate_and_delete_update_the_highlighted_style() {
     }
 }
 
+#[test]
+fn character_style_options_menu_opens_format_sections() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    click_label(&ctx, &mut app, "Body", |app, ui| show(app, ui, Kind::Char));
+    assert_eq!(click_label(&ctx, &mut app, "   Character Style Options…", |app, ui| menu(app, ui, Kind::Char)), 1);
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(dialog.kind, crate::dialogs::char_style_options::KIND);
+    assert_eq!(dialog.str("section"), "general");
+    assert_eq!(dialog.str("size"), "24.0");
+    assert!(dialog.bool("preview"));
+}
+
 /// In a panel scrolled to the top of a long list, the menu's Duplicate scrolls the copy's row into
 /// view, and so does the New button's `highlight_made` for the new style.
 #[test]
@@ -368,6 +384,15 @@ fn capture_from_menu(range: Option<(usize, usize)>, redefine: bool) {
     capture_from_ui(range, redefine, false, false);
 }
 
+fn assert_new_style_highlight(ctx: &egui::Context, redefine: bool, name: &str) {
+    if !redefine {
+        let selected: Option<String> = pstate(ctx, Kind::Char.key());
+        assert_eq!(selected.as_deref(), Some(name), "New highlights the style it made");
+        let scroll_to: Option<String> = pstate(ctx, Kind::Char.scroll_key());
+        assert_eq!(scroll_to.as_deref(), Some(name), "New requests a scroll to the new style");
+    }
+}
+
 fn capture_from_ui(range: Option<(usize, usize)>, redefine: bool, footer: bool, unicode: bool) {
     let (mut app, id, ctx) = capture_app();
     let (first, tail) = if unicode { ("é", "漢字") } else { ("AB", "cdef") };
@@ -413,6 +438,7 @@ fn capture_from_ui(range: Option<(usize, usize)>, redefine: bool, footer: bool, 
     }
     let after = app.session.doc().unwrap().doc.clone();
     let name = if redefine { "Body" } else { "Character Style 1" };
+    assert_new_style_highlight(&ctx, redefine, name);
     let definition = after.char_styles.iter().find(|s| s.name == name);
     let size = definition.and_then(|s| s.attrs.get("size")).and_then(Value::as_f64);
     let expected_size = if range.is_some_and(|(a, b)| b > a && a >= first.len()) { 34.0 } else { 18.0 };
@@ -840,6 +866,10 @@ fn alt_clicking_new_character_style_asks_for_its_name() {
     set_name(&mut app, "Untouched");
     assert!(crate::dialogs::confirm(&mut app).is_err(), "names are unique");
     assert!(app.ui.dialog.is_some(), "a taken name keeps the dialog open");
+    assert!(app.ui.made_text_style.is_empty(), "a taken name does not request a highlight");
+    set_name(&mut app, "");
+    assert!(crate::dialogs::confirm(&mut app).is_err(), "a name is required");
+    assert!(app.ui.made_text_style.is_empty(), "an empty name does not request a highlight");
     set_name(&mut app, "Heading");
     let undo = app.session.doc().unwrap().history.undo.len();
     crate::dialogs::confirm(&mut app).unwrap();
@@ -850,6 +880,141 @@ fn alt_clicking_new_character_style_asks_for_its_name() {
     assert_eq!(doc.char_styles.len(), before.len() + 1);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
     assert_eq!(text_editing(&app), Some((id, 3, 5)), "the Type selection stays");
+}
+
+#[test]
+fn new_character_style_without_selection_uses_japanese_defaults() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.prefs.interface_language = "ja".into();
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    assert!(app.session.japanese_interface());
+
+    for (name, size) in [("Default", None), ("Edited", Some(18))] {
+        crate::dialogs::new_text_style::open(&mut app, false, json!({})).unwrap();
+        let dialog = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(dialog.fields["__attrs"]["charAlign"], "emBoxCenter");
+        dialog.fields.insert("name".into(), json!(name));
+        if let Some(size) = size {
+            dialog.fields.insert("size".into(), json!(size));
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        let style = app.session.doc().unwrap().doc.char_styles.iter().find(|style| style.name == name).unwrap();
+        assert_eq!(style.attrs.get("charAlign"), Some(&json!("emBoxCenter")));
+        assert_eq!(style.attrs.get("size").cloned(), size.map(|value| json!(f64::from(value))));
+    }
+    crate::dialogs::new_text_style::open(&mut app, false, json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("basic"));
+    app.run("ui.charStyleOptions.resetPanel", json!({})).unwrap();
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert!(!crate::dialogs::char_style_options::edited_attrs(dialog).unwrap().contains_key("charAlign"));
+    crate::dialogs::cancel(&mut app);
+
+    crate::dialogs::new_text_style::open(&mut app, true, json!({})).unwrap();
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert!(dialog.fields["__target"].get("attrs").is_none());
+    assert!(dialog.fields.get("__attrs").is_none());
+    crate::dialogs::cancel(&mut app);
+}
+
+/// The dialog highlights its new style and scrolls the matching panel to its row.
+#[test]
+fn a_style_made_in_the_new_style_dialog_is_highlighted() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, id, ctx) = capture_app();
+        if kind == Kind::Para {
+            app.run("paraStyle.new", json!({"name": "Untouched"})).unwrap();
+        }
+        for i in 1..=12 {
+            app.run(&format!("{}.new", kind.prefix()), json!({"name": format!("Item {i:02}")})).unwrap();
+        }
+        select_type_range(&mut app, id, 3, 5);
+        let panel = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            egui::ScrollArea::vertical().id_salt("styles").max_height(80.0).show(ui, |ui| show(app, ui, kind));
+        };
+        let before = frame_events(&ctx, &mut app, vec![], panel);
+        let top = text_rect(&before, "Untouched").top() - 30.0;
+        set_pstate(&ctx, kind.key(), Some("Untouched".to_string()));
+        alt_click_new(&ctx, &mut app, kind);
+        set_name(&mut app, "Heading");
+        crate::dialogs::confirm(&mut app).unwrap();
+        let other = if kind == Kind::Char { Kind::Para } else { Kind::Char };
+        frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, other));
+        assert_eq!(pstate::<Option<String>>(&ctx, other.key()), None, "{}: the other panel highlights nothing", kind.what());
+        assert_eq!(
+            app.ui.made_text_style.first().map(|(_, _, name)| name.as_str()),
+            Some("Heading"),
+            "{}: the other panel leaves the new style pending",
+            kind.what()
+        );
+        let mut after = vec![];
+        for _ in 0..3 {
+            let time = ctx.input(|i| i.time) + 1.0;
+            after = frame_raw(&ctx, &mut app, egui::RawInput { time: Some(time), ..Default::default() }, panel);
+        }
+        let highlighted: Option<String> = pstate(&ctx, kind.key());
+        assert_eq!(highlighted.as_deref(), Some("Heading"), "{}: the new style replaces the old highlight", kind.what());
+        assert!(app.ui.made_text_style.is_empty(), "{}: the panel consumes its pending highlight", kind.what());
+        let row = text_rect(&after, "Heading");
+        assert!(row.top() >= top && row.bottom() <= top + 80.0 + 30.0, "{}: Heading at {row:?}, panel from {top}", kind.what());
+    }
+}
+
+#[test]
+fn new_character_and_paragraph_style_highlights_wait_for_their_panels() {
+    let (mut app, id, ctx) = capture_app();
+    select_type_range(&mut app, id, 3, 5);
+    for (kind, name) in [(Kind::Char, "Heading Char"), (Kind::Para, "Heading Para")] {
+        open_new(&mut app, kind).unwrap();
+        set_name(&mut app, name);
+        crate::dialogs::confirm(&mut app).unwrap();
+    }
+    frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, Kind::Char));
+    assert_eq!(pstate::<Option<String>>(&ctx, Kind::Char.key()).as_deref(), Some("Heading Char"));
+    assert_eq!(app.ui.made_text_style.len(), 1);
+    frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, Kind::Para));
+    assert_eq!(pstate::<Option<String>>(&ctx, Kind::Para.key()).as_deref(), Some("Heading Para"));
+    assert!(app.ui.made_text_style.is_empty());
+}
+
+/// A style made in one document is highlighted only when that document's panel draws.
+#[test]
+fn a_new_style_dialog_highlight_waits_for_its_document() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, id, ctx) = capture_app();
+        let first_uid = app.session.active().unwrap().uid;
+        select_type_range(&mut app, id, 3, 5);
+        alt_click_new(&ctx, &mut app, kind);
+        set_name(&mut app, "Heading");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.made_text_style.first().map(|(uid, _, _)| *uid), Some(first_uid));
+
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Heading"})).unwrap();
+        frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, kind));
+        assert_eq!(pstate::<Option<String>>(&ctx, kind.key()), None, "{}: the second document highlights nothing", kind.what());
+        assert!(!app.ui.made_text_style.is_empty(), "{}: the first document's highlight stays pending", kind.what());
+
+        assert!(app.session.set_active(0));
+        frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, kind));
+        assert_eq!(pstate::<Option<String>>(&ctx, kind.key()).as_deref(), Some("Heading"), "{}: the first document is highlighted", kind.what());
+        assert!(app.ui.made_text_style.is_empty());
+    }
+}
+
+#[test]
+fn a_closed_document_drops_its_pending_style_highlight() {
+    let (mut app, id, ctx) = capture_app();
+    select_type_range(&mut app, id, 3, 5);
+    alt_click_new(&ctx, &mut app, Kind::Char);
+    set_name(&mut app, "Heading");
+    crate::dialogs::confirm(&mut app).unwrap();
+
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("charStyle.new", json!({"name": "Heading"})).unwrap();
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, Kind::Char));
+    assert_eq!(pstate::<Option<String>>(&ctx, Kind::Char.key()), None);
+    assert!(app.ui.made_text_style.is_empty(), "the closed document's highlight is discarded");
 }
 
 /// OK makes the style from the text's attributes as they were when the dialog opened: a later

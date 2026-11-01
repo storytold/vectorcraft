@@ -45,7 +45,10 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     if sp.anchors.len() < 3 {
         return sp;
     }
-    let fitted = po::simplify_with(&PathData::single(sp.clone()), &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false });
+    let fitted = po::simplify_with(
+        &PathData::single(sp.clone()),
+        &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false, ..Default::default() },
+    );
     fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp)
 }
 
@@ -373,8 +376,22 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     if !(size.is_finite() && size > 0.0) {
         return Err(bad(C, "size must be positive"));
     }
-    let pressure = size_pressure(p, &samples, C)?;
+    let angle = number_or(p, "angle", 0.0, C)?;
+    let roundness = number_or(p, "roundness", 100.0, C)?;
+    if !angle.is_finite() || !roundness.is_finite() {
+        return Err(bad(C, "angle and roundness must be finite"));
+    }
+    let angle = angle.clamp(-180.0, 180.0);
+    let roundness = roundness.clamp(0.0, 100.0);
+    let tip = vectorcraft_tools::draw2::blob_tip(angle, roundness);
+    let squash = tip.inverse();
+    // Width profiles use distance along the spine, so measure pressure on the same squashed
+    // points that the outline reads for a non-round tip.
+    let mapped_samples: Vec<(Point, Option<f64>)> =
+        if roundness < 100.0 { samples.iter().map(|(pt, pressure)| (squash * *pt, *pressure)).collect() } else { samples.clone() };
+    let pressure = size_pressure(p, &mapped_samples, C)?;
     let pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
+    let mapped_pts: Vec<Point> = mapped_samples.into_iter().map(|(pt, _)| pt).collect();
     // The widest the brush gets: the area merges look in.
     let reach = pressure.as_ref().map_or(size, |(_, v)| size + v);
     // With `fidelity` (pt), the brush follows the stroke fitted by [`fit_freehand`], as a Pencil
@@ -384,9 +401,12 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(_) => Some(number_or(p, "fidelity", 0.0, C)?.clamp(vectorcraft_tools::draw2::MIN_FIDELITY, 100.0)),
     };
-    let spine = |tol: Option<f64>| match tol {
-        Some(tol) => PathData::single(fit_freehand(&pts, tol, false)),
-        None => PathData::single(SubPath::polyline(&pts, false)),
+    let spine = |tol: Option<f64>| {
+        let path = match tol {
+            Some(tol) => PathData::single(fit_freehand(&pts, tol, false)),
+            None => PathData::single(SubPath::polyline(&pts, false)),
+        };
+        if roundness < 100.0 { path.transformed(squash) } else { path }
     };
     let region = match (&pressure, pts.len() > 1) {
         (Some((prof, variation)), true) => {
@@ -400,15 +420,16 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         // A click: one dab as wide as the pen pressed.
-        (Some((prof, variation)), false) => brush_region(&pts, vectorcraft_tools::draw2::pressure_size(size, *variation, prof.at(0.0))),
+        (Some((prof, variation)), false) => brush_region(&mapped_pts, vectorcraft_tools::draw2::pressure_size(size, *variation, prof.at(0.0))),
         (None, _) => {
             let fitted = fidelity
                 .filter(|_| pts.len() > 1)
                 .map(|tol| po::outline_stroke(&spine(Some(tol)), size, Cap::Round, Join::Round, 4.0))
                 .filter(|r| !r.is_empty());
-            fitted.unwrap_or_else(|| brush_region(&pts, size))
+            fitted.unwrap_or_else(|| brush_region(&mapped_pts, size))
         }
     };
+    let region = if roundness < 100.0 { region.transformed(tip) } else { region };
     if region.is_empty() {
         return Err(EngineError::Other("empty brush stroke".into()));
     }

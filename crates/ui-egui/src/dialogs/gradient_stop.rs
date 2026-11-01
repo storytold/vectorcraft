@@ -353,7 +353,11 @@ mod tests {
         let mut app = app();
         let view = app.view_info();
         let chip = Point::new(150.0, 150.0 + 10.0 / view.zoom);
-        crate::canvas::dispatch(&mut app, &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), pressure: 1.0 }, view);
+        crate::canvas::dispatch(
+            &mut app,
+            &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), backquote: false, pressure: 1.0 },
+            view,
+        );
         let d = app.ui.dialog.clone().expect("the popover opened");
         assert_eq!((d.kind.as_str(), d.fields["index"].clone(), d.str("tab")), ("gradientStop", json!(1), "color".into()));
         assert_eq!(app.session.selected_stop(), Some(1));
@@ -453,7 +457,11 @@ mod tests {
         let (p, i) = point(&app);
         // Double-clicking the point opens the popover beside it.
         let view = app.view_info();
-        crate::canvas::dispatch(&mut app, &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), pressure: 1.0 }, view);
+        crate::canvas::dispatch(
+            &mut app,
+            &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), backquote: false, pressure: 1.0 },
+            view,
+        );
         let d = app.ui.dialog.clone().expect("the popover opened");
         assert_eq!((d.kind.as_str(), d.fields["index"].clone()), ("gradientStop", json!(i)));
         frame(&mut app, vec![]);

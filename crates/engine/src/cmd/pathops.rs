@@ -15,8 +15,8 @@ use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
 use super::edit::selected_roots;
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_multi, has_selection, number_or,
-    str_param, switch_or,
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, number_or, str_param,
+    switch_or,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Window", "Pathfinder"],
             None,
             "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids}",
-            has_multi,
+            has_selection,
             |s, p| run_pf(s, p, PathfinderOp::Crop)
         ),
         cmd!(
@@ -161,7 +161,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth…",
             ["Object", "Path"],
             None,
-            "{level?: 0..100 (50; the Smooth slider: 0 minimum smoothing, the path staying within 0.1% of its longer side, 100 maximum: refitted with curves within up to 2.5% of it, corners kept only where the path turns back, never with more anchor points), auto?: bool (Auto-Smooth: level 50), ids?: [id…] (default: the selection)} smooth each path under the objects, compound path members included, as one undo step → {ids, before, after} anchor counts, and the level used",
+            "{level?: 0..100 (50; the Smooth slider: 0 minimum smoothing, the path staying within 0.1% of its longer side, 100 maximum: smoothed along its length by up to 5% of it and refitted with curves within up to 2.5% of it, corners kept only where the path turns back, never with more anchor points), auto?: bool (Auto-Smooth: level 50), ids?: [id…] (default: the selection)} smooth each path under the objects, compound path members included, as one undo step; without ids, a path with anchor points or segments direct-selected smooths only the sections between them, which stay selected → {ids, before, after} anchor counts, and the level used",
             has_selection,
             smooth
         ),
@@ -888,11 +888,13 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
 }
 
 /// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
+/// The copy is shown and unlocked.
 pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>) -> Node {
     let mut f = d.reid(l);
     f.appearance = Appearance { items, ..Default::default() }.into();
     f.opacity = 1.0;
     f.blend = BlendMode::Normal;
+    (f.visible, f.locked, f.knockout_shape) = (true, false, false);
     f.name = None;
     f.extras_mut().mask = None;
     if let NodeKind::Path { live, .. } = &mut f.kind {
@@ -903,7 +905,7 @@ pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>
 
 /// What stands for object `l` once its appearance became `parts` (paint order): the one part (in a
 /// group when it has effects of its own) or a group of them, with `l`'s transparency, name, opacity
-/// mask and effects. `None` without parts.
+/// mask, effects, and hidden, locked and knockout-shape states. `None` without parts.
 pub(crate) fn assemble(d: &mut Document, l: &Node, mut parts: Vec<Node>) -> Option<Node> {
     let root = match parts.len() {
         0 => return None,
@@ -911,6 +913,7 @@ pub(crate) fn assemble(d: &mut Document, l: &Node, mut parts: Vec<Node>) -> Opti
         _ => Node::group(d.alloc_id(), parts.into_iter().map(Arc::new).collect()),
     };
     let mut root = with_transparency(d, root, l.opacity, l.blend);
+    (root.visible, root.locked, root.knockout_shape) = (l.visible, l.locked, l.knockout_shape);
     root.name = l.name.clone();
     root.extras_mut().mask = l.extras().mask.clone();
     root.appearance.effects = l.appearance.effects.clone();
@@ -1086,6 +1089,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
         tolerance: tolerance.clamp(1e-4, 1e4),
         corner_angle_deg: num_param(p, "cornerAngle").unwrap_or(30.0).clamp(0.0, 180.0),
         straight_lines: bool_or(p, "straightLines", false),
+        smooth: 0.0,
     };
     let whole = bool_or(p, "wholePaths", false);
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
@@ -1096,13 +1100,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
             return (po::simplify_with(path, &opts), None);
         };
         let part = po::simplify_part(path, &picked, &opts);
-        let mut kept: BTreeSet<AnchorRef> = anchors.into_iter().flatten().filter_map(|a| part.anchors.get(a).copied()).collect();
-        for &(si, i) in &part.segments {
-            let m = part.path.subpaths.get(si).map_or(1, |sp| sp.anchors.len().max(1));
-            kept.extend([(si, i), (si, (i + 1) % m)]);
-        }
-        let segs = segments.map(|_| part.segments.clone());
-        (part.path, Some((kept, segs)))
+        refitted_part(part, anchors, segments)
     })?;
     let mut out = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after });
     if let Some(l) = level {
@@ -1111,14 +1109,39 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// A path with only the runs of `part` refitted, and what stays direct-selected: the anchors it had
+/// selected that are still there, and the refitted runs (their anchors, and their segments when
+/// segments were selected).
+fn refitted_part(
+    part: po::SimplifiedPart,
+    anchors: Option<&BTreeSet<AnchorRef>>,
+    segments: Option<&BTreeSet<SegmentRef>>,
+) -> (PathData, PartSelection) {
+    let mut kept: BTreeSet<AnchorRef> = anchors.into_iter().flatten().filter_map(|a| part.anchors.get(a).copied()).collect();
+    for &(si, i) in &part.segments {
+        let m = part.path.subpaths.get(si).map_or(1, |sp| sp.anchors.len().max(1));
+        kept.extend([(si, i), (si, (i + 1) % m)]);
+    }
+    let segs = segments.map(|_| part.segments.clone());
+    (part.path, Some((kept, segs)))
+}
+
 /// Object › Path › Smooth (`object.path.smooth`): [`po::smooth_level`] on each path under the
 /// objects given or selected, as one undo step; Auto-Smooth (`auto`) uses [`po::SMOOTH_AUTO_LEVEL`].
+/// A path with anchor points or segments direct-selected (and no `ids` given) smooths only the runs
+/// between them, which stay selected, as Simplify does.
 fn smooth(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.path.smooth";
     let level = number_or(p, "level", po::SMOOTH_AUTO_LEVEL, C)?.round().clamp(0.0, 100.0);
     let level = if switch_or(p, "auto", false, C)? { po::SMOOTH_AUTO_LEVEL } else { level };
+    let given = p.get("ids").is_some_and(|v| !v.is_null());
     let roots = checked_ids_or_selection(s, p, C)?;
-    let (ids, before, after) = edit_paths(s, &roots, "Smooth", |path, _, _| (po::smooth_level(path, level), None))?;
+    let (ids, before, after) = edit_paths(s, &roots, "Smooth", |path, anchors, segments| {
+        let Some(picked) = selected_segments(path, anchors, segments).filter(|_| !given) else {
+            return (po::smooth_level(path, level), None);
+        };
+        refitted_part(po::simplify_part(path, &picked, &po::smooth_options(path, level)), anchors, segments)
+    })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after, "level": level }))
 }
 

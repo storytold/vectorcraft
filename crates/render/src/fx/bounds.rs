@@ -249,6 +249,11 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
     match &n.kind {
         // The object and its crop marks.
         _ if effects::has_crop_marks(n) => effects::crop_marks_art(n).and_then(|art| inner(&art)),
+        // The object Vector Halftone samples, and as far as its dots reach past it.
+        _ if effects::addons::halftone::has_halftone(n) => {
+            let reach = effects::addons::halftone::reach(n);
+            inner(&effects::addons::halftone::split(n).0).map(|b| b.inflate(reach, reach))
+        }
         // The evaluated art (its fills, strokes and geometry effects) and the raster effects' reach.
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(Some(symbols.document()), n);

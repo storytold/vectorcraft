@@ -8,7 +8,7 @@
 //! agents. Its position is kept with the preferences and in user workspaces, and a position saved
 //! on a bigger window is clamped into this one when drawn.
 
-use egui::{CornerRadius, Id, Pos2, Rect, Stroke, Vec2, pos2, vec2};
+use egui::{CornerRadius, Id, Key, Pos2, Rect, Stroke, Vec2, pos2, vec2};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -33,6 +33,14 @@ fn move_id() -> Id {
     Id::unique("tools-float-move")
 }
 
+fn escape_cancel_id() -> Id {
+    Id::unique("tools-float-escape-cancel")
+}
+
+pub(crate) fn escape_cancelled_move(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<u64>(escape_cancel_id())) == Some(ctx.cumulative_frame_nr_for(ctx.viewport_id()))
+}
+
 /// The strip along the window's left edge where the Tools panel docks, as last laid out.
 pub(crate) fn tools_zone_id() -> Id {
     Id::unique("tools-float-zone")
@@ -48,6 +56,13 @@ pub fn clamp(pos: [f32; 2], size: Vec2, screen: Rect) -> Pos2 {
 
 fn gesture_allowed(ctx: &egui::Context) -> bool {
     ctx.input(|input| input.focused && !input.key_pressed(egui::Key::Escape))
+}
+
+/// Cancel a move before shortcuts route the same Escape press.
+pub(crate) fn cancel_move_on_escape(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if ctx.input(|i| i.key_pressed(Key::Escape)) {
+        track(app, ctx);
+    }
 }
 
 fn start(app: &VectorcraftApp, ctx: &egui::Context, grab: Vec2) {
@@ -94,6 +109,10 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !gesture_allowed(ctx) {
         app.ui.toolbar_pos = m.original;
         ctx.data_mut(|d| d.remove::<Move>(move_id()));
+        if ctx.input(|i| i.key_pressed(Key::Escape)) {
+            let frame = ctx.cumulative_frame_nr_for(ctx.viewport_id());
+            ctx.data_mut(|d| d.insert_temp(escape_cancel_id(), frame));
+        }
         return;
     }
     let at = ctx.input(|i| i.pointer.interact_pos());

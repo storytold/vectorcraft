@@ -1,9 +1,12 @@
 //! The reader: runs the editing data's operators into a document.
 //!
 //! - Art space has y up; the first artboard's top left corner is the document's origin.
-//! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed … colorIndex r g b …
-//!   dimPercent … Lb` (ten operands in the legacy format, without the one before the colour
-//!   index), `(name) Ln`, its art, `LB`.
+//! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed … colorIndex r g b
+//!   template dimPercent … Lb` (ten operands in the legacy format, without the one before the
+//!   colour index; see `Reader::layer_attrs`), `(name) Ln`, its art, `LB`.
+//! - Ruler guides: a straight `(N) *` guide path, directly on a layer, that runs across the whole
+//!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
+//!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end.
 //! - Paths: `m`, `l`/`L`, `c`/`C`, `v`/`V`, `y`/`Y`, painted by `N n F f S s B b` (lower case
@@ -15,6 +18,8 @@
 //!   app wrote) the bounding box.
 //! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
 //!   gives how many variables and data sets it has ([`VariableLibrary`]).
+//! - Objects on Path: a group whose objects' dictionaries carry ids, and a record of the
+//!   `/Document` dictionary naming them, read by [`on_path`].
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
@@ -70,14 +75,16 @@ mod art;
 mod containers;
 mod directives;
 mod document;
+mod on_path;
 mod ops;
 mod types;
 
+pub(crate) use art::join_and;
 use art::preview_png;
 pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Kind, PatternHead, Place, Raster};
+use types::{BLEND_BUDGET, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, Raster};
 #[cfg(test)]
 pub use types::{NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -101,6 +108,10 @@ pub struct Structure {
     pub template: Option<[f64; 4]>,
     /// What layers that don't show have that isn't read (operators, objects): left out of them.
     pub hidden_unread: BTreeSet<String>,
+    /// Top-level object ids and the unread kinds within them.
+    pub unread: Vec<(NodeId, Vec<String>)>,
+    /// Other bounds for previewless placed files whose page art uses the file box's corner.
+    pub unread_elsewhere: Vec<(NodeId, Rect)>,
     /// The names of text objects, by their slot's id.
     pub slot_names: HashMap<NodeId, String>,
     /// Where the drawn looks lay that objects read with their art style took the place of (the
@@ -110,6 +121,9 @@ pub struct Structure {
     /// move, in its pixels, that places them there (the corner of the box they are written with,
     /// in place of the canvas point of art space's origin).
     pub placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// The live envelopes read from the editing data, by id, with the drawn art each took the place
+    /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
+    pub envelopes_drawn: Vec<(NodeId, Node)>,
     pub warnings: Vec<String>,
 }
 
@@ -140,6 +154,8 @@ struct Reader<'a> {
     artboards: Vec<(String, Rect)>,
     /// The variables and data sets of the `/Document` dictionary's variable library.
     variables: VariableLibrary,
+    /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
+    on_path: on_path::OnPath,
     gradients: HashMap<String, Gradient>,
     gradient_def: Option<GradientDef>,
     instance: Option<Instance>,
@@ -162,6 +178,12 @@ struct Reader<'a> {
     unknown: BTreeSet<String>,
     /// What layers that don't show have that this reader doesn't read.
     hidden_unread: BTreeSet<String>,
+    unread: Vec<(NodeId, Vec<String>)>,
+    symbol_bounds: HashMap<String, Rect>,
+    /// Depth shared by pattern and symbol readers.
+    subreader_depth: usize,
+    pending_unread_fill: bool,
+    pending_unread_stroke: bool,
     /// The header's bounding boxes and template box.
     bbox: Option<[f64; 4]>,
     hires: Option<[f64; 4]>,
@@ -181,14 +203,34 @@ struct Reader<'a> {
     blend_record: Option<(usize, Vec<u8>)>,
     /// How many more objects blends may lay out in this import ([`super::blend::live_blend`]).
     blend_budget: usize,
+    /// The group on `%_` lines an envelope's dictionary just took (see [`Reader::drop_envelope_art`]).
+    envelope_art: Option<Node>,
+    /// Envelopes waiting for their drawn art, innermost last.
+    envelopes: Vec<PendingEnvelope>,
+    /// How many more envelopes this import may draw to check ([`super::envelope::drawn_alike`]).
+    envelope_checks: usize,
+    /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
+    envelope_spent: super::envelope::Spent,
+    /// The live envelopes made so far and the drawn art each took the place of
+    /// ([`Structure::envelopes_drawn`]).
+    envelopes_drawn: Vec<(NodeId, Node)>,
     /// A group just ended, its state (`Xy`, `Xd`, `XW`) not yet read.
     group_ended: bool,
+    /// A gradient mesh just ended (`/End X!`), its own state (`Xy`) not yet read: also after its
+    /// dictionary (its name, its opacity mask and the mask's art).
+    mesh_ended: bool,
     /// A layer's own state (`Xy` after its art, before `LB`), until something says the art moves on.
     layer_state: Option<(f32, BlendMode, bool, Knockout)>,
+    /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
+    /// instead when the layer's `LB` follows rather than their own `6 () XW`.
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
     /// Painted copies of clipping paths that have a fill (drawn under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
     looks: HashSet<NodeId>,
+    /// Straight `(N) *` guide paths painted directly on a layer, by id: their two points in art
+    /// space. [`Reader::finish`] makes the ruler guides among them guides of their layer.
+    ruler_guides: HashMap<NodeId, (Point, Point)>,
     /// Legacy compound member groups, even when followed by the generic `9 () XW` marker.
     compound_groups: HashSet<NodeId>,
     /// Groups of a text object and its look (see [`Self::style_marker`]), which aren't a look.
@@ -203,6 +245,7 @@ struct Reader<'a> {
     restyled: Vec<Rect>,
     /// See [`Structure::placed_elsewhere`].
     placed_elsewhere: Vec<(NodeId, Affine)>,
+    unread_elsewhere: Vec<(NodeId, Rect)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
     /// A `/ForeignObject`'s `/Data`: its PDF as ASCII85 in comment lines, until the object closes.
@@ -256,6 +299,7 @@ impl<'a> Reader<'a> {
             cropmarks: None,
             artboards: Vec::new(),
             variables: VariableLibrary::default(),
+            on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),
             gradient_def: None,
             instance: None,
@@ -271,6 +315,11 @@ impl<'a> Reader<'a> {
             unsupported: BTreeSet::new(),
             unknown: BTreeSet::new(),
             hidden_unread: BTreeSet::new(),
+            unread: Vec::new(),
+            symbol_bounds: HashMap::new(),
+            subreader_depth: 0,
+            pending_unread_fill: false,
+            pending_unread_stroke: false,
             bbox: None,
             hires: None,
             template: None,
@@ -283,16 +332,25 @@ impl<'a> Reader<'a> {
             blend_roles: HashMap::new(),
             blend_record: None,
             blend_budget: BLEND_BUDGET,
+            envelope_art: None,
+            envelopes: Vec::new(),
+            envelope_checks: super::envelope::MAX_CHECKED,
+            envelope_spent: super::envelope::Spent::default(),
+            envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
+            ruler_guides: HashMap::new(),
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
             group_ended: false,
+            mesh_ended: false,
             layer_state: None,
+            mesh_undo: None,
             styles: HashMap::new(),
             palette: super::palette::Palette::default(),
             restyled: vec![],
             placed_elsewhere: vec![],
+            unread_elsewhere: vec![],
             mesh: None,
             cmyk_cache: HashMap::new(),
             done: false,
@@ -324,7 +382,7 @@ impl<'a> Reader<'a> {
                     let w = std::str::from_utf8(w).unwrap_or("?");
                     self.op(w, hidden)?;
                 }
-                Tok::Comment(c) => self.comment(c)?,
+                Tok::Comment(c) => self.comment(c, hidden)?,
                 Tok::Data(d) => self.image(d)?,
                 Tok::Preview(d) => {
                     if let Some(p) = self.place.as_mut() {

@@ -3,6 +3,9 @@ use super::{Affine, BlendMode, Dash, FillRule, Knockout, LayerColor, LineCap, Li
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
 
+/// Most nested pattern and symbol readers on one call stack.
+pub(super) const MAX_SUBREADERS: usize = 32;
+
 /// Most operands on the stack.
 pub(super) const MAX_STACK: usize = 1 << 20;
 
@@ -120,6 +123,7 @@ pub(super) struct LayerAttrs {
     pub(super) preview: bool,
     pub(super) locked: bool,
     pub(super) printable: bool,
+    pub(super) template: bool,
     pub(super) dim: Option<u8>,
     pub(super) color: Option<LayerColor>,
 }
@@ -142,15 +146,39 @@ pub(super) struct Frame {
     pub(super) hidden: bool,
     /// [`Reader::after_object`] when it opened.
     pub(super) after: bool,
+    /// [`Reader::mesh_ended`] when it opened.
+    pub(super) mesh_ended: bool,
     /// The state when it opened (a container's lock and visibility; a dictionary's state to go
     /// back to).
     pub(super) gs: GState,
+    /// Unresolved pattern paint saved by `q`, which restores graphics state at `Q`.
+    pub(super) pending_unread_fill: bool,
+    pub(super) pending_unread_stroke: bool,
     /// The operand stack's height when it opened.
     pub(super) base: usize,
     /// The clipping paths' indexes among the children.
     pub(super) clips: Vec<usize>,
     /// A compound member group explicitly declares its subpaths' winding with `D`.
     pub(super) compound_members: bool,
+    /// Unread kinds belonging to this top-level object.
+    pub(super) unread: Vec<String>,
+    /// A dictionary in the art: the transparency (`Xy`) its art set last, which stays after it.
+    pub(super) state: Option<(f32, BlendMode, bool, Knockout, bool)>,
+}
+
+/// An envelope whose dictionary was read, waiting for its drawn art and its plugin's `XP` (see
+/// [`super::super::envelope`]).
+#[derive(Debug)]
+pub(super) struct PendingEnvelope {
+    pub(super) obj: Obj,
+    /// The group on `%_` lines before the dictionary.
+    pub(super) before: Option<Node>,
+    /// The art in the dictionary's `AIDeformArtKey` block.
+    pub(super) inner: Vec<Node>,
+    /// How many frames were open when the dictionary closed, and how many children the innermost
+    /// had: its drawn art is the one child after them.
+    pub(super) depth: usize,
+    pub(super) siblings: usize,
 }
 
 /// What a reader of a pattern's definition has of its head, `(name) llx lly urx ury`: the operands
@@ -246,6 +274,9 @@ pub(super) const SKIPPED: &[(&str, &str)] = &[
     ("BeginSymbolList", "EndSymbolList"),
     ("BeginTextDocument", "EndTextDocument"),
     ("BeginEncoding", "EndEncoding"),
+    // The printer's crop marks, drawn after the layers (`userdict /AI3_noCropMarks known not {
+    // … } if`); the crop area they mark is `%AI3_Cropmarks`.
+    ("BeginCrops", "EndCrops"),
 ];
 
 /// The note for versioned content whose `%AI17_End_Versioned_Content` is missing: every

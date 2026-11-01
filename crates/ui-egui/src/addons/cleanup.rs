@@ -1,7 +1,8 @@
 //! Artwork Cleanup's panel and submenu (Object › Plug-ins › Artwork Cleanup). The panel runs the
 //! Document Health Check on the selection, or the document while nothing is selected, lists what it
 //! found, and shows or fixes the issues picked in the list (Fix All: every issue listed), each fix
-//! one undo step. Below, the add-on's one-click tools open their options as their menu items do.
+//! one undo step. Below, the add-on's one-click tools open their options as their menu items do,
+//! and its text tools, which the panel can hide, act on the selected type.
 
 use egui::{Align, Layout, Ui};
 use serde_json::{Value, json};
@@ -16,6 +17,8 @@ pub const ID: &str = "artworkCleanup";
 
 /// Where the panel keeps its last check (panel state).
 const STATE: &str = "artwork-cleanup";
+/// Where the panel keeps whether its text tools are hidden (panel state).
+const TEXT_HIDDEN: &str = "artwork-cleanup-text-hidden";
 
 /// The one-click tools: (menu label, command, the options their dialog opens with).
 fn tools() -> [(&'static str, &'static str, Value); 3] {
@@ -26,11 +29,94 @@ fn tools() -> [(&'static str, &'static str, Value); 3] {
     ]
 }
 
+/// Replace Missing Fonts' options: the default type font.
+fn replace_fonts() -> Value {
+    json!({ "font": vectorcraft_doc::CharStyle::default().font_family })
+}
+
+/// A row of the panel's text tools: a label above (if any), then its buttons (label, what a
+/// modifier click does, command, params).
+type TextRow = (Option<&'static str>, Vec<(&'static str, Option<&'static str>, &'static str, Value)>);
+
+fn text_rows() -> [TextRow; 5] {
+    let align = |a: &str| json!({ "align": a });
+    let by = |b: &str| json!({ "by": b });
+    [
+        (
+            Some("Set Alignment, Keep Position:"),
+            vec![
+                ("Left", None, "addon.cleanup.alignInPlace", align("left")),
+                ("Center", None, "addon.cleanup.alignInPlace", align("center")),
+                ("Right", None, "addon.cleanup.alignInPlace", align("right")),
+            ],
+        ),
+        (
+            Some("Break Text into:"),
+            vec![
+                ("Lines", Some("Shift-click: break into paragraphs"), "addon.cleanup.breakText", by("lines")),
+                ("Words", None, "addon.cleanup.breakText", by("words")),
+                ("Glyphs", None, "addon.cleanup.breakText", by("glyphs")),
+            ],
+        ),
+        (
+            None,
+            vec![
+                ("Split at Cursor", None, "addon.cleanup.splitText", json!({})),
+                ("Reset Transform", Some("Alt-click: reset the horizontal scale too"), "addon.cleanup.resetTextTransform", json!({})),
+            ],
+        ),
+        (None, vec![("Combine Point Text", None, "addon.cleanup.combineText", json!({}))]),
+        (None, vec![("Join Point Text", None, "addon.cleanup.joinText", json!({}))]),
+    ]
+}
+
+/// The text tools one to a row below the others: (label, command, params).
+fn text_singles() -> [(&'static str, &'static str, Value); 3] {
+    [
+        ("Remove Line Breaks", "addon.cleanup.removeBreaks", json!({ "kind": "line" })),
+        ("Remove Paragraph Breaks", "addon.cleanup.removeBreaks", json!({ "kind": "paragraph" })),
+        ("Replace Missing Fonts…", "addon.cleanup.replaceFonts", replace_fonts()),
+    ]
+}
+
+/// `p` for a click with `held`: Shift-click on Lines breaks into paragraphs, Alt-click on Reset
+/// Transform resets the horizontal scale too.
+fn modified(id: &str, mut p: Value, held: egui::Modifiers) -> Value {
+    match id {
+        "addon.cleanup.breakText" if held.shift && p["by"] == "lines" => p["by"] = json!("paragraphs"),
+        "addon.cleanup.resetTextTransform" if held.alt => p["scale"] = json!(true),
+        _ => {}
+    }
+    p
+}
+
 /// Object › Plug-ins › Artwork Cleanup.
 pub fn menu() -> Vec<Item> {
     let mut items = vec![Item::Cmd("Document Health Check", "window.panel", json!({ "panel": ID })), Item::Sep];
     items.extend(tools().into_iter().map(|(label, id, p)| Item::Cmd(label, id, p)));
-    items.extend([Item::Sep, Item::Cmd("Fix All Issues", "addon.cleanup.fix", Value::Null)]);
+    items.extend([Item::Sep, Item::Cmd("Fix All Issues", "addon.cleanup.fix", Value::Null), Item::Sep]);
+    let by = |b: &str| json!({ "by": b });
+    let align = |a: &str| json!({ "align": a });
+    items.extend([
+        Item::Cmd("Combine Point Text", "addon.cleanup.combineText", json!({})),
+        Item::Cmd("Join Point Text", "addon.cleanup.joinText", json!({})),
+        Item::Cmd("Break Text into Lines", "addon.cleanup.breakText", by("lines")),
+        Item::Cmd("Break Text into Paragraphs", "addon.cleanup.breakText", by("paragraphs")),
+        Item::Cmd("Break Text into Words", "addon.cleanup.breakText", by("words")),
+        Item::Cmd("Break Text into Glyphs", "addon.cleanup.breakText", by("glyphs")),
+        Item::Cmd("Split Text at Cursor", "addon.cleanup.splitText", json!({})),
+        Item::Sub(
+            "Set Alignment, Keep Position",
+            vec![
+                Item::Cmd("Left", "addon.cleanup.alignInPlace", align("left")),
+                Item::Cmd("Center", "addon.cleanup.alignInPlace", align("center")),
+                Item::Cmd("Right", "addon.cleanup.alignInPlace", align("right")),
+            ],
+        ),
+        Item::Cmd("Reset Text Transform", "addon.cleanup.resetTextTransform", json!({})),
+        Item::Cmd("Reset Text Transform and Scale", "addon.cleanup.resetTextTransform", json!({ "scale": true })),
+    ]);
+    items.extend(text_singles().into_iter().map(|(label, id, p)| Item::Cmd(label, id, p)));
     items
 }
 
@@ -94,7 +180,8 @@ enum Action {
     Check,
     Show(String),
     Fix(Vec<String>),
-    Tool(usize),
+    /// A tool's button: (its label, command, params), run as its menu item is.
+    Run(&'static str, &'static str, Value),
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -121,12 +208,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     widgets::divider(ui);
     ui.add_enabled_ui(selected, |ui| {
-        for (i, (label, ..)) in tools().iter().enumerate() {
+        for (label, id, p) in tools() {
             if widgets::flat_button(ui, tl!(label), width).clicked() {
-                action = Some(Action::Tool(i));
+                action = Some(Action::Run(label, id, p));
             }
         }
     });
+    let hidden: bool = pstate(ui.ctx(), TEXT_HIDDEN);
+    widgets::divider(ui);
+    if widgets::section_toggle(ui, "Text", !hidden) {
+        set_pstate(ui.ctx(), TEXT_HIDDEN, !hidden);
+    }
+    if !hidden {
+        let editing = app.session.tool_options().get("editing").is_some_and(|v| !v.is_null());
+        text_tools(ui, width, selected, editing, &mut action);
+    }
     match action {
         Some(Action::Check) => r = check(app, None),
         Some(Action::Show(kind)) => {
@@ -135,15 +231,51 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         Some(Action::Fix(kinds)) => r = fix(app, &r, kinds),
-        Some(Action::Tool(i)) => {
-            if let Some((label, id, p)) = tools().into_iter().nth(i) {
-                let (id, p) = crate::menus::click_target(label, id, &p);
-                crate::menus::invoke(app, &id, p);
-            }
+        Some(Action::Run(label, id, p)) => {
+            let (id, p) = crate::menus::click_target(label, id, &p);
+            crate::menus::invoke(app, &id, p);
         }
         None => {}
     }
     set_pstate(ui.ctx(), STATE, r);
+}
+
+/// The text tools: rows of buttons, then one to a row. Each is enabled when its command can act:
+/// Split at Cursor while a Type tool edits text, Replace Missing Fonts always, the others with a
+/// selection.
+fn text_tools(ui: &mut Ui, width: f32, selected: bool, editing: bool, action: &mut Option<Action>) {
+    let enabled = |id: &str| match id {
+        "addon.cleanup.splitText" => editing,
+        "addon.cleanup.replaceFonts" => true,
+        _ => selected,
+    };
+    let mut button = |ui: &mut Ui, label: &'static str, tip: Option<&str>, id: &'static str, p: Value, w: f32| {
+        // Lines and words of text, not lines drawn: their own catalog rows (the button translates
+        // the others).
+        let shown = if id == "addon.cleanup.breakText" { crate::i18n::tr_ctx(crate::i18n::current(), "breakText", label) } else { label };
+        let mut resp = ui.add_enabled_ui(enabled(id), |ui| widgets::flat_button(ui, shown, w)).inner;
+        if let Some(tip) = tip {
+            resp = resp.on_hover_text(tl!(tip));
+        }
+        if resp.clicked() {
+            *action = Some(Action::Run(label, id, modified(id, p, ui.input(|i| i.modifiers))));
+        }
+    };
+    for (heading, buttons) in text_rows() {
+        if let Some(h) = heading {
+            widgets::subheader(ui, h);
+        }
+        ui.horizontal(|ui| {
+            let n = buttons.len() as f32;
+            let each = ((width - ui.spacing().item_spacing.x * (n - 1.0)) / n).max(40.0);
+            for (label, tip, id, p) in buttons {
+                button(ui, label, tip, id, p, each);
+            }
+        });
+    }
+    for (label, id, p) in text_singles() {
+        button(ui, label, None, id, p, width);
+    }
 }
 
 /// The list of what the check found (click picks a row, Ctrl/Cmd- or Shift-click adds one), and
