@@ -14,7 +14,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{DataSet, DataValue, NodeId, NodeKind, Variable, VariableKind, Variables};
+use vectorcraft_doc::{DataSet, DataValue, Document, NodeId, NodeKind, Selection, Variable, VariableKind, Variables};
 
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
@@ -42,6 +42,45 @@ fn variables_unlocked(s: &Session) -> std::result::Result<(), String> {
 fn selection_and_unlocked(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     variables_unlocked(s)
+}
+
+/// [`Session::edit`] for a command that changes only the variables and data sets and may change
+/// nothing, such as binding art to the variable it already has: `f` runs on a copy of them, and
+/// only a copy that differs becomes an undo step. When nothing changed, the undo and redo steps and
+/// the saved state stay as they were.
+fn edit_variables<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Variables) -> Result<T>) -> Result<T> {
+    let st = s.doc()?;
+    let mut vars = st.doc.variables.clone();
+    let v = f(&mut vars)?;
+    if vars != st.doc.variables {
+        s.edit(label, |d, _| {
+            d.variables = vars;
+            Ok(())
+        })?;
+    }
+    Ok(v)
+}
+
+/// [`Session::edit`] for applying a data set, which may change nothing when the art already shows
+/// the active row: `f` runs on a copy of the document and the selection, and only a document that
+/// differs becomes an undo step, with the selection `f` left. When the document did not change, the
+/// undo and redo steps and the saved state stay as they were, and a selection `f` changed is set
+/// without an undo step.
+fn edit_if_changed<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+    let st = s.doc()?;
+    let mut doc = (*st.doc).clone();
+    let mut sel = st.selection.clone();
+    let v = f(&mut doc, &mut sel)?;
+    if doc != *st.doc {
+        s.edit(label, |d, selection| {
+            *d = doc;
+            *selection = sel;
+            Ok(())
+        })?;
+    } else if sel != st.selection {
+        s.select(|_, selection| *selection = sel)?;
+    }
+    Ok(v)
 }
 
 fn var_name(p: &Value, cmd: &str) -> Result<String> {
@@ -225,7 +264,7 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     // Without `names`, the highlighted variable: what the panel's bin and the menu item delete.
     let highlighted = s.doc()?.variables_highlight.clone();
     let names = names_param(p, "variable.delete", highlighted, "no variable highlighted")?;
-    let n = s.edit("Delete Variables", |d, _| Ok(d.variables.prune(&names)))?;
+    let n = edit_variables(s, "Delete Variables", |v| Ok(v.prune(&names)))?;
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
     if st.variables_highlight.as_ref().is_some_and(|h| st.doc.variables.variable(h).is_none()) {
@@ -276,7 +315,7 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
     check_bindable(doc, &ids, kind, C)?;
     // Binding again is not a second binding, and says so rather than counting as a change.
     let already: Vec<u64> = ids.iter().filter(|id| doc.variables.objects_of(&name).contains(id)).map(|id| id.0).collect();
-    let n = s.edit("Bind Variable", |d, _| Ok(ids.iter().filter(|id| d.variables.bind(**id, &name)).count()))?;
+    let n = edit_variables(s, "Bind Variable", |v| Ok(ids.iter().filter(|id| v.bind(**id, &name)).count()))?;
     Ok(json!({"variable": name, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "bound": n, "already": already}))
 }
 
@@ -284,13 +323,13 @@ fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.unbind";
     let ids = checked_ids_or_selection(s, p, C)?;
     let name = defined_variable(s, p, C)?;
-    let n = s.edit("Unbind Variable", |d, _| {
+    let n = edit_variables(s, "Unbind Variable", |vars| {
         let mut n = 0;
         for id in &ids {
             // With `variable` only that one binding goes; without it, every one the object has.
             match &name {
-                Some(v) => n += usize::from(d.variables.unbind(*id, v)),
-                None => n += usize::from(d.variables.bindings.remove(id).is_some()),
+                Some(v) => n += usize::from(vars.unbind(*id, v)),
+                None => n += usize::from(vars.bindings.remove(id).is_some()),
             }
         }
         Ok(n)
@@ -343,8 +382,8 @@ fn dataset_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.set";
     let name = var_name(p, C)?;
     let values = values_param(&s.doc()?.doc.variables, p, C)?;
-    let (set, removed) = s.edit("Edit Data Set", |d, _| {
-        let ds = d.variables.datasets.iter_mut().find(|x| x.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
+    let (set, removed) = edit_variables(s, "Edit Data Set", |v| {
+        let ds = v.datasets.iter_mut().find(|x| x.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
         let removed: Vec<String> = ds.values.keys().filter(|k| !values.contains_key(*k)).cloned().collect();
         ds.values = values.clone();
         Ok((values.len(), removed))
@@ -411,8 +450,8 @@ fn dataset_update(s: &mut Session, p: &Value) -> Result<Value> {
     if values.is_empty() {
         return Err(bad(C, "bind something to a variable first"));
     }
-    let (written, left) = s.edit("Update Data Set", |d, _| {
-        let ds = d.variables.datasets.iter_mut().find(|d| d.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
+    let (written, left) = edit_variables(s, "Update Data Set", |vars| {
+        let ds = vars.datasets.iter_mut().find(|d| d.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
         let mut written = BTreeSet::new();
         for (var, value) in &values {
             if all || ds.values.contains_key(var) {
@@ -420,7 +459,7 @@ fn dataset_update(s: &mut Session, p: &Value) -> Result<Value> {
                 written.insert(var.as_str());
             }
         }
-        let left: Vec<String> = d.variables.variables.iter().filter(|v| !written.contains(v.name.as_str())).map(|v| v.name.clone()).collect();
+        let left: Vec<String> = vars.variables.iter().filter(|v| !written.contains(v.name.as_str())).map(|v| v.name.clone()).collect();
         Ok((written.len(), left))
     })?;
     Ok(json!({"name": name, "values": written, "left": left}))
@@ -430,14 +469,14 @@ fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {
     // Without `names`, the active dataset: what the panel's Delete Data Set deletes.
     let active = s.doc()?.doc.variables.active_dataset.clone();
     let names = names_param(p, "dataset.delete", active, "no active data set")?;
-    let n = s.edit("Delete Data Sets", |d, _| {
-        let before = d.variables.datasets.len();
-        d.variables.datasets.retain(|d| !names.contains(&d.name));
+    let n = edit_variables(s, "Delete Data Sets", |v| {
+        let before = v.datasets.len();
+        v.datasets.retain(|d| !names.contains(&d.name));
         // The active dataset's own name is the one that goes, not a variable's.
-        if d.variables.active_dataset.as_ref().is_some_and(|a| names.contains(a)) {
-            d.variables.active_dataset = None;
+        if v.active_dataset.as_ref().is_some_and(|a| names.contains(a)) {
+            v.active_dataset = None;
         }
-        Ok(before - d.variables.datasets.len())
+        Ok(before - v.datasets.len())
     })?;
     Ok(json!({"deleted": n}))
 }
@@ -460,7 +499,7 @@ fn dataset_list(s: &mut Session, _p: &Value) -> Result<Value> {
 fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
     const C: &str = "dataset.select";
     let doc_path = s.doc()?.path.clone();
-    let (applied, skipped, mut typed, bound) = s.edit("Apply Data Set", |d, sel| {
+    let (applied, skipped, mut typed, bound) = edit_if_changed(s, "Apply Data Set", |d, sel| {
         let ds = d.variables.dataset(name).cloned().ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
         // One object may be driven by several variables; walk them in definition order, so two
         // text variables on the same object land the later one's value and both are counted.
@@ -706,7 +745,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Data Set",
             ["Window", "Variables"],
             None,
-            "{name} apply a dataset in one undo step, deselecting every selected object left hidden or locked (the key object too) → {applied, skipped, overflow?: [id…] (area type and type on a path whose text it rewrote and that no longer fits; left out when all fits), warning? (when no object is bound to a variable that the dataset has a value for, so nothing was applied)}",
+            "{name} apply a dataset in one undo step (none when it leaves the document as it was), deselecting every selected object left hidden or locked (the key object too) → {applied, skipped, overflow?: [id…] (area type and type on a path whose text it rewrote and that no longer fits; left out when all fits), warning? (when no object is bound to a variable that the dataset has a value for, so nothing was applied)}",
             has_doc,
             dataset_select
         ),

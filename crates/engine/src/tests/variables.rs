@@ -1666,3 +1666,65 @@ fn graph_variable_applies_csv_and_captures() {
     let r = rect(&mut s);
     assert!(s.execute("variable.bind", &json!({"variable": name, "ids": [r.0]})).is_err());
 }
+
+/// A Variables command that leaves the document as it was (binding art to the variable it already
+/// has, unbinding art that has none, deleting a variable or data set that does not exist, writing a
+/// row's own values back, applying the active data set again) records no undo step: the step to
+/// redo stays, and the document stays unmodified.
+#[test]
+fn a_variables_command_that_changes_nothing_records_no_undo_step() {
+    let dir = Folder::new("vars-noop");
+    let red_path = dir.file("red.png");
+    write(&red_path, &png(8, 8, RED));
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    let img = place(&mut s, &red_path);
+    let other = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Photo", "ids": [img.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Bob", "Show": false, "Photo": red_path}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    let a = json!({"name": "A", "values": {"Name": "Bob", "Show": false, "Photo": red_path}});
+    let calls = [
+        ("variable.bind", json!({"variable": "Show", "ids": [r.0]})),
+        ("variable.unbind", json!({"ids": [other.0]})),
+        ("variable.unbind", json!({"variable": "Name", "ids": [r.0]})),
+        ("variable.delete", json!({"names": ["Nope"]})),
+        ("dataset.delete", json!({"names": ["Nope"]})),
+        ("dataset.set", a),
+        ("dataset.update", json!({})),
+        ("dataset.update", json!({"all": true})),
+        ("dataset.select", json!({"name": "A"})),
+        ("dataset.next", json!({})),
+        ("dataset.prev", json!({})),
+    ];
+    for (cmd, p) in calls {
+        super::select_with_a_step_to_redo(&mut s, &[other]);
+        let before = super::history(&s);
+        assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(super::history(&s), before, "{cmd} {p}");
+    }
+    assert_eq!(plain(&s, t), "Bob");
+    // Applying the row again still deselects the art it leaves hidden, without an undo step.
+    s.execute("select.set", &json!({"ids": [r.0, other.0]})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.contains(&r), "the hidden rectangle is selected");
+    let before = super::history(&s);
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!((super::history(&s), s.doc().unwrap().selection.objects.clone()), (before, vec![other]));
+    // A command that changes something is still one undo step, and it clears Redo.
+    super::select_with_a_step_to_redo(&mut s, &[other]);
+    let undo = super::history(&s).0;
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [other.0]})).unwrap();
+    assert_eq!(super::history(&s), (undo + 1, 0, true));
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Cy"}})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let undo = super::history(&s).0;
+    s.execute("dataset.next", &json!({})).unwrap();
+    assert_eq!((super::history(&s), plain(&s, t)), ((undo + 1, 0, true), "Cy".to_string()));
+}

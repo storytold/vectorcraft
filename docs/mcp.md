@@ -1637,7 +1637,11 @@ already walks Image Trace. Short agent entry points:
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, values?}`, `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
-  `dataset.export {path?}` (CSV: `name`, then one column per variable). `dataset.import` also reads tab-separated
+  `dataset.export {path?}` (CSV: `name`, then one column per variable). `variable.bind`, `variable.unbind`,
+  `variable.delete`, `dataset.set`, `dataset.update`, `dataset.delete`, `dataset.select`, `dataset.next` and
+  `dataset.prev` add no undo step when they leave the document as it was, such as binding art to a variable it
+  already has or applying the active data set again: the steps to redo stay, and a saved document stays
+  unmodified. `dataset.import` also reads tab-separated
   files, and files whose first header cell isn't `name`: every header cell is then a variable, and the rows take the
   first free names `Data Set 1`, `Data Set 2` and so on. An import error about a row's values or name gives the file
   line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
