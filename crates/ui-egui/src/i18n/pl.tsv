@@ -620,7 +620,7 @@
 	Layers	Warstwy
 	Libraries	Biblioteki
 	Links	Łącza
-	{count} linked image(s) changed on disk. Show the new versions?	Połączone obrazy zmienione na dysku: {count}. Pokazać nowe wersje?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	Połączone obrazy zmienione na dysku: {n}. Pokazać nowe wersje?|Połączone obrazy zmienione na dysku: {n}. Pokazać nowe wersje?|Połączone obrazy zmienione na dysku: {n}. Pokazać nowe wersje?
 	Update Changed Links	Aktualizuj zmienione łącza
 @msg	Updated {_1} linked file(s) changed on disk	Zaktualizowano połączone pliki zmienione na dysku: {_1}
 	Magic Wand	Różdżka
@@ -1140,12 +1140,12 @@ lighting	Light	Światło
 	 to set spacing and orientation	 aby ustawić odstęp i orientację
 	Apply	Zastosuj
 	Change Screen Mode (F)	Zmień tryb ekranu (F)
-	Color (,)	Kolor (,)
+	Color (, or Shift+,)	Kolor (, lub Shift+,)
 	Draw Behind	Rysuj pod spodem
 	Draw Inside	Rysuj wewnątrz
 	Draw Normal	Rysuj normalnie
 	Expand:	Rozszerz:
-	Gradient (.)	Gradient (.)
+	Gradient (. or Shift+.)	Gradient (. lub Shift+.)
 	H:	W:
 	Modify	Modyfikuj
 	Navigate	Nawigacja
@@ -1350,7 +1350,6 @@ lighting	Light	Światło
 	Fractional Widths	Szerokości ułamkowe
 	Hide Options	Ukryj opcje
 	Horizontal Scale %	Skala pozioma %
-	Kerning (0 = Auto)	Kerning (0 = auto)
 	Leading	Interlinia
 	No Break	Bez podziału
 	Proportional Metrics	Metryka proporcjonalna
@@ -1359,6 +1358,15 @@ lighting	Light	Światło
 	Arabic	Arabskie
 	Hindi	Hindi
 	Farsi	Perskie
+digits	Devanagari	Dewanagari
+digits	Bengali	Bengalskie
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gudżarati
+digits	Odia	Orija
+digits	Tamil	Tamilskie
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malajalam
 	Reset Panel	Resetuj panel
 	Roman Baseline	Linia bazowa łacińska
 	Select a text object to edit its character attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty znaków.
@@ -1420,8 +1428,8 @@ lighting	Light	Światło
 	Select objects to see their CSS, or Generate CSS for the whole document.	Zaznacz obiekty, aby zobaczyć ich CSS, lub wygeneruj CSS całego dokumentu.
 	The selected objects have no CSS of their own (see below).	Zaznaczone obiekty nie mają własnego CSS (patrz niżej).
 	Units: {units}	Jednostki: {units}
-	{count} more rules: Export writes every one.	Więcej reguł: {count}. Eksport zapisze wszystkie.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Pominięto obiekty bez nazwy: {count}. Nadaj im nazwy lub włącz Obiekty bez nazwy w menu panelu.
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	Więcej reguł: {n}. Eksport zapisze wszystkie.|Więcej reguł: {n}. Eksport zapisze wszystkie.|Więcej reguł: {n}. Eksport zapisze wszystkie.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Pominięto obiekty bez nazwy: {n}. Nadaj im nazwy lub włącz Obiekty bez nazwy w menu panelu.|Pominięto obiekty bez nazwy: {n}. Nadaj im nazwy lub włącz Obiekty bez nazwy w menu panelu.|Pominięto obiekty bez nazwy: {n}. Nadaj im nazwy lub włącz Obiekty bez nazwy w menu panelu.
 	All Categories	Wszystkie kategorie
 	Repeat Objects	Obiekty powtórzenia
 	Save…	Zapisz…
@@ -1454,7 +1462,7 @@ lighting	Light	Światło
 	Color:	Kolor:
 	Delete Stop	Usuń punkt koloru
 	Edit Gradient	Edytuj gradient
-	Edit the selected point's colour in the Color panel	Edytuj kolor zaznaczonego punktu w panelu Kolor
+	Edit the point	Edytuj punkt
 	Edit the stop	Edytuj punkt koloru
 	Eyedropper: click the art to sample the stop's colour	Kroplomierz: kliknij kompozycję, aby pobrać kolor punktu
 	Eyedropper: click the art to sample the key color	Kroplomierz: kliknij kompozycję, aby pobrać kolor kluczowy
@@ -1473,6 +1481,9 @@ lighting	Light	Światło
 	Save to Swatches	Zapisz w próbkach
 	Delete Graphic Style (Alt-click: without asking)	Usuń styl graficzny (kliknięcie z Alt: bez pytania)
 	Delete the graphic style “{name}”?	Usunąć styl graficzny „{name}”?
+	Delete Action Sets	Usuń zestawy operacji
+	Delete the action set “{name}” and its actions?	Usunąć zestaw operacji „{name}” i jego operacje?
+	Delete the selected action sets and their actions?	Usunąć zaznaczone zestawy operacji i ich operacje?
 	Delete these {n} graphic styles?	Usunąć te style graficzne ({n})?
 	Delete this {n} graphic style?	Usunąć ten styl graficzny ({n})?
 	Graphic Style Libraries Menu	Menu bibliotek stylów graficznych
@@ -1508,6 +1519,7 @@ lighting	Light	Światło
 	Delete Guides	Usuń linie pomocnicze
 	Delete Slice	Usuń plasterek
 	Delete Style	Usuń styl
+	Delete Styles	Usuń style
 	Delete Variables	Usuń zmienne
 	Delete View	Usuń widok
 	Done Editing Pattern	Zakończ edycję wzorka
@@ -1544,6 +1556,8 @@ lighting	Light	Światło
 	Objects on Path	Obiekty na ścieżce
 	Attach	Dołącz
 	Objects on Path Options	Opcje obiektów na ścieżce
+	Pivot:	Punkt obrotu:
+	Rotate:	Obrót:
 	Objects on Path Tool	Narzędzie Obiekty na ścieżce
 	Attach Objects on Path	Dołącz obiekty do ścieżki
 	Expand Objects on Path	Rozszerz obiekty na ścieżce
@@ -1863,7 +1877,6 @@ lighting	Light	Światło
 	Weight:	Grubość:
 	Art using a deleted global swatch keeps its colour.	Kompozycja używająca usuniętej próbki globalnej zachowa swój kolor.
 	Color Group: {name}	Grupa kolorów: {name}
-	Delete these {count} swatches and groups?	Usunąć te próbki i grupy ({count})?
 	Delete “{name}”?	Usunąć „{name}”?
 	Document Swatches	Próbki dokumentu
 	Edit or Apply Color Group	Edytuj lub zastosuj grupę kolorów
@@ -1962,6 +1975,7 @@ lighting	Light	Światło
 	Polygon Properties:	Właściwości wielokąta:
 	Rectangle Properties:	Właściwości prostokąta:
 	Shape Properties:	Właściwości kształtu:
+	Shape Properties	Właściwości kształtu
 	Sides:	Boki:
 	Transform options	Opcje przekształcania
 	Transform Both	Przekształć oba
@@ -2156,6 +2170,7 @@ lighting	Light	Światło
 	Compatible Gradient and Gradient Mesh Printing	Zgodne drukowanie gradientów i siatek gradientowych
 	Embed Fonts (for other applications)	Osadź czcionki (dla innych aplikacji)
 	EPS Options	Opcje EPS
+	Include Artboard Fill	Uwzględnij wypełnienie obszaru kompozycji
 	Include CMYK PostScript in RGB Files	Dołącz CMYK PostScript w plikach RGB
 	Include Document Thumbnails	Dołącz miniatury dokumentu
 	Include Linked Files	Dołącz połączone pliki
@@ -2174,6 +2189,13 @@ lighting	Light	Światło
 	Use Artboards	Użyj obszarów kompozycji
 	Choose a folder	Wybierz folder
 	Create Sub-folders	Utwórz podfoldery
+	Clear Selection	Wyczyść zaznaczenie
+	Export PDFs As:	Eksportuj pliki PDF jako:
+	Single File	Jeden plik
+	Multiple Files	Wiele plików
+	Format Presets	Ustawienia formatów
+	Grid View	Widok siatki
+	Selected: {n}, Total number of files to export: {m}	Zaznaczono: {n}, łączna liczba plików do eksportu: {m}
 	Export Asset	Eksportuj zasób
 	Export to:	Eksportuj do:
 	Format Settings	Ustawienia formatu
@@ -2312,19 +2334,21 @@ lighting	Light	Światło
 	Stop	Zatrzymaj
 	Searching…	Wyszukiwanie…
 	Not found	Nie znaleziono
-	{folders} folder(s) and {files} file(s) searched	Przeszukano foldery: {folders} i pliki: {files}
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Pominięte foldery: {count} — np. foldery innych aplikacji, systemowe i ukryte
-	{count} folder(s) or file(s) couldn't be read	Nie udało się odczytać folderów lub plików: {count}
+	{folders} and {files} searched	Przeszukano {folders} i {files}
+@plural	{n} folder|{n} folders	{n} folder|{n} foldery|{n} folderów
+@plural	{n} file|{n} files	{n} plik|{n} pliki|{n} plików
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Pominięte foldery: {n} — np. foldery innych aplikacji, systemowe i ukryte|Pominięte foldery: {n} — np. foldery innych aplikacji, systemowe i ukryte|Pominięte foldery: {n} — np. foldery innych aplikacji, systemowe i ukryte
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nie udało się odczytać folderów lub plików: {n}|Nie udało się odczytać folderów lub plików: {n}|Nie udało się odczytać folderów lub plików: {n}
 	The search stopped at its limit: search a smaller folder.	Wyszukiwanie zatrzymało się na limicie: przeszukaj mniejszy folder.
 	Copy only fonts you own or are licensed to install.	Kopiuj tylko czcionki, które posiadasz lub masz licencję na ich instalację.
 	VectorCraft copies the fonts to {folder}.	VectorCraft kopiuje czcionki do {folder}.
-	Apply to All ({count} more missing)	Zastosuj do wszystkich (brakuje jeszcze: {count})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Zastosuj do wszystkich (brakuje jeszcze: {n})|Zastosuj do wszystkich (brakuje jeszcze: {n})|Zastosuj do wszystkich (brakuje jeszcze: {n})
 	Ignore	Ignoruj
 	Linked File Not Found	Nie znaleziono połączonego pliku
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Zastąp go innym plikiem lub zignoruj: jego obrazy nadal będą pokazywać podgląd zapisany w dokumencie.
 	Replace…	Zastąp…
 	Update Modified Links	Aktualizuj zmodyfikowane łącza
-	{count} linked image(s) changed since this document was saved. Show the new versions?	Połączone obrazy zmienione od zapisania dokumentu: {count}. Pokazać nowe wersje?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	Połączone obrazy zmienione od zapisania dokumentu: {n}. Pokazać nowe wersje?|Połączone obrazy zmienione od zapisania dokumentu: {n}. Pokazać nowe wersje?|Połączone obrazy zmienione od zapisania dokumentu: {n}. Pokazać nowe wersje?
 	Dialog	Okno dialogowe
 	Convert Process to Global	Konwertuj triadowe na globalne
 	Create From:	Utwórz z:
@@ -2362,12 +2386,12 @@ lighting	Light	Światło
 	Fonts whose licence doesn't allow embedding are not copied.	Czcionki, których licencja nie zezwala na osadzanie, nie są kopiowane.
 	Package collects a saved document with its linked files and fonts.	Pakowanie zbiera zapisany dokument wraz z połączonymi plikami i czcionkami.
 	Package created	Utworzono pakiet
-	Packaged {n} file(s) in {folder} {note}	Spakowane pliki: {n} w {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Spakowane pliki: {n} w {folder} {note}|Spakowane pliki: {n} w {folder} {note}|Spakowane pliki: {n} w {folder} {note}
 	Packaged {n} file(s){note}	Spakowane pliki: {n}{note}
 	Relink Linked Files to the Document	Połącz ponownie połączone pliki z dokumentem
 	Save the document first?	Najpierw zapisać dokument?
-	{count} file(s) in {folder} {note}. Show the package folder?	Pliki: {count} w {folder}{note}. Pokazać folder pakietu?
-	{count} linked file(s) not found	Nie znaleziono połączonych plików: {count}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?
+@plural	{n} linked file not found|{n} linked files not found	Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}
 	fonts not copied: {fonts}	nieskopiowane czcionki: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Wbudowane ustawienia są tylko do odczytu: Nowe… tworzy edytowalną kopię.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na obszarze kompozycji odpowiada {real} {unit} w scenie.
@@ -2951,6 +2975,12 @@ theme	Appearance	Wygląd
 	Current Symbol	Bieżący symbol
 	Delete Brush	Usuń pędzel
 	Delete Symbol	Usuń symbol
+	Delete the selected symbol?	Usunąć zaznaczony symbol?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Co najmniej jeden z symboli jest używany i nie można go usunąć, dopóki jego wystąpienia nie zostaną rozszerzone lub usunięte.
+	Expand Instances	Rozszerz wystąpienia
+	Delete Instances	Usuń wystąpienia
+	Yes	Tak
+	No	Nie
 	Duplicate Brush	Powiel pędzel
 	Duplicate Symbol	Powiel symbol
 	Edit Symbol	Edytuj symbol
@@ -3194,6 +3224,7 @@ theme	Appearance	Wygląd
 	Make Envelope	Utwórz kopertę
 	Move Envelope Mesh Point	Przesuń punkt siatki koperty
 	Move Mesh Point	Przesuń punkt siatki
+	Move Mesh Points	Przesuń punkty siatki
 	Move Spine Point	Przesuń punkt grzbietu
 	Reshape Spine Segment	Zmień kształt segmentu grzbietu
 	Reset with Mesh	Resetuj z siatką
@@ -3377,6 +3408,7 @@ theme	Appearance	Wygląd
 	Identify Objects By	Identyfikuj obiekty według
 	Include SVG Code	Dołącz kod SVG
 	Italian	Włoski
+	Kerning	Kerning
 	Keyboard Increment	Przyrost klawiatury
 	Language Options	Opcje języka
 	Large	Duże
@@ -3405,6 +3437,7 @@ theme	Appearance	Wygląd
 	On Paste	Przy wklejaniu
 	On Screen	Na ekranie
 	Open Documents As Tabs	Otwieraj dokumenty jako karty
+	Optical	Optyczny
 	Options	Opcje
 	Output All Blacks Accurately	Wyprowadzaj wszystkie czernie dokładnie
 	Output All Blacks as Rich Black	Wyprowadzaj wszystkie czernie jako czerń głęboką
@@ -3641,6 +3674,7 @@ axis	Both	Obie
 	Set Text	Ustaw tekst
 	Insert Character	Wstaw znak
 	Replace	Zastąp
+	Replace:	Zastąp:
 	Type on a Path Options	Opcje tekstu na ścieżce
 	Highlight Variable	Wyróżnij zmienną
 	New Variable	Nowa zmienna
@@ -3945,6 +3979,8 @@ imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} element|{n} elementy|{n} elementów
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Tablica kolorów ({n} kolor)|Tablica kolorów ({n} kolory)|Tablica kolorów ({n} kolorów)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Usunąć {n} styl graficzny?|Usunąć {n} style graficzne?|Usunąć {n} stylów graficznych?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Usunąć {n} pędzel?|Usunąć {n} pędzle?|Usunąć {n} pędzli?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Usunąć {n} próbkę lub grupę?|Usunąć {n} próbki i grupy?|Usunąć {n} próbek i grup?
 @plural	{n} Layer|{n} Layers	{n} warstwa|{n} warstwy|{n} warstw
 @plural	{n} Object|{n} Objects	{n} obiekt|{n} obiekty|{n} obiektów
 @plural	{n} area highlighted|{n} areas highlighted	Wyróżniono {n} obszar|Wyróżniono {n} obszary|Wyróżniono {n} obszarów
@@ -3957,6 +3993,7 @@ imageTrace	Outline	Kontur
 @plural	{n} stroke|{n} strokes	{n} obrys|{n} obrysy|{n} obrysów
 @msg	no library `{id}`	brak biblioteki `{id}`
 @msg	select some type first	najpierw zaznacz tekst
+@msg	kerning must be a number, "auto", or "optical"	Kerning musi być liczbą, „auto” lub „optical”
 @msg	the selection has no gradient fill	zaznaczenie nie ma gradientu wypełnienia
 @msg	the selection has no gradient stroke	zaznaczenie nie ma gradientu obrysu
 @msg	the selection has no pattern fill	zaznaczenie nie ma wzorka wypełnienia
@@ -4038,7 +4075,7 @@ imageTrace	Outline	Kontur
 @msg	PDF settings are not an object	Ustawienia PDF nie są obiektem
 @msg	PDF security settings are not an object	Ustawienia zabezpieczeń PDF nie są obiektem
 @msg	PDF writer error: {0}	Błąd zapisu PDF: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Spakowane pliki: {n} w {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Spakowane pliki: {n} w {folder} ({note})
 @msg	Packaged {n} file(s){note}	Spakowane pliki: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Podgląd w przeglądarce wymaga aplikacji desktopowej (wersja webowa zamiast tego pobiera pliki)
 @msg	Release Guides: no guides	Uwolnij linie pomocnicze: brak linii pomocniczych
@@ -4196,6 +4233,7 @@ imageTrace	Outline	Kontur
 @msg	cannot split an open path at its end point	nie można podzielić otwartej ścieżki w jej punkcie końcowym
 @msg	closing needs three anchors	zamknięcie wymaga trzech punktów
 @msg	check an asset to export	zaznacz zasób do eksportu
+@msg	check an artboard to export	zaznacz obszar kompozycji do eksportu
 @msg	check a layer to export	zaznacz warstwę do eksportu
 @msg	select the art to export first	najpierw zaznacz grafikę do eksportu
 @msg	choice must be "merge" or "add", not `{choice}`	wybór musi mieć wartość "merge" lub "add", nie `{choice}`
@@ -4285,6 +4323,7 @@ imageTrace	Outline	Kontur
 @msg	no document	brak dokumentu
 @msg	no document open	brak otwartego dokumentu
 @msg	no effect applied yet	nie zastosowano jeszcze żadnego efektu
+@msg	no Pathfinder operation applied yet	nie zastosowano jeszcze żadnej operacji odnajdywania ścieżek
 @msg	no effect at index {k}	brak efektu o indeksie {k}
 @msg	no end record	brak rekordu końcowego
 @msg	no file manager here	brak menedżera plików
@@ -4337,6 +4376,7 @@ imageTrace	Outline	Kontur
 @msg	no such perspective grid preset	brak takiego ustawienia siatki perspektywy
 @msg	no such recent file	brak takiego ostatniego pliku
 @msg	no such recent font	brak takiej ostatniej czcionki
+@msg	some text is hidden or locked, so its font wasn't replaced	część tekstu jest ukryta lub zablokowana, więc jego czcionka nie została zastąpiona
 @msg	no such saved selection	brak takiego zapisanego zaznaczenia
 @msg	no such segment	brak takiego segmentu
 @msg	no such spine point	brak takiego punktu grzbietu
@@ -4704,6 +4744,8 @@ imageTrace	Outline	Kontur
 @msg	the PCX file is cut short	plik PCX jest ucięty
 @msg	the PCX file's header is damaged	nagłówek pliku PCX jest uszkodzony
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	nie można odczytać plików PCX z {bits}-bitowymi pikselami w {planes} płaszczyznach
+@msg	the JPEG 2000 file can't be read	nie można odczytać pliku JPEG 2000
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	plik JPEG 2000 zawiera nieobsługiwaną przestrzeń barw lub zawartość JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
 @msg	zipped 32-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 32-bitowych danych obrazu PSD z predykcją
 @msg	{depth}-bit PSD files in this colour mode can't be read	nie można odczytać {depth}-bitowych plików PSD w tym trybie koloru
@@ -5420,13 +5462,13 @@ mark-style	Japanese	Japońskie
 	Slope:	Nachylenie:
 axis	X Axis	Oś X
 axis	Y Axis	Oś Y
-@msg	Packaged {n} file(s) in {folder}	Spakowane pliki: {n} w {folder}
-@msg	Packaged {n} file(s) {note}	Spakowane pliki: {n} {note}
-@msg	Packaged {n} file(s)	Spakowane pliki: {n}
-	Packaged {n} file(s)	Spakowane pliki: {n}
-	Packaged {n} file(s) in {folder}	Spakowane pliki: {n} w {folder}
-	Packaged {n} file(s) {note}	Spakowane pliki: {n} {note}
-	{count} file(s) in {folder}. Show the package folder?	Pliki: {count} w {folder}. Pokazać folder pakietu?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Spakowane pliki: {n} w {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Spakowane pliki: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Spakowane pliki: {n}
+@plural	Packaged {n} file|Packaged {n} files	Spakowane pliki: {n}|Spakowane pliki: {n}|Spakowane pliki: {n}
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	Pliki: {n} w {folder}. Pokazać folder pakietu?|Pliki: {n} w {folder}. Pokazać folder pakietu?|Pliki: {n} w {folder}. Pokazać folder pakietu?
 	Clockwise	Zgodnie z ruchem wskazówek zegara
 	Dither	Rozpraszanie
 	Fine noise hides banding in the gradient fill	Drobny szum ukrywa pasy w wypełnieniu gradientem
@@ -5460,7 +5502,7 @@ axis	Y Axis	Oś Y
 	Include Objects On Canvas	Uwzględnij obiekty na płótnie
 	Result(s): {count}	Wyniki: {count}
 @msg	select one object	zaznacz jeden obiekt
-@msg	Global Edit works on paths, compound paths and symbol instances	Edycja globalna działa na ścieżkach, ścieżkach złożonych i wystąpieniach symboli
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli
@@ -5536,3 +5578,387 @@ axis	Y Axis	Oś Y
 # Object › Expand… dimmed until Expand Appearance (#3089).
 	Expand Appearance first (Object › Expand Appearance)	Najpierw rozszerz wygląd (Obiekt › Rozszerz wygląd)
 	Live preview	Podgląd na żywo
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Tekst punktowy
+	Area Text	Tekst akapitowy
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
+	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów
+	Snap to Glyph Options	Opcje przyciągania do glifów
+	x-height	Wysokość x
+	Glyph Bounds	Granice glifów
+	Proximity Guides	Linie bliskości
+	Angular Guides	Linie kątowe
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Uśrednij i połącz…
+	Average & Join	Uśrednij i połącz
+anchor	Points:	Punkty:
+@msg	select two open path ends, or two open paths, to average and join	zaznacz dwa końce otwartych ścieżek lub dwie otwarte ścieżki do uśrednienia i połączenia
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Porządkowanie grafiki
+	Simplify Anchors (Keep Shape)…	Uprość punkty kontrolne (zachowaj kształt)…
+	Health Check	Kontrola stanu
+	Show Issue	Pokaż problem
+	Fix All Issues	Napraw wszystkie problemy
+	Fix Issues	Napraw problemy
+	Deep Ungroup…	Rozgrupuj wszystkie poziomy…
+	Rejoin Path Pieces…	Ponownie połącz fragmenty ścieżek…
+	Document Health Check	Kontrola stanu dokumentu
+	Check Selection	Sprawdź zaznaczenie
+	Check Document	Sprawdź dokument
+	No issues found.	Nie znaleziono problemów.
+	Changed since the last check.	Zmieniono od ostatniego sprawdzenia.
+	Fix Selected	Napraw zaznaczone
+	Fix All	Napraw wszystko
+	Issues fixed: {count}	Naprawione problemy: {count}
+	Open a document to check it for issues.	Otwórz dokument, aby sprawdzić go pod kątem problemów.
+	Empty Text	Pusty tekst
+	Unpainted Objects	Obiekty bez koloru
+	Zero-Opacity Objects	Obiekty o zerowym kryciu
+	Duplicate Objects	Zduplikowane obiekty
+	Off-Artboard Art	Grafika poza obszarami kompozycji
+	Duplicate Anchors	Zduplikowane punkty kontrolne
+	Tiny Handles	Bardzo krótkie uchwyty
+	Collinear Anchors	Współliniowe punkty kontrolne
+	Nearly Coincident Anchors	Prawie pokrywające się punkty kontrolne
+	Nearly Closed Paths	Prawie zamknięte ścieżki
+	Filled Open Paths	Wypełnione otwarte ścieżki
+	Needless Clipping Groups	Zbędne grupy przycinające
+	Needless Compound Paths	Zbędne ścieżki złożone
+	Needless Groups	Zbędne grupy
+	Empty Artboards	Puste obszary kompozycji
+	Protect Corners	Chroń narożniki
+	Gap	Odstęp
+	Include Clip Groups	Uwzględnij grupy przycinające
+@msg	`tolerance` must be from 1 to 100	`tolerance` musi mieścić się w zakresie od 1 do 100
+@msg	`gap` must be from 0 to 6 pt	`gap` musi mieścić się w zakresie od 0 do 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Uprość punkty kontrolne: ścieżki mają zbyt wiele punktów kontrolnych, aby uprościć je naraz
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Ponownie połącz fragmenty ścieżek: zbyt wiele ścieżek do połączenia naraz
+@msg	None of these issues are left: check again	Żaden z tych problemów już nie występuje: sprawdź ponownie
+@msg	`kinds` must be a list of issue kinds	`kinds` musi być listą rodzajów problemów
+@msg	missing `kind`	brak `kind`
+	Simplify Anchors (Keep Shape)	Uprość punkty kontrolne (zachowaj kształt)
+	Deep Ungroup	Rozgrupuj wszystkie poziomy
+	Rejoin Path Pieces	Ponownie połącz fragmenty ścieżek
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Efekty koloru
+	Color Effects Panel	Panel Efekty koloru
+	Exposure	Ekspozycja
+	Exposure…	Ekspozycja…
+	Desaturate	Usuń nasycenie
+	Adjustment	Korekta
+	Add as Effect	Dodaj jako efekt
+	Apply as Filter	Zastosuj jako filtr
+	Select objects to adjust their colors.	Zaznacz obiekty, aby skorygować ich kolory.
+	Brightness/Contrast	Jasność/kontrast
+	Hue/Saturation	Barwa/nasycenie
+	Temperature/Tint	Temperatura/odcień
+@msg	`{id}` is not a colour adjustment	`{id}` nie jest korektą koloru
+@msg	missing `effect`	brak `effect`
+@msg	`params` must be an object	`params` musi być obiektem
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Precyzyjne narzędzia ścieżek
+	Anchor Eraser Brush	Pędzel gumki punktów kontrolnych
+	Extend Path Tool	Narzędzie Przedłuż ścieżkę
+	Measure & Inspect Tool	Narzędzie Mierz i badaj
+	Anchor Inspector	Inspektor punktów kontrolnych
+	Add Points at Crossings	Dodaj punkty na skrzyżowaniach
+	Split at Crossings	Podziel na skrzyżowaniach
+	Extend Path	Przedłuż ścieżkę
+	Measure & Inspect	Mierz i badaj
+	Set Anchor	Ustaw punkt kontrolny
+	Make Smooth	Zmień na gładki
+	Make Corner	Zmień na narożny
+	Equalize Handles	Wyrównaj uchwyty
+	Remove Points, Keep Shape	Usuń punkty, zachowaj kształt
+	Add Points to Segments…	Dodaj punkty do segmentów…
+	Add Points to Segments	Dodaj punkty do segmentów
+	Open a document to edit its anchor points.	Otwórz dokument, aby edytować jego punkty kontrolne.
+	Anchors selected: {count}	Zaznaczone punkty kontrolne: {count}
+	Direct-select anchor points to edit them.	Zaznacz bezpośrednio punkty kontrolne, aby je edytować.
+	Length	Długość
+	In:	Wejście:
+	Out:	Wyjście:
+	Add Points	Dodaj punkty
+	Points per segment	Punkty na segment
+	Close Path:	Zamknij ścieżkę:
+	Keep Handles	Zachowaj uchwyty
+	Straight	Prosty
+	Stretch Curve	Rozciągnij krzywą
+@msg	direct-select the anchor points to remove	zaznacz bezpośrednio punkty kontrolne do usunięcia
+@msg	select segments, or paths, to add points to	zaznacz segmenty lub ścieżki, do których dodać punkty
+@msg	select open paths to close	zaznacz otwarte ścieżki do zamknięcia
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	za dużo ścieżek lub są zbyt splątane, by znaleźć ich skrzyżowania (najwyżej 10000 segmentów)
+@msg	the paths have too many anchors to edit at once	ścieżki mają za dużo punktów kontrolnych, by edytować je naraz
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Narzędzie Kształt parametryczny
+	Parametric Shape	Kształt parametryczny
+	Edit Parametric Shape	Edytuj kształt parametryczny
+	Convert to Parametric Shape	Konwertuj na kształt parametryczny
+	Ring	Pierścień
+	Heart	Serce
+	Gear	Koło zębate
+	Speech Bubble	Dymek
+	Count:	Liczba:
+	Thickness:	Grubość:
+	Inner Radius:	Promień wewnętrzny:
+	Head:	Grot:
+	Shaft:	Trzon:
+	Point:	Czubek:
+	Tooth Height:	Wysokość zęba:
+	Tail:	Ogonek:
+	Tip:	Czubek:
+	Open a document to draw parametric shapes.	Otwórz dokument, aby rysować kształty parametryczne.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Zaznacz kształt parametryczny, aby go edytować. Bez zaznaczenia te wartości dotyczą następnego kształtu.
+@msg	the object is not an editable parametric shape	obiekt nie jest edytowalnym kształtem parametrycznym
+@msg	select plain rectangles, ellipses or regular polygons to convert	zaznacz zwykłe prostokąty, elipsy lub wielokąty foremne do konwersji
+@msg	the shape's numbers are out of range	wartości kształtu są poza zakresem
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` musi mieć jedną z wartości: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` musi być liczbą całkowitą od 3 do 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` musi mieć wartość od {lo} do {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Inteligentne pióro
+	Smart Pen Tool	Narzędzie Inteligentne pióro
+	Smart Pen Panel	Panel Inteligentne pióro
+	Next Segment	Następny segment
+	Curved	Zakrzywiony
+	Retract Handles	Schowaj uchwyty
+	Close or Join	Zamknij lub połącz
+	Open a document to draw with the Smart Pen.	Otwórz dokument, aby rysować inteligentnym piórem.
+	Straight or Curved Segment	Segment prosty lub zakrzywiony
+@msg	the path is locked or hidden	ścieżka jest zablokowana lub ukryta
+@msg	`id` is not a path	`id` nie jest ścieżką
+@msg	the path has no open subpath	ścieżka nie ma otwartej ścieżki podrzędnej
+@msg	the subpath is closed	ścieżka podrzędna jest zamknięta
+@msg	the subpath is closed or too short to close	ścieżka podrzędna jest zamknięta lub za krótka, by ją zamknąć
+@msg	the path is too short to remove a point from	ścieżka jest za krótka, by usunąć z niej punkt
+@msg	the segment can't be bent that far	segmentu nie da się tak bardzo wygiąć
+@msg	give `{a}` and `{b}`	podaj `{a}` i `{b}`
+@msg	`t` must be from 0 to 1	`t` musi mieć wartość od 0 do 1
+@msg	`segment` must be "straight" or "curved"	`segment` musi mieć wartość "straight" lub "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musi mieć wartość "free", "keepAngles" lub "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` musi mieć postać [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Zaznacz według rodzaju koloru
+	Objects with Spot Colors	Obiekty z kolorami dodatkowymi
+	Objects with Color Effects	Obiekty z efektami koloru
+	RGB Images	Obrazy RGB
+	CMYK Images	Obrazy CMYK
+	Grayscale Images	Obrazy w skali szarości
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` musi mieć wartość spotColors, colorEffects, rgbImages, cmykImages lub grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Kolor kropek z kompozycji
+	Basic Character Formats	Podstawowe formaty znaków
+	Case	Wielkość liter
+@msg	{label} must be a number	{label} musi być liczbą
+@msg	{label} must be a number of at least 0.1	{label} musi być liczbą co najmniej 0,1
+@msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Dwutonowy…
+	Duotone	Dwutonowy
+	Print Ink Fixes…	Poprawki farb drukarskich…
+	Print Ink Fixes	Poprawki farb drukarskich
+	Inks	Farby
+	Tone 1	Ton 1
+	Tone 2	Ton 2
+	Tone 3	Ton 3
+	Tone 4	Ton 4
+	Curve	Krzywa
+	Reset to Linear	Resetuj do liniowej
+	Reset to Inverse	Resetuj do odwróconej
+	Skip Objects with Spot Colors	Pomiń obiekty z kolorami dodatkowymi
+	Ink Limit	Limit farby
+	Exclude Pure Black	Wyklucz czystą czerń
+	Remove White Overprint	Usuń nadruk bieli
+	Overprint Black	Nadruk czerni
+	Text Only	Tylko tekst
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	podaj `inkLimit`, `removeWhiteOverprint` lub `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Poprawki farb drukarskich działają w dokumentach CMYK: najpierw wybierz Plik › Tryb koloru dokumentu › Kolor CMYK
+@msg	`{key}` must be 0..{max}	`{key}` musi wynosić 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Narzędzie Narożniki
+	Slide Anchor Along Path	Przesuń punkt kontrolny wzdłuż ścieżki
+	Set Corners	Ustaw narożniki
+	Remove Corners	Usuń narożniki
+	Corners selected: {count}	Zaznaczone narożniki: {count}
+	Apply to Selected Anchors	Zastosuj do zaznaczonych punktów kontrolnych
+@msg	`radius` must be from 0 to 1000000 pt	`radius` musi wynosić od 0 do 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` musi być liczbą od -0.98 do 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	wybierz punkty kontrolne, w których dwa boki spotykają się pod kątem: tylko one mogą mieć narożnik
+@msg	give `anchor`, the index of the anchor to slide	podaj `anchor`, indeks punktu kontrolnego do przesunięcia
+@msg	that anchor can't slide: an end of an open path has nowhere to go	tego punktu kontrolnego nie można przesunąć: koniec otwartej ścieżki nie ma dokąd pójść
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Narzędzie Scal wspólną krawędź
+	Merge Shared Edge	Scal wspólną krawędź
+	Keep Shared Points Together	Trzymaj wspólne punkty razem
+	Shared Edges	Wspólne krawędzie
+	Coincidence:	Zbieżność:
+@msg	`a` and `b` must be two different paths	`a` i `b` muszą być dwiema różnymi ścieżkami
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` musi mieć od 0.25 do 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` musi mieć od 0 do 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` musi mieć wartość "average", "a" lub "b"
+@msg	the paths have nothing to merge there	ścieżki nie mają tu nic do scalenia
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Podziel tekst
+	Combine Point Text	Połącz tekst punktowy
+	Join Point Text	Złącz tekst punktowy
+	Remove Breaks	Usuń podziały
+	Split Text at Cursor	Podziel tekst w miejscu kursora
+	Set Alignment, Keep Position	Ustaw wyrównanie, zachowaj położenie
+	Reset Text Transform	Resetuj przekształcenie tekstu
+	Replace Missing Fonts…	Zastąp brakujące czcionki…
+	Replace Missing Fonts	Zastąp brakujące czcionki
+	Remove Line Breaks	Usuń podziały wiersza
+	Remove Paragraph Breaks	Usuń podziały akapitu
+	Break Text into Lines	Podziel tekst na wiersze
+	Break Text into Paragraphs	Podziel tekst na akapity
+	Break Text into Words	Podziel tekst na słowa
+	Break Text into Glyphs	Podziel tekst na glify
+	Reset Text Transform and Scale	Resetuj przekształcenie i skalę tekstu
+	Set Alignment, Keep Position:	Ustaw wyrównanie, zachowaj położenie:
+	Break Text into:	Podziel tekst na:
+	Split at Cursor	Podziel w miejscu kursora
+	Reset Transform	Resetuj przekształcenie
+	Shift-click: break into paragraphs	Kliknięcie z Shift: podziel na akapity
+	Alt-click: reset the horizontal scale too	Kliknięcie z Alt: resetuj także skalę poziomą
+breakText	Lines	Wiersze
+breakText	Words	Słowa
+breakText	Glyphs	Glify
+@msg	Click in type with a Type tool to split it	Kliknij w tekst narzędziem Tekst, aby go podzielić
+@msg	Too many type objects to change at once	Zbyt wiele obiektów tekstowych do zmiany naraz
+@msg	Too many pieces to make at once	Zbyt wiele części do utworzenia naraz
+@msg	Select horizontal point or area type whose text fits	Zaznacz poziomy tekst punktowy lub akapitowy, którego tekst się mieści
+@msg	Nothing to split at the cursor	Nie ma nic do podzielenia w miejscu kursora
+@msg	Select two or more one-line point type objects on one baseline to combine	Zaznacz co najmniej dwa jednowierszowe obiekty tekstu punktowego na jednej linii bazowej, aby je połączyć
+@msg	Select two or more one-line point type objects to join	Zaznacz co najmniej dwa jednowierszowe obiekty tekstu punktowego, aby je złączyć
+@msg	No line breaks to remove	Brak podziałów wiersza do usunięcia
+@msg	No paragraph breaks to remove	Brak podziałów akapitu do usunięcia
+@msg	Too many breaks to remove at once	Zbyt wiele podziałów do usunięcia naraz
+@msg	Select point type	Zaznacz tekst punktowy
+@msg	The point type is aligned that way already	Tekst punktowy jest już tak wyrównany
+@msg	The point type has no transform to reset	Tekst punktowy nie ma przekształcenia do zresetowania
+@msg	No fonts are missing	Nie brakuje żadnych czcionek
+@msg	the replacement font is not available	czcionka zastępcza jest niedostępna
+@msg	missing `align`	brak `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` musi mieć wartość lines, paragraphs, words lub glyphs, a nie {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` musi mieć wartość "line" lub "paragraph", a nie {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` musi mieć wartość "left", "center" lub "right", a nie {other}
+	File + Number	Plik + numer
+	File + Data Set Name	Plik + nazwa zestawu danych
+	Data Set Name	Nazwa zestawu danych
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` musi mieć wartość `fileNumber`, `fileDataSetName` lub `dataSetName`
+@msg	no free data set file name in destination folder	Brak wolnej nazwy pliku zestawu danych w folderze docelowym
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Efekty ścieżki
+	Reverse Direction	Odwróć kierunek
+	Align to Corners and Ends	Wyrównaj do narożników i końców
+	Count	Liczba
+	Max Count	Maksymalna liczba
+	Start Length	Długość na początku
+	Start Percent	Procent na początku
+	Start Shape	Kształt na początku
+	End Length	Długość na końcu
+	End Percent	Procent na końcu
+	End Shape	Kształt na końcu
+	By Count	Według liczby
+	By Distance	Według odległości
+	Both	Oba
+	Shorter Than Length	Krótsze niż długość
+	Anchors	Punkty kontrolne
+	Dashes to Geometry	Kreski jako geometria
+	Dashes to Geometry…	Kreski jako geometria…
+	Add Anchors	Dodaj punkty kontrolne
+	Add Anchors…	Dodaj punkty kontrolne…
+	Smooth Anchors	Wygładź punkty kontrolne
+	Smooth Anchors…	Wygładź punkty kontrolne…
+	Simplify Anchors	Uprość punkty kontrolne
+	Simplify Anchors…	Uprość punkty kontrolne…
+	Split at Anchors	Podziel w punktach kontrolnych
+	Split at Anchors…	Podziel w punktach kontrolnych…
+	Extend Path…	Przedłuż ścieżkę…
+	Close Path…	Zamknij ścieżkę…
+	Retract Handles…	Schowaj uchwyty…
+	Dash 1	Kreska 1
+	Gap 1	Odstęp 1
+	Dash 2	Kreska 2
+	Gap 2	Odstęp 2
+	Dash 3	Kreska 3
+	Gap 3	Odstęp 3
+	Dash 4	Kreska 4
+	Gap 4	Odstęp 4
+	Dash 5	Kreska 5
+	Gap 5	Odstęp 5
+@msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
+@msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru
+@msg	no pattern named `{choice}`	nie ma wzoru o nazwie `{choice}`
+	Delete the selected brushes?	Usunąć zaznaczone pędzle?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Obrysy używają co najmniej jednego z tych pędzli. Zdjąć pędzle z tych obrysów i usunąć pędzle?
+	Remove Strokes	Usuń obrysy
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Narzędzia układania
+	Arrange in Grid…	Ułóż w siatce…
+	Arrange in Grid	Ułóż w siatce
+	Swap Objects	Zamień obiekty miejscami
+	Swap Objects and Sizes	Zamień obiekty miejscami i rozmiarami
+	Replace with Top Object…	Zastąp górnym obiektem…
+	Replace with Top Object	Zastąp górnym obiektem
+	Set Size of Each…	Ustaw rozmiar każdego…
+	Set Size of Each	Ustaw rozmiar każdego
+@msg	select exactly two objects	zaznacz dokładnie dwa obiekty
+@msg	give `width` or `height`	podaj `width` lub `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Grupuj nakładające się obiekty
+@msg	too many objects selected (at most 20000)	zaznaczono za dużo obiektów (najwyżej 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Podziel na kreski…
+	Divide into Dashes	Podziel na kreski
+	Dash:	Myślnik:
+	Gap:	Odstęp:
+	Fit to Corners and Ends	Dopasuj do narożników i końców
+	Remove Gaps	Usuń odstępy
+@msg	that makes too many pieces (at most 100000): make the dashes longer	to daje za dużo części (najwyżej 100000): wydłuż kreski
+@msg	select paths, or segments, to divide	zaznacz ścieżki lub segmenty do podzielenia
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Narzędzia dokumentu
+	Save a Timestamped Copy	Zapisz kopię z datą i godziną
+@msg	there is no clock here	brak tu zegara
+@msg	there is no clock here: give `time` (Unix seconds)	brak tu zegara: podaj `time` (sekundy Unix)
+@msg	the document has never been saved: give `folder`	dokument nigdy nie został zapisany: podaj `folder`
+@msg	every numbered name for the copy is taken	wszystkie numerowane nazwy kopii są zajęte
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Nowe symbole z warstw
+	Convert Layers to Symbols	Konwertuj warstwy na symbole
+@msg	{id} is no top-level layer	{id} nie jest warstwą najwyższego poziomu
+	Marathi	Marathi
+	Gujarati	Gudżarati
+	Bengali	Bengalski
+	Punjabi	Pendżabski
+	Tamil	Tamilski
+	Telugu	Telugu
+	Kannada	Kannada
+	Malayalam	Malajalam
+	Odia	Orija
+	Urdu	Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} i nowsze (wersja {n})
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Typ symbolu:
+	Dynamic Symbol	Symbol dynamiczny
+	Static Symbol	Symbol statyczny
+	Symbol Instance Appearance	Wygląd wystąpienia symbolu
+	Reset Symbol Instance	Resetuj wystąpienie symbolu
+@msg	type must be static or dynamic, not {v}	type musi mieć wartość static lub dynamic, a nie {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` jest symbolem statycznym: najpierw ustaw jego typ symbolu na Dynamiczny
+@msg	path must be a list of child indices	path musi być listą indeksów elementów podrzędnych
+@msg	no object at path {shown} in the symbol's art	brak obiektu w ścieżce {shown} w grafice symbolu
+@msg	give fill, stroke, opacity and/or blend	podaj fill, stroke, opacity i/lub blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	podaj newName, registration, exportType, nineSlice i/lub type
+	Text Flow	Przepływ tekstu
+	By Rows	Wierszami
+	By Columns	Kolumnami

@@ -69,7 +69,6 @@ pub(super) struct Saved {
     pub(super) blend: BlendMode,
     pub(super) mask: Option<Arc<MaskSpec>>,
     pub(super) page: Rect,
-    pub(super) pending: bool,
 }
 
 pub(super) struct Builder<'p> {
@@ -129,7 +128,6 @@ pub(super) struct Builder<'p> {
     /// The page as walked by [`scan_page`], and how far the interpreter is through it.
     pub(super) scan: Scan,
     pub(super) tag_at: usize,
-    pub(super) group_at: usize,
     /// The fills and strokes of paths drawn so far ([`Scan::paints`]).
     pub(super) paint_at: usize,
     pub(super) aligned: bool,
@@ -140,8 +138,6 @@ pub(super) struct Builder<'p> {
     pub(super) unsure: bool,
     /// The marked-content sequences open: the group each marks.
     pub(super) marked: Vec<Option<usize>>,
-    /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
-    pub(super) pending: bool,
     pub(super) nested: u32,
     /// Reading an alpha soft mask's art: images are read white with their own alpha, so the
     /// mask's luminance is their alpha, as whitened vector art's is (cairo, and so Inkscape,
@@ -245,6 +241,32 @@ pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f
 
 /// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
 const MAX_DASH_ENTRIES: usize = 64;
+/// Most dash periods [`stroke_outline`] cuts a stroke into.
+const MAX_OUTLINE_DASHES: f64 = 1e5;
+
+/// The area stroke `p` paints along `path` (in its own space, before `transform`), in the document:
+/// where a shading painting the stroke shows. Width, caps, joins and dashes as [`stroke_layer`]
+/// takes them. `None` when it paints nothing.
+pub(super) fn stroke_outline(path: &BezPath, transform: Affine, p: &StrokeProps) -> Option<BezPath> {
+    let scale = mean_scale(transform);
+    if !(scale.is_finite() && scale > 1e-9) {
+        return None;
+    }
+    let mut style =
+        kurbo::Stroke::new(line_width(p, scale) / scale).with_join(p.line_join).with_caps(p.line_cap).with_miter_limit(p.miter_limit as f64);
+    let dashes: Vec<f64> = p.dash_array.iter().take(MAX_DASH_ENTRIES).map(|v| *v as f64).collect();
+    let dash = Dash { pattern: dashes.clone(), offset: p.dash_offset as f64, align_corners: false };
+    // A dash pattern far finer than the path would cut it into countless pieces: it strokes solid.
+    let period: f64 = dashes.iter().sum();
+    if dash.is_dashed() && period > 0.0 && kurbo::Shape::perimeter(path, 1e-3) / period < MAX_OUTLINE_DASHES {
+        style = style.with_dashes(dash.offset, dashes);
+    }
+    // To a hundredth of a point in the document, within reason at extreme scales.
+    let tolerance = (0.01 / scale).clamp(1e-4, 1.0);
+    let mut out = kurbo::stroke(path.iter(), &style, &kurbo::StrokeOpts::default(), tolerance);
+    out.apply_affine(transform);
+    (!out.elements().is_empty()).then_some(out)
+}
 
 pub(crate) fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
@@ -278,5 +300,24 @@ pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     match image::GrayImage::from_raw(a.width, a.height, a.data.clone()) {
         Some(g) => image::imageops::resize(&g, w, h, image::imageops::FilterType::Triangle).into_raw(),
         None => vec![255; (w * h) as usize],
+    }
+}
+
+#[cfg(test)]
+mod stroke_outline_tests {
+    use super::*;
+
+    /// A dash pattern far finer than the path strokes it solid instead of cutting it into
+    /// millions of pieces; one in reason dashes it.
+    #[test]
+    fn a_dash_far_finer_than_the_path_strokes_solid() {
+        let mut path = BezPath::new();
+        path.move_to((0.0, 0.0));
+        path.line_to((1000.0, 0.0));
+        let props = |dash: f32| StrokeProps { line_width: 2.0, dash_array: [dash; 4].into(), ..StrokeProps::default() };
+        let solid = stroke_outline(&path, Affine::IDENTITY, &props(1e-6)).unwrap();
+        assert!(solid.elements().len() < 20, "{} elements", solid.elements().len());
+        let dashed = stroke_outline(&path, Affine::IDENTITY, &props(10.0)).unwrap();
+        assert!(dashed.elements().len() > 100, "dashed: {} elements", dashed.elements().len());
     }
 }

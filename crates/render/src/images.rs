@@ -4,7 +4,8 @@
 //! pixels cached per renderer, a 24-megapixel photo would take 96 MB in each. Here they are kept
 //! once, keyed by the image's content (not the document's key for it, which another document may
 //! use for other pixels) and by what was made of them: greyscale (outline mode), recoloured by a
-//! colour adjustment, separated into ink planes, or shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
+//! colour adjustment, separated into ink planes, shown through Separations Preview's plates, or
+//! shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
 //!
 //! The store holds at most [`ImageStore::budget`] bytes, dropping the least recently used entries
 //! beyond that, except ones still held elsewhere (a render context drawing them): dropping those
@@ -39,6 +40,15 @@ fn default_budget() -> usize {
 #[cfg(not(target_arch = "wasm32"))]
 fn budget_for(memory: u64) -> usize {
     usize::try_from(memory / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX)
+}
+
+/// Installed memory in bytes, `None` where it isn't known (the web, other systems). Other crates
+/// size their own budgets from it.
+pub fn installed_memory() -> Option<u64> {
+    #[cfg(target_arch = "wasm32")]
+    return None;
+    #[cfg(not(target_arch = "wasm32"))]
+    physical_memory()
 }
 
 /// Installed memory in bytes (`MemTotal` in `/proc/meminfo`).
@@ -92,6 +102,9 @@ pub(crate) struct ImageKey {
     /// Generations of the colour tables the pixels were made with (0 = none): a CMYK image's
     /// display table, and the separation table of ink planes (see `ink`).
     pub luts: (u64, u64),
+    /// Generation of the Separations Preview table the pixels show the visible plates through
+    /// (`proof::PlateLut`; 0 = none).
+    pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
 }
@@ -414,7 +427,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0 }
     }
 
     #[test]

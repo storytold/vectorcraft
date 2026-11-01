@@ -851,6 +851,63 @@ fn mesh_point_colour_move_and_undo() {
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 99, "color": "#000000"})).is_err());
 }
 
+/// `object.mesh.movePoints` moves just the points it names (their handles with them), over one or
+/// several meshes, as one undo step; `object.mesh.setPointColor` colours and fades several points
+/// alike. A bad index, a non-number or a move past the coordinate range fails and changes nothing
+/// (#4207, #4208).
+#[test]
+fn mesh_points_move_and_colour_together() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    let (ma, mb) = (mesh_of(&s, a), mesh_of(&s, b));
+    let n = undo_len(&s);
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [0, 4, 4], "dx": 10, "dy": -5})).unwrap();
+    let m = mesh_of(&s, a);
+    for (i, (q, was)) in m.points.iter().zip(&ma.points).enumerate() {
+        let want = if i == 0 || i == 4 { Point::new(was.p.x + 10.0, was.p.y - 5.0) } else { was.p };
+        assert_eq!((q.p, q.handles), (want, was.handles), "point {i}: moved once if named, its handles with it");
+    }
+    assert_eq!(undo_len(&s), n + 1);
+    s.execute("object.mesh.movePoints", &json!({"items": [{"id": a.0, "points": [1]}, {"id": b.0, "index": 2}], "dx": 1, "dy": 1})).unwrap();
+    assert_eq!(mesh_of(&s, a).points[1].p, Point::new(ma.points[1].p.x + 1.0, ma.points[1].p.y + 1.0));
+    assert_eq!(mesh_of(&s, b).points[2].p, Point::new(mb.points[2].p.x + 1.0, mb.points[2].p.y + 1.0));
+    assert_eq!(undo_len(&s), n + 2, "both meshes in one step");
+    // A move that would take a point past the coordinate range fails.
+    assert!(s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [0], "dx": 1e308, "dy": 0})).is_err());
+    assert_eq!(undo_len(&s), n + 2);
+    for _ in 0..2 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!((mesh_of(&s, a), mesh_of(&s, b)), (ma.clone(), mb.clone()));
+    // Several points take one colour and opacity, in one step.
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [2, 6], "color": "#0000ff", "opacity": 0.25})).unwrap();
+    for (i, q) in mesh_of(&s, a).points.iter().enumerate() {
+        let named = i == 2 || i == 6;
+        assert_eq!((q.color.to_hex() == "#0000ff", q.opacity == 0.25), (named, named), "point {i}");
+    }
+    assert_eq!(undo_len(&s), n + 1);
+    let n = undo_len(&s);
+    let before = (mesh_of(&s, a), mesh_of(&s, b));
+    for p in [
+        json!({"id": a.0, "points": [0, 99], "dx": 1, "dy": 1}),
+        json!({"items": [{"id": a.0, "points": [0]}, {"id": b.0, "points": [99]}], "dx": 1, "dy": 1}),
+        json!({"id": a.0, "points": [-1], "dx": 1, "dy": 1}),
+        json!({"id": a.0, "points": [1.5], "dx": 1, "dy": 1}),
+        json!({"id": a.0, "points": ["1"], "dx": 1, "dy": 1}),
+        json!({"id": a.0, "points": 1, "dx": 1, "dy": 1}),
+        json!({"id": a.0, "points": [0], "dx": "1", "dy": 1}),
+        json!({"items": 3, "dx": 1, "dy": 1}),
+        json!({"points": [0], "dx": 1, "dy": 1}),
+    ] {
+        assert!(s.execute("object.mesh.movePoints", &p).is_err(), "{p}");
+    }
+    assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [0, 9], "color": "#000000"})).is_err());
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "nothing changed");
+}
+
 #[test]
 fn mesh_add_line_and_delete_point() {
     let mut s = session();
@@ -868,6 +925,32 @@ fn mesh_add_line_and_delete_point() {
     let m = mesh_of(&s, a);
     assert_eq!((m.rows, m.cols), (1, 1));
     assert!(s.execute("object.mesh.deletePoint", &json!({"id": a.0, "index": 0})).is_err(), "corner lines can't go");
+}
+
+/// A Mesh tool click that hits a mesh's edge from just outside it adds a mesh line at the
+/// nearest point of the edge; `tolerance` gives `object.mesh.addLine` the same reach.
+#[test]
+fn mesh_add_line_on_the_edge_from_just_outside() {
+    use crate::tooling::ViewInfo;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("mesh", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 99.0, 160.0), v).unwrap();
+    }
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (2, 1), "a row through the left edge");
+    assert!(m.points.iter().any(|q| q.p.distance(Point::new(100.0, 160.0)) < 0.5), "{:?}", m.points.iter().map(|q| q.p).collect::<Vec<_>>());
+    let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202, "tolerance": 3})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (2, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(140.0, 200.0)) < 0.5);
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202})).is_err(), "no tolerance: outside");
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 210, "tolerance": 3})).is_err(), "past the tolerance");
 }
 
 /// A mesh point `index`, and `rows`, `cols` or `columns` for Create Gradient Mesh, that is not a
@@ -963,10 +1046,15 @@ fn mesh_expand_to_flat_pieces() {
     let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     sel(&mut s, &[a]);
     s.execute("object.mesh.create", &json!({"rows": 1, "cols": 2})).unwrap();
+    // The first patch shades from black to white; the second is one colour.
+    for (index, color) in [(0, "#000000"), (3, "#000000"), (1, "#ffffff"), (2, "#ffffff"), (4, "#ffffff"), (5, "#ffffff")] {
+        s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": index, "color": color})).unwrap();
+    }
     s.execute("object.mesh.expand", &json!({})).unwrap();
     let g = node(&s, a);
     assert!(matches!(g.kind, NodeKind::Group { .. }));
-    assert_eq!(g.children().unwrap().len(), 2 * 64);
+    // 8 × 8 pieces for the shaded patch, one for the flat one.
+    assert_eq!(g.children().unwrap().len(), 64 + 1);
     assert!(g.children().unwrap().iter().all(|c| c.id != NodeId(0)));
 }
 
@@ -1036,9 +1124,10 @@ fn live_objects_round_trip_through_native_format() {
 fn svg_export_expands_live_objects() {
     let s = live_doc();
     let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
-    // 4 blend objects + envelope content + 4 patches × 64 mesh pieces.
-    let paths = svg.matches("<path").count();
-    assert!(paths >= 4 + 1 + 256, "{paths}");
+    // 4 blend objects + envelope content + a piece for each of the 4 mesh patches (the mesh is
+    // white, which its highlight leaves white, so a patch is one piece rather than 64 alike).
+    let paths = vectorcraft_testkit::svg_shapes(&svg);
+    assert!(paths >= 4 + 1 + 4, "{paths}");
     assert!(vectorcraft_svg::import(&svg).is_ok());
 }
 
@@ -1167,7 +1256,9 @@ fn cmyk_mesh(create: Value) -> (Session, NodeId) {
     (s, a)
 }
 
-/// The fill colours `document.exportPdf {standard: pdfX4}` writes (`… scn` operands), and its warnings.
+/// The fill colours `document.exportPdf {standard: pdfX4}` writes (`… scn` operands, and the
+/// corner colours of its gradient meshes, which are patch shadings, as PDF import reads them
+/// back), and its warnings.
 fn pdf_fill_colours(s: &mut Session) -> (Vec<Vec<f32>>, Vec<String>) {
     let v = s.execute("document.exportPdf", &json!({"standard": "pdfX4", "compression": {"compressText": false}})).unwrap();
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
@@ -1178,10 +1269,21 @@ fn pdf_fill_colours(s: &mut Session) -> (Vec<Vec<f32>>, Vec<String>) {
         for (i, w) in words.iter().enumerate() {
             if *w == "scn" {
                 let nums: Vec<f32> = words[..i].iter().rev().map_while(|x| x.parse().ok()).collect();
-                out.push(nums.into_iter().rev().collect());
+                // A pattern (`/P0 scn`) has no colour of its own.
+                if !nums.is_empty() {
+                    out.push(nums.into_iter().rev().collect());
+                }
             }
         }
     }
+    vectorcraft_pdf::import(&bytes).unwrap().walk(|n| {
+        if let NodeKind::Mesh(m) = &n.kind {
+            out.extend(m.points.iter().map(|p| match p.color {
+                Color::Cmyk { c, m, y, k } => vec![c, m, y, k],
+                c => c.to_rgb().to_vec(),
+            }));
+        }
+    });
     (out, serde_json::from_value(v["warnings"].clone()).unwrap())
 }
 

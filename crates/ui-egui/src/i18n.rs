@@ -23,6 +23,8 @@
 //!   message itself stays English (the control channel, MCP and tests read it); `@msg` catalog
 //!   rows hold whole messages or templates such as `Couldn't open {name}: {e}`, and the values in
 //!   the placeholders are translated in turn (the reason after `: {e}` is often a message too).
+//!   A `@msgplural` row is a template with a count: its source holds the English `one|other`
+//!   forms, its translation the language's plural forms, and the `{n}` value picks the form.
 
 mod catalog;
 
@@ -68,8 +70,8 @@ fn plural_french(n: u64) -> usize {
     usize::from(n > 1)
 }
 
-/// Russian and Ukrainian integer counts: 1 (but not 11) is `one`, 2–4 (but not 12–14)
-/// `few`, everything else `many`.
+/// Russian, Ukrainian and Bosnian integer counts: 1 (but not 11) is `one`, 2–4 (but not 12–14)
+/// `few`, everything else `many` (Bosnian `other`).
 fn plural_east_slavic(n: u64) -> usize {
     match n % 100 {
         11..=14 => 2,
@@ -94,7 +96,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 26] = [
+pub static LANGUAGES: [LangInfo; 27] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
@@ -134,6 +136,16 @@ pub static LANGUAGES: [LangInfo; 26] = [
         name: "Čeština",
         source: include_str!("i18n/cs.tsv"),
         plural: plural_czech,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    // Bosnian (Latin script, Ijekavian): the whole interface and the status and error messages, with
+    // one/few/other plurals (the Russian rule for whole counts); every `bs-*` locale resolves here.
+    LangInfo {
+        code: "bs",
+        name: "Bosanski",
+        source: include_str!("i18n/bs.tsv"),
+        plural: plural_east_slavic,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
@@ -641,7 +653,10 @@ pub fn message(lang: Lang, s: &str) -> String {
 }
 
 fn message_at(lang: Lang, s: &str, depth: usize) -> String {
-    let Some((template, caps)) = lang.catalog().message(s) else { return s.to_string() };
+    let Some((forms, caps)) = lang.catalog().message_forms(s) else { return s.to_string() };
+    let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
+    let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
+    let Some(template) = forms.get(form) else { return s.to_string() };
     let values: Vec<(&str, String)> =
         caps.into_iter().map(|(k, v)| (k, if depth > 1 { message_at(lang, v, depth - 1) } else { v.to_string() })).collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();

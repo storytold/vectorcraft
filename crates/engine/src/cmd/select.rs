@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_tools::builder::is_live_paint;
 
 use super::wand::{fill_of, stroke_of};
 use super::{
@@ -106,11 +107,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill Color",
             ["Select", "Same"],
             None,
-            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path",
+            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path; from a Live Paint face, the faces of its Live Paint group only, and from any other object, no Live Paint face",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
-                same(s, "select.same.fillColor", |a, b| same_paint(&fill_of(a), &fill_of(b), tint))
+                same_fill(s, "select.same.fillColor", |a, b| same_paint(&fill_of(a), &fill_of(b), tint))
             }
         ),
         cmd!(
@@ -135,11 +136,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill & Stroke",
             ["Select", "Same"],
             None,
-            "{} the objects with the first selected object's fill and stroke colours (tints and compound paths as select.same.fillColor)",
+            "{} the objects with the first selected object's fill and stroke colours (tints, compound paths and Live Paint faces as select.same.fillColor)",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
-                same(s, "select.same.fillAndStroke", |a, b| {
+                same_fill(s, "select.same.fillAndStroke", |a, b| {
                     same_paint(&fill_of(a), &fill_of(b), tint) && same_paint(&stroke_of(a).0, &stroke_of(b).0, tint)
                 })
             }
@@ -684,9 +685,30 @@ fn same_reference<'a>(st: &'a DocState, cmd: &str) -> Result<(&'a Node, bool)> {
 /// [`paint_reported`] accepts. A compound path matches as a whole. In isolation mode inside a
 /// compound path, its member paths are matched instead.
 fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
-    let (refn, members) = same_reference(s.doc()?, cmd)?;
+    same_in(s, cmd, false, eq)
+}
+
+/// Select > Same > Fill Color and Fill & Stroke: [`same`], kept to one side of a Live Paint group.
+/// From a face or edge of a Live Paint group, only the faces and edges of that group match; from
+/// any other object, no face or edge of a Live Paint group does
+/// (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/select-objects-with-same-fill-and-stroke.html>).
+fn same_fill(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
+    same_in(s, cmd, true, eq)
+}
+
+fn same_in(s: &mut Session, cmd: &str, live_paint: bool, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
+    let st = s.doc()?;
+    let (refn, members) = same_reference(st, cmd)?;
+    let group = live_paint_group(&st.doc, refn.id);
     let refn = refn.clone();
-    select_where(s, cmd, &json!({}), |d, n| (if members { !n.is_container() } else { paint_reported(d, n) }) && eq(n, &refn))
+    select_where(s, cmd, &json!({}), |d, n| {
+        (!live_paint || live_paint_group(d, n.id) == group) && (if members { !n.is_container() } else { paint_reported(d, n) }) && eq(n, &refn)
+    })
+}
+
+/// The Live Paint group `id` is a face or edge of.
+fn live_paint_group(d: &Document, id: NodeId) -> Option<NodeId> {
+    d.parent_of(id).filter(|p| d.node(*p).is_some_and(is_live_paint))
 }
 
 /// Select the objects [`walk_selectable`] visits that `f` accepts (not looking inside accepted

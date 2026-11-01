@@ -65,7 +65,7 @@ pinned commit (the `ref:` of its craft-fonts checkout step) and builds with `CRA
 `CRAFT_FONTS_REQUIRED=1`, so releases embed its Japanese fonts and fail rather than ship without
 them (the web build embeds only the UI font, BIZ UDPGothic Regular, to stay small). The packages carry each embedded font's licence as `OFL-<family>.txt`
 (`copy_font_licences` in `packaging/env.sh`). Bump the pins deliberately, in every job at once.
-The rules are in craftrules `standards/fonts.md`, the build option in
+The build option is in
 [`docs/development.md`](development.md) › Fonts.
 
 ### macOS
@@ -164,7 +164,7 @@ to the target triple, so host build scripts aren't affected.
 AppStream metainfo, the MIME type for VectorCraft documents, the icons and the licence files.
 
 **Document types.** The desktop entry's `MimeType` lists every format File › Open reads but PSD,
-PSB, `.ps` PostScript, Targa and PCX, so file managers list VectorCraft under Open With for them.
+PSB, `.ps` PostScript, Targa, PCX and JPEG 2000, so file managers list VectorCraft under Open With for them.
 `ai.storyteller.vectorcraft.mime.xml` declares the types that shared-mime-info lacks: VectorCraft
 documents and templates, `.ait` templates and Affinity files (`application/x-affinity`). An `.af`
 file gets the Affinity type by its content, and `.afdesign` and `.afpub` files by their extension.

@@ -2,8 +2,9 @@
 //! previewed live (engine: `recolor.reduce`, `recolor.randomize`, `recolor.apply`).
 //!
 //! Assign tab: Colors (Auto, or a count: similar colours merge into rows), Preserve White, Black and
-//! Grays, the rows (click to select, Shift or Cmd/Ctrl-click to add; a row's arrow excludes or
-//! includes it; the hex field edits its new colour, and a double-click on it opens the Color Picker,
+//! Grays (they open as OK on art last left them), the rows (click to select, Shift or Cmd/Ctrl-click
+//! to add; a row's arrow excludes or includes it; the hex field edits its new colour, and a
+//! double-click on it opens the Color Picker,
 //! whose OK sets it in the model it was picked in), Merge and Separate, Randomize order or
 //! saturation and brightness, Reset, the Method and Limit to Library (its folder button imports a
 //! library file and limits to it; a library's colours apply as its swatches: a spot colour stays a
@@ -100,9 +101,12 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     // Without art the rows are the group's colours, as they are.
     let start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    // The Preserve checkboxes as they were last confirmed (#2960).
+    let kept = |k: &str, default: bool| app.ui.recolor_preserve.get(k).and_then(Value::as_bool).unwrap_or(default);
     let fields = json!({
         "rows": start, "colors": count, "method": Method::ScaleTints.id(),
-        "preserveWhite": true, "preserveBlack": true, "preserveGrays": false, "limitTo": limit,
+        "preserveWhite": kept("preserveWhite", true), "preserveBlack": kept("preserveBlack", true),
+        "preserveGrays": kept("preserveGrays", false), "limitTo": limit,
         "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
         "preview": true, "__art": art, "__assign": assign, "__newGroup": new_group,
     });
@@ -277,7 +281,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let colors: Vec<Value> = rows(&d).into_iter().filter(|r| !excluded(r)).map(|r| r["to"].clone()).collect();
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }
-    form::commit_preview(app, CMD, apply_params(&d))
+    let r = form::commit_preview(app, CMD, apply_params(&d))?;
+    // The Preserve checkboxes (shown with art) open as confirmed here next time (#2960).
+    if d.bool("__art") {
+        app.ui.recolor_preserve =
+            json!({"preserveWhite": d.bool("preserveWhite"), "preserveBlack": d.bool("preserveBlack"), "preserveGrays": d.bool("preserveGrays")});
+    }
+    Ok(r)
 }
 
 /// The preset the fields match: an n-colour job (n rows, Scale Tints), a library, or Custom.

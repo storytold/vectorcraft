@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask, Selection};
+use vectorcraft_doc::{Document, Knockout, Node, NodeId, NodeKind, OpacityMask, Selection};
 
 use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
 use super::pathops::{Beside, separate};
@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped if several). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask; one target (an object or a layer) is refused in isolation mode and in pattern editing mode → {id, editing}",
+            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped if several, a layer among several by its art). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask; one target (an object or a layer) is refused in isolation mode and in pattern editing mode → {id, editing}",
             can_make,
             make
         ),
@@ -206,6 +206,24 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     let invert = bool_or(p, "invert", s.menu.new_masks_inverted);
     // Several objects: the top one is the mask. One: an empty mask, drawn in mask editing.
     let (art, mask_id) = if below.is_empty() { (&ids[..], None) } else { (below, Some(top)) };
+    // Several objects go into a new group, and a layer can't: a layer among them stands for its
+    // visible, unlocked art, which the group takes from it. A hidden, locked or template layer
+    // gives none.
+    let contents;
+    let art = if art.len() > 1 && art.iter().any(|id| d.node(*id).is_some_and(Node::is_layer)) {
+        let objects = art.iter().flat_map(|id| match d.node(*id) {
+            Some(n) if n.is_layer() && (!n.visible || n.locked || n.is_template()) => vec![],
+            Some(n) if n.is_layer() => n.layer_art(true),
+            _ => vec![*id],
+        });
+        contents = super::edit::outermost(d, d.paint_order(objects));
+        if contents.is_empty() {
+            return Err(bad(C, "the layers hold no art to mask"));
+        }
+        &contents[..]
+    } else {
+        art
+    };
     let (id, layer) = s.edit("Make Opacity Mask", |d, sel| {
         let mask_art = match mask_id {
             Some(m) => (*d.remove(m)?).clone(),
@@ -368,12 +386,19 @@ impl TransparencyInfo {
         }
     }
 
-    /// The opacity of the focused gradient mesh `point` (see `transparency.set`) instead of its
-    /// object's.
-    fn with_mesh_point(mut self, point: Option<(NodeId, usize, f32)>) -> Self {
-        if let Some((_, _, o)) = point {
-            self.opacity = Some((o as f64 * 10_000.0).round() / 100.0);
-        }
+    /// The opacity of the picked gradient mesh `points` (see `transparency.set`) instead of their
+    /// objects': `None` where they differ.
+    fn with_mesh_points(mut self, d: &Document, points: Option<Vec<(NodeId, Vec<usize>)>>) -> Self {
+        let Some(points) = points else { return self };
+        let mut all = points.iter().flat_map(|(id, v)| {
+            let m = match d.node(*id).map(|n| &n.kind) {
+                Some(NodeKind::Mesh(m)) => Some(m),
+                _ => None,
+            };
+            v.iter().filter_map(move |i| m?.points.get(*i)).map(|q| (q.opacity as f64 * 10_000.0).round() as i64)
+        });
+        let first = all.next();
+        self.opacity = first.filter(|f| all.all(|o| o == *f)).map(|o| o as f64 / 100.0);
         self
     }
 }
@@ -404,8 +429,8 @@ impl Session {
     pub fn transparency_info(&self) -> TransparencyInfo {
         match (self.active(), transparency_targets(self, &Value::Null)) {
             (Some(st), Ok(ids)) => {
-                let point = super::paint::focused_mesh_point_of(self, &ids);
-                TransparencyInfo::of(&st.doc, ids).with_mesh_point(point)
+                let points = super::paint::picked_mesh_points_of(self, &ids);
+                TransparencyInfo::of(&st.doc, ids).with_mesh_points(&st.doc, points)
             }
             _ => TransparencyInfo::default(),
         }
@@ -415,8 +440,8 @@ impl Session {
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let ids = transparency_targets(s, p)?;
-    let point = super::paint::focused_mesh_point_of(s, &ids);
-    let i = TransparencyInfo::of(&st.doc, ids).with_mesh_point(point);
+    let points = super::paint::picked_mesh_points_of(s, &ids);
+    let i = TransparencyInfo::of(&st.doc, ids).with_mesh_points(&st.doc, points);
     Ok(json!({
         "ids": i.ids.iter().map(|id| id.0).collect::<Vec<_>>(),
         "opacity": i.opacity,
@@ -483,6 +508,45 @@ mod tests {
         let n = d.node(NodeId(g)).unwrap();
         assert_eq!(n.children().unwrap().len(), 2);
         assert!(!n.extras().mask.as_ref().unwrap().clip);
+    }
+
+    #[test]
+    fn make_masks_the_art_of_layers_under_a_mask_object() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let rect = |s: &mut Session, x: u64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+        };
+        let l1 = s.doc().unwrap().doc.layers[0].id.0;
+        let (a, a2) = (rect(&mut s, 0), rect(&mut s, 30));
+        let l2 = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let (b, b2) = (rect(&mut s, 60), rect(&mut s, 90));
+        s.execute("layer.new", &json!({})).unwrap();
+        let top = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 150, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let layer_ids = |s: &Session| s.doc().unwrap().doc.layers.iter().map(|l| l.id.0).collect::<Vec<_>>();
+        let before = s.doc().unwrap().doc.layers.clone();
+        // Two layers, and a layer with an object of another layer: the masked group takes the
+        // layers' art, and the layers stay where they are.
+        for (ids, grouped, left) in [(vec![l1, l2, top], vec![a, a2, b, b2], vec![]), (vec![l1, b, top], vec![a, a2, b], vec![b2])] {
+            let g = s.execute("transparency.makeOpacityMask", &json!({ "ids": ids })).unwrap()["id"].as_u64().unwrap();
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(layer_ids(&s), before.iter().map(|l| l.id.0).collect::<Vec<_>>(), "{ids:?}: no layer moved");
+            let n = d.node(NodeId(g)).unwrap();
+            assert!(!n.is_layer() && n.extras().mask.is_some(), "{ids:?}");
+            assert!(d.parent_of(NodeId(g)).and_then(|p| d.node(p)).is_some_and(Node::is_layer), "{ids:?}: the group is in a layer");
+            assert_eq!(n.children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), grouped, "{ids:?}");
+            for id in left {
+                assert_eq!(d.parent_of(NodeId(id)), Some(NodeId(l2)), "{ids:?}: {id} stays in its layer");
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc.layers, before, "{ids:?}: undo");
+        }
+        // A hidden layer gives none of its art.
+        s.execute("layer.setProps", &json!({"id": l2, "visible": false})).unwrap();
+        let g = s.execute("transparency.makeOpacityMask", &json!({ "ids": [l1, l2, top] })).unwrap()["id"].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.node(NodeId(g)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), vec![a, a2]);
+        assert_eq!((d.parent_of(NodeId(b)), d.parent_of(NodeId(b2))), (Some(NodeId(l2)), Some(NodeId(l2))));
     }
 
     #[test]

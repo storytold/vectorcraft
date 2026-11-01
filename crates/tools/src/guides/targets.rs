@@ -1,6 +1,6 @@
 use super::snap::{Leave, meeting, seg_direction, touch_params};
 use super::{
-    Affine, Arc, BezPath, Document, FontDb, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind, OrientedBox, Overlay, ParamCurve,
+    Affine, Arc, BezPath, Document, FontDb, GlyphSnap, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind, OrientedBox, Overlay, ParamCurve,
     ParamCurveNearest, PathSeg, Point, Rect, Ruler, Selection, Shape, SubPath, ToolContext, Vec2, layout_text,
 };
 
@@ -163,12 +163,13 @@ impl Targets {
 
     /// Targets for a drawn point: the art in `visible` (all of it for None) but `exclude`, its
     /// anchors, centres, edges and path segments, its anchors in line too. The anchors and
-    /// segments of `exclude` (the path being drawn, whose bounds grow with it) stay targets.
-    pub fn for_drawing(doc: &Document, exclude: &[NodeId], visible: Option<Rect>, glyphs: bool) -> Self {
+    /// segments of `exclude` (the path being drawn, whose bounds grow with it) stay targets. With
+    /// `glyphs` (Snap to Glyph on), live text gives the guides those options ask for.
+    pub fn for_drawing(doc: &Document, exclude: &[NodeId], visible: Option<Rect>, glyphs: Option<GlyphSnap>) -> Self {
         let mut t = Self::collect_inner(doc, exclude, None, visible, Gather::Drawing);
         t.push_paths(doc, exclude, true);
-        if glyphs {
-            t.push_glyphs(doc, exclude, visible);
+        if let Some(o) = glyphs {
+            t.push_glyphs(doc, exclude, visible, o);
         }
         t.index()
     }
@@ -214,8 +215,9 @@ impl Targets {
     }
 
     /// A glyph guide through `at` along `dir` (on the page): a line the art lines up with when it
-    /// runs across or down the page, else an angled line a point lands on.
-    fn push_glyph_line(&mut self, at: Point, dir: Vec2) {
+    /// runs across or down the page, else (with `angular`, Angular Guides) an angled line a point
+    /// lands on.
+    fn push_glyph_line(&mut self, at: Point, dir: Vec2, angular: bool) {
         let len = dir.hypot();
         if !(len.is_finite() && len > 1e-12 && at.is_finite()) {
             return;
@@ -225,7 +227,7 @@ impl Targets {
             self.ys.push((at.y, at, Kind::Glyph));
         } else if d.x.abs() <= 1e-9 {
             self.xs.push((at.x, at, Kind::Glyph));
-        } else {
+        } else if angular {
             self.angled.push((at, d));
         }
     }
@@ -234,8 +236,9 @@ impl Targets {
     /// a single line of type also its baseline and x-height, the proximity guides at the edges of
     /// each character's advance width, and its glyphs' anchor points. In rotated type these
     /// guides run at its angle (angular guides), and type of one glyph also has angular guides
-    /// along the glyph's slanted straight segments.
-    fn push_glyphs(&mut self, doc: &Document, exclude: &[NodeId], visible: Option<Rect>) {
+    /// along the glyph's slanted straight segments. Each kind of guide is there only while its
+    /// option `o` is on.
+    fn push_glyphs(&mut self, doc: &Document, exclude: &[NodeId], visible: Option<Rect>, o: GlyphSnap) {
         let skip: HashSet<NodeId> = exclude.iter().copied().collect();
         let db = FontDb::global();
         let kind = Kind::Glyph;
@@ -264,10 +267,10 @@ impl Targets {
             // Text space → the page, and a direction in text space → one on the page.
             let to_doc = |p: Point| t.xf * p;
             let along = |m: Affine, v: Vec2| (m * v.to_point()) - (m * Point::ZERO);
-            if single {
+            if single && o.baseline {
                 let line_doc = t.xf * lay.line_xf;
                 for line in &lay.lines {
-                    self.push_glyph_line(line_doc * Point::new(line.x0, line.baseline), along(line_doc, Vec2::new(1.0, 0.0)));
+                    self.push_glyph_line(line_doc * Point::new(line.x0, line.baseline), along(line_doc, Vec2::new(1.0, 0.0)), o.angular);
                 }
             }
             // The last x-height pushed, to push each run of glyphs alike once.
@@ -300,23 +303,26 @@ impl Targets {
                         let (l, k) = (d.hypot(), dir.hypot());
                         l > 1e-12 && k > 1e-12 && (d / l - dir / k).hypot() <= 1e-9 && ((at - a).cross(d / l)).abs() <= 1e-6
                     });
-                    if face.x_height() > 0.0 && !same {
-                        self.push_glyph_line(at, dir);
+                    if o.x_height && face.x_height() > 0.0 && !same {
+                        self.push_glyph_line(at, dir, o.angular);
                         last_x_height = Some((at, dir));
                     }
                     // Proximity guides: across the baseline at both edges of the width the layout
                     // gives the character (its advance with tracking and kerning).
-                    for e in [g.origin, g.origin + ahead * g.advance] {
-                        self.push_glyph_line(to_doc(e), along(t.xf, up));
+                    if o.proximity {
+                        for e in [g.origin, g.origin + ahead * g.advance] {
+                            self.push_glyph_line(to_doc(e), along(t.xf, up), o.angular);
+                        }
                     }
                 }
                 if single {
                     for seg in g.outline.segments() {
-                        if anchors > 0 {
+                        if o.anchors && anchors > 0 {
                             self.points.push((to_doc(seg.start()), Kind::Anchor));
                             anchors -= 1;
                         }
-                        if one_glyph
+                        if o.angular
+                            && one_glyph
                             && angular > 0
                             && let PathSeg::Line(l) = seg
                         {
@@ -324,16 +330,18 @@ impl Targets {
                             let d = q - p;
                             let len = d.hypot();
                             if len > 1e-6 && d.x.abs() > 1e-9 * len && d.y.abs() > 1e-9 * len {
-                                self.push_glyph_line(p, d);
+                                self.push_glyph_line(p, d, true);
                                 angular -= 1;
                             }
                         }
                     }
                 }
-                let r = t.xf.transform_rect_bbox(bb);
-                for p in [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)] {
-                    self.xs.push((p.x, p, kind));
-                    self.ys.push((p.y, p, kind));
+                if o.bounds {
+                    let r = t.xf.transform_rect_bbox(bb);
+                    for p in [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)] {
+                        self.xs.push((p.x, p, kind));
+                        self.ys.push((p.y, p, kind));
+                    }
                 }
             }
         });

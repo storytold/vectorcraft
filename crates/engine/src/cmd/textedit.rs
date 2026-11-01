@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Step Type",
             [],
             None,
-            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift). The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: kerning steps the character before it, leading its paragraph), else every selected type object → {ids}",
+            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; horizontal: ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift; vertical: ↓/↑ with or without Shift kerning or tracking, ←/→ leading, Shift+→/← baseline shift; mixed selected text objects use the horizontal mapping). The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: kerning steps the character before it, leading its paragraph), else every selected type object → {ids}",
             has_doc,
             type_step
         ),
@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Tracking and Kerning",
             [],
             Some("Cmd+Alt+Q"),
-            "{ids?: [id…]} set tracking to 0 and kerning to Auto (the font's own kerning, which the Character panel shows as 0) in all the text of the type objects in `ids`, else in the text the Type tool has selected (at a caret: only the kerning of the character before it), else in every selected type object, as one undo step → {ids}",
+            "{ids?: [id…]} set tracking to 0 and clear manual kerning without changing the automatic method in all the text of the type objects in `ids`, else in the text the Type tool has selected (at a caret: only the kerning of the character before it), else in every selected type object, as one undo step → {ids}",
             has_selection,
             reset_tracking
         ),
@@ -300,6 +300,7 @@ pub(crate) struct CharChange {
     leading: Option<Option<f64>>,
     tracking: Option<f64>,
     kerning: Option<Option<f64>>,
+    optical_kerning: Option<bool>,
     baseline_shift: Option<f64>,
     h_scale: Option<f64>,
     v_scale: Option<f64>,
@@ -320,6 +321,8 @@ pub(crate) struct CharChange {
     tate_chu_yoko: Option<bool>,
     no_break: Option<bool>,
     digits: Option<vectorcraft_doc::Digits>,
+    /// The language to set: a tag, or `None` for the default.
+    language: Option<Option<String>>,
     font_axes: Option<AxisChange>,
 }
 
@@ -336,17 +339,27 @@ pub(crate) fn char_direction_param(p: &Value, cmd: &str) -> Result<Option<Option
     }))
 }
 
-/// `digits: "default"|"arabic"|"hindi"|"farsi"` → the numeral system the digits are drawn in.
+/// `digits: "default"|"arabic"|"hindi"|"farsi"|"devanagari"|…` ([`Digits::id`]) → the numeral
+/// system the digits are drawn in.
+///
+/// [`Digits::id`]: vectorcraft_doc::Digits::id
 pub(crate) fn digits_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_doc::Digits>> {
     use vectorcraft_doc::Digits;
     let Some(v) = p.get("digits").filter(|v| !v.is_null()) else { return Ok(None) };
-    Ok(Some(match v.as_str() {
-        Some("default") => Digits::Default,
-        Some("arabic") => Digits::Arabic,
-        Some("hindi") => Digits::Hindi,
-        Some("farsi") => Digits::Farsi,
-        _ => return Err(bad(cmd, "`digits` must be \"default\", \"arabic\", \"hindi\" or \"farsi\"")),
-    }))
+    let Some(d) = v.as_str().and_then(Digits::from_id) else {
+        let ids: Vec<String> = Digits::ALL.iter().map(|d| format!("\"{}\"", d.id())).collect();
+        return Err(bad(cmd, format!("`digits` must be one of {}", ids.join(", "))));
+    };
+    Ok(Some(d))
+}
+
+/// `language: name|tag` (one of Document Setup's languages, case-insensitive) → the language to
+/// set ([`vectorcraft_doc::CharStyle::language`]: `None` inside for the default).
+pub(crate) fn language_param(p: &Value, cmd: &str) -> Result<Option<Option<String>>> {
+    let Some(v) = p.get("language").filter(|v| !v.is_null()) else { return Ok(None) };
+    let l = v.as_str().ok_or_else(|| bad(cmd, "`language` must be a language name or tag, such as \"Turkish\" or \"tr\""))?;
+    let tag = vectorcraft_doc::setup::char_language(l).map_err(|e| bad(cmd, e))?;
+    Ok(Some(tag.map(str::to_string)))
 }
 
 /// Variable Font settings to change: by axis tag, a value in the axis's units, or `None` to go
@@ -476,7 +489,17 @@ impl CharChange {
             size: num("size"),
             leading: auto_or_num(p, "leading", cmd)?,
             tracking: num("tracking"),
-            kerning: auto_or_num(p, "kerning", cmd)?,
+            kerning: match p.get("kerning") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(v)) if v.eq_ignore_ascii_case("optical") => None,
+                Some(Value::String(v)) if v.eq_ignore_ascii_case("auto") => Some(None),
+                Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(cmd, "kerning must be a number, \"auto\", or \"optical\""))?)),
+            },
+            optical_kerning: match p.get("kerning") {
+                Some(Value::String(v)) if v.eq_ignore_ascii_case("optical") => Some(true),
+                Some(Value::String(v)) if v.eq_ignore_ascii_case("auto") => Some(false),
+                _ => None,
+            },
             baseline_shift: num("baselineShift"),
             h_scale: num("hScale"),
             v_scale: num("vScale"),
@@ -496,6 +519,7 @@ impl CharChange {
             tate_chu_yoko: flag("tateChuYoko"),
             no_break: flag("noBreak"),
             digits: digits_param(p, cmd)?,
+            language: language_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
         };
         if c.size.is_some_and(|v| v <= 0.0) {
@@ -521,6 +545,7 @@ impl CharChange {
             && self.leading.is_none()
             && self.tracking.is_none()
             && self.kerning.is_none()
+            && self.optical_kerning.is_none()
             && self.baseline_shift.is_none()
             && self.h_scale.is_none()
             && self.v_scale.is_none()
@@ -540,6 +565,7 @@ impl CharChange {
             && self.tate_chu_yoko.is_none()
             && self.no_break.is_none()
             && self.digits.is_none()
+            && self.language.is_none()
             && self.font_axes.is_none()
     }
 
@@ -552,7 +578,8 @@ impl CharChange {
         Ok(())
     }
 
-    pub(crate) fn apply(&self, st: &mut CharStyle) {
+    /// The font family, style and Variable Font settings of [`Self::apply`].
+    fn apply_font(&self, st: &mut CharStyle) {
         if let Some(f) = &self.font {
             st.font_family = f.clone();
             // Keep the style when the new family has it, else its closest match.
@@ -571,6 +598,10 @@ impl CharChange {
         if let Some(v) = &self.font_axes {
             change_font_axes(st, v);
         }
+    }
+
+    pub(crate) fn apply(&self, st: &mut CharStyle) {
+        self.apply_font(st);
         if let Some(v) = self.size {
             st.size = v;
         }
@@ -582,6 +613,9 @@ impl CharChange {
         }
         if let Some(v) = self.kerning {
             st.kerning = v.map(|k| k.clamp(-1000.0, 10000.0));
+        }
+        if let Some(v) = self.optical_kerning {
+            st.optical_kerning = v;
         }
         if let Some(v) = self.baseline_shift {
             st.baseline_shift = v;
@@ -639,6 +673,9 @@ impl CharChange {
         }
         if let Some(v) = self.digits {
             st.digits = v;
+        }
+        if let Some(v) = &self.language {
+            st.language.clone_from(v);
         }
     }
 }
@@ -708,6 +745,9 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     let t = text_ref(s, id)?;
     change.localize(&t, C)?;
     let (a, b) = range_of(p, edit::runs_len(&t.runs), C)?;
+    // The fonts the styled characters are set in, for the warning.
+    let mut set = std::collections::BTreeSet::new();
+    let sets_font = change.font.is_some() || change.style.is_some();
     let n = s.edit("Character", |d, _| {
         let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
         if a == b && !t.plain_text().is_empty() {
@@ -719,19 +759,63 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(before) = before {
             protect_missing_glyphs(&before, &mut t.runs);
         }
+        if sets_font {
+            // Empty text has one run, which the empty range styles.
+            let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
+            set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+        }
         refresh_bounds(t);
         Ok(t.runs.len())
     })?;
-    Ok(json!({"id": id.0, "runs": n}))
+    let mut out = json!({"id": id.0, "runs": n});
+    if let Some(w) = super::fonts::set_font_warning(set) {
+        out["warning"] = json!(w);
+    }
+    if let Some(kerning) = p.get("kerning") {
+        out["kerning"] = kerning.clone();
+    }
+    Ok(out)
 }
 
 /// The em a laid-out glyph's kerning and tracking are measured in, in text space: the size it
 /// was shaped at (superscript, small caps and Shrink Text to Fit included).
-fn glyph_em(t: &TextObject, g: &vectorcraft_text::PositionedGlyph) -> Option<f64> {
-    let face = vectorcraft_text::FontDb::global().face_by_id(g.font_id)?;
+fn glyph_em(db: &vectorcraft_text::FontDb, t: &TextObject, g: &vectorcraft_text::PositionedGlyph) -> Option<f64> {
+    let face = db.face_by_id(g.font_id)?;
     let h_scale = edit::slice_runs(&t.runs, g.byte, g.byte + g.len).first()?.style.h_scale / 100.0;
     let [a, b, ..] = g.xf.as_coeffs();
     Some(a.hypot(b) * face.units_per_em() / h_scale).filter(|em| em.is_finite() && *em > 0.0)
+}
+
+/// The current pair correction in thousandths of an em, including an automatic correction.
+pub fn effective_kerning(db: &vectorcraft_text::FontDb, t: &TextObject, lay: &vectorcraft_text::TextLayout, x: usize, y: usize) -> f64 {
+    if let Some(value) = edit::slice_runs(&t.runs, x, y).first().and_then(|r| r.style.kerning) {
+        return value;
+    }
+    // Measure both layouts without wrapping so the same pair stays on one line.
+    let mut trial = t.clone();
+    trial.kind = TextKind::Point;
+    let unwrapped = (!matches!(t.kind, TextKind::Point)).then(|| vectorcraft_text::layout(db, &trial));
+    let original = unwrapped.as_ref().unwrap_or(lay);
+    edit::style_range(&mut trial.runs, x, y, |st| st.kerning = Some(0.0));
+    let base = vectorcraft_text::layout(db, &trial);
+    let owner = original.glyphs.iter().find(|g| g.byte == x);
+    let rtl = owner.is_some_and(|g| g.rtl);
+    let drawn_gap = |layout: &vectorcraft_text::TextLayout| {
+        let first = layout.glyphs.iter().find(|g| g.byte == if rtl { y } else { x })?;
+        let following = layout.glyphs.iter().find(|g| g.byte == if rtl { x } else { y })?;
+        if first.line != following.line {
+            return None;
+        }
+        let axis = vectorcraft_geom::Vec2::new(first.angle.cos(), first.angle.sin());
+        let along = if rtl { -axis } else { axis };
+        let drawn = |g: &vectorcraft_text::PositionedGlyph| {
+            let [_, _, _, _, tx, ty] = g.xf.as_coeffs();
+            Point::new(tx, ty)
+        };
+        Some((drawn(following) - drawn(first)).dot(along))
+    };
+    let em = owner.and_then(|g| glyph_em(db, t, g)).unwrap_or(0.0);
+    if em > 0.0 { drawn_gap(original).zip(drawn_gap(&base)).map_or(0.0, |(a, b)| (a - b) * 1000.0 / em) } else { 0.0 }
 }
 
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
@@ -768,18 +852,21 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // A list marker's glyphs (length 0) stand for no character.
     let prev = lay.glyphs.iter().find(|h| h.line == g.line && h.len > 0 && h.byte + h.len == a);
     let pr = prev.map(|h| (h.byte, h.byte + h.len));
-    let em = glyph_em(&t, g).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
+    let db = vectorcraft_text::FontDb::global();
+    let em = glyph_em(db, &t, g).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
     let em_prev = match prev {
-        Some(h) => Some(glyph_em(&t, h).ok_or_else(|| bad(C, "the character's size can't be measured"))?),
+        Some(h) => Some(glyph_em(db, &t, h).ok_or_else(|| bad(C, "the character's size can't be measured"))?),
         None if dx != 0.0 => return Err(bad(C, "the first character of a line has no character before it to kern: it moves only up and down (dy)")),
         None => None,
     };
-    let kerning_in = |(x, y): (usize, usize)| edit::slice_runs(&t.runs, x, y).first().and_then(|r| r.style.kerning).unwrap_or(0.0);
+    let kerning_in = |(x, y): (usize, usize)| effective_kerning(db, &t, &lay, x, y);
+    let original_before = pr.map(kerning_in);
+    let original_own = kerning_in((a, b));
     // The move along the line, in text space, limited to what kerning from -1000 to 10000 (1/1000
     // em) on the character before it and on the character itself can give.
     let mut moved = dx / doc_len(along);
-    if let (Some(range), Some(ep)) = (pr, em_prev) {
-        let (kp, kc) = (kerning_in(range), kerning_in((a, b)));
+    if let (Some(_range), Some(ep)) = (pr, em_prev) {
+        let (kp, kc) = (original_before.unwrap_or(0.0), original_own);
         let hi = ((10000.0 - kp) * ep).min((kc + 1000.0) * em) / 1000.0;
         let lo = ((-1000.0 - kp) * ep).max((kc - 10000.0) * em) / 1000.0;
         if lo <= hi {
@@ -791,7 +878,8 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     let touch = |t: &mut TextObject, before: Option<f64>, own: Option<f64>, raise: f64| {
         for (range, by) in [(pr, before), (Some((a, b)), own)] {
             if let (Some((x, y)), Some(by)) = (range, by) {
-                edit::style_range(&mut t.runs, x, y, |st| st.kerning = Some((st.kerning.unwrap_or(0.0) + by).clamp(-1000.0, 10000.0)));
+                let original = if (x, y) == (a, b) { original_own } else { original_before.unwrap_or(0.0) };
+                edit::style_range(&mut t.runs, x, y, |st| st.kerning = Some((original + by).clamp(-1000.0, 10000.0)));
             }
         }
         edit::style_range(&mut t.runs, a, b, |st| {
@@ -1074,9 +1162,20 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => None,
     })?;
+    let mut caret_kerning = Vec::with_capacity(ranges.len());
+    for &(id, a, b, caret) in &ranges {
+        let value = if matches!(step, Step::Kerning) && caret {
+            let t = text_ref(s, id)?;
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            Some(effective_kerning(vectorcraft_text::FontDb::global(), &t, &lay, a, b))
+        } else {
+            None
+        };
+        caret_kerning.push(value);
+    }
     if !ranges.is_empty() {
         s.edit("Character", |d, _| {
-            for &(id, a, b, _) in &ranges {
+            for (range_index, &(id, a, b, _)) in ranges.iter().enumerate() {
                 let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
                 let points = if matches!(step, Step::Size | Step::Leading | Step::BaselineShift) {
                     t.style_scale().ok_or_else(|| bad(C, "text transform is collapsed or unrepresentable"))?.points
@@ -1115,7 +1214,10 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
                             st.leading = Some(super::typecmd::local_type_value(t, leading * points + inc, (0.1, 5000.0), false, C)?);
                         }
                         Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),
-                        Step::Kerning => st.kerning = Some((st.kerning.unwrap_or(0.0) + inc).clamp(-1000.0, 10000.0)),
+                        Step::Kerning => {
+                            let current = caret_kerning.get(range_index).copied().flatten().unwrap_or_else(|| st.kerning.unwrap_or(0.0));
+                            st.kerning = Some((current + inc).clamp(-1000.0, 10000.0));
+                        }
                         Step::BaselineShift => {
                             st.baseline_shift = super::typecmd::local_type_value(t, st.baseline_shift * points + inc, (-1296.0, 1296.0), false, C)?;
                         }
@@ -1130,9 +1232,10 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ranges.iter().map(|(id, ..)| id.0).collect::<Vec<_>>() }))
 }
 
-/// Cmd/Ctrl+Alt+Q: tracking 0 and kerning Auto (0 in the Character panel) in the type objects in
+/// Cmd/Ctrl+Alt+Q: tracking 0 and manual kerning cleared in the type objects in
 /// `ids`, else in the Type tool's selected text, else in every selected type object. At a caret,
-/// only the kerning of the character before it changes, as Alt+←/→ kerns there.
+/// only the kerning of the character before it changes, as Alt+←/→ in horizontal type or Alt+↓/↑ in vertical type kerns there.
+/// The automatic method remains selected.
 fn reset_tracking(s: &mut Session, p: &Value) -> Result<Value> {
     let ranges = type_ranges(s, p, "type.resetTracking", |text, a| Some((edit::prev_char(text, a), a)))?;
     if !ranges.is_empty() {

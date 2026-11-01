@@ -339,6 +339,35 @@ fn transform_group_recurses() {
     assert_eq!(child.appearance.stroke_width(), 2.0);
 }
 
+/// A symbol instance in perspective keeps its picture moved by a transform, and loses its
+/// projection when no invertible map of finite numbers draws the moved picture.
+#[test]
+fn a_projection_follows_the_transform_or_is_removed() {
+    use vectorcraft_geom::{Homography, Point};
+    let instance = |h: Homography| {
+        let mut n = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::IDENTITY });
+        n.extras_mut().perspective =
+            Some(Box::new(crate::PerspectiveAttachment { projection: Some(h.to_array()), ..crate::PerspectiveAttachment::new("left", 0.0) }));
+        n
+    };
+    let projection = |n: &Node| n.extras().perspective.as_deref().and_then(|p| p.projection);
+    // A move by 10 scaled by 1e307: moved by a scale by 10, the product overflows unless scaled down.
+    let big = Homography([[1e307, 0.0, 1e308], [0.0, 1e307, 0.0], [0.0, 0.0, 1e307]]);
+    let mut n = instance(big);
+    n.transform(Affine::scale(10.0), false);
+    let p = Point::new(3.0, 7.0);
+    assert!(n.projection().unwrap().apply(p).unwrap().distance(Point::new(103.0, 7.0)) < 1e-9);
+    // A move by 1e200 moved by a scale by 1e150 sends every point to about (1e350, 0).
+    let far = Homography([[1.0, 0.0, 1e200], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
+    let mut n = instance(far);
+    n.transform(Affine::scale(1e150), false);
+    assert_eq!(projection(&n), None);
+    // A transform that is not invertible leaves the projection as it is.
+    let mut n = instance(far);
+    n.transform(Affine::scale(0.0), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+}
+
 #[test]
 fn unplaced_gradients_pin_only_when_a_refit_would_differ() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
@@ -453,6 +482,23 @@ fn objects_are_read_within_the_node_budget() {
     // A budget left by a read that failed doesn't carry over to the next one.
     assert!(with_node_budget(1, read).is_err());
     assert!(with_node_budget(3, read).is_ok());
+}
+
+/// An Intertwine member's areas of tier 2 and up are written and read back, and each one counts
+/// against [`with_node_budget`] as an object does, so a file of many empty areas is refused.
+#[test]
+fn intertwine_tiers_are_read_within_the_node_budget() {
+    let mut n = Node::group(NodeId(1), vec![]);
+    let area = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    n.extras_mut().intertwine_tiers = vec![PathData::default(), area];
+    let json = serde_json::to_string(&n).unwrap();
+    assert!(json.contains("\"intertwine_tiers\""), "{json}");
+    let read = || serde_json::from_str::<Node>(&json);
+    assert_eq!(with_node_budget(3, read).unwrap(), n, "the object and its two areas fit a budget of three");
+    let why = with_node_budget(2, read).unwrap_err().to_string();
+    assert!(why.contains("more than 2 objects"), "{why}");
+    let plain = serde_json::to_string(&Node::group(NodeId(1), vec![])).unwrap();
+    assert!(!plain.contains("intertwine_tiers"), "an object without tiers writes none: {plain}");
 }
 
 /// #3587: fields read before an object's `type` are buffered value by value within

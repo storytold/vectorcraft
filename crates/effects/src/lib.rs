@@ -34,6 +34,7 @@
 //! anchored at the object's centre.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod adjust;
 mod bake;
 mod clip;
@@ -94,7 +95,7 @@ mod catalog;
 mod geometry;
 mod params;
 
-pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, plugin_effects};
+pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects};
 pub(crate) use geometry::{Budget, apply_one};
 pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
 #[cfg(test)]

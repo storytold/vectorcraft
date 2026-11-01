@@ -295,4 +295,22 @@ mod tests {
         assert!(OtFeatures::default().to_tags().is_empty());
         assert!(OtFeatures::known_tag("-onum") && !OtFeatures::known_tag("zzzz"));
     }
+
+    /// The characters' language reaches the shaper (#4940): Source Serif 4's Turkish forms
+    /// (`locl`) keep f and i apart, and the dot on the i, where English ligates them. Runs in
+    /// different languages are shaped apart, each in its own.
+    #[test]
+    fn language_picks_the_fonts_forms() {
+        let st =
+            |language: Option<&str>| CharStyle { font_family: "Source Serif 4".into(), language: language.map(str::to_string), ..Default::default() };
+        let count = |language| layout(FontDb::global(), &TextObject::point(Point::ZERO, "fi", st(language))).glyphs.len();
+        assert_eq!((count(None), count(Some("en-US")), count(Some("tr"))), (1, 1, 2));
+        // A tag that isn't one (from a file) shapes without a language.
+        assert_eq!((count(Some("tr; DROP")), count(Some(""))), (1, 1));
+        let mut t = TextObject::point(Point::ZERO, "", st(None));
+        t.runs = vec![vectorcraft_doc::TextRun::new("fi", st(Some("tr"))), vectorcraft_doc::TextRun::new("fi", st(None))];
+        let glyphs = layout(FontDb::global(), &t).glyphs;
+        let per_run: Vec<usize> = (0..2).map(|r| glyphs.iter().filter(|g| g.run == r).count()).collect();
+        assert_eq!(per_run, [2, 1]);
+    }
 }

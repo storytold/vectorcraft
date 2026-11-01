@@ -182,6 +182,22 @@ mod tests {
         assert_eq!(fonts(&mut app)[0]["family"], "Source Sans 3");
     }
 
+    /// Change All leaves locked text in its font, and the status bar says so.
+    #[test]
+    fn change_all_says_when_locked_text_keeps_its_font() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
+        app.session.execute("object.lock", &json!({})).unwrap();
+        open(&mut app);
+        let d = app.ui.dialog.clone().unwrap();
+        let from = fonts(&mut app)[0].clone();
+        let r = change(&mut app, &d, &from, true).unwrap();
+        assert_eq!(r["runs"], 0, "{r}");
+        assert_eq!(fonts(&mut app)[0]["family"], "Missing Family");
+        assert_eq!(app.ui.status, "some text is hidden or locked, so its font wasn't replaced");
+    }
+
     #[test]
     fn find_in_folder_puts_the_missing_fonts_dialog_in_find_fonts_place() {
         let dir = std::fs::canonicalize(vectorcraft_testkit::temp_dir("find-font-folder")).unwrap();

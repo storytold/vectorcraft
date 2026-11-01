@@ -1147,8 +1147,9 @@ fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
 }
 
 /// Libraries panel library file `data` imported, then each kind's first item used on the rich
-/// document, moved into its first group and next to its kind's last item, the group moved and
-/// deleted and the library exported (#926).
+/// document, moved into its first group and next to its kind's last item, a colour and the
+/// selection added into that group next to the first ones, the group moved and deleted and the
+/// library exported (#926).
 fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "library.import", data, |s, r| {
         let lib = r["id"].clone();
@@ -1173,6 +1174,11 @@ fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
                 }
             }
         }
+        // Added where the panel drops it: into the first group, next to the first colour and graphic.
+        let group = &got["groups"][0]["name"];
+        let to = json!({"library": lib, "kind": "fillColor", "color": "#123456", "group": group, "after": got["colors"][0]["name"]});
+        let _ = no_panic(s.execute("library.add", &to));
+        let _ = no_panic(s.execute("library.add", &json!({"library": lib, "kind": "graphic", "group": group, "before": got["graphics"][0]["id"]})));
         if let Some(g) = got["groups"].get(0) {
             for to in [0, 1, 1_000_000] {
                 let _ = no_panic(s.execute("library.moveGroup", &json!({"library": lib, "group": g["name"], "to": to})));
@@ -1774,6 +1780,31 @@ proptest! {
 }
 
 // ---------- SVG saved with hidden layers and editing data ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated JP2 boxes and raw codestream markers must return errors rather than unwind.
+    #[test]
+    fn mutated_jpeg2000_files_do_not_panic(raw in any::<bool>(), cut in 0usize..300, edits in prop::collection::vec((0usize..300, any::<u8>()), 0..8)) {
+        let (name, mut bytes) = if raw {
+            ("a.j2k", include_bytes!("fixtures/jpeg2000/checker-raw.j2k").to_vec())
+        } else {
+            ("a.jp2", include_bytes!("fixtures/jpeg2000/checker.jp2").to_vec())
+        };
+        for (at, byte) in edits {
+            if let Some(slot) = bytes.get_mut(at) { *slot = byte; }
+        }
+        bytes.truncate(cut);
+        let result = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let params = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &params));
+            let _ = no_panic(s.execute("file.place", &params));
+        });
+        prop_assert!(result.is_ok(), "{name}: panicked: {:?}", result.err());
+    }
+}
 
 /// The rich document with a hidden layer, saved as SVG with its editing data.
 fn saved_svg() -> String {
@@ -2778,8 +2809,125 @@ fn text_eps_of(document: &str, objects: &str) -> Vec<u8> {
     editing_eps(&editing)
 }
 
+/// A text document of `kinds.len()` stories, story `i` in frame `i` of kind `kinds[i]` (0 point type,
+/// 1 area type, 2 type on a path, others a kind the reader doesn't know), with a line break inside
+/// its paragraph (`\x03`) at each of `soft` (by character, wrapping, the story's end included) and
+/// its paragraph runs `runs` characters long (the whole story when there are none).
+fn stories_document_text(kinds: &[u8], soft: &[usize], runs: &[usize]) -> String {
+    let frames: Vec<String> = kinds
+        .iter()
+        .enumerate()
+        .map(|(i, kind)| {
+            // Six rows 15 apart on the page (the canvas is y down), then the same rows again a little
+            // to the right.
+            let (x, y) = (8150.0 + (i / 6) as f64 * 5.0, 8150.0 + (i % 6) as f64 * 15.0);
+            match kind {
+                0 => format!("<< /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 {x} {y} ] >> >> >>"),
+                1 => format!(
+                    "<< /0 << /0 [ 0 0 ] /1 << /0 [ {x} {y} {x} {y} {0} {y} {0} {y} {0} {y} {0} {y} {0} {1} {0} {1} {0} {1} {0} {1} {x} {1} {x} {1} ] >> /2 << /0 1 >> >> >>",
+                    x + 70.0,
+                    y + 12.0
+                ),
+                2 => format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {x} {y} {x} {y} {0} {y} {0} {y} ] >> /2 << /0 2 /6 [ 0 0.9 ] >> >> >>", x + 70.0),
+                k => format!("<< /0 << /0 [ 0 0 ] /2 << /0 {k} /2 [ 1 0 0 1 {x} {y} ] >> >> >>"),
+            }
+        })
+        .collect();
+    let stories: Vec<String> = (0..kinds.len())
+        .map(|i| {
+            let mut chars: Vec<char> = format!("Line {i} one two\rand three\r").chars().collect();
+            for at in soft {
+                chars.insert(at % (chars.len() + 1), '\x03');
+            }
+            let n = chars.len();
+            let text: String = chars.iter().map(|c| match c {
+                '\r' => "\\r".to_string(),
+                '\x03' => "\\003".to_string(),
+                c => c.to_string(),
+            }).collect();
+            let lengths: Vec<usize> = if runs.is_empty() { vec![n] } else { runs.to_vec() };
+            let paras: String = lengths
+                .iter()
+                .enumerate()
+                .map(|(j, len)| format!("<< /0 << /0 << /0 () /5 << /0 {} /2 2 /4 {j} >> /6 0 >> >> /1 {len} >> ", j % 3))
+                .collect();
+            format!(
+                "<< /0 << /0 ({text}) /5 << /0 [ {paras}] >> /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /1 8.0 >> >> >> /1 {n} >> ] >> >> /1 << /0 [ << /0 {i} >> ] >> >>"
+            )
+        })
+        .collect();
+    format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ {} ] >> >>\n/1 << /1 [ {} ] /2 << /1 12.0 >> >>\n",
+        frames.join(" "),
+        stories.join(" ")
+    )
+}
+
+/// An EPS whose page draws `page` (PostScript), with the text `objects` on a layer that shows and
+/// the stories in `document`.
+fn shown_text_eps(document: &str, objects: &str, page: &str) -> Vec<u8> {
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let editing = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Words) Ln\n{objects}LB\n%AI5_EndLayer--\n\
+         %AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        lines.join("\n")
+    );
+    let stream = ascii85(&zstd(&editing));
+    let private: Vec<String> = stream.as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 0 1 setcmykcolor /Helvetica findfont 8 scalefont setfont {page}\nshowpage\n%%EOF\n%AI9_PrivateDataBegin\n%AI24_DataStream\n{}\n%AI9_PrivateDataEnd\n",
+        private.join("\n")
+    )
+    .into_bytes()
+}
+
+/// The page of [`stories_document_text`]'s first story's first line, at its place.
+const FIRST_LINE: &str = "8.5 91.5 moveto (Line 0 one two) show";
+
+/// The text objects of `pairs` (story, frame among the story's).
+fn story_objects(pairs: &[(u32, u32)]) -> String {
+    pairs.iter().map(|(story, frame)| format!("/AI11Text :\n{frame} /FrameIndex ,\n{story} /StoryIndex ,\n;\n")).collect()
+}
+
+/// The fixture, as it is (point type, area type and type on a path, a line break inside each
+/// paragraph), opens with its layers and every story's type from its text document.
+#[test]
+fn the_shown_stories_fixture_opens_with_its_layers() {
+    let doc = stories_document_text(&[0, 1, 2], &[4], &[]);
+    // Each story's first line where the page draws it: the area type's below its frame's top, the
+    // type on a path on its path.
+    let page = format!("{FIRST_LINE} 8.5 69.5 moveto (Line 1) show 8.5 61.5 moveto (Line 2) show");
+    let l = vectorcraft_engine::cmd::fileio::load("x.eps", &shown_text_eps(&doc, &story_objects(&[(0, 0), (1, 0), (2, 0)]), &page)).unwrap();
+    let names: Vec<_> = l.doc.layers.iter().map(|l| l.name.clone()).collect();
+    assert_eq!(names, [Some("Words".to_string())], "{:?}", l.warnings);
+    let mut texts = vec![];
+    l.doc.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            texts.push(t.plain_text());
+        }
+    });
+    assert_eq!(texts.len(), 3, "{texts:?} {:?}", l.warnings);
+    assert!(texts.iter().all(|t| t.contains('\u{2028}') && t.contains('\n')), "{texts:?}");
+}
+
 proptest! {
     #![proptest_config(config())]
+
+    /// An Illustrator EPS with text objects that show, in frames of every kind and some the reader
+    /// doesn't know, naming stories and frames that may not exist, with line breaks inside their
+    /// paragraphs and paragraph runs of any length: read as its layers, or as its page.
+    #[test]
+    fn eps_shown_stories_never_panic(
+        kinds in prop::collection::vec(0u8..4, 1..20),
+        pairs in prop::collection::vec((0u32..24, 0u32..3), 1..24),
+        soft in prop::collection::vec(0usize..40, 0..5),
+        runs in prop::collection::vec(0usize..40, 0..5),
+    ) {
+        let kinds: Vec<u8> = kinds.into_iter().map(|k| if k == 3 { 9 } else { k }).collect();
+        let bytes = shown_text_eps(&stories_document_text(&kinds, &soft, &runs), &story_objects(&pairs), FIRST_LINE);
+        survive("EPS with shown stories", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+    }
 
     /// An Illustrator EPS whose text document is damaged or hostile: read as its type, or without it.
     #[test]
@@ -4164,7 +4312,7 @@ fn brushed_document(kind: usize, art: usize) -> Document {
         Node::path(doc.alloc_id(), square(), Appearance::basic(fill, Paint::None, 0.0))
     };
     let (in_symbol, in_pattern) = (brushed(&mut doc), brushed(&mut doc));
-    doc.symbols.push(Symbol { name: "s0".into(), art: std::sync::Arc::new(in_symbol) });
+    doc.symbols.push(Symbol { dynamic: false, name: "s0".into(), art: std::sync::Arc::new(in_symbol) });
     doc.patterns.push(PatternDef::new("p0", vec![std::sync::Arc::new(in_pattern)]));
     let art = match art {
         0 => instance(&mut doc),
@@ -4354,7 +4502,7 @@ fn symbols_document(count: usize, levels: usize, last: &str) -> Document {
         for _ in 0..levels {
             art = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(art)]);
         }
-        doc.symbols.push(Symbol { name: format!("s{i}"), art: std::sync::Arc::new(art) });
+        doc.symbols.push(Symbol { dynamic: false, name: format!("s{i}"), art: std::sync::Arc::new(art) });
     }
     let first = instance(&mut doc, "s0".into());
     let layer = doc.layers[0].id;

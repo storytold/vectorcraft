@@ -667,10 +667,58 @@ shown_when = ["The Measure tool: drag to measure distance and angle."]
 hotspot = "Exact, because precision matters here (an open centre suits it)."
 
 [[cursor]]
+id = "SmartPen"
+group = "Drawing and editing tools"
+shown_when = ["The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path. Over a path, or while a path is drawn, the tool shows the Pen's and Direct Selection's cursors for what a click there does."]
+hotspot = "The nib's tip."
+
+[[cursor]]
 id = "PrintTiling"
 group = "Drawing and editing tools"
 shown_when = ["The Print Tiling tool: a drag moves the printable page area over the artboard (it snaps to the artboard's edges)."]
 hotspot = "The page corner being placed."
+
+[[cursor]]
+id = "AnchorEraser"
+group = "Drawing and editing tools"
+shown_when = ["The Anchor Eraser Brush (Path Precision Tools add-on): a drag over selected paths removes the anchors under the brush that the outline can do without. The app draws the brush's size as a circle around the cursor."]
+hotspot = "The brush centre."
+
+[[cursor]]
+id = "ExtendPath"
+group = "Drawing and editing tools"
+shown_when = ["The Extend Path tool (Path Precision Tools add-on): a drag from an end of an open path lengthens or shortens the path there."]
+hotspot = "Exact: the end being dragged follows it."
+
+[[cursor]]
+id = "MeasureInspect"
+group = "Drawing and editing tools"
+shown_when = ["The Measure & Inspect tool (Path Precision Tools add-on): drag to measure distance and angle; hover a path to read its lengths, area, curvature and angles."]
+hotspot = "Exact, because precision matters here (an open centre suits it)."
+
+[[cursor]]
+id = "ParametricShape"
+group = "Drawing and editing tools"
+shown_when = ["The Parametric Shape Tool (Path Precision Tools add-on): a drag draws a re-editable shape out from its centre; a click selects one and shows its handles."]
+hotspot = "Exact: the centre of the shape being drawn."
+
+[[cursor]]
+id = "CornerTool"
+group = "Drawing and editing tools"
+shown_when = ["The Corner Tool (Path Precision Tools add-on): a click or drag on an anchor where two sides meet cuts a corner there; a drag on a corner's marker resizes it; an Alt-drag cuts corners on every anchor inside the marquee."]
+hotspot = "Exact: the anchor or marker being picked."
+
+[[cursor]]
+id = "SlideAnchor"
+group = "Drawing and editing tools"
+shown_when = ["The Slide Anchor Along Path tool (Path Precision Tools add-on): a drag moves an anchor along the curve it sits on."]
+hotspot = "Exact: the anchor being dragged follows it along the path."
+
+[[cursor]]
+id = "SharedEdge"
+group = "Drawing and editing tools"
+shown_when = ["The Shared Edge Merge Tool (Path Precision Tools add-on): a click merges the touching edges of two paths under the round brush, or brings their anchors together there."]
+hotspot = "Exact: the centre of the brush, drawn by the app as a circle around the cursor."
 
 # ── Symbolism tools ───────────────────────────────────────────────────────────────────────────────
 # The brush size is drawn by the app as a circle around the cursor.

@@ -1,6 +1,6 @@
 use super::flow::flow;
 use super::region::Region;
-use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Shape, Tcy, TextLayout, TextObject, VerticalAlign, is_cjk, punct};
+use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, is_cjk, punct};
 
 /// System Layout on or Fractional Widths off: each character that takes space advances by a whole
 /// number of points, at least one, so small type does not collapse onto itself. A zero advance (a
@@ -242,28 +242,8 @@ pub(super) fn stands_upright(g: &SGlyph) -> bool {
 
 pub(super) fn finish_bounds(out: &mut TextLayout) {
     let xf = out.line_xf;
-    let mut b: Option<Rect> = None;
+    let mut b: Option<Rect> = out.ink_bounds();
     let mut add = |r: Rect| b = Some(b.map_or(r, |b| b.union(r)));
-    for g in &out.glyphs {
-        if !g.outline.elements().is_empty() {
-            add(g.outline.bounding_box());
-        }
-        if let Some((image, xf)) = g.placed_image() {
-            add(xf.transform_rect_bbox(image.rect()));
-        }
-        if let Some(b) = g.colour.as_ref().and_then(|c| c.geometric_bounds()) {
-            add(g.xf.transform_rect_bbox(b));
-        }
-    }
-    // Ruby: covered by its line's ascent, but its ink can overhang sideways past the line.
-    for g in &out.ruby {
-        if !g.outline.elements().is_empty() {
-            add(g.outline.bounding_box());
-        }
-    }
-    for i in &out.inlines {
-        add(i.bounds);
-    }
     if !out.on_path {
         for l in &out.lines {
             add(xf.transform_rect_bbox(Rect::new(l.x0.min(l.x1), l.baseline - l.ascent, l.x0.max(l.x1), l.baseline + l.descent)));

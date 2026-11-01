@@ -9,28 +9,35 @@
 //! key toggles to Smooth Tool off) draws a straight line at any angle. The Pencil's new path starts and ends on
 //! Smart Guides ([`DrawSnap`]: an anchor, a path, in line with the art), hovering too; the points
 //! between follow the hand. The Paintbrush records the pen pressure of each point (a stroke a pen
-//! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes. The
-//! other tools collect the drag polyline (shown as an overlay) and run
-//! one command on release. With Shift held, the Blob Brush's points stay on the horizontal or
+//! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes, and
+//! so do the Blob Brush and the Eraser while their Size varies with Pressure. The other tools
+//! collect the drag polyline (shown as an overlay) and run one command on release. With Shift held, the Blob Brush's points stay on the horizontal or
 //! vertical line through the press point. Alt held at the press, or before the Blob Brush's drag
 //! has moved, switches the Blob Brush to the Smooth tool: the drag smooths the selected paths.
+//! Alt held at a Paintbrush press with a selected path also smooths; Alt pressed after its stroke
+//! begins closes the path on release.
+//! Alt held at the Knife's press makes it cut along the straight line from the press point to the
+//! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
+//! line to 45° steps from the canvas axes.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
-use super::{FEEDBACK, eraser_area, points_json, polyline};
+use super::{FEEDBACK, blob_area, eraser_area, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
-/// How far from its drag the Smooth tool smooths, in screen pixels. The Pencil uses the same
-/// radius while Alt switches it to the Smooth tool.
+/// How far from its drag the Smooth tool smooths, in screen pixels. Alt smoothing with the
+/// Pencil, Paintbrush or Blob Brush uses the same radius.
 const SMOOTH_RADIUS: f64 = 12.0;
 
 /// The finest Fidelity (screen pixels) a Pencil or Paintbrush stroke is fitted at while it is drawn:
 /// a fit's cost grows as its Fidelity shrinks (at 0.01 pt a long pen stroke lagged, #4565), and
 /// a preview within half a pixel of the stroke looks the same. The release fits it at its Fidelity.
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
+/// The Smooth tool's Fidelity until Smooth Tool Options sets another.
+const SMOOTH_FIDELITY: f64 = 2.5;
 
 pub struct GestureTool {
     /// How many points the last preview of the stroke had ([`crate::previews_at`]); 0 when it was
@@ -38,7 +45,8 @@ pub struct GestureTool {
     previewed: usize,
     id: &'static str,
     points: Vec<Point>,
-    /// The pen pressure of each of `points` (the Paintbrush only).
+    /// The pen pressure of each of `points` (the Paintbrush, and the Blob Brush and the Eraser
+    /// with `size_pressure`).
     pressures: Vec<f32>,
     active: bool,
     began: bool,
@@ -57,9 +65,15 @@ pub struct GestureTool {
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
-    /// The angle of the Eraser tip's long axis, in degrees counter-clockwise from horizontal.
+    /// Blob Brush and Eraser Tool Options' Size set to Pressure (else Fixed): the tip is `size` −
+    /// `size_variation` wide at the lightest pen pressure and `size` + `size_variation` at the
+    /// heaviest.
+    pub size_pressure: bool,
+    /// Blob Brush and Eraser Tool Options' Size Variation, in points.
+    pub size_variation: f64,
+    /// The angle of the Blob Brush or Eraser tip's long axis, in degrees counter-clockwise from horizontal.
     pub angle: f64,
-    /// The Eraser tip's short axis in percent of its long one (100: round).
+    /// The Blob Brush or Eraser tip's short axis in percent of its long one (100: round).
     pub roundness: f64,
     /// Fill new pencil/brush strokes.
     pub fill: bool,
@@ -67,7 +81,8 @@ pub struct GestureTool {
     /// or merges into (on for the Pencil and Paintbrush, off for the Blob Brush).
     pub keep_selected: bool,
     /// "Alt key toggles to Smooth Tool": holding Alt with the Pencil tool smooths selected paths
-    /// instead of closing the path (Pencil only, off by default).
+    /// instead of closing the path (Pencil only, off by default). Paintbrush Alt smoothing with a
+    /// selected path and Blob Brush Alt smoothing do not use this toggle.
     pub alt_smooth: bool,
     /// "Live preview" (Pencil only, on by default): the stroke shows with its fill and stroke as it
     /// is drawn. Off, only a thin line follows the pen while drawing, and the path takes its fill
@@ -77,16 +92,19 @@ pub struct GestureTool {
     /// preview shows the points joined by straight segments and the release fits them (Pencil
     /// only, on by default).
     pub live_fit: bool,
-    /// Active drag is smoothing with the Pencil or the Blob Brush (Alt held).
+    /// The Smooth tool's Fidelity, used when Alt switches the Pencil, Paintbrush or Blob Brush to Smooth.
+    /// The engine sets it from Smooth Tool Options (`smoothFidelity`).
+    smooth_fidelity: f64,
+    /// Active drag is smoothing with the Pencil, Paintbrush or Blob Brush (Alt held).
     smoothing: bool,
     /// The pointer has moved from the press point, by any distance (a move too short to add a
     /// point counts).
     moved: bool,
-    /// Active Pencil drag draws a straight line (Shift or Alt held at the press): the stroke is
-    /// the press point and the pointer.
+    /// Active Pencil drag draws a straight line (Shift or Alt held at the press), or active Knife
+    /// drag cuts along one (Alt held at the press): the stroke is the press point and the pointer.
     straight: bool,
-    /// The straight line is Alt's: the pointer is not constrained to 45° steps, and the line's end
-    /// snaps to Smart Guides as a stroke's end does.
+    /// The straight line is not constrained to 45° steps: the Pencil's Alt line, whose end snaps to
+    /// Smart Guides as a stroke's end does, or the Knife's line while Shift is up.
     unconstrained: bool,
     /// Axis selected during the current uninterrupted Shift interval, in degrees.
     shift_line: Option<f64>,
@@ -111,6 +129,22 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
     }
 }
 
+/// Whether the selection contains a path the Smooth command can act on.
+fn has_selected_smooth_path(cx: &ToolContext) -> bool {
+    let editable = cx.doc.editable();
+    cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
+        let mut found = false;
+        n.walk(&mut |child| {
+            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(|sp| sp.anchors.len() >= 3))
+                && editable(child.id)
+            {
+                found = true;
+            }
+        });
+        found
+    })
+}
+
 impl GestureTool {
     pub fn new(id: &str) -> Self {
         let id: &'static str = match id {
@@ -123,7 +157,7 @@ impl GestureTool {
             "join" => "join",
             _ => "pencil",
         };
-        let fidelity = if id == "smooth" { 2.5 } else { 1.5 };
+        let fidelity = if id == "smooth" { SMOOTH_FIDELITY } else { 1.5 };
         Self {
             id,
             previewed: 0,
@@ -137,6 +171,8 @@ impl GestureTool {
             redraw: None,
             fidelity,
             size: 10.0,
+            size_pressure: false,
+            size_variation: 0.0,
             angle: 0.0,
             roundness: 100.0,
             fill: false,
@@ -145,6 +181,7 @@ impl GestureTool {
             alt_smooth: false,
             live_preview: true,
             live_fit: true,
+            smooth_fidelity: SMOOTH_FIDELITY,
             smoothing: false,
             moved: false,
             straight: false,
@@ -175,7 +212,7 @@ impl GestureTool {
     /// Add a stroke sample.
     fn push(&mut self, p: Point, pressure: f32) {
         self.points.push(p);
-        if self.id == "paintbrush" {
+        if self.id == "paintbrush" || (self.varies_size() && self.size_pressure) {
             self.pressures.push(pressure);
         }
     }
@@ -192,7 +229,16 @@ impl GestureTool {
         self.id == "blobBrush" && m.alt && !self.moved
     }
 
-    /// Constrain the Pencil line or the current Blob Brush sample. Blob Brush chooses an
+    /// Shift keeps an active straight Knife cut at 45° steps; without Shift it follows the pointer.
+    /// Releasing Alt does not end a straight cut.
+    fn knife_shift(&mut self, m: Mods) {
+        if self.id == "knife" && self.straight {
+            self.unconstrained = !m.shift;
+        }
+    }
+
+    /// Constrain a straight Pencil line from the Constrain Angle, a straight Knife cut from the
+    /// canvas axes, or the current Blob Brush sample. Blob Brush chooses an
     /// axis once per uninterrupted Shift interval; samples already drawn never move.
     /// A smoothing drag follows the pointer without a Shift constraint.
     fn constrained(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Point {
@@ -202,7 +248,8 @@ impl GestureTool {
         if self.straight
             && let Some(&start) = self.points.first()
         {
-            return start + vectorcraft_geom::constrain_angle_from(p - start, 45.0, cx.constrain_angle);
+            let origin = if self.id == "knife" { 0.0 } else { cx.constrain_angle };
+            return start + vectorcraft_geom::constrain_angle_from(p - start, 45.0, origin);
         }
         let Some(&start) = self.points.first().filter(|_| self.id == "blobBrush" && m.shift && !self.smoothing) else {
             self.shift_line = None;
@@ -234,6 +281,19 @@ impl GestureTool {
         self.pressures.clear();
         self.previewed = 0;
         self.shift_line = None;
+    }
+
+    /// Does the tool's Size take Fixed or Pressure (the Blob Brush and the Eraser)?
+    fn varies_size(&self) -> bool {
+        matches!(self.id, "blobBrush" | "eraser")
+    }
+
+    /// The pen pressure of each point of a Blob Brush or Eraser stroke whose Size varies with
+    /// Pressure, when a pen pressed less than fully anywhere along it (a stroke without pressure
+    /// keeps its Size).
+    fn size_pressures(&self) -> Option<&[f32]> {
+        let pressed = self.pressures.len() == self.points.len() && self.pressures.iter().any(|p| *p < 1.0);
+        (self.varies_size() && self.size_pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
     }
 
     /// The stroke's points, each `[x, y, pressure]` when a pen pressed less than fully anywhere
@@ -348,7 +408,7 @@ impl GestureTool {
             if has_sel && pts.len() >= 2 {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": self.fidelity}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": self.smooth_fidelity}),
                 )];
             }
             return vec![];
@@ -361,7 +421,7 @@ impl GestureTool {
                 // Close Paths When Ends Are Within is off at 0 pixels.
                 let near = pts.last().is_some_and(|&end| self.ends_near_start(cx, end));
                 // A straight line has two points: closing it would draw it back over itself.
-                let closed = !self.straight && ((m.alt && !self.alt_smooth) || (self.extend.is_none() && near));
+                let closed = !self.straight && ((m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || (self.extend.is_none() && near));
                 let mut params = self.freehand_params(closed);
                 // A Pencil stroke that continues a selected path and ends on an open end of another
                 // path selected at the press connects the two.
@@ -374,16 +434,27 @@ impl GestureTool {
             "blobBrush" => vec![Action::Exec(
                 "path.blob".into(),
                 json!({
-                    "points": points_json(pts),
+                    "points": self.stroke_json(),
                     "size": self.size,
+                    "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
+                    "sizeVariation": self.size_variation,
                     "fidelity": self.fidelity,
+                    "angle": self.angle,
+                    "roundness": self.roundness,
                     "keepSelected": self.keep_selected,
                     "mergeOnlySelection": self.merge_only_selection
                 }),
             )],
             "eraser" => vec![Action::Exec(
                 "path.eraseRegion".into(),
-                json!({"points": points_json(pts), "size": self.size, "angle": self.angle, "roundness": self.roundness}),
+                json!({
+                    "points": self.stroke_json(),
+                    "size": self.size,
+                    "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
+                    "sizeVariation": self.size_variation,
+                    "angle": self.angle,
+                    "roundness": self.roundness
+                }),
             )],
             "knife" if pts.len() >= 2 => vec![Action::Exec("path.knife".into(), json!({"points": points_json(pts)}))],
             "smooth" if has_sel && pts.len() >= 2 => {
@@ -414,12 +485,15 @@ impl Tool for GestureTool {
                 self.active = true;
                 self.began = false;
                 self.near_start = false;
-                // Alt switches the Pencil to the Smooth tool while Alt key toggles to Smooth Tool is on, and always
-                // switches the Blob Brush.
-                self.smoothing = ev.mods.alt && (self.id == "blobBrush" || (self.id == "pencil" && self.alt_smooth));
+                // Alt switches the Pencil when its toggle is on, the Blob Brush always, and the
+                // Paintbrush when the press has a selected path.
+                self.smoothing = ev.mods.alt
+                    && (self.id == "blobBrush"
+                        || (self.id == "pencil" && self.alt_smooth)
+                        || (self.id == "paintbrush" && has_selected_smooth_path(cx)));
                 // Alt draws a straight line only while it doesn't lend the Smooth tool; with Shift
-                // too, the line keeps Shift's 45° steps.
-                self.straight = self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt);
+                // too, the line keeps Shift's 45° steps. Alt makes the Knife cut along a straight line.
+                self.straight = (self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt)) || (self.id == "knife" && ev.mods.alt);
                 self.unconstrained = self.straight && !ev.mods.shift;
                 let extend = if self.draws_path() && !self.smoothing { self.find_extend(cx, p) } else { None };
                 self.extend = extend.map(|(id, at_start, _)| (id, at_start));
@@ -449,6 +523,7 @@ impl Tool for GestureTool {
                 if (!self.began && !self.straight && self.id == "pencil" && self.alt_smooth && ev.mods.alt) || self.blob_alt_smooths(ev.mods) {
                     self.smoothing = true;
                 }
+                self.knife_shift(ev.mods);
                 self.moved |= self.points.first().is_some_and(|start| p.distance(*start) > vectorcraft_geom::EPS);
                 let p = self.constrained(cx, p, ev.mods);
                 let mut end = p;
@@ -517,6 +592,8 @@ impl Tool for GestureTool {
                 if self.blob_alt_smooths(ev.mods) {
                     self.smoothing = true;
                 }
+                // Alt only on release cannot turn a freehand Knife drag into a straight cut.
+                self.knife_shift(ev.mods);
                 let p = self.constrained(cx, p, ev.mods);
                 let end = if self.snaps() && !self.smoothing && (!self.straight || self.unconstrained) { self.snap.drag(cx, p, None) } else { p };
                 self.snap.clear();
@@ -616,13 +693,35 @@ impl Tool for GestureTool {
             _ => 1.0,
         };
         let color = if self.id == "eraser" { [0x80, 0x80, 0x80] } else { FEEDBACK };
-        // A tip that is not round shows the outline of the area it covers.
-        if self.id == "eraser" && self.roundness < 100.0 {
-            let area = eraser_area(&self.points, self.size, self.angle, self.roundness);
-            o.push(Overlay::Path { path: area.to_bezpath(), color, width: 1.0, dashed: false });
-            return o;
+        // A tip that is not round shows the outline of the area it covers, each step of the drag
+        // as wide as the pen pressed there with Size set to Pressure.
+        if matches!(self.id, "eraser" | "blobBrush") && self.roundness < 100.0 && !self.smoothing {
+            let area = |pts: &[Point], size| {
+                if self.id == "blobBrush" {
+                    blob_area(pts, size, self.angle, self.roundness)
+                } else {
+                    eraser_area(pts, size, self.angle, self.roundness)
+                }
+            };
+            if let Some(pressures) = self.size_pressures() {
+                for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
+                    let pressure = f64::from(p[0] + p[1]) / 2.0;
+                    let size = super::pressure_size(self.size, self.size_variation, pressure);
+                    o.push(Overlay::Path { path: area(seg, size).to_bezpath(), color, width: 1.0, dashed: false });
+                }
+            } else {
+                o.push(Overlay::Path { path: area(&self.points, self.size).to_bezpath(), color, width: 1.0, dashed: false });
+            }
+        } else if let Some(pressures) = self.size_pressures() {
+            // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
+            for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
+                let pressure = f64::from(p[0] + p[1]) / 2.0;
+                let width = super::pressure_size(self.size, self.size_variation, pressure) * cx.zoom;
+                o.push(Overlay::Path { path: polyline(seg), color, width: width as f32, dashed: false });
+            }
+        } else {
+            o.push(Overlay::Path { path: polyline(&self.points), color, width, dashed: self.id == "knife" });
         }
-        o.push(Overlay::Path { path: polyline(&self.points), color, width, dashed: self.id == "knife" });
         if cx.measurement_labels && self.id == "blobBrush" && !self.smoothing {
             let last = self.points[self.points.len() - 1];
             let length = self.points.windows(2).map(|w| w[0].distance(w[1])).sum();
@@ -631,9 +730,13 @@ impl Tool for GestureTool {
         o
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
-        // A drag that smooths, or Alt before a Pencil or Blob Brush stroke has begun to draw (a
-        // stroke that has begun keeps drawing with Alt).
-        if self.smoothing || (self.id == "pencil" && self.alt_smooth && m.alt && !self.began) || self.blob_alt_smooths(m) {
+        // An active smoothing drag, or Alt before a press that would switch the Pencil, Paintbrush
+        // or Blob Brush to Smooth. A Paintbrush stroke already drawing keeps drawing with Alt.
+        if self.smoothing
+            || (self.id == "pencil" && self.alt_smooth && m.alt && !self.began)
+            || (!self.active && self.id == "paintbrush" && m.alt && has_selected_smooth_path(cx))
+            || self.blob_alt_smooths(m)
+        {
             return Cursor::Smooth;
         }
         // Before a press that would draw a straight line: over an end of a selected open path,
@@ -644,7 +747,7 @@ impl Tool for GestureTool {
         // Alt held at the release closes the path (`finish`).
         // A straight line stays open, so its release has nothing to close, and before a press Alt
         // gives the Pencil a straight line.
-        if self.draws_path() && !self.alt_smooth && m.alt && !self.straight && (self.active || self.id != "pencil") {
+        if self.draws_path() && (self.id == "paintbrush" || !self.alt_smooth) && m.alt && !self.straight && (self.active || self.id != "pencil") {
             return if self.id == "paintbrush" { Cursor::PaintbrushClose } else { Cursor::PencilClose };
         }
         // A release near a freehand stroke's start closes it too (`finish`): the ring shows while
@@ -691,9 +794,24 @@ impl Tool for GestureTool {
             }
             "smooth" => json!({"fidelity": self.fidelity}),
             "blobBrush" => {
-                json!({"fidelity": self.fidelity, "size": self.size, "keepSelected": self.keep_selected, "mergeOnlySelection": self.merge_only_selection})
+                json!({
+                    "fidelity": self.fidelity,
+                    "size": self.size,
+                    "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
+                    "sizeVariation": self.size_variation,
+                    "angle": self.angle,
+                    "roundness": self.roundness,
+                    "keepSelected": self.keep_selected,
+                    "mergeOnlySelection": self.merge_only_selection
+                })
             }
-            "eraser" => json!({"size": self.size, "angle": self.angle, "roundness": self.roundness}),
+            "eraser" => json!({
+                "size": self.size,
+                "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
+                "sizeVariation": self.size_variation,
+                "angle": self.angle,
+                "roundness": self.roundness
+            }),
             _ => Value::Null,
         }
     }
@@ -701,12 +819,21 @@ impl Tool for GestureTool {
         match key {
             "fidelity" => self.fidelity = v.as_f64().unwrap_or(self.fidelity).clamp(super::min_fidelity(self.id), 100.0),
             "size" => self.size = v.as_f64().unwrap_or(self.size).clamp(0.1, 1000.0),
+            "sizeMode" if self.varies_size() => match v.as_str() {
+                Some("pressure") => self.size_pressure = true,
+                Some("fixed") => self.size_pressure = false,
+                _ => {}
+            },
+            "sizeVariation" if self.varies_size() => self.size_variation = v.as_f64().unwrap_or(self.size_variation).clamp(0.0, 1000.0),
             "angle" => self.angle = v.as_f64().unwrap_or(self.angle).clamp(-180.0, 180.0),
-            "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(1.0, 100.0),
+            "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(if self.id == "blobBrush" { 0.0 } else { 1.0 }, 100.0),
             "fill" => self.fill = v.as_bool().unwrap_or(self.fill),
             "altSmooth" => self.alt_smooth = v.as_bool().unwrap_or(self.alt_smooth),
             "livePreview" if self.id == "pencil" => self.live_preview = v.as_bool().unwrap_or(self.live_preview),
             "liveFit" if self.id == "pencil" => self.live_fit = v.as_bool().unwrap_or(self.live_fit),
+            "smoothFidelity" if matches!(self.id, "pencil" | "paintbrush" | "blobBrush") => {
+                self.smooth_fidelity = v.as_f64().unwrap_or(self.smooth_fidelity).clamp(super::min_fidelity("smooth"), 100.0)
+            }
             "keepSelected" => self.keep_selected = v.as_bool().unwrap_or(self.keep_selected),
             "mergeOnlySelection" => self.merge_only_selection = v.as_bool().unwrap_or(self.merge_only_selection),
             "editWithin" => self.edit_within = v.as_f64().unwrap_or(self.edit_within).clamp(0.0, 100.0),

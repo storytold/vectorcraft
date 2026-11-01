@@ -1191,10 +1191,10 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
     let instance = |name: &str| Arc::new(Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY }));
     let mut d = Document::new(100.0, 100.0);
     // A 500 × 500 grid as a symbol's art, directly and inside a group; a symbol holding itself.
-    d.symbols.push(Symbol { name: "Grid".into(), art: repeat(grid(unit(), 500)) });
-    d.symbols.push(Symbol { name: "Grouped".into(), art: Arc::new(Node::group(NodeId(0), vec![repeat(grid(unit(), 500))])) });
-    d.symbols.push(Symbol { name: "Loop".into(), art: Arc::new(Node::group(NodeId(0), vec![unit(), instance("Loop")])) });
-    d.symbols.push(Symbol { name: "Small".into(), art: repeat(grid(unit(), 3)) });
+    d.symbols.push(Symbol { dynamic: false, name: "Grid".into(), art: repeat(grid(unit(), 500)) });
+    d.symbols.push(Symbol { dynamic: false, name: "Grouped".into(), art: Arc::new(Node::group(NodeId(0), vec![repeat(grid(unit(), 500))])) });
+    d.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(Node::group(NodeId(0), vec![unit(), instance("Loop")])) });
+    d.symbols.push(Symbol { dynamic: false, name: "Small".into(), art: repeat(grid(unit(), 3)) });
     // A 3 × 3 grid of an instance of each: each copy draws 250,000 instances, so one copy fits.
     for name in ["Grid", "Grouped"] {
         let outer = Node::new(NodeId(0), NodeKind::Repeat(grid(instance(name), 3)));
@@ -1206,4 +1206,18 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
     assert_eq!(expand_live(Some(&d), &looped).len(), 9);
     let small = Node::new(NodeId(0), NodeKind::Repeat(RepeatSpec::mirror(vec![instance("Small")], 90.0, 5.0)));
     assert_eq!(expand_live(Some(&d), &small).len(), 2);
+}
+
+#[test]
+fn a_distance_parameters_range_comes_from_its_documentation() {
+    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    // The effect applies the range's floor to a radius below it.
+    assert_eq!(
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 1})),
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 4}))
+    );
+    // A distance documented without a range, and unknown effects and parameters, have none.
+    assert_eq!(length_range("path.offsetPath", "offset"), None);
+    assert_eq!(length_range("pixelate.colorHalftone", "channel1"), None);
+    assert_eq!(length_range("no.such", "maxRadius"), None);
 }

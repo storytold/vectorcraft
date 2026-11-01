@@ -75,17 +75,23 @@ pub(super) fn ask_next(app: &mut VectorcraftApp, rest: Vec<Value>, modified: Vec
 
 /// With Update Links: Ask When Modified, offer to read the modified linked files `ids` again.
 fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
-    ask(app, ids, tl!("{count} linked image(s) changed since this document was saved. Show the new versions?"));
+    ask(
+        app,
+        ids,
+        "{n} linked image changed since this document was saved. Show the new version?",
+        "{n} linked images changed since this document was saved. Show the new versions?",
+    );
 }
 
 /// The same offer for linked files another app changed while the document is open
 /// ([`vectorcraft_engine::link_watch`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn ask_update_changed(app: &mut VectorcraftApp, ids: Vec<Value>) {
-    ask(app, ids, tl!("{count} linked image(s) changed on disk. Show the new versions?"));
+    ask(app, ids, "{n} linked image changed on disk. Show the new version?", "{n} linked images changed on disk. Show the new versions?");
 }
 
-fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, question: &str) {
+/// Ask about the modified linked files `ids`; `one` and `other` are the English forms of the question.
+fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, one: &str, other: &str) {
     if ids.is_empty() {
         return;
     }
@@ -93,7 +99,7 @@ fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, question: &str) {
         app.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", ids.len()));
         return;
     }
-    let detail = crate::i18n::fmt(question, &[("count", &ids.len().to_string())]);
+    let detail = crate::i18n::tn(ids.len() as u64, one, other);
     super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
 }
 
@@ -133,7 +139,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if rest > 0 {
         ui.add_space(10.0);
         let all = d.bool("applyToAll");
-        let label = crate::i18n::fmt(tl!("Apply to All ({count} more missing)"), &[("count", &rest.to_string())]);
+        let label = crate::i18n::tn(rest as u64, "Apply to All ({n} more missing)", "Apply to All ({n} more missing)");
         if widgets::check(ui, &label, all, true) {
             d.fields.insert("applyToAll".into(), json!(!all));
         }
@@ -260,6 +266,24 @@ mod tests {
         let status: Vec<&str> = c["links"].as_array().unwrap().iter().map(|l| l["status"].as_str().unwrap()).collect();
         assert_eq!((status, c["missing"].as_u64()), (vec!["ok", "missing"], Some(1)));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The question about modified linked files uses the form the language's plural rule picks for
+    /// the count.
+    #[test]
+    fn the_modified_links_question_uses_each_count_form() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut question = |code: &str, n: u64| {
+            crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+            ask_update(&mut app, (0..n).map(|id| json!(id)).collect());
+            let detail = app.ui.dialog.take().map(|d| d.str("detail"));
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            detail.unwrap_or_default()
+        };
+        assert_eq!(question("en", 1), "1 linked image changed since this document was saved. Show the new version?");
+        assert_eq!(question("cs", 1), "Od uložení dokumentu se změnil 1 propojený obrázek. Zobrazit novou verzi?");
+        assert_eq!(question("cs", 2), "Od uložení dokumentu se změnily 2 propojené obrázky. Zobrazit nové verze?");
+        assert_eq!(question("cs", 5), "Od uložení dokumentu se změnilo 5 propojených obrázků. Zobrazit nové verze?");
     }
 
     #[test]

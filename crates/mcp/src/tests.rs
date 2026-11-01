@@ -1398,6 +1398,30 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
 }
 
+#[test]
+fn pointer_gesture_forwards_backquote_on_each_event() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let selected = call(&mut s, 2, "run_command", json!({"command": "select.set", "params": {"ids": [id]}}));
+    assert_eq!(selected["isError"], false, "{selected}");
+    let drag = call(
+        &mut s,
+        3,
+        "pointer_gesture",
+        json!({"tool": "selection", "backquote": true, "events": [
+            {"kind": "down", "x": 125, "y": 125},
+            {"kind": "drag", "x": 145, "y": 125},
+            {"kind": "up", "x": 145, "y": 125}
+        ]}),
+    );
+    assert_eq!(drag["isError"], false, "{drag}");
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let rect = doc["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).unwrap();
+    assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
+}
+
 /// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
 /// objects it reaches, so a selected one leaves the selection and an unselected one joins it.
 #[test]

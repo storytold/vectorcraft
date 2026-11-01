@@ -8,7 +8,7 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{CharStyle, Document, NodeId, NodeKind, ParaStyle, TextStyleDef};
+use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, TextStyleDef};
 
 use super::typecmd::{refresh_bounds, text_targets};
 use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, id_param, index, ok, str_param};
@@ -99,9 +99,17 @@ macro_rules! style_cmds {
                 concat!($p, ".delete"),
                 concat!("Delete ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name} (text keeps its look)",
+                "{name} | {names: [name…]} delete styles in one undo step (text keeps its look; never the Normal style)",
                 |s, p| delete(s, p, $kind),
                 true,
+            ),
+            spec(
+                concat!($p, ".unused"),
+                "Select All Unused",
+                &["Window", "Type", $menu],
+                "{} → {names: [the styles no text uses, in panel order; never the Normal style]} (the panel highlights them)",
+                |s, _| unused(s, $kind),
+                false,
             ),
         ]
     };
@@ -109,6 +117,14 @@ macro_rules! style_cmds {
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(Kind::Char, "charStyle", "Character Styles", "Character");
+    v.push(spec(
+        "charStyle.edit",
+        "Edit Character Style",
+        &[],
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides",
+        |s, p| edit_style(s, p, Kind::Char),
+        true,
+    ));
     v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph"));
     v
 }
@@ -144,6 +160,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("fontAxes", json!(v.font_axes)),
         ("leading", json!(v.leading)),
         ("kerning", json!(v.kerning)),
+        ("opticalKerning", json!(v.optical_kerning)),
         ("features", json!(v.features)),
         ("overprint_fill", json!(v.overprint_fill)),
         ("overprint_stroke", json!(v.overprint_stroke)),
@@ -160,6 +177,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
+        ("language", json!(v.language)),
     ] {
         m.insert(k.into(), x);
     }
@@ -236,14 +254,16 @@ fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Val
 }
 
 /// `cur` after its style changed from `old` to `new`: attributes still equal to the old style's
-/// value (or not set by it) take the new value; overrides stay. `attrs` lists every attribute of
-/// `cur` ([`char_attrs`], [`para_attrs`]), so one at its default matches a style that sets the
-/// default. Unchanged if the style doesn't round-trip through JSON.
+/// value (or not set by it) take the new value, and removed attributes return to `base`;
+/// overrides stay. `attrs` lists every attribute of `cur` ([`char_attrs`], [`para_attrs`]), so
+/// one at its default matches a style that sets the default. Unchanged if the style doesn't
+/// round-trip through JSON.
 fn restyle<T: Serialize + DeserializeOwned + Clone>(
     cur: &T,
     attrs: fn(&T) -> Map<String, Value>,
     old: &Map<String, Value>,
     new: &Map<String, Value>,
+    base: &Map<String, Value>,
 ) -> T {
     let Some(full) = to_map(cur) else { return cur.clone() };
     let mut m = attrs(cur);
@@ -253,6 +273,14 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
+        }
+    }
+    for (k, v) in old {
+        if !new.contains_key(k)
+            && m.get(k) == Some(v)
+            && let Some(base_value) = base.get(k)
+        {
+            m.insert(k.clone(), base_value.clone());
         }
     }
     serde_json::from_value(Value::Object(m)).unwrap_or_else(|_| cur.clone())
@@ -273,15 +301,47 @@ fn font_change(before: &CharStyle, mut st: CharStyle, attrs: &Map<String, Value>
     st
 }
 
-/// Every text object id in the document.
-fn all_text(d: &Document) -> Vec<NodeId> {
-    let mut v = vec![];
-    d.walk(|n| {
-        if matches!(n.kind, NodeKind::Text(_)) {
-            v.push(n.id)
+/// Change text in layers, symbols, graph designs, pattern tiles, saved pattern tiles restored by
+/// Cancel, and brush art, including opacity masks in those trees.
+fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
+    fn has_text(n: &Node) -> bool {
+        matches!(n.kind, NodeKind::Text(_))
+            || n.extras().mask.as_ref().is_some_and(|mask| has_text(&mask.art))
+            || n.children().is_some_and(|children| children.iter().any(|child| has_text(child)))
+    }
+
+    fn visit(n: &mut Node, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
+        if let NodeKind::Text(t) = &mut n.kind {
+            f(t)?;
         }
-    });
-    v
+        if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+            && has_text(&mask.art)
+        {
+            visit(std::sync::Arc::make_mut(&mut mask.art), f)?;
+        }
+        for child in n.children_mut().into_iter().flatten() {
+            if has_text(child) {
+                visit(std::sync::Arc::make_mut(child), f)?;
+            }
+        }
+        Ok(())
+    }
+    let trees = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.graph_designs.iter_mut().map(|g| &mut g.art));
+    let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+    for root in trees.chain(patterns.flat_map(|p| &mut p.art)) {
+        if has_text(root) {
+            visit(std::sync::Arc::make_mut(root), f)?;
+        }
+    }
+    let mut brushes = vectorcraft_brush::library(d);
+    let original_brushes = brushes.clone();
+    for art in brushes.iter_mut().flat_map(|b| b.art_mut()) {
+        visit(art, f)?;
+    }
+    if brushes != original_brushes {
+        vectorcraft_brush::store(d, &brushes);
+    }
+    Ok(())
 }
 
 fn text_mut(d: &mut Document, id: NodeId) -> Option<&mut vectorcraft_doc::TextObject> {
@@ -291,32 +351,48 @@ fn text_mut(d: &mut Document, id: NodeId) -> Option<&mut vectorcraft_doc::TextOb
     }
 }
 
-/// How many runs (char) or paragraphs (para) use `name`.
-fn uses(d: &Document, kind: Kind, name: &str) -> usize {
-    let target = (name != kind.normal()).then_some(name);
-    let mut n = 0;
-    d.walk(|node| {
-        if let NodeKind::Text(t) = &node.kind {
-            n += match kind {
-                Kind::Char => t.runs.iter().filter(|r| r.style.style_name.as_deref() == target).count(),
-                Kind::Para => (0..t.paragraph_count()).filter(|&i| t.para_at(i).style_name.as_deref() == target).count(),
-            };
-        }
-    });
+/// How many runs (char) or paragraphs (para) use each style, by style name (`None`: the Normal
+/// style). Type in the art (opacity masks included), symbols, graph designs, pattern tiles and the
+/// art of brushes counts.
+fn uses(d: &Document, kind: Kind) -> std::collections::HashMap<Option<String>, usize> {
+    let mut n = std::collections::HashMap::new();
+    let mut count = |name: &Option<String>| *n.entry(name.clone()).or_insert(0) += 1;
+    let brushes = vectorcraft_brush::library(d);
+    let trees = d.layers.iter().map(|l| &**l).chain(d.symbols.iter().map(|s| &*s.art)).chain(d.graph_designs.iter().map(|g| &*g.art));
+    let trees = trees.chain(d.patterns.iter().flat_map(|p| p.art.iter().map(|a| &**a))).chain(brushes.iter().flat_map(|b| b.art()));
+    for tree in trees {
+        vectorcraft_doc::swatches::walk_with_masks(tree, &mut |node| {
+            if let NodeKind::Text(t) = &node.kind {
+                match kind {
+                    Kind::Char => t.runs.iter().for_each(|r| count(&r.style.style_name)),
+                    Kind::Para => (0..t.paragraph_count()).for_each(|i| count(&t.para_at(i).style_name)),
+                }
+            }
+        });
+    }
     n
 }
 
+/// How many runs (char) or paragraphs (para) use `name` (see [`uses`]).
+fn uses_of(uses: &std::collections::HashMap<Option<String>, usize>, kind: Kind, name: &str) -> usize {
+    uses.get(&(name != kind.normal()).then(|| name.to_string())).copied().unwrap_or(0)
+}
+
 /// Update every user of `name` from `old` to `new` attributes (overrides kept).
-fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Value>, new: &Map<String, Value>) {
+fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Value>, new: &Map<String, Value>) -> Result<()> {
     let target = (name != kind.normal()).then_some(name.to_string());
-    for id in all_text(d) {
-        let Some(t) = text_mut(d, id) else { continue };
+    let normal = kind.attrs(d, kind.normal()).unwrap_or_default();
+    let base = match kind {
+        Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), &normal, &kind.cmd("edit"))?),
+        Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), &normal, &kind.cmd("edit"))?),
+    };
+    each_text_mut(d, &mut |t| {
         let mut changed = false;
         match kind {
             Kind::Char => {
                 for r in &mut t.runs {
                     if r.style.style_name == target {
-                        r.style = font_change(&r.style, restyle(&r.style, char_attrs, old, new), new);
+                        r.style = font_change(&r.style, restyle(&r.style, char_attrs, old, new, &base), new);
                         changed = true;
                     }
                 }
@@ -324,7 +400,7 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
             Kind::Para => {
                 for pa in t.para_styles_mut() {
                     if pa.style_name == target {
-                        *pa = restyle(pa, para_attrs, old, new);
+                        *pa = restyle(pa, para_attrs, old, new, &base);
                         changed = true;
                     }
                 }
@@ -333,7 +409,8 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
         if changed {
             refresh_bounds(t);
         }
-    }
+        Ok(())
+    })
 }
 
 /// The selected text's attributes: the first selected character for a nonempty range,
@@ -373,6 +450,11 @@ pub fn target_style_attrs(s: &Session, target: &Value, para: bool) -> Option<Map
     selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }).ok().flatten()
 }
 
+/// The attributes a new character or paragraph style receives when no text is selected.
+pub fn default_new_style_attrs(s: &Session, para: bool) -> Map<String, Value> {
+    new_style_attrs(s, if para { Kind::Para } else { Kind::Char })
+}
+
 /// Whether the document has a character (`para`: paragraph) style `name`, and its attributes.
 pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<String, Value>> {
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
@@ -399,7 +481,14 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
             // form (so comparing a style with its text's attributes is exact).
             let c = kind.cmd(verb);
             let full = match kind {
-                Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), m, &c)?),
+                Kind::Char => {
+                    let mut st = with_attrs(&CharStyle::default(), m, &c)?;
+                    // A language of the list, stored as its tag (as text.setFormat takes it).
+                    if let Some(l) = &st.language {
+                        st.language = vectorcraft_doc::setup::char_language(l).map_err(|e| bad(&c, e))?.map(str::to_string);
+                    }
+                    char_attrs(&st)
+                }
                 Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), m, &c)?),
             };
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
@@ -434,7 +523,8 @@ fn list(s: &mut Session, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let mut names = vec![kind.normal().to_string()];
     names.extend(kind.defs(d).iter().map(|s| s.name.clone()).filter(|n| n != kind.normal()));
-    let styles: Vec<Value> = names.iter().map(|n| json!({ "name": n, "attrs": kind.attrs(d, n), "uses": uses(d, kind, n) })).collect();
+    let uses = uses(d, kind);
+    let styles: Vec<Value> = names.iter().map(|n| json!({ "name": n, "attrs": kind.attrs(d, n), "uses": uses_of(&uses, kind, n) })).collect();
     Ok(json!({ "styles": styles }))
 }
 
@@ -545,13 +635,16 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 fn redefine_to(s: &mut Session, kind: Kind, name: &str, new_attrs: Map<String, Value>, verb: &str) -> Result<Value> {
     let d = &s.doc()?.doc;
     let old = kind.attrs(d, name).ok_or_else(|| bad(&kind.cmd(verb), format!("no style `{name}`")))?;
+    if new_attrs == old {
+        return ok();
+    }
     let name = name.to_string();
     s.edit_named("Redefine {name}", &name, name == kind.normal(), |d, _| {
         match kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
             Some(def) => def.attrs = new_attrs.clone(),
             None => kind.defs_mut(d).push(TextStyleDef { name: name.clone(), attrs: new_attrs.clone() }),
         }
-        update_users(d, kind, &name, &old, &new_attrs);
+        update_users(d, kind, &name, &old, &new_attrs)?;
         Ok(())
     })?;
     ok()
@@ -567,6 +660,50 @@ fn set_attrs(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "setAttrs")?.to_string();
     let attrs = attrs_param(p, kind, "setAttrs")?.ok_or_else(|| bad(&kind.cmd("setAttrs"), "missing `attrs`"))?;
     redefine_to(s, kind, &name, attrs, "setAttrs")
+}
+
+fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
+    let c = kind.cmd("edit");
+    let name = name_param(p, kind, "edit")?.to_string();
+    let to = str_param(p, "to").ok_or_else(|| bad(&c, "missing `to`"))?.trim().to_string();
+    let attrs = attrs_param(p, kind, "edit")?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
+    let d = &s.doc()?.doc;
+    let old = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
+    if name == kind.normal() {
+        return Err(bad(&c, format!("`{name}` can't be edited this way")));
+    }
+    if to.is_empty() {
+        return Err(bad(&c, "give the style a name"));
+    }
+    if to != name && kind.attrs(d, &to).is_some() {
+        return Err(bad(&c, format!("a style named `{to}` already exists")));
+    }
+    if to == name && attrs == old {
+        return ok();
+    }
+    s.edit(if kind == Kind::Char { "Character Style Options" } else { "Paragraph Style Options" }, |d, _| {
+        if let Some(def) = kind.defs_mut(d).iter_mut().find(|def| def.name == name) {
+            def.name = to.clone();
+            def.attrs = attrs.clone();
+        }
+        update_users(d, kind, &name, &old, &attrs)?;
+        if to != name {
+            each_text_mut(d, &mut |t| {
+                let fix = |style_name: &mut Option<String>| {
+                    if style_name.as_deref() == Some(name.as_str()) {
+                        *style_name = Some(to.clone());
+                    }
+                };
+                match kind {
+                    Kind::Char => t.runs.iter_mut().for_each(|r| fix(&mut r.style.style_name)),
+                    Kind::Para => t.para_styles_mut().for_each(|pa| fix(&mut pa.style_name)),
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    })?;
+    ok()
 }
 
 fn duplicate(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
@@ -597,8 +734,7 @@ fn rename(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         if let Some(def) = kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
             def.name = to.clone();
         }
-        for id in all_text(d) {
-            let Some(t) = text_mut(d, id) else { continue };
+        each_text_mut(d, &mut |t| {
             let fix = |n: &mut Option<String>| {
                 if n.as_deref() == Some(name.as_str()) {
                     *n = Some(to.clone());
@@ -608,7 +744,8 @@ fn rename(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                 Kind::Char => t.runs.iter_mut().for_each(|r| fix(&mut r.style.style_name)),
                 Kind::Para => t.para_styles_mut().for_each(|pa| fix(&mut pa.style_name)),
             }
-        }
+            Ok(())
+        })?;
         Ok(())
     })?;
     ok()
@@ -616,16 +753,25 @@ fn rename(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 
 fn delete(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("delete");
-    let name = name_param(p, kind, "delete")?.to_string();
-    if name == kind.normal() || !kind.defs(&s.doc()?.doc).iter().any(|s| s.name == name) {
+    let names: Vec<String> = match p.get("names") {
+        Some(v) => v
+            .as_array()
+            .and_then(|a| a.iter().map(|n| n.as_str().map(str::to_string)).collect::<Option<Vec<_>>>())
+            .ok_or_else(|| bad(&c, "`names` must be an array of style names"))?,
+        None => vec![name_param(p, kind, "delete")?.to_string()],
+    };
+    if names.is_empty() {
+        return Err(bad(&c, "missing `name`"));
+    }
+    let defs = kind.defs(&s.doc()?.doc);
+    if let Some(name) = names.iter().find(|n| *n == kind.normal() || !defs.iter().any(|s| s.name == **n)) {
         return Err(bad(&c, format!("`{name}` can't be deleted")));
     }
-    s.edit("Delete Style", |d, _| {
-        kind.defs_mut(d).retain(|s| s.name != name);
-        for id in all_text(d) {
-            let Some(t) = text_mut(d, id) else { continue };
+    s.edit(if names.len() > 1 { "Delete Styles" } else { "Delete Style" }, |d, _| {
+        kind.defs_mut(d).retain(|s| !names.contains(&s.name));
+        each_text_mut(d, &mut |t| {
             let fix = |n: &mut Option<String>| {
-                if n.as_deref() == Some(name.as_str()) {
+                if n.as_ref().is_some_and(|n| names.contains(n)) {
                     *n = None;
                 }
             };
@@ -633,10 +779,20 @@ fn delete(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                 Kind::Char => t.runs.iter_mut().for_each(|r| fix(&mut r.style.style_name)),
                 Kind::Para => t.para_styles_mut().for_each(|pa| fix(&mut pa.style_name)),
             }
-        }
+            Ok(())
+        })?;
         Ok(())
     })?;
     ok()
+}
+
+/// The styles no text uses (see [`uses`]), in the order the panel lists them, without the Normal
+/// style.
+fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let uses = uses(d, kind);
+    let names: Vec<&str> = kind.defs(d).iter().map(|s| s.name.as_str()).filter(|n| *n != kind.normal() && uses_of(&uses, kind, n) == 0).collect();
+    Ok(json!({ "names": names }))
 }
 
 #[cfg(test)]

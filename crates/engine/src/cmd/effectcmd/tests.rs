@@ -68,7 +68,7 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
         assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"bevel": "nope"}, "ids": [id.0], "item": null})).is_err());
         let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
         let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
-        assert!(svg.matches("<path").count() >= 2, "{effect}: exported as vector faces");
+        assert!(vectorcraft_testkit::svg_shapes(&svg) >= 2, "{effect}: exported as vector faces");
         s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
         assert!(matches!(node(&s, id).kind, NodeKind::Group { .. }), "{effect}");
         assert!(!effects::has_solid(&node(&s, id)));
@@ -77,12 +77,35 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(node(&s, id).appearance.effects.len(), 0, "{effect}: back to the plain rectangle");
     }
-    // Type has no outline to extrude.
+}
+
+/// #4715: type extrudes as its glyph outlines, painted with its characters' colour, and stays
+/// type: editing its text reshapes the solid.
+#[test]
+fn type_extrudes_as_its_glyphs_and_stays_editable() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-    let t = s.execute("text.create", &json!({"x": 50, "y": 50, "text": "3D"})).unwrap();
-    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [t["id"]], "item": null})).unwrap_err();
-    assert!(err.to_string().contains("requires a path"), "{err}");
+    let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": "3D", "size": 72})).unwrap();
+    let id = NodeId(t["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#cc2200"})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Text(_)), "still type");
+    let art = effects::solid_art(&n).expect("a solid of the glyphs");
+    let mut faces = 0;
+    let mut tinted = false;
+    art.walk(&mut |c| {
+        if c.path_data().is_some() {
+            faces += 1;
+            // Shaded from the characters' red: red stays the strongest channel.
+            if let Some([r, g, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+                tinted |= r > g && r > b;
+            }
+        }
+    });
+    assert!(faces > 2 && tinted, "{faces} faces, tinted {tinted}");
+    s.execute("text.setText", &json!({"ids": [id.0], "text": "3DD"})).unwrap();
+    assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "the solid follows the edited text");
 }
 
 /// Scripts from before the Perspective angle give `perspective` as a 0–100 % strength: it is

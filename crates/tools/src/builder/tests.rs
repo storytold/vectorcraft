@@ -766,6 +766,125 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
 }
 
 #[test]
+fn bucket_alt_samples_face_edge_and_selected_region_without_painting() {
+    let (mut d, _gid, face, edge) = live_group_doc();
+    d.node_mut(face).unwrap().appearance.set_fill(vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE));
+    d.node_mut(edge).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+    let s = Selection::default();
+    let p = paint();
+    let cx = crate::testutil::cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0).with_mods(alt)),
+        vec![Action::Exec("appearance.copyFrom".into(), json!({"source": face.0, "defaultsOnly": true}))]
+    );
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 25.0).with_mods(alt)),
+        vec![Action::Exec("appearance.copyFrom".into(), json!({"source": edge.0, "defaultsOnly": true}))]
+    );
+
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let cx = crate::testutil::cx(&d, &s, &p);
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0).with_mods(alt)),
+        vec![Action::Exec("appearance.copyFrom".into(), json!({"source": b.0, "defaultsOnly": true}))]
+    );
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 400.0, 400.0).with_mods(alt)).is_empty());
+    let (d, _, _, _) = live_group_doc();
+    assert!(t.pointer(&crate::testutil::cx(&d, &Selection::default(), &p), &ev(PointerKind::Down, 75.0, 25.0).with_mods(alt)).is_empty());
+}
+
+#[test]
+fn bucket_alt_shift_samples_only_solid_color_and_restores_hover() {
+    let (mut d, _gid, face, _edge) = live_group_doc();
+    d.node_mut(face).unwrap().appearance.set_fill(vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE));
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    let both = Mods { alt: true, shift: true, ..Default::default() };
+    let pos = Point::new(75.0, 25.0);
+    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket);
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert!(!t.overlays(&cx).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0).with_mods(alt));
+    assert_eq!(t.cursor(&cx, pos, alt), Cursor::Eyedropper);
+    assert_eq!(t.id(), "livePaintBucket");
+    assert!(t.overlays(&cx).is_empty());
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0).with_mods(both)),
+        vec![Action::Exec("paint.sampleColor".into(), json!({"color": crate::params::color_json(&vectorcraft_color::Color::WHITE), "ids": []}))]
+    );
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 400.0, 400.0).with_mods(both)).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket);
+    assert!(!t.overlays(&cx).is_empty());
+}
+
+#[test]
+fn bucket_alt_shift_samples_gradient_image_and_stroke_color() {
+    let (mut d, _a, b) = two_rects();
+    let gradient = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    d.node_mut(b).unwrap().appearance.set_fill(gradient.clone());
+    let s = Selection::default();
+    let p = paint();
+    let both = Mods { alt: true, shift: true, ..Default::default() };
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(
+        t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 100.0, 50.0).with_mods(both)),
+        vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": crate::params::color_json(&vectorcraft_color::Color::rgb(0.5, 0.5, 0.5)), "ids": []})
+        )]
+    );
+
+    let (mut d, _gid, _face, edge) = live_group_doc();
+    d.node_mut(edge).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+    assert_eq!(
+        t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 50.0, 25.0).with_mods(both)),
+        vec![Action::Exec("paint.sampleColor".into(), json!({"color": crate::params::color_json(&vectorcraft_color::Color::BLACK), "ids": []}))]
+    );
+
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let img = image::RgbaImage::from_raw(3, 1, [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]].concat()).unwrap();
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("px".into(), vectorcraft_doc::ImageBlob::png(png));
+    let im = vectorcraft_doc::ImageObject {
+        key: "px".into(),
+        width: 3,
+        height: 1,
+        xf: vectorcraft_geom::Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let id = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(im)))).unwrap();
+    let mut cx = cx(&d, &s, &p);
+    cx.raster_sample = 3;
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 15.0, 5.0).with_mods(Mods { alt: true, ..Default::default() })),
+        vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": crate::params::color_json(&vectorcraft_color::Color::rgb8(85, 85, 85)), "stroke": false, "ids": [], "clearStroke": true})
+        )]
+    );
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 15.0, 5.0).with_mods(both)),
+        vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": crate::params::color_json(&vectorcraft_color::Color::rgb8(85, 85, 85)), "ids": []})
+        )]
+    );
+}
+
+#[test]
 fn bucket_on_plain_selection_makes_live_paint() {
     let (d, a, b) = two_rects();
     let mut s = Selection::default();
