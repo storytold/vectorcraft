@@ -99,10 +99,10 @@ impl LoadOptions {
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
-    /// box, a password, without its hidden layers)? Writing it back would lose the rest, so Save
-    /// doesn't (it asks for a name).
+    /// box, a password, without its hidden layers, without the VectorCraft document it carries)?
+    /// Writing it back would lose the rest, so Save doesn't (it asks for a name).
     pub fn is_partial(&self) -> bool {
-        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers
+        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers || !self.native
     }
 
     /// The PDF import options: `pages` resolved against the file's page count. A PDF-compatible
