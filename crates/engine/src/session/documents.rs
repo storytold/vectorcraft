@@ -28,6 +28,7 @@ impl Session {
             docs: vec![],
             active: None,
             prefs: Prefs::default(),
+            caps_lock: false,
             paint: PaintDefaults::default(),
             fill_active: true,
             clipboard: Clipboard::default(),

@@ -2,7 +2,7 @@
 //! on-path type from paths, Fit Headline, Convert To Area/Point Type.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject};
+use vectorcraft_doc::{CharStyle, NodeId, NodeKind, TextKind, TextObject};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
@@ -85,6 +85,168 @@ fn set_range_style_splits_runs() {
     assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Character").count(), 2);
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0})).is_err(), "nothing to change");
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0, "size": -1})).is_err());
+}
+
+#[test]
+fn optical_command_manual_pair_undo_redo_and_native_reopen() {
+    let mut s = session();
+    let id = text(&mut s, "III");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": 70})).unwrap();
+    let result = s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    assert_eq!(result["kerning"], "optical");
+    assert!(obj(&s, id).runs[0].style.optical_kerning);
+    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "kerning": 0})).unwrap();
+    let styled = obj(&s, id);
+    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![Some(70.0), Some(0.0), Some(70.0)]);
+    assert!(styled.runs.iter().all(|r| r.style.optical_kerning));
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    let opened = vectorcraft_format::load(&bytes).unwrap();
+    let NodeKind::Text(reopened) = &opened.node(id).unwrap().kind else { panic!("text missing") };
+    assert_eq!(
+        reopened.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>(),
+        styled.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>()
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[1].style.kerning, Some(0.0));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.optical_kerning));
+}
+
+#[test]
+fn optical_set_format_keeps_existing_pair_override() {
+    let mut s = session();
+    let id = text(&mut s, "III");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 40})).unwrap();
+    let result = s.execute("text.setFormat", &json!({"ids": [id.0], "kerning": "optical"})).unwrap();
+    assert_eq!(result["kerning"], "optical");
+    let t = obj(&s, id);
+    assert!(t.runs.iter().all(|r| r.style.optical_kerning));
+    assert_eq!(t.runs[0].style.kerning, Some(40.0));
+}
+
+#[test]
+fn optical_kerning_step_starts_from_the_automatic_pair() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "AVA", "size": 100, "font": "JetBrains Mono"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    let t = obj(&s, id);
+    let optical = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let mut manual = t.clone();
+    vectorcraft_text::edit::style_range(&mut manual.runs, 0, 1, |st| st.kerning = Some(0.0));
+    let unkerned = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &manual);
+    let auto = (optical.glyphs[0].advance - unkerned.glyphs[0].advance) * 1000.0 / 100.0;
+    assert!(auto.abs() > 1.0, "the font needs a measurable shape correction");
+    s.execute("type.step", &json!({"id": id.0, "start": 1, "end": 1, "attribute": "kerning", "by": 1})).unwrap();
+    let after = obj(&s, id);
+    assert!((after.runs[0].style.kerning.unwrap() - auto - s.prefs.tracking_increment).abs() < 0.01);
+    assert!(after.runs.iter().all(|r| r.style.optical_kerning));
+}
+
+#[test]
+fn metrics_pair_step_preserves_the_drawn_auto_position() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "AV", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let before = obj(&s, id);
+    let auto = vectorcraft_text::layout(db, &before);
+    let drawn_v = |layout: &vectorcraft_text::TextLayout| layout.glyphs.iter().find(|g| g.byte == 1).unwrap().xf.as_coeffs()[4];
+    assert!((crate::cmd::effective_kerning(db, &before, &auto, 0, 1) + 160.0).abs() < 0.01);
+    let mut same = before.clone();
+    vectorcraft_text::edit::style_range(&mut same.runs, 0, 1, |st| st.kerning = Some(-160.0));
+    assert!((drawn_v(&vectorcraft_text::layout(db, &same)) - drawn_v(&auto)).abs() < 0.01);
+
+    s.execute("type.step", &json!({"id": id.0, "start": 1, "end": 1, "attribute": "kerning", "by": 1})).unwrap();
+    let after = obj(&s, id);
+    assert!((after.runs[0].style.kerning.unwrap() + 160.0 - s.prefs.tracking_increment).abs() < 0.01);
+    let moved = drawn_v(&vectorcraft_text::layout(db, &after)) - drawn_v(&auto);
+    assert!((moved - s.prefs.tracking_increment * 0.1).abs() < 0.01, "V moves by one kerning increment: {moved}");
+}
+
+#[test]
+fn effective_auto_kerning_at_area_line_end_survives_unkerned_wrap() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(pair_kerning_font().unwrap());
+    let style = CharStyle { font_family: PAIR_KERNING_FAMILY.into(), size: 100.0, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "AV", style);
+    let mut wrapping_pair = None;
+    for width in 80..160 {
+        text.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, f64::from(width), 300.0)) };
+        let auto = vectorcraft_text::layout(db, &text);
+        let mut trial = text.clone();
+        vectorcraft_text::edit::style_range(&mut trial.runs, 0, 1, |st| st.kerning = Some(0.0));
+        let unkerned = vectorcraft_text::layout(db, &trial);
+        if auto.glyphs.len() >= 2
+            && unkerned.glyphs.len() >= 2
+            && auto.glyphs[0].line == auto.glyphs[1].line
+            && unkerned.glyphs[0].line != unkerned.glyphs[1].line
+        {
+            wrapping_pair = Some((text.clone(), auto, unkerned));
+            break;
+        }
+    }
+    let (text, auto, unkerned) = wrapping_pair.expect("the kerned pair fits on a line that wraps the unkerned pair");
+    assert_ne!(unkerned.glyphs[0].line, unkerned.glyphs[1].line);
+    assert!((crate::cmd::effective_kerning(db, &text, &auto, 0, 1) + 160.0).abs() < 0.01);
+}
+
+#[test]
+fn effective_optical_kerning_reads_the_right_to_left_pair() {
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(right_to_left_optical_font().unwrap()), 1);
+    let style = CharStyle { font_family: RIGHT_TO_LEFT_OPTICAL_FAMILY.into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let text = TextObject::point(Point::ZERO, "אב", style);
+    let optical = vectorcraft_text::layout(&db, &text);
+    let mut manual = text.clone();
+    manual.runs[0].style.kerning = Some(0.0);
+    let unkerned = vectorcraft_text::layout(&db, &manual);
+    let drawn_gap = |lay: &vectorcraft_text::TextLayout| {
+        let drawn = |byte| lay.glyphs.iter().find(|g| g.byte == byte).unwrap().xf.as_coeffs()[4];
+        drawn(2) - drawn(0)
+    };
+    let expected = (drawn_gap(&optical) - drawn_gap(&unkerned)) * 10.0;
+    assert!(expected.abs() > 1.0, "the outlined pair has a measurable Optical correction");
+    let actual = crate::cmd::effective_kerning(&db, &text, &optical, 0, 2);
+    assert!((actual - expected).abs() < 0.01, "the caret reads the adjacent right-to-left pair");
+}
+
+#[test]
+fn reset_tracking_clears_manual_pairs_without_changing_optical_mode() {
+    let mut s = session();
+    let id = text(&mut s, "III");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 80})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let (a, b) = vectorcraft_text::caret_position(&lay, 1);
+    let p = t.xf * a.midpoint(b);
+    click(&mut s, p.x, p.y);
+    assert!(s.tool_wants_text());
+    s.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    s.execute("type.resetTracking", &json!({})).unwrap();
+    let caret = obj(&s, id);
+    assert_eq!(caret.runs[0].style.kerning, None);
+    assert!(caret.runs.iter().all(|r| r.style.optical_kerning));
+
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": 60, "tracking": 30})).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    s.execute("type.resetTracking", &json!({})).unwrap();
+    let range = obj(&s, id);
+    assert!(range.runs.iter().all(|r| r.style.kerning.is_none() && r.style.tracking == 0.0));
+    assert!(range.runs.iter().all(|r| r.style.optical_kerning));
 }
 
 /// A character style applied from byte 2^32 to 2^32 + 5 styles no character, as a range past the

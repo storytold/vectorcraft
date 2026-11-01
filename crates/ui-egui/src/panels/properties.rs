@@ -6,7 +6,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind, Unit, WidthProfile};
 use vectorcraft_engine::cmd::newdoc;
 
-use super::{corner_radius_row, first_selected, pstate, set_pstate};
+use super::{first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, dim_label, divider, section_header};
 use crate::{VectorcraftApp, icons};
@@ -65,6 +65,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         trace_section(app, ui, &preset, view);
         divider(ui);
     }
+    if let Some(oop) = selected_objects_on_path(app) {
+        objects_on_path_section(app, ui, &oop);
+        divider(ui);
+    }
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -111,10 +115,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Quick Actions"));
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
     let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
-    // Blend Options for one blend while the Blend tool is in use, Merge Live Paint for a Live
-    // Paint group selected with more to merge into it, as the Properties panel overview lists them
+    // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with
+    // more to merge into it, as the Properties panel overview lists them
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-    let blend_options = n_sel == 1 && app.session.tool_id() == "blend" && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
+    // The overview names the Blend tool; the blending page has the button for a blend selected with
+    // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
+    let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
@@ -133,6 +139,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if is_live {
         actions.push((tl!("Expand Shape"), "object.expandShape"));
+    }
+    // A dynamic symbol instance with appearance changes of its own: Reset shows the symbol's again.
+    if super::symbols::changed_instances_selected(app) {
+        actions.push((tl!("Reset"), "symbol.instance.reset"));
     }
     if multi_color(app, ui.ctx()) {
         actions.push((tl!("Recolor"), "ui.recolorDialog"));
@@ -350,6 +360,71 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
                 app.run(id, json!({})).ok();
             }
         }
+    });
+}
+
+/// The Objects on Path groups selected with nothing else: their ids, and the Pivot and Rotate they
+/// share (`None` where they differ).
+struct ObjectsOnPathSelection {
+    ids: Vec<u64>,
+    pivot: Option<u8>,
+    rotate: Option<f64>,
+}
+
+/// The selection as Objects on Path groups ([`ObjectsOnPathSelection`]), when every selected
+/// object is one.
+fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelection> {
+    let st = app.session.active()?;
+    let mut out: Option<ObjectsOnPathSelection> = None;
+    for id in &st.selection.objects {
+        let rec = st.doc.node(*id)?.extras().objects_on_path.as_deref()?;
+        match &mut out {
+            None => out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate) }),
+            Some(s) => {
+                s.ids.push(id.0);
+                if s.pivot != Some(rec.pivot) {
+                    s.pivot = None;
+                }
+                if s.rotate != Some(rec.rotate) {
+                    s.rotate = None;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The Objects on Path Options of the selected Objects on Path groups: Pivot, the point of each
+/// object that attaches to the path, and Rotate, the angle each object tilts by from upright on the
+/// path, as the help page places them in the Properties panel
+/// (<https://helpx.adobe.com/illustrator/using/objects-on-path.html>). A change goes to every
+/// selected group in one undo step (`object.objectsOnPath.options`). Where the groups differ, no
+/// Pivot square is chosen and Rotate is blank.
+fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsOnPathSelection) {
+    section_header(ui, tl!("Objects on Path Options"));
+    let fw = super::field_width(ui);
+    let set = |app: &mut VectorcraftApp, mut p: serde_json::Value| {
+        p["ids"] = json!(oop.ids);
+        if let Err(e) = app.run("object.objectsOnPath.options", p) {
+            app.status(e);
+        }
+    };
+    egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        dim_label(ui, tl!("Pivot:"));
+        // 9 is no square: the groups' pivots differ.
+        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+            && oop.pivot.is_none_or(|p| usize::from(p) != i)
+        {
+            set(app, json!({ "pivot": i }));
+        }
+        ui.end_row();
+        dim_label(ui, tl!("Rotate:"));
+        if let Some(a) = widgets::spin_plain(ui, "props-oop-rotate", oop.rotate, "°", 2, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS)
+            && oop.rotate != Some(a)
+        {
+            set(app, json!({ "rotate": a }));
+        }
+        ui.end_row();
     });
 }
 
@@ -796,15 +871,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
     {
-        match &**live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => corner_radius_row(app, ui, &n, "radius"),
-            vectorcraft_doc::LiveShape::Polygon { .. } => super::transform::polygon_rows(app, ui, &n, live, "props-polygon"),
-            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
-                widgets::subheader(ui, tl!("Ellipse Properties:"));
-                super::transform::pie_rows(app, ui, *pie, "props-pie");
-            }
-            _ => {}
-        }
+        super::transform::live_shape_rows(app, ui, &n, live, "props", false);
     }
 }
 

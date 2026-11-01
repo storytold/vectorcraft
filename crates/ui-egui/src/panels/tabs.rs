@@ -1,7 +1,8 @@
 //! Tabs panel: tab-stop alignment, X position (Y in vertical type), leader and "align on", and a
 //! ruler numbered in the General unit on which a click adds a stop, dragging moves one and dragging
-//! it off the ruler deletes it. A stop placed or dragged on the ruler lands on the nearest whole
-//! point. With Snap to Unit on, or Shift held, it lands on the ruler's nearest tick.
+//! it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the stops by the
+//! same distance. A stop placed or dragged on the ruler lands on the nearest whole point. With Snap
+//! to Unit on, or Shift held, it lands on the ruler's nearest tick.
 
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
@@ -39,6 +40,9 @@ fn align_id(a: TabAlign) -> &'static str {
 
 /// The panel body's margin and the ruler's own inset: the ruler's 0 is this far right of the panel.
 const RULER_LEFT: f32 = 10.0 + 4.0;
+
+/// The largest stop position `text.tabs.set` takes, in points.
+const MAX_STOP: f64 = 100_000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum IndentMarker {
@@ -302,6 +306,29 @@ fn apply_moved(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Vec<Ta
     })
 }
 
+/// `stops` with every stop moved by the distance that takes stop `i` to `position`, or by less
+/// when that would put a stop below 0 or past [`MAX_STOP`], so the leftmost stop ends at 0 or the
+/// rightmost at [`MAX_STOP`] and the stops keep their spacing. The stops keep their order,
+/// alignment, leader and "align on". `None` when there is no stop `i`.
+fn moved_all(stops: &[TabStop], i: usize, position: f64) -> Option<Vec<TabStop>> {
+    let from = stops.get(i)?.position;
+    let lowest = stops.iter().map(|s| s.position).fold(f64::INFINITY, f64::min);
+    let highest = stops.iter().map(|s| s.position).fold(f64::NEG_INFINITY, f64::max);
+    let offset = (position - from).min(MAX_STOP - highest).max(-lowest);
+    Some(stops.iter().map(|s| TabStop { position: s.position + offset, ..s.clone() }).collect())
+}
+
+/// Move every stop as [`moved_all`] does, in one `text.tabs.set`, and select stop `i`. Returns its
+/// index, or `None` when the stops are not set and `stops` and the selection stay as they were.
+fn apply_moved_all(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Vec<TabStop>, i: usize, position: f64) -> Option<usize> {
+    let moved = moved_all(stops, i, position)?;
+    apply(app, &moved).then(|| {
+        *stops = moved;
+        set_pstate(ctx, "tabs-sel", i);
+        i
+    })
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((node, para, span)) = current_para(app) else {
@@ -429,7 +456,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some((marker, value, both))
     });
     paint_markers(ui, &p, &t, MarkerPaint { rect, span, para: &para, mixed_left, selected: selected_marker, drag: marker_drag, preview }, to_x);
-    for (i, s) in stops.iter().enumerate() {
+    let drag: Option<usize> = pstate(ui.ctx(), "tabs-drag");
+    let drag_all = drag.is_some() && pstate::<bool>(ui.ctx(), "tabs-drag-all");
+    // While a Ctrl-drag (Command on macOS) is on the ruler, the stops are drawn where the drop puts them.
+    let all_preview = drag.filter(|_| drag_all).and_then(|i| {
+        let pointer = ui.input(|input| input.pointer.any_down().then(|| input.pointer.interact_pos()).flatten())?;
+        (pointer.y <= rect.bottom() + 20.0).then(|| moved_all(&stops, i, place(pointer.x))).flatten()
+    });
+    for (i, s) in all_preview.as_deref().unwrap_or(&stops).iter().enumerate() {
         let x = to_x(s.position);
         let c = if i == sel && selected_marker.is_none() { t.accent } else { t.text };
         let y = rect.bottom() - 2.0;
@@ -445,7 +479,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             p.circle_filled(egui::pos2(x + 3.0, y - 6.0), 1.5, c);
         }
     }
-    let drag: Option<usize> = pstate(ui.ctx(), "tabs-drag");
     // The stop within 5 px of `x`.
     let hit_at = |x: f32| stops.iter().position(|s| (to_x(s.position) - x).abs() <= 5.0);
     let cancel_drag = ui.input(|i| i.key_pressed(egui::Key::Escape));
@@ -466,6 +499,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else {
             let hit = hit_at(pos.x);
             set_pstate(ui.ctx(), "tabs-drag", hit);
+            set_pstate(ui.ctx(), "tabs-drag-all", hit.is_some() && ui.input(|i| i.modifiers.command));
             if let Some(i) = hit {
                 set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
                 set_pstate(ui.ctx(), "tabs-sel", i);
@@ -481,6 +515,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             set_marker(app, marker, place(pos.x), &para, span, &targets, both);
         }
     } else if resp.drag_stopped()
+        && !cancel_drag
         && let (Some(i), Some(pos)) = (drag, resp.interact_pointer_pos())
     {
         set_pstate::<Option<usize>>(ui.ctx(), "tabs-drag", None);
@@ -489,6 +524,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 // Dragged off the ruler: delete.
                 stops.remove(i);
                 apply(app, &stops);
+            } else if drag_all {
+                apply_moved_all(app, ui.ctx(), &mut stops, i, place(pos.x));
             } else {
                 apply_moved(app, ui.ctx(), &mut stops, i, place(pos.x));
             }

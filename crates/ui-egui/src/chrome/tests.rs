@@ -973,6 +973,37 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
 }
 
+/// Tab goes to the isolation bar's back button and breadcrumbs and does not stop on the bar
+/// behind them, which only keeps the pointer off the canvas.
+#[test]
+fn tab_skips_the_isolation_bars_background() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let mut frame = |events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::isolation_bar(&mut app, ui, screen);
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), 24.0));
+    let back = egui::Rect::from_min_size(bar.min + egui::vec2(6.0, 3.0), egui::vec2(18.0, 18.0));
+    let widget =
+        |rect: egui::Rect| ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == rect).map(|w| w.id));
+    let (bar, back) = (widget(bar).expect("the isolation bar"), widget(back).expect("the back button"));
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 10, frame);
+    assert!(stops.contains(&back), "Tab reaches the back button: {stops:?}");
+    assert!(!stops.contains(&bar), "{stops:?}");
+}
+
 /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
 /// Selection selected, and Exit Isolation Mode leaves with the path selected. Type, symbol
 /// instances, blends, two objects and an envelope's contents get no isolate button, and pattern
@@ -1029,6 +1060,23 @@ fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
     app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
     assert!(app.session.active().unwrap().isolation.is_some());
     assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
+}
+
+/// #4819: with Direct Selection, a selected blend shows the Control bar's and the Properties
+/// panel's Convert buttons, as a path selected whole does; with the Selection tool it doesn't.
+#[test]
+fn a_blend_selected_with_direct_selection_shows_the_convert_buttons() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 200.0));
+    let blend = app.run("object.blend.make", json!({"ids": [a, b], "steps": 1})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [blend]})).unwrap();
+    assert!(super::anchor_controls(&app) == super::AnchorControls::None, "the Selection tool");
+    app.select_tool("directSelection");
+    assert!(super::anchor_controls(&app) == super::AnchorControls::Convert);
 }
 
 /// The Zoom tool's hint follows Performance › Animated Zoom (#394): a drag zooms as it goes,

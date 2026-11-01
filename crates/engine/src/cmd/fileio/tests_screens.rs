@@ -811,3 +811,25 @@ fn the_document_remembers_its_export_settings() {
     assert!(!plain.contains("export_settings") && !plain.contains("exportSettings"), "not written when empty");
     assert!(vectorcraft_format::load(plain.as_bytes()).unwrap().export_settings.is_empty());
 }
+
+/// Export PDFs As › Single file: with several artboards, a PDF row writes them as the pages of one
+/// file named after the document (raster rows still write a file per artboard); with one artboard
+/// the PDF is that artboard's, as Multiple files writes it.
+#[test]
+fn single_file_pdfs_hold_every_chosen_artboard() {
+    let mut s = session(3);
+    let title = s.doc().unwrap().doc.title.clone();
+    let rows = json!([{"format": "png", "scale": "1x"}, {"format": "pdf"}]);
+    let r = export(&mut s, json!({"range": "1-2", "pdfs": "single", "formats": rows}));
+    let got = files(&r);
+    let pdf: Vec<&(String, Vec<u8>)> = got.iter().filter(|(n, _)| n.ends_with(".pdf")).collect();
+    assert_eq!(pdf.len(), 1, "{:?}", names(&r));
+    assert_eq!(pdf[0].0, format!("{title}.pdf"));
+    assert_eq!(vectorcraft_pdf::import(&pdf[0].1).unwrap().artboards.len(), 2, "one page per artboard");
+    assert_eq!(got.iter().filter(|(n, _)| n.ends_with(".png")).count(), 2);
+    let r = export(&mut s, json!({"range": "2", "pdfs": "single", "formats": [{"format": "pdf"}]}));
+    assert_eq!(names(&r), ["Artboard-2.pdf"]);
+    let r = export(&mut s, json!({"range": "1-2", "pdfs": "multiple", "formats": [{"format": "pdf"}]}));
+    assert_eq!(names(&r), ["Artboard-1.pdf", "Artboard-2.pdf"]);
+    assert!(s.execute("document.exportForScreens", &json!({"pdfs": "both", "formats": [{"format": "pdf"}]})).is_err());
+}

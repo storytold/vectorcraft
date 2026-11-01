@@ -110,6 +110,12 @@ pub fn hit_test_visible(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit
     hit_test_skipping(doc, p, opt, &|_| false, false)
 }
 
+/// [`hit_test_visible`] passing over the nodes `skip` names (and their contents): what lies below
+/// them at `p`. A skipped clipping path still clips.
+pub fn hit_test_visible_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool) -> Option<Hit> {
+    hit_test_skipping(doc, p, opt, skip, false)
+}
+
 /// The object of `selected` (topmost first) whose own art lies under `p` where a clipping mask
 /// hides it: a clip group (or a layer with a clipping mask) holding it doesn't clip to `p`. A
 /// click there hits nothing ([`hit_test`]), so the selection tools grab the selection by that
@@ -538,20 +544,15 @@ fn hit_children(
 }
 
 /// The order a click at `p` tries the children of `parent` in, front first: their stacking order
-/// from the top, except that in an Intertwine group the members drawn over the others at `p`
-/// come first (from the top among them too).
+/// from the top, except that in an Intertwine group the members are tried in the order they are
+/// drawn at `p`, from the top ([`crate::intertwine::tier_at`]).
 fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
-    let over: Vec<usize> = if matches!(parent.kind, NodeKind::Intertwine { .. }) {
-        let contains = |a: &vectorcraft_geom::PathData| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p);
-        (0..children.len()).rev().filter(|i| children.get(*i).and_then(|c| crate::intertwine::over_area(c)).is_some_and(contains)).collect()
-    } else {
-        vec![]
-    };
-    let rest = (0..children.len()).rev().filter({
-        let over = over.clone();
-        move |i| !over.contains(i)
-    });
-    over.into_iter().chain(rest)
+    let mut order: Vec<usize> = (0..children.len()).rev().collect();
+    if matches!(parent.kind, NodeKind::Intertwine { .. }) {
+        let tier = |i: usize| children.get(i).map_or(0, |c| crate::intertwine::tier_at(c, p));
+        order.sort_by_cached_key(|i| std::cmp::Reverse((tier(*i), *i)));
+    }
+    order.into_iter()
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke

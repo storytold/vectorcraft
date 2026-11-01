@@ -153,6 +153,8 @@ pub(super) struct Frame {
     pub(super) clips: Vec<usize>,
     /// A compound member group explicitly declares its subpaths' winding with `D`.
     pub(super) compound_members: bool,
+    /// A dictionary in the art: the transparency (`Xy`) its art set last, which stays after it.
+    pub(super) state: Option<(f32, BlendMode, bool, Knockout, bool)>,
 }
 
 /// What a reader of a pattern's definition has of its head, `(name) llx lly urx ury`: the operands

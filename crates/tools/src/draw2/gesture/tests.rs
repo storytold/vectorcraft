@@ -344,7 +344,8 @@ fn blob_brush_shift_keeps_the_stroke_horizontal_or_vertical() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let mut cx = cx(&d, &s, &p);
+    // Precise cursors: no tip outline, only the stroke's own overlay.
+    let mut cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     let shift = Mods { shift: true, ..Default::default() };
     let mut t = GestureTool::new("blobBrush");
     let ev = |k, x, y, m| PointerEvent::new(k, x, y).with_mods(m);
@@ -1358,7 +1359,8 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let cx = cx(&d, &s, &p);
+    // Precise cursors: no tip outline, only the stroke's own overlay.
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     let mut t = GestureTool::new("eraser");
     t.set_option("size", &json!(20));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
@@ -1389,6 +1391,120 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
     let b = vectorcraft_geom::Shape::bounding_box(path);
     assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
     assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+}
+
+/// The Blob Brush's Angle and Roundness (Blob Brush Tool Options, 0° and 100% by default) go with
+/// its stroke, kept within −180–180° and 0–100%; while it drags, a tip that is not round shows the
+/// outline of the area it covers with the length label, and an Alt drag that smooths shows the
+/// Smooth tool's thin line.
+#[test]
+fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("blobBrush");
+    assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(0.0), Some(100.0)));
+    t.set_option("size", &json!(20));
+    for (angle, roundness, sent) in [(45.0, 25.0, (45.0, 25.0)), (400.0, -5.0, (180.0, 0.0)), (-400.0, 250.0, (-180.0, 100.0))] {
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(sent.0), Some(sent.1)));
+        let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+        assert!(
+            matches!(&acts[2][0], Action::Exec(c, v) if c == "path.blob" && v["size"] == 20.0 && v["angle"] == sent.0 && v["roundness"] == sent.1),
+            "{acts:?}"
+        );
+    }
+    // A tip 20 pt long and 5 pt wide, standing upright: along a horizontal drag from x 50 to
+    // x 150 the outline reaches 2.5 pt either side of the drag and 10 pt above and below its ends.
+    t.set_option("angle", &json!(90));
+    t.set_option("roundness", &json!(25));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+    let o = t.overlays(&cx);
+    let Some(Overlay::Path { path, width, .. }) = o.iter().find(|o| matches!(o, Overlay::Path { .. })) else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    let b = vectorcraft_geom::Shape::bounding_box(path);
+    assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
+    assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { .. })), "{o:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0));
+    let alt = Mods { alt: true, ..Default::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    let o = t.overlays(&cx);
+    let [Overlay::Path { path, width, .. }] = &o[..] else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
+}
+
+/// #4977: the Blob Brush and the Eraser show their tip at the pointer before a press and while
+/// painting: its outline at its size, angle and roundness, a black line on a white halo, following
+/// `[` / `]` and Tool Options at once. It goes when the hover ends, with precise cursors (Caps
+/// Lock), while Cmd/Ctrl lends a selection tool and while Alt lends the Blob Brush the Smooth
+/// tool. The other gesture tools show none.
+#[test]
+fn the_blob_brush_and_the_eraser_show_their_tip_at_the_pointer() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let bounds = |t: &GestureTool, cx: &ToolContext| match &t.overlays(cx)[..] {
+        [Overlay::Path { path: halo, color: [0xff, 0xff, 0xff], width: 3.0, .. }, Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => {
+            assert_eq!(halo, path);
+            Some(vectorcraft_geom::Shape::bounding_box(path))
+        }
+        [] => None,
+        o => panic!("{o:?}"),
+    };
+    let near = |b: Option<vectorcraft_geom::Rect>, want: (f64, f64, f64, f64)| {
+        let b = b.unwrap_or_else(|| panic!("no tip"));
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let hover = |t: &mut GestureTool, cx: &ToolContext, m: Mods| t.pointer(cx, &PointerEvent::new(PointerKind::Move, 100.0, 50.0).with_mods(m));
+    for id in ["blobBrush", "eraser"] {
+        let mut t = GestureTool::new(id);
+        assert_eq!(bounds(&t, &cx), None, "{id}: nothing before the pointer comes");
+        hover(&mut t, &cx, Mods::default());
+        near(bounds(&t, &cx), (95.0, 45.0, 105.0, 55.0));
+        // `]` grows it at once, without a move; Tool Options too.
+        t.key(&cx, ToolKey::BracketRight, Mods::default());
+        near(bounds(&t, &cx), (94.5, 44.5, 105.5, 55.5));
+        t.set_option("size", &json!(20));
+        near(bounds(&t, &cx), (90.0, 40.0, 110.0, 60.0));
+        // Upright and a quarter as wide: 5 pt across, 20 pt tall.
+        t.set_option("angle", &json!(90));
+        t.set_option("roundness", &json!(25));
+        near(bounds(&t, &cx), (97.5, 40.0, 102.5, 60.0));
+        // It follows the drag, over the stroke's footprint.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 50.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 50.0));
+        let o = t.overlays(&cx);
+        assert!(matches!(&o[o.len() - 2..], [Overlay::Path { width: 3.0, .. }, Overlay::Path { color: [0, 0, 0], width: 1.0, .. }]), "{id}: {o:?}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 50.0));
+        let precise = ToolContext { precise_cursors: true, ..crate::testutil::cx(&d, &s, &p) };
+        assert_eq!(bounds(&t, &precise), None, "{id}: precise cursors show the crosshair alone");
+        t.hover_ended(&cx);
+        assert_eq!(bounds(&t, &cx), None, "{id}: gone with the hover");
+        hover(&mut t, &cx, Mods::default());
+        assert!(t.deactivate(&cx).is_empty());
+        assert_eq!(bounds(&t, &cx), None, "{id}: gone with the tool");
+    }
+    // Alt before a press lends the Blob Brush the Smooth tool, and Cmd/Ctrl either tool a
+    // selection tool, whose cursors show instead.
+    let mut t = GestureTool::new("blobBrush");
+    hover(&mut t, &cx, Mods { alt: true, ..Default::default() });
+    assert_eq!(bounds(&t, &cx), None);
+    let mut t = GestureTool::new("eraser");
+    hover(&mut t, &cx, Mods { cmd: true, ..Default::default() });
+    assert_eq!(bounds(&t, &cx), None);
+    for id in ["pencil", "paintbrush", "smooth", "knife", "pathEraser", "join"] {
+        let mut t = GestureTool::new(id);
+        hover(&mut t, &cx, Mods::default());
+        assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { width, .. } if *width == 3.0)), "{id}");
+    }
 }
 
 #[test]

@@ -49,7 +49,7 @@ mod presets;
 mod report;
 
 pub(crate) use analysis::{outlined_text, see_through_images};
-pub(crate) use apply::flatten_document;
+pub(crate) use apply::{expand_transparent_tile_images, flatten_document, flatten_expanded, has_transparent_tile_images};
 pub use commands::specs;
 pub use options::FlattenOptions;
 pub use presets::{FlattenerPreset, PRESET_EXTS, PRESET_FORMAT};

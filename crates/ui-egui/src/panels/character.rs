@@ -1,11 +1,12 @@
 //! Character panel: font family / style, size, leading, kerning, tracking, vertical and horizontal
 //! scale, baseline shift, character rotation and the All Caps, Small Caps, Superscript, Subscript,
-//! Underline and Strikethrough toggles.
+//! Underline and Strikethrough toggles and the Language menu.
 
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
+use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -222,7 +223,7 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     range_style(app, p);
 }
 
-/// Set the Kerning field's `value` (a number or "auto"). At a caret in text the Type tool edits
+/// Set the Kerning field's `value` (a number, "auto", or "optical"). At a caret in text the Type tool edits
 /// it is the pair kerning after the character before the caret, as Alt+←/→ steps it
 /// (`type.step`); nowhere to set at the start of the text. Else it is a character attribute like
 /// the others: the selected range, or all the text.
@@ -242,6 +243,37 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     }
     end_typing(app);
     app.run("text.setRangeStyle", json!({"id": id.0, "start": start, "end": a, "kerning": value})).ok();
+}
+
+/// The pair before the caret, in 1/1000 em, using the layout the canvas draws.
+fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
+    let (id, a, b) = text_editing(app)?;
+    if a != b {
+        return None;
+    }
+    let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
+    let text = t.plain_text();
+    let start = vectorcraft_text::edit::prev_char(&text, a);
+    if start >= a {
+        return None;
+    }
+    let style = vectorcraft_text::edit::style_at(&t.runs, start + 1);
+    if let Some(v) = style.kerning {
+        return Some((v, false));
+    }
+    let state = app.session.active()?;
+    let key = (state.uid, state.revision, id, a);
+    let slot = ui.scope_id().with("caret-kerning");
+    if let Some((cached_key, value)) = ui.ctx().data(|d| d.get_temp::<((u64, u64, NodeId, usize), f64)>(slot))
+        && cached_key == key
+    {
+        return Some((value, true));
+    }
+    let original = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let value = vectorcraft_engine::cmd::effective_kerning(vectorcraft_text::FontDb::global(), t, &original, start, a);
+    let value = value.round();
+    ui.ctx().data_mut(|d| d.insert_temp(slot, (key, value)));
+    Some((value, true))
 }
 
 /// The faces Type › Bold and Type › Italic switch to.
@@ -637,14 +669,33 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             match widgets::spin_field_auto(ui, "ch-lead", leading, Some(auto), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
                 Some(SpinPick::Value(v)) => style(app, json!({"leading": v})),
                 Some(SpinPick::Auto) => style(app, json!({"leading": "auto"})),
+                Some(SpinPick::Optical) => {}
                 None => {}
             }
         });
         ui.end_row();
-        cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
-            let kerning = shared(app, |s| s.kerning.unwrap_or(0.0));
-            if let Some(v) = widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
-                set_kerning(app, if v == 0.0 { json!("auto") } else { json!(v) });
+        cell(ui, "VA", tl!("Kerning"), |ui| {
+            let mode = shared(app, |s| (s.optical_kerning, s.kerning));
+            let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
+            let at_caret = if caret { caret_kerning(app, ui) } else { None };
+            let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
+            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
+            let optical = mode.map(|(optical, _)| optical);
+            match widgets::spin_kerning(
+                ui,
+                "ch-kern",
+                kerning,
+                automatic,
+                optical,
+                tl!("Optical"),
+                at_caret.is_some_and(|(_, auto)| auto),
+                fw,
+                &TRACKING_PRESETS,
+            ) {
+                Some(SpinPick::Value(v)) => set_kerning(app, json!(v)),
+                Some(SpinPick::Auto) => set_kerning(app, json!("auto")),
+                Some(SpinPick::Optical) => set_kerning(app, json!("optical")),
+                None => {}
             }
         });
         cell(ui, "VA↔", tl!("Tracking"), |ui| {
@@ -872,6 +923,17 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
+    // Language: the characters are shaped in it, so that the font uses that language's forms.
+    ui.add_space(4.0);
+    let names: Vec<&str> = LANGUAGES.iter().map(|(n, _, _)| *n).collect();
+    // Mixed: blank; a tag from a file that is not in the list: as it is.
+    let current = shared(app, |s| s.language.clone())
+        .map_or_else(String::new, |l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
+    widgets::label_row(ui, tl!("Language:"), 64.0, |ui| {
+        if let Some(name) = widgets::dropdown(ui, "ch-language", &current, &names, w - 72.0).and_then(|i| names.get(i)) {
+            format(app, json!({"language": name}));
+        }
+    });
 }
 
 /// The `text.setFormat` params of the Superscript or Subscript toggle `p` for text whose
@@ -954,6 +1016,44 @@ fn char_direction_items(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The numeral systems Character panel menu › Digits lists after Default, with their English
+/// labels, translated in the `digits` context (Hindi, Bengali, Tamil… are also languages): the
+/// Arabic-script ones, then the Indic scripts' own digits from Devanagari on.
+pub(crate) const DIGITS: [(&str, vectorcraft_doc::Digits); 12] = {
+    use vectorcraft_doc::Digits;
+    [
+        ("Arabic", Digits::Arabic),
+        ("Hindi", Digits::Hindi),
+        ("Farsi", Digits::Farsi),
+        ("Devanagari", Digits::Devanagari),
+        ("Bengali", Digits::Bengali),
+        ("Gurmukhi", Digits::Gurmukhi),
+        ("Gujarati", Digits::Gujarati),
+        ("Odia", Digits::Odia),
+        ("Tamil", Digits::Tamil),
+        ("Telugu", Digits::Telugu),
+        ("Kannada", Digits::Kannada),
+        ("Malayalam", Digits::Malayalam),
+    ]
+};
+
+/// Character panel menu › Digits; `digits`: the selected characters' (`None` when they differ).
+fn digits_items(app: &mut VectorcraftApp, ui: &mut Ui, digits: Option<vectorcraft_doc::Digits>) {
+    use vectorcraft_doc::Digits;
+    let mut item = |ui: &mut Ui, label: &str, d: Digits| {
+        if menu_item(ui, label, true, digits == Some(d)) {
+            format(app, json!({"digits": d.id()}));
+        }
+    };
+    item(ui, tl!("Default"), Digits::Default);
+    for (label, d) in DIGITS {
+        if d == Digits::Devanagari {
+            ui.separator();
+        }
+        item(ui, crate::i18n::tr_ctx(crate::i18n::current(), "digits", label), d);
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = text_style(app);
     let has = st.is_some();
@@ -1020,6 +1120,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!("Tate-chu-yoko"), has, tcy) {
             format(app, json!({"tateChuYoko": !tcy}));
         }
+        // Standard Vertical Roman Alignment: the selected half-width characters stand upright in
+        // vertical type instead of being rotated. Checked when every selected character has it; a
+        // mixed selection turns it on.
+        let roman = shared(app, |s| s.standard_vertical_roman) == Some(true);
+        if menu_item(ui, tl!("Standard Vertical Roman Alignment"), has, roman) {
+            format(app, json!({"standardVerticalRoman": !roman}));
+        }
         ui.separator();
     }
     // Digits: the numeral system the selected characters' digits are drawn in, with the Middle
@@ -1027,19 +1134,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_indic_options {
         let digits = s.as_ref().map(|s| s.digits);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Digits")), |ui| {
-                use vectorcraft_doc::Digits;
-                for (label, d, key) in [
-                    (tl!("Default"), Digits::Default, "default"),
-                    (tl!("Arabic"), Digits::Arabic, "arabic"),
-                    (tl!("Hindi"), Digits::Hindi, "hindi"),
-                    (tl!("Farsi"), Digits::Farsi, "farsi"),
-                ] {
-                    if menu_item(ui, label, true, digits == Some(d)) {
-                        format(app, json!({"digits": key}));
-                    }
-                }
-            });
+            ui.menu_button(format!("   {}", tl!("Digits")), |ui| digits_items(app, ui, digits));
         });
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
@@ -1068,7 +1163,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("System Layout"), open, system) {
         app.run("type.systemLayout", json!({})).ok();
     }
-    menu_item(ui, tl!("Standard Vertical Roman Alignment"), false, false);
     ui.separator();
     // The installed fonts are always listed; this picks up fonts installed since the app started.
     #[cfg(not(target_arch = "wasm32"))]
@@ -1096,9 +1190,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
-/// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off, the Default character
-/// direction and the Default digits, whether or not Show East Asian Options and Show Indic Options
-/// are on.
+/// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
+/// No Break off, the Default character direction and the Default digits, whether or not Show East
+/// Asian Options and Show Indic Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -1107,7 +1201,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
         json!({
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
-            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko, "noBreak": d.no_break, "charDirection": "default",
+            "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
+            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
             "digits": d.digits
         }),
     );

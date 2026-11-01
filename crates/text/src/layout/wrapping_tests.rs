@@ -36,6 +36,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             vpal: None,
             level: unicode_bidi::Level::ltr(),
             no_break: false,
+            vertical_roman: false,
             cursive: false,
         })
         .collect()

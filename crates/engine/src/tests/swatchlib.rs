@@ -637,3 +637,22 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
     run(&mut s, "swatch.edit", json!({"name": "Red", "paint": {"color": "#00ff00"}}));
     assert_eq!(doc(&s).swatch("Red").unwrap().paint.color().map(|c| c.to_hex()), Some("#00ff00".into()));
 }
+
+/// #3602: a library titled with a Windows device name is saved under a name that is not one.
+#[test]
+fn a_library_file_name_is_never_a_windows_device_name() {
+    use crate::cmd::swatchlib::library_file_name;
+    for (title, ext) in
+        [("CON", "json"), ("nul", "json"), ("Com1", "acb"), ("LPT9", "ase"), ("aux.", "json"), ("CON.txt", "json"), ("nul.tar.gz", "acb")]
+    {
+        let file = library_file_name(title, ext);
+        assert!(!crate::file_access::is_device_name(&file), "{title}: {file}");
+        assert!(
+            file.ends_with(&format!(".{ext}"))
+                && file.to_ascii_lowercase().starts_with(&title.split('.').next().unwrap_or_default().to_ascii_lowercase()),
+            "{title}: {file}"
+        );
+    }
+    assert_eq!(library_file_name("Console", "json"), "Console.json");
+    assert_eq!(library_file_name("COM10", "json"), "COM10.json");
+}

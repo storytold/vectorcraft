@@ -360,7 +360,7 @@ mod tests {
         // Inside the envelope: a new row and column.
         assert_eq!(
             t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 160.0)),
-            vec![Action::Exec("object.mesh.addLine".into(), json!({"id": e.0, "x": 150.0, "y": 160.0}))]
+            vec![Action::Exec("object.mesh.addLine".into(), json!({"id": e.0, "x": 150.0, "y": 160.0, "tolerance": c.hit_options().tol}))]
         );
     }
 

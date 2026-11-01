@@ -1,8 +1,8 @@
 use super::compare::{MAX_DIFFERENCE, PageView, compare, difference};
-use super::plan::plan;
+use super::plan::{made_only, make_slots, plan, readable_all};
 use super::slots::{
-    ART_LEFT_OUT, Content, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots, extent, few, fill_slots,
-    letters, text_objects, words,
+    ART_LEFT_OUT, Content, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, SlotInfo, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots, extent, few,
+    fill_slots, letters, text_objects, words,
 };
 use super::{Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, Vec2, ai};
 
@@ -183,10 +183,6 @@ pub(super) fn build_from(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    // The page's type is compared with every text object of the layers: that has its limits.
-    if infos.len() > MAX_SLOTS || infos.len().saturating_mul(shown.len()) > MAX_PAIRS {
-        return Err("it has too many text objects".into());
-    }
     let texts = Texts::read(data);
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
@@ -202,7 +198,8 @@ pub(super) fn build_from(
     }
     let template = template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
     let mut notes = warnings;
-    let content = plan(&infos, &stories, template, to_doc, [&shown, &hidden], &mut notes);
+    let own = (!outlined).then(|| outside_placed_files(&shown, &doc, &placed_elsewhere));
+    let (content, reflow) = slot_content(&infos, &stories, template, to_doc, own.as_deref(), [&shown, &hidden], &mut notes)?;
     // The glyphs left out with the rest of the page's art, and how many text objects take type of
     // the page right next to them (not counted past `MAX_PAIRS` comparisons).
     let compared = lone.len().saturating_mul(shown.iter().chain(&hidden).map(Vec::len).sum());
@@ -211,7 +208,7 @@ pub(super) fn build_from(
         matches!(n.kind, NodeKind::Text(_))
             && n.visual_bounds().is_some_and(|b| missing.iter().any(|r| !b.inflate(OUTLINE_REACH, OUTLINE_REACH).intersect(*r).is_zero_area()))
     };
-    let short = content.iter().filter(|c| matches!(c, Content::Page(p) | Content::Made(_, _, _, p) if p.iter().any(next_to_missing))).count();
+    let short = content.iter().filter(|c| matches!(c, Content::Page(p) if p.iter().any(next_to_missing))).count();
     let mut empty = 0;
     let mut layers = std::mem::take(&mut doc.layers);
     let mut made = vec![];
@@ -244,16 +241,16 @@ pub(super) fn build_from(
             // doesn't draw is weighed again with the images there, since an image that covered a
             // text object at the first placement may not cover it at the other.
             let other = elsewhere(&doc, &placed_elsewhere);
-            let unseen = prune_unseen(&frame, &mut view, &mut doc);
+            let unseen = prune_unseen(&frame, &mut view, &mut doc, reflow);
             let unseen_note = |n: usize| (n > 0).then(|| format!("{n} {UNSEEN_TEXT}"));
-            match compare(&frame, &mut view, &doc) {
+            match compare(&frame, &mut view, &doc, reflow) {
                 // Placed files at the other point their data gives, where that draws closer to the
                 // page: a small image in the wrong place differs too little to fail.
                 Ok(note) => {
                     let closer = other.and_then(|mut other| {
-                        let unseen = prune_unseen(&frame, &mut view, &mut other);
-                        let closer = view.difference(&other, frame.rect).any < view.difference(&doc, frame.rect).any;
-                        closer.then(|| compare(&frame, &mut view, &other).ok()).flatten().map(|note| (other, unseen, note))
+                        let unseen = prune_unseen(&frame, &mut view, &mut other, reflow);
+                        let closer = view.difference(&other, frame.rect, reflow).any < view.difference(&doc, frame.rect, reflow).any;
+                        closer.then(|| compare(&frame, &mut view, &other, reflow).ok()).flatten().map(|note| (other, unseen, note))
                     });
                     match closer {
                         Some((other, unseen, note)) => {
@@ -265,8 +262,8 @@ pub(super) fn build_from(
                 }
                 // Placed files at the other point their data gives, where that draws as the page.
                 Err(why) => match other.map(|mut other| {
-                    let unseen = prune_unseen(&frame, &mut view, &mut other);
-                    (compare(&frame, &mut view, &other), other, unseen)
+                    let unseen = prune_unseen(&frame, &mut view, &mut other, reflow);
+                    (compare(&frame, &mut view, &other, reflow), other, unseen)
                 }) {
                     Some((Ok(note), other, unseen)) => {
                         doc = other;
@@ -286,6 +283,34 @@ pub(super) fn build_from(
         scale_document(&mut doc, unit);
     }
     Ok((doc, notes))
+}
+
+/// What goes into each of `infos`' slots, and whether the type is all made from the file's text
+/// document. When the text document makes the type of every text object that shows (and the type
+/// isn't asked for as outlines: `own` has the page's text objects that show outside placed files),
+/// each slot takes its own made type and the page's type is only compared with it: type laid out
+/// again, in another font where the file's isn't installed, may differ from the page's. Otherwise
+/// see [`plan`], with `pages` (the page's text objects that show and that don't).
+fn slot_content(
+    infos: &[SlotInfo],
+    stories: &[Option<Arc<Story>>],
+    template: Option<(f64, f64)>,
+    to_doc: Affine,
+    own: Option<&[Vec<Arc<Node>>]>,
+    pages: [&[Vec<Arc<Node>>]; 2],
+    notes: &mut Vec<String>,
+) -> Result<(Vec<Content>, bool), String> {
+    let made = make_slots(infos, stories, template, to_doc, notes);
+    if let Some(own) = own.filter(|_| readable_all(infos, &made)) {
+        return Ok((made_only(infos, made, [own, pages[1]], notes), true));
+    }
+    // The page's type is matched with every text object whose type isn't made, and weighed against
+    // where every made one draws: that has its limits.
+    let open = made.iter().filter(|m| m.is_none()).count();
+    if open > MAX_SLOTS || infos.len().saturating_mul(pages[0].len()) > MAX_PAIRS {
+        return Err("it has too many text objects".into());
+    }
+    Ok((plan(infos, stories, made, template, to_doc, pages, notes), false))
 }
 
 /// `doc` with the placed files `placed` lists at their other placement (see
@@ -389,6 +414,21 @@ fn in_placed_files(objects: &[Vec<Arc<Node>>], doc: &Document, placed: &[(NodeId
                 .all(|o| extent(o).is_some_and(|r| files.iter().any(|f: &Rect| f.inflate(OUTLINE_REACH, OUTLINE_REACH).contains_rect(r))))
     };
     inside(doc) || elsewhere(doc, placed).is_some_and(|other| inside(&other))
+}
+
+/// The page's text objects in `objects` that don't lie inside a placed file that shows in `doc`, at
+/// either placement (see [`in_placed_files`]): the placed file's preview has the others.
+fn outside_placed_files(objects: &[Vec<Arc<Node>>], doc: &Document, placed: &[(NodeId, Affine)]) -> Vec<Vec<Arc<Node>>> {
+    let mut files = vec![];
+    placed_files(&doc.layers, &mut files);
+    if let Some(other) = elsewhere(doc, placed) {
+        placed_files(&other.layers, &mut files);
+    }
+    if files.is_empty() {
+        return objects.to_vec();
+    }
+    let inside = |o: &[Arc<Node>]| extent(o).is_some_and(|r| files.iter().any(|f| f.inflate(OUTLINE_REACH, OUTLINE_REACH).contains_rect(r)));
+    objects.iter().filter(|o| !inside(o)).cloned().collect()
 }
 
 /// Where the placed files that show in `nodes` are: the linked images the editing data's reader
@@ -520,15 +560,16 @@ fn take_out(nodes: &mut Vec<Arc<Node>>, id: NodeId, hide: bool) -> bool {
 /// The text objects made from the file's text document that show and print on the page's area,
 /// where the page has no type to match them, and that the layers look no worse without, are not
 /// drawn by the app that wrote the file (which paints every shown text object; it keeps the type
-/// of what was turned to outlines): they are taken out. How many.
-pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document) -> usize {
+/// of what was turned to outlines): they are taken out. How many. `reflow`: the type is all laid
+/// out again from the text document (see [`compare`]).
+pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document, reflow: bool) -> usize {
     let mut found = vec![];
     unmark(&mut doc.layers, true, true, &mut found);
     let rect = frame.rect;
     if found.is_empty() || found.len() > MAX_WEIGHED {
         return 0;
     }
-    let with = view.difference(doc, rect).any;
+    let with = view.difference(doc, rect, reflow).weighed(reflow);
     // Taking a text object out changes only what is drawn in its box. When the art would still
     // differ from the page by more than `compare` allows with every candidate gone, the layers
     // aren't used whatever is pruned: don't draw them again for each one (#758).

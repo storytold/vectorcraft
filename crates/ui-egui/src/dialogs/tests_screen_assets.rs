@@ -65,10 +65,10 @@ fn export_selection_collects_the_selection_and_opens_the_assets_tab() {
     assert_eq!(assets(&mut app).len(), 2);
     assert_eq!(field(&app, "assets"), json!(ids));
     let text = painted_text(&mut app, |app, ui| super::show(app, ui.ctx()));
-    assert!(text.contains("Asset 1") && text.contains("Asset 2") && text.contains("Select All"), "{text}");
-    // The web downloads both as one zip.
+    assert!(text.contains("Asset 1") && text.contains("Asset 2") && text.contains("Clear Selection"), "{text}");
+    // The web downloads both as one zip, in the 1x sub-folder Create Sub-folders makes by default.
     let r = confirm(&mut app).unwrap();
-    assert_eq!(r["files"], json!(["Asset-1.png", "Asset-2.png"]));
+    assert_eq!(r["files"], json!(["1x/Asset-1.png", "1x/Asset-2.png"]));
     assert_eq!(log.borrow().len(), 1);
     assert!(app.ui.dialog.is_none());
     // Nothing selected: Export Selection is off; document.exportSelection still exports in one go.
@@ -112,8 +112,9 @@ fn the_assets_tab_exports_the_checked_assets_into_the_folder() {
     set(&mut app, "assets", json!([ids[1], 999]));
     set(&mut app, "formats", json!([{"format": "png", "scale": "2x", "suffix": "@2x"}]));
     let r = confirm(&mut app).unwrap();
-    assert_eq!(r["files"], json!([format!("{folder}/Asset-2@2x.png")]));
-    let png = image::load_from_memory(&std::fs::read(dir.join("Asset-2@2x.png")).unwrap()).unwrap();
+    // Create Sub-folders is on by default: a folder per scale.
+    assert_eq!(r["files"], json!([format!("{folder}/2x/Asset-2@2x.png")]));
+    let png = image::load_from_memory(&std::fs::read(dir.join("2x").join("Asset-2@2x.png")).unwrap()).unwrap();
     assert_eq!((png.width(), png.height()), (60, 40), "the asset's art at 2x");
     assert_eq!(log.borrow().len(), 1, "Open Location shows the file");
     // The rows are remembered for the dialog and the Asset Export panel alike.

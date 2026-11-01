@@ -446,6 +446,28 @@ impl<'a> Reader<'a> {
             // art moves on, so a path's state before its paint isn't read as its layer's.
             self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
         }
+        self.note_state();
+    }
+
+    /// Inside a dictionary in the art (a text's frame, a mask's art), the transparency just set
+    /// stays after the dictionary: the writer goes on from it, so the objects after an area text
+    /// whose frame sets one have no `Xy` of their own.
+    fn note_state(&mut self) {
+        let gs = &self.gs;
+        let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+        if self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_)))
+            && let Some(f) = self.frames.iter_mut().rev().find(|f| matches!(f.kind, Kind::Obj(_)))
+        {
+            f.state = Some(state);
+        }
+    }
+
+    /// A dictionary's art set transparency `state` (see [`Self::note_state`]): it is the current
+    /// one now, and the enclosing dictionary's.
+    pub(super) fn keep_state(&mut self, state: (f32, BlendMode, bool, Knockout, bool)) {
+        let gs = &mut self.gs;
+        (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape) = state;
+        self.note_state();
     }
 
     /// `n (style) XW` after an object: `1 (style)` after the object written on `%_` lines, its
