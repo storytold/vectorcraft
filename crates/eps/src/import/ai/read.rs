@@ -13,9 +13,13 @@
 //!   closes), `(op) *` for a guide. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
 //! - Names: an `/ArtDictionary` after an object, its `AI10_ArtUID` the name's XML id.
-//! - Artboards: the `ArtboardArray` of the `/Document` dictionary, else `%AI3_Cropmarks`, else
-//!   the art size around the template box's centre, else (a file in the legacy format another
-//!   app wrote) the bounding box.
+//! - Artboards: the `ArtboardArray` of the `/Document` dictionary, with each one's display
+//!   options, else `%AI3_Cropmarks`, else the art size around the template box's centre
+//!   (`%AI3_TemplateBox`, `%%TemplateBox` in older files), else (a file in the legacy format
+//!   another app wrote) the bounding box.
+//! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
+//!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
+//!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
 //! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
 //!   gives how many variables and data sets it has ([`VariableLibrary`]).
 //! - Objects on Path: a group whose objects' dictionaries carry ids, and a record of the
@@ -137,6 +141,17 @@ pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
     r.finish()
 }
 
+/// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private
+/// data): the program's header gives the author and the custom colors the editing data's header
+/// doesn't.
+pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structure, String> {
+    let mut r = Reader::new(data);
+    r.large_canvas = large_canvas.then_some(1.0);
+    r.run()?;
+    r.program_header(ps);
+    r.finish()
+}
+
 struct Reader<'a> {
     lex: Lexer<'a>,
     stack: Vec<V>,
@@ -151,7 +166,15 @@ struct Reader<'a> {
     doc: Document,
     to_doc: Option<Affine>,
     cropmarks: Option<Rect>,
-    artboards: Vec<(String, Rect)>,
+    artboards: Vec<document::AiArtboard>,
+    /// The user the header's `%%For` names.
+    author: Option<String>,
+    /// The custom colors the header's `%%CMYKCustomColor` and `%%RGBCustomColor` define.
+    custom_colors: Vec<Named>,
+    /// The last header comment defined custom colors (CMYK when true), which a `%%+` line continues.
+    custom_more: Option<bool>,
+    /// The header ended (`%%EndComments`).
+    header_done: bool,
     /// The variables and data sets of the `/Document` dictionary's variable library.
     variables: VariableLibrary,
     /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
@@ -298,6 +321,10 @@ impl<'a> Reader<'a> {
             to_doc: None,
             cropmarks: None,
             artboards: Vec::new(),
+            author: None,
+            custom_colors: Vec::new(),
+            custom_more: None,
+            header_done: false,
             variables: VariableLibrary::default(),
             on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),

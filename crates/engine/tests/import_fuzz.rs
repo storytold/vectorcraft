@@ -3156,6 +3156,17 @@ fn arb_guide_coord() -> impl Strategy<Value = String> {
     ]
 }
 
+/// A value of a `/Document` setting: a number of any type, several numbers, a string or a
+/// dictionary.
+fn arb_ai_setting() -> impl Strategy<Value = String> {
+    prop_oneof![
+        (arb_num(), prop::sample::select(vec!["/Int", "/Real", "/Bool", "/String", ""])).prop_map(|(n, t)| format!("{n} {t}")),
+        (arb_num(), arb_num()).prop_map(|(a, b)| format!("{a} {b} /RealPoint\n%_")),
+        Just("(text) /String".to_string()),
+        Just("/Dictionary :\n%_1 /Int (x) ,\n%_;\n%_".to_string()),
+    ]
+}
+
 /// The operators, operands and section comments of hostile editing data.
 fn arb_ai_token() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -3485,6 +3496,51 @@ proptest! {
         })?;
         let eps = ai::eps(data.as_bytes(), ai::page_ps());
         survive("layer options and ruler guides in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+
+    /// Artboard display options and Document Raster Effects Settings of any type and value, and
+    /// header comments (`%%For`, custom colors and their `%%+` lines, `%%TemplateBox`) with any
+    /// operands.
+    #[test]
+    fn ai_document_settings_never_panic(
+        boards in prop::collection::vec(prop::collection::vec((prop::sample::select(vec!["DisplayMark", "PAR"]), arb_ai_setting()), 0..4), 0..4),
+        raster in prop::collection::vec((prop::sample::select(vec!["dpi.", "mask", "alis", "spot", "padd", "colr"]), arb_ai_setting()), 0..8),
+        header in prop::collection::vec(
+            (
+                prop::sample::select(vec!["%%For:", "%%CMYKCustomColor:", "%%RGBCustomColor:", "%%+", "%%TemplateBox:", "%%DocumentCustomColors:"]),
+                prop::collection::vec(prop_oneof![arb_num(), "\\(?[ -~]{0,12}\\)?".prop_map(|s| s)], 0..6),
+            ),
+            0..10,
+        ),
+    ) {
+        use vectorcraft_testkit::ai;
+        let entries = |e: &[(&str, String)]| e.iter().map(|(k, v)| format!("%_{v} ({k}) ,\n")).collect::<String>();
+        let array: String = boards
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                format!(
+                    "%_/Dictionary :\n{}%_{} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+                    entries(e),
+                    i * 100,
+                    i * 100 + 100
+                )
+            })
+            .collect();
+        let document = format!(
+            "%_/Document :\n%_/Dictionary :\n%_/Dictionary :\n{}%_; (AI Auto Rasterize) ,\n%_/Array :\n{array}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n",
+            entries(&raster)
+        );
+        let comments: String = header.iter().map(|(c, ops)| format!("{c} {}\n", ops.join(" "))).collect();
+        let body = format!("{document}{}", ai::layer("L", &format!("{}f\n", ai::rect(0.0, 0.0, 10.0, 10.0))));
+        let data = ai::editing_data(200.0, 100.0, &body).replacen("%%EndComments", &format!("{comments}%%EndComments"), 1);
+        survive("document settings", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("document settings in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+        // The same comments in the EPS's own header.
+        let at = eps.windows(13).position(|w| w == b"%%EndComments").unwrap_or(0);
+        let outer = [&eps[..at], comments.as_bytes(), &eps[at..]].concat();
+        survive("document settings in an EPS's header", || vectorcraft_engine::cmd::fileio::load("x.eps", &outer).ok().map(|l| l.doc))?;
     }
 
     /// The testkit's sample damaged, as it is and compressed, in EPS, `.ai` and PDF files.

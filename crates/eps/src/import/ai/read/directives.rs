@@ -49,6 +49,33 @@ impl<'a> Reader<'a> {
             }
             return Ok(());
         }
+        // The header's comments (AI7 specification §2.1.1; DSC 3.0).
+        let more = self.custom_more.take();
+        if !self.header_done && self.frames.is_empty() {
+            let bytes = c.trim_ascii_end();
+            if let (Some(cmyk), Some(v)) = (more, bytes.strip_prefix(b"%+")) {
+                self.custom_color(v, cmyk);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%CMYKCustomColor:") {
+                self.custom_color(v, true);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%RGBCustomColor:") {
+                self.custom_color(v, false);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%For:") {
+                // `(username) (organization)`: the user who created the file.
+                if self.author.is_none() {
+                    self.author = ps_string(v).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+                }
+                return Ok(());
+            }
+            if bytes == b"%EndComments" {
+                self.header_done = true;
+            }
+        }
         let m = marker(line);
         // A pattern's definition (one inside another's isn't read).
         if m == "BeginPattern" && self.pattern.is_none() {
@@ -138,7 +165,7 @@ impl<'a> Reader<'a> {
             self.ruler_units = Some(n);
         } else if let Some(v) = line.strip_prefix("AI5_ArtSize:") {
             self.art_size = two(v);
-        } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:") {
+        } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:").or_else(|| line.strip_prefix("%TemplateBox:")) {
             self.template_center = two(v);
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
@@ -155,6 +182,32 @@ impl<'a> Reader<'a> {
             self.color_model = Some(v.trim() == "2");
         }
         Ok(())
+    }
+
+    /// A custom color of the header, `cyan magenta yellow black (name)` (`cmyk`) or
+    /// `red green blue (name)`, each component from 0 to 1. One written otherwise isn't kept.
+    fn custom_color(&mut self, v: &[u8], cmyk: bool) {
+        self.custom_more = Some(cmyk);
+        if self.custom_colors.len() >= MAX_CUSTOM_COLORS {
+            return;
+        }
+        let Some(open) = v.iter().position(|&b| b == b'(') else { return };
+        let (Some(head), Some(name)) = (v.get(..open), v.get(open..).and_then(ps_string)) else { return };
+        // One more than a color has, so that too many are seen.
+        let parts: Vec<Option<f32>> = head
+            .split(u8::is_ascii_whitespace)
+            .filter(|w| !w.is_empty())
+            .take(5)
+            .map(|w| std::str::from_utf8(w).ok()?.parse::<f32>().ok().filter(|n| (0.0..=1.0).contains(n)))
+            .collect();
+        let color = match parts.as_slice() {
+            [Some(c), Some(m), Some(y), Some(k)] if cmyk => vectorcraft_color::Color::cmyk(*c, *m, *y, *k),
+            [Some(r), Some(g), Some(b)] if !cmyk => vectorcraft_color::Color::rgb(*r, *g, *b),
+            _ => return,
+        };
+        if !name.trim().is_empty() && !self.custom_colors.iter().any(|n| n.name == name) {
+            self.custom_colors.push(super::Named { name, color, tint: 1.0, spot: true });
+        }
     }
 
     /// Skip to the comment with marker `end` (sections of the same kind nested in it count, and
@@ -279,9 +332,77 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// How many custom colors the header may define.
+pub(super) const MAX_CUSTOM_COLORS: usize = 1000;
+
+/// The longest string the header's comments may give, in bytes.
+const MAX_STRING: usize = 4096;
+
+/// The PostScript string `v` starts with (after spaces), its escapes read, when it ends on the line
+/// and holds at most [`MAX_STRING`] bytes.
+fn ps_string(v: &[u8]) -> Option<String> {
+    let mut bytes = v.trim_ascii_start().iter().copied().peekable();
+    if bytes.next()? != b'(' {
+        return None;
+    }
+    let (mut out, mut depth) = (Vec::new(), 0usize);
+    while let Some(b) = bytes.next() {
+        if out.len() > MAX_STRING {
+            return None;
+        }
+        match b {
+            b'\\' => match bytes.next()? {
+                b'n' => out.push(b'\n'),
+                b'r' => out.push(b'\r'),
+                b't' => out.push(b'\t'),
+                b'b' => out.push(8),
+                b'f' => out.push(12),
+                d @ b'0'..=b'7' => {
+                    let mut n = u32::from(d - b'0');
+                    for _ in 0..2 {
+                        match bytes.peek() {
+                            Some(&o @ b'0'..=b'7') => {
+                                n = n * 8 + u32::from(o - b'0');
+                                bytes.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    out.push((n & 0xff) as u8);
+                }
+                other => out.push(other),
+            },
+            b'(' => {
+                depth += 1;
+                out.push(b);
+            }
+            b')' => {
+                let Some(d) = depth.checked_sub(1) else { return Some(super::obj::text(&out)) };
+                depth = d;
+                out.push(b);
+            }
+            _ => out.push(b),
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn postscript_strings_read_their_escapes_and_end_on_the_line() {
+        assert_eq!(ps_string(b" (Ann \\(R\\) (x) \\101\\0618) (Org)").as_deref(), Some("Ann (R) (x) A18"));
+        assert_eq!(ps_string(b"(a\\nb\\\\)").as_deref(), Some("a\nb\\"));
+        assert_eq!(ps_string(b"(never ends \\)"), None);
+        assert_eq!(ps_string(b"(ends in a backslash\\"), None);
+        assert_eq!(ps_string(b"no string"), None);
+        let long = format!("({})", "x".repeat(MAX_STRING + 1));
+        assert_eq!(ps_string(long.as_bytes()), None);
+        let longest = format!("({})", "x".repeat(MAX_STRING));
+        assert_eq!(ps_string(longest.as_bytes()).map(|s| s.len()), Some(MAX_STRING));
+    }
 
     #[test]
     fn deeply_nested_symbol_definitions_stop_at_subreader_limit() {

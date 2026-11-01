@@ -87,6 +87,27 @@ fn native_import_keeps_ruler_units_from_editing_data() {
     assert_eq!(r.document.units, Unit::Millimeters);
 }
 
+#[test]
+fn an_eps_takes_the_author_and_custom_colors_of_its_own_header() {
+    let art = layer("Art", true, &square(10, 10));
+    let outer = |data: Vec<u8>| {
+        let at = data.windows(13).position(|w| w == b"%%EndComments").unwrap();
+        let header = b"%%For: (Outer Author) (Org)\n%%CMYKCustomColor: 0 0 1 0 (Outer Ink)\n%%+ 0 1 0 0 (Shared Ink)\n%%+ 0 0.5 0.5 0 (Red)\n";
+        [&data[..at], &header[..], &data[at..]].concat()
+    };
+    let r = import(&outer(eps(&page_square(10, 10), &native(&art)))).unwrap();
+    assert_eq!(names(&r.document), ["Art"]);
+    assert_eq!(r.document.metadata.author, "Outer Author");
+    let ink = |d: &Document, name: &str| d.swatch(name).map(|s| (s.paint.color(), s.spot));
+    assert_eq!(ink(&r.document, "Outer Ink"), Some((Some(vectorcraft_color::Color::cmyk(0.0, 0.0, 1.0, 0.0)), true)));
+    assert_eq!(ink(&r.document, "Red"), Some((Some(vectorcraft_color::Color::cmyk(0.0, 0.5, 0.5, 0.0)), true)), "in place of the default");
+    // The private data's own header comes first.
+    let own = native(&art).replacen("%%BoundingBox", "%%For: (Inner Author) ()\n%%RGBCustomColor: 1 0 0 (Shared Ink)\n%%BoundingBox", 1);
+    let r = import(&outer(eps(&page_square(10, 10), &own))).unwrap();
+    assert_eq!(r.document.metadata.author, "Inner Author");
+    assert_eq!(ink(&r.document, "Shared Ink"), Some((Some(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)), true)));
+}
+
 fn kinds(l: &Node) -> Vec<&'static str> {
     l.children()
         .into_iter()
