@@ -1333,6 +1333,7 @@ digits	Malayalam	マラヤーラム数字
 	Delete Workspace	ワークスペースを削除
 	Delete the graphic style “{name}”?	グラフィックスタイル「{name}」を削除しますか？
 	Delete Action Sets	アクションセットを削除
+	Duplicate Action or Action Set	アクションまたはアクションセットを複製
 	Delete the action set “{name}” and its actions?	アクションセット「{name}」とそのアクションを削除しますか？
 	Delete the selected action sets and their actions?	選択したアクションセットとそのアクションを削除しますか？
 	Delete theme	テーマを削除

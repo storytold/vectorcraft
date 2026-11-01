@@ -760,6 +760,7 @@ font-technology	Variable	Вариативные
 	Delete Tab	Удалить табуляцию
 	Delete the graphic style “{name}”?	Удалить графический стиль «{name}»?
 	Delete Action Sets	Удалить наборы действий
+	Duplicate Action or Action Set	Дублировать действие или набор действий
 	Delete the action set “{name}” and its actions?	Удалить набор действий «{name}» и его действия?
 	Delete the selected action sets and their actions?	Удалить выбранные наборы действий и их действия?
 	Delete Theme	Удалить тему

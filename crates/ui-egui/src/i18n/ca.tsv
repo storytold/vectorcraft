@@ -1064,6 +1064,7 @@
 	Delete Tab	Suprimeix la tabulació
 	Delete the graphic style “{name}”?	Voleu suprimir l’estil gràfic “{name}”?
 	Delete Action Sets	Suprimeix els conjunts d’accions
+	Duplicate Action or Action Set	Duplica l’acció o el conjunt d’accions
 	Delete the action set “{name}” and its actions?	Voleu suprimir el conjunt d’accions “{name}” i les seves accions?
 	Delete the selected action sets and their actions?	Voleu suprimir els conjunts d’accions seleccionats i les seves accions?
 	Delete the library “{name}”?	Voleu suprimir la biblioteca “{name}”?
