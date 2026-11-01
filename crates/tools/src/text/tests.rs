@@ -571,7 +571,8 @@ fn drag_selects_and_overlay_highlights() {
     tool.pointer(&c, &PointerEvent::new(PointerKind::Up, b.x + 0.1, b.y));
     assert_eq!(tool.sel(), (7, 9));
     let o = tool.overlays(&c);
-    assert!(o.iter().any(|o| matches!(o, Overlay::Highlight { .. })));
+    assert!(o.iter().any(|o| matches!(o, Overlay::Invert { .. })), "an inverting overlay is emitted for GPU inverse-video selection");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Highlight { .. })), "a translucent highlight overlay is emitted as fallback");
     let opts = tool.options();
     assert_eq!((opts["start"].as_u64(), opts["end"].as_u64()), (Some(7), Some(9)));
 }

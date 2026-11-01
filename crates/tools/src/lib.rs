@@ -84,6 +84,8 @@ pub enum Overlay {
     Distance { a: Point, b: Point, text: String, color: [u8; 3] },
     /// Translucent filled quad (text selection highlight), RGBA.
     Highlight { quad: [Point; 4], color: [u8; 4] },
+    /// Inverting quad (inverse-video text selection highlight, matching reference behaviour).
+    Invert { quad: [Point; 4] },
     /// A colour chip of fixed screen size (a gradient stop), RGBA; ringed when selected.
     Swatch { p: Point, color: [u8; 4], selected: bool },
     /// A hairline in a translucent colour (perspective gridlines), RGBA.

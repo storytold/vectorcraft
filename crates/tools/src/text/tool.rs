@@ -621,7 +621,9 @@ impl Tool for TypeTool {
             o.push(Overlay::Line { a: t.xf * p, b: t.xf * q, color: [0, 0, 0], dashed: false });
         } else {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
-                o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
+                let quad = q.map(|p| t.xf * p);
+                o.push(Overlay::Invert { quad });
+                o.push(Overlay::Highlight { quad, color: [60, 120, 255, 90] });
             }
         }
         if let Some(id) = self.editing.filter(|id| shown && ported(cx.doc, *id).is_some()) {

@@ -308,6 +308,15 @@ pub(super) fn ime_geometry(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &X
 }
 
 pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
+    let invert_quads: Vec<[egui::Pos2; 4]> = overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Invert { quad } => Some([xf.to_screen(quad[0]), xf.to_screen(quad[1]), xf.to_screen(quad[2]), xf.to_screen(quad[3])]),
+            _ => None,
+        })
+        .collect();
+    let invert_active = if !invert_quads.is_empty() { crate::gpu_invert::paint_invert_quads(p, &invert_quads) } else { false };
+
     for o in overlays {
         match o {
             // Where the tools select: the document rectangle, turned with the view.
@@ -345,9 +354,12 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                 );
             }
             Overlay::Highlight { quad, color } => {
-                let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
-                p.add(Shape::convex_polygon(quad.iter().map(|q| xf.to_screen(*q)).collect(), c, Stroke::NONE));
+                if !invert_active {
+                    let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
+                    p.add(Shape::convex_polygon(quad.iter().map(|q| xf.to_screen(*q)).collect(), c, Stroke::NONE));
+                }
             }
+            Overlay::Invert { .. } => {}
             Overlay::Measure { p: pt, text } => {
                 let sp = xf.to_screen(*pt) + vec2(14.0, 14.0);
                 let galley = p.layout(text.clone(), egui::FontId::proportional(11.0), Color32::WHITE, 200.0);
