@@ -1,4 +1,5 @@
 use super::*;
+use crate::panels::library_panel;
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 
 /// One headless frame of the panel (and its menu) with `events`: the texts drawn, with where.

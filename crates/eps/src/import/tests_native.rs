@@ -1135,6 +1135,46 @@ fn editing_data_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
     assert!(near(first(&d, 0), [100.0, 860.0, 140.0, 900.0]), "{:?}", first(&d, 0));
 }
 
+/// #779: a `.ai`'s ruler guides come in as guides of their layers, at the page's size when the
+/// editing data is in the units of a `UserUnit` page.
+#[test]
+fn an_ai_files_ruler_guides_come_in_on_their_layers() {
+    // Across the canvas (16,383 points around the template box's centre, 50 50) at y 40, and
+    // across the artboard at x 20.
+    let guides = "-8141.5 40 m\n8241.5 40 L\n(N) *\n20 0 m\n20 100 L\n(N) *\n";
+    let art = native(&layer("Jig", true, &format!("{}\n{guides}", square(10, 10))));
+    let art = art.replacen("%AI5_NumLayers", "%AI3_TemplateBox: 50 50 50 50\n%AI5_NumLayers", 1);
+    for k in [1.0, 10.0] {
+        let page = in_points(pdf_part(10.0, 86.0), k);
+        let (d, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, k);
+        assert!(read, "{w:?}");
+        let jig = d.layers[0].id;
+        let want = [
+            vectorcraft_doc::Guide { vertical: false, pos: 60.0 * k, artboard: None, layer: Some(jig) },
+            vectorcraft_doc::Guide { vertical: true, pos: 20.0 * k, artboard: Some(d.artboards[0].id), layer: Some(jig) },
+        ];
+        assert_eq!(d.guides, want);
+        assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the square alone");
+    }
+}
+
+/// An EPS whose page is its art's box keeps only its first artboard, and the guides of that one:
+/// the ruler guides of the artboards left out go with them.
+#[test]
+fn an_eps_of_its_art_box_keeps_the_guides_of_its_first_artboard() {
+    let point = |x: u32, y: u32, n: u8| format!("%_{x} {y} /RealPointRelToROrigin\n%_ (PositionPoint{n}) ,\n");
+    let board = |x0: u32, x1: u32| format!("%_/Dictionary :\n{}{}%_; ,\n", point(x0, 50, 1), point(x1, 0, 2));
+    let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board(0, 50), board(50, 100));
+    let boards = format!("%_/Document :\n%_/Dictionary :\n{array}%_; /NotRecorded ,\n%_;\n");
+    let guides = "25 0 m\n25 50 L\n(N) *\n75 0 m\n75 50 L\n(N) *\n";
+    let art = native(&format!("{boards}{}", layer("Art", true, &format!("{}\n{guides}", square(10, 10)))));
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert_eq!(r.document.artboards.len(), 1);
+    let (board, layer) = (r.document.artboards[0].id, r.document.layers[0].id);
+    assert_eq!(r.document.guides, [vectorcraft_doc::Guide { vertical: true, pos: 25.0, artboard: Some(board), layer: Some(layer) }]);
+}
+
 /// A PDF part read from a `UserUnit` page cropped to the art: the art's box, not the artboard, is
 /// the page in the editing data's units, so the layers are read at the page's size, with their
 /// artboard.
@@ -2846,6 +2886,40 @@ fn envelope_options_keep_the_source_text_hidden_under_its_outlined_appearance() 
     });
     assert_eq!(texts, [("CHONKYCATS".to_string(), false)], "{:?}", r.warnings);
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// A live envelope that draws a little apart from its drawn art, in layers that already differ
+/// from the page almost as much as the page check takes, would make them differ too much: its
+/// drawn art is put back, so the file still opens from its layers.
+#[test]
+fn a_live_envelope_that_would_tip_the_page_check_keeps_its_drawn_art() {
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| format!("{x0} {y0} m\n{x0} {y1} L\n{x1} {y1} L\n{x1} {y0} L\n{x0} {y0} L\n");
+    let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
+    let corner = |x: f64, y: f64, nx: f64, ny: f64, px: f64, py: f64| format!("[0.8 1 {x} {y} {nx} {ny} 1 {px} {py} 1] /N X#\n");
+    let mesh = format!(
+        "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[1 1] /Size X#\n/Data X#\n/DeviceGray /CS X#\n[0 0] /P X#\n{}{}{}{}/E X#\n/End X!\n",
+        corner(20.0, 5.0, 20.0, 35.0, 40.0, 5.0),
+        corner(20.0, 95.0, 40.0, 95.0, 20.0, 65.0),
+        corner(80.0, 95.0, 80.0, 65.0, 60.0, 95.0),
+        corner(80.0, 5.0, 60.0, 5.0, 80.0, 35.0),
+    );
+    let red = "0 1 1 0 1 0 0 Xa\n";
+    let envelope = format!(
+        "{}%_/ArtDictionary :\n%_131073 /Int (AIDeformOptionsKey) ,\n%_50 /Int (AIDeformFidelityKey) ,\n%_0 /Bool (AIDeformEditModeKey) ,\n%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_2 /Int (AIDeformStyle) ,\n%_;\n%_\nu\n{red}{}f\nU\n(Adobe Deform Plugin) 1 0 0 XP\n",
+        hidden(&format!("u\n{mesh}U\n")),
+        hidden(&format!("u\n{red}{}f\nU\n", rect(20.0, 5.0, 80.0, 95.0))),
+        rect(20.5, 5.0, 80.5, 95.0),
+    );
+    // Hairlines the page doesn't draw: about 4.5% of it differs before the envelope.
+    let lines: String = [3, 6, 9, 12, 15, 85, 88, 91, 94].iter().map(|x| format!("0 0 0 1 K\n0.5 w\n{x} 0 m\n{x} 100 L\nS\n")).collect();
+    let art = native(&layer("Art", true, &format!("{lines}{envelope}")));
+    let page = "1 0 0 setrgbcolor 20.5 5 moveto 80.5 5 lineto 80.5 95 lineto 20.5 95 lineto closepath fill";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let mut envelopes = 0;
+    r.document.walk(|n| envelopes += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(envelopes, 0, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w == crate::import::ai::ENVELOPE_DRAWN), "{:?}", r.warnings);
 }
 
 /// An art style section with style `Comic`: a white fill offset and repeated by Transform under a
