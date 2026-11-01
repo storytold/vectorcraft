@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (native format: dynamic symbols, #4938) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Text export joins a PDF's lines into paragraphs, with ids that Import Text Paragraphs reads back) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -110,7 +110,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | PICT, Pixar PXR | open, place (legacy) | no | no | rarely used |
 | FreeHand `.fh*` | open (legacy) | no | no | |
 | CorelDRAW `.cdr` | open | no | no | |
-| Text `.txt` | place, export | place (Text Import Options) | yes | |
+| Text `.txt` | place, export | place (Text Import Options) | yes (Text Export Options: encoding, line endings, selection only; Join Lines into Paragraphs joins lines of point type, as a PDF's come in, by font family, size, left edge, even line spacing and columns, with LF, CRLF or a space between a paragraph's lines; Write Paragraph IDs starts each with `[#id]`, and File › Import Text Paragraphs… puts edited or translated paragraphs back by them, a paragraph of lines as wrapping area type, threaded across its columns) | `tests_text.rs`, `text/import.rs`; fuzzed (`import_fuzz.rs`); paragraph detection and the id round trip are VectorCraft's own (Illustrator's text export writes the stories as they are) |
 | RTF `.rtf` | place | place (area type with fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/rtf.rs`; fuzzed (`text_import_fuzz.rs`); `\'hh` bytes read as Windows-1252 or Mac Roman only |
 | Word `.docx` | place | place (area type with the document's styles and its fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/docx.rs`; fuzzed (`text_import_fuzz.rs`); list numbers, pictures and text boxes are left out |
 | Word `.doc` | place | place (area type with the same formatting as `.docx`, from the style sheet's styles and direct formatting; Word 97 and later) | no | `tests/textimport.rs`, `place/doc.rs`; fuzzed (`text_import_fuzz.rs`); pictures, headers, footers, notes, comments and text boxes are left out with a warning; encrypted and fast-saved documents are refused |
@@ -131,6 +131,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Text export: Join Lines into Paragraphs (`paragraphs`, `lineBreaks`) groups lines of point type into paragraphs by font family, size, left edge, even line spacing and side-by-side columns; a short line in justified type, a sentence end in ragged type, a bold lead-in or heading and a first-line indent end a paragraph. `ids` starts each paragraph with `[#id]`; `text.importParagraphs` (File › Import Text Paragraphs…) puts edited or translated paragraphs back by them |
 | 2026-11-01 | minor | Native format: a symbol's Symbol Type (`dynamic`) and a dynamic symbol instance's appearance changes to objects of its art (`symbol_overrides`) round-trip; both are left out when unset, so other documents save unchanged (#4938). `.ai` reading and writing of dynamic symbols remains. |
 | 2026-11-01 | minor | Exports draw each artboard's background color behind its art (#4937): PNG, JPEG, GIF, TIFF, WebP, BMP, Targa and PSD (a layer of its own; on a transparent background too), PDF, SVG and EPS pages, a `.ai` file's PDF pages and PostScript and PDF print; `includeArtboardFill: false` leaves it out. Files with editing data (Preserve Editing, `.ai`, EPS, native) keep it as the artboard's color and reopen without extra art. Not read from the reference app's own `.ai` data, nor written to it. DXF, EMF and WMF leave it out |
 | 2026-10-31 | minor | PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`; scores unchanged (estimated) |
