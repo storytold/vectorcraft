@@ -15,8 +15,8 @@ use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
 use super::edit::selected_roots;
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_multi, has_selection, number_or,
-    str_param, switch_or,
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, number_or, str_param,
+    switch_or,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Window", "Pathfinder"],
             None,
             "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids}",
-            has_multi,
+            has_selection,
             |s, p| run_pf(s, p, PathfinderOp::Crop)
         ),
         cmd!(

@@ -906,6 +906,23 @@ fn text_outside_ascii_is_escaped_before_2007() {
     assert_eq!(text(DxfVersion::R2018), "Größe");
 }
 
+/// Type whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is 20 pt type, whose TEXT height is 14.
+#[test]
+fn a_font_height_reference_is_written_as_the_size_drawn() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut d = text_doc("Plan A", 14.0);
+    let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.font_family = HEIGHT_FAMILY.into();
+        t.runs[0].style.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    }
+    let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    let e = entities(&editable);
+    assert!((all(&e[0], 40)[0] - 14.0).abs() < 1e-6, "{:?}", all(&e[0], 40));
+}
+
 #[test]
 fn images_link_png_or_jpeg_files() {
     let mut png = vec![];
@@ -986,7 +1003,7 @@ fn crop_keeps_an_instance_whose_art_reaches_the_region() {
     // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
     let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 50.0, 140.0, 90.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let o = DxfOptions { crop: true, ..opts(&d) };
     assert!(!kinds(&export(&d, &o).unwrap()).is_empty());
 }

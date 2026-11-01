@@ -15,8 +15,8 @@ use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots, selected_roots_to_transform};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selection,
-    has_selection_outside_isolation, switch_or,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selected_member,
+    has_selection, switch_or,
 };
 
 /// Session-level (not saved) state owned by the menu commands.
@@ -43,8 +43,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "All Artwork Above",
             ["Object", "Lock"],
             None,
-            "{} lock objects in the same layer that are above and overlap the selection, deselecting every selected object left locked or hidden (the key object too) → {count}",
-            has_selection_outside_isolation,
+            "{} lock objects in the same layer that are above and overlap the selection, deselecting every selected object left locked or hidden (the key object too); in isolation mode, lock the selected objects and the objects above them inside the isolated object → {count}",
+            has_selected_member,
             |s, _| above(s, true)
         ),
         cmd!(
@@ -52,8 +52,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Layers",
             ["Object", "Lock"],
             None,
-            "{} lock every layer that holds no selected object → {count}",
-            has_selection_outside_isolation,
+            "{} lock every layer that holds no selected object; in isolation mode, change nothing and return a count of 0 → {count}",
+            has_selected_member,
             |s, _| other_layers(s, true)
         ),
         cmd!(
@@ -61,8 +61,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unselected Artwork",
             ["Object", "Lock"],
             Some("Cmd+Alt+Shift+2"),
-            "{} lock unselected artwork in one undo step, including unselected members of partly selected groups, clipping groups and compound paths, and guides while Lock Guides is on; hidden art and art on locked layers stay unlocked; a selected layer's art counts as selected; in isolation, only art inside the isolated object is affected; object.unlockAll unlocks locked art document-wide → {count}",
-            has_selection,
+            "{} lock unselected artwork in one undo step, including unselected members of partly selected groups, clipping groups and compound paths, and guides while Lock Guides is on; hidden art and art on locked layers stay unlocked; a selected layer's art counts as selected; in isolation, only art inside the isolated object is affected; object.unlockAll unlocks locked art document-wide, or inside the isolated object in isolation mode → {count}",
+            has_selected_member,
             |s, _| unselected_art(s, true)
         ),
         cmd!(
@@ -70,8 +70,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "All Artwork Above",
             ["Object", "Hide"],
             None,
-            "{} hide objects in the same layer that are above and overlap the selection, deselecting every selected object left hidden or locked (the key object too) → {count}",
-            has_selection_outside_isolation,
+            "{} hide objects in the same layer that are above and overlap the selection, deselecting every selected object left hidden or locked (the key object too); in isolation mode, hide the selected objects and the objects above them inside the isolated object → {count}",
+            has_selected_member,
             |s, _| above(s, false)
         ),
         cmd!(
@@ -79,8 +79,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Layers",
             ["Object", "Hide"],
             None,
-            "{} hide every layer that holds no selected object → {count}",
-            has_selection_outside_isolation,
+            "{} hide every layer that holds no selected object; in isolation mode, change nothing and return a count of 0 → {count}",
+            has_selected_member,
             |s, _| other_layers(s, false)
         ),
         cmd!(
@@ -88,8 +88,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unselected Artwork",
             ["Object", "Hide"],
             Some("Cmd+Alt+Shift+3"),
-            "{} hide, in one undo step, every object select.all takes that is not selected and holds no selected object; in a group that holds one it hides the other members one by one, and a clip group, compound path or other object that holds one stays as it is; the objects of a selected layer count as selected; while Lock Guides is on, guide paths count as selected and stay as they are; object.showAll shows them again; disabled in isolation mode → {count}",
-            has_selection_outside_isolation,
+            "{} hide, in one undo step, every object select.all takes that is not selected and holds no selected object; in a group that holds one it hides the other members one by one, and a clip group, compound path or other object that holds one stays as it is; the objects of a selected layer count as selected; while Lock Guides is on, guide paths count as selected and stay as they are; in isolation mode, only art inside the isolated object is affected; object.showAll shows them again → {count}",
+            has_selected_member,
             |s, _| unselected_art(s, false)
         ),
         cmd!(
@@ -243,14 +243,21 @@ fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
 // ---------- Lock / Hide ----------
 
 fn above(s: &mut Session, lock: bool) -> Result<Value> {
-    let roots = selected_roots(s)?;
-    let d = &s.doc()?.doc;
+    let st = s.doc()?;
+    let d = &st.doc;
+    let isolation = super::ordinary_isolation(st);
+    // In isolation mode a path of the isolated compound path is an object of its own.
+    let roots = match isolation {
+        Some(root) => super::edit::selected_roots_inside(s, root, false)?,
+        None => selected_roots(s)?,
+    };
     let symbols = d.symbol_boxes();
-    // `selected` holds each selected object's visual bounds, by layer, with the index there of its
-    // ancestor directly inside the layer. Symbol instances are measured by their art.
+    // `selected` holds each selected object's visual bounds, by layer (the isolated object in
+    // isolation mode), with the index there of its ancestor directly inside it. Symbol instances
+    // are measured by their art.
     let mut selected: BTreeMap<NodeId, Vec<(usize, Rect)>> = BTreeMap::new();
     for id in &roots {
-        let Some(layer) = d.layer_of(*id) else { continue };
+        let Some(layer) = isolation.or_else(|| d.layer_of(*id)) else { continue };
         // The selected object's ancestor directly inside the layer.
         let anc = d.ancestry(*id).unwrap_or_default();
         let Some(pos) = anc.iter().position(|a| *a == layer) else { continue };
@@ -259,10 +266,14 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
         let Some((_, idx, _)) = d.position(top) else { continue };
         selected.entry(layer).or_default().push((idx, b));
     }
-    // The loop walks up each layer once. Each object that is not selected and overlaps a selected
-    // object below it is locked (Lock) or hidden (Hide).
+    // The loop walks up each layer once, or the isolated object in isolation mode. Each object that
+    // is not selected and overlaps a selected object below it is locked (Lock) or hidden (Hide). In
+    // isolation mode the selected objects are locked or hidden too.
     let roots: HashSet<NodeId> = roots.into_iter().collect();
     let mut hits: BTreeSet<NodeId> = BTreeSet::new();
+    if isolation.is_some() {
+        hits.extend(roots.iter().copied());
+    }
     for (layer, mut below) in selected {
         below.sort_by_key(|(idx, _)| *idx);
         let mut below = below.into_iter().peekable();
@@ -307,6 +318,11 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
 
 fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
     let st = s.doc()?;
+    // In isolation mode the other layers lie outside the isolated group, layer or sublayer, so the
+    // document and its undo history stay as they are.
+    if super::ordinary_isolation(st).is_some() {
+        return Ok(json!({ "count": 0 }));
+    }
     let keep: Vec<NodeId> = st.selection.objects.iter().filter_map(|id| st.doc.ancestry(*id)).flatten().collect();
     let others: Vec<NodeId> = st.doc.layers.iter().map(|l| l.id).filter(|l| !keep.contains(l)).collect();
     let n = others.len();
@@ -370,10 +386,19 @@ fn unselected(
 }
 
 fn unselected_art(s: &mut Session, lock: bool) -> Result<Value> {
-    let roots = selected_roots_to_transform(s)?;
+    // In isolation mode the isolated object itself does not count as a selected object.
+    let iso = super::ordinary_isolation(s.doc()?);
+    let roots = match iso {
+        Some(root) => super::edit::selected_roots_inside(s, root, true)?,
+        None => selected_roots_to_transform(s)?,
+    };
     let guides_locked = s.menu.guides_locked;
     let st = s.doc()?;
-    let ids = unselected(&st.doc, st.isolation, &st.selection.objects, &roots, guides_locked, lock);
+    let selection: Vec<NodeId> = match iso {
+        Some(root) => st.selection.objects.iter().copied().filter(|id| super::inside_isolation(&st.doc, root, *id)).collect(),
+        None => st.selection.objects.to_vec(),
+    };
+    let ids = unselected(&st.doc, st.isolation, &selection, &roots, guides_locked, lock);
     // With nothing to lock (Lock) or hide (Hide), the document and its undo history stay as they are.
     if !ids.is_empty() {
         s.edit(if lock { "Lock" } else { "Hide" }, |d, _| {

@@ -571,6 +571,28 @@ fn turned_cursors_step_with_the_view() {
     assert_eq!(Cursor::rotate_about_in_view(Point::ORIGIN, Point::ORIGIN, 90.0), Cursor::Rotate, "on the center");
 }
 
+/// #4980: with anchors selected on their own (the end anchor of a path the Pen is drawing, when
+/// Cmd/Ctrl lends the Selection tool) the canvas shows no bounding box, so its handles neither
+/// offer a resize pointer nor scale on a press: the press takes the path, as away from the box.
+#[test]
+fn hidden_box_handles_take_no_press_while_anchors_are_selected() {
+    let (d, id) = doc_with_rect();
+    let p = paint();
+    let top_middle = Point::new(150.0, 100.0);
+    let mut s = Selection::default();
+    s.add(id);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&cx(&d, &s, &p), top_middle, Mods::default()), Cursor::ResizeV, "the shown box's handle");
+    assert_eq!(t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 150.0, 100.0)), vec![Action::Begin("Scale".into())]);
+    s.anchors.entry(id).or_default().insert((0, 1));
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, top_middle, Mods::default()), Cursor::Move);
+    let down = t.pointer(&c, &ev(PointerKind::Down, 150.0, 100.0));
+    assert!(!down.contains(&Action::Begin("Scale".into())), "{down:?}");
+    assert!(!crate::select::bbox_handle_at(&c, top_middle));
+}
+
 /// In a rotated view the resize and rotate cursors turn with the view.
 #[test]
 fn box_cursors_turn_with_the_view() {
@@ -1941,4 +1963,38 @@ fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
     // Without a memo, every call measures.
     let c = cx(&moved, &s, &p);
     assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
+}
+
+/// A double-click on a symbol instance edits its symbol in symbol editing mode (`symbol.edit`), and
+/// one outside the symbol's art in that mode leaves it, as it leaves isolation mode. An instance
+/// inside the art of the symbol being edited is not entered.
+#[test]
+fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
+    use vectorcraft_doc::{Appearance, Node, NodeKind, Symbol, SymbolEdit};
+    let (mut d, rect) = doc_with_rect();
+    let art = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), Appearance::default_art());
+    d.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: std::sync::Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = Affine::translate((300.0, 300.0)) * Affine::scale(2.0);
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
+    let (s, p) = (Selection::default(), paint());
+    let double = |d: &vectorcraft_doc::Document, isolation: Option<NodeId>, x: f64, y: f64| {
+        let c = ToolContext { isolation, ..cx(d, &s, &p) };
+        SelectionTool::default().pointer(&c, &ev(PointerKind::DoubleClick, x, y))
+    };
+    assert_eq!(double(&d, None, 300.0, 300.0), vec![Action::Exec("symbol.edit".into(), json!({"id": id.0}))]);
+    assert_eq!(double(&d, None, 150.0, 150.0), vec![Action::Exec("object.isolate".into(), json!({"id": rect.0}))]);
+    // In symbol editing mode, with the instance on the editing layer.
+    d.symbol_edit = Some(SymbolEdit {
+        symbol: "Other".into(),
+        layer: l,
+        instance: None,
+        xf: Affine::IDENTITY,
+        group: false,
+        changed: false,
+        back_isolation: None,
+        back_layer: None,
+    });
+    assert_eq!(double(&d, Some(l), 300.0, 300.0), vec![]);
+    assert_eq!(double(&d, Some(l), 450.0, 50.0), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
 }

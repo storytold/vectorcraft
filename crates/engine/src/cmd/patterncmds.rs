@@ -161,12 +161,18 @@ fn in_pattern_edit(s: &Session) -> std::result::Result<(), String> {
     editing(s).map(|_| ()).ok_or_else(|| "not in pattern editing mode".into())
 }
 
-/// Make: a selection, and no opacity mask is being edited
-/// ([`super::maskedit::outside_mask_editing`]), since the tile layer would replace the mask editing
-/// layer as the isolated layer.
+/// Make: a selection, and no opacity mask or symbol is being edited
+/// ([`super::maskedit::outside_mask_editing`], [`outside_symbol_editing`]), since the tile layer
+/// would replace that mode's editing layer as the isolated layer.
 fn can_make_pattern(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    super::maskedit::outside_mask_editing(s)
+    super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)
+}
+
+/// No symbol is being edited (symbol editing mode shows the symbol in isolation mode).
+fn outside_symbol_editing(s: &Session) -> std::result::Result<(), String> {
+    if s.active().is_some_and(|st| st.doc.symbol_edit.is_some()) { Err("exit isolation mode first".into()) } else { Ok(()) }
 }
 
 fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
@@ -175,6 +181,7 @@ fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
         return Err("already editing a pattern".into());
     }
     super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)?;
     if s.active().is_some_and(|st| st.doc.patterns.is_empty()) { Err("the document has no patterns".into()) } else { Ok(()) }
 }
 

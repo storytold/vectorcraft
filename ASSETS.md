@@ -345,6 +345,9 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `examples/ribbons.vectorcraft` | VectorCraft contributors | Original artwork built through the VectorCraft command API | MIT OR Apache-2.0 |  |
 | `examples/feature-sheet.vectorcraft` | VectorCraft contributors | Original artwork built through the VectorCraft command API | MIT OR Apache-2.0 |  |
 | `examples/perspective-city.vectorcraft` | VectorCraft contributors | Original artwork built through the VectorCraft command API | MIT OR Apache-2.0 |  |
+| `crates/engine/tests/fixtures/jpeg2000/checker.jp2` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | a 2 × 2 checker encoded with FFmpeg's JPEG 2000 encoder; SHA-256 `3de9c2bb5b8aaec241d939b795002a68eb3d50e41d51c43368000804ad3de057` |
+| `crates/engine/tests/fixtures/jpeg2000/checker-raw.j2k` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | a 2 × 2 checker encoded with FFmpeg's JPEG 2000 encoder; SHA-256 `76fa51ab8ccbc2534098b26b8e7fe16dd886e2b6298ba52d06a6b1bde9b61d9e` |
+| `crates/engine/tests/fixtures/jpeg2000/checker-300ppi.jp2` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | a 2 × 2 checker encoded with FFmpeg's JPEG 2000 encoder; SHA-256 `1b1aeed8975d3cdc832da6ecf5855852d07d0c490105121e61a8aefb31af009b` |
 
 ## Assets embedded by the PDF backend
 

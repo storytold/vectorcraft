@@ -300,7 +300,7 @@ fn symbol_doc(effects: Vec<Effect>) -> Document {
         shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
         Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
     );
-    d.symbols.push(Symbol { name: "Square".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Square".into(), art: Arc::new(art) });
     let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((50.0, 50.0)) });
     n.appearance.effects = effects;
     doc_with(d, n)
@@ -469,7 +469,7 @@ fn a_transform_effect_on_a_group_symbol_or_envelope_moves_and_scales_the_gradien
     t.id = NodeId(500);
     // The type in a group, as the art of a symbol, and in an envelope that leaves it as it is.
     let mut symbols = Document::new(100.0, 100.0);
-    symbols.symbols.push(Symbol { name: "Type".into(), art: Arc::new(t.clone()) });
+    symbols.symbols.push(Symbol { dynamic: false, name: "Type".into(), art: Arc::new(t.clone()) });
     let holders = [
         doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t.clone())])),
         doc_with(symbols, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Type".into(), xf: Affine::IDENTITY })),

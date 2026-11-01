@@ -19,6 +19,7 @@
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 mod automation_args;
+mod caps_lock;
 mod clipboard;
 #[cfg(feature = "wgpu")]
 mod compositor_gpu;
@@ -94,6 +95,7 @@ use titlebar::{custom_titlebar, native_options};
 
 struct App {
     app: VectorcraftApp,
+    host_caps_lock: caps_lock::HostCapsLock,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
@@ -288,15 +290,15 @@ fn main() -> std::process::ExitCode {
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
-    // and X11 (XWayland) When a Pen Is Attached does so when a pen is attached, where the pen draws (#2028).
+    // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
         if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
-                if pref == Some("x11WithPen") {
-                    log::info!("pen found: opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                if pref != Some("x11") {
+                    log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
                 } else {
                     log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
                 }
@@ -344,14 +346,15 @@ fn main() -> std::process::ExitCode {
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
             create.instance_descriptor.backend_options.dx12.shader_compiler =
                 eframe::wgpu::Dx12Compiler::from_env().unwrap_or(eframe::wgpu::Dx12Compiler::Fxc);
-            // The window's surface may be as large as the adapter allows, not eframe's fixed
-            // 8192 px: a window stretched over several monitors, or grown by a display scale
-            // change, otherwise fails to configure its surface and the app closes (#1459).
+            // The device asks for no more than the adapter offers, so a GPU short of one of
+            // eframe's limits still gets a device (#2105). The window's surface may be as large as
+            // the adapter allows, not eframe's fixed 8192 px: a window stretched over several
+            // monitors, or grown by a display scale change, otherwise fails to configure its
+            // surface and the app closes (#1459).
             let device = create.device_descriptor.clone();
             create.device_descriptor = std::sync::Arc::new(move |adapter: &eframe::wgpu::Adapter| {
                 let mut descriptor = device(adapter);
-                let limit = &mut descriptor.required_limits.max_texture_dimension_2d;
-                *limit = gpu::surface_limit(*limit, adapter.limits().max_texture_dimension_2d);
+                descriptor.required_limits = gpu::device_limits(descriptor.required_limits, &adapter.limits());
                 descriptor
             });
         }
@@ -487,6 +490,7 @@ fn main() -> std::process::ExitCode {
                 // The content and the pointer stay aligned on Windows (#1758).
                 let window_frame = window_frame::service(cc, custom_titlebar);
                 Ok(Box::new(App {
+                    host_caps_lock: caps_lock::HostCapsLock::new(winit_window.as_deref()),
                     app,
                     graphics_loss,
                     graphics_lost: false,

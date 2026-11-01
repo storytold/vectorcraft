@@ -479,7 +479,7 @@ fn thirty_stacked_glows_draw_quickly_cached_or_not() {
         shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)),
         Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
     );
-    instanced.symbols.push(vectorcraft_doc::Symbol { name: "Square".into(), art: std::sync::Arc::new(art) });
+    instanced.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Square".into(), art: std::sync::Arc::new(art) });
     let mut instance =
         Node::new(instanced.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((30.0, 30.0)) });
     instance.appearance.effects = glows.into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
@@ -754,7 +754,7 @@ fn a_moved_group_draws_the_shadow_of_the_instance_art_in_it_while_interacting() 
     let mut base = Document::new(100.0, 100.0);
     let orange = Appearance::basic(Paint::solid(Color::rgb(0.9, 0.4, 0.1)), Paint::None, 0.0);
     let art = Node::path(base.alloc_id(), shapes::rectangle(Rect::new(100.0, 100.0, 130.0, 126.0)), orange);
-    base.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: std::sync::Arc::new(art) });
+    base.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: std::sync::Arc::new(art) });
     // The instance draws the art from (20, 20) to (50, 46), and the 20 × 20 square around the
     // origin from (-90, -90) to (-70, -70).
     let xf = Affine::translate((-80.0, -80.0));

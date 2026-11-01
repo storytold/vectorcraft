@@ -458,7 +458,7 @@ fn pattern_options_set_each_corner_tile_to_original_none_or_an_automatic_tile() 
         assert!(roles.contains(&egui::accesskit::Role::ComboBox), "a menu named {name}: {roles:?}");
     }
     for name in ["Side Tile", "Start Tile", "End Tile"] {
-        assert!(!shown_tree.iter().any(|n| n.label() == Some(name) && n.role() == egui::accesskit::Role::ComboBox), "no menu for {name}");
+        assert!(shown_tree.iter().any(|n| n.label() == Some(name) && n.role() == egui::accesskit::Role::ComboBox), "a menu for {name}");
     }
     set(&mut app, json!({"outerCornerTile": "autoBetween", "innerCornerTile": "autoOverlap"}));
     let text = shown(&mut app);
@@ -492,6 +492,98 @@ fn pattern_options_set_each_corner_tile_to_original_none_or_an_automatic_tile() 
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("outerCornerTile"), "autoSliced");
 }
 
+#[test]
+fn pattern_tile_menus_use_document_patterns_and_side_none_keeps_dialog_open() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Node, PatternDef};
+    use vectorcraft_geom::Rect;
+
+    let mut app = app();
+    app.session
+        .edit("Pattern", |doc, _| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            );
+            doc.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new("Wide", vec![Arc::new(art)]) });
+            Ok(())
+        })
+        .unwrap();
+    let before = app.run("brush.get", json!({"name":"Diamonds"})).unwrap();
+    app.run("ui.brushOptions", json!({"name":"Diamonds"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(crate::dialogs::brush_art_options::pattern_names(d), vec!["Wide".to_string()]);
+    for key in ["sideTile", "outerCornerTile", "innerCornerTile", "startTile", "endTile"] {
+        assert!(d.fields.contains_key(key), "{key}");
+    }
+    for corner in [false, true] {
+        let ids: Vec<_> = crate::dialogs::brush_art_options::tile_choices(d, corner).into_iter().map(|(id, _)| id).collect();
+        assert!(ids.contains(&"pattern:Wide".to_string()));
+        if corner {
+            for auto in ["autoCentered", "autoBetween", "autoSliced", "autoOverlap"] {
+                assert!(ids.contains(&auto.to_string()));
+            }
+        } else {
+            assert_eq!(ids.first().map(String::as_str), Some("none"));
+            assert_eq!(ids.get(1).map(String::as_str), Some("original"));
+        }
+    }
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "Wide");
+    assert!(!crate::dialogs::brush_art_options::original_available(d, "side"));
+    let preview = crate::dialogs::brush_art_options::edited_def(d);
+    assert_eq!(preview["side_frame"], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+    assert_ne!(preview["side"], before["side"]);
+    super::super::confirm(&mut app).unwrap();
+    app.session
+        .edit("Delete pattern", |doc, _| {
+            doc.patterns.clear();
+            Ok(())
+        })
+        .unwrap();
+    app.run("ui.brushOptions", json!({"name":"Diamonds"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("sideTile"), "original");
+    let saved = app.run("brush.get", json!({"name":"Diamonds"})).unwrap();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "none");
+    let error = super::super::confirm(&mut app).unwrap_err();
+    assert!(error.contains("You must choose a side pattern."), "{error}");
+    assert!(app.ui.dialog.is_some());
+    assert_eq!(app.run("brush.get", json!({"name":"Diamonds"})).unwrap(), saved);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn new_pattern_brush_keeps_a_tile_swatch_choice() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Node, PatternDef};
+    use vectorcraft_geom::Rect;
+
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x":0,"y":0,"width":20,"height":4})).unwrap();
+    app.session
+        .edit("Pattern", |doc, _| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            );
+            doc.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new("Wide", vec![Arc::new(art)]) });
+            Ok(())
+        })
+        .unwrap();
+    super::open_new(&mut app, "pattern", None).unwrap();
+    let name = app.ui.dialog.as_ref().unwrap().str("name");
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "Wide");
+    super::super::confirm(&mut app).unwrap();
+    let def = app.run("brush.get", json!({"name":name})).unwrap();
+    assert_eq!(def["side_swatch"], "Wide");
+    assert_eq!(def["side_frame"], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+}
+
 /// A pattern brush with art for one kind of corner draws it at both kinds. Its other corner tile
 /// shows that art as Original, and OK keeps it there when the first corner tile changes.
 #[test]
@@ -507,6 +599,115 @@ fn pattern_options_keep_the_corner_art_a_corner_borrows() {
     let def = app.run("brush.get", json!({"name": "One Corner"})).unwrap();
     assert!(def.get("outer_corner").is_none() && def["inner_corner"].is_object(), "{def}");
     assert_eq!(def["outer_source"], json!("none"));
+}
+
+#[test]
+fn pattern_options_preview_and_save_borrowed_corner_before_clearing_source() {
+    use vectorcraft_geom::Rect;
+
+    let mut app = app();
+    let chain = app.run("brush.get", json!({"name": "Chain"})).unwrap();
+    let art = chain["outer_corner"].clone();
+    let frame = json!(Rect::new(1.0, 2.0, 15.0, 18.0));
+    for (name, source, borrowed) in [("Borrow Outer", "inner", "outer"), ("Borrow Inner", "outer", "inner")] {
+        let source_art = format!("{source}_corner");
+        let source_frame = format!("{source_art}_frame");
+        let borrowed_art = format!("{borrowed}_corner");
+        let borrowed_frame = format!("{borrowed_art}_frame");
+        let source_tile = format!("{source}CornerTile");
+        let borrowed_tile = format!("{borrowed}CornerTile");
+        app.run("brush.new", json!({"type":"pattern", "name":name, "params":{"side":chain["side"], source_art:art, source_frame:frame}})).unwrap();
+        app.run("ui.brushOptions", json!({"name":name})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::brush_art_options::choose_corner(d, &source_tile, "none");
+        crate::dialogs::brush_art_options::choose_corner(d, &borrowed_tile, "original");
+        let preview = crate::dialogs::brush_art_options::edited_def(d);
+        assert_eq!(preview[&borrowed_art], chain["outer_corner"], "{borrowed} preview art");
+        assert_eq!(preview[&borrowed_frame], frame, "{borrowed} preview frame");
+        super::super::confirm(&mut app).unwrap();
+        let saved = app.run("brush.get", json!({"name":name})).unwrap();
+        assert_eq!(saved[&borrowed_art], chain["outer_corner"], "{borrowed} saved art");
+        assert_eq!(saved[&borrowed_frame], frame, "{borrowed} saved frame");
+    }
+}
+
+#[test]
+fn pattern_options_borrowed_swatch_corner_keeps_its_frame() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Node, PatternDef};
+    use vectorcraft_geom::Rect;
+
+    let mut app = app();
+    app.session
+        .edit("Pattern", |doc, _| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            );
+            doc.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new("Corner", vec![Arc::new(art)]) });
+            Ok(())
+        })
+        .unwrap();
+    let side = app.run("brush.get", json!({"name":"Diamonds"})).unwrap()["side"].clone();
+    app.run("brush.new", json!({"type":"pattern", "name":"Borrow", "params":{"side":side}})).unwrap();
+    app.run("brush.options", json!({"name":"Borrow", "params":{"outer_corner_tile":{"pattern":"Corner"}}})).unwrap();
+    let before = app.run("brush.get", json!({"name":"Borrow"})).unwrap();
+    app.run("ui.brushOptions", json!({"name":"Borrow"})).unwrap();
+    set(&mut app, json!({"outerCornerTile":"none"}));
+    super::super::confirm(&mut app).unwrap();
+    let after = app.run("brush.get", json!({"name":"Borrow"})).unwrap();
+    assert_eq!(after["inner_corner"], before["outer_corner"]);
+    assert_eq!(after["inner_corner_frame"], before["outer_corner_frame"]);
+    assert_eq!(after["outer_source"], json!("none"));
+}
+
+#[test]
+fn pattern_options_selects_swatches_with_reserved_names() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Node, PatternDef};
+    use vectorcraft_geom::Rect;
+
+    let mut app = app();
+    let names = ["none", "original", "autoCentered", "autoBetween", "autoSliced", "autoOverlap"];
+    app.session
+        .edit("Patterns", |doc, _| {
+            for name in names {
+                let art = Node::path(
+                    doc.alloc_id(),
+                    vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)),
+                    vectorcraft_doc::Appearance::default_art(),
+                );
+                doc.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new(name, vec![Arc::new(art)]) });
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("ui.brushOptions", json!({"name":"Diamonds"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    for name in names {
+        let choice = (format!("pattern:{name}"), name.to_string());
+        assert!(crate::dialogs::brush_art_options::tile_choices(d, true).contains(&choice));
+    }
+    for (field, name) in [
+        ("sideTile", "none"),
+        ("outerCornerTile", "original"),
+        ("innerCornerTile", "autoCentered"),
+        ("startTile", "autoBetween"),
+        ("endTile", "autoSliced"),
+    ] {
+        crate::dialogs::brush_art_options::choose_corner(app.ui.dialog.as_mut().unwrap(), field, &format!("pattern:{name}"));
+    }
+    let preview = crate::dialogs::brush_art_options::edited_def(app.ui.dialog.as_ref().unwrap());
+    assert_eq!(preview["side_swatch"], "none");
+    super::super::confirm(&mut app).unwrap();
+    let saved = app.run("brush.get", json!({"name":"Diamonds"})).unwrap();
+    for (art, name) in
+        [("side", "none"), ("outer_corner", "original"), ("inner_corner", "autoCentered"), ("start", "autoBetween"), ("end", "autoSliced")]
+    {
+        assert_eq!(saved[format!("{art}_swatch")], name);
+        assert_eq!(saved[format!("{art}_frame")], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+    }
 }
 
 /// OK leaves the corner fields of a corner tile the menus were not set to as they were: a corner

@@ -164,6 +164,7 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
                 colour: None,
                 bend: None,
                 unturned: Affine::IDENTITY,
+                pivot: Point::new(x, baseline),
             });
             x += advance;
         }
@@ -589,6 +590,47 @@ fn digits_draw_every_digit_in_the_styles_numeral_system() {
     assert_eq!(clusters(&arabic), clusters(&lay("صفحة ٣", Digits::Default)));
     // Default leaves each digit as typed.
     assert_ne!(gids(&lay("3 ٣ ۳", Digits::Default)), gids(&lay("3 ٣ ۳", Digits::Hindi)));
+}
+
+/// The Indic digits (#4942): typed Western digits are drawn with the glyphs of the script's own
+/// digits, on the typed text's clusters. A font lacking them still lays the text out, in the
+/// fallback face that has them or as missing glyphs, with the clusters as typed. Each script
+/// needs an installed font with its digits; one without is skipped.
+#[test]
+fn indic_digits_draw_the_scripts_own_digits() {
+    use vectorcraft_doc::Digits;
+    let indic = [
+        (Digits::Devanagari, '३'),
+        (Digits::Bengali, '৩'),
+        (Digits::Gurmukhi, '੩'),
+        (Digits::Gujarati, '૩'),
+        (Digits::Odia, '୩'),
+        (Digits::Tamil, '௩'),
+        (Digits::Telugu, '౩'),
+        (Digits::Kannada, '೩'),
+        (Digits::Malayalam, '൩'),
+    ];
+    let clusters = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.len)).collect::<Vec<_>>();
+    let gids = |l: &TextLayout| l.glyphs.iter().map(|g| (g.gid, g.font_id)).collect::<Vec<_>>();
+    // Bundled fonts only: the digits may have no face at all, and nothing panics.
+    let bundled = FontDb::with_font_dirs(vec![]);
+    for (d, _) in indic {
+        let lay = |s: &str, digits: Digits| layout(&bundled, &TextObject::point(Point::ZERO, s, CharStyle { digits, ..CharStyle::default() }));
+        assert_eq!(clusters(&lay("page 30", d)), clusters(&lay("page 30", Digits::Default)), "{d:?}");
+    }
+    let db = FontDb::global();
+    for (d, three) in indic {
+        let Some(face) = db.face_covering(three) else {
+            eprintln!("SKIPPED: indic_digits_draw_the_scripts_own_digits for {d:?}; no installed font covers {three}");
+            continue;
+        };
+        eprintln!("ASSERTIONS RUN: indic_digits_draw_the_scripts_own_digits for {d:?}; {} {}", face.family, face.style);
+        let st = |digits: Digits| CharStyle { digits, ..arabic_style(&face) };
+        let lay = |s: &str, digits: Digits| layout(db, &TextObject::point(Point::ZERO, s, st(digits)));
+        let drawn = lay("3", d);
+        assert_eq!(gids(&drawn), gids(&lay(&three.to_string(), Digits::Default)), "{d:?}");
+        assert_eq!(clusters(&drawn), clusters(&lay("3", Digits::Default)), "{d:?}");
+    }
 }
 
 /// Right-to-left type on a path that overflows shows the start of its text, as a line of area

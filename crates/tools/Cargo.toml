@@ -12,6 +12,7 @@ workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
+vectorcraft-brush = { workspace = true }
 vectorcraft-pathops = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-text = { workspace = true }

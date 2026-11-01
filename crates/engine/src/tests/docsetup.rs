@@ -256,7 +256,7 @@ fn a_file_with_script_proportions_out_of_range_opens_with_them_in_range() {
     }
     let mut art = d.node(id).unwrap().clone();
     art.id = NodeId(9000);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Formula".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Formula".into(), art: Arc::new(art) });
     if let Some(g) = d.node_mut(graph).and_then(|n| n.extras_if_any()).and_then(|e| e.graph.as_deref_mut()) {
         let position = CharPosition::Subscript(ScriptMetrics { size: 0.0, position: 1000.0 });
         g.label_styles.legend = Some(vectorcraft_doc::CharStyle { position, small_caps: Some(0.0), ..vectorcraft_doc::CharStyle::default() });

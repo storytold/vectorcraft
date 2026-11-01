@@ -247,6 +247,16 @@ fn oriented(art: &Node, dir: Direction, flip_along: bool, flip_across: bool) -> 
     (b.width() > 1e-9).then_some((a, b))
 }
 
+/// Orient a tile's repeat frame with its art. The frame can be smaller than the art.
+fn oriented_tile(art: &Node, frame: Option<Rect>, flip_along: bool, flip_across: bool) -> Option<(Node, Rect)> {
+    let (node, bounds) = oriented(art, Direction::LeftToRight, flip_along, flip_across)?;
+    let Some(frame) = frame else { return Some((node, bounds)) };
+    let x = if flip_along { (-frame.x1, -frame.x0) } else { (frame.x0, frame.x1) };
+    let y = if flip_across { (-frame.y1, -frame.y0) } else { (frame.y0, frame.y1) };
+    let frame = Rect::new(x.0, y.0, x.1, y.1);
+    (frame.width() > 1e-9 && frame.height() > 1e-9).then_some((node, frame))
+}
+
 /// Piecewise-linear map from art x (offset from the art's left edge) to arc length.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AlongMap {
@@ -800,13 +810,13 @@ fn masked(n: Node, quad: &[Point], p: Point, towards: Vec2) -> Option<Node> {
 }
 
 pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
-    let orient = |n: &Node| oriented(n, Direction::LeftToRight, pb.flip_along, pb.flip_across);
-    let Some(side) = orient(&pb.side) else { return vec![] };
+    let orient = |n: &Node, frame| oriented_tile(n, frame, pb.flip_along, pb.flip_across);
+    let Some(side) = orient(&pb.side, pb.side_frame) else { return vec![] };
     let k = weight * pb.scale.max(1.0) / 100.0;
-    let outer = pb.outer_corner.as_ref().and_then(orient);
-    let inner = pb.inner_corner.as_ref().and_then(orient);
-    let start = pb.start.as_ref().and_then(orient);
-    let end = pb.end.as_ref().and_then(orient);
+    let outer = pb.outer_corner.as_ref().and_then(|n| orient(n, pb.outer_corner_frame));
+    let inner = pb.inner_corner.as_ref().and_then(|n| orient(n, pb.inner_corner_frame));
+    let start = pb.start.as_ref().and_then(|n| orient(n, pb.start_frame));
+    let end = pb.end.as_ref().and_then(|n| orient(n, pb.end_frame));
     let tw = side.1.width() * k;
     let gap = tw * pb.spacing.max(0.0) / 100.0;
     // Each kind of corner takes its own art, else its source, else the other kind's art.
