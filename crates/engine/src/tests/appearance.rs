@@ -554,6 +554,12 @@ fn move_reports_the_index_in_the_object_whose_row_it_names() {
     // An explicit item is a row of the first target, a.
     let r = run(&mut s, "effect.move", json!({"from": 0, "to": 9, "fromItem": 0}));
     assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "a's row 0 holds one effect");
+    // When the first selected object has no effect to move, the reply names the first object that moved.
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.move", json!({"from": 1, "to": 0}));
+    assert_eq!(r["ids"], json!([b.0]), "only b has a second effect in row 0");
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "b's effect moved to the start of its row 0");
 }
 
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
