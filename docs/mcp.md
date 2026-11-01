@@ -1764,6 +1764,9 @@ new variables without binding them, `dataset.select`, `dataset.next` and `datase
 has a value for". A data set with a value for a bound variable gives no warning even when every object bound to it is
 locked; `skipped` counts those objects.
 
+A `dataset.import` error about a value says why it was refused: a visibility value other than true, false, 1, 0, yes
+or no, or a graph value longer than 262,144 bytes.
+
 `dataset.update {all?}` writes what the bound objects hold now into the active data set, for each variable that the
 data set holds. A variable whose objects report no value, because they are locked, inside a locked layer or group,
 or deleted, keeps the data set's value. With `all: true` it also adds every other variable that the

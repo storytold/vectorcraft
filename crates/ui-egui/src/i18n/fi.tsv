@@ -4380,6 +4380,8 @@ imageTrace	Outline	Ääriviiva
 @msg	join needs open paths	liittäminen vaatii avoimia polkuja
 @msg	lang must be one of {_1}	lang-arvon on oltava jokin seuraavista: {_1}
 @msg	layers can't be wrap objects	tasot eivät voi olla rivitysobjekteja
+@msg	line {line}: value for `{var}` must be true or false	rivi {line}: muuttujan `{var}` arvon on oltava true tai false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	rivi {line}: muuttujan `{var}` arvo on pidempi kuin {MAX_GRAPH_CSV} tavua
 @msg	missing `folder`	`folder` puuttuu
 @msg	missing `id` (see plugin.list)	`id` puuttuu (ks. plugin.list)
 @msg	missing `name`	`name` puuttuu

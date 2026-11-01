@@ -4008,6 +4008,8 @@ imageTrace	Outline	轮廓
 @msg	node {_1} is not text	节点 {_1} 不是文字
 @msg	Text Wrap: select a wrap object	文本绕排：请选择一个绕排对象
 @msg	layers can't be wrap objects	图层不能作为绕排对象
+@msg	line {line}: value for `{var}` must be true or false	第 {line} 行：`{var}` 的值必须是 true 或 false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	第 {line} 行：`{var}` 的值超过 {MAX_GRAPH_CSV} 字节
 @msg	no threaded text selected	未选择串接文本
 @msg	Create Outlines: select text objects	创建轮廓：请选择文本对象
 @msg	paste unavailable	无法粘贴

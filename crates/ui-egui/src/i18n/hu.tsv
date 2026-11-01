@@ -4810,6 +4810,8 @@ imageTrace	Outline	Körvonal
 @msg	lang must be one of {_1}	a lang értéke ezek egyike lehet: {_1}
 @msg	larger than 256 MB	nagyobb 256 MB-nál
 @msg	layers can't be wrap objects	réteg nem lehet körbefuttató objektum
+@msg	line {line}: value for `{var}` must be true or false	{line}. sor: a(z) `{var}` értéke csak true vagy false lehet
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	{line}. sor: a(z) `{var}` értéke hosszabb {MAX_GRAPH_CSV} bájtnál
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Élő festés egyesítése: jelölj ki egy élőfestés-csoportot és a hozzáadandó útvonalakat
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Az élő festés útvonalakat és összetett útvonalakat fogad: előbb alakítsd útvonallá a szöveget, a képeket és a többi objektumot
 @msg	Live Paint: select paths or compound paths	Élő festés: jelölj ki útvonalakat vagy összetett útvonalakat

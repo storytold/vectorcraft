@@ -4295,6 +4295,8 @@ imageTrace	Outline	Kontur
 @msg	join needs open paths	łączenie wymaga otwartych ścieżek
 @msg	lang must be one of {_1}	lang musi mieć jedną z wartości: {_1}
 @msg	layers can't be wrap objects	warstwy nie mogą być obiektami oblewanymi
+@msg	line {line}: value for `{var}` must be true or false	wiersz {line}: wartość `{var}` musi być true lub false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	wiersz {line}: wartość `{var}` jest dłuższa niż {MAX_GRAPH_CSV} bajtów
 @msg	missing `folder`	brak `folder`
 @msg	missing `id` (see plugin.list)	brak `id` (patrz plugin.list)
 @msg	missing `name`	brak `name`

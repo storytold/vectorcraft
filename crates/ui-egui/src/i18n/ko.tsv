@@ -4210,6 +4210,8 @@ theme	Appearance	외관
 @msg	node {_1} is not text	노드 {_1}은(는) 텍스트가 아닙니다
 @msg	Text Wrap: select a wrap object	텍스트 감싸기: 감싸기 개체를 선택하세요
 @msg	layers can't be wrap objects	레이어는 감싸기 개체가 될 수 없습니다
+@msg	line {line}: value for `{var}` must be true or false	{line}행: `{var}`의 값은 true 또는 false여야 합니다
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	{line}행: `{var}`의 값이 {MAX_GRAPH_CSV}바이트보다 깁니다
 @msg	no threaded text selected	선택한 연결 텍스트가 없습니다
 @msg	Create Outlines: select text objects	윤곽선 만들기: 텍스트 개체를 선택하세요
 @msg	paste unavailable	붙여넣을 수 없습니다

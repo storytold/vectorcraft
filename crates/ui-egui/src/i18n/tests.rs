@@ -1763,6 +1763,34 @@ fn postscript_errors_keep_their_name_and_meaning() {
     }
 }
 
+/// Import Data Sets' errors for a refused cell are translated in every language that translates
+/// every message, with the line and the variable kept.
+#[test]
+fn dataset_import_cell_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
+    let mut errors = vec![];
+    for (csv, want) in [
+        ("name,Show\nX,maybe".to_string(), "line 2: value for `Show` must be true or false"),
+        (format!("name,Sales\nX,\"{}\"", "1,".repeat(140_000)), "line 2: value for `Sales` is longer than 262144 bytes"),
+    ] {
+        let e = s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+        errors.push((e.to_string(), want));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want) && shown.contains('2') && shown.contains('`'), "{code}: {shown}");
+        }
+    }
+}
+
 /// The errors of the parameter checks that many commands share (a number given as text, a missing
 /// number or index, a fraction for a whole number, `ids` that aren't a list of object ids, an
 /// object id that is negative or names no object, a date that isn't Unix seconds) fill their

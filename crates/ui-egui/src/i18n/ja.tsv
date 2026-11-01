@@ -4283,6 +4283,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	node {_1} is not text	ノード {_1} はテキストではありません
 @msg	Text Wrap: select a wrap object	テキストの回り込み: 回り込みオブジェクトを選択してください
 @msg	layers can't be wrap objects	レイヤーは回り込みオブジェクトにできません
+@msg	line {line}: value for `{var}` must be true or false	{line} 行目: `{var}` の値には true または false を指定してください
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	{line} 行目: `{var}` の値が {MAX_GRAPH_CSV} バイトを超えています
 @msg	no threaded text selected	スレッドテキストが選択されていません
 @msg	Create Outlines: select text objects	アウトラインを作成: テキストオブジェクトを選択してください
 @msg	paste unavailable	貼り付けを使用できません

@@ -1216,6 +1216,23 @@ fn datasets_csv_row_errors_name_the_file_line() {
     assert!(long.contains("line 3:") && long.contains("longer than 255"), "{long}");
 }
 
+/// A refused cell's error gives its line and why the value was refused: a visibility value that
+/// isn't true or false, or a graph value longer than the graph data limit.
+#[test]
+fn datasets_csv_cell_errors_say_why() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
+    let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
+    let maybe = error(&mut s, "name,Show\nX,maybe");
+    let want = "line 2: value for `Show` must be true or false";
+    assert!(matches!(&maybe, EngineError::BadParams { msg, .. } if msg == want), "{maybe}");
+    let long = error(&mut s, &format!("name,Sales\nX,\"{}\"", "1,".repeat(140_000)));
+    let want = "line 2: value for `Sales` is longer than 262144 bytes";
+    assert!(matches!(&long, EngineError::BadParams { msg, .. } if msg == want), "{long}");
+    assert!(s.doc().unwrap().doc.variables.datasets.is_empty());
+}
+
 /// A header cell that names no variable defines one, unbound, in the import's undo step: `#`
 /// defines a visibility variable, `@` defines an image variable, and a cell without a prefix
 /// defines a text variable. Importing the file again finds them; a prefix of the other kind, a

@@ -3938,6 +3938,8 @@ font-technology	Variable	ცვლადი
 @msg	join needs open paths	შეერთებას ღია ტრაექტორიები სჭირდება
 @msg	lang must be one of {_1}	lang უნდა იყოს ერთ-ერთი: {_1}
 @msg	layers can't be wrap objects	შრეები შემოსავლელი ობიექტები ვერ იქნება
+@msg	line {line}: value for `{var}` must be true or false	სტრიქონი {line}: `{var}`-ის მნიშვნელობა უნდა იყოს true ან false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	სტრიქონი {line}: `{var}`-ის მნიშვნელობა {MAX_GRAPH_CSV} ბაიტზე გრძელია
 @msg	missing `folder`	აკლია `folder`
 @msg	missing `id` (see plugin.list)	აკლია `id` (იხ. plugin.list)
 @msg	missing `name`	აკლია `name`
