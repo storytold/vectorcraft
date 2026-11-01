@@ -135,6 +135,133 @@ fn front_and_back_choose_the_member_where_three_objects_overlap() {
     assert!(e.to_string().contains("999"), "{e}");
 }
 
+/// The rings with a green bar across their top crossing, in front of both, made into an
+/// Intertwine group: (group, a, b, c). A, B and C overlap at (50, 30); only A and B at (50, 70).
+fn rings_and_bar(s: &mut Session) -> (NodeId, NodeId, NodeId, NodeId) {
+    let (a, b) = rings(s);
+    let c = id_of(&s.execute("shape.rectangle", &json!({"x": 46, "y": 20, "width": 8, "height": 20})).unwrap());
+    s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [c.0], "none": true})).unwrap();
+    select(s, &[a, b, c]);
+    let g = id_of(&s.execute("object.intertwine.make", &json!({})).unwrap());
+    (g, a, b, c)
+}
+
+/// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn
+/// there, bottom first.
+fn order_at(d: &Document, g: NodeId, x: f64, y: f64) -> Vec<NodeId> {
+    use vectorcraft_tools::intertwine::{drawn_order, face_at, faces};
+    let children = d.node(g).unwrap().children().unwrap();
+    let face = face_at(&faces(children), vectorcraft_geom::Point::new(x, y)).unwrap();
+    drawn_order(children, &face).into_iter().map(|i| children[i].id).collect()
+}
+
+/// Bring Forward and Send Backward move an object one place among the objects of one overlap
+/// area, keeping the others' order, so every order of three objects can be set there (C, B, A
+/// included); the other areas stay as they are.
+#[test]
+fn forward_and_backward_move_an_object_one_place_in_an_area() {
+    let mut s = session();
+    let (g, a, b, c) = rings_and_bar(&mut s);
+    let order = |s: &Session| order_at(&s.doc().unwrap().doc, g, 50.0, 30.0);
+    let v = arrange(&mut s, json!({"at": [50, 30], "order": "forward", "member": a.0}));
+    assert_eq!((&v["count"], &v["top"]), (&json!(1), &json!([c.0])));
+    assert_eq!(order(&s), [b, a, c]);
+    arrange(&mut s, json!({"at": [50, 30], "order": "backward", "member": c.0}));
+    assert_eq!(order(&s), [b, c, a]);
+    assert!(red(&render(&s), 50, 30), "A is on top");
+    let v = arrange(&mut s, json!({"at": [50, 30], "order": "forward", "member": b.0}));
+    assert_eq!(v["top"], json!([a.0]));
+    assert_eq!(order(&s), [c, b, a], "the reverse of the group's order");
+    assert_eq!(hit(&s, 50.0, 30.0), Some(a), "a click picks the object drawn on top");
+    // Without a member: forward moves the object right below the top, backward the top one.
+    arrange(&mut s, json!({"at": [50, 30], "order": "backward"}));
+    assert_eq!(order(&s), [c, a, b]);
+    assert!(blue(&render(&s), 50, 30));
+    assert_eq!(hit(&s, 50.0, 30.0), Some(b));
+    arrange(&mut s, json!({"at": [50, 30], "order": "forward"}));
+    assert_eq!(order(&s), [c, b, a]);
+    // Bring to Front and Send to Back keep the order of the others.
+    arrange(&mut s, json!({"at": [50, 30], "order": "front", "member": c.0}));
+    assert_eq!(order(&s), [b, a, c]);
+    arrange(&mut s, json!({"at": [50, 30], "order": "back", "member": a.0}));
+    assert_eq!(order(&s), [a, b, c]);
+    // The crossing where only the rings overlap is as it was.
+    assert_eq!(order_at(&s.doc().unwrap().doc, g, 50.0, 70.0), [a, b]);
+    assert!(blue(&render(&s), 50, 70));
+    // There only the rings count: forward moves A over B, and C is not in that area.
+    let v = arrange(&mut s, json!({"at": [50, 70], "order": "forward"}));
+    assert_eq!(v["top"], json!([a.0]));
+    assert!(red(&render(&s), 50, 70));
+    let e = s.execute("object.intertwine.arrange", &json!({"at": [50, 70], "order": "backward", "member": c.0})).unwrap_err();
+    assert!(e.to_string().contains("not in the overlap"), "{e}");
+    assert_eq!(order(&s), [a, b, c]);
+}
+
+/// An object already at the end it is moved to is not moved: no area changes and no undo step is
+/// recorded. One move is one undo step, and undo, redo and a saved file keep the order.
+#[test]
+fn a_move_that_changes_nothing_records_nothing_and_orders_survive_undo_and_save() {
+    let mut s = session();
+    let (g, a, b, c) = rings_and_bar(&mut s);
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    for (order, member) in [("forward", c), ("front", c), ("backward", a), ("back", a)] {
+        let v = arrange(&mut s, json!({"at": [50, 30], "order": order, "member": member.0}));
+        assert_eq!((&v["count"], &v["top"]), (&json!(0), &json!([])), "{order}");
+    }
+    assert_eq!(undo(&s), before, "nothing to undo");
+    arrange(&mut s, json!({"at": [50, 30], "order": "forward", "member": b.0}));
+    arrange(&mut s, json!({"at": [50, 30], "order": "backward", "member": c.0}));
+    arrange(&mut s, json!({"at": [50, 30], "order": "forward", "member": a.0}));
+    assert_eq!(undo(&s), before + 3, "one undo step a move");
+    let order = |s: &Session| order_at(&s.doc().unwrap().doc, g, 50.0, 30.0);
+    assert_eq!(order(&s), [c, b, a]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(order(&s), [c, a, b]);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(order(&s), [c, b, a]);
+    let data = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "rings.vectorcraft", "dataBase64": data})).unwrap();
+    assert_eq!(order_at(&o.doc().unwrap().doc, g, 50.0, 30.0), [c, b, a]);
+    assert!(red(&render(&o), 50, 30) && blue(&render(&o), 50, 70));
+    // Expand draws the same.
+    s.execute("object.expand", &json!({"fill": false, "stroke": false})).unwrap();
+    assert!(red(&render(&s), 50, 30) && blue(&render(&s), 50, 70));
+}
+
+/// Where three or more objects overlap, hovering highlights the outline of the object nearest to
+/// the pointer.
+#[test]
+fn hovering_where_three_overlap_highlights_the_nearest_object() {
+    use kurbo::Shape;
+    let mut s = session();
+    let view = ViewInfo::default();
+    // Squares from x = 0, 20 and 40, 60 wide: all three overlap from x = 40 to 60.
+    let ids: Vec<NodeId> =
+        [0, 20, 40].iter().map(|x| id_of(&s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 60, "height": 60})).unwrap())).collect();
+    select(&mut s, &ids);
+    s.execute("object.intertwine.make", &json!({})).unwrap();
+    let highlighted = |s: &mut Session, x: f64| {
+        s.pointer(&vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Move, x, 30.0), view).unwrap();
+        let o = s.overlays(view);
+        let [vectorcraft_tools::Overlay::Path { path, .. }] = o.as_slice() else { panic!("one highlight: {o:?}") };
+        let r = path.bounding_box();
+        (r.x0, r.x1)
+    };
+    // Within the half point a 1 pt stroke reaches past each edge.
+    let near = |(x0, x1): (f64, f64), (e0, e1): (f64, f64)| (x0 - e0).abs() <= 0.6 && (x1 - e1).abs() <= 0.6;
+    // By the left edge of the third square, then by the right edge of the first one.
+    let h = highlighted(&mut s, 41.0);
+    assert!(near(h, (40.0, 100.0)), "{h:?}");
+    let h = highlighted(&mut s, 59.0);
+    assert!(near(h, (0.0, 60.0)), "{h:?}");
+    // Where two overlap, the area is highlighted.
+    let h = highlighted(&mut s, 30.0);
+    assert!(near(h, (20.0, 40.0)), "{h:?}");
+}
+
 #[test]
 fn release_gives_the_objects_back_as_they_were() {
     let mut s = session();
@@ -328,4 +455,14 @@ fn edit_chooses_the_tool_for_the_group_of_a_selected_member() {
     assert_eq!(v["id"], g.0);
     assert_eq!(s.tool_id(), "intertwine");
     assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [g]);
+}
+
+#[test]
+fn arrange_with_explicit_id_works_without_active_selection() {
+    let mut s = session();
+    let (g, _, _) = intertwined(&mut s);
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.doc().unwrap().selection.is_empty());
+    let out = s.execute("object.intertwine.arrange", &json!({"id": g.0, "at": [50.0, 30.0]})).unwrap();
+    assert_eq!(out["count"], 1);
 }

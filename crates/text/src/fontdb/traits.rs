@@ -1,7 +1,7 @@
 use super::face::{MAX_AXES, Variation};
 use super::names::{MAX_LEGACY_NAMES, all_names, localized, name, native_family_name, norm};
 use super::scan::named_instances;
-use super::*;
+use super::{MetadataProvider, StringId};
 
 /// The names a face answers to besides its (English) family and style, normalized ([`norm`]):
 /// its family in every language (typographic, else legacy: `ヒラギノ角ゴシック`), its style likewise

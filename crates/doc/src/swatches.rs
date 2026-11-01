@@ -108,9 +108,10 @@ impl Document {
         Some(list.remove(i))
     }
 
-    /// Visit every colour that can link to a swatch — solid paints and gradient stops of fills,
-    /// strokes and text runs — in the art (opacity masks included), symbol definitions, pattern
-    /// tiles, graphic styles and the swatches themselves (tint swatches, gradient swatches' stops).
+    /// Visit every color that can link to a swatch (solid paints and gradient stops of fills,
+    /// strokes and text runs) in the art (opacity masks included), symbol definitions, graph
+    /// designs, pattern tiles and the tile that pattern editing's Cancel puts back, graphic styles
+    /// and the swatches themselves (tint swatches, gradient swatches' stops).
     /// `f(colour, link, tint)` may change them and returns true when it did
     /// ([`Paint::map_links`]). Only nodes holding a changed paint (and the paths to them) are
     /// copied. Returns the number of changed paints.
@@ -119,7 +120,10 @@ impl Document {
         for s in &mut self.symbols {
             n += map_tree(&mut s.art, f);
         }
-        for p in &mut self.patterns {
+        for g in &mut self.graph_designs {
+            n += map_tree(&mut g.art, f);
+        }
+        for p in self.patterns.iter_mut().chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut())) {
             n += map_trees(&mut p.art, f);
         }
         for gs in &mut self.graphic_styles {
@@ -225,13 +229,14 @@ fn item_paint_mut(it: &mut AppearanceItem) -> &mut Paint {
     }
 }
 
-/// The paints a node holds itself (not its children): appearance items, then text runs.
+/// The paints a node holds itself (not its children): appearance items, then text runs, then an
+/// image's colorize paint.
 pub fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     let runs = match &n.kind {
         NodeKind::Text(t) => t.runs.as_slice(),
         _ => &[],
     };
-    n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke]))
+    n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])).chain(n.extras().colorize.as_deref())
 }
 
 /// Mutable [`node_paints`], in the same order.
@@ -240,7 +245,8 @@ pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
         NodeKind::Text(t) => t.runs.as_mut_slice(),
         _ => &mut [],
     };
-    n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke]))
+    let colorize = n.extras.0.as_deref_mut().and_then(|e| e.colorize.as_deref_mut());
+    n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke])).chain(colorize)
 }
 
 /// `n` with `f` applied to its subtree's linkable colours, or `None` when nothing changed (then
@@ -304,6 +310,19 @@ pub fn walk_with_masks<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
     }
     for c in n.children().into_iter().flatten() {
         walk_with_masks(c, f);
+    }
+}
+
+/// [`Document::map_solid_paints`] for art a document keeps outside its trees, such as the art of a
+/// brush: `f` applied to the linkable colors of `n` and its subtree (opacity masks included). Only
+/// the nodes holding a changed paint are copied. Returns the number of changed paints.
+pub fn map_node_solid_paints(n: &mut Node, f: &mut LinkFn) -> usize {
+    match map_node(n, f) {
+        Some((new, count)) => {
+            *n = new;
+            count
+        }
+        None => 0,
     }
 }
 
@@ -398,6 +417,25 @@ mod tests {
         let again = d.clone();
         assert_eq!(d.map_solid_paints(&mut |_, _, _| false), 0);
         assert!(Arc::ptr_eq(&d.layers[0], &again.layers[0]));
+    }
+
+    #[test]
+    fn mapping_reaches_graph_designs_and_the_tile_that_pattern_cancel_puts_back() {
+        let (mut d, a, _) = doc();
+        let art = d.node_arc(a).cloned().unwrap();
+        d.graph_designs.push(crate::GraphDesign { name: "Bar".into(), art: art.clone() });
+        d.pattern_edit =
+            Some(crate::PatternEdit { pattern: "Tile".into(), layer: NodeId(0), original: Some(crate::PatternDef::new("Tile", vec![art])) });
+        let mut loose = d.node(a).unwrap().clone();
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
+        assert_eq!(d.map_solid_paints(&mut to_blue), 3, "the layer's rectangle, the design and the Cancel tile");
+        assert_eq!(d.graph_designs[0].art.appearance.fill_paint(), linked(blue, "Brand"));
+        let tile = &d.pattern_edit.as_ref().unwrap().original.as_ref().unwrap().art[0];
+        assert_eq!(tile.appearance.fill_paint(), linked(blue, "Brand"));
+        assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 1);
+        assert_eq!(loose.appearance.fill_paint(), linked(blue, "Brand"));
+        assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 0, "nothing left to change");
     }
 
     #[test]

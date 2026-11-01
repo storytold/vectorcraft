@@ -347,3 +347,72 @@ fn pathfinder_on_many_stacked_bars_still_runs() {
     let out = pathfinder_children(&g, None).unwrap();
     assert_eq!(out.len(), 1);
 }
+
+/// Two overlapping squares (0–10 and 5–15 by 10 high) as a compound shape, the front one in `mode`.
+fn compound_shape(mode: ShapeMode) -> Node {
+    let mut front = (*sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0))).clone();
+    front.extras_mut().shape_mode = mode;
+    let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), Arc::new(front)]);
+    g.extras_mut().compound_shape = true;
+    g.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0).into();
+    g
+}
+
+/// A compound shape draws the area its members' modes make, one unpainted path that its own
+/// appearance paints; evaluated, it is plain art painted with that appearance.
+#[test]
+fn compound_shapes_draw_the_area_their_shape_modes_make() {
+    for (mode, want) in [(ShapeMode::Add, 150.0), (ShapeMode::Subtract, 50.0), (ShapeMode::Intersect, 50.0), (ShapeMode::Exclude, 100.0)] {
+        let g = compound_shape(mode);
+        assert!(has_pathfinder(&g), "{mode:?}");
+        let area_path = compound_shape_area(&g, None).unwrap();
+        assert!((po::area(&area_path, FillRule::NonZero).abs() - want).abs() < 0.01, "{mode:?}");
+        let out = pathfinder_children(&g, None).unwrap();
+        assert_eq!(out.len(), 1, "{mode:?}");
+        assert!(out[0].appearance.items.is_empty(), "the group's own appearance paints it");
+        let art = evaluate_container(None, &g).unwrap();
+        assert!(!art.is_compound_shape(), "evaluated, it is art");
+        let painted: Vec<&Arc<Node>> = art.children().unwrap().iter().filter(|c| !c.appearance.items.is_empty()).collect();
+        assert_eq!(painted.len(), 1);
+        assert_eq!(painted[0].appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "{mode:?}");
+        assert!((area(painted[0]) - want).abs() < 0.01, "{mode:?}");
+    }
+    // The backmost member's mode doesn't change the area.
+    let mut g = compound_shape(ShapeMode::Add);
+    if let Some(ch) = g.children_mut() {
+        let mut back = (*ch[0]).clone();
+        back.extras_mut().shape_mode = ShapeMode::Subtract;
+        ch[0] = Arc::new(back);
+    }
+    assert!((po::area(&compound_shape_area(&g, None).unwrap(), FillRule::NonZero).abs() - 150.0).abs() < 0.01);
+    // Hidden members take no part; the mark on a clip group is ignored.
+    let mut g = compound_shape(ShapeMode::Subtract);
+    if let Some(ch) = g.children_mut() {
+        let mut front = (*ch[1]).clone();
+        front.visible = false;
+        ch[1] = Arc::new(front);
+    }
+    assert!((po::area(&compound_shape_area(&g, None).unwrap(), FillRule::NonZero).abs() - 100.0).abs() < 0.01);
+    let mut clip = compound_shape(ShapeMode::Add);
+    clip.kind = NodeKind::Group { children: clip.children().unwrap().clone(), clip: true };
+    assert!(!clip.is_compound_shape() && compound_shape_area(&clip, None).is_none());
+}
+
+/// A compound shape inside another (and inside an Effect › Pathfinder group) takes part as its area,
+/// styled like it.
+#[test]
+fn nested_compound_shapes_take_part_as_their_area() {
+    let inner = compound_shape(ShapeMode::Subtract);
+    let mut cutter = (*sq(3, 2.0, Color::BLACK)).clone();
+    cutter.extras_mut().shape_mode = ShapeMode::Intersect;
+    let mut outer = Node::group(NodeId(20), vec![Arc::new(inner.clone()), Arc::new(cutter)]);
+    outer.extras_mut().compound_shape = true;
+    // (0–5 of the inner area) ∩ (2–12) = 2–5 by 10 high.
+    assert!((po::area(&compound_shape_area(&outer, None).unwrap(), FillRule::NonZero).abs() - 30.0).abs() < 0.01);
+    let mut effect = Node::group(NodeId(30), vec![Arc::new(inner)]);
+    effect.appearance.effects.push(Effect { id: "pathfinder.add".into(), params: serde_json::json!({}), visible: true });
+    let out = pathfinder_children(&effect, None).unwrap();
+    assert_eq!(out.len(), 1);
+    assert!((area(&out[0]) - 50.0).abs() < 0.01);
+    assert_eq!(out[0].appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "styled like the compound shape");
+}

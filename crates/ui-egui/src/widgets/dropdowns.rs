@@ -1,6 +1,7 @@
 use super::drag::PanelDrag;
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
-use super::*;
+use super::text::take_armed_focus;
+use super::{CornerRadius, HashOnly, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, vec2};
 
 /// A compact dropdown of interface labels (shown in the UI language). Returns the chosen index.
 pub fn dropdown(ui: &mut Ui, id: impl std::hash::Hash, current: &str, options: &[&str], width: f32) -> Option<usize> {
@@ -124,7 +125,9 @@ pub(crate) fn combo_named<R>(
 /// filters in place over a list that scrolls (the font menu and the shortcut import's target
 /// picker, #555). `menu` shows the menu with one of [`craft_ui::combo::Menu`]'s header forms and
 /// returns what it returned (`None` while the menu is closed). A click inside the menu keeps it
-/// open: it closes itself when an option is chosen. A click outside closes it.
+/// open: it closes itself when an option is chosen. A click outside closes it. Armed with id salt
+/// `id` ([`arm_field_focus`]), the menu opens and no widget keeps the keyboard focus, so the
+/// menu's search field can take it.
 pub(crate) fn combo_menu<R>(
     ui: &mut Ui,
     id: impl std::hash::Hash,
@@ -139,7 +142,12 @@ pub(crate) fn combo_menu<R>(
         .stroke(Stroke::new(1.0, t.input_border))
         .corner_radius(CornerRadius::same(3))
         .show(ui, |ui| {
+            let armed = take_armed_focus(ui, &id);
             let resp = combo_field(ui, id_with(ui.scope_id(), id), label, None, current, width - 4.0);
+            if armed {
+                egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
+                ui.memory_mut(|m| m.stop_text_input());
+            }
             menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside))
         })
         .inner

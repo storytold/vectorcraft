@@ -1,4 +1,6 @@
-use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use super::write_atomic;
+use super::{EngineError, Result, Session, Value, bad, json};
 
 // ---------- the file system (none on the web, where commands take and return bytes) ----------
 //

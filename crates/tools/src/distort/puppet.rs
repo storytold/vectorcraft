@@ -5,7 +5,8 @@
 //! adds a pin and selects it; Shift-click adds pins to the selection (or takes them out); dragging
 //! a pin moves every selected pin and warps the art; Alt-dragging near (not on) a selected pin
 //! turns the art around it, and that pin keeps the turn; Delete/Backspace remove the selected pins.
-//! A click off the mesh places nothing and says so.
+//! A click off the mesh places nothing and says so. Escape during a drag cancels it: the art, its
+//! pins and the selected pins go back to how the press found them.
 //!
 //! The pins live in the document ([`PuppetPins`]) with the rest shape they started from, so every
 //! warp starts from that shape (dragging a pin back restores the original, warps don't stack) and
@@ -224,6 +225,8 @@ pub struct PuppetWarpTool {
     /// Selected pins (indices into the pins).
     selected: Vec<usize>,
     drag: Option<Gesture>,
+    /// The selected pins before the press that began the drag (Escape puts them back).
+    before_drag: Vec<usize>,
     /// The pins as the drag began (each preview starts from them).
     start: Option<Arc<Cached>>,
     /// The pointer and the modifiers held while hovering (for the turn ring).
@@ -245,6 +248,7 @@ impl Default for PuppetWarpTool {
             ids: vec![],
             selected: vec![],
             drag: None,
+            before_drag: vec![],
             start: None,
             hover: None,
             off_mesh: None,
@@ -368,14 +372,17 @@ impl Tool for PuppetWarpTool {
                     && let Some(q) = set.pins.get(i)
                 {
                     self.drag = Some(Gesture::Turn { pin: i, base: set.turn_of(i), from: (p - q.at).atan2(), angle: 0.0 });
+                    self.before_drag = self.selected.clone();
                     self.start = Some(c.clone());
                     return vec![Action::Begin("Puppet Warp".into())];
                 }
                 if let Some(i) = Self::pin_at(cx, set, p) {
+                    let before = self.selected.clone();
                     if !self.pick(i, ev.mods.shift) {
                         return vec![];
                     }
                     self.drag = Some(Gesture::Move { from: p, to: p });
+                    self.before_drag = before;
                     self.start = Some(c.clone());
                     return vec![Action::Begin("Puppet Warp".into())];
                 }
@@ -426,7 +433,14 @@ impl Tool for PuppetWarpTool {
             && cx.selection.objects == self.ids
             && self.pins(cx).is_some_and(|c| self.selected.iter().any(|i| *i < c.set.pins.len()))
     }
+    /// Escape during a pin drag or a turn cancels it: the art and its pins go back to the start of
+    /// the drag, and the pins selected before the press are selected again.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.drag.take().is_some() {
+            self.start = None;
+            self.selected = std::mem::take(&mut self.before_drag);
+            return vec![Action::Cancel, Action::Notify("pins".into())];
+        }
         if !self.claims_key(cx, key) {
             return vec![];
         }
@@ -572,6 +586,11 @@ mod tests {
                         self.run(p);
                     }
                     Action::Commit => self.base = None,
+                    Action::Cancel => {
+                        if let Some(b) = self.base.take() {
+                            self.doc = b;
+                        }
+                    }
                     Action::Exec(c, p) if c == "object.puppetWarp" => self.run(p),
                     Action::Notify(w) => {
                         let p = paint();
@@ -676,6 +695,32 @@ mod tests {
         r.key(ToolKey::Backspace);
         assert!(r.pins().is_empty());
         assert_eq!(r.bounds(), before);
+    }
+
+    #[test]
+    fn escape_cancels_a_pin_drag_or_a_turn_and_selects_the_pins_selected_before_it() {
+        let mut r = Rig::new();
+        r.click(110.0, 110.0, Mods::default());
+        r.click(190.0, 110.0, Mods::default());
+        let b = r.pins().len() - 1;
+        assert_eq!(r.tool.selected, vec![b]);
+        assert!(r.key(ToolKey::Escape).is_empty(), "no drag: Escape is the shortcut's");
+        let (pins, art) = (r.pins(), r.doc.node(r.sel.objects[0]).cloned().unwrap());
+        // A press on the unselected pin selects it and drags it; Escape puts everything back.
+        for (what, press, to, mods) in [("move", (110.0, 110.0), (130.0, 140.0), Mods::default()), ("turn", (205.0, 110.0), (190.0, 125.0), alt())] {
+            assert_eq!(r.ev(PointerKind::Down, press.0, press.1, mods), vec![Action::Begin("Puppet Warp".into())], "{what}");
+            r.ev(PointerKind::Drag, to.0, to.1, mods);
+            assert_ne!(r.doc.node(r.sel.objects[0]), Some(&art), "{what}: the drag warps the art");
+            assert_eq!(r.key(ToolKey::Escape), vec![Action::Cancel, Action::Notify("pins".into())], "{what}");
+            assert_eq!(r.doc.node(r.sel.objects[0]), Some(&art), "{what}: Escape puts the art back");
+            assert_eq!(r.pins(), pins, "{what}: and the pins");
+            assert_eq!(r.tool.selected, vec![b], "{what}: and the pins selected before the press");
+            assert!(!r.tool.busy(), "{what}");
+            // The rest of the drag does nothing.
+            assert!(r.ev(PointerKind::Drag, to.0 + 10.0, to.1, mods).is_empty(), "{what}");
+            assert!(r.ev(PointerKind::Up, to.0 + 10.0, to.1, mods).is_empty(), "{what}");
+            assert_eq!(r.pins(), pins, "{what}");
+        }
     }
 
     #[test]

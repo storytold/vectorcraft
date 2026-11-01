@@ -1,7 +1,7 @@
 use super::options::flatten;
 use super::presets::{presets_delete, presets_export, presets_import, presets_list, presets_save};
 use super::report::preview;
-use super::*;
+use super::{CommandSpec, always, cmd, has_doc};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

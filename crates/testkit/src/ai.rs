@@ -5,9 +5,17 @@
 /// Editing data of a `width` × `height` page: header comments (the art's bounding box and the crop
 /// marks are the page), `body` (setup and layers), the trailer.
 pub fn editing_data(width: f64, height: f64, body: &str) -> String {
+    editing_data_in([0.0, 0.0, width, height], [0.0, 0.0, width, height], body)
+}
+
+/// [`editing_data`] whose art's bounding box (`x0 y0 x1 y1`, art space) is `art` and whose
+/// artboard (the crop marks) is `board`.
+pub fn editing_data_in(art: [f64; 4], board: [f64; 4], body: &str) -> String {
+    let [a0, a1, a2, a3] = art;
+    let [b0, b1, b2, b3] = board;
     format!(
-        "{PS_HEADER}\n%%Creator: VectorCraft tests\n%%BoundingBox: 0 0 {width} {height}\n%%HiResBoundingBox: 0 0 {width} {height}\n\
-         %AI5_FileFormat 14.0\n%AI3_Cropmarks: 0 0 {width} {height}\n%%EndComments\n\
+        "{PS_HEADER}\n%%Creator: VectorCraft tests\n%%BoundingBox: {a0} {a1} {a2} {a3}\n%%HiResBoundingBox: {a0} {a1} {a2} {a3}\n\
+         %AI5_FileFormat 14.0\n%AI3_Cropmarks: {b0} {b1} {b2} {b3}\n%%EndComments\n\
          %%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{body}\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n"
     )
 }

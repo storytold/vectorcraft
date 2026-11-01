@@ -114,8 +114,32 @@ fn profile(n: &Node) -> Option<(PathData, FillRule)> {
         NodeKind::Compound { children, rule } => {
             Some((PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect()), *rule))
         }
+        // Type extrudes as its glyph outlines and stays type: editing it reshapes the solid (#4715).
+        NodeKind::Text(_) => {
+            let mut subpaths = vec![];
+            crate::outline_text(n)?.walk(&mut |c| subpaths.extend(c.path_data().into_iter().flat_map(|p| p.subpaths.iter().cloned())));
+            (!subpaths.is_empty()).then(|| (PathData::new(subpaths), FillRule::NonZero))
+        }
         _ => None,
     }
+}
+
+/// What a 3D effect paints `n` with: its own fills and strokes, else, for type that has none, the
+/// fill and stroke of its first painted run (its characters' colours).
+fn solid_paints(n: &Node) -> Vec<AppearanceItem> {
+    let own: Vec<AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).cloned().collect();
+    if !own.is_empty() || !matches!(n.kind, NodeKind::Text(_)) {
+        return own;
+    }
+    let mut runs = vec![];
+    if let Some(outlined) = crate::outline_text(n) {
+        outlined.walk(&mut |c| {
+            if runs.is_empty() && c.path_data().is_some() {
+                runs = c.appearance.items.iter().filter(|i| crate::paints(i)).cloned().collect();
+            }
+        });
+    }
+    runs
 }
 
 fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
@@ -320,7 +344,8 @@ pub fn solid_art(n: &Node) -> Option<Node> {
     }
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
-    let painted: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).collect();
+    let paints = solid_paints(n);
+    let painted: Vec<&AppearanceItem> = paints.iter().collect();
     let mut children = vec![];
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {

@@ -238,3 +238,27 @@ fn ranged_set_format_sets_direction_mojikumi_and_leading_model_per_paragraph() {
     s.execute("text.setFormat", &json!({"ids": [id], "direction": "auto"})).unwrap();
     assert!(text(&s, id).paragraph_styles().iter().all(|p| p.direction.is_none()));
 }
+
+#[test]
+fn shift_return_in_the_type_tool_inserts_soft_return() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "First Second", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.select_tool("type", v).unwrap();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(&s, id));
+    let l0 = &lay.lines[0];
+    let (x, y) = (100.0 + (l0.x0 + l0.x1) / 2.0, 100.0 + l0.baseline - 5.0);
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+    }
+    s.tool_key(ToolKey::Home, Mods::default(), v).unwrap();
+    for _ in 0..6 {
+        s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    }
+    let shift = Mods { shift: true, ..Default::default() };
+    s.tool_key(ToolKey::Enter, shift, v).unwrap();
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(text(&s, id).plain_text(), "First \u{2028}Second");
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(&s, id));
+    assert_eq!(lay.lines.len(), 2, "broken into two lines in one paragraph");
+}

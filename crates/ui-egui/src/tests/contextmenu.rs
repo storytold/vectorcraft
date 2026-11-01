@@ -168,6 +168,38 @@ fn right_clicking_a_ruler_swaps_the_document_units() {
     assert!(texts.iter().any(|(t, _)| t == "✓  Millimeters"), "the left ruler reflects the current unit: {texts:?}");
 }
 
+/// Cmd+Alt+Shift+U is Switch Units by default (Ctrl+Alt+Shift+U on Windows and Linux,
+/// Option+Shift+Command+U on macOS): pressed, the document goes to the unit after its own in the
+/// ruler's menu, and Smart Guides (Cmd+U) stay as they are. No other default has the key.
+#[test]
+fn cmd_alt_shift_u_switches_to_the_next_unit() {
+    use crate::shortcut_editor as ed;
+    use vectorcraft_doc::Unit;
+    assert_eq!(ed::default_command_shortcut("document.switchUnits"), Some("Cmd+Alt+Shift+U"));
+    assert_eq!(ed::command_for_key("Cmd+Alt+Shift+U"), Some("document.switchUnits"));
+    let shown = menus::pretty_shortcut("Cmd+Alt+Shift+U");
+    assert_eq!(shown, if cfg!(target_os = "macos") { "⌥⇧⌘U" } else { "Ctrl+Alt+Shift+U" });
+    let mut app = app();
+    let listed = app.run("shortcuts.list", json!({"query": "document.switchUnits"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone())).collect();
+    assert_eq!(rows, [(json!("Switch Units"), json!("Document"), json!("Cmd+Alt+Shift+U"))], "Keyboard Shortcuts lists it under Document");
+    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+    fn press(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
+        let ev = Event::Key { key: egui::Key::U, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    let guides = app.ui.view.smart_guides;
+    press(&mut app);
+    assert_eq!(app.session.general_unit(), Unit::Picas, "Points → Picas");
+    assert_eq!(app.ui.view.smart_guides, guides, "Smart Guides stay as they are");
+    app.run("document.setUnits", json!({"units": "Feet"})).unwrap();
+    press(&mut app);
+    assert_eq!(app.session.general_unit(), Unit::Points, "Feet → Points");
+}
+
 fn labels(items: &[Item]) -> Vec<&'static str> {
     items
         .iter()
@@ -254,6 +286,61 @@ fn selected_type_has_apply_numbers() {
     menus::invoke(&mut app, "type.applyNumbers", json!({}));
     let Some(NodeKind::Text(text)) = app.session.active().unwrap().doc.node(t).map(|n| &n.kind) else { panic!("text") };
     assert_eq!(text.para_at(0).list.and_then(|l| l.number), Some(vectorcraft_doc::text::NumberStyle::Arabic));
+}
+
+/// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn
+/// there, bottom first.
+fn intertwine_order(app: &VectorcraftApp, g: NodeId, x: f64, y: f64) -> Vec<NodeId> {
+    use vectorcraft_tools::intertwine::{drawn_order, face_at, faces};
+    let st = app.session.active().unwrap();
+    let children = st.doc.node(g).unwrap().children().unwrap();
+    let face = face_at(&faces(children), Point::new(x, y)).unwrap();
+    drawn_order(children, &face).into_iter().map(|i| children[i].id).collect()
+}
+
+/// With the Intertwine tool, a right-click where three or more objects of the group overlap lists
+/// Bring to Front, Bring Forward, Send Backward and Send to Back for the object nearest to the
+/// pointer in place of the Arrange submenu, and they move it in that overlap area only. Elsewhere
+/// the menu is the usual one.
+#[test]
+fn right_click_where_three_intertwined_objects_overlap_arranges_the_nearest_one() {
+    let mut app = app();
+    // Rectangles from x = 50, 90 and 130, 120 wide: all three overlap from x = 130 to 170.
+    let wide = |app: &mut VectorcraftApp, x: f64| {
+        NodeId(app.run("shape.rectangle", json!({"x": x, "y": 50, "width": 120, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    let (a, b, c) = (wide(&mut app, 50.0), wide(&mut app, 90.0), wide(&mut app, 130.0));
+    app.run("select.set", json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(app.session.tool_id(), "intertwine");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let items = ["Bring to Front", "Bring Forward", "Send Backward", "Send to Back"];
+    // By the right edge of A (the first rectangle), where all three overlap.
+    let p = screen(&app, 169.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [g], "the selection stays the group");
+    for label in items {
+        assert!(has(&texts, label), "{label} in {texts:?}");
+    }
+    assert!(!has(&texts, "Arrange"), "no Arrange submenu: {texts:?}");
+    let rows: Vec<f32> = items.iter().map(|l| at(&texts, l).y).collect();
+    assert!(rows.windows(2).all(|w| w[0] < w[1]), "in that order: {rows:?}");
+    let Some(Item::Cmd(_, id, params)) = menus::context_items(&app).into_iter().find(|i| matches!(i, Item::Cmd("Bring Forward", ..))) else {
+        panic!("no Bring Forward item")
+    };
+    assert_eq!(id, "object.intertwine.arrange");
+    assert_eq!((&params["id"], &params["order"], &params["member"]), (&json!(g.0), &json!("forward"), &json!(a.0)));
+    // Bring Forward moves A one place up in that area only.
+    assert_eq!(intertwine_order(&app, g, 150.0, 100.0), [a, b, c]);
+    let texts = click(&mut app, &ctx, at(&texts, "Bring Forward"), PointerButton::Primary);
+    assert!(!has(&texts, "Bring Forward"), "the menu closes");
+    assert_eq!(intertwine_order(&app, g, 150.0, 100.0), [b, a, c]);
+    assert_eq!(intertwine_order(&app, g, 110.0, 100.0), [a, b], "where only A and B overlap");
+    // Where only two overlap, the menu is the usual one.
+    let p = screen(&app, 110.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Arrange") && !has(&texts, "Bring Forward"), "{texts:?}");
 }
 
 /// Every label the context menu can show is a menu string, so complete catalogs must translate it.

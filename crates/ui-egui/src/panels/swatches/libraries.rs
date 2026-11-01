@@ -1,7 +1,10 @@
 use super::actions::deletable;
 use super::dnd::selection;
 use super::tiles::{describe, global_mark, list_icons};
-use super::*;
+use super::{
+    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary, Ui, Value,
+    VectorcraftApp, json, library_panel, menu_item, swatch_tile, swatchlib,
+};
 
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
     libs.into_iter().map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
@@ -88,8 +91,12 @@ impl LibraryKind for SwatchLibraries {
     fn describe(w: &Swatch) -> String {
         describe(&w.paint, w.global, w.spot)
     }
-    /// Adds the swatch and applies it to the active proxy (Alt: the inactive one), as one step.
+    /// Adds the swatch and applies it to the active proxy (Alt: the inactive one), as one step. A
+    /// color swatch also becomes the Color Guide's base color.
     fn click(app: &mut VectorcraftApp, ui: &Ui, id: &str, name: &str) {
+        if let Some(c) = swatchlib::library(&app.session, id).and_then(|(_, lib)| lib.iter().find(|w| w.name == name).and_then(|w| w.paint.color())) {
+            crate::panels::color_guide::choose_base(app, c);
+        }
         let alt = crate::panels::alt_held(ui);
         let apply = if crate::panels::proxy_cmd(app, alt) == "paint.setFill" { "fill" } else { "stroke" };
         add_from_library(app, json!({"library": id, "names": [name], "apply": apply, "focus": !alt}));

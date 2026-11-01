@@ -155,32 +155,25 @@ fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later
     // The fonts left out: their license doesn't allow it, or they aren't on this computer.
     let fonts = r["skippedFonts"].as_array().into_iter().flatten().filter_map(|f| f["font"].as_str()).collect::<Vec<_>>().join(", ");
     let shown_note = package_status_note(missing, &fonts);
-    let n_s = n.to_string();
+    let n = n as u64;
     if web {
         let (name, data) = (r["name"].as_str().unwrap_or("package.zip"), r["dataBase64"].as_str().unwrap_or_default());
         let bytes = vectorcraft_format::base64_decode(data).ok_or("the package came back damaged")?;
         io::write_named(app, None, name, &bytes)?;
-        let status = if shown_note.is_empty() {
-            crate::i18n::fmt(tl!("Packaged {n} file(s)"), &[("n", &n_s)])
-        } else {
-            crate::i18n::fmt(tl!("Packaged {n} file(s) {note}"), &[("n", &n_s), ("note", &shown_note)])
-        };
-        app.status(status);
+        app.status(package_status(n, None, &shown_note));
         return Ok(r);
     }
     let folder = r["folder"].as_str().unwrap_or_default().to_string();
-    let status = if shown_note.is_empty() {
-        crate::i18n::fmt(tl!("Packaged {n} file(s) in {folder}"), &[("n", &n_s), ("folder", &folder)])
-    } else {
-        crate::i18n::fmt(tl!("Packaged {n} file(s) in {folder} {note}"), &[("n", &n_s), ("folder", &folder), ("note", &shown_note)])
-    };
-    app.status(status);
+    app.status(package_status(n, Some(&folder), &shown_note));
     let detail = if shown_note.is_empty() {
-        crate::i18n::fmt(tl!("{count} file(s) in {folder}. Show the package folder?"), &[("count", &n_s), ("folder", &folder)])
+        crate::i18n::fmt(
+            &crate::i18n::tn(n, "{n} file in {folder}. Show the package folder?", "{n} files in {folder}. Show the package folder?"),
+            &[("folder", &folder)],
+        )
     } else {
         crate::i18n::fmt(
-            tl!("{count} file(s) in {folder} {note}. Show the package folder?"),
-            &[("count", &n_s), ("folder", &folder), ("note", &shown_note)],
+            &crate::i18n::tn(n, "{n} file in {folder} {note}. Show the package folder?", "{n} files in {folder} {note}. Show the package folder?"),
+            &[("folder", &folder), ("note", &shown_note)],
         )
     };
     if app.ui.dialog.is_none() {
@@ -189,12 +182,27 @@ fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later
     Ok(r)
 }
 
-/// Parenthetical notes after the folder path in a package status (`(2 linked file(s) not found)` …),
+/// The status bar's line for a package of `n` files written to `folder` (`None`: the web's
+/// download), with `note` from [`package_status_note`] when it isn't empty. With a note and a
+/// folder, the note comes before the folder and the folder ends the line. Each catalog also has
+/// `@msgplural` rows for the English line, shown after a language switch; the folder takes the rest
+/// of the line after `) in `, so a folder name with spaces or parentheses stays whole.
+pub(super) fn package_status(n: u64, folder: Option<&str>, note: &str) -> String {
+    let (one, other) = match (folder.is_some(), note.is_empty()) {
+        (false, true) => ("Packaged {n} file", "Packaged {n} files"),
+        (false, false) => ("Packaged {n} file {note}", "Packaged {n} files {note}"),
+        (true, true) => ("Packaged {n} file in {folder}", "Packaged {n} files in {folder}"),
+        (true, false) => ("Packaged {n} file {note} in {folder}", "Packaged {n} files {note} in {folder}"),
+    };
+    crate::i18n::fmt(&crate::i18n::tn(n, one, other), &[("folder", folder.unwrap_or_default()), ("note", note)])
+}
+
+/// Parenthetical notes in a package status (`(2 linked files not found)` …),
 /// joined with spaces and without a leading space (#3494).
-fn package_status_note(missing: usize, fonts: &str) -> String {
+pub(super) fn package_status_note(missing: usize, fonts: &str) -> String {
     let mut parts = Vec::new();
     if missing > 0 {
-        parts.push(format!("({})", crate::i18n::fmt(tl!("{count} linked file(s) not found"), &[("count", &missing.to_string())])));
+        parts.push(format!("({})", crate::i18n::tn(missing as u64, "{n} linked file not found", "{n} linked files not found")));
     }
     if !fonts.is_empty() {
         parts.push(format!("({})", crate::i18n::fmt(tl!("fonts not copied: {fonts}"), &[("fonts", fonts)])));

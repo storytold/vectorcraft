@@ -5,6 +5,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{PATTERN_EDIT_LAYER, RepeatKind, TileType};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
+use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use crate::tests_menucmds::place_undecodable_png;
 use crate::*;
@@ -87,6 +88,52 @@ fn done_saves_edited_art_and_leaves_mode() {
     assert!(s.doc().unwrap().isolation.is_none());
 }
 
+/// Exit Isolation Mode while a pattern is edited (the canvas context menu and the Layers panel
+/// menu offer it) leaves pattern editing as Done does, with the drawn art saved into the pattern.
+#[test]
+fn exit_isolation_while_editing_a_pattern_saves_it_and_leaves_the_mode() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    rect(&mut s, 2.0, 2.0, 3.0, 3.0);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.pattern_edit.is_none());
+    assert_eq!(d.pattern("P").unwrap().art.len(), 2);
+    assert!(d.layers.iter().all(|l| l.name.as_deref() != Some(PATTERN_EDIT_LAYER)));
+    let st = s.doc().unwrap();
+    assert_eq!((st.isolation, st.active_layer), (None, st.doc.default_layer()));
+    assert_eq!(st.history.undo.last().unwrap().label, "Done Editing Pattern");
+}
+
+/// Point type that a Type tool click placed in the tile and left empty is discarded when Done or
+/// Exit Isolation Mode leaves pattern editing, so the pattern does not keep it.
+#[test]
+fn empty_point_type_is_not_saved_into_the_pattern() {
+    for cmd in ["object.pattern.done", "object.exitIsolation"] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        sel(&mut s, &[r]);
+        s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 200.0, 200.0), v).unwrap();
+        }
+        assert!(s.tool_wants_text(), "{cmd}: the click places point type to edit");
+        s.execute(cmd, &json!({})).unwrap();
+        assert!(!s.tool_wants_text(), "{cmd}");
+        let art = &doc(&s).pattern("P").unwrap().art;
+        assert_eq!(art.len(), 1, "{cmd}: the tile keeps only the square");
+        assert!(!matches!(art[0].kind, NodeKind::Text(_)), "{cmd}");
+        let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
+        assert_eq!(labels.last(), Some(&"Done Editing Pattern"), "{cmd}");
+        assert!(!labels.contains(&"Type"), "{cmd}: {labels:?}");
+    }
+}
+
 #[test]
 fn cancel_new_pattern_removes_it() {
     let mut s = session();
@@ -110,6 +157,38 @@ fn edit_then_cancel_restores_definition() {
     let def = doc(&s).pattern("Dots").unwrap();
     assert_eq!(def.tile_type, TileType::Grid);
     assert_eq!(def.tile.width(), 20.0);
+}
+
+/// Pattern editing mode is not entered while an opacity mask is edited: Edit Pattern and Make are
+/// off, with or without a name, and Make also with `edit: false`. Mask editing goes on, its layer
+/// still isolated. After Stop Editing Opacity Mask, Edit Pattern works again.
+#[test]
+fn pattern_editing_is_not_entered_while_an_opacity_mask_is_edited() {
+    let mut s = session();
+    make_dots(&mut s);
+    let obj = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let m = rect(&mut s, 100.0, 100.0, 50.0, 100.0);
+    s.execute("paint.setFill", &json!({"ids": [m.0], "color": "#ffffff"})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [obj.0, m.0]})).unwrap();
+    let layer = s.execute("transparency.editOpacityMask", &json!({"id": obj.0})).unwrap()["layer"].as_u64().map(NodeId);
+    let why = "stop editing the opacity mask first";
+    for (cmd, p) in [
+        ("object.pattern.edit", json!({"name": "Dots"})),
+        ("object.pattern.edit", json!({})),
+        ("object.pattern.make", json!({})),
+        ("object.pattern.make", json!({"name": "Mask Art", "edit": false})),
+    ] {
+        let err = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&err, EngineError::Disabled(id, w) if id == cmd && w == why), "{cmd} {p}: {err}");
+    }
+    let st = s.doc().unwrap();
+    assert!(st.doc.pattern_edit.is_none() && st.doc.pattern("Mask Art").is_none() && st.doc.pattern("New Pattern 1").is_none());
+    assert_eq!(st.doc.mask_edit.map(|e| (e.object, Some(e.layer))), Some((obj, layer)));
+    assert_eq!((st.isolation, st.active_layer), (layer, layer));
+    s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+    s.execute("object.pattern.edit", &json!({"name": "Dots"})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.isolation, st.doc.pattern_edit.as_ref().map(|e| e.layer));
 }
 
 #[test]
@@ -290,6 +369,57 @@ fn transforms_without_transform_objects_move_only_the_pattern() {
 }
 
 #[test]
+fn selection_backquote_drag_changes_pattern_fill_and_stroke_without_moving_mixed_art() {
+    let mut s = session();
+    make_dots(&mut s);
+    let patterned = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let solid = rect(&mut s, 220.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [patterned.0], "swatch": "Dots"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [patterned.0], "swatch": "Dots"})).unwrap();
+    s.execute("prefs.set", &json!({"key": "transformPatternTiles", "value": false})).unwrap();
+    sel(&mut s, &[patterned, solid]);
+    let before_patterned = node(&s, patterned);
+    let before_solid = node(&s, solid);
+    let history = crate::tests::history(&s).0;
+    let v = ViewInfo { show_bbox: false, ..Default::default() };
+    s.select_tool("selection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 125.0), v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Drag, 145.0, 125.0) }, v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 145.0, 125.0) }, v).unwrap();
+    let after = node(&s, patterned);
+    assert_eq!(after.geometric_bounds(), before_patterned.geometric_bounds());
+    assert_eq!(node(&s, solid), before_solid);
+    for paint in [after.appearance.fill_paint(), after.appearance.stroke_paint()] {
+        let Paint::Pattern { xf, .. } = paint else { panic!("pattern paint expected") };
+        assert_eq!(xf.as_coeffs()[4], 20.0);
+    }
+    assert_eq!(crate::tests::history(&s).0, history + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, patterned), before_patterned);
+    assert_eq!(node(&s, solid), before_solid);
+}
+
+#[test]
+fn selection_backquote_drag_changes_stroke_only_pattern() {
+    let mut s = session();
+    make_dots(&mut s);
+    let id = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [id.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[id]);
+    let before = node(&s, id).geometric_bounds();
+    let v = ViewInfo { show_bbox: false, ..Default::default() };
+    s.select_tool("selection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 125.0), v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Drag, 120.0, 125.0) }, v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 120.0, 125.0) }, v).unwrap();
+    let after = node(&s, id);
+    assert_eq!(after.geometric_bounds(), before);
+    let Paint::Pattern { xf, .. } = after.appearance.stroke_paint() else { panic!("pattern stroke expected") };
+    assert_eq!(xf.as_coeffs()[4], 20.0);
+}
+
+#[test]
 fn list_reports_patterns_and_edit_state() {
     let mut s = session();
     make_dots(&mut s);
@@ -416,7 +546,7 @@ fn svg_export_writes_pattern_def() {
     // The tile art is inside the pattern.
     let start = svg.find("<pattern").unwrap();
     let end = svg.find("</pattern>").unwrap();
-    assert!(svg[start..end].contains("<path"));
+    assert!(vectorcraft_testkit::svg_shapes(&svg[start..end]) > 0);
 }
 
 /// A pattern fill is written as a PDF tiling pattern, which PDF import reads back as a pattern
@@ -480,17 +610,10 @@ fn pdf_export_writes_patterns_nested_too_deep_as_tiles_with_a_warning() {
 
 #[test]
 fn every_raster_export_says_when_a_pattern_holds_an_image_that_could_not_be_decoded() {
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short, made
-    // into a pattern and then cleared from the page: only the pattern's tile draws it.
+    // A PNG whose header reads but whose pixel data is cut short, made into a pattern and then
+    // cleared from the page: only the pattern's tile draws it.
     let mut s = session();
-    let mut png = Vec::new();
-    image::RgbaImage::from_pixel(20, 20, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
-    let placed = s.execute("file.place", &json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
-    let placed = NodeId(placed["ids"][0].as_u64().unwrap());
+    let placed = crate::tests_menucmds::place_undecodable_png_sized(&mut s, 20, 20);
     sel(&mut s, &[placed]);
     s.execute("object.pattern.make", &json!({"name": "Cut", "width": 20, "height": 20})).unwrap();
     s.execute("object.pattern.done", &json!({})).unwrap();

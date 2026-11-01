@@ -572,6 +572,54 @@ fn model_param_must_be_a_string_when_given() {
     assert_eq!(fill(&s, art).to_hex(), "#1a1a1a", "nothing changed");
 }
 
+/// Recolor Artwork's commands refuse a parameter of the wrong form, such as `limitTo: 5` or
+/// `includeImages: "false"`, with an error that names it; the art keeps its color and no undo
+/// step is recorded. A null counts as a value left out.
+#[test]
+fn recolor_commands_refuse_params_of_the_wrong_form() {
+    let mut s = session();
+    let art = rect(&mut s, json!("#1a1a1a"));
+    select_all(&mut s);
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    let map = json!({"#1a1a1a": "#ff0000"});
+    let rows = json!([{"from": ["#1a1a1a"], "to": "#ff0000", "exclude": "true"}]);
+    for (cmd, p, msg) in [
+        ("recolor.apply", json!({"map": map, "limitTo": 5}), "no swatch library `5`"),
+        ("recolor.apply", json!({"map": map, "limitTo": true}), "no swatch library `true`"),
+        ("recolor.reduce", json!({"limitTo": 216}), "no swatch library `216`"),
+        ("recolor.apply", json!({"map": map, "includeImages": "false"}), "`includeImages` must be true or false"),
+        ("recolor.apply", json!({"map": map, "includePatterns": 0}), "`includePatterns` must be true or false"),
+        ("recolor.apply", json!({"map": map, "method": 5}), "unknown method `5`"),
+        ("recolor.reduce", json!({"method": true}), "unknown method `true`"),
+        ("recolor.reduce", json!({"colors": "2"}), "`colors` must be a number"),
+        ("recolor.reduce", json!({"colors": 2.5}), "`colors` must be a whole number"),
+        ("recolor.reduce", json!({"preserve": "none"}), "`preserve` must be an object"),
+        ("recolor.reduce", json!({"preserve": {"white": "false"}}), "`white` must be true or false"),
+        ("recolor.apply", json!({"map": rows}), "`exclude` must be true or false"),
+        ("recolor.apply", json!({"map": map, "group": 5}), "`group` must be a string"),
+        ("recolor.apply", json!({"map": map, "rename": 5}), "`rename` must be a string"),
+        ("recolor.apply", json!({"map": map, "groupColors": "#00ff00"}), "`groupColors` must be an array"),
+        ("recolor.randomize", json!({"map": rows}), "`exclude` must be true or false"),
+        ("recolor.randomize", json!({"map": map, "seed": "4"}), "`seed` must be a number"),
+        ("recolor.randomize", json!({"map": map, "seed": -1}), "`seed` must be a whole number"),
+        ("recolor.randomize", json!({"map": map, "order": "false"}), "`order` must be true or false"),
+        ("recolor.randomize", json!({"map": map, "saturationBrightness": 1}), "`saturationBrightness` must be true or false"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+    }
+    assert_eq!(fill(&s, art).to_hex(), "#1a1a1a", "nothing changed");
+    assert_eq!(undo(&s), before, "no undo step");
+    let r = run(&mut s, "recolor.reduce", json!({"colors": null, "method": null, "limitTo": null, "preserve": null}));
+    assert_eq!(r["method"], "scaleTints");
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": null, "order": null, "saturationBrightness": null}));
+    assert_eq!(r["map"][0]["to"], "rgb 255 0 0");
+    let p = json!({"map": map, "limitTo": null, "method": null, "includeImages": null, "includePatterns": null, "group": null, "rename": null, "groupColors": null});
+    run(&mut s, "recolor.apply", p);
+    assert_eq!(fill(&s, art).to_hex(), "#ff0000");
+}
+
 #[test]
 fn document_model_converts_the_colours_of_a_group_too() {
     let mut s = session();
