@@ -26,7 +26,7 @@
             fontconfig
             freetype
             zlib
-          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             vulkan-loader
             wayland
             libxkbcommon
@@ -63,7 +63,7 @@
             '';
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
               # No path links possible for non Linux
-            ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               # Graphic APIs
               libGL
               vulkan-loader
@@ -95,12 +95,12 @@
           nativeBuildInputs = with pkgs; [
             pkg-config
             libclang
-          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ autoPatchelfHook ]; # Hooks runtime dependencies to RPATH
+          ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ autoPatchelfHook ]; # Hooks runtime dependencies to RPATH
           buildInputs = commonDeps;
   
           runtimeDependencies = with pkgs; [
             # No dependencies for non Linux possible
-          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             # Graphic APIs
             libGL
             vulkan-loader
