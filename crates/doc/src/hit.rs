@@ -436,7 +436,7 @@ pub fn locked_objects_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<NodeI
 /// whole, and an unlocked layer, group, blend or envelope in Edit Contents is searched inside.
 fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, out: &mut Vec<NodeId>) {
     let Some(children) = parent.children() else { return };
-    if parent.clips() && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
+    if parent.clips() && !edits_inside(parent, opt.scope) && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
         return;
     }
     for i in hit_order(parent, children, p) {
@@ -617,6 +617,15 @@ fn clip_outline_hit(parent: &Node, clip: &Node, p: Point, opt: HitOptions, symbo
     clip_outline(clip, p, opt)
 }
 
+/// Does isolation mode (`scope`) edit what `parent` holds: is `parent` the isolated container, or
+/// the parent of the single object isolated? Then the selection tools hit the art that the
+/// clipping mask of `parent` hides, and the Unlock submenu lists it (#3748). The reference
+/// app's help says that the parts outside a clipping mask can still be edited
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-clipping-masks.html>).
+fn edits_inside(parent: &Node, scope: Option<NodeId>) -> bool {
+    scope.is_some_and(|s| s == parent.id || parent.children().is_some_and(|c| c.iter().any(|c| c.id == s)))
+}
+
 fn hit_children(
     parent: &Node,
     p: Point,
@@ -634,8 +643,10 @@ fn hit_children(
             chain.push(clip.id);
             return Some(Hit { leaf: clip.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 });
         }
-        // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it.
-        if !clip_contains(clip, p) {
+        // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it, except for
+        // the selection tools in isolation mode within it.
+        let edited = opt.clip_outlines && editable_only && edits_inside(parent, opt.scope);
+        if !edited && !clip_contains(clip, p) {
             return None;
         }
     }
@@ -833,21 +844,22 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
 /// by their art ([`Node::geometric_bounds_with`]). The art of a clip group or of a layer with a
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
-/// only within that region's bounds.
+/// only within that region's bounds. In isolation mode the clipping mask of the isolated container,
+/// or of the parent of the single object isolated, does not limit the marquee, as it does not limit
+/// the selection tools' clicks.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
     let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
-        Some(s) => match (s.children(), marquee_in(s, r)) {
-            (Some(c), Some(r)) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
-            (Some(_), None) => vec![],
+        Some(s) => match s.children() {
+            Some(c) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             // A single object isolated: only it.
-            (None, _) => doc
+            None => doc
                 .parent_of(s.id)
                 .and_then(|p| doc.node(p))
-                .and_then(|p| Some((p.children()?, marquee_in(p, r)?)))
+                .and_then(|p| p.children())
                 .into_iter()
-                .flat_map(|(c, r)| c.iter().filter(|c| c.id == s.id).map(move |c| (c, r)))
+                .flat_map(|c| c.iter().filter(|c| c.id == s.id).map(|c| (c, r)))
                 .collect(),
         },
         // The objects of the layers, looking through sublayers (hidden, locked and template ones
