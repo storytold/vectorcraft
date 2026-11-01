@@ -1398,6 +1398,7 @@ digits	Malayalam	მალაიალამური
 	Delete Graphic Style (Alt-click: without asking)	გრაფიკული სტილის წაშლა (Alt-დაწკაპუნებით: დაუკითხავად)
 	Delete the graphic style “{name}”?	წაიშალოს გრაფიკული სტილი „{name}“?
 	Delete Action Sets	მოქმედებების ნაკრებების წაშლა
+	Duplicate Action or Action Set	მოქმედების ან მოქმედებების ნაკრების დუბლირება
 	Delete the action set “{name}” and its actions?	წაიშალოს მოქმედებების ნაკრები „{name}“ და მისი მოქმედებები?
 	Delete the selected action sets and their actions?	წაიშალოს მონიშნული მოქმედებების ნაკრებები და მათი მოქმედებები?
 	Delete these {n} graphic styles?	წაიშალოს ეს გრაფიკული სტილები ({n})?

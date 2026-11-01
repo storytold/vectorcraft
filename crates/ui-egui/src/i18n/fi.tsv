@@ -1544,6 +1544,7 @@ digits	Malayalam	Malajalam
 	Delete Graphic Style (Alt-click: without asking)	Poista grafiikkatyyli (Alt-napsautus: kysymättä)
 	Delete the graphic style “{name}”?	Poistetaanko grafiikkatyyli ”{name}”?
 	Delete Action Sets	Poista toimintosarjat
+	Duplicate Action or Action Set	Monista toiminto tai toimintosarja
 	Delete the action set “{name}” and its actions?	Poistetaanko toimintosarja ”{name}” ja sen toiminnot?
 	Delete the selected action sets and their actions?	Poistetaanko valitut toimintosarjat ja niiden toiminnot?
 	Delete these {n} graphic styles?	Poistetaanko nämä {n} grafiikkatyyliä?

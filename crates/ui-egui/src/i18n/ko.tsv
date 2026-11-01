@@ -1316,6 +1316,7 @@ digits	Malayalam	말라얄람어
 	Delete Workspace	작업 영역 삭제
 	Delete the graphic style “{name}”?	그래픽 스타일 “{name}”을(를) 삭제하시겠습니까?
 	Delete Action Sets	액션 세트 삭제
+	Duplicate Action or Action Set	액션 또는 액션 세트 복제
 	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
 	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제

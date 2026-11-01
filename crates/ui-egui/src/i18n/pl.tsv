@@ -1484,6 +1484,7 @@ digits	Malayalam	Malajalam
 	Delete Graphic Style (Alt-click: without asking)	Usuń styl graficzny (kliknięcie z Alt: bez pytania)
 	Delete the graphic style “{name}”?	Usunąć styl graficzny „{name}”?
 	Delete Action Sets	Usuń zestawy operacji
+	Duplicate Action or Action Set	Powiel operację lub zestaw operacji
 	Delete the action set “{name}” and its actions?	Usunąć zestaw operacji „{name}” i jego operacje?
 	Delete the selected action sets and their actions?	Usunąć zaznaczone zestawy operacji i ich operacje?
 	Delete these {n} graphic styles?	Usunąć te style graficzne ({n})?

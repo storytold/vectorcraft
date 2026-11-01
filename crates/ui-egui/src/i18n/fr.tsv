@@ -748,6 +748,7 @@ font-technology	Variable	Variables
 	Delete Selected Item	Supprimer l’élément sélectionné
 	Delete Selection	Supprimer la sélection
 	Delete Action Sets	Supprimer les jeux de scripts
+	Duplicate Action or Action Set	Dupliquer le script ou le jeu de scripts
 	Delete the action set “{name}” and its actions?	Supprimer le jeu de scripts « {name} » et ses scripts ?
 	Delete the selected action sets and their actions?	Supprimer les jeux de scripts sélectionnés et leurs scripts ?
 	Delete Slices	Supprimer les tranches

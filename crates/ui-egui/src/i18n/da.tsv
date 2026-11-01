@@ -1481,6 +1481,7 @@ digits	Malayalam	Malayalam
 	Delete Graphic Style (Alt-click: without asking)	Slet grafisk typografi (Alt-klik: uden at spørge)
 	Delete the graphic style “{name}”?	Slet den grafiske typografi »{name}«?
 	Delete Action Sets	Slet handlingssæt
+	Duplicate Action or Action Set	Duplikér handling eller handlingssæt
 	Delete the action set “{name}” and its actions?	Slet handlingssættet »{name}« og dets handlinger?
 	Delete the selected action sets and their actions?	Slet de markerede handlingssæt og deres handlinger?
 	Delete these {n} graphic styles?	Slet disse {n} grafiske typografier?

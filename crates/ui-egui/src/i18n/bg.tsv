@@ -747,6 +747,7 @@ font-technology	Variable	Променливи
 	Delete Tab	Изтриване на табулация
 	Delete the graphic style “{name}”?	Изтриване на графичния стил „{name}“?
 	Delete Action Sets	Изтриване на набори от действия
+	Duplicate Action or Action Set	Дублиране на действие или набор от действия
 	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
 	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
 	Delete Theme	Изтриване на тема

@@ -1571,6 +1571,7 @@ digits	Malayalam	Malajálamské
 	Delete Graphic Style (Alt-click: without asking)	Odstranit grafický styl (Alt+kliknutí: bez dotazu)
 	Delete the graphic style “{name}”?	Odstranit grafický styl „{name}“?
 	Delete Action Sets	Odstranit sady akcí
+	Duplicate Action or Action Set	Duplikovat akci nebo sadu akcí
 	Delete the action set “{name}” and its actions?	Odstranit sadu akcí „{name}“ a její akce?
 	Delete the selected action sets and their actions?	Odstranit vybrané sady akcí a jejich akce?
 	Delete these {n} graphic styles?	Odstranit tyto grafické styly ({n})?
