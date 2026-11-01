@@ -1425,7 +1425,6 @@ digits	Malayalam	Malayalam
 	Save changes to {name}	Gem ændringer i {name}
 	Save theme to My Themes	Gem tema i Mine temaer
 	Set the selected color to the current color	Sæt den markerede farve til den aktuelle farve
-	Copied the CSS of {rules} object(s)	Kopierede CSS'en for {rules} objekt(er)
 	Copy All Styles	Kopiér alle typografier
 	Exported {path}	Eksporterede {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Generér CSS: hele dokumentets CSS, når intet er markeret
@@ -1580,8 +1579,6 @@ digits	Malayalam	Malayalam
 	Color Space	Farverum
 	Created	Oprettet
 	Dimensions	Dimensioner
-	Embedded {n} image(s)	Indlejret {n} billede(r)
-	Embedded {n} image(s); {missing} missing: relink them first	Indlejret {n} billede(r); {missing} mangler: sammenkæd dem igen først
 	File › Place… brings in an image, linked or embedded.	Filer › Placér… henter et billede ind, sammenkædet eller indlejret.
 	Format	Format
 	Medium Thumbnails	Mellemstore miniaturer
@@ -1591,9 +1588,6 @@ digits	Malayalam	Malayalam
 	No Thumbnails	Ingen miniaturer
 	Nothing matches the Show filter.	Intet matcher Vis-filteret.
 	PPI	PPI
-	Relinked {n} image(s)	Sammenkædet {n} billede(r) igen
-	Relinked {n} image(s); not in that folder: {}	Sammenkædet {n} billede(r) igen; ikke i den mappe: {}
-	Relinked {} image(s)	Sammenkædet {} billede(r) igen
 	Relink…	Sammenkæd igen…
 	Find Linked Files	Find sammenkædede filer
 	Find Linked Files in Folder…	Find sammenkædede filer i mappe…
@@ -1610,7 +1604,6 @@ digits	Malayalam	Malayalam
 	Status	Status
 	Unembedded to {}	Taget ud af indlejring til {}
 	Update Link	Opdatér sammenkædning
-	Updated {} image(s)	Opdaterede {} billede(r)
 	Break Link	Bryd sammenkædning
 	Tolerance:	Tolerance:
 	Transparency Options	Gennemsigtighedsindstillinger
@@ -2271,7 +2264,6 @@ digits	Malayalam	Malayalam
 	Package collects a saved document with its linked files and fonts.	Pakning samler et gemt dokument med dets linkede filer og skrifttyper.
 	Package created	Pakke oprettet
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Pakkede {n} fil i {folder} {note}|Pakkede {n} filer i {folder} {note}
-	Packaged {n} file(s){note}	Pakkede {n} fil(er){note}
 	Relink Linked Files to the Document	Genopret link til dokumentets linkede filer
 	Save the document first?	Gem dokumentet først?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fil i {folder} {note}. Vis pakkemappen?|{n} filer i {folder} {note}. Vis pakkemappen?
@@ -2465,7 +2457,6 @@ digits	Malayalam	Malayalam
 	Convert to sRGB	Konvertér til sRGB
 	Delete this saved preset	Slet denne gemte forudindstilling
 	Dither:	Dither:
-	Downloaded {} file(s)	Downloadede {} fil(er)
 	Fit in View	Tilpas i visning
 	Format:	Format:
 	WebP	WebP
@@ -3682,18 +3673,14 @@ font-technology	Variable	Variable
 	Can't save “{name}”.	Kan ikke gemme »{name}«.
 	Can't export “{name}”.	Kan ikke eksportere »{name}«.
 	Downloaded {what}	Downloadede {what}
-	Exported {count} file(s) to {folder}	Eksporterede {count} fil(er) til {folder}
 	Exported {what}	Eksporterede {what}
-	Exported {what} with {} note(s): {first}	Eksporterede {what} med {} bemærkning(er): {first}
 	Exporting {}	Eksporterer {}
 	Imported {what}: {}	Importerede {what}: {}
 	Installed plug-in {}	Installerede plug-in'en {}
-	Opened with {} note(s): {}	Åbnede med {} bemærkning(er): {}
 	Revert to the saved version of “{name}”?	Gendan den gemte version af »{name}«?
 	Replace “{name}”, the file this document was opened from?	Erstat »{name}«, den fil, dette dokument blev åbnet fra?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Da den blev åbnet, blev det udeladt, som VectorCraft ikke kan læse endnu ({what}), så hvis du erstatter den, går det tabt for altid. Gem under et andet navn for at beholde det.
 	Saved {path}	Gemte {path}
-	Saved {path} with {} note(s): {first}	Gemte {path} med {} bemærkning(er): {first}
 	Saving	Gemmer
 	Saving {}	Gemmer {}
 	Search commands and tools…	Søg i kommandoer og værktøjer…
@@ -3710,8 +3697,6 @@ font-technology	Variable	Variable
 	Smaller ↔ Larger	Mindre ↔ Større
 	Smart Guides (View → Smart Guides)	Smarte hjælpelinjer (Vis → Smarte hjælpelinjer)
 	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
-	Discarded {} recovered document(s)	Kasserede {} gendannede dokument(er)
-	Restored {} recovered document(s): save them to keep them	Genoprettede {} gendannede dokument(er): gem dem for at beholde dem
 	Saved recovery data for {title}	Gemte gendannelsesdata for {title}
 	Saving recovery data for {}	Gemmer gendannelsesdata for {}
 	Alt	Alt
@@ -3969,14 +3954,12 @@ imageTrace	Outline	Kontur
 @msg	No saved views (View → New View…)	Ingen gemte visninger (Vis → Ny visning…)
 @msg	Offset Path: select paths	Forskyd kurve: markér kurver
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Forskyd kurve: forskydningen efterlader intet af de markerede kurver (en indadgående forskydning, der er større end figurerne)
-@msg	Opened with {_1} note(s): {_2}	Åbnede med {_1} bemærkning(er): {_2}
 @msg	Opened {url}	Åbnede {url}
 @msg	Outline Stroke: no stroked paths selected	Konturér kurve: ingen kurver med kontur er markeret
 @msg	PDF settings are not an object	PDF-indstillinger er ikke et objekt
 @msg	PDF security settings are not an object	PDF-sikkerhedsindstillinger er ikke et objekt
 @msg	PDF writer error: {0}	PDF-skriverfejl: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pakkede {n} fil i {folder} ({note})|Pakkede {n} filer i {folder} ({note})
-@msg	Packaged {n} file(s){note}	Pakkede {n} fil(er){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Forhåndsvisning i browser kræver skrivebordsappen (webversionen downloader filer i stedet)
 @msg	Release Guides: no guides	Frigiv hjælpelinjer: ingen hjælpelinjer
 @msg	Release: no layer to put the rectangle in	Frigiv: intet lag at lægge rektanglet i
@@ -4474,7 +4457,6 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunne ikke placere {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Gemte {path} med {_1} note(r): {first}
 @msg	Exported {what}	Eksporterede {what}
 @msg	Saved {n} files beside {path}	Gemte {n} filer ved siden af {path}
 @msg	Saving	Gemmer
@@ -4483,8 +4465,10 @@ imageTrace	Outline	Kontur
 @msg	Packaging {_1}	Pakker {_1}
 @msg	Placing {_1}	Placerer {_1}
 @msg	Saving recovery data for {_1}	Gemmer gendannelsesdata for {_1}
-@msg	Discarded {_1} recovered document(s)	Forkastede {_1} gendannet(e) dokument(er)
-@msg	Restored {_1} recovered document(s): save them to keep them	Genvandt {_1} gendannet(e) dokument(er): gem dem for at beholde dem
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Åbnede med {n} note: {first}|Åbnede med {n} noter: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Gemte {path} med {n} note: {first}|Gemte {path} med {n} noter: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
 @msgplural	Embedded {n} image|Embedded {n} images	Indlejrede {n} billede|Indlejrede {n} billeder
 @msgplural	Relinked {n} image|Relinked {n} images	Linkede {n} billede igen|Linkede {n} billeder igen
@@ -5589,7 +5573,7 @@ axis	Y Axis	Y-akse
 	On Artboards	På tegneflader
 	All Artboards	Alle tegneflader
 	Include Objects On Canvas	Medtag objekter på lærredet
-	Result(s): {count}	Resultat(er): {count}
+@plural	Result: {n}|Results: {n}	Resultat: {n}|Resultater: {n}
 	Add to Symbols	Føj til symboler
 	Basic Shapes	Grundlæggende former
 	Open Symbol Library	Åbn symbolbibliotek

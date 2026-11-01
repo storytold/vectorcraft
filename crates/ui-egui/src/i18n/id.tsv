@@ -1425,7 +1425,6 @@ digits	Malayalam	Malayalam
 	Save changes to {name}	Simpan perubahan ke {name}
 	Save theme to My Themes	Simpan tema ke Tema saya
 	Set the selected color to the current color	Atur warna terpilih ke warna saat ini
-	Copied the CSS of {rules} object(s)	Menyalin CSS dari {rules} objek
 	Copy All Styles	Salin semua gaya
 	Exported {path}	Diekspor ke {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Buat CSS: CSS seluruh dokumen saat tidak ada yang dipilih
@@ -1580,8 +1579,6 @@ digits	Malayalam	Malayalam
 	Color Space	Ruang warna
 	Created	Dibuat
 	Dimensions	Dimensi
-	Embedded {n} image(s)	{n} gambar tersemat
-	Embedded {n} image(s); {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
 	File › Place… brings in an image, linked or embedded.	File › Tempatkan… memasukkan gambar, tertaut atau tersemat.
 	Format	Format
 	Medium Thumbnails	Thumbnail sedang
@@ -1591,9 +1588,6 @@ digits	Malayalam	Malayalam
 	No Thumbnails	Tanpa thumbnail
 	Nothing matches the Show filter.	Tidak ada yang cocok dengan filter Tampilkan.
 	PPI	PPI
-	Relinked {n} image(s)	{n} gambar ditautkan ulang
-	Relinked {n} image(s); not in that folder: {}	{n} gambar ditautkan ulang; tidak ada di folder tersebut: {}
-	Relinked {} image(s)	{} gambar ditautkan ulang
 	Relink…	Tautkan ulang…
 	Find Linked Files	Temukan file tertaut
 	Find Linked Files in Folder…	Temukan file tertaut di folder…
@@ -1610,7 +1604,6 @@ digits	Malayalam	Malayalam
 	Status	Status
 	Unembedded to {}	Sematan dilepas ke {}
 	Update Link	Perbarui tautan
-	Updated {} image(s)	{} gambar diperbarui
 	Break Link	Putuskan tautan
 	Tolerance:	Toleransi:
 	Transparency Options	Opsi transparansi
@@ -2271,7 +2264,6 @@ digits	Malayalam	Malayalam
 	Package collects a saved document with its linked files and fonts.	Package mengumpulkan dokumen tersimpan beserta file dan font yang tertaut.
 	Package created	Paket dibuat
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} file dipaketkan dalam {folder} {note}
-	Packaged {n} file(s){note}	{n} file dipaketkan{note}
 	Relink Linked Files to the Document	Tautkan ulang file tertaut ke dokumen
 	Save the document first?	Simpan dokumen terlebih dahulu?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} file dalam {folder} {note}. Tampilkan folder paket?
@@ -2465,7 +2457,6 @@ digits	Malayalam	Malayalam
 	Convert to sRGB	Konversi ke sRGB
 	Delete this saved preset	Hapus preset tersimpan ini
 	Dither:	Dither:
-	Downloaded {} file(s)	{} file diunduh
 	Fit in View	Sesuaikan ke tampilan
 	Format:	Format:
 	WebP	WebP
@@ -3682,18 +3673,14 @@ font-technology	Variable	Variabel
 	Can't save “{name}”.	Tidak dapat menyimpan “{name}”.
 	Can't export “{name}”.	Tidak dapat mengekspor “{name}”.
 	Downloaded {what}	Berhasil mengunduh {what}
-	Exported {count} file(s) to {folder}	Berhasil mengekspor {count} file ke {folder}
 	Exported {what}	Berhasil mengekspor {what}
-	Exported {what} with {} note(s): {first}	Berhasil mengekspor {what} dengan {} catatan: {first}
 	Exporting {}	Mengekspor {}
 	Imported {what}: {}	Berhasil mengimpor {what}: {}
 	Installed plug-in {}	Berhasil memasang plug-in {}
-	Opened with {} note(s): {}	Dibuka dengan {} catatan: {}
 	Revert to the saved version of “{name}”?	Kembalikan ke versi tersimpan dari “{name}”?
 	Replace “{name}”, the file this document was opened from?	Ganti “{name}”, file asal dokumen ini?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Saat membukanya, VectorCraft meninggalkan bagian yang belum dapat dibacanya ({what}), sehingga mengganti file akan membuat bagian itu hilang permanen. Simpan dengan nama lain untuk mempertahankannya.
 	Saved {path}	Berhasil menyimpan {path}
-	Saved {path} with {} note(s): {first}	Berhasil menyimpan {path} dengan {} catatan: {first}
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
 	Search commands and tools…	Cari perintah dan alat…
@@ -3710,8 +3697,6 @@ font-technology	Variable	Variabel
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
 	Smart Guides (View → Smart Guides)	Panduan pintar (Tampilan → Panduan pintar)
 	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
-	Discarded {} recovered document(s)	Berhasil membuang {} dokumen yang dipulihkan
-	Restored {} recovered document(s): save them to keep them	Berhasil membuka kembali {} dokumen yang dipulihkan: simpan agar tidak hilang
 	Saved recovery data for {title}	Berhasil menyimpan data pemulihan untuk {title}
 	Saving recovery data for {}	Menyimpan data pemulihan untuk {}
 	Alt	Alt
@@ -3969,14 +3954,12 @@ imageTrace	Outline	Kontur
 @msg	No saved views (View → New View…)	Tidak ada tampilan tersimpan (Tampilan → Tampilan Baru…)
 @msg	Offset Path: select paths	Jalur offset: pilih jalur
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Jalur offset: offset tidak menyisakan apa pun dari jalur yang dipilih (inset yang lebih besar daripada bentuknya)
-@msg	Opened with {_1} note(s): {_2}	Dibuka dengan {_1} catatan: {_2}
 @msg	Opened {url}	Berhasil membuka {url}
 @msg	Outline Stroke: no stroked paths selected	Ubah goresan menjadi kontur: tidak ada jalur dengan goresan yang dipilih
 @msg	PDF settings are not an object	Pengaturan PDF bukan objek
 @msg	PDF security settings are not an object	Pengaturan keamanan PDF bukan objek
 @msg	PDF writer error: {0}	Kesalahan penulis PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Berhasil mengemas {n} file di {folder} ({note})
-@msg	Packaged {n} file(s){note}	Berhasil mengemas {n} file{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pratinjau di Peramban memerlukan aplikasi desktop (versi web mengunduh file sebagai gantinya)
 @msg	Release Guides: no guides	Lepaskan panduan: tidak ada panduan
 @msg	Release: no layer to put the rectangle in	Lepaskan: tidak ada lapisan untuk menaruh persegi panjangnya
@@ -4474,7 +4457,6 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Tidak dapat menempatkan {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path} disimpan dengan {_1} catatan: {first}
 @msg	Exported {what}	{what} diekspor
 @msg	Saved {n} files beside {path}	{n} berkas disimpan di sebelah {path}
 @msg	Saving	Menyimpan
@@ -4483,8 +4465,10 @@ imageTrace	Outline	Kontur
 @msg	Packaging {_1}	Mengemas {_1}
 @msg	Placing {_1}	Menempatkan {_1}
 @msg	Saving recovery data for {_1}	Menyimpan data pemulihan untuk {_1}
-@msg	Discarded {_1} recovered document(s)	{_1} dokumen hasil pemulihan dibuang
-@msg	Restored {_1} recovered document(s): save them to keep them	{_1} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Dibuka dengan {n} catatan: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} disimpan dengan {n} catatan: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} gambar tersemat
 @msgplural	Relinked {n} image|Relinked {n} images	{n} gambar ditautkan ulang
@@ -5589,7 +5573,7 @@ axis	Y Axis	Sumbu Y
 	On Artboards	Di artboard
 	All Artboards	Semua artboard
 	Include Objects On Canvas	Sertakan objek di kanvas
-	Result(s): {count}	Hasil: {count}
+@plural	Result: {n}|Results: {n}	Hasil: {n}
 	Add to Symbols	Tambahkan ke simbol
 	Basic Shapes	Bentuk dasar
 	Open Symbol Library	Buka pustaka simbol

@@ -1488,7 +1488,6 @@ digits	Malayalam	Malajalam
 	Save changes to {name}	Tallenna muutokset kohteeseen {name}
 	Save theme to My Themes	Tallenna teema Omiin teemoihin
 	Set the selected color to the current color	Aseta valituksi väriksi nykyinen väri
-	Copied the CSS of {rules} object(s)	CSS kopioitu, objekteja: {rules}
 	Copy All Styles	Kopioi kaikki tyylit
 	Exported {path}	Viety: {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Luo CSS: koko asiakirjan CSS, kun mitään ei ole valittu
@@ -1722,8 +1721,6 @@ digits	Malayalam	Malajalam
 	Color Space	Väriavaruus
 	Created	Luotu
 	Dimensions	Mitat
-	Embedded {n} image(s)	Upotettu {n} kuva(a)
-	Embedded {n} image(s); {missing} missing: relink them first	Upotettu {n} kuva(a); {missing} puuttuu: linkitä ne ensin uudelleen
 	File › Place… brings in an image, linked or embedded.	Tiedosto › Sijoita… tuo kuvan linkitettynä tai upotettuna.
 	Format	Muoto
 	Medium Thumbnails	Keskikokoiset pikkukuvat
@@ -1733,9 +1730,6 @@ digits	Malayalam	Malajalam
 	No Thumbnails	Ei pikkukuvia
 	Nothing matches the Show filter.	Mikään ei vastaa Näytä-suodinta.
 	PPI	PPI
-	Relinked {n} image(s)	Linkitetty uudelleen {n} kuva(a)
-	Relinked {n} image(s); not in that folder: {}	Linkitetty uudelleen {n} kuva(a); ei kyseisessä kansiossa: {}
-	Relinked {} image(s)	Linkitetty uudelleen {} kuva(a)
 	Relink…	Linkitä uudelleen…
 	Find Linked Files	Etsi linkitetyt tiedostot
 	Find Linked Files in Folder…	Etsi linkitetyt tiedostot kansiosta…
@@ -1752,7 +1746,6 @@ digits	Malayalam	Malajalam
 	Status	Tila
 	Unembedded to {}	Upotus purettu: {}
 	Update Link	Päivitä linkki
-	Updated {} image(s)	Päivitetty {} kuva(a)
 	Break Link	Katkaise linkki
 	Tolerance:	Toleranssi:
 	Corner Point Angle Threshold:	Kulmapisteiden kulmakynnys:
@@ -2428,7 +2421,6 @@ digits	Malayalam	Malajalam
 	Package collects a saved document with its linked files and fonts.	Paketointi kokoaa tallennetun asiakirjan sekä sen linkitetyt tiedostot ja fontit.
 	Package created	Paketti luotu
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Paketoitiin {n} tiedosto kansioon {folder} {note}|Paketoitiin {n} tiedostoa kansioon {folder} {note}
-	Packaged {n} file(s){note}	Paketoitu {n} tiedosto(a){note}
 	Relink Linked Files to the Document	Linkitä linkitetyt tiedostot uudelleen asiakirjaan
 	Save the document first?	Tallennetaanko asiakirja ensin?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tiedosto kansiossa {folder} {note}. Näytetäänkö pakettikansio?|{n} tiedostoa kansiossa {folder} {note}. Näytetäänkö pakettikansio?
@@ -2622,7 +2614,6 @@ digits	Malayalam	Malajalam
 	Convert to sRGB	Muunna sRGB:ksi
 	Delete this saved preset	Poista tämä tallennettu esiasetus
 	Dither:	Rasterointi:
-	Downloaded {} file(s)	Ladattu {} tiedosto(a)
 	Fit in View	Sovita näkymään
 	Format:	Muoto:
 	WebP	WebP
@@ -3871,20 +3862,16 @@ font-technology	Variable	Muuttuvat
 	Can't save “{name}”.	Kohdetta ”{name}” ei voi tallentaa.
 	Can't export “{name}”.	Kohdetta ”{name}” ei voi viedä.
 	Downloaded {what}	Ladattu {what}
-	Exported {count} file(s) to {folder}	Viety {count} tiedosto(a) kansioon {folder}
 	Exported {what}	Viety {what}
-	Exported {what} with {} note(s): {first}	Viety {what}, huomautuksia {}: {first}
 	Exporting {}	Viedään {}
 	Imported {what}: {}	Tuotu {what}: {}
 	Installed plug-in {}	Asennettu laajennus {}
-	Opened with {} note(s): {}	Avattu, huomautuksia {}: {}
 	Revert to the saved version of “{name}”?	Palautetaanko tiedoston ”{name}” tallennettu versio?
 	Replace “{name}”, the file this document was opened from?	Korvataanko ”{name}”, tiedosto, josta tämä asiakirja avattiin?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Avattaessa jätettiin pois se, mitä VectorCraft ei vielä osaa lukea ({what}), joten korvaaminen hävittää sen pysyvästi. Säilytä se tallentamalla toisella nimellä.
 	“{name}” already exists. Replace it?	”{name}” on jo olemassa. Korvataanko se?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Tallennusikkunan nimi oli ”{typed}”, ja VectorCraft lisäsi tiedostotyypin tunnisteen. Tiedoston korvaaminen kirjoittaa sen sisällön yli.
 	Saved {path}	Tallennettu {path}
-	Saved {path} with {} note(s): {first}	Tallennettu {path}, huomautuksia {}: {first}
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
 	Search commands and tools…	Hae komentoja ja työkaluja…
@@ -3901,8 +3888,6 @@ font-technology	Variable	Muuttuvat
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
 	Smart Guides (View → Smart Guides)	Älykkäät apuviivat (Näytä → Älykkäät apuviivat)
 	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
-	Discarded {} recovered document(s)	Hylätty {} palautettua asiakirjaa
-	Restored {} recovered document(s): save them to keep them	Palautettu {} asiakirjaa: tallenna ne säilyttääksesi ne
 	Saved recovery data for {title}	Tallennettu palautustiedot: {title}
 	Saving recovery data for {}	Tallennetaan palautustietoja: {}
 	Alt	Alt
@@ -4173,14 +4158,12 @@ imageTrace	Outline	Ääriviiva
 @msg	No saved views (View → New View…)	Ei tallennettuja näkymiä (Näytä → Uusi näkymä…)
 @msg	Offset Path: select paths	Siirrä polkua: valitse polkuja
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Siirrä polkua: siirtymän jälkeen valituista poluista ei jää mitään (sisennys on muotoja suurempi)
-@msg	Opened with {_1} note(s): {_2}	Avattiin, {_1} huomautus(ta): {_2}
 @msg	Opened {url}	Avattiin {url}
 @msg	Outline Stroke: no stroked paths selected	Muunna viiva ääriviivaksi: viivallisia polkuja ei ole valittu
 @msg	PDF settings are not an object	PDF-asetukset eivät ole objekti
 @msg	PDF security settings are not an object	PDF-suojausasetukset eivät ole objekti
 @msg	PDF writer error: {0}	PDF-kirjoittimen virhe: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketoitiin {n} tiedosto kansioon {folder} ({note})|Paketoitiin {n} tiedostoa kansioon {folder} ({note})
-@msg	Packaged {n} file(s){note}	Paketoitiin {n} tiedosto(a){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Esikatselu selaimessa vaatii työpöytäsovelluksen (verkkoversio lataa tiedostot sen sijaan)
 @msg	Release Guides: no guides	Vapauta apuviivat: ei apuviivoja
 @msg	Release: no layer to put the rectangle in	Vapauta: ei tasoa, johon suorakulmion voisi sijoittaa
@@ -4722,7 +4705,6 @@ imageTrace	Outline	Ääriviiva
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kohdetta {name} ei voitu sijoittaa: {e}
 @msg	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Tallennettiin {path}, {_1} huomautus(ta): {first}
 @msg	Exported {what}	Vietiin {what}
 @msg	Saved {n} files beside {path}	Tallennettiin {n} tiedostoa kohteen {path} viereen
 @msg	Saving	Tallennetaan
@@ -4731,8 +4713,10 @@ imageTrace	Outline	Ääriviiva
 @msg	Packaging {_1}	Paketoidaan {_1}
 @msg	Placing {_1}	Sijoitetaan {_1}
 @msg	Saving recovery data for {_1}	Tallennetaan palautustietoja: {_1}
-@msg	Discarded {_1} recovered document(s)	Hylättiin {_1} palautettu(a) asiakirja(a)
-@msg	Restored {_1} recovered document(s): save them to keep them	Palautettiin {_1} asiakirja(a): tallenna ne säilyttääksesi ne
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Hylättiin {n} palautettu asiakirja|Hylättiin {n} palautettua asiakirjaa
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Palautettiin {n} asiakirja: tallenna se säilyttääksesi sen|Palautettiin {n} asiakirjaa: tallenna ne säilyttääksesi ne
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Avattiin, {n} huomautus: {first}|Avattiin, {n} huomautusta: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Tallennettiin {path}, {n} huomautus: {first}|Tallennettiin {path}, {n} huomautusta: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Upotettiin {n} kuva; {missing} puuttuu: linkitä ne ensin uudelleen|Upotettiin {n} kuvaa; {missing} puuttuu: linkitä ne ensin uudelleen
 @msgplural	Embedded {n} image|Embedded {n} images	Upotettiin {n} kuva|Upotettiin {n} kuvaa
 @msgplural	Relinked {n} image|Relinked {n} images	Linkitettiin uudelleen {n} kuva|Linkitettiin uudelleen {n} kuvaa
@@ -5698,7 +5682,7 @@ axis	Y Axis	Y-akseli
 	On Artboards	Piirtoalustoilla
 	All Artboards	Kaikki piirtoalustat
 	Include Objects On Canvas	Sisällytä kankaalla olevat objektit
-	Result(s): {count}	Tulokset: {count}
+@plural	Result: {n}|Results: {n}	Tulos: {n}|Tulokset: {n}
 @msg	select one object	valitse yksi objekti
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Yleismuokkaus toimii poluille, yhdistelmäpoluille, symbolien esiintymille ja niiden ryhmille
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (kierrettyjä tai peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen

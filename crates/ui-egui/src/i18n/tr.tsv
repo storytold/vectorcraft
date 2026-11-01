@@ -588,7 +588,6 @@ font-technology	Variable	Değişken
 	Convert to sRGB	sRGB'ye dönüştür
 	Convert to Straight Lines	Düz Çizgilere Dönüştür
 	Convert:	Dönüştür:
-	Copied the CSS of {rules} object(s)	{rules} nesnelerinin CSS'si kopyalandı
 	Copies:	Kopyalar:
 	Copy	Kopyala
 	Copy (make a transformed copy)	Kopyala (dönüştürülmüş bir kopya oluştur)
@@ -776,7 +775,6 @@ font-technology	Variable	Değişken
 	Discard Empty Type	Boş Türü At
 	Discard Recovered Documents	Kurtarılan Belgeleri Atın
 	Discard White Overprint in Output	Çıktıdaki Beyaz Üst Baskıyı At
-	Discarded {} recovered document(s)	Kurtarılan {} belge atıldı
 	Discord	Discord
 	Discretionary Hyphen	İsteğe Bağlı Kısa Çizgi
 	Discretionary Ligatures	İsteğe Bağlı Bitişik Harfler
@@ -838,7 +836,6 @@ font-technology	Variable	Değişken
 	Download	İndir
 	Download:	İndir:
 	Downloaded {what}	{what} indirildi
-	Downloaded {} file(s)	{} dosya indirildi
 	Drag	Sürükle
 	Drag a handle	Bir tutamacı sürükleyin
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Resmi buraya sürükleyin veya seçip + işaretine tıklayın. Birkaç nesneden oluşan bir varlık için Alt tuşunu basılı tutun.
@@ -939,8 +936,6 @@ font-technology	Variable	Değişken
 	Embed page thumbnails	Sayfa küçük resimlerini yerleştirme
 	Embedded	Gömülü
 	Embedded Image	Gömülü Resim
-	Embedded {n} image(s)	Gömülü {n} görselleri
-	Embedded {n} image(s); {missing} missing: relink them first	Gömülü {n} görselleri; {missing} eksik: önce onları yeniden bağlayın
 	Emulsion:	Emülsiyon:
 	En Dash	En Dash
 	En Space	Uzayda
@@ -1058,10 +1053,8 @@ font-technology	Variable	Değişken
 	Export Transparency Flattener Presets	Şeffaflık Düzleştirici Ön Ayarlarını Dışa Aktarma
 	Export {count} Selected	Seçilen {count}'yi Dışa Aktar
 	Export:	İhracat:
-	Exported {count} file(s) to {folder}	{count} dosyası/dosyaları {folder}'ye aktarıldı
 	Exported {path}	Dışa aktarılan {path}
 	Exported {what}	Dışa aktarılan {what}
-	Exported {what} with {} note(s): {first}	{what}, {} notla birlikte dışa aktarıldı: {first}
 	Exporting {}	{} dışa aktarılıyor
 	Export…	İhracat…
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
@@ -2044,7 +2037,6 @@ shape	Open	Açık
 	Open Recent Files	Son Dosyaları Aç
 	Open Swatch Library	Swatch Kitaplığını Aç
 	Open the URL in the web browser	URL'yi web tarayıcısında açın
-	Opened with {} note(s): {}	{} notla açıldı: {}
 	Open…	Aç…
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
@@ -2104,7 +2096,6 @@ shape	Open	Açık
 	Package collects a saved document with its linked files and fonts.	Paket, kayıtlı bir belgeyi bağlantılı dosyaları ve yazı tipleriyle birlikte toplar.
 	Package created	Paket oluşturuldu
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} dosya {folder} klasörüne paketlendi {note}
-	Packaged {n} file(s){note}	Paketlenmiş {n} dosyası/dosyaları{note}
 	Package…	Paket…
 	Page	Sayfa
 	Page information	Sayfa bilgisi
@@ -2452,9 +2443,6 @@ digits	Malayalam	Malayalam
 	Relink	Yeniden bağla
 	Relink Linked Files to the Document	Bağlantılı Dosyaları Belgeye Yeniden Bağlama
 	Relink to Folder…	Klasöre Yeniden Bağlan…
-	Relinked {n} image(s)	Yeniden bağlanan {n} görselleri
-	Relinked {n} image(s); not in that folder: {}	Yeniden bağlanan {n} görselleri; bu klasörde değil: {}
-	Relinked {} image(s)	{} resim yeniden bağlandı
 	Relink…	Yeniden bağla…
 	Find Linked Files	Bağlantılı Dosyaları Bul
 	Find Linked Files in Folder…	Klasördeki Bağlantılı Dosyaları Bul…
@@ -2534,7 +2522,6 @@ digits	Malayalam	Malayalam
 	Restore every preference to its default (applied on OK)	Her tercihi varsayılana geri yükleyin (Tamam'a uygulanır)
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
 	Restored documents open unsaved: save them to keep them.	Geri yüklenen belgeler kaydedilmeden açılır: saklamak için kaydedin.
-	Restored {} recovered document(s): save them to keep them	Geri yüklenen {} kurtarılmış belge: onları saklamak için kaydedin
 	Restrict printing, editing and other tasks	Yazdırmayı, düzenlemeyi ve diğer görevleri kısıtlayın
 	Reverse Front to Back	Önden Arkaya Ters Çevir
 	Reverse Gradient	Ters Degrade
@@ -2697,7 +2684,6 @@ digits	Malayalam	Malayalam
 	Saved Views	Kayıtlı Görünümler
 	Saved {n} files beside {path}	{path}'nin yanında kaydedilen {n} dosyaları
 	Saved {path}	{path} kaydedildi
-	Saved {path} with {} note(s): {first}	{path}, {} notla kaydedildi: {first}
 	Saves the current bars, toolbar and panel layout.	Geçerli çubukları, araç çubuğunu ve panel düzenini kaydeder.
 	Save…	Kaydet…
 	Saving	Kaydediliyor
@@ -3357,7 +3343,6 @@ digits	Malayalam	Malayalam
 	Update Links	Bağlantıları Güncelle
 	Update Changed Links	Değiştirilen Bağlantıları Güncelle
 	Update Modified Links	Değiştirilen Bağlantıları Güncelle
-	Updated {} image(s)	{} resim güncellendi
 	UPPERCASE	BÜYÜK HARF
 	URL:	URL'si:
 	Use 	Kullanım 
@@ -3747,14 +3732,12 @@ axis	Both	Her İkisi
 @msg	No saved views (View → New View…)	Kaydedilmiş görünüm yok (Görünüm → Yeni Görünüm…)
 @msg	Offset Path: select paths	Yolu Ofset: yolları seçin
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Yolu Ofset: ofset, seçilen yollardan hiçbir şey bırakmaz (şekillerden daha büyük bir ek)
-@msg	Opened with {_1} note(s): {_2}	{_1} notu/notları ile açıldı: {_2}
 @msg	Opened {url}	{url} açıldı
 @msg	Outline Stroke: no stroked paths selected	Anahat Konturu: konturlu yol seçilmedi
 @msg	PDF settings are not an object	PDF ayarları bir nesne değildir
 @msg	PDF security settings are not an object	PDF güvenlik ayarları bir nesne değildir
 @msg	PDF writer error: {0}	PDF yazıcı hatası: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})
-@msg	Packaged {n} file(s){note}	Paketlenmiş {n} dosyası/dosyaları{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
 @msg	Release Guides: no guides	Sürüm Kılavuzları: kılavuz yok
 @msg	Release: no layer to put the rectangle in	Serbest bırakma: dikdörtgeni yerleştirecek katman yok
@@ -4256,7 +4239,6 @@ axis	Both	Her İkisi
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} yerleştirilemedi: {e}
 @msg	Couldn't paste from the clipboard: {e}	Panodan yapıştırılamadı: {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path}, {_1} notlarıyla kaydedildi: {first}
 @msg	Exported {what}	Dışa aktarılan {what}
 @msg	Saved {n} files beside {path}	{path}'nin yanında kaydedilen {n} dosyaları
 @msg	Saving	Kaydediliyor
@@ -4265,8 +4247,10 @@ axis	Both	Her İkisi
 @msg	Packaging {_1}	{_1} paketleniyor
 @msg	Placing {_1}	{_1} yerleştiriliyor
 @msg	Saving recovery data for {_1}	{_1} için kurtarma verileri kaydediliyor
-@msg	Discarded {_1} recovered document(s)	Atılan {_1} kurtarılan belge(ler)
-@msg	Restored {_1} recovered document(s): save them to keep them	Geri yüklenen {_1} kurtarılan belge(ler): saklamak için bunları kaydedin
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} notla açıldı: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path}, {n} notla kaydedildi: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} görsel gömüldü; {missing} eksik: önce onları yeniden bağlayın
 @msgplural	Embedded {n} image|Embedded {n} images	{n} görsel gömüldü
 @msgplural	Relinked {n} image|Relinked {n} images	{n} görsel yeniden bağlandı
@@ -5625,7 +5609,7 @@ axis	Y Axis	Y ekseni
 	On Artboards	Çalışma Yüzeylerinde
 	All Artboards	Tüm Çalışma Yüzeyleri
 	Include Objects On Canvas	Tuvaldeki Nesneleri Dahil Et
-	Result(s): {count}	Sonuç(lar): {count}
+@plural	Result: {n}|Results: {n}	Sonuç: {n}
 @msg	select one object	bir nesne seçin
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Genel düzenleme yollar, bileşik yollar, sembol örnekleri ve bunların grupları üzerinde çalışır
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (döndürülmüş veya yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin

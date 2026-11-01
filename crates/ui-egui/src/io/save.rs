@@ -379,10 +379,15 @@ pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
 }
 
 /// [`report_saved`]'s message.
-pub(super) fn saved_status(path: &str, r: &Value) -> String {
+pub(crate) fn saved_status(path: &str, r: &Value) -> String {
     let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     match warnings.first() {
-        Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
+        Some(first) => crate::i18n::msg_n(
+            warnings.len() as u64,
+            "Saved {path} with {n} note: {first}",
+            "Saved {path} with {n} notes: {first}",
+            &[("path", path), ("first", first)],
+        ),
         None => format!("Saved {path}"),
     }
 }

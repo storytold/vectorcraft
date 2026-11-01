@@ -1491,7 +1491,6 @@ digits	Malayalam	Malajalam
 	Save changes to {name}	Sačuvaj promjene u {name}
 	Save theme to My Themes	Sačuvaj temu u Moje teme
 	Set the selected color to the current color	Postavi odabranu boju na trenutnu boju
-	Copied the CSS of {rules} object(s)	Kopiran CSS objekata: {rules}
 	Copy All Styles	Kopiraj sve stilove
 	Exported {path}	Izvezeno: {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Generiši CSS: CSS cijelog dokumenta kad ništa nije odabrano
@@ -1735,8 +1734,6 @@ digits	Malayalam	Malajalam
 	Color Space	Prostor boja
 	Created	Kreirano
 	Dimensions	Dimenzije
-	Embedded {n} image(s)	Ugrađeno slika: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Ugrađeno slika: {n}; nedostaje {missing}: prvo ih ponovo povežite
 	File › Place… brings in an image, linked or embedded.	Datoteka › Postavi… unosi sliku, povezanu ili ugrađenu.
 	Format	Format
 	Medium Thumbnails	Srednje sličice
@@ -1746,9 +1743,6 @@ digits	Malayalam	Malajalam
 	No Thumbnails	Bez sličica
 	Nothing matches the Show filter.	Ništa ne odgovara filteru Prikaži.
 	PPI	PPI
-	Relinked {n} image(s)	Ponovo povezano slika: {n}
-	Relinked {n} image(s); not in that folder: {}	Ponovo povezano slika: {n}; nisu u tom folderu: {}
-	Relinked {} image(s)	Ponovo povezano slika: {}
 	Relink…	Ponovo poveži…
 	Find Linked Files	Pronađi povezane datoteke
 	Find Linked Files in Folder…	Pronađi povezane datoteke u folderu…
@@ -1765,7 +1759,6 @@ digits	Malayalam	Malajalam
 	Status	Status
 	Unembedded to {}	Ugrađivanje poništeno u {}
 	Update Link	Ažuriraj vezu
-	Updated {} image(s)	Ažurirano slika: {}
 	Break Link	Prekini vezu
 	Tolerance:	Tolerancija:
 	Corner Point Angle Threshold:	Prag ugla ugaone tačke:
@@ -2456,7 +2449,6 @@ digits	Malayalam	Malajalam
 	Package collects a saved document with its linked files and fonts.	Paket prikuplja sačuvani dokument s njegovim povezanim datotekama i fontovima.
 	Package created	Paket je kreiran
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Upakovano datoteka u {folder}: {n} {note}|Upakovano datoteka u {folder}: {n} {note}|Upakovano datoteka u {folder}: {n} {note}
-	Packaged {n} file(s){note}	Upakovano datoteka: {n}{note}
 	Relink Linked Files to the Document	Ponovo poveži povezane datoteke s dokumentom
 	Save the document first?	Prvo sačuvati dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?
@@ -2650,7 +2642,6 @@ digits	Malayalam	Malajalam
 	Convert to sRGB	Pretvori u sRGB
 	Delete this saved preset	Izbriši ovaj sačuvani predložak
 	Dither:	Dithering:
-	Downloaded {} file(s)	Preuzeto datoteka: {}
 	Fit in View	Uklopi u prikaz
 	Format:	Format:
 	WebP	WebP
@@ -3919,20 +3910,16 @@ font-technology	Variable	Varijabilni
 	Can't save “{name}”.	Nije moguće sačuvati „{name}”.
 	Can't export “{name}”.	Nije moguće izvesti „{name}”.
 	Downloaded {what}	Preuzeto: {what}
-	Exported {count} file(s) to {folder}	Izvezeno datoteka u {folder}: {count}
 	Exported {what}	Izvezeno: {what}
-	Exported {what} with {} note(s): {first}	Izvezeno {what} s bilješkama ({}): {first}
 	Exporting {}	Izvoz {}
 	Imported {what}: {}	Uvezeno {what}: {}
 	Installed plug-in {}	Instaliran dodatak {}
-	Opened with {} note(s): {}	Otvoreno s bilješkama ({}): {}
 	Revert to the saved version of “{name}”?	Vratiti na sačuvanu verziju dokumenta „{name}”?
 	Replace “{name}”, the file this document was opened from?	Zamijeniti „{name}”, datoteku iz koje je ovaj dokument otvoren?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Pri otvaranju izostavljeno je ono što VectorCraft još ne može pročitati ({what}), pa se zamjenom to trajno gubi. Sačuvajte pod drugim nazivom da to zadržite.
 	“{name}” already exists. Replace it?	„{name}” već postoji. Zamijeniti?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Naziv u panelu za čuvanje bio je „{typed}”; VectorCraft je dodao ekstenziju vrste datoteke. Zamjena datoteke prepisuje njen sadržaj.
 	Saved {path}	Sačuvano: {path}
-	Saved {path} with {} note(s): {first}	Sačuvano {path} s bilješkama ({}): {first}
 	Saving	Čuvanje
 	Saving {}	Čuvanje {}
 	Search commands and tools…	Pretraži naredbe i alate…
@@ -3949,8 +3936,6 @@ font-technology	Variable	Varijabilni
 	Smaller ↔ Larger	Manje ↔ veće
 	Smart Guides (View → Smart Guides)	Pametne vodilice (Prikaz → Pametne vodilice)
 	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
-	Discarded {} recovered document(s)	Odbačeno oporavljenih dokumenata: {}
-	Restored {} recovered document(s): save them to keep them	Vraćeno oporavljenih dokumenata: {}; sačuvajte ih da ih zadržite
 	Saved recovery data for {title}	Sačuvani podaci za oporavak za {title}
 	Saving recovery data for {}	Čuvanje podataka za oporavak za {}
 	Alt	Alt
@@ -4220,14 +4205,12 @@ imageTrace	Outline	Obris
 @msg	No saved views (View → New View…)	Nema sačuvanih pogleda (Prikaz → Novi pogled…)
 @msg	Offset Path: select paths	Odmak putanje: odaberite putanje
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Odmak putanje: odmak ne ostavlja ništa od odabranih putanja (umetak veći od oblika)
-@msg	Opened with {_1} note(s): {_2}	Otvoreno s bilješkama ({_1}): {_2}
 @msg	Opened {url}	Otvoreno: {url}
 @msg	Outline Stroke: no stroked paths selected	Obris poteza: nisu odabrane putanje s potezom
 @msg	PDF settings are not an object	PDF postavke nisu objekat
 @msg	PDF security settings are not an object	PDF sigurnosne postavke nisu objekat
 @msg	PDF writer error: {0}	greška PDF zapisivača: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})
-@msg	Packaged {n} file(s){note}	Upakovano datoteka: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pregledaj u pregledniku zahtijeva desktop aplikaciju (web umjesto toga preuzima datoteke)
 @msg	Release Guides: no guides	Oslobodi vodilice: nema vodilica
 @msg	Release: no layer to put the rectangle in	Oslobodi: nema sloja u koji bi se stavio pravougaonik
@@ -4780,7 +4763,6 @@ imageTrace	Outline	Obris
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nije moguće postaviti {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Sačuvano {path} s bilješkama ({_1}): {first}
 @msg	Exported {what}	Izvezeno: {what}
 @msg	Saved {n} files beside {path}	Sačuvano datoteka pored {path}: {n}
 @msg	Saving	Čuvanje
@@ -4789,8 +4771,10 @@ imageTrace	Outline	Obris
 @msg	Packaging {_1}	Pakovanje {_1}
 @msg	Placing {_1}	Postavljanje {_1}
 @msg	Saving recovery data for {_1}	Čuvanje podataka za oporavak za {_1}
-@msg	Discarded {_1} recovered document(s)	Odbačeno oporavljenih dokumenata: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Vraćeno oporavljenih dokumenata: {_1}; sačuvajte ih da ih zadržite
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otvoreno s {n} bilješkom: {first}|Otvoreno s {n} bilješke: {first}|Otvoreno s {n} bilješki: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sačuvano {path} s {n} bilješkom: {first}|Sačuvano {path} s {n} bilješke: {first}|Sačuvano {path} s {n} bilješki: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
 @msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika
 @msgplural	Relinked {n} image|Relinked {n} images	Ponovo je povezana {n} slika|Ponovo su povezane {n} slike|Ponovo je povezano {n} slika
@@ -5595,7 +5579,7 @@ axis	Y Axis	Y osa
 	On Artboards	Na radnim pločama
 	All Artboards	Sve radne ploče
 	Include Objects On Canvas	Uključi objekte na platnu
-	Result(s): {count}	Rezultati: {count}
+@plural	Result: {n}|Results: {n}	Rezultat: {n}|Rezultati: {n}|Rezultati: {n}
 @msg	select one object	odaberite jedan objekat
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globalno uređivanje radi na putanjama, složenim putanjama, instancama simbola i njihovim grupama
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (rotirane ili zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo

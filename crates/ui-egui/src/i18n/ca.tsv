@@ -845,7 +845,6 @@
 	Convert:	Converteix:
 	Convex	Convex
 	Cool	Fred
-	Copied the CSS of {rules} object(s)	S’ha copiat el CSS de {rules} objecte(s)
 	Copies:	Còpies:
 	Copy	Copia
 	Copy (make a transformed copy)	Copia (fes una còpia transformada)
@@ -1124,7 +1123,6 @@
 	Discard Empty Type	Descarta el text buit
 	Discard Recovered Documents	Descarta els documents recuperats
 	Discard White Overprint in Output	Descarta la sobrempressió del blanc a la sortida
-	Discarded {} recovered document(s)	S’han descartat {} documents recuperats
 	Discord	Discord
 	Discretionary Hyphen	Guionet discrecional
 	Discretionary Ligatures	Lligadures discrecionals
@@ -1205,7 +1203,6 @@
 	Download	Baixa
 	Download:	Baixa:
 	Downloaded {what}	S’ha baixat {what}
-	Downloaded {} file(s)	S’han baixat {} fitxers
 	Draft	Esbós
 	Drag	Arrossega
 	Drag a handle	Arrossega una maneta
@@ -1354,8 +1351,6 @@
 	Embed page thumbnails	Incrusta les miniatures de pàgina
 	Embedded	Incrustat
 	Embedded Image	Imatge incrustada
-	Embedded {n} image(s)	{n} imatge/imatges incrustades
-	Embedded {n} image(s); {missing} missing: relink them first	{n} imatge/imatges incrustades; en falten {missing}: torna a enllaçar-les primer
 	Emulsion:	Emulsió:
 	En Dash	Ratlla en
 	En Space	Espai en
@@ -1480,10 +1475,8 @@
 	Export Type:	Tipus d’exportació:
 	Export {count} Selected	Exporta {count} elements seleccionats
 	Export:	Exporta:
-	Exported {count} file(s) to {folder}	S’han exportat {count} fitxers a {folder}
 	Exported {path}	S’ha exportat {path}
 	Exported {what}	S’ha exportat {what}
-	Exported {what} with {} note(s): {first}	S’ha exportat {what} amb {} notes: {first}
 	Exporting {}	S’està exportant {}
 	Export…	Exporta…
 	Extrude & Bevel…	Extrudeix i bisella…
@@ -2755,7 +2748,6 @@ digits	Malayalam	Malaiàlam
 	Open the URL in the web browser	Obre l’URL al navegador web
 	Open this dialog with these settings next time	Obre aquest quadre de diàleg amb aquesta configuració la propera vegada
 	Open this setting's help page	Obre la pàgina d’ajuda d’aquest paràmetre
-	Opened with {} note(s): {}	S’ha obert amb {} nota(es): {}
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	En obrir-lo s’ha omès el que VectorCraft encara no pot llegir ({what}), de manera que substituir-lo ho perd per sempre. Desa’l amb un altre nom per conservar-ho.
 	Opens files in other apps	Obre fitxers en altres aplicacions
 	Opens network connections	Obre connexions de xarxa
@@ -2836,7 +2828,6 @@ digits	Malayalam	Malaiàlam
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	S’ha empaquetat {n} fitxer a {folder}|S’han empaquetat {n} fitxers a {folder}
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	S’ha empaquetat {n} fitxer a {folder} {note}|S’han empaquetat {n} fitxers a {folder} {note}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	S’ha empaquetat {n} fitxer {note}|S’han empaquetat {n} fitxers {note}
-	Packaged {n} file(s){note}	S’han empaquetat {n} fitxers{note}
 	Package…	Empaqueta…
 	Page	Pàgina
 	Page Cover 1640×624	Coberta de pàgina 1640×624
@@ -3266,9 +3257,6 @@ digits	Malayalam	Malaiàlam
 	Relink	Torna a enllaçar
 	Relink Linked Files to the Document	Torna a enllaçar els fitxers enllaçats al document
 	Relink to Folder…	Torna a enllaçar a una carpeta…
-	Relinked {n} image(s)	S’han tornat a enllaçar {n} imatge/imatges
-	Relinked {n} image(s); not in that folder: {}	S’han tornat a enllaçar {n} imatge/imatges; no es troben en aquesta carpeta: {}
-	Relinked {} image(s)	S’han tornat a enllaçar {} imatge/imatges
 	Relink…	Torna a enllaçar…
 	Reload Plug-ins	Recarrega els complements
 	Remember Import Matches	Recorda les coincidències d’importació
@@ -3389,10 +3377,9 @@ digits	Malayalam	Malaiàlam
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
 	Restore Recovered Documents	Restaura els documents recuperats
 	Restored documents open unsaved: save them to keep them.	Els documents restaurats s’obren sense desar: desa’ls per conservar-los.
-	Restored {} recovered document(s): save them to keep them	S’han restaurat {} document(s) recuperat(s): desa’ls per conservar-los
 	Restrict printing, editing and other tasks	Restringeix la impressió, l’edició i altres tasques
 	Restricted Colors	Colors restringits
-	Result(s): {count}	Resultat(s): {count}
+@plural	Result: {n}|Results: {n}	Resultat: {n}|Resultats: {n}
 	Reticulation	Retículació
 	Reticulation…	Retículació…
 	Reverse Front to Back	Inverteix de davant a darrere
@@ -3605,7 +3592,6 @@ digits	Malayalam	Malaiàlam
 	Saved Views	Vistes desades
 	Saved {n} files beside {path}	S’han desat {n} fitxers al costat de {path}
 	Saved {path}	S’ha desat {path}
-	Saved {path} with {} note(s): {first}	S’ha desat {path} amb {} nota(es): {first}
 	Saves the current bars, toolbar and panel layout.	Desa la disposició actual de barres, barra d’eines i panells.
 	Save…	Desa…
 	Saving	Desant
@@ -4458,7 +4444,6 @@ digits	Malayalam	Malaiàlam
 	Update Links	Actualitza els enllaços
 	Update Modified Links	Actualitza els enllaços modificats
 	Update Selection	Actualitza la selecció
-	Updated {} image(s)	S’han actualitzat {} imatge(s)
 	UPPERCASE	MAJÚSCULES
 	URL:	URL:
 	Use 	Utilitza 
@@ -4976,7 +4961,7 @@ digits	Malayalam	Malaiàlam
 @msg	Dimension point is outside the canvas	El punt de dimensió és fora del llenç
 @msg	Dimension size is outside its supported range	La mida de dimensió és fora del seu interval compatible
 @msg	direct-select anchor points to cut at (not the end points of open paths)	seleccioneu directament els punts d’ancoratge on tallar (no els punts finals dels traçats oberts)
-@msg	Discarded {_1} recovered document(s)	S’han descartat {_1} document(s) recuperat(s)
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	S’ha descartat {n} document recuperat|S’han descartat {n} documents recuperats
 @msg	divide into 1 to {MAX_PIECES} slices	divideix en 1 a {MAX_PIECES} talls
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
@@ -5274,14 +5259,13 @@ digits	Malayalam	Malaiàlam
 @msg	onto must name a floating panel	onto ha de nomenar un panell flotant
 @msg	onto must name a panel floating in another group	onto ha de nomenar un panell que floti en un altre grup
 @msg	open a document with data sets	obre un document amb conjunts de dades
-@msg	Opened with {_1} note(s): {_2}	Obert amb {_1} nota(es): {_2}
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	S’ha obert amb {n} nota: {first}|S’ha obert amb {n} notes: {first}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
 @msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
 @msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	S’ha empaquetat {n} fitxer a {folder}|S’han empaquetat {n} fitxers a {folder}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	S’ha empaquetat {n} fitxer a {folder} ({note})|S’han empaquetat {n} fitxers a {folder} ({note})
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	S’ha empaquetat {n} fitxer {note}|S’han empaquetat {n} fitxers {note}
-@msg	Packaged {n} file(s){note}	Empaquetats {n} fitxer(s){note}
 @msg	Packaging {_1}	Empaquetant {_1}
 @msg	page size {w} × {h}	mida de pàgina {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	la pàgina {0} no existeix (el PDF en té {1})
@@ -5346,7 +5330,7 @@ digits	Malayalam	Malaiàlam
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
 @msg	Reset {_1}	Restableix {_1}
 @msg	resolutions must be between 1 and 2400 ppi	les resolucions han de ser entre 1 i 2400 ppi
-@msg	Restored {_1} recovered document(s): save them to keep them	Restaurats {_1} document(s) recuperat(s): desa’ls per conservar-los
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
 @msg	result would exceed the canvas (coordinates out of range)	el resultat excediria el llenç (coordenades fora de rang)
 @msg	Running “{name}”…	S’està executant «{name}»…
 @msg	Save for Web: the image is empty	Desa per a la web: la imatge és buida
@@ -5357,7 +5341,7 @@ digits	Malayalam	Malaiàlam
 @msg	Saved to User Defined: {_1}	Desat a User Defined: {_1}
 @msg	Saved {n} files beside {path}	S’han desat {n} fitxers al costat de {path}
 @msg	Saved {path}	Desat {path}
-@msg	Saved {path} with {_1} note(s): {first}	Desat {path} amb {_1} nota(es): {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	S’ha desat {path} amb {n} nota: {first}|S’ha desat {path} amb {n} notes: {first}
 @msg	Saving	S’està desant
 @msg	Saving recovery data for {_1}	S’estan desant les dades de recuperació de {_1}
 @msg	Saving {_1}	S’està desant {_1}

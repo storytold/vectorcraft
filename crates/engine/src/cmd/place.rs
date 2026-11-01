@@ -270,7 +270,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
         (art_of(layer_art(&layers)), frame)
     } else {
         let n = doc.artboards.len();
-        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} page(s)")))?;
+        let pages = if n == 1 { "page" } else { "pages" };
+        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} {pages}")))?;
         // An EPS file's art is whatever lies on the artboard.
         (on_artboard(&symbols, &layers, board), crop.then_some(board))
     };
@@ -318,7 +319,8 @@ pub(crate) fn pdf_art(
     // whatever lies on the artboard.
     let index = if alone { index } else { 0 };
     let n = doc.artboards.len();
-    let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} page(s)")))?;
+    let pages = if n == 1 { "page" } else { "pages" };
+    let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} {pages}")))?;
     let pages = if alone { &layers[..] } else { layers.get(index..=index).unwrap_or_default() };
     let nodes = on_artboard(&symbols, pages, board);
     let clip = (!bounding).then_some(board);

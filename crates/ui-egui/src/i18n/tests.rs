@@ -1585,6 +1585,62 @@ fn counted_status_messages_take_the_plural_form() {
     assert_eq!(message(ru, "Exported 5 files to /out"), "Экспортировано 5 файлов в /out");
 }
 
+/// The open, save and recovery status messages with a count, in English for a count of 1 and of 2.
+const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
+    ("Opened with 1 note: a note", "Opened with 2 notes: a note"),
+    ("Saved /out/a.pdf with 1 note: a note", "Saved /out/a.pdf with 2 notes: a note"),
+    ("Discarded 1 recovered document", "Discarded 2 recovered documents"),
+    ("Restored 1 recovered document: save it to keep it", "Restored 2 recovered documents: save them to keep them"),
+];
+
+/// The open, save and recovery status messages and the Global Edit options' Results line name a
+/// count of 1 in the singular and other counts in the plural, and every complete catalog
+/// translates both, in the form its plural rule picks.
+#[test]
+fn open_save_and_recovery_messages_take_the_plural_form() {
+    use crate::io::{opened_with_notes, saved_status};
+    use crate::panels::properties::global_edit_results;
+    use crate::recovery::recovered_status;
+    let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let made = [
+        (opened_with_notes(1, "a note"), opened_with_notes(2, "a note")),
+        (saved("/out/a.pdf", 1), saved("/out/a.pdf", 2)),
+        (recovered_status(true, 1), recovered_status(true, 2)),
+        (recovered_status(false, 1), recovered_status(false, 2)),
+    ];
+    for ((one, other), (want_one, want_other)) in made.iter().zip(OPEN_SAVE_COUNTED_MESSAGES) {
+        assert_eq!((one.as_str(), other.as_str()), (*want_one, *want_other));
+    }
+    // A path that holds placeholder text is not filled in again.
+    assert_eq!(saved("/out/{first}.pdf", 1), "Saved /out/{first}.pdf with 1 note: a note");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in OPEN_SAVE_COUNTED_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
+            assert_ne!(message(lang, s), *s, "{code}: {s}");
+        }
+    }
+    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
+        let lang = Lang::from_code(l.code).expect("registered");
+        for n in [1, 2] {
+            assert_ne!(trn(lang, n, "Result: {n}", "Results: {n}"), trn(Lang::EN, n, "Result: {n}", "Results: {n}"), "{}: {n}", l.code);
+        }
+    }
+    assert_eq!((global_edit_results(1), global_edit_results(2)), ("Result: 1".to_string(), "Results: 2".to_string()));
+    set_current(de());
+    assert_eq!((global_edit_results(1), global_edit_results(2)), ("Ergebnis: 1".to_string(), "Ergebnisse: 2".to_string()));
+    set_current(Lang::EN);
+    assert_eq!(message(de(), OPEN_SAVE_COUNTED_MESSAGES[0].0), "Mit 1 Hinweis geöffnet: a note");
+    assert_eq!(message(de(), OPEN_SAVE_COUNTED_MESSAGES[0].1), "Mit 2 Hinweisen geöffnet: a note");
+    assert_eq!(message(de(), &saved("/out/{n}.pdf", 2)), "/out/{n}.pdf mit 2 Hinweisen gespeichert: a note");
+    let cs = cs();
+    assert_eq!(message(cs, &recovered_status(true, 1)), "Zahozen 1 obnovený dokument");
+    assert_eq!(message(cs, &recovered_status(true, 3)), "Zahozeny 3 obnovené dokumenty");
+    assert_eq!(message(cs, &recovered_status(true, 5)), "Zahozeno 5 obnovených dokumentů");
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!(message(ru, &opened_with_notes(1, "x")), "Открыто с 1 примечанием: x");
+    assert_eq!(message(ru, &opened_with_notes(3, "x")), "Открыто с 3 примечаниями: x");
+}
+
 /// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
 /// an error enum's variant, `EngineError::Disabled`'s reason included: a literal or a `format!`
 /// string, on the call's line or wrapped over several lines, in the same template form as the

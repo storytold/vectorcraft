@@ -609,7 +609,6 @@ font-technology	Variable	Variabili
 	Convert to sRGB	Converti in sRGB
 	Convert to Straight Lines	Converti in linee rette
 	Convert:	Converti:
-	Copied the CSS of {rules} object(s)	CSS copiato da {rules} oggetto/i
 	Copies:	Copie:
 	Copy	Copia
 	Copy (make a transformed copy)	Copia (crea una copia trasformata)
@@ -797,7 +796,6 @@ font-technology	Variable	Variabili
 	Discard Empty Type	Scarta testo vuoto
 	Discard Recovered Documents	Scarta documenti recuperati
 	Discard White Overprint in Output	Scarta sovrastampa del bianco nell'output
-	Discarded {} recovered document(s)	Documenti recuperati scartati: {}
 	Discord	Discord
 	Discretionary Hyphen	Trattino facoltativo
 	Discretionary Ligatures	Legature facoltative
@@ -859,7 +857,6 @@ font-technology	Variable	Variabili
 	Download	Scarica
 	Download:	Download:
 	Downloaded {what}	Download completato: {what}
-	Downloaded {} file(s)	File scaricati: {}
 	Drag	Trascina
 	Drag a handle	Trascina una maniglia
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Trascina qui la grafica oppure selezionala e fai clic su +. Tieni premuto Alt per creare una sola risorsa da più oggetti.
@@ -969,8 +966,6 @@ font-technology	Variable	Variabili
 	Embed page thumbnails	Incorpora miniature delle pagine
 	Embedded	Incorporato
 	Embedded Image	Immagine incorporata
-	Embedded {n} image(s)	Immagini incorporate: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Immagini incorporate: {n}; mancanti: {missing} (ricollegale prima)
 	Emulsion:	Emulsione:
 	En Dash	Trattino medio
 	En Space	Spazio en
@@ -1088,10 +1083,8 @@ font-technology	Variable	Variabili
 	Export Transparency Flattener Presets	Esporta preset di appiattimento trasparenza
 	Export {count} Selected	Esporta selezione ({count})
 	Export:	Esporta:
-	Exported {count} file(s) to {folder}	File esportati in {folder}: {count}
 	Exported {path}	Esportazione completata: {path}
 	Exported {what}	Esportazione completata: {what}
-	Exported {what} with {} note(s): {first}	Esportazione di {what} completata con note ({}): {first}
 	Exporting {}	Esportazione di {} in corso
 	Export…	Esporta…
 	Extrude & Bevel…	Estrusione e smusso…
@@ -2259,7 +2252,6 @@ file-filter	Templates	Modelli
 	Open Recent Files	Apri file recenti
 	Open Swatch Library	Apri libreria campioni
 	Open the URL in the web browser	Apri l'URL nel browser web
-	Opened with {} note(s): {}	Aperto con note ({}): {}
 	Open…	Apri…
 	Optical	Ottica
 	Optical Margin Alignment	Allineamento ottico dei margini
@@ -2320,7 +2312,6 @@ file-filter	Templates	Modelli
 	Package collects a saved document with its linked files and fonts.	Il comando Crea pacchetto raccoglie un documento salvato insieme ai file collegati e ai font.
 	Package created	Pacchetto creato
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Pacchetto creato con {n} file in {folder} {note}|Pacchetto creato con {n} file in {folder} {note}
-	Packaged {n} file(s){note}	Pacchetto creato con {n} file{note}
 	Package…	Crea pacchetto…
 	Page	Pagina
 	Page information	Informazioni pagina
@@ -2676,9 +2667,6 @@ digits	Malayalam	Malayalam
 	Relink	Ricollega
 	Relink Linked Files to the Document	Ricollega i file collegati al documento
 	Relink to Folder…	Ricollega a cartella…
-	Relinked {n} image(s)	Immagini ricollegate: {n}
-	Relinked {n} image(s); not in that folder: {}	Immagini ricollegate: {n}; non presenti in quella cartella: {}
-	Relinked {} image(s)	Immagini ricollegate: {}
 	Relink…	Ricollega…
 	Find Linked Files	Trova file collegati
 	Find Linked Files in Folder…	Trova file collegati in una cartella…
@@ -2760,7 +2748,6 @@ digits	Malayalam	Malayalam
 	Restore every preference to its default (applied on OK)	Ripristina tutte le preferenze ai valori predefiniti (applicato con OK)
 	Restore Recovered Documents	Ripristina documenti recuperati
 	Restored documents open unsaved: save them to keep them.	I documenti ripristinati si aprono senza essere salvati: salvali per conservarli.
-	Restored {} recovered document(s): save them to keep them	Documenti recuperati ripristinati: {}. Salvali per conservarli
 	Restrict printing, editing and other tasks	Limita la stampa, la modifica e altre operazioni
 	Reverse Front to Back	Inverti davanti/dietro
 	Reverse Gradient	Inverti sfumatura
@@ -2928,7 +2915,6 @@ digits	Malayalam	Malayalam
 	Saved Views	Viste salvate
 	Saved {n} files beside {path}	{n} file salvati accanto a {path}
 	Saved {path}	{path} salvato
-	Saved {path} with {} note(s): {first}	{path} salvato (note: {}): {first}
 	Saves the current bars, toolbar and panel layout.	Salva la disposizione corrente di barre, barra degli strumenti e pannelli.
 	Save…	Salva…
 	Saving	Salvataggio
@@ -3580,7 +3566,6 @@ digits	Malayalam	Malayalam
 	Update Links	Aggiorna collegamenti
 	Update Changed Links	Aggiorna collegamenti modificati
 	Update Modified Links	Aggiorna collegamenti modificati
-	Updated {} image(s)	Immagini aggiornate: {}
 	UPPERCASE	MAIUSCOLO
 	URL:	URL:
 	Use 	Usa 
@@ -3992,14 +3977,12 @@ axis	Both	Entrambi
 @msg	No saved views (View → New View…)	Nessuna vista salvata (Visualizza → Nuova vista…)
 @msg	Offset Path: select paths	Sposta tracciato: seleziona tracciati
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Sposta tracciato: lo spostamento non lascia nulla dei tracciati selezionati (uno spostamento verso l’interno maggiore delle forme)
-@msg	Opened with {_1} note(s): {_2}	Aperto con {_1} nota/e: {_2}
 @msg	Opened {url}	Aperto {url}
 @msg	Outline Stroke: no stroked paths selected	Contorna traccia: nessun tracciato con traccia selezionato
 @msg	PDF settings are not an object	Le impostazioni PDF non sono un oggetto
 @msg	PDF security settings are not an object	Le impostazioni di sicurezza PDF non sono un oggetto
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
-@msg	Packaged {n} file(s){note}	Pacchetto creato con {n} file{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
 @msg	Release Guides: no guides	Rilascia guide: nessuna guida
 @msg	Release: no layer to put the rectangle in	Rilascia: nessun livello in cui inserire il rettangolo
@@ -4555,7 +4538,6 @@ axis	Both	Entrambi
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Impossibile inserire {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Impossibile incollare dagli appunti: {e}
-@msg	Saved {path} with {_1} note(s): {first}	Salvato {path} con {_1} nota/e: {first}
 @msg	Exported {what}	Esportato {what}
 @msg	Saved {n} files beside {path}	Salvati {n} file accanto a {path}
 @msg	Saving	Salvataggio
@@ -4564,8 +4546,10 @@ axis	Both	Entrambi
 @msg	Packaging {_1}	Creazione del pacchetto {_1}
 @msg	Placing {_1}	Inserimento di {_1}
 @msg	Saving recovery data for {_1}	Salvataggio dei dati di recupero per {_1}
-@msg	Discarded {_1} recovered document(s)	Documenti recuperati scartati: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Documenti recuperati ripristinati: {_1}. Salvali per conservarli
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Scartato {n} documento recuperato|Scartati {n} documenti recuperati
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Ripristinato {n} documento recuperato. Salvalo per conservarlo|Ripristinati {n} documenti recuperati. Salvali per conservarli
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aperto con {n} nota: {first}|Aperto con {n} note: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Salvato {path} con {n} nota: {first}|Salvato {path} con {n} note: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Incorporata {n} immagine; mancanti: {missing} (ricollegale prima)|Incorporate {n} immagini; mancanti: {missing} (ricollegale prima)
 @msgplural	Embedded {n} image|Embedded {n} images	Incorporata {n} immagine|Incorporate {n} immagini
 @msgplural	Relinked {n} image|Relinked {n} images	Ricollegata {n} immagine|Ricollegate {n} immagini
@@ -5284,7 +5268,7 @@ axis	Y Axis	Asse Y
 	On Artboards	Sulle tavole da disegno
 	All Artboards	Tutte le tavole da disegno
 	Include Objects On Canvas	Includi oggetti sulla tela
-	Result(s): {count}	Risultati: {count}
+@plural	Result: {n}|Results: {n}	Risultato: {n}|Risultati: {n}
 @msg	select one object	selezionate un oggetto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modifica globale funziona su tracciati, tracciati composti, istanze di simboli e gruppi di essi
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nessun oggetto simile trovato (le copie ruotate o riflesse non vengono riconosciute); cambiate le opzioni di modifica globale e riprovate

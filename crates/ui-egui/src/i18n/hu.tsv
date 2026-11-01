@@ -798,7 +798,6 @@ font-technology	Variable	Változó
 	Convert to Straight Lines	Átalakítás egyenes vonalakká
 	Convert:	Átalakítás:
 	Cool	Hideg
-	Copied the CSS of {rules} object(s)	CSS másolva, objektumok: {rules}
 	Copies:	Példányszám:
 	Copy	Másolás
 	Copy (make a transformed copy)	Másolat (átalakított másolat készítése)
@@ -1036,7 +1035,6 @@ font-technology	Variable	Változó
 	Discard Empty Type	Üres szöveg elvetése
 	Discard Recovered Documents	Helyreállított dokumentumok elvetése
 	Discard White Overprint in Output	Fehér felülnyomás elvetése a kimenetben
-	Discarded {} recovered document(s)	Elvetett helyreállított dokumentumok: {}
 	Discord	Discord
 	Discretionary Hyphen	Feltételes elválasztójel
 	Discretionary Ligatures	Választható ligatúrák
@@ -1109,7 +1107,6 @@ font-technology	Variable	Változó
 	Download	Letöltés
 	Download:	Letöltés:
 	Downloaded {what}	Letöltve: {what}
-	Downloaded {} file(s)	Letöltött fájlok: {}
 	Draft	Vázlat
 	Drag	Húzás
 	Drag a handle	Fogantyú húzása
@@ -1230,8 +1227,6 @@ font-technology	Variable	Változó
 	Embed page thumbnails	Oldalbélyegképek beágyazása
 	Embedded	Beágyazott
 	Embedded Image	Beágyazott kép
-	Embedded {n} image(s)	Beágyazott képek: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Beágyazott képek: {n}; hiányzik: {missing}, ezeket előbb csatold újra
 	Emulsion:	Emulzió:
 	En Dash	Gondolatjel
 	En Space	Félkvirtszóköz
@@ -1364,10 +1359,8 @@ font-technology	Variable	Változó
 	Export Transparency Flattener Presets	Átlátszóság-lapítási előbeállítások exportálása
 	Export {count} Selected	Kijelöltek exportálása ({count})
 	Export:	Exportálás:
-	Exported {count} file(s) to {folder}	Exportált fájlok: {count}, mappa: {folder}
 	Exported {path}	Exportálva: {path}
 	Exported {what}	Exportálva: {what}
-	Exported {what} with {} note(s): {first}	Exportálva: {what}, megjegyzések: {}. {first}
 	Exporting {}	Exportálás: {}
 	Export…	Exportálás…
 	Extrude & Bevel…	Kihúzás és élletörés…
@@ -2711,7 +2704,6 @@ file-filter	Templates	Sablonok
 	Open Recent Files	Legutóbbi fájlok megnyitása
 	Open Swatch Library	Színminta-könyvtár megnyitása
 	Open the URL in the web browser	URL megnyitása a böngészőben
-	Opened with {} note(s): {}	Megnyitva, megjegyzések: {}. {}
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Megnyitáskor kimaradt, amit a VectorCraft még nem tud beolvasni ({what}), ezért a fájl felülírásával ez végleg elvész. A megtartásához mentsd más néven.
 	“{name}” already exists. Replace it?	„{name}” már létezik. Felülírod?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	A mentési panelen megadott név ez volt: „{typed}”, a VectorCraft pedig hozzáadta a fájltípus kiterjesztését. A fájl felülírásakor a tartalma elvész.
@@ -2783,7 +2775,6 @@ file-filter	Templates	Sablonok
 	Package collects a saved document with its linked files and fonts.	A csomagolás egy mentett dokumentumot a csatolt fájljaival és betűtípusaival együtt gyűjt össze.
 	Package created	A csomag elkészült
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} {note}
-	Packaged {n} file(s){note}	Becsomagolt fájlok: {n}{note}
 	Package…	Csomagolás…
 	Page	Oldal
 	Page Cover 1640×624	Oldalborító 1640×624
@@ -3162,9 +3153,6 @@ mark-style	Japanese	Japán
 	Relink	Újracsatolás
 	Relink Linked Files to the Document	Csatolt fájlok újracsatolása a dokumentumhoz
 	Relink to Folder…	Újracsatolás mappából…
-	Relinked {n} image(s)	Újracsatolt képek: {n}
-	Relinked {n} image(s); not in that folder: {}	Újracsatolt képek: {n}; nincs a mappában: {}
-	Relinked {} image(s)	Újracsatolt képek: {}
 	Relink…	Újracsatolás…
 	Find Linked Files	Csatolt fájlok keresése
 	Find Linked Files in Folder…	Csatolt fájlok keresése mappában…
@@ -3277,7 +3265,6 @@ mark-style	Japanese	Japán
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
 	Restored documents open unsaved: save them to keep them.	A visszaállított dokumentumok mentetlenül nyílnak meg: mentsd őket, ha meg akarod tartani.
-	Restored {} recovered document(s): save them to keep them	Visszaállított helyreállított dokumentumok: {}. Mentsd őket, ha meg akarod tartani
 	Restrict printing, editing and other tasks	Nyomtatás, szerkesztés és más műveletek korlátozása
 	Restricted Colors	Korlátozott színek
 	Reverse Front to Back	Sorrend megfordítása
@@ -3472,7 +3459,6 @@ mark-style	Japanese	Japán
 	Saved Views	Mentett nézetek
 	Saved {n} files beside {path}	Mentett fájlok: {n}, a következő mellett: {path}
 	Saved {path}	Mentve: {path}
-	Saved {path} with {} note(s): {first}	Mentve: {path}, megjegyzések: {}. {first}
 	Saves the current bars, toolbar and panel layout.	Menti a sávok, az eszköztár és a panelek aktuális elrendezését.
 	Save…	Mentés…
 	Saving	Mentés
@@ -4256,7 +4242,6 @@ mark-style	Japanese	Japán
 	Update Link	Csatolás frissítése
 	Update Links	Csatolások frissítése
 	Update Modified Links	Módosult csatolások frissítése
-	Updated {} image(s)	Frissített képek: {}
 	UPPERCASE	NAGYBETŰS
 	URL:	URL:
 	Use 	Menü: 
@@ -4712,7 +4697,7 @@ imageTrace	Outline	Körvonal
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Az adat-helyreállításnak nincs hova mentenie a másolatokat: állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
 @msg	decimals must be {_1}–{_2} (got {_3})	a tizedesjegyek száma {_1}–{_2} lehet (kapott érték: {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	jelöld ki közvetlen kijelöléssel a vágási horgonypontokat (nyitott útvonal végpontja nem lehet)
-@msg	Discarded {_1} recovered document(s)	Elvetett helyreállított dokumentumok: {_1}
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}
 @msg	divide into 1 to {MAX_PIECES} slices	a felosztás 1 és {MAX_PIECES} közötti szeletre lehetséges
 @msg	Divide Objects Below: select a path	Alatta lévő objektumok felosztása: jelölj ki egy útvonalat
 @msg	Divide Objects Below: select exactly one path	Alatta lévő objektumok felosztása: pontosan egy útvonalat jelölj ki
@@ -4977,11 +4962,10 @@ imageTrace	Outline	Körvonal
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
 @msg	onto must name a panel floating in another group	az onto egy másik csoportban lebegő panelt kell megnevezzen
-@msg	Opened with {_1} note(s): {_2}	Megnyitva; megjegyzések: {_1}: {_2}
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}
 @msg	Opened {url}	Megnyitva: {url}
 @msg	Outline Stroke: no stroked paths selected	Körvonal útvonallá alakítása: nincs kijelölt körvonalas útvonal
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})
-@msg	Packaged {n} file(s){note}	Becsomagolt fájlok: {n}{note}
 @msg	page size {w} × {h}	oldalméret: {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	nincs ilyen oldal: {0} (a PDF oldalszáma: {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: nincs ilyen oldal: {n} (a fájl oldalszáma: 1)
@@ -5041,7 +5025,7 @@ imageTrace	Outline	Körvonal
 @msg	Replace Spine: select a blend and a path	Gerinc cseréje: jelölj ki egy összemosást és egy útvonalat
 @msg	Reset {_1}	Visszaállítva: {_1}
 @msg	resolutions must be between 1 and 2400 ppi	a felbontás 1 és 2400 ppi között lehet
-@msg	Restored {_1} recovered document(s): save them to keep them	Helyreállított dokumentumok: {_1}; mentsd őket, ha meg akarod tartani
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Helyreállított dokumentumok: {n}; mentsd őket, ha meg akarod tartani
 @msg	result would exceed the canvas (coordinates out of range)	az eredmény túllépné a vásznat (a koordináták tartományon kívül esnek)
 @msg	objects can't be nested more than 32 deep	az objektumok legfeljebb 32 szint mélyen ágyazhatók egymásba
 @msg	the SVG's elements are nested more than {0} deep	az SVG elemei több mint {0} szint mélyen vannak egymásba ágyazva
@@ -5054,7 +5038,7 @@ imageTrace	Outline	Körvonal
 @msg	Saved to User Defined: {_1}	Mentve a felhasználóiak közé: {_1}
 @msg	Saved {n} files beside {path}	Mentett fájlok: {n}, a következő mellett: {path}
 @msg	Saved {path}	Mentve: {path}
-@msg	Saved {path} with {_1} note(s): {first}	Mentve: {path}; megjegyzések: {_1}, az első: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Mentve: {path}; megjegyzések: {n}, az első: {first}
 @msg	Saving	Mentés
 @msg	Saving recovery data for {_1}	Helyreállítási adatok mentése: {_1}
 @msg	Saving {_1}	Mentés: {_1}
@@ -5653,7 +5637,7 @@ axis	Y Axis	Y tengely
 	On Artboards	Rajztáblákon
 	All Artboards	Minden rajztábla
 	Include Objects On Canvas	Vásznon lévő objektumok is
-	Result(s): {count}	Eredmény(ek): {count}
+@plural	Result: {n}|Results: {n}	Eredmény: {n}
 @msg	select one object	jelöljön ki egy objektumot
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A globális szerkesztés útvonalakon, összetett útvonalakon, szimbólumpéldányokon és ezek csoportjain működik
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (az elforgatott vagy tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra

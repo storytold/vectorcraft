@@ -3534,14 +3534,12 @@ axis	Both	Ambos
 @msg	No saved views (View → New View…)	Nenhuma vista salva (Exibir → Nova vista…)
 @msg	Offset Path: select paths	Deslocar traçado: selecione traçados
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Deslocar traçado: o deslocamento não deixa nada dos traçados selecionados (um deslocamento para dentro maior que as formas)
-@msg	Opened with {_1} note(s): {_2}	Aberto com {_1} observação(ões): {_2}
 @msg	Opened {url}	{url} aberto
 @msg	Outline Stroke: no stroked paths selected	Contornar traço: nenhum traçado com traço selecionado
 @msg	PDF settings are not an object	as configurações de PDF não são um objeto
 @msg	PDF security settings are not an object	as configurações de segurança de PDF não são um objeto
 @msg	PDF writer error: {0}	Erro do gravador de PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} arquivo empacotado em {folder} ({note})|{n} arquivos empacotados em {folder} ({note})
-@msg	Packaged {n} file(s){note}	{n} arquivo(s) empacotado(s){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Visualizar no navegador exige o aplicativo para desktop (na web, os arquivos são baixados)
 @msg	Release Guides: no guides	Liberar guias: não há guias
 @msg	Release: no layer to put the rectangle in	Liberar: não há camada para colocar o retângulo
@@ -4085,7 +4083,6 @@ axis	Both	Ambos
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Não foi possível inserir {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Não foi possível colar da área de transferência: {e}
-@msg	Saved {path} with {_1} note(s): {first}	{path} salvo com {_1} observação(ões): {first}
 @msg	Exported {what}	{what} exportado
 @msg	Saved {n} files beside {path}	{n} arquivos salvos ao lado de {path}
 @msg	Saving	Salvando
@@ -4094,8 +4091,10 @@ axis	Both	Ambos
 @msg	Packaging {_1}	Empacotando {_1}
 @msg	Placing {_1}	Inserindo {_1}
 @msg	Saving recovery data for {_1}	Salvando dados de recuperação de {_1}
-@msg	Discarded {_1} recovered document(s)	{_1} documento(s) recuperado(s) descartado(s)
-@msg	Restored {_1} recovered document(s): save them to keep them	{_1} documento(s) recuperado(s) restaurado(s): salve-os para mantê-los
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} documento recuperado descartado|{n} documentos recuperados descartados
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} documento recuperado restaurado: salve-o para mantê-lo|{n} documentos recuperados restaurados: salve-os para mantê-los
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aberto com {n} observação: {first}|Aberto com {n} observações: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} salvo com {n} observação: {first}|{path} salvo com {n} observações: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} imagem incorporada; faltam {missing}: revincule-as primeiro|{n} imagens incorporadas; faltam {missing}: revincule-as primeiro
 @msgplural	Embedded {n} image|Embedded {n} images	{n} imagem incorporada|{n} imagens incorporadas
 @msgplural	Relinked {n} image|Relinked {n} images	{n} imagem revinculada|{n} imagens revinculadas
@@ -4400,7 +4399,6 @@ axis	Both	Ambos
 	Compression › Color › Above Ppi	Compressão › Cor › Acima de Ppi
 	Contrast	Contraste
 	Convert To Outlines	Converter em Contornos
-	Copied the CSS of {rules} object(s)	CSS de {rules} objeto(s) copiado
 	Copy All Objects	Copiar Todos os Objetos
 	Copy Fonts Used in the Document	Copiar Fontes Usadas no Documento
 	Copy Links	Copiar Links
@@ -4422,14 +4420,12 @@ axis	Both	Ambos
 	Delete Layer	Excluir Camada
 	Delete these {n} graphic styles?	Excluir estes {n} estilos gráficos?
 	Delete this {n} graphic style?	Excluir este {n} estilo gráfico?
-	Discarded {} recovered document(s)	{} documento(s) recuperado(s) descartado(s)
 	Discord	Discord
 	Do Not Move	Não Mover
 	Document profile	Perfil do documento
 	Document Swatches	Amostras do Documento
 	Download	Baixar
 	Downloaded {what}	{what} baixado
-	Downloaded {} file(s)	{} arquivo(s) baixado(s)
 	Draw Behind	Desenhar Atrás
 	Draw Inside	Desenhar Dentro
 	Draw Normal	Desenhar Normal
@@ -4438,14 +4434,10 @@ axis	Both	Ambos
 	Duplicate Layer	Duplicar Camada
 	Edit Toolbar	Editar Barra de Ferramentas
 	Edit Views	Editar Exibições
-	Embedded {n} image(s)	{n} imagem(ns) incorporada(s)
-	Embedded {n} image(s); {missing} missing: relink them first	{n} imagem(ns) incorporada(s); {missing} ausente(s): revincule-as primeiro
 	Entire Font	Fonte Inteira
 	Export Asset	Exportar Ativo
-	Exported {count} file(s) to {folder}	{count} arquivo(s) exportado(s) para {folder}
 	Exported {path}	{path} exportado
 	Exported {what}	{what} exportado
-	Exported {what} with {} note(s): {first}	{what} exportado com {} observação(ões): {first}
 	Exporting {}	Exportando {}
 	File Dimensions	Dimensões do Arquivo
 	Fill: click for swatches, Shift-click for the color mixer	Preenchimento: clique para ver as amostras, clique com Shift para o misturador de cores
@@ -4617,7 +4609,6 @@ axis	Both	Ambos
 	Offset X	Deslocamento X
 	Opacity: 50% Multiply	Opacidade: 50% Multiplicar
 	Opacity: Default	Opacidade: Padrão
-	Opened with {} note(s): {}	Aberto com {} observação(ões): {}
 	Other Libraries	Outras Bibliotecas
 	Out of Gamut Warning	Aviso de Fora do Gamut
 	Out of Web Color Warning	Aviso de Cor Fora da Web
@@ -4626,7 +4617,6 @@ axis	Both	Ambos
 	Output White	Branco de Saída
 	Output › Mode	Saída › Modo
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} arquivo empacotado em {folder} {note}|{n} arquivos empacotados em {folder} {note}
-	Packaged {n} file(s){note}	{n} arquivo(s) empacotado(s){note}
 	Page information	Informações da página
 	Paragraph Style	Estilo de Parágrafo
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	Parte do ArtCraft. MIT OR Apache-2.0. Fontes: Source Sans 3, Inter, JetBrains Mono (OFL). Ícones: Lucide (ISC) + VectorCraft.
@@ -4660,9 +4650,6 @@ axis	Both	Ambos
 	Reflect Horizontal	Espelhar Horizontalmente
 	Registration marks	Marcas de registro
 	Relink Linked Files to the Document	Revincular Arquivos Vinculados ao Documento
-	Relinked {n} image(s)	{n} imagem(ns) revinculada(s)
-	Relinked {n} image(s); not in that folder: {}	{n} imagem(ns) revinculada(s); não estão nessa pasta: {}
-	Relinked {} image(s)	{} imagem(ns) revinculada(s)
 	Find Linked Files	Localizar Arquivos Vinculados
 	Find Linked Files in Folder…	Localizar Arquivos Vinculados na Pasta…
 	Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.	Escolha o arquivo ao qual revincular cada arquivo vinculado. Arquivos com o tamanho e o conteúdo salvos com o link vêm primeiro.
@@ -4674,7 +4661,6 @@ axis	Both	Ambos
 	Reset with Mesh	Redefinir com Malha
 	Reset with Warp	Redefinir com Distorção
 	Reset {}	Redefinir {}
-	Restored {} recovered document(s): save them to keep them	{} documento(s) recuperado(s) restaurado(s): salve-os para mantê-los
 	Right in Front	Direita na Frente
 	Right-Justified Tab	Parada de Tabulação à Direita
 	Rotate 90° CW	Girar 90° no Sentido Horário
@@ -4684,7 +4670,6 @@ axis	Both	Ambos
 	Saved to User Defined: {}	Salvo em Definido pelo Usuário: {}
 	Saved {n} files beside {path}	{n} arquivos salvos ao lado de {path}
 	Saved {path}	{path} salvo
-	Saved {path} with {} note(s): {first}	{path} salvo com {} observação(ões): {first}
 	Saving	Salvando
 	Saving Poster.vectorcraft	Salvando Poster.vectorcraft
 	Saving recovery data for {}	Salvando dados de recuperação de {}
@@ -4770,7 +4755,6 @@ axis	Both	Ambos
 	Unique	Único
 	Unite and Simplify	Unir e Simplificar
 	Untitled	Sem Título
-	Updated {} image(s)	{} imagem(ns) atualizada(s)
 	Use the document's swatch: pasted colors take its color.	Usa a amostra do documento: as cores coladas assumem a cor dela.
 	User Library	Biblioteca do Usuário
 	User Preset	Predefinido do Usuário
@@ -5584,7 +5568,7 @@ axis	Y Axis	Eixo Y
 	On Artboards	Nas Mesas de Trabalho
 	All Artboards	Todas as Mesas de Trabalho
 	Include Objects On Canvas	Incluir Objetos na Tela
-	Result(s): {count}	Resultado(s): {count}
+@plural	Result: {n}|Results: {n}	Resultado: {n}|Resultados: {n}
 @msg	select one object	selecione um objeto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A edição global funciona com demarcadores, demarcadores compostos, instâncias de símbolos e grupos deles
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nenhum objeto semelhante encontrado (cópias giradas ou refletidas não são correspondidas); altere as opções de edição global e tente novamente

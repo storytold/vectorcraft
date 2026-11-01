@@ -1342,7 +1342,6 @@ digits	Malayalam	მალაიალამური
 	Save changes to {name}	ცვლილებების შენახვა: {name}
 	Save theme to My Themes	თემის შენახვა „ჩემ თემებში“
 	Set the selected color to the current color	მონიშნული ფერის მიმდინარე ფერად დაყენება
-	Copied the CSS of {rules} object(s)	კოპირებულია ობიექტების CSS: {rules}
 	Copy All Styles	ყველა სტილის კოპირება
 	Exported {path}	ექსპორტირებულია: {path}
 	Generate CSS: the whole document's CSS while nothing is selected	CSS-ის გენერაცია: სანამ არაფერია მონიშნული — მთელი დოკუმენტის CSS
@@ -1490,8 +1489,6 @@ digits	Malayalam	მალაიალამური
 	Color Space	ფერთა სივრცე
 	Created	შექმნილია
 	Dimensions	ზომები
-	Embedded {n} image(s)	ჩაშენებულია გამოსახულება: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	ჩაშენებულია გამოსახულება: {n}; აკლია: {missing} — ჯერ ხელახლა დააკავშირეთ
 	File › Place… brings in an image, linked or embedded.	ფაილი › განთავსება… შემოაქვს გამოსახულება, დაკავშირებული ან ჩაშენებული.
 	Format	ფორმატი
 	Medium Thumbnails	საშუალო ესკიზები
@@ -1501,9 +1498,6 @@ digits	Malayalam	მალაიალამური
 	No Thumbnails	ესკიზების გარეშე
 	Nothing matches the Show filter.	„ჩვენების“ ფილტრს არაფერი შეესაბამება.
 	PPI	PPI
-	Relinked {n} image(s)	ხელახლა დაკავშირებულია გამოსახულება: {n}
-	Relinked {n} image(s); not in that folder: {}	ხელახლა დაკავშირებულია გამოსახულება: {n}; იმ საქაღალდეში არ არის: {}
-	Relinked {} image(s)	ხელახლა დაკავშირებულია გამოსახულება: {}
 	Relink…	ხელახლა დაკავშირება…
 	Select an image to see its Link Info.	ბმულის ინფორმაციის სანახავად მონიშნეთ გამოსახულება.
 	Show Embedded	ჩაშენებულის ჩვენება
@@ -1513,7 +1507,6 @@ digits	Malayalam	მალაიალამური
 	Status	სტატუსი
 	Unembedded to {}	ჩაშენება მოხსნილია: {}
 	Update Link	ბმულის განახლება
-	Updated {} image(s)	განახლებულია გამოსახულება: {}
 	Break Link	ბმულის გაწყვეტა
 	Tolerance:	დაშვება:
 	Transparency Options	გამჭვირვალობის პარამეტრები
@@ -2167,7 +2160,6 @@ digits	Malayalam	მალაიალამური
 	Package collects a saved document with its linked files and fonts.	შეფუთვა აგროვებს შენახულ დოკუმენტს მის დაკავშირებულ ფაილებთან და შრიფტებთან ერთად.
 	Package created	შეფუთვა შეიქმნა
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}
-	Packaged {n} file(s){note}	შეიფუთა ფაილები: {n}{note}
 	Relink Linked Files to the Document	დაკავშირებული ფაილების დოკუმენტთან ხელახლა დაკავშირება
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
@@ -2355,7 +2347,6 @@ digits	Malayalam	მალაიალამური
 	Convert to sRGB	sRGB-ად გარდაქმნა
 	Delete this saved preset	ამ შენახული პრესეტის წაშლა
 	Dither:	დიზერინგი:
-	Downloaded {} file(s)	ჩამოტვირთულია ფაილი: {}
 	Fit in View	ხედში ჩატევა
 	Format:	ფორმატი:
 	High	მაღალი
@@ -3464,18 +3455,14 @@ font-technology	Variable	ცვლადი
 	Changes made since it was last saved will be lost.	ბოლო შენახვის შემდეგ შეტანილი ცვლილებები დაიკარგება.
 	Can't open “{name}”.	„{name}“ ვერ გაიხსნა.
 	Downloaded {what}	ჩამოტვირთულია: {what}
-	Exported {count} file(s) to {folder}	ექსპორტირებულია ფაილი ({count}) საქაღალდეში {folder}
 	Exported {what}	ექსპორტირებულია: {what}
-	Exported {what} with {} note(s): {first}	ექსპორტირებულია: {what}, შენიშვნა ({}): {first}
 	Exporting {}	ექსპორტირდება: {}
 	Imported {what}: {}	იმპორტირებულია: {what}: {}
 	Installed plug-in {}	დაინსტალირდა პლაგინი {}
-	Opened with {} note(s): {}	გაიხსნა, შენიშვნა ({}): {}
 	Revert to the saved version of “{name}”?	დაბრუნდეს „{name}“-ის შენახული ვერსია?
 	Replace “{name}”, the file this document was opened from?	ჩანაცვლდეს „{name}“, ფაილი, რომლიდანაც ეს დოკუმენტი გაიხსნა?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	გახსნისას გამოტოვდა ის, რისი წაკითხვაც VectorCraft-ს ჯერ არ შეუძლია ({what}), ამიტომ ჩანაცვლება მას სამუდამოდ დაკარგავს. შესანარჩუნებლად შეინახეთ სხვა სახელით.
 	Saved {path}	შენახულია: {path}
-	Saved {path} with {} note(s): {first}	შენახულია: {path}, შენიშვნა ({}): {first}
 	Saving	შენახვა
 	Saving {}	ინახება: {}
 	Search commands and tools…	ბრძანებებისა და ხელსაწყოების ძიება…
@@ -3492,8 +3479,6 @@ font-technology	Variable	ცვლადი
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
 	Smart Guides (View → Smart Guides)	ჭკვიანი დამხმარე ხაზები (ხედი → ჭკვიანი დამხმარე ხაზები)
 	Couldn't save recovery data: {e}	აღდგენის მონაცემები ვერ შეინახა: {e}
-	Discarded {} recovered document(s)	უკუგდებულია აღდგენილი დოკუმენტი ({})
-	Restored {} recovered document(s): save them to keep them	აღდგენილია დოკუმენტი ({}): შესანარჩუნებლად შეინახეთ
 	Saved recovery data for {title}	შენახულია აღდგენის მონაცემები: {title}
 	Saving recovery data for {}	ინახება აღდგენის მონაცემები: {}
 	Alt	Alt
@@ -3740,14 +3725,12 @@ font-technology	Variable	ცვლადი
 @msg	No saved selections (Select → Save Selection…)	შენახული მონიშვნები არ არის (მონიშვნა → მონიშნულის შენახვა…)
 @msg	No saved views (View → New View…)	შენახული ხედები არ არის (ხედი → ახალი ხედი…)
 @msg	Offset Path: select paths	ტრაექტორიის წანაცვლება: მონიშნეთ ტრაექტორიები
-@msg	Opened with {_1} note(s): {_2}	გაიხსნა, შენიშვნა ({_1}): {_2}
 @msg	Opened {url}	გაიხსნა {url}
 @msg	Outline Stroke: no stroked paths selected	კონტურის ფიგურად გარდაქმნა: კონტურიანი ტრაექტორიები მონიშნული არ არის
 @msg	PDF settings are not an object	PDF-ის პარამეტრები ობიექტი არ არის
 @msg	PDF security settings are not an object	PDF-ის უსაფრთხოების პარამეტრები ობიექტი არ არის
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
-@msg	Packaged {n} file(s){note}	შეფუთულია ფაილი ({n}){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
 @msg	Release Guides: no guides	დამხმარე ხაზების მოხსნა: დამხმარე ხაზები არ არის
 @msg	Release: no layer to put the rectangle in	მოხსნა: მართკუთხედის ჩასასმელი შრე არ არის
@@ -4261,7 +4244,6 @@ font-technology	Variable	ცვლადი
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name}-ის განთავსება ვერ მოხერხდა: {e}
 @msg	Couldn't paste from the clipboard: {e}	გაცვლის ბუფერიდან ჩასმა ვერ მოხერხდა: {e}
-@msg	Saved {path} with {_1} note(s): {first}	შენახულია {path}, შენიშვნები: {_1}: {first}
 @msg	Exported {what}	ექსპორტირებულია {what}
 @msg	Saved {n} files beside {path}	{path}-ის გვერდით შენახულია ფაილები: {n}
 @msg	Saving	შენახვა
@@ -4270,8 +4252,10 @@ font-technology	Variable	ცვლადი
 @msg	Packaging {_1}	იფუთება: {_1}
 @msg	Placing {_1}	თავსდება: {_1}
 @msg	Saving recovery data for {_1}	{_1}-ის აღდგენის მონაცემების შენახვა
-@msg	Discarded {_1} recovered document(s)	უარყოფილია აღდგენილი დოკუმენტები: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	აღდგენილია დოკუმენტები: {_1}: შესანარჩუნებლად შეინახეთ ისინი
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
 @msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
 @msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}
@@ -5583,7 +5567,7 @@ axis	Y Axis	Y ღერძი
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
 	Include Objects On Canvas	ტილოზე არსებული ობიექტების გათვალისწინება
-	Result(s): {count}	შედეგი: {count}
+@plural	Result: {n}|Results: {n}	შედეგი: {n}
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
