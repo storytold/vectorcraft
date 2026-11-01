@@ -740,6 +740,31 @@ fn built_in_pattern_libraries_hold_tiling_patterns_with_unique_names() {
     }
 }
 
+/// Listing and reading a pattern library add nothing to the document. A pattern added from it
+/// undoes and redoes with its swatch, and both stay after a save and reopen.
+#[test]
+fn a_pattern_library_adds_only_the_picked_pattern_and_it_undoes_and_saves() {
+    let mut s = session();
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let empty = counts(doc(&s));
+    run(&mut s, "swatch.library.list", json!({}));
+    run(&mut s, "swatch.library.get", json!({"library": "geometric-patterns"}));
+    assert_eq!(counts(doc(&s)), empty, "reading a library adds no pattern or swatch");
+    run(&mut s, "swatch.library.add", json!({"library": "geometric-patterns", "names": ["Checkerboard"]}));
+    assert_eq!(counts(doc(&s)), (empty.0 + 1, empty.1 + 1), "only the picked pattern and its swatch");
+    let has = |d: &vectorcraft_doc::Document| d.pattern("Checkerboard").is_some() && d.swatch("Checkerboard").is_some();
+    assert!(has(doc(&s)));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(counts(doc(&s)), empty);
+    assert!(doc(&s).pattern("Checkerboard").is_none() && doc(&s).swatch("Checkerboard").is_none());
+    run(&mut s, "edit.redo", json!({}));
+    assert!(has(doc(&s)));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc(&s), false)).unwrap();
+    assert_eq!(back.patterns, doc(&s).patterns);
+    assert!(has(&back));
+    assert_eq!(back.swatch("Checkerboard").map(|w| &w.paint), doc(&s).swatch("Checkerboard").map(|w| &w.paint));
+}
+
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.
 #[test]
 fn a_library_file_name_is_never_a_windows_device_name() {
