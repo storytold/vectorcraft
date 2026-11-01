@@ -42,6 +42,8 @@ const CMD: &str = "text.setFormat";
 const TABS: [&str; 2] = ["bullets", "numbers"];
 /// The `listAlign` values, in the order Alignment lists them.
 const ALIGNS: [&str; 2] = ["left", "right"];
+/// The indents `text.setFormat` keeps (points): a value typed outside them becomes the nearer end.
+const INDENTS: std::ops::RangeInclusive<f64> = -1296.0..=1296.0;
 /// The side of a preset button (points).
 const PRESET: f32 = 34.0;
 /// The keys a preset button with the keyboard focus keeps from egui's focus moves.
@@ -317,10 +319,10 @@ fn position(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) {
         }
         ui.end_row();
         label(ui, tl!("Left Indent:"));
-        form::length(ui, d, "leftIndent", unit, 90.0);
+        form::length_within(ui, d, "leftIndent", unit, 90.0, Some(INDENTS));
         ui.end_row();
         label(ui, tl!("First Line Indent:"));
-        form::length(ui, d, "firstLineIndent", unit, 90.0);
+        form::length_within(ui, d, "firstLineIndent", unit, 90.0, Some(INDENTS));
         ui.end_row();
     });
 }
@@ -621,6 +623,45 @@ mod tests {
         pick_preset(&mut app, "bullet", Some("dot"));
         super::super::confirm(&mut app).unwrap();
         assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Dot).aligned(ListAlign::Right)));
+    }
+
+    /// An indent typed past the 1296 pt `text.setFormat` keeps becomes 1296 pt (or -1296 pt) in the
+    /// field, so the field shows the indent the preview and OK give the type.
+    #[test]
+    fn an_indent_typed_out_of_range_shows_the_indent_the_type_gets() {
+        let (mut app, id) = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let key = |k| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        // Each frame returns where the label `find` was drawn.
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, find: &str| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out.shapes.iter().find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == find => Some(t.galley.rect.translate(t.pos.to_vec2())),
+                _ => None,
+            })
+        };
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        // Left Indent, the first field, is focused: type over it and Tab to commit it.
+        frame(&mut app, vec![], "");
+        frame(&mut app, vec![egui::Event::Text("2000 pt".into())], "");
+        frame(&mut app, vec![key(egui::Key::Tab)], "");
+        // Click First Line Indent's field, beside its label, and type over it.
+        let label = frame(&mut app, vec![], "First Line Indent:").expect("First Line Indent is drawn");
+        let at = egui::pos2(label.right() + 30.0, label.center().y);
+        let click = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(at)], "");
+        frame(&mut app, vec![click(true), click(false)], "");
+        frame(&mut app, vec![], "");
+        frame(&mut app, vec![egui::Event::Text("-5000 pt".into())], "");
+        frame(&mut app, vec![key(egui::Key::Tab)], "");
+        frame(&mut app, vec![], "");
+        let d = app.ui.dialog.clone().expect("the dialog stays open");
+        assert_eq!((d.f64("leftIndent", 0.0), d.f64("firstLineIndent", 0.0)), (1296.0, -1296.0));
+        assert_eq!(first(&app, id), (None, 1296.0, -1296.0), "previewed as shown");
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(first(&app, id), (None, 1296.0, -1296.0));
     }
 
     /// `ui.dialog.set` sets the fields the dialog does not hold: a bullet or a number for type in
