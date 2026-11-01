@@ -5694,6 +5694,9 @@ breakText	Glyphs	字符
 	Gap 4	間隙 4
 	Dash 5	虛線 5
 	Gap 5	間隙 5
+
+@msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。
 @msg	invalid pattern tile choice	圖樣拼塊選項無效
 @msg	no pattern named `{choice}`	沒有名為 `{choice}` 的圖樣
@@ -5724,6 +5727,9 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	將短破折號展開為路徑
+@msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝
@@ -5746,6 +5752,11 @@ breakText	Glyphs	字符
 	Odia	歐利亞文
 	Urdu	烏都文
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更新版本 (版本 {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	將所有開啟的文件匯出為 PDF
+	Export All Open Documents as SVG	將所有開啟的文件匯出為 SVG
+@msgplural	Exported {n} document|Exported {n} documents	已匯出 {n} 份文件
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已匯出 {n} 份文件; 未寫入 {title}：{error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符號類型:
 	Dynamic Symbol	動態符號
