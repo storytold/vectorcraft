@@ -1,5 +1,5 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{FLIP, GState, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -50,10 +50,14 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         let m = marker(line);
-        // A pattern's definition (one inside another's isn't read).
-        if m == "BeginPattern" && self.pattern.is_none() {
+        // A pattern's definition. One inside another's isn't read, and the outer tile is then incomplete.
+        if m == "BeginPattern" {
             let section = self.section("EndPattern")?;
-            self.define_pattern(section);
+            if self.pattern.is_some() {
+                self.unsupported.insert("patterns inside patterns".into());
+            } else {
+                self.define_pattern(section);
+            }
             return Ok(());
         }
         if m == "BeginSymbol" {
@@ -197,6 +201,11 @@ impl<'a> Reader<'a> {
         if self.pattern_tiles.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
             return;
         }
+        match legacy_pattern(section) {
+            Legacy::No => {}
+            Legacy::Malformed => return,
+            Legacy::Yes(def) => return self.define_legacy_pattern(&def),
+        }
         let mut sub = Reader::new(section);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
@@ -214,6 +223,96 @@ impl<'a> Reader<'a> {
             && sub.unread.is_empty()
             && sub.hidden_unread.is_empty()
             && sub.frames.len() == 1;
+        self.keep_pattern(sub, whole);
+    }
+
+    /// A definition in the version 7 form ([`legacy_pattern`]), read layer by layer into one group:
+    /// each layer's colors (`@`) set the state its tile string (`&`) is read with, or the fill of the
+    /// tile's box (`_ &`). Each layer starts from the state the definition starts with.
+    fn define_legacy_pattern(&mut self, def: &LegacyPattern) {
+        let mut sub = Reader::new(b"");
+        sub.subreader_depth = self.subreader_depth + 1;
+        sub.pattern = Some(PatternHead { taken: true, name: def.name.clone(), tile: Some(def.tile) });
+        sub.gradients = std::mem::take(&mut self.gradients);
+        sub.nodes = self.nodes;
+        sub.template = self.template;
+        let mut read = sub.open(Kind::Group, false);
+        for layer in &def.layers {
+            if read.is_err() {
+                break;
+            }
+            read = sub.pattern_layer(layer, def.tile);
+        }
+        self.nodes = sub.nodes;
+        self.gradients = std::mem::take(&mut sub.gradients);
+        let whole = read.is_ok()
+            && sub.unsupported.is_empty()
+            && sub.unknown.is_empty()
+            && sub.unread.is_empty()
+            && sub.hidden_unread.is_empty()
+            && sub.frames.len() == 1;
+        self.keep_pattern(sub, whole);
+    }
+
+    /// One layer of a definition in the version 7 form, read into the definition's group.
+    fn pattern_layer(&mut self, layer: &'a LegacyLayer, tile: Rect) -> Result<(), String> {
+        self.gs = GState::default();
+        self.pending_fill = None;
+        self.pending_stroke = None;
+        self.pending_unread_fill = false;
+        self.pending_unread_stroke = false;
+        self.instance = None;
+        self.end_path_quietly();
+        // The color part has the overprint and the colors only.
+        let mut lex = super::Lexer::new(&layer.color);
+        while let Some(t) = lex.next_token() {
+            match t.tok {
+                Tok::Num(_) | Tok::Str(_) | Tok::Hex(_) => {}
+                Tok::Word(w) if LAYER_COLOR_OPS.contains(&w) => {}
+                _ => return Err("a pattern layer's colors hold something else".into()),
+            }
+        }
+        self.run_string(&layer.color)?;
+        match &layer.tile {
+            Some(art) => self.run_string(art)?,
+            None => {
+                let corner = |x: f64, y: f64| [V::Num(x), V::Num(y)];
+                self.path_op("m", &corner(tile.x0, tile.y0))?;
+                for (x, y) in [(tile.x0, tile.y1), (tile.x1, tile.y1), (tile.x1, tile.y0)] {
+                    self.path_op("L", &corner(x, y))?;
+                }
+                self.paint("f", false, false)?;
+            }
+        }
+        // A path the layer leaves unpainted paints nothing.
+        self.end_path_quietly();
+        Ok(())
+    }
+
+    /// Run this reader on one of a pattern layer's strings, which must end everything it starts.
+    fn run_string(&mut self, bytes: &'a [u8]) -> Result<(), String> {
+        let depth = self.frames.len();
+        self.lex = super::Lexer::new(bytes);
+        let read = self.run();
+        let open = self.done
+            || self.frames.len() != depth
+            || self.stack.iter().any(|v| matches!(v, V::Mark))
+            || self.text.is_some()
+            || self.raster.is_some()
+            || self.place.is_some()
+            || self.mesh.is_some()
+            || self.gradient_def.is_some();
+        self.stack.clear();
+        self.marks.clear();
+        read?;
+        if open {
+            return Err("a pattern layer doesn't end what it starts".into());
+        }
+        Ok(())
+    }
+
+    /// Keep the pattern `sub` read, when it read it `whole`, as a pattern swatch.
+    fn keep_pattern(&mut self, mut sub: Reader<'_>, whole: bool) {
         let (Some(head), Some(frame)) = (sub.pattern.take(), sub.frames.pop()) else { return };
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
@@ -277,6 +376,116 @@ impl<'a> Reader<'a> {
         head.tile = Some(Rect::new(*x0, *y0, *x1, *y1));
         vals.split_off(at + 5)
     }
+}
+
+/// The operators a pattern layer's colors (`@`) may hold: overprint, gray, process and custom colors.
+const LAYER_COLOR_OPS: &[&[u8]] = &[b"O", b"R", b"g", b"G", b"k", b"K", b"x", b"X"];
+
+/// The longest string a pattern layer may have (the format's limit, 64K bytes).
+const MAX_LAYER_STRING: usize = 65_535;
+
+/// Most layers in one pattern's definition.
+const MAX_LAYERS: usize = 65_536;
+
+/// A pattern's definition in the version 7 form: its head, then a list of layers painted in order,
+/// the first the lowest.
+struct LegacyPattern {
+    name: String,
+    /// The tile in the pattern's space (y up).
+    tile: Rect,
+    layers: Vec<LegacyLayer>,
+}
+
+/// `(colors) @ (tile) &`, or `(colors) @ _ &` (no tile: the tile's box is filled with the colors' fill).
+struct LegacyLayer {
+    color: Vec<u8>,
+    tile: Option<Vec<u8>>,
+}
+
+enum Legacy {
+    /// Another form: the definition's art follows its head as operators.
+    No,
+    /// The version 7 form, which can't be read.
+    Malformed,
+    Yes(LegacyPattern),
+}
+
+/// The next token that isn't a comment; `Err` at a pattern's definition inside this one.
+fn next_operand<'s>(lex: &mut super::Lexer<'s>) -> Result<Option<super::super::lex::Token<'s>>, ()> {
+    while let Some(t) = lex.next_token() {
+        match t.tok {
+            Tok::Comment(c) if marker(&String::from_utf8_lossy(c)) == "BeginPattern" => return Err(()),
+            Tok::Comment(_) => {}
+            _ => return Ok(Some(t)),
+        }
+    }
+    Ok(None)
+}
+
+/// A pattern's definition in the version 7 form: `(name) llx lly urx ury [`, then for each layer
+/// `(colors) @` and `(tile) &` or `_ &`, then `] E` (version 7 specification §3.4). It is that form
+/// when a `[` that isn't on a `%_` line follows the head.
+fn legacy_pattern(section: &[u8]) -> Legacy {
+    let mut lex = super::Lexer::new(section);
+    let mut next = || next_operand(&mut lex).ok().flatten().map(|t| (t.tok, t.hidden));
+    let name = match next() {
+        Some((Tok::Str(s), _)) => super::obj::text(&s),
+        _ => return Legacy::No,
+    };
+    let mut tile = [0.0; 4];
+    for v in &mut tile {
+        match next() {
+            Some((Tok::Num(n), _)) => *v = n,
+            _ => return Legacy::No,
+        }
+    }
+    if !matches!(next(), Some((Tok::Word(b"["), false))) {
+        return Legacy::No;
+    }
+    let [x0, y0, x1, y1] = tile;
+    let mut layers = vec![];
+    let string = |t: Option<(Tok, bool)>| match t {
+        Some((Tok::Str(s) | Tok::Hex(s), _)) if s.len() <= MAX_LAYER_STRING => Some(s),
+        _ => None,
+    };
+    let word = |t: Option<(Tok, bool)>, w: &[u8]| matches!(t, Some((Tok::Word(x), _)) if x == w);
+    loop {
+        // Before the first layer, anything but a string or `] E` is the newer form's art (`[]0 d`).
+        let first = layers.is_empty();
+        let color = match next() {
+            Some((Tok::Word(b"]"), _)) if !first => break,
+            Some((Tok::Word(b"]"), _)) => {
+                return match next() {
+                    Some((Tok::Word(b"E"), _)) => Legacy::Yes(LegacyPattern { name, tile: Rect::new(x0, y0, x1, y1), layers }),
+                    _ => Legacy::No,
+                };
+            }
+            t @ Some((Tok::Str(_) | Tok::Hex(_), _)) => match string(t) {
+                Some(s) => s,
+                None => return Legacy::Malformed,
+            },
+            _ if first => return Legacy::No,
+            _ => return Legacy::Malformed,
+        };
+        if !word(next(), b"@") {
+            return Legacy::Malformed;
+        }
+        let tile = match next() {
+            Some((Tok::Word(b"_"), _)) => None,
+            t => match string(t) {
+                Some(s) => Some(s),
+                None => return Legacy::Malformed,
+            },
+        };
+        if !word(next(), b"&") || layers.len() >= MAX_LAYERS {
+            return Legacy::Malformed;
+        }
+        layers.push(LegacyLayer { color, tile });
+    }
+    if !word(next(), b"E") {
+        return Legacy::Malformed;
+    }
+    Legacy::Yes(LegacyPattern { name, tile: Rect::new(x0, y0, x1, y1), layers })
 }
 
 #[cfg(test)]
