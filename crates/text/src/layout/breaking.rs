@@ -518,8 +518,8 @@ const PUSH_IN_RUN: usize = 16;
 /// before it, makes room for them. Push In First tries this before it pushes out. Push Out First
 /// tries it only when pushing out, to the line's last allowed break `pushed_out`, would leave the
 /// line short by more than an em of the character before `j`. Push Out Only never pushes in, and
-/// neither does a line holding a tab, nor one where the characters taken in reach a space after a
-/// character that may not end a line. With `hanging` (Optical Margin Alignment or Roman Hanging
+/// neither does a line holding a tab or right-to-left text, nor one where the characters taken in
+/// reach a space after a character that may not end a line. With `hanging` (Optical Margin Alignment or Roman Hanging
 /// Punctuation), the gaps that hanging punctuation keeps open are not counted.
 #[allow(clippy::too_many_arguments)]
 fn push_in(
@@ -568,6 +568,11 @@ fn push_in(
     let mut last = end;
     while last > i && g[last - 1].is_space() {
         last -= 1;
+    }
+    // A line holding right-to-left text is reordered before it is drawn, and justification closes
+    // the gaps between its glyphs in that order: it pushes out.
+    if g[i..last].iter().any(|h| h.len > 0 && h.level.is_rtl()) {
+        return None;
     }
     let punct = |k: usize| g.get(k).is_some_and(optical_punct);
     let quote = |k: usize| g.get(k).is_some_and(|h| is_quote(h.ch));

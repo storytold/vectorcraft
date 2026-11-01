@@ -223,4 +223,13 @@ fn kinsoku_shori_type_pushes_a_closing_bracket_in_or_out() {
     assert_eq!(end(tabbed, 146.0, Kinsoku::Hard, PushOutOnly), 12);
     assert_eq!(end(tabbed, 146.0, Kinsoku::Hard, PushOutFirst), 12);
     assert_eq!(end(tabbed, 146.0, Kinsoku::Hard, PushInFirst), 12);
+
+    // A line holding right-to-left text is reordered before it is drawn, so the gaps that close
+    // differ from the ones counted here: it pushes out.
+    let mixed = "一二三א五六七八九十一二三四五」六";
+    let mut glyphs = full_width(mixed);
+    glyphs[3].level = unicode_bidi::Level::rtl();
+    let mixed_end = |ty: KinsokuShoriType| break_line(mixed, &glyphs, 0, 150.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false).0;
+    assert_eq!(mixed_end(PushInFirst), 14, "right-to-left text on the line: 五 is pushed out with 」");
+    assert_eq!(mixed_end(PushOutOnly), 14);
 }
