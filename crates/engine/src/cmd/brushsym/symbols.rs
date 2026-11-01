@@ -95,14 +95,7 @@ pub(crate) fn normalize(mut art: Node) -> Result<(Node, (f64, f64), Point)> {
     Ok((art, (w, h), c))
 }
 
-/// After the art of symbol `name` changed: each of its instances keeps its appearance changes to
-/// the objects the art still has.
-pub(crate) fn fit_instances_of(d: &mut Document, name: &str) {
-    let ids = instances_of(d, Some(name));
-    fit_overrides(d, &ids);
-}
-
-pub(crate) fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
+fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
     let mut v = vec![];
     d.walk(|n| {
         if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
