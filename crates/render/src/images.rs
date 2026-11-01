@@ -33,7 +33,14 @@ fn default_budget() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_budget() -> usize {
-    physical_memory().filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
+    budget_for_reading(physical_memory())
+}
+
+/// The default budget for a reading of the installed memory: [`IMAGE_CACHE_MAX`] when `memory` is
+/// `None` or 0, otherwise [`budget_for`] it.
+#[cfg(not(target_arch = "wasm32"))]
+fn budget_for_reading(memory: Option<u64>) -> usize {
+    memory.filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
 }
 
 /// The default budget on a machine with `memory` bytes installed: a quarter of it, and at most a
@@ -581,6 +588,50 @@ mod tests {
         assert_eq!(budget_for(16 << 30), 4 << 30);
         assert_eq!(budget_for(64 << 30), 16 << 30, "no fixed ceiling");
         assert_eq!(budget_for(2 << 30), 512 << 20);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn budget_follows_the_memory_reading() {
+        assert_eq!(budget_for_reading(Some(2 << 30)), 512 << 20);
+        assert_eq!(budget_for_reading(Some(8 << 30)), 2 << 30);
+        assert_eq!(budget_for_reading(Some(64 << 30)), 16 << 30);
+        assert_eq!(budget_for_reading(None), IMAGE_CACHE_MAX, "memory that can't be read");
+        assert_eq!(budget_for_reading(Some(0)), IMAGE_CACHE_MAX, "memory that reads as 0");
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn images_past_the_budget_drop_the_least_recently_used() {
+        // 16 MiB installed (16 GiB scaled down): a 4 MiB budget, room for four 512 × 512 images.
+        let mut s = ImageStore::new(budget_for_reading(Some(16 << 20)));
+        for k in ["a", "b", "c", "d"] {
+            drop(s.insert(key(k), Arc::new(Pixmap::new(512, 512))));
+        }
+        assert_eq!(s.bytes(), 4 << 20, "four images fill the budget exactly");
+        assert!(["a", "b", "c", "d"].iter().all(|k| s.peek(&key(k)).is_some()));
+        drop(s.insert(key("e"), Arc::new(Pixmap::new(512, 512))));
+        assert_eq!(s.bytes(), 4 << 20);
+        assert!(s.peek(&key("a")).is_none(), "the oldest image is dropped");
+        assert!(["b", "c", "d", "e"].iter().all(|k| s.peek(&key(k)).is_some()));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn an_image_larger_than_the_budget_is_kept_only_while_drawn() {
+        // 16 MiB installed: a 4 MiB budget. A 1,100 × 1,000 image takes 4.2 MiB.
+        let budget = budget_for_reading(Some(16 << 20));
+        let mut s = ImageStore::new(budget);
+        assert!(!s.keep(key("big"), Arc::new(Pixmap::new(1100, 1000))), "not kept for a later frame");
+        assert_eq!(s.bytes(), 0);
+        drop(s.insert(key("small"), Arc::new(Pixmap::new(512, 512))));
+        let drawn = s.insert(key("big"), Arc::new(Pixmap::new(1100, 1000)));
+        assert!(s.peek(&key("big")).is_some(), "kept while drawn");
+        assert!(s.peek(&key("small")).is_none(), "the other image is dropped to make room");
+        drop(drawn);
+        s.set_budget(budget);
+        assert!(s.peek(&key("big")).is_none(), "dropped once nothing draws it");
+        assert_eq!(s.bytes(), 0);
     }
 
     #[test]
