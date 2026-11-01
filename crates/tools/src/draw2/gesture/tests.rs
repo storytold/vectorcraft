@@ -587,6 +587,44 @@ fn pencil_shows_the_straight_line_cursor_when_a_press_draws_a_line() {
     assert_eq!(Cursor::PencilStraight.precise(), Cursor::Crosshair, "Use Precise Cursors");
 }
 
+/// While a stroke that redraws a selected path is drawn, its previews show the stroke as drawn,
+/// joined at its start to the path, unfilled, and leave the path and the selection as they are;
+/// the release (or a switch of tool mid-stroke) redraws the path.
+#[test]
+fn pencil_previews_a_redraw_as_the_stroke_drawn_and_redraws_at_the_release() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+    ]));
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let mut t = GestureTool::new("pencil");
+    t.set_option("fill", &json!(true));
+    // Out from the path and back onto it: within Edit selected paths within all the way.
+    let acts = drag(&mut t, &cx, &[(350.0, 304.0), (352.0, 308.0), (356.0, 309.0), (360.0, 303.0)], Mods::default());
+    let (release, drawing) = acts.split_last().unwrap();
+    let previews: Vec<&Value> = drawing.iter().flatten().filter_map(|a| if let Action::Preview(_, v) = a { Some(v) } else { None }).collect();
+    assert!(!previews.is_empty(), "{acts:?}");
+    for v in previews {
+        assert!(v.get("redraw").is_none() && v["fill"] == false && v["keepSelected"] == false, "{v}");
+        assert_eq!(v["points"][0], json!([350.0, 300.0]), "joined to the path where it starts: {v}");
+        assert_eq!(v["points"][1], json!([350.0, 304.0]), "{v}");
+    }
+    assert!(matches!(release.as_slice(), [Action::Preview(_, v), Action::Commit] if v["redraw"]["id"] == id.0 && v["fill"] == true), "{release:?}");
+    // A switch of tool mid-stroke keeps the redraw too.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 350.0, 304.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 352.0, 320.0));
+    let acts = t.deactivate(&cx);
+    assert!(matches!(acts.as_slice(), [Action::Preview(_, v), Action::Commit] if v["redraw"]["id"] == id.0), "{acts:?}");
+}
+
 /// Before a press, the Pencil shows its new-path cursor (the star) exactly when the press draws
 /// a new path: over an end of a selected open path, which the stroke continues, and over a
 /// selected path, which it redraws, it does not. With nothing selected, with Edit Selected Paths

@@ -448,6 +448,25 @@ impl GestureTool {
         v
     }
 
+    /// The preview of a stroke being drawn: [`Self::freehand_params`], except that a stroke that
+    /// redraws a selected path is shown as it is drawn, joined at its start to the point of the
+    /// path nearest to it, with no fill, and leaves the path as it is: where the stroke ends is
+    /// only known at the release, which redraws the path (`finish`).
+    fn drawing_params(&self, cx: &ToolContext) -> Value {
+        let mut v = self.freehand_params(false);
+        let Some((id, _)) = self.redraw else { return v };
+        if let Some(o) = v.as_object_mut() {
+            o.remove("redraw");
+        }
+        v["fill"] = json!(false);
+        v["keepSelected"] = json!(false);
+        let on = self.points.first().and_then(|&p| cx.doc.node(id)?.path_data()?.nearest(p)).map(|n| n.3);
+        if let (Some(on), Some(pts)) = (on, v["points"].as_array_mut()) {
+            pts.insert(0, json!([on.x, on.y]));
+        }
+        v
+    }
+
     fn finish(&mut self, cx: &ToolContext, m: Mods) -> Vec<Action> {
         let pts = &self.points;
         let has_sel = !cx.selection.is_empty();
@@ -626,7 +645,7 @@ impl Tool for GestureTool {
                 }
                 // With the Pencil's Live preview off a thin line shows instead (`overlays`).
                 if self.previews() && crate::previews_at(self.points.len()) {
-                    let mut v = self.freehand_params(false);
+                    let mut v = self.drawing_params(cx);
                     let fidelity = self.fidelity.max(cx.tol(PREVIEW_FIDELITY_PX));
                     v["fidelity"] = json!(fidelity);
                     // A preview fitted coarser than the stroke kept is stale (`deactivate`).
@@ -728,10 +747,11 @@ impl Tool for GestureTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         let began = self.began;
         self.tip_at = None;
-        // Drags past the last preview are in the stroke kept, too, and with Live curve fitting
-        // off the stroke kept is fitted.
-        let stale = (began && (self.previewed != self.points.len() || !self.live_fit) && self.draws_path() && !self.smoothing)
-            .then(|| Action::Preview("path.freehand".into(), self.freehand_params(false)));
+        // Drags past the last preview are in the stroke kept, too, with Live curve fitting off the
+        // stroke kept is fitted, and a stroke that redraws a path redraws it (`drawing_params`).
+        let stale =
+            (began && (self.previewed != self.points.len() || !self.live_fit || self.redraw.is_some()) && self.draws_path() && !self.smoothing)
+                .then(|| Action::Preview("path.freehand".into(), self.freehand_params(false)));
         self.snap.clear();
         self.active = false;
         self.near_start = false;
