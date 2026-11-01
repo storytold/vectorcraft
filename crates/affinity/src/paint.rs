@@ -357,9 +357,25 @@ pub(crate) fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, beh
         r.warn("brush strokes (imported as plain strokes)");
     }
     // The pressure curve sets the width along the path; one at full width all along is a plain
-    // stroke.
-    let profile = match s.obj(ldsc, b"LDeP").map(|p| crate::geometry::pressure(r, p)) {
-        Some(Some(points)) => (!points.iter().all(|(_, w)| (w - 1.0).abs() < 1e-3)).then_some(points),
+    // stroke. Every curve read, full width or not, counts against the document's points, and once
+    // they are used up the rest are not read.
+    const BEYOND: &str = "pressure strokes beyond the pressure points one document may hold (imported as plain strokes)";
+    let ldep = s.obj(ldsc, b"LDeP");
+    if ldep.is_some() && r.budget.pressure == 0 {
+        r.warn(BEYOND);
+    }
+    let profile = match ldep.filter(|_| r.budget.pressure > 0).map(|p| crate::geometry::pressure(r, p)) {
+        Some(Some(points)) => match r.budget.pressure.checked_sub(points.len()) {
+            Some(left) => {
+                r.budget.pressure = left;
+                (!points.iter().all(|(_, w)| (w - 1.0).abs() < 1e-9)).then_some(points)
+            }
+            None => {
+                r.budget.pressure = 0;
+                r.warn(BEYOND);
+                None
+            }
+        },
         Some(None) => {
             r.warn("pressure strokes whose pressure curve can't be read (imported as plain strokes)");
             None

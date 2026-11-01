@@ -34,7 +34,7 @@ Affinity files.
 | Opacity, visibility, lock, names, the blend modes VectorCraft has | the same |
 
 Everything else is reported in the import warnings, one line per kind with a count, never
-dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush strokes, pressure curves that can't be read,
+dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush strokes, pressure curves that can't be read or that go past the million points one document may hold,
 transparency gradients, fill opacity, bitmap fills, master pages based on other master pages, conical gradients (as radial),
 special shapes (cloud, heart, cog, callouts, arrows…, imported as their bounding ellipse), corner
 types other than round or straight, stars with rounded points, several fills or strokes on one object (the

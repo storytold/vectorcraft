@@ -172,16 +172,19 @@ fn curves(r: &mut Reader, crvs: ObjId, budget: &mut OutlineBudget) -> Option<Pat
 /// Most segments a stroke's pressure curve may have; the curves in real documents have a handful.
 const MAX_PRESSURE_SEGMENTS: usize = 256;
 
-/// Most points a pressure curve is sampled at: each segment gets an equal share, at least 2 (its
-/// middle and its end) and 8 at most.
+/// Most regular samples of a pressure curve: each segment gets an equal share, at least 2 (its
+/// middle and its end) and 8 at most. The points where a segment's width stops rising or falling
+/// come on top (at most two per segment), so a curve has at most 1 + 4 × [`MAX_PRESSURE_SEGMENTS`]
+/// points; the document's limit counts all of them.
 const PRESSURE_POINTS: usize = 512;
 
 /// A stroke's pressure curve (`LDsc.LDeP`, a `CrvD` whose positional `Data` holds an array of
 /// 18-byte records as in [`curves`]): x is the position along the path (0 to 1) and y the width as
 /// a fraction of the stroke's weight. Each segment is sampled at 2 to 8 points, at most
-/// [`PRESSURE_POINTS`] in all → (position, width) in order along the path, positions clamped into
-/// 0..1 and never going back, widths clamped into 0..1. `None` when the curve can't be read or has
-/// more than [`MAX_PRESSURE_SEGMENTS`] segments.
+/// [`PRESSURE_POINTS`] in all, and also where its width stops rising or falling (at most two more
+/// points), so a dip between samples is kept → (position, width) in order along the path,
+/// positions clamped into 0..1 and never going back, widths clamped into 0..1. `None` when the
+/// curve can't be read or has more than [`MAX_PRESSURE_SEGMENTS`] segments.
 pub(crate) fn pressure(r: &Reader, crvd: ObjId) -> Option<Vec<(f64, f64)>> {
     let s = r.s;
     let data = s.obj(crvd, b"Data")?;
@@ -198,8 +201,11 @@ pub(crate) fn pressure(r: &Reader, crvd: ObjId) -> Option<Vec<(f64, f64)>> {
     let mut samples = vec![(curve.start.x, curve.start.y)];
     let mut from = curve.start;
     for [c1, c2, to] in &curve.segments {
-        for i in 1..=steps {
-            let t = f64::from(i) / f64::from(steps);
+        let mut ts: Vec<f64> = (1..=steps).map(|i| f64::from(i) / f64::from(steps)).collect();
+        ts.extend(turning_points(from.y, c1.y, c2.y, to.y).into_iter().flatten());
+        ts.sort_by(f64::total_cmp);
+        ts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        for t in ts {
             let u = 1.0 - t;
             let at = |a: f64, b: f64, c: f64, d: f64| u * u * u * a + 3.0 * u * u * t * b + 3.0 * u * t * t * c + t * t * t * d;
             samples.push((at(from.x, c1.x, c2.x, to.x), at(from.y, c1.y, c2.y, to.y)));
@@ -216,6 +222,29 @@ pub(crate) fn pressure(r: &Reader, crvd: ObjId) -> Option<Vec<(f64, f64)>> {
             })
             .collect(),
     )
+}
+
+/// The parameters strictly between 0 and 1 where the cubic Bézier with control values `a`, `b`,
+/// `c` and `d` stops rising or falling (where its derivative is 0). The values are scaled into
+/// -1..1 first, so huge ones can't overflow the discriminant.
+fn turning_points(a: f64, b: f64, c: f64, d: f64) -> [Option<f64>; 2] {
+    let scale = a.abs().max(b.abs()).max(c.abs()).max(d.abs());
+    if !(scale.is_finite() && scale > 0.0) {
+        return [None, None];
+    }
+    let (a, b, c, d) = (a / scale, b / scale, c / scale, d / scale);
+    let (d0, d1, d2) = (b - a, c - b, d - c);
+    let (qa, qb, qc) = (d0 - 2.0 * d1 + d2, 2.0 * (d1 - d0), d0);
+    let inside = |t: f64| (t.is_finite() && t > 0.0 && t < 1.0).then_some(t);
+    if qa.abs() < 1e-12 {
+        return [if qb.abs() < 1e-12 { None } else { inside(-qc / qb) }, None];
+    }
+    let disc = qb * qb - 4.0 * qa * qc;
+    if disc < 0.0 {
+        return [None, None];
+    }
+    let root = disc.sqrt();
+    [inside((-qb - root) / (2.0 * qa)), inside((-qb + root) / (2.0 * qa))]
 }
 
 struct Anchor {
@@ -308,4 +337,20 @@ fn corner_radii(fields: Vec<&Value>) -> Option<Vec<(usize, f64)>> {
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn turning_points_of_huge_control_values_are_found() {
+        let small = turning_points(1.0, -3.0, 3.0, 1.0);
+        let huge = turning_points(1e200, -3e200, 3e200, 1e200);
+        assert!(small.iter().all(Option::is_some), "{small:?}");
+        for (s, h) in small.iter().zip(&huge) {
+            let (Some(s), Some(h)) = (s, h) else { panic!("{huge:?}") };
+            assert!((s - h).abs() < 1e-12, "{small:?} {huge:?}");
+        }
+    }
 }

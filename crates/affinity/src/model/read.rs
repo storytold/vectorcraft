@@ -26,6 +26,9 @@ const MAX_DOCUMENT_CHARS: usize = 16 << 20;
 /// Table cells of all tables together (each becomes a text object with its edge lines).
 const MAX_DOCUMENT_CELLS: usize = 1 << 18;
 
+/// Points of all strokes' pressure curves together (a stroke style may be shared by many layers).
+const MAX_DOCUMENT_PRESSURE_POINTS: usize = 1 << 20;
+
 /// What a whole read may still use. Shared objects can be linked from many layers, and embedded
 /// documents are read with what their embedding document left, so linking or embedding the
 /// same content many times can't multiply the work.
@@ -39,10 +42,18 @@ pub(crate) struct Budget {
     pub(crate) chars: usize,
     /// Table cells ([`MAX_DOCUMENT_CELLS`] in all).
     pub(crate) cells: usize,
+    /// Points of pressure curves ([`MAX_DOCUMENT_PRESSURE_POINTS`] in all).
+    pub(crate) pressure: usize,
 }
 
 impl Budget {
-    pub(crate) const FULL: Budget = Budget { nodes: MAX_NODES, pixels: MAX_LAYER_PIXELS, chars: MAX_DOCUMENT_CHARS, cells: MAX_DOCUMENT_CELLS };
+    pub(crate) const FULL: Budget = Budget {
+        nodes: MAX_NODES,
+        pixels: MAX_LAYER_PIXELS,
+        chars: MAX_DOCUMENT_CHARS,
+        cells: MAX_DOCUMENT_CELLS,
+        pressure: MAX_DOCUMENT_PRESSURE_POINTS,
+    };
 }
 
 /// Read a document: archive, `doc.dat` and the model.
