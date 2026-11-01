@@ -189,3 +189,6 @@ sync_github_name = false
 [people.WadahBadawi]
 display_name = "Wadah Badawi"
 sync_github_name = true
+
+[people.RICHRAN2030]
+sync_github_name = true

@@ -1553,15 +1553,21 @@ world", "size": 20}),
     assert_eq!((t.first_style().size, t.first_style().fill.color().map(|c| c.to_hex())), (20.0, Some("#00ff00".into())));
 }
 
-/// Preferences › Type › Show Font Names in English (#394): stored and read by the font menus.
+/// Preferences › Type › Show Font Names in English (#394): follows the interface language until
+/// the user chooses, then stores the choice.
 #[test]
-fn show_font_names_in_english_preference_is_stored() {
+fn show_font_names_in_english_follows_the_interface_until_chosen() {
     let mut s = Session::new();
-    assert!(s.prefs.font_names_in_english, "on by default");
-    set_pref(&mut s, "fontNamesInEnglish", json!(false));
-    assert!(!s.prefs.font_names_in_english);
+    assert_eq!(s.prefs.font_names_in_english, None, "unset: follows the interface language");
+    assert!(!s.prefs.font_names_in_english(true), "a Chinese, Japanese or Korean interface lists the fonts' own names");
+    assert!(s.prefs.font_names_in_english(false), "every other interface lists English names");
     set_pref(&mut s, "fontNamesInEnglish", json!(true));
-    assert!(s.prefs.font_names_in_english);
+    assert_eq!(s.prefs.font_names_in_english, Some(true));
+    assert!(s.prefs.font_names_in_english(true), "the user's choice wins");
+    set_pref(&mut s, "fontNamesInEnglish", json!(false));
+    assert_eq!(s.prefs.font_names_in_english, Some(false));
+    set_pref(&mut s, "fontNamesInEnglish", Value::Null);
+    assert_eq!(s.prefs.font_names_in_english, None, "null follows the interface language again");
 }
 
 /// Preferences › Devices › Enable Touch Workspace (#394): stored and restored through `prefs.set`.

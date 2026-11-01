@@ -343,7 +343,7 @@ fn cmd_alt_shift_2_locks_unselected_artwork() {
     app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
     assert_eq!(crate::menus::shortcut_of("object.lock.unselected"), Some("Cmd+Alt+Shift+2"));
     assert_eq!(crate::menus::shortcut_of("object.hide.unselected"), Some("Cmd+Alt+Shift+3"));
-    assert!(!crate::menus::menu_tree_named(true).iter().any(|(_, items)| format!("{items:?}").contains("object.lock.unselected")));
+    assert!(!crate::menus::menu_tree_named(None, true).iter().any(|(_, items)| format!("{items:?}").contains("object.lock.unselected")));
     let rect = |app: &mut VectorcraftApp, x: f64| {
         let r = app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap();
         vectorcraft_doc::NodeId(r["id"].as_u64().unwrap())

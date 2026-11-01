@@ -320,6 +320,10 @@ impl Dialog {
     }
 }
 
+/// The engine preferences schema [`UiState::prefs_version`] records;
+/// [`crate::prefs_dialog::restore`] migrates older files to it.
+pub const PREFS_VERSION: u32 = 1;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -487,6 +491,11 @@ pub struct UiState {
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// The engine preferences schema [`Self::engine_prefs`] was written with: 0 (absent) for
+    /// files from before [`PREFS_VERSION`], which stored Show Font Names in English as the old
+    /// default `true` and had no way to say "follow the interface language".
+    #[serde(default)]
+    pub prefs_version: u32,
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
@@ -892,6 +901,7 @@ impl Default for UiState {
             recent_fonts: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
+            prefs_version: 0,
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),

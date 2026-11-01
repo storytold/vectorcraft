@@ -760,12 +760,80 @@ fn family_display_name_follows_show_font_names_in_english() {
     ]);
     let db = FontDb::with_font_dirs(vec![]);
     assert!(db.add_font(bytes) > 0);
-    assert_eq!(db.family_display_name("Hiragino Sans", true), "Hiragino Sans");
-    assert_eq!(db.family_display_name("Hiragino Sans", false), "ヒラギノ角ゴシック");
-    assert_eq!(db.family_display_name("ヒラギノ角ゴシック", false), "ヒラギノ角ゴシック");
-    assert_eq!(db.family_display_name("Source Sans 3", false), "Source Sans 3");
+    assert_eq!(db.family_display_name("Hiragino Sans", None, true), "Hiragino Sans");
+    assert_eq!(db.family_display_name("Hiragino Sans", None, false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("Hiragino Sans", Some(crate::cjk::CjkScript::Japanese), false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("ヒラギノ角ゴシック", None, false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("Source Sans 3", None, false), "Source Sans 3");
     let face = db.face("ヒラギノ角ゴシック", "Regular").unwrap();
     assert_eq!(face.family, "Hiragino Sans");
+}
+
+/// `bytes` with its OS/2 `ulCodePageRange1` set to `pages` (version 1, where the ranges live).
+fn with_code_pages(mut bytes: Vec<u8>, pages: u32) -> Vec<u8> {
+    let n = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
+    for i in 0..n {
+        let r = 12 + i * 16;
+        if &bytes[r..r + 4] == b"OS/2" {
+            let offset = u32::from_be_bytes(bytes[r + 8..r + 12].try_into().unwrap()) as usize;
+            bytes[offset..offset + 2].copy_from_slice(&1u16.to_be_bytes());
+            bytes[offset + 78..offset + 82].copy_from_slice(&pages.to_be_bytes());
+            return bytes;
+        }
+    }
+    panic!("no OS/2 table");
+}
+
+/// A font naming itself in Simplified Chinese, Traditional Chinese and Japanese shows each name
+/// in that writing system's interface, as Glow Sans SC, TC and J do; a search finds every name.
+#[test]
+fn family_display_name_picks_the_interfaces_own_name() {
+    use crate::cjk::CjkScript::*;
+    let bytes = named(&[
+        (3, EN, 1, "Glow Test"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "GlowTest-Regular"),
+        (3, EN, 16, "Glow Test"),
+        (3, 0x0804, 16, "未来测试"),
+        (3, 0x0404, 16, "未來測試"),
+        (3, JA, 16, "ヒカリテスト"),
+    ]);
+    let db = FontDb::with_font_dirs(vec![]);
+    assert!(db.add_font(bytes) > 0);
+    assert_eq!(db.family_display_name("Glow Test", Some(SimplifiedChinese), false), "未来测试");
+    assert_eq!(db.family_display_name("Glow Test", Some(TraditionalChinese), false), "未來測試");
+    assert_eq!(db.family_display_name("Glow Test", Some(Japanese), false), "ヒカリテスト");
+    assert_eq!(db.family_display_name("Glow Test", Some(Korean), false), "未來測試", "no Korean name: the first other one");
+    assert_eq!(db.family_display_name("Glow Test", Some(SimplifiedChinese), true), "Glow Test", "English requested");
+    let names = db.family_search_names("Glow Test");
+    for name in ["Glow Test", "未来测试", "未來測試", "ヒカリテスト"] {
+        assert!(names.iter().any(|n| n == name), "{name} among {names:?}");
+    }
+    let scripts = db.family_scripts("Glow Test");
+    assert!(scripts.hans && scripts.hant && scripts.jpan && !scripts.kore, "{scripts:?}");
+}
+
+/// The writing systems a font serves come from its OS/2 code page bits — what Photoshop and
+/// Illustrator group by — when it states them, else from the languages it names itself in.
+#[test]
+fn font_traits_classify_the_cjk_writing_systems() {
+    use crate::cjk::CjkScript::*;
+    for (bit, script) in [(18, SimplifiedChinese), (20, TraditionalChinese), (17, Japanese), (19, Korean)] {
+        let bytes = with_code_pages(named(&[(3, EN, 1, "Coded Test"), (3, EN, 2, "Regular"), (3, EN, 6, "CodedTest-Regular")]), 1 << bit);
+        let db = FontDb::with_font_dirs(vec![]);
+        assert!(db.add_font(bytes) > 0, "bit {bit}");
+        let scripts = db.family_scripts("Coded Test");
+        assert!(scripts.has(script), "bit {bit} is {script:?}: {scripts:?}");
+        for other in [SimplifiedChinese, TraditionalChinese, Japanese, Korean].into_iter().filter(|s| *s != script) {
+            assert!(!scripts.has(other), "bit {bit} is only {script:?}: {scripts:?}");
+        }
+    }
+    // No code page bits: the languages the font names itself in say.
+    let bytes = named(&[(3, EN, 16, "Named Test"), (3, 0x0804, 16, "命名测试"), (3, EN, 2, "Regular"), (3, EN, 6, "NamedTest-Regular")]);
+    let db = FontDb::with_font_dirs(vec![]);
+    assert!(db.add_font(bytes) > 0);
+    let scripts = db.family_scripts("Named Test");
+    assert!(scripts.hans && !scripts.hant && !scripts.jpan && !scripts.kore, "{scripts:?}");
 }
 
 /// #2208: English-only typographic names must not hide a localized legacy family name.
@@ -791,9 +859,10 @@ fn family_display_name_falls_back_to_localized_legacy_names() {
         std::fs::write(dir.join("localized.ttf"), bytes).unwrap();
         let catalog = FontDb::with_font_dirs(vec![dir.clone()]);
         for (source, db) in [("loaded", loaded), ("catalog", catalog)] {
-            assert_eq!(db.family_display_name("SimSun", true), "SimSun", "{source}, case {case}: English requested");
-            assert_eq!(db.family_display_name("SimSun", false), expected, "{source}, case {case}: native requested");
-            assert_eq!(db.family_display_name("SimSun", true), "SimSun", "{source}, case {case}: switch back to English");
+            assert_eq!(db.family_display_name("SimSun", None, true), "SimSun", "{source}, case {case}: English requested");
+            assert_eq!(db.family_display_name("SimSun", None, false), expected, "{source}, case {case}: native requested");
+            assert_eq!(db.family_display_name("SimSun", Some(crate::cjk::CjkScript::SimplifiedChinese), false), expected, "{source}, case {case}: Simplified Chinese requested");
+            assert_eq!(db.family_display_name("SimSun", None, true), "SimSun", "{source}, case {case}: switch back to English");
             assert_eq!(db.is_loaded("SimSun"), source == "loaded", "{source}, case {case}: catalog names need no face loading");
         }
         std::fs::remove_dir_all(dir).unwrap();

@@ -66,7 +66,7 @@ fn family(name: &str) -> Row {
 fn recent_fonts_are_first_available_unique_and_expandable() {
     let names: Vec<_> = ["Alpha", "Bravo", "Charlie"].map(str::to_string).into();
     let recent: Vec<_> = ["Charlie", "Missing", "BRAVO", "charlie"].map(str::to_string).into();
-    let rows = super::grouped_rows(&names, &recent, &["bravo".into()], |_| vec!["Bold".into()]);
+    let rows = super::grouped_rows(&names, &recent, &std::collections::HashSet::new(), &["bravo".into()], |_| vec!["Bold".into()]);
     assert_eq!(
         rows,
         [
@@ -79,9 +79,37 @@ fn recent_fonts_are_first_available_unique_and_expandable() {
         ]
     );
     // A filter removing a recent family also removes it from the recent section.
-    let filtered = super::grouped_rows(&names[..1], &recent, &[], |_| vec![]);
+    let filtered = super::grouped_rows(&names[..1], &recent, &std::collections::HashSet::new(), &[], |_| vec![]);
     assert_eq!(filtered, [family("Alpha")]);
-    assert!(super::grouped_rows(&[], &recent, &[], |_| vec![]).is_empty());
+    assert!(super::grouped_rows(&[], &recent, &std::collections::HashSet::new(), &[], |_| vec![]).is_empty());
+}
+
+/// A Chinese, Japanese or Korean interface lists its own fonts in a group of their own, after
+/// Recent and above the rest, separated by a line — as Photoshop lists its Chinese fonts before
+/// the Latin ones. Without any, the rows are as before.
+#[test]
+fn the_interfaces_own_fonts_form_their_own_group_after_recent() {
+    let names: Vec<String> = ["Arial", "ヒカリ角ゴ", "未来黑", "Zebra"].map(str::to_string).into();
+    let recent = vec!["Zebra".to_string()];
+    let native: std::collections::HashSet<String> = ["ヒカリ角ゴ".to_string(), "未来黑".to_string()].into_iter().collect();
+    let rows = super::grouped_rows(&names, &recent, &native, &[], |_| vec![]);
+    assert_eq!(
+        rows,
+        [
+            Row::Heading("Recent Fonts"),
+            family("Zebra"),
+            Row::Heading("Fonts"),
+            family("ヒカリ角ゴ"),
+            family("未来黑"),
+            Row::Separator,
+            family("Arial")
+        ]
+    );
+    // The group's fonts keep the order the caller listed them in (the menu sorts them by label in
+    // the writing system's own order), and no native font means no group and no line.
+    let sorted: Vec<String> = ["Arial", "未來黑", "未来黑"].map(str::to_string).into();
+    let rows = super::grouped_rows(&sorted, &[], &std::collections::HashSet::new(), &[], |_| vec![]);
+    assert_eq!(rows, [family("Arial"), family("未來黑"), family("未来黑")], "no native font: no group");
 }
 
 #[test]

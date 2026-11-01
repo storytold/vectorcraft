@@ -433,6 +433,8 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
         PrefKind::Bool => match v {
             Value::Bool(b) => Ok(json!(b)),
             Value::String(s) if s == "true" || s == "false" => Ok(json!(s == "true")),
+            // Show Font Names in English can also follow the interface language (`null`).
+            Value::Null if key == "fontNamesInEnglish" => Ok(Value::Null),
             _ => Err(format!("`{key}` must be true or false")),
         },
         PrefKind::Num { min, max, .. } => in_range(key, num(), min, max),

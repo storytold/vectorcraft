@@ -10,6 +10,7 @@ pub(super) fn instanced(face: &FontFace, variations: Vec<Variation>, id: u32) ->
     let spec = FaceStyle {
         family: face.family.clone(),
         native_family: face.native_family.clone(),
+        localized_family: face.localized_family.clone(),
         style: face.style.clone(),
         keys: face.keys.clone(),
         variations,
@@ -28,7 +29,7 @@ pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Opt
         FontBytes::Owned(v) => v.as_slice(),
     };
     let f = skrifa::FontRef::from_index(data, index).ok()?;
-    let FaceStyle { family, native_family, style, keys, variations, weight, italic, traits } = spec;
+    let FaceStyle { family, native_family, localized_family, style, keys, variations, weight, italic, traits } = spec;
     let version = name(&f, &[StringId::VERSION_STRING]).unwrap_or_default();
     // A named instance: outlines, metrics and advances at its axis settings.
     let location = if variations.is_empty() { Location::default() } else { f.axes().location(variations.iter().map(|(t, v)| (Tag::new(t), *v))) };
@@ -54,6 +55,7 @@ pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Opt
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         family,
         native_family,
+        localized_family,
         style,
         version,
         weight: weight.unwrap_or(a.weight.value()),

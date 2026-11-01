@@ -1,3 +1,6 @@
+use vectorcraft_text::CjkScript;
+use vectorcraft_text::cjk::menu_sort_key;
+
 use super::{Item, Sep, c, cp, json, sub, todo};
 
 /// Type → Size presets.
@@ -64,20 +67,26 @@ pub(super) fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
 /// the fonts or Show Font Names in English change (the menu tree is built every frame); labels are
 /// interned once each, so rebuilding doesn't allocate forever. The command still sets the English
 /// family name ([`vectorcraft_text::FontDb::canonical`]).
-pub(super) fn font_items(english_names: bool) -> Vec<Item> {
+pub(super) fn font_items(script: Option<CjkScript>, english_names: bool) -> Vec<Item> {
     static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
-    static ITEMS: std::sync::Mutex<(u64, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, Vec::new()));
+    static ITEMS: std::sync::Mutex<(u64, Option<CjkScript>, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, None, true, Vec::new()));
     let db = vectorcraft_text::FontDb::global();
     // Read first: fonts that load meanwhile make the next frame build the list again.
     let generation = db.generation();
     let fams = db.menu_family_list();
     let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
-    if items.0 != generation || items.1 != english_names {
-        let list = fams
-            .iter()
+    if items.0 != generation || items.1 != script || items.2 != english_names {
+        // A CJK interface lists the fonts in its writing system's own order (pinyin for Chinese),
+        // as its font menu does; every other language keeps the English-alphabetical order.
+        let mut listed: Vec<&String> = fams.iter().collect();
+        if let Some(script) = script {
+            listed.sort_by_cached_key(|f| (menu_sort_key(&db.family_display_name(f.as_str(), Some(script), english_names), Some(script)), f.to_lowercase()));
+        }
+        let list = listed
+            .into_iter()
             .map(|f| {
                 let english = f.as_str();
-                let shown = db.family_display_name(english, english_names);
+                let shown = db.family_display_name(english, script, english_names);
                 let label: &'static str = match names.get(shown.as_str()) {
                     Some(n) => n,
                     None => {
@@ -97,9 +106,9 @@ pub(super) fn font_items(english_names: bool) -> Vec<Item> {
                 cp(label, "text.setStyle", json!({ "font": font }))
             })
             .collect();
-        *items = (generation, english_names, list);
+        *items = (generation, script, english_names, list);
     }
-    items.2.clone()
+    items.3.clone()
 }
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the

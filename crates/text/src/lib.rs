@@ -11,6 +11,7 @@
 #![forbid(unsafe_code)]
 
 mod bitmap;
+pub mod cjk;
 mod colr;
 mod composer;
 pub mod craft_fonts;
@@ -32,6 +33,7 @@ pub mod test_fonts;
 pub mod thread;
 
 pub use bitmap::GlyphImage;
+pub use cjk::{CjkScript, CjkScripts};
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{

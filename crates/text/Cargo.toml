@@ -49,6 +49,19 @@ test-fonts = ["dep:write-fonts"]
 [dev-dependencies]
 write-fonts = "0.48"
 
+[build-dependencies]
+# The font menu's ordering tables (build.rs): each CJK writing system's standard character set
+# (GB2312, Big5, JIS X 0208, KS X 1001) in the order the set lists it. MIT OR Apache-2.0; the
+# indexes come from the WHATWG Encoding standard.
+encoding_rs = "0.8"
+
+# Old CJK fonts keep a localized family name only in a legacy encoding (Mac GB2312, Big5,
+# Shift-JIS or EUC-KR records; Windows encodings 2-5), which the font stack can't read: the menu
+# decodes them itself, on the desktop only (the web has no system fonts, and the wasm stays
+# small). MIT OR Apache-2.0.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+encoding_rs = "0.8"
+
 # Fonts registered with Windows outside its font folders ("install as shortcut", installers);
 # MIT OR Apache-2.0, a safe wrapper of the registry API from the windows-rs project.
 [target.'cfg(windows)'.dependencies]
