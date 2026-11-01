@@ -216,6 +216,10 @@ pub fn build_file_font(info: &FileFontInfo, glyphs: &[FileGlyph]) -> Option<Vec<
     Some(b.build())
 }
 
+/// The largest coordinate of a glyph outline read from a file, in the file's units (thousandths of
+/// an em). Far past any glyph; a curve control point beyond it leaves the glyph out.
+const MAX_INPUT: f64 = 1e6;
+
 /// `outline` (thousandths of an em, y up) as a TrueType glyph in font units: its cubic curves as
 /// quadratic ones, its contours that draw nothing (a lone point) left out. `Glyph::Empty` for a
 /// glyph without ink (a space); `None` when it can't be written (points that aren't numbers or lie
@@ -235,11 +239,13 @@ fn glyph(outline: &BezPath) -> Option<Glyph> {
             out.close_path();
         }
     };
-    // A point that isn't a number can't be written (nor bounded: `min`/`max` skip NaN).
+    // A point that isn't a number can't be written (nor bounded: `min`/`max` skip NaN), and one
+    // far outside any glyph would make the curve subdivision below enormous.
+    let sane = |p: kurbo::Point| p.is_finite() && p.x.abs() <= MAX_INPUT && p.y.abs() <= MAX_INPUT;
     let finite = |el: &PathEl| match *el {
-        PathEl::MoveTo(p) | PathEl::LineTo(p) => p.is_finite(),
-        PathEl::QuadTo(a, p) => a.is_finite() && p.is_finite(),
-        PathEl::CurveTo(a, b, p) => a.is_finite() && b.is_finite() && p.is_finite(),
+        PathEl::MoveTo(p) | PathEl::LineTo(p) => sane(p),
+        PathEl::QuadTo(a, p) => sane(a) && sane(p),
+        PathEl::CurveTo(a, b, p) => sane(a) && sane(b) && sane(p),
         PathEl::ClosePath => true,
     };
     if !outline.elements().iter().all(finite) {
@@ -397,6 +403,25 @@ mod tests {
             assert!(db.keep_file_font("kept", Arc::new(bytes)));
             assert_eq!(db.file_font("kept").unwrap().embedding(), want, "fsType {fs_type:?}");
         }
+    }
+
+    /// A curve whose control point is absurdly far out is left out before it is subdivided
+    /// (CodeRabbit, #4569); a glyph of ordinary size still builds.
+    #[test]
+    fn a_curve_with_an_absurd_control_point_is_left_out() {
+        let mut from = glyphs("a");
+        let mut wild = BezPath::new();
+        wild.move_to((0.0, 0.0));
+        wild.curve_to((1e12, 0.0), (0.0, 1e12), (10.0, 10.0));
+        wild.line_to((10.0, 0.0));
+        wild.close_path();
+        from.push(FileGlyph { ch: 'w', outline: wild, advance: 500.0 });
+        let bytes = build_file_font(&info(), &from).unwrap();
+        let db = FontDb::with_font_dirs(vec![]);
+        assert!(db.keep_file_font("kept", Arc::new(bytes)));
+        let face = db.file_font("kept").unwrap();
+        assert_ne!(face.glyph_for('a'), 0);
+        assert_eq!(face.glyph_for('w'), 0);
     }
 
     #[test]
