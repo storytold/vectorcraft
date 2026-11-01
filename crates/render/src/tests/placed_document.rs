@@ -27,7 +27,7 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
 
 /// A 100×100 document showing one placed file (`bytes` under `key`) in the box (10, 10)–(90, 50).
 fn doc_with(key: &str, bytes: &[u8]) -> Document {
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     d.images.insert(key.into(), ImageBlob::new("application/json", bytes.to_vec()));
     let l = d.layers[0].id;
@@ -60,7 +60,9 @@ static GATE_SHUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 /// The thread drawing while the gate is shut: it never waits (a file read there is drawn exactly).
 static GATE_HOLDER: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
 
-/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it.
+/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it. Every test
+/// here registers it: the first registration stays, so all of them must agree (open, it is
+/// `blue_page`).
 fn gated_blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     let here = std::thread::current().id();
     let holder = *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -201,7 +203,7 @@ fn copies_of_one_placed_document_share_its_bitmap() {
 #[test]
 fn nine_large_bitmaps_on_screen_are_not_made_again() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     let l = d.layers[0].id;
     let keys: Vec<String> = (0..9).map(|i| format!("nine-{i}")).collect();
