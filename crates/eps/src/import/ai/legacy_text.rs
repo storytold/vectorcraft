@@ -236,7 +236,7 @@ impl Reader<'_> {
         };
         style.fill = if fill { gs.fill.clone() } else { Paint::None };
         style.stroke = if stroke { gs.stroke.clone() } else { Paint::None };
-        style.stroke_width = if stroke { gs.width } else { 0.0 };
+        style.stroke_width = if stroke { gs.line_width() } else { 0.0 };
         (style.stroke_cap, style.stroke_join, style.stroke_miter_limit, style.stroke_dash) = (gs.cap, gs.join, gs.miter, gs.dash.clone());
         (style.overprint_fill, style.overprint_stroke) = (gs.overprint_fill, gs.overprint_stroke);
         let mut text = String::new();

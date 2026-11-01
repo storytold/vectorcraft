@@ -66,6 +66,7 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{FillRule, PathData};
 
 use super::super::ate::CANVAS_CENTRE;
+use super::super::graphics::HAIRLINE;
 use super::lex::{Lexer, Tok};
 use super::obj::{self, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};

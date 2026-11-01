@@ -1,4 +1,4 @@
-use super::{Affine, BlendMode, Dash, FillRule, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
+use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -84,6 +84,18 @@ impl Default for GState {
             hidden: false,
         }
     }
+}
+
+impl GState {
+    /// The width its stroke draws at (see [`line_width`]).
+    pub(crate) fn line_width(&self) -> f64 {
+        line_width(self.width)
+    }
+}
+
+/// The width a stroke of `w w` draws at: `0 w` is the thinnest line a device draws, a [`HAIRLINE`].
+pub(super) fn line_width(w: f64) -> f64 {
+    if w > 0.0 { w } else { HAIRLINE }
 }
 
 /// The blend modes by their number in `Xy`.

@@ -3004,6 +3004,28 @@ proptest! {
         survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose strokes have any width (0, which draws a hairline, negative, huge, not a number) on a
+    /// path, on a gradient-filled path that `1 BB` strokes and on type in any rendering mode,
+    /// damaged or hostile.
+    #[test]
+    fn ai_line_widths_never_panic(
+        width in prop::sample::select(vec!["0", "0.0", "-0", "-1", "1e308", "1e-308", "nan", "inf", "2"]),
+        render in prop::sample::select(vec!["0", "1", "2", "5", "6", "7", "-1", "99"]),
+        cut in 0usize..2_000,
+        edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', 'w', 'B', 'S', 'T'])), 0..8),
+    ) {
+        use vectorcraft_testkit::ai;
+        let gradient = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+        let art = format!(
+            "0 1 1 0 1 0 0 XA\n{width} w\n10 10 m\n90 90 L\nS\n{}Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\nf\n1 BB\n\
+             0 To\n1 0 0 1 10 50 0 Tp\nTP\n{render} Tr\n/_Helvetica 9 Tf\n(hi) Tx\nTO\n",
+            ai::rect(20.0, 20.0, 80.0, 80.0)
+        );
+        let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{gradient}{}", ai::layer("L", &art))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai line widths", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning
     /// whether the layers are read or not (an inserted `Z` can make an operator the reader doesn't
     /// handle, and then the layers aren't read).

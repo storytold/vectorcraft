@@ -186,7 +186,7 @@ impl<'a> Reader<'a> {
             }));
         }
         if stroke && !clip {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.width);
+            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
             st.cap = gs.cap;
             st.join = gs.join;
             st.miter_limit = gs.miter;
@@ -304,7 +304,7 @@ impl<'a> Reader<'a> {
         if !matches!(n.kind, NodeKind::Path { clipping: false, .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.width);
+        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
         st.cap = gs.cap;
         st.join = gs.join;
         st.miter_limit = gs.miter;
