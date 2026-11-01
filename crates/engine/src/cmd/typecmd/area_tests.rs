@@ -1636,3 +1636,26 @@ fn area_options_columns_change_layout() {
     assert_eq!(lay(&s).frames.len(), 1);
     assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
 }
+
+/// #3759: an option given for several area types goes onto each one's own options: the others
+/// stay as each had them, not copied from the first.
+#[test]
+fn area_options_for_several_frames_change_only_what_is_given() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [a], "columns": 3, "gutter": 6})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [b], "inset": 4})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [a, b], "verticalAlign": "bottom"})).unwrap();
+    let area = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        k => panic!("{k:?}"),
+    };
+    let (oa, ob) = (area(&s, a), area(&s, b));
+    assert_eq!((oa.vertical_align, ob.vertical_align), (vectorcraft_doc::VerticalAlign::Bottom, vectorcraft_doc::VerticalAlign::Bottom));
+    assert_eq!((oa.columns, oa.gutter, oa.inset), (3, 6.0, 0.0));
+    assert_eq!((ob.columns, ob.inset), (1, 4.0), "b keeps its own options");
+}

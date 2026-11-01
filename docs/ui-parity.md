@@ -395,6 +395,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Paragraph panel: with area type selected, Align Top / Center / Bottom / Justify Vertically buttons set its vertical alignment in the frame, as Area Type Options does (#3759); `text.areaOptions` on several frames now changes only the options given on each; scores and estimates unchanged |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |

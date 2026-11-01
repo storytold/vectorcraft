@@ -1039,35 +1039,43 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let cur = area_text(s.doc()?.doc.node(first)).map(|t| t.area.clone()).unwrap_or_default();
     let fit = fit_param(p, cur.fit, C)?;
-    let mut v = serde_json::to_value(&cur).map_err(|e| EngineError::Other(e.to_string()))?;
     let size = |k: &str| p.get(k).and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(1.0, 100_000.0));
-    let (w, mut h) = (size("width"), size("height"));
-    let mut changed = w.is_some() || h.is_some() || fit.is_some();
-    if let (Some(o), Some(src)) = (v.as_object_mut(), p.as_object()) {
-        for (k, val) in src.iter().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())) {
-            o.insert(k.clone(), val.clone());
-            changed = true;
-        }
-    }
-    if !changed {
+    let (w, h) = (size("width"), size("height"));
+    let given: Vec<(&String, &Value)> = p.as_object().into_iter().flatten().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())).collect();
+    if w.is_none() && h.is_none() && fit.is_none() && given.is_empty() {
         return options(s);
     }
-    let mut opts: vectorcraft_doc::AreaOptions = serde_json::from_value(v).map_err(|e| bad(C, e.to_string()))?;
-    opts.rows = opts.rows.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
-    opts.columns = opts.columns.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
-    let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
-    opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
-    opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
-    opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
-    opts.fit = fit.unwrap_or(cur.fit);
-    if opts.fit == AreaFit::AutoHeight {
-        // Auto Size sets the height (Illustrator's dialog turns the Height field off).
-        h = None;
-    }
+    // Each area type takes the options given over its own (#3759): setting one option on several
+    // frames leaves their other options as they were.
+    let merged = |own: &vectorcraft_doc::AreaOptions| -> Result<vectorcraft_doc::AreaOptions> {
+        let mut v = serde_json::to_value(own).map_err(|e| EngineError::Other(e.to_string()))?;
+        if let Some(o) = v.as_object_mut() {
+            for (k, val) in &given {
+                o.insert((*k).clone(), (*val).clone());
+            }
+        }
+        let mut opts: vectorcraft_doc::AreaOptions = serde_json::from_value(v).map_err(|e| bad(C, e.to_string()))?;
+        opts.rows = opts.rows.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
+        opts.columns = opts.columns.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
+        let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
+        opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
+        opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
+        opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
+        opts.fit = fit.unwrap_or(own.fit);
+        Ok(opts)
+    };
+    let d = &s.doc()?.doc;
+    let planned: Vec<(NodeId, vectorcraft_doc::AreaOptions)> = ids
+        .iter()
+        .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, &t.area)))
+        .map(|(id, own)| merged(own).map(|o| (id, o)))
+        .collect::<Result<_>>()?;
     s.edit("Area Type Options", |d, _| {
-        for id in &ids {
+        for (id, opts) in &planned {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                 t.area = opts.clone();
+                // Auto Size sets the height (Illustrator's dialog turns the Height field off).
+                let h = if opts.fit == AreaFit::AutoHeight { None } else { h };
                 // A resized frame has laid its text out again; otherwise the new options do here.
                 if !size_area(t, w, h) {
                     refresh_bounds(t);
