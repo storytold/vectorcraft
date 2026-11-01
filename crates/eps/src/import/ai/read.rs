@@ -46,7 +46,10 @@
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
 //!
-//! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
+//! - Brushes: the brush plug-in objects and their art sections (`%AI8_BeginBrushPattern`), read by
+//!   [`super::brush`], replace the default brushes when the file has any.
+//!
+//! Sections the reader doesn't need (symbols, styles, filters) are skipped;
 //! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
 //! it doesn't know are errors.
 
@@ -81,7 +84,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
+pub use document::{Brushes, PaletteSwatches, VariableLibrary, artboards, brushes, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, Raster};
@@ -272,6 +275,18 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// The file has brush objects (the brush manager's order or a brush).
+    brush_objects: bool,
+    /// The brush manager's order.
+    brush_order: Option<Vec<(super::brush::Tool, String)>>,
+    /// The brushes read, in the order of their objects.
+    brush_drafts: Vec<super::brush::BrushDraft>,
+    /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
+    brush_art: HashMap<String, Node>,
+    /// The brush art sections read so far, repeated names included.
+    brush_art_sections: usize,
+    /// Brush objects that weren't read.
+    brushes_unread: usize,
 }
 
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
@@ -364,6 +379,12 @@ impl<'a> Reader<'a> {
             pattern_tiles: HashMap::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            brush_objects: false,
+            brush_order: None,
+            brush_drafts: Vec::new(),
+            brush_art: HashMap::new(),
+            brush_art_sections: 0,
+            brushes_unread: 0,
         }
     }
 

@@ -3102,3 +3102,183 @@ fn an_objects_on_path_group_in_versioned_content_opens_once() {
     assert_eq!(kids[0].children().unwrap().len(), 5);
     assert!(kids[0].extras().objects_on_path.is_some());
 }
+
+// ---- brushes ------------------------------------------------------------------------------
+
+const CALLIGRAPHIC: &str = "Adobe Calligraphic Brush Tool";
+const SCATTER: &str = "Adobe Scatter Brush Tool";
+const ART_BRUSH: &str = "Adobe ArtOnPath Brush Tool";
+const PATTERN_BRUSH: &str = "Adobe PatternOnPath Brush Tool";
+const BRISTLE: &str = "Adobe dBrush Brush Tool";
+
+/// A plug-in object of plug-in `kind` named `name`, its parameters `params` split into strings of
+/// 16 characters at most (`-` after each but the last, `.` after that).
+fn plugin_object(kind: &str, name: &str, params: &str) -> String {
+    let chars: Vec<char> = params.chars().collect();
+    let chunks: Vec<String> = chars.chunks(16).map(|c| c.iter().collect()).collect();
+    let n = chunks.len();
+    let lines: String = chunks.iter().enumerate().map(|(i, c)| format!("({c}) {}\n", if i + 1 == n { "." } else { "-" })).collect();
+    format!("%AI5_Begin_NonPrinting\nNp\n%AI8_BeginPluginObject\n({kind})\n({name})\n{lines}%AI8_EndPluginObject\n%AI5_End_NonPrinting--\n")
+}
+
+/// The brush manager's order of the brushes `brushes` (plug-in, name).
+fn brush_order(brushes: &[(&str, &str)]) -> String {
+    let params: String = brushes.iter().map(|(k, n)| format!(" {k}/ {n}/")).collect();
+    plugin_object(brush::MANAGER, brush::MANAGER, &params)
+}
+
+/// A brush's art named `name`: a filled square of side `side`.
+fn brush_art(name: &str, side: f64) -> String {
+    format!("%AI8_BeginBrushPattern\n({name})\n0 A\n0 g\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, side, side))
+}
+
+/// A Calligraphic brush with diameter 2 to 6, roundness 40 to 60 and angle -30 to 10, the diameter
+/// varying at random, the roundness fixed and the angle with the pen's pressure.
+const NIB: &str = "1 2 6 40 60 -30 10 1 0 2 0";
+/// A Scatter brush of the art `Dot art`: size 50% to 150% at random, spacing 120% to 200% fixed,
+/// scatter -25% to 25% with the pressure, rotation -45° to 30° at random and following the path.
+const SPRAY: &str = "2 /Dot art/ 5 1 0 0 / 0 0.5 1.5 1 1.2 2 0 -0.25 0.25 2 -45 30 1 1 0";
+/// An Art brush of the art `Ribbon art`.
+const RIBBON: &str = "2 / Ribbon art/ / / / / 0 0/ 5 0 0 0 /  1 1 1 0 1 0 0 0 1 1 0 0 0 0 1";
+/// A Pattern brush of four tiles (the fourth slot empty) at 80%.
+const FENCE: &str = "2 / Tile one/ Tile two/ Tile three/ / Tile five/ 0 0/ 0 1 /  1 1 0.8 0 4 0 0 0 0.8 0.8 0 0 0 0 0";
+/// A Bristle brush: stiffness 60%, thickness 40%, density 30%, opacity 80%, length 150%, size 2 mm.
+const MOP: &str = "0 4 0.6 0.4 0.3 0.8 1.5 2 library shape";
+
+/// The brushes of the five kinds, their art and the manager's order (the Bristle brush first).
+fn five_brushes() -> String {
+    let order = brush_order(&[(BRISTLE, "Mop"), (CALLIGRAPHIC, "Nib"), (SCATTER, "Spray"), (ART_BRUSH, "Ribbon"), (PATTERN_BRUSH, "Fence")]);
+    let art: String = ["Dot art", "Ribbon art", "Tile one", "Tile two", "Tile three", "Tile five"].iter().map(|n| brush_art(n, 4.0)).collect();
+    let objects = [
+        (CALLIGRAPHIC, "Nib", NIB),
+        (SCATTER, "Spray", SPRAY),
+        (ART_BRUSH, "Ribbon", RIBBON),
+        (PATTERN_BRUSH, "Fence", FENCE),
+        (BRISTLE, "Mop", MOP),
+    ];
+    let objects: String = objects.iter().map(|(k, n, p)| plugin_object(k, n, p)).collect();
+    format!("{art}{order}{objects}")
+}
+
+fn brush_named<'a>(lib: &'a [vectorcraft_brush::Brush], name: &str) -> &'a vectorcraft_brush::BrushKind {
+    match lib.iter().find(|b| b.name == name) {
+        Some(b) => &b.kind,
+        None => panic!("no brush {name} in {:?}", lib.iter().map(|b| &b.name).collect::<Vec<_>>()),
+    }
+}
+
+/// The brush manager's order gives the kind and name of each brush, in the panel's order.
+#[test]
+fn the_brush_managers_order_gives_each_brushs_kind_in_order() {
+    let params = format!(" {BRISTLE}/ Mop/ {CALLIGRAPHIC}/ Nib/ {SCATTER}/ Spray/ {ART_BRUSH}/ Ribbon/ {PATTERN_BRUSH}/ Fence  /");
+    let order = brush::parse_brush_manager(&params).unwrap();
+    use brush::Tool;
+    let want = [(Tool::Bristle, "Mop"), (Tool::Calligraphic, "Nib"), (Tool::Scatter, "Spray"), (Tool::Art, "Ribbon"), (Tool::Pattern, "Fence  ")];
+    assert_eq!(order, want.map(|(t, n)| (t, n.to_string())), "a name keeps its trailing spaces");
+    assert_eq!(brush::parse_brush_manager(" Some Other Plugin/ Thing/"), None);
+}
+
+/// A file's brushes replace the default ones, in the manager's order, with their values. A pattern
+/// brush is left out (which slot holds which tile isn't known), with a note.
+#[test]
+fn a_files_brushes_come_in_with_their_values_in_the_panels_order() {
+    let r = read_ok(&format!("{}{}", five_brushes(), layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Mop", "Nib", "Spray", "Ribbon"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w == "brushes VectorCraft can't read yet were left out of the Brushes panel (1)"), "{:?}", r.warnings);
+    use vectorcraft_brush::{BrushKind, Variation};
+    let BrushKind::Calligraphic(c) = brush_named(&lib, "Nib") else { panic!("calligraphic") };
+    assert_eq!((c.angle, c.roundness, c.size), (-10.0, 50.0, 4.0));
+    assert_eq!(c.variation, [20.0, 10.0, 2.0]);
+    assert_eq!(c.modes, Some([Variation::Pressure, Variation::Fixed, Variation::Random]));
+    let BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter") };
+    assert_eq!((s.size, s.spacing, s.scatter, s.rotation), ((50.0, 150.0), (120.0, 200.0), (-25.0, 25.0), (-45.0, 30.0)));
+    assert_eq!(s.modes, Some([Variation::Random, Variation::Fixed, Variation::Pressure, Variation::Random]));
+    assert!(s.rotation_relative_to_path);
+    assert_eq!(s.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)), "the art of its section");
+    let BrushKind::Art(a) = brush_named(&lib, "Ribbon") else { panic!("art") };
+    assert!(a.art.geometric_bounds().is_some(), "the art of its section");
+    assert_eq!(a.colorization, vectorcraft_brush::Colorization::None, "the art keeps its colors");
+    let BrushKind::Bristle(b) = brush_named(&lib, "Mop") else { panic!("bristle") };
+    let got = [b.stiffness, b.thickness, b.density, b.opacity, b.length, b.size];
+    let want = [60.0, 40.0, 30.0, 80.0, 150.0, 2.0 * 72.0 / 25.4];
+    assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-9), "{got:?}");
+}
+
+/// A Pattern brush's five slots name its art sections, in its order, an empty slot naming none;
+/// its scale comes in as a percentage.
+#[test]
+fn a_pattern_brushs_five_slots_are_kept() {
+    let d = brush::parse_tool_object(brush::Tool::Pattern, "Fence", FENCE).unwrap();
+    let brush::DraftKind::Pattern { tiles, scale } = d.kind else { panic!("{d:?}") };
+    let s = |n: &str| Some(n.to_string());
+    assert_eq!(tiles, [s("Tile one"), s("Tile two"), s("Tile three"), None, s("Tile five")]);
+    assert!((scale - 80.0).abs() < 1e-9);
+    let d = brush::parse_tool_object(brush::Tool::Scatter, "Spray", SPRAY).unwrap();
+    assert!(matches!(d.kind, brush::DraftKind::Scatter { ref art, .. } if art == "Dot art"), "{d:?}");
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", RIBBON).unwrap();
+    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, .. } if art == "Ribbon art"), "{d:?}");
+}
+
+/// A brush's art filled with a pattern the file defines before it is read, with that pattern.
+#[test]
+fn a_brushs_art_takes_the_patterns_defined_before_it() {
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let art_ = format!(
+        "%AI8_BeginBrushPattern\n(Dot art)\n0 A\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n%AI8_EndBrushPattern\n",
+        rect_path(0.0, 0.0, 4.0, 4.0)
+    );
+    let r = read_ok(&format!("{dots}{art_}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter") };
+    assert!(matches!(fill(&s.art), Paint::Pattern { ref pattern, .. } if pattern == "Dots"), "{:?}", r.warnings);
+}
+
+/// A file without brush objects keeps the default brushes.
+#[test]
+fn a_file_without_brushes_keeps_the_default_ones() {
+    let r = read_ok(&layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n")));
+    assert!(!r.doc.unknown.contains_key(vectorcraft_brush::DOC_KEY));
+}
+
+/// A brush whose object can't be read, or whose art is missing or can't be read, is left out with a
+/// note; the layers and the other brushes still come in.
+#[test]
+fn a_brush_that_cant_be_read_leaves_the_layers_and_other_brushes() {
+    let bad_art = "%AI8_BeginBrushPattern\n(Odd art)\n0 g\n0 0 m\n1 1 L\nnotanoperator\nf\n%AI8_EndBrushPattern\n";
+    let objects = [
+        plugin_object(CALLIGRAPHIC, "Nib", NIB),
+        plugin_object(CALLIGRAPHIC, "Short", "1 2 3"),
+        plugin_object(CALLIGRAPHIC, "Huge", "1 2 inf 40 60 -30 10 1 0 2 0"),
+        plugin_object(SCATTER, "Odd", &SPRAY.replace("Dot art", "Odd art")),
+        plugin_object(SCATTER, "Lost", &SPRAY.replace("Dot art", "Nowhere")),
+        plugin_object(ART_BRUSH, "Bare", "2 / / / / / / 0 0/ 5 0 0 0 /  1 1 1 0 1 0 0 0 1 1 0 0 0 0 1"),
+        plugin_object(BRISTLE, "Nib", MOP),
+    ]
+    .concat();
+    let r = read_ok(&format!("{bad_art}{objects}{}", layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
+    assert_eq!(art(&r.doc).len(), 1, "the layer's art");
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Nib"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (6)")), "{:?}", r.warnings);
+}
+
+/// Files with brush objects and no brushes VectorCraft reads get an empty list, not the defaults.
+#[test]
+fn a_file_whose_brushes_are_all_left_out_has_none() {
+    let r = read_ok(&format!("{}{}", plugin_object(PATTERN_BRUSH, "Fence", FENCE), layer("")));
+    assert!(vectorcraft_brush::library(&r.doc).is_empty());
+}
+
+/// A gradient's `Br` (a stop's ramp) isn't a brush: the gradient keeps its stops.
+#[test]
+fn a_gradients_br_is_not_a_brush() {
+    let gradient =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n0 0 0 0 1 1 1 2 1 6 50 0 Bs\n0 0 0 1 0 0 0 2 0.5 6 50 100 Bs\n0 Br\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("{}Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\nf\n0 BB\n", rect_path(0.0, 0.0, 20.0, 20.0));
+    let r = read_ok(&format!("{gradient}{}", layer(&art_)));
+    assert!(!r.doc.unknown.contains_key(vectorcraft_brush::DOC_KEY));
+    let Paint::Gradient(g) = fill(&art(&r.doc)[0]) else { panic!("a gradient: {:?}", r.warnings) };
+    assert_eq!(g.gradient.stops.len(), 2);
+}

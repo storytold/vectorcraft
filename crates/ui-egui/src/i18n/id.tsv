@@ -4537,6 +4537,7 @@ imageTrace	Outline	Kontur
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	memiliki {_1}, yang belum dibaca VectorCraft dari berkas tersebut
 @msg	its objects are nested too deeply	objeknya bersarang terlalu dalam
 @msg	its section ending with `%{end}` doesn't end	bagian yang berakhir dengan `%{end}` tidak berakhir
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	kuas yang belum dapat dibaca VectorCraft tidak dimasukkan ke panel Kuas ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradien “{name}” tidak didefinisikan dalam berkas: warna polos dipakai sebagai pengganti
 @msg	an image VectorCraft can't read was left out	gambar yang tidak dapat dibaca VectorCraft tidak disertakan

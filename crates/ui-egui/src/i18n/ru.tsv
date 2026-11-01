@@ -4615,6 +4615,7 @@ axis	Both	Оба
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	в них есть {_1}, которые VectorCraft пока не читает
 @msg	its objects are nested too deeply	объекты в них вложены слишком глубоко
 @msg	its section ending with `%{end}` doesn't end	раздел, заканчивающийся на `%{end}`, не заканчивается
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	кисти, которые VectorCraft пока не умеет читать, не добавлены в панель «Кисти» ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиент «{name}» не определён в файле: вместо него используется сплошной цвет
 @msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено

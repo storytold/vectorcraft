@@ -1077,6 +1077,28 @@ fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
     assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
 }
 
+/// A brush library (brush objects and their art, no layers) comes in as its PDF part with the
+/// library's brushes in place of the default ones: Other Library lists them.
+#[test]
+fn an_ai_brush_library_without_layers_keeps_its_brushes() {
+    let order = "%AI8_BeginPluginObject\n(Adobe Brush Manager Order)\n(Adobe Brush Manager Order)\n\
+                 ( Adobe Scatter Brush Tool/ Spray/ Adobe Calli) -\n(graphic Brush Tool/ Nib/) .\n%AI8_EndPluginObject\n";
+    let nib = "%AI8_BeginPluginObject\n(Adobe Calligraphic Brush Tool)\n(Nib)\n(1 2 6 40 60 -30 10 1 0 2 0) .\n%AI8_EndPluginObject\n";
+    let spray = "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n(Spray)\n(2 /Dot art/ 5 1 0 0 / 0 0.5 1.5 1 ) -\n\
+                 (1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n";
+    // The art is filled with a pattern no swatch paints with: it comes in with the brush.
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let dot = "%AI8_BeginBrushPattern\n(Dot art)\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n";
+    let library =
+        format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 0 0\n%%BeginSetup\n{dots}{dot}{order}{nib}{spray}%%EndSetup\n%%PageTrailer\n%%Trailer\n");
+    let (d, warnings, read) = crate::layered_ai(&private(&library), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let lib = vectorcraft_brush::library(&d);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Spray", "Nib"], "{warnings:?}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(d.pattern("Dots").is_some_and(|p| !p.art.is_empty()), "the pattern the brush's art paints with");
+}
+
 /// An EPS whose editing data can't be used, a palette with no layers among others, comes in as its
 /// page with the swatches and color groups of that palette in place of the defaults.
 #[test]

@@ -18,6 +18,7 @@
 //! did before (the printed page, or the PDF), with a warning saying why.
 
 mod blend;
+mod brush;
 mod envelope;
 mod frames;
 mod lex;
@@ -35,7 +36,7 @@ use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
-pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
+pub use read::{Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, brushes, palette, read, variables};
 pub(crate) use read::{join_and, slot_frame, slot_of};
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+use super::super::brush;
 use super::art::{element_name, elements, join_and, sane};
 use super::containers::drop_commented_copies;
 use super::types::{FLIP, Kind, MAX_DEPTH};
@@ -112,6 +113,55 @@ pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> 
         }
     });
     Some(PaletteSwatches { swatches, groups, patterns: added, images })
+}
+
+/// The brushes of a `.ai` file's editing data, as [`brushes`] reads them.
+pub struct Brushes {
+    pub brushes: Vec<vectorcraft_brush::Brush>,
+    /// The patterns the editing data defines that the given patterns lack and the brushes' art
+    /// paints with.
+    pub patterns: Vec<PatternDef>,
+    /// The image blobs the art of `patterns` shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The note for the brushes left out.
+    pub note: Option<String>,
+}
+
+/// The brushes of the editing data `data`, for a file whose layers aren't read (a brush library
+/// has none), as [`read`] makes them, with the patterns their art paints with that `patterns`
+/// lacks. `None` when the file has no brush objects or reading stops before them.
+pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
+    // Brush objects are plug-in objects: data without one isn't read again.
+    memchr::memmem::find(data, b"BeginPluginObject")?;
+    let mut r = Reader::new(data);
+    // The brushes come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    let (lib, unread) = r.brush_library()?;
+    // The patterns the brushes' art paints with, and those their art paints with, and so on.
+    let defined = std::mem::take(&mut r.doc.patterns);
+    let mut stack: Vec<&vectorcraft_doc::Node> = lib.iter().flat_map(|b| b.art()).collect();
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(n) = stack.pop() {
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        for p in vectorcraft_doc::swatches::node_paints(n) {
+            if let Paint::Pattern { pattern, .. } = p
+                && used.insert(pattern.clone())
+                && let Some(d) = defined.iter().find(|d| &d.name == pattern)
+            {
+                stack.extend(d.art.iter().map(|a| &**a));
+            }
+        }
+    }
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| used.contains(&d.name) && !patterns.iter().any(|p| p.name == d.name)).collect();
+    let mut shown = Document::new(1.0, 1.0);
+    shown.patterns.clone_from(&added);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -385,6 +435,17 @@ impl<'a> Reader<'a> {
         Some((swatches, groups))
     }
 
+    /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
+    /// no brush objects (the document keeps the default brushes).
+    fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
+        if !self.brush_objects {
+            return None;
+        }
+        let drafts = std::mem::take(&mut self.brush_drafts);
+        let (lib, left_out) = brush::finish_brushes(drafts, &self.brush_art, self.brush_order.as_deref());
+        Some((lib, left_out + self.brushes_unread))
+    }
+
     pub(super) fn finish(mut self) -> Result<Structure, String> {
         // Envelopes whose plugin never closed them keep their drawn art.
         if !self.envelopes.is_empty() {
@@ -482,7 +543,13 @@ impl<'a> Reader<'a> {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }
-        let mut warnings = self.warnings;
+        let mut warnings = std::mem::take(&mut self.warnings);
+        if let Some((lib, unread)) = self.brush_library() {
+            vectorcraft_brush::store(&mut doc, &lib);
+            if unread > 0 {
+                warnings.push(brush::left_out_note(unread));
+            }
+        }
         if self.drawn_looks > 0 {
             warnings.push(format!(
                 "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",

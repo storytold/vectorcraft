@@ -3048,6 +3048,44 @@ proptest! {
             survive("hostile Objects on Path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
         }
     }
+
+    /// Brush objects of every kind with any parameters, the brush manager's order with any names,
+    /// and brush art sections nested or cut short: read with the layers, or as a library without
+    /// them, the brushes kept within their ranges.
+    #[test]
+    fn ai_brushes_never_panic(
+        kind in 0usize..7,
+        params in prop::collection::vec(prop_oneof![arb_num(), Just("/".to_string()), Just(" / ".to_string()), Just("nan".to_string()), Just("inf".to_string()), "[A-Za-z ]{0,6}"], 0..40),
+        order in "[ -~]{0,80}",
+        nest in 0usize..6,
+        cut in any::<bool>(),
+        layers in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let kinds = ["Adobe Calligraphic Brush Tool", "Adobe Scatter Brush Tool", "Adobe ArtOnPath Brush Tool", "Adobe PatternOnPath Brush Tool", "Adobe dBrush Brush Tool", "Adobe Brush Manager Order", "Other"];
+        let object = |k: &str, name: &str, p: &str| {
+            let chars: Vec<char> = p.chars().collect();
+            let lines: String = chars.chunks(12).map(|c| format!("({}) -\n", c.iter().collect::<String>())).collect();
+            format!("%AI8_BeginPluginObject\n({k})\n({name})\n{lines}() .\n%AI8_EndPluginObject\n")
+        };
+        let p = params.join(" ");
+        let mut art = String::new();
+        for _ in 0..nest {
+            art.push_str("%AI8_BeginBrushPattern\n(A)\n");
+        }
+        art.push_str("0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        for _ in 0..nest.saturating_sub(usize::from(cut)) {
+            art.push_str("%AI8_EndBrushPattern\n");
+        }
+        let records = format!("{art}{}{}", object(kinds[kind], "B", &p), object(kinds[5], kinds[5], &order.replace(['(', ')', '\\'], "")));
+        let body = if layers { format!("{records}{}", ai::layer("L", "0 g\n10 10 m\n20 20 L\nS\n")) } else { records };
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&ai::editing_data(100.0, 100.0, &body))].concat();
+        survive("hostile .ai brushes", || {
+            let d = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0;
+            let _ = vectorcraft_brush::library(&d);
+            Some(d)
+        })?;
+    }
 }
 
 /// The data [`ai_objects_on_path_never_panics`] damages, as it is, opens with its Objects on Path group.
