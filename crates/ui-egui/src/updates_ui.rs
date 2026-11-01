@@ -5,7 +5,9 @@ use serde_json::Value;
 use crate::VectorcraftApp;
 
 #[cfg(not(target_arch = "wasm32"))]
-use craft_update::updater::{Action, Status, Updater};
+use craft_update::updater::{Action, Updater};
+#[cfg(not(target_arch = "wasm32"))]
+use craft_update::{CheckResultDialog, CheckResultResponse};
 
 pub(crate) struct Runtime {
     #[cfg(not(target_arch = "wasm32"))]
@@ -18,7 +20,10 @@ pub(crate) struct Runtime {
     /// The context of the last frame, to wake the UI when a check is queued from a menu callback.
     #[cfg(not(target_arch = "wasm32"))]
     repaint: Option<egui::Context>,
+    /// Whether the result of Help ▸ Check for Updates is in view.
     pub(crate) manual_window_open: bool,
+    /// The web build has no updater; its window only says so.
+    #[cfg(target_arch = "wasm32")]
     pub(crate) status_message: Option<String>,
 }
 
@@ -34,6 +39,7 @@ impl Default for Runtime {
             #[cfg(not(target_arch = "wasm32"))]
             repaint: None,
             manual_window_open: false,
+            #[cfg(target_arch = "wasm32")]
             status_message: None,
         }
     }
@@ -51,6 +57,7 @@ pub(crate) fn check(app: &mut VectorcraftApp) -> Result<Value, String> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         app.updates_rt.check_requested = true;
+        app.updates_rt.manual_window_open = true;
         if let Some(ctx) = &app.updates_rt.repaint {
             ctx.request_repaint();
         }
@@ -90,18 +97,25 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             Action::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             Action::None => {}
         }
-        // The window answers Help ▸ Check for Updates, so it follows the updater's status.
+        // An available update goes to the prompt above, which replaces the result dialog.
         let rt = &mut app.updates_rt;
-        (rt.manual_window_open, rt.status_message) = match rt.updater.status() {
-            Status::Idle => (false, None),
-            Status::Checking => (true, Some(tl!("Checking for updates…").to_string())),
-            Status::UpToDate => {
-                (true, Some(tl!("VectorCraft {version} is currently the newest version available.").replace("{version}", env!("CARGO_PKG_VERSION"))))
+        if rt.manual_window_open && rt.updater.prompt_open() {
+            rt.manual_window_open = false;
+        }
+        if rt.manual_window_open {
+            match CheckResultDialog::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")).show(ctx, rt.updater.status()) {
+                CheckResultResponse::None => {}
+                CheckResultResponse::Close => rt.manual_window_open = false,
+                CheckResultResponse::CheckAgain => rt.updater.check_now(ctx),
             }
-            Status::Failed(e) => (true, Some(tl!("Could not check for updates:\n{error}").replace("{error}", e))),
-        };
+        }
+        // Closing the dialog dismisses the outcome it showed.
+        if !rt.manual_window_open {
+            rt.updater.dismiss_status();
+        }
     }
 
+    #[cfg(target_arch = "wasm32")]
     if app.updates_rt.manual_window_open {
         let mut open = true;
         egui::Window::new(tl!("VectorCraft Updates"))
@@ -123,17 +137,13 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.updates_rt.manual_window_open = false;
         }
     }
-
-    // Closing the window dismisses the outcome it showed.
-    #[cfg(not(target_arch = "wasm32"))]
-    if !app.updates_rt.manual_window_open {
-        app.updates_rt.updater.dismiss_status();
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "wasm32"))]
+    use craft_update::updater::Status;
     use vectorcraft_engine::Session;
 
     #[test]

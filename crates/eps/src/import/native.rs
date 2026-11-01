@@ -12,10 +12,12 @@
 //! colours, gradients, transparency and images of the art.
 //!
 //! Text objects are slots in that document: their characters, fonts and places are in the file's
-//! text document (see `ate`). Type that shows comes from the page, which draws it, into the slot
-//! whose text is where the page has it. Type that doesn't show (a hidden layer or object, or off
-//! the page) is made from the text document; where that can't be read (area type, type on a path)
-//! it's left out, with a warning.
+//! text document (see `ate`). When the text document has the type of every text object that shows,
+//! all the type is made from it, each text object in its own place, and the page's type is only
+//! compared with it. Otherwise the type it has is still made from it, and the page's type that
+//! lies elsewhere goes into the text objects it can't make, by where the text document puts their
+//! lines or else in painting order. A text object whose type neither has (a frame of a kind it
+//! doesn't read, on a hidden layer or object) is left out, with a warning.
 //!
 //! What a layer that shows has that `ai` doesn't read makes the file come in as its page, as it did
 //! before; on a layer that doesn't show it is left out of that layer, with a warning. The page is
@@ -38,7 +40,7 @@ use super::ai::{self, Structure, slot_of};
 use super::ate::{Story, Texts};
 
 mod build;
-mod compare;
+pub(super) mod compare;
 mod layers;
 mod plan;
 mod slots;
@@ -46,7 +48,9 @@ mod slots;
 #[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
 #[cfg(test)]
-use compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour};
+use compare::{
+    MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
+};
 pub use layers::{ai_alone, layered_ai};
 pub(super) use layers::{layered, program_alone};
 pub use slots::is_loss;
@@ -86,9 +90,9 @@ mod tests {
         ring(&mut layers, Some(MADE), red, 6.0, square);
         ring(&mut layers, Some(MADE), red, 2.0, Rect::new(40.0, 40.0, 60.0, 60.0));
         let rect = page.artboards[0].rect;
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
         let mut view = PageView::new(&frame);
-        assert_eq!(prune_unseen(&frame, &mut view, &mut layers), 1, "only the ring the page doesn't draw");
+        assert_eq!(prune_unseen(&frame, &mut view, &mut layers, false), 1, "only the ring the page doesn't draw");
         let widths: Vec<f64> = layers.layers[0].children().unwrap().iter().filter_map(|n| n.appearance.stroke().map(|s| s.width)).collect();
         assert_eq!(widths, [12.0, 6.0]);
         // Taken by lightness alone, the red and the dark red are alike.
@@ -97,6 +101,33 @@ mod tests {
             [r, g, b, 255]
         };
         assert!(!differ(&px(dark), &px(red)) && differ_in_colour(&px(dark), &px(red)));
+    }
+
+    /// The share of a rectangle's pixels in the areas, however many areas there are: none for one
+    /// that only shares their edge, lies off the drawing or isn't a number.
+    #[test]
+    fn the_share_of_a_rectangle_in_the_areas_counts_its_pixels() {
+        let in_areas = |areas: &[Rect], w: usize, h: usize| {
+            let marks: Vec<bool> = (0..w * h)
+                .map(|k| {
+                    let (x, y) = ((k % w) as f64 + 0.5, (k / w) as f64 + 0.5);
+                    areas.iter().any(|a| a.contains(Point::new(x, y)))
+                })
+                .collect();
+            let shares = Shares::of(&marks, w, h);
+            move |r: &Rect| shares.share(r)
+        };
+        let share = in_areas(&[Rect::new(10.0, 10.0, 20.0, 20.0), Rect::new(30.0, 0.0, 31.0, 1.0)], 40, 40);
+        assert_eq!((share(&Rect::new(12.0, 12.0, 22.0, 18.0)), share(&Rect::new(10.0, 10.0, 30.0, 20.0))), (0.8, 0.5));
+        assert_eq!((share(&Rect::new(15.0, 15.0, 30.0, 30.0)), share(&Rect::new(30.2, 0.2, 30.8, 0.8))), (25.0 / 225.0, 1.0));
+        assert_eq!(
+            [share(&Rect::new(20.0, 20.0, 30.0, 30.0)), share(&Rect::new(0.0, 0.0, 5.0, 5.0)), share(&Rect::new(50.0, 50.0, 60.0, 60.0))],
+            [0.0; 3]
+        );
+        assert_eq!(share(&Rect::new(f64::NAN, 0.0, 39.0, 39.0)), 0.0);
+        let many: Vec<Rect> = (0..5000).map(|i| Rect::new(f64::from(i % 70), 50.0, f64::from(i % 70) + 1.0, 51.0)).collect();
+        let share = in_areas(&many, 80, 80);
+        assert_eq!((share(&Rect::new(60.0, 50.0, 75.0, 51.0)), share(&Rect::new(70.0, 50.0, 75.0, 51.0))), (10.0 / 15.0, 0.0));
     }
 
     fn piece(text: &str, x: f64, y: f64) -> Arc<Node> {
@@ -161,11 +192,11 @@ mod tests {
         let a = comparison_render(&mut renderer, &page, rect, 0.4, 1);
         let b = comparison_render(&mut vectorcraft_render::Renderer::new(), &vector, rect, 0.4, 1);
         assert!(compared(&a, &b, &[], &[]).solid > MAX_SOLID_DIFFERENCE, "the old point sampling falsely refused this page");
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
         let mut view = PageView::new(&frame);
-        assert!(compare(&frame, &mut view, &vector).is_ok());
-        assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0)).is_err(), "missing artwork remains an error");
+        assert!(compare(&frame, &mut view, &vector, false).is_ok());
+        assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0), false).is_err(), "missing artwork remains an error");
         let shifted = Rect::new(0.0, 0.0, 500.0, 500.0);
-        assert!(view.difference(&vector, shifted).any > MAX_DIFFERENCE, "wrong framing remains an error");
+        assert!(view.difference(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
     }
 }

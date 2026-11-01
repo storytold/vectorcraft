@@ -17,7 +17,7 @@ use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
 use vectorcraft_engine::cmd::TracePresetChange;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-use super::{first_selected, library_panel, pstate, set_pstate, swatches};
+use super::{first_selected, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -44,24 +44,6 @@ fn palette_label(id: &str) -> &'static str {
         "documentLibrary" => tl!("Document Library"),
         _ => tl!("Limited"),
     }
-}
-
-/// The name of Document Library's library `key` (the document's swatches or a swatch library); a
-/// library that is gone shows its key.
-fn library_label(app: &VectorcraftApp, key: &str) -> String {
-    match swatches::limit_name(app, key) {
-        Some(_) if key == DOCUMENT_SWATCHES => tl!(swatches::DOCUMENT_SWATCHES).to_string(),
-        Some(name) => library_panel::library_name(key, &name).to_string(),
-        None => key.to_string(),
-    }
-}
-
-/// Document Library's choices: the document's swatches, then the colour libraries (`current`
-/// checked) → the key chosen.
-fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
-    let document = menu_item(ui, swatches::DOCUMENT_SWATCHES, true, current == DOCUMENT_SWATCHES).then(|| DOCUMENT_SWATCHES.to_string());
-    ui.separator();
-    library_panel::library_items(ui, &swatches::colour_libraries(app), &|id| id == current).or(document)
 }
 
 /// Document Library's Colors choices with the document's swatches: All, then the document's color
@@ -656,7 +638,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, tl!("Library:"));
                 let key = st.params["library"].as_str().unwrap_or(DOCUMENT_SWATCHES).to_string();
-                if let Some(k) = widgets::combo(ui, "it-library", &library_label(app, &key), 170.0, |ui| library_list(app, ui, &key)) {
+                if let Some(k) =
+                    widgets::combo(ui, "it-library", &swatches::library_label(app, &key), 170.0, |ui| swatches::library_list(app, ui, &key))
+                {
                     if k != DOCUMENT_SWATCHES {
                         st.params["colorGroup"] = Value::Null;
                     }

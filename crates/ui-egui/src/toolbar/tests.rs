@@ -109,7 +109,7 @@ fn screen_readers_name_the_tool_buttons_and_the_active_tool() {
     let name = |id| tool_info(id).map(tip).unwrap_or_default();
     assert_eq!(role_and_state(&tree, &name("pen")), (Role::Button, Some(Toggled::True)));
     assert_eq!(role_and_state(&tree, &name("selection")), (Role::Button, Some(Toggled::False)));
-    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (, or <)", "Gradient (. or >)", "None (/)"] {
+    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (, or Shift+,)", "Gradient (. or Shift+.)", "None (/)"] {
         assert_eq!(role_and_state(&tree, label), (Role::Button, None), "{label}");
     }
 }
@@ -994,4 +994,52 @@ fn screen_readers_name_a_flyouts_rows_and_a_floating_strips_buttons() {
     assert_eq!(role_and_state(&strip, &name("star")), (Role::Button, Some(Toggled::True)));
     assert_eq!(role_and_state(&strip, "Put back in the toolbar"), (Role::Button, None));
     assert_eq!(role_and_state(&strip, "Drag to move"), (Role::Button, None));
+}
+
+/// Tab goes through the tool buttons and does not stop on the Tools panel's grip, a flyout's
+/// tear-off bar or a floating strip's bar, which only the pointer drags.
+#[test]
+fn tab_skips_the_grip_and_the_tear_off_bars() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let group: Vec<String> = ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec();
+    let tools: Vec<String> = ["polygon", "star"].map(String::from).to_vec();
+    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |events: Vec<Event>| {
+        time += 0.05;
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0)));
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
+            app.ui.flyout = Some(0);
+            ui.data_mut(|d| d.insert_temp(egui::Id::unique("flyout-tools"), group.clone()));
+            show(&mut app, ui);
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    frame(vec![]);
+    // The grip: the 6 pt strip under the title bar that senses drags and no clicks.
+    let grip = ctx.viewport(|vp| {
+        vp.prev_pass
+            .widgets
+            .layers()
+            .flat_map(|(_, w)| w.iter())
+            .find(|w| w.rect.height() == 6.0 && w.sense.senses_drag() && !w.sense.senses_click())
+            .map(|w| w.id)
+    });
+    let grip = grip.expect("the Tools panel's grip");
+    // The Tools panel's tool buttons: 36 by 29 pt.
+    let buttons: Vec<egui::Id> = ctx.viewport(|vp| {
+        vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == vec2(36.0, PITCH - 1.0)).map(|w| w.id).collect()
+    });
+    assert!(!buttons.is_empty(), "the Tools panel's buttons are drawn");
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 120, frame);
+    assert!(stops.iter().any(|id| buttons.contains(id)), "Tab reaches the Tools panel's buttons: {stops:?}");
+    let close = egui::Id::unique(("tool-flyout-close", "polygon"));
+    assert!(stops.contains(&close), "Tab reaches the strip's Put back in the toolbar button: {stops:?}");
+    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id("rectangle")), ("the strip's bar", bar_id("polygon"))] {
+        assert!(!stops.contains(&id), "Tab stops on {name}: {stops:?}");
+    }
 }

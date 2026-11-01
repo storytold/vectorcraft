@@ -100,6 +100,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if jxlread::is_jxl(bytes) {
         return format("jxl");
     }
+    if super::jp2read::is_jpeg2000(bytes) {
+        return format("jpeg2000");
+    }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
@@ -638,6 +641,9 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if jxlread::is_jxl(bytes) {
         let (img, icc, orientation) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
         return as_png(img, icc, jxlread::oriented_resolution(ppi, orientation));
+    }
+    if super::jp2read::is_jpeg2000(bytes) {
+        return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {

@@ -214,11 +214,11 @@ pub(super) fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
             }
             match text.rsplit_once('+') {
                 Some((_, key)) if !key.is_empty() => {
-                    let pretty = menus::pretty_shortcut(text);
+                    let pretty = menus::shown_shortcut(text);
                     let shown = pretty.strip_suffix(key).map_or(pretty.clone(), |m| format!("{m}{}", tl!(key)));
                     (Cow::Owned(shown), bold)
                 }
-                _ => (Cow::Owned(menus::pretty_shortcut(tl!(text))), bold),
+                _ => (Cow::Owned(menus::shown_shortcut(tl!(text))), bold),
             }
         })
         .collect()

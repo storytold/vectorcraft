@@ -565,6 +565,9 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 (RasterFormat::Jpeg, Some(m)) => MapKind::from_id(m).ok_or_else(|| bad(C, format!("imageMap `{m}`: none, client or server")))?,
                 _ => MapKind::None,
             };
+            // The artboards' background colors, behind the art (a transparent background too).
+            let filled = super::export::with_artboard_fills(doc, p, chosen.iter().copied()).map_err(|e| bad(C, e))?;
+            let doc = &*filled;
             let mut enc = Encoded::default();
             let mut renderer = vectorcraft_render::Renderer::new();
             let total = chosen.len() as u64;

@@ -54,7 +54,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             }
         }
         None => {
-            app.ui.action_sets.push(crate::panels::actions::ActionSet { name, actions: vec![] });
+            app.ui.action_sets.push(crate::panels::actions::ActionSet::new(name, vec![]));
             app.ui.action_set = Some(app.ui.action_sets.len() - 1);
         }
     }

@@ -38,8 +38,9 @@ impl VectorcraftApp {
         }
         let mut params = params;
         // Paste in place, in front and in back (#693), Select › All on Active Artboard (#1006), and Align,
-        // Distribute Objects and Distribute Spacing with Align to Artboard act on the active artboard, the
-        // view's, which the app passes as `artboard`. A batch passes it on to those steps.
+        // Distribute Objects and Distribute Spacing with Align to Artboard, and Edit Symbol from the Symbols
+        // panel act on the active artboard, the view's, which the app passes as `artboard`. A batch passes
+        // it on to those steps.
         if (vectorcraft_engine::ON_ACTIVE_ARTBOARD.contains(&id) || id == "command.batch")
             && params.get("artboard").is_none()
             && self.view().is_some()
@@ -47,6 +48,29 @@ impl VectorcraftApp {
             && let Some(p) = params.as_object_mut()
         {
             p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
+        }
+        // Edit Symbol from the Symbols panel in a document without artboards centers the symbol's
+        // art in the view, whose center the app passes as `viewCenter`, to a batch's symbol.edit
+        // steps too.
+        if matches!(id, "symbol.edit" | "command.batch")
+            && let Some(c) = self.view().map(|v| v.center)
+        {
+            let fill = |p: &mut serde_json::Value| {
+                if let Some(p) = p.as_object_mut() {
+                    p.entry("viewCenter").or_insert(serde_json::json!([c.x, c.y]));
+                }
+            };
+            if id == "symbol.edit" {
+                fill(&mut params);
+            } else if let Some(serde_json::Value::Array(steps)) = params.get_mut("commands") {
+                for step in steps {
+                    if step.get("command").and_then(serde_json::Value::as_str) == Some("symbol.edit")
+                        && let Some(step) = step.as_object_mut()
+                    {
+                        fill(step.entry("params").or_insert_with(|| serde_json::json!({})));
+                    }
+                }
+            }
         }
         // Object › Artboards › Fit to Artwork Bounds resizes the selected artboards (the Artboard
         // tool's, else the active one), which the app passes as its `indices`, and Fit to Selected
@@ -92,7 +116,11 @@ impl VectorcraftApp {
         let ime_view = self.view_info();
         let ime_target = crate::ime::target(&mut self.session, ime_view);
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
+        let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
+            self.canvas.hover_cursor = None;
+        }
         if r.is_ok()
             && let Some(ctx) = self.ui_ctx.clone()
         {

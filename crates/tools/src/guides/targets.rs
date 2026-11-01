@@ -81,11 +81,11 @@ fn within<T>(sorted: &[T], key: impl Fn(&T) -> f64, v: f64, tol: f64) -> &[T] {
     sorted.get(lo..hi).unwrap_or_default()
 }
 
-/// Visit `nodes` and everything inside them, but the nodes in `skip` and everything inside those:
-/// one pass, however many are skipped. A Shaper Group's original shapes, its first child, are
-/// not shown and are skipped too.
+/// Visit `nodes` and everything inside them, but the nodes in `skip`, the hidden nodes and
+/// everything inside those: one pass, however many are skipped. A Shaper Group's original
+/// shapes, its first child, are not shown and are skipped too.
 fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnMut(&'a Node)) {
-    for n in nodes.iter().filter(|n| !skip.contains(&n.id)) {
+    for n in nodes.iter().filter(|n| n.visible && !skip.contains(&n.id)) {
         f(n);
         if let Some(ch) = n.children() {
             walk_but(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), skip, f);
@@ -500,6 +500,19 @@ impl Targets {
         self
     }
 
+    /// Only these targets' anchors and path segments pull, and where segments cross: no centers,
+    /// bounds, lines up, extensions or glyph guides.
+    pub(super) fn anchors_and_paths(mut self) -> Self {
+        self.points.retain(|(_, k)| *k == Kind::Anchor);
+        self.xs.clear();
+        self.ys.clear();
+        self.rulers.clear();
+        self.boxes.clear();
+        self.extensions.clear();
+        self.angled.clear();
+        self
+    }
+
     /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
     /// unlocked, as the selection tools pick them) pull the pointer into line where they run.
     pub(super) fn for_snap_to_point(self, cx: &ToolContext) -> Self {
@@ -550,23 +563,27 @@ impl Targets {
     }
 
     /// Anchors and centres of the visible leaves under `roots` (the roots included) whose bounds
-    /// reach into `near`.
+    /// reach into `near`. Nothing inside a hidden group or layer counts.
     pub(super) fn points_near(doc: &Document, roots: &[NodeId], near: Rect) -> Self {
         let mut t = Targets::default();
-        for n in roots.iter().filter_map(|id| doc.node(*id)) {
-            crate::draw2::walk_shown(n, &mut |c| {
-                if c.is_container() || !c.visible {
-                    return;
-                }
-                let Some(b) = c.geometric_bounds() else { return };
-                if b.x0 > near.x1 || b.x1 < near.x0 || b.y0 > near.y1 || b.y1 < near.y0 {
-                    return;
-                }
-                if let NodeKind::Path { path, .. } = &c.kind {
-                    t.points.extend(path.anchors().map(|(_, _, a)| (a.p, Kind::Anchor)));
-                }
-                t.points.push((b.center(), Kind::Center));
-            });
+        let mut push = |c: &Node| {
+            if c.is_container() {
+                return;
+            }
+            let Some(b) = c.geometric_bounds() else { return };
+            if b.x0 > near.x1 || b.x1 < near.x0 || b.y0 > near.y1 || b.y1 < near.y0 {
+                return;
+            }
+            if let NodeKind::Path { path, .. } = &c.kind {
+                t.points.extend(path.anchors().map(|(_, _, a)| (a.p, Kind::Anchor)));
+            }
+            t.points.push((b.center(), Kind::Center));
+        };
+        for n in roots.iter().filter_map(|id| doc.node(*id)).filter(|n| n.visible) {
+            push(n);
+            if let Some(ch) = n.children() {
+                walk_but(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), &HashSet::new(), &mut push);
+            }
         }
         t.index()
     }
