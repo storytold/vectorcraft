@@ -3619,6 +3619,10 @@ file-filter	Templates	템플릿
 	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일이 다운로드됩니다)
 	Print presets	인쇄 프리셋
 	Proportional Lining	비례 라이닝
+	Position:	위치:
+	Default Position	기본 위치
+	Numerator	분자
+	Denominator	분모
 	Proportional Oldstyle	비례 올드스타일
 	Punctuation	문장 부호
 	Radius 1	반지름 1

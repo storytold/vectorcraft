@@ -1628,6 +1628,10 @@ digits	Malayalam	Malayalam
 	Ligatures are off while the text is tracked.	Ligatur nonaktif saat teks diberi tracking.
 	Ordinals	Ordinal
 	Proportional Lining	Lining proporsional
+	Position:	Posisi:
+	Default Position	Posisi default
+	Numerator	Pembilang
+	Denominator	Penyebut
 	Proportional Oldstyle	Oldstyle proporsional
 	Reset OpenType Features	Setel ulang fitur OpenType
 	Select text to set its OpenType features.	Pilih teks untuk mengatur fitur OpenType-nya.

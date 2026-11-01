@@ -1776,6 +1776,10 @@ digits	Malayalam	Malajalam
 	Ligatures are off while the text is tracked.	Ligatuurit eivät ole käytössä, kun tekstin merkkiväliä on muutettu.
 	Ordinals	Järjestysluvut
 	Proportional Lining	Suhteelliset numerot
+	Position:	Sijainti:
+	Default Position	Oletussijainti
+	Numerator	Osoittaja
+	Denominator	Nimittäjä
 	Proportional Oldstyle	Suhteelliset vanhanaikaiset numerot
 	Reset OpenType Features	Palauta OpenType-ominaisuudet
 	Select text to set its OpenType features.	Valitse teksti, jonka OpenType-ominaisuudet haluat asettaa.

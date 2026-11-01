@@ -1531,6 +1531,9 @@ digits	Malayalam	მალაიალამური
 	Ligatures are off while the text is tracked.	ტექსტზე ტრეკინგის დროს ლიგატურები გამორთულია.
 	Ordinals	რიგობითი რიცხვები
 	Proportional Lining	პროპორციული ხაზოვანი
+	Default Position	ნაგულისხმევი პოზიცია
+	Numerator	მრიცხველი
+	Denominator	მნიშვნელი
 	Proportional Oldstyle	პროპორციული ძველებური
 	Reset OpenType Features	OpenType შესაძლებლობების ჩამოყრა
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.

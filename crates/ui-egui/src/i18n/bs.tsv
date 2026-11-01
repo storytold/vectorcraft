@@ -1789,6 +1789,9 @@ digits	Malayalam	Malajalam
 	Ligatures are off while the text is tracked.	Ligature su isključene dok tekst ima razmak slova.
 	Ordinals	Redni brojevi
 	Proportional Lining	Proporcionalne brojke
+	Default Position	Zadani položaj
+	Numerator	Brojnik
+	Denominator	Nazivnik
 	Proportional Oldstyle	Proporcionalne stare brojke
 	Reset OpenType Features	Vrati OpenType mogućnosti na početno
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.

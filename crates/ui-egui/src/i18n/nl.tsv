@@ -1642,6 +1642,10 @@ digits	Malayalam	Malayalam
 	Ligatures are off while the text is tracked.	Ligaturen staan uit terwijl de tekst wordt gespatieerd.
 	Ordinals	Rangtelwoorden
 	Proportional Lining	Proportionele lining
+	Position:	Positie:
+	Default Position	Standaardpositie
+	Numerator	Teller
+	Denominator	Noemer
 	Proportional Oldstyle	Proportionele oldstyle
 	Reset OpenType Features	OpenType-functies herstellen
 	Select text to set its OpenType features.	Selecteer tekst om de OpenType-functies in te stellen.

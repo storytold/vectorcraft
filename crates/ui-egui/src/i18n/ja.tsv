@@ -3631,6 +3631,10 @@ file-filter	Templates	テンプレート
 	Preview in Browser needs the desktop app (the web downloads files instead)	ブラウザーでプレビューにはデスクトップアプリが必要です (Web アプリではファイルがダウンロードされます)
 	Print presets	プリントプリセット
 	Proportional Lining	プロポーショナルライニング
+	Position:	位置:
+	Default Position	デフォルトの位置
+	Numerator	分子
+	Denominator	分母
 	Proportional Oldstyle	プロポーショナルオールドスタイル
 	Punctuation	句読点
 	Radius 1	半径 1
