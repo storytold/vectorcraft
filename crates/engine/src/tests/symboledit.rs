@@ -372,6 +372,41 @@ fn other_editing_modes_and_symbol_editing_do_not_overlap() {
     assert_eq!(s.doc().unwrap().doc.layers.iter().filter(|l| l.name.as_deref() == Some("Box")).count(), 1);
 }
 
+/// Editing another symbol at a place off the canvas fails and keeps the current edit open.
+#[test]
+fn a_switch_to_another_symbol_that_fails_keeps_the_current_edit() {
+    let (mut s, first, _) = two_instances();
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 200, "width": 20, "height": 20}));
+    run(&mut s, "symbol.new", json!({"name": "Dot"}));
+    let layer = NodeId(run(&mut s, "symbol.edit", json!({"id": first.0}))["layer"].as_u64().unwrap());
+    let e = s.execute("symbol.edit", &json!({"name": "Dot", "x": 1e300})).unwrap_err().to_string();
+    assert!(e.contains("exceed the canvas"), "{e}");
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.symbol_edit.as_ref().map(|e| (e.symbol.as_str(), e.layer)), Some(("Box", layer)));
+    assert_eq!((st.isolation, st.active_layer), (Some(layer), Some(layer)));
+    assert!(st.doc.node(layer).is_some());
+}
+
+/// While a symbol is edited, art outside the editing layer is not isolated, so leaving isolation
+/// mode leaves symbol editing mode.
+#[test]
+fn art_outside_the_editing_layer_is_not_isolated_while_a_symbol_is_edited() {
+    let (mut s, first, _) = two_instances();
+    let other = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 200, "width": 20, "height": 20})));
+    run(&mut s, "select.set", json!({"ids": [first.0]}));
+    let layer = NodeId(run(&mut s, "symbol.edit", json!({"id": first.0}))["layer"].as_u64().unwrap());
+    let e = s.execute("object.isolate", &json!({"id": other.0})).unwrap_err().to_string();
+    assert!(e.contains("outside the isolated group"), "{e}");
+    assert_eq!(s.doc().unwrap().isolation, Some(layer));
+    // Isolation that names art outside the layer (a stale state) still leaves the mode.
+    s.doc_mut().unwrap().isolation = Some(other);
+    run(&mut s, "object.exitIsolation", json!({}));
+    let st = s.doc().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.doc.node(layer).is_none());
+    assert_eq!(st.isolation, None);
+    assert_eq!(st.selection.objects, vec![first]);
+}
+
 #[test]
 fn renaming_deleting_and_saving_while_a_symbol_is_edited() {
     let (mut s, first, _) = two_instances();
