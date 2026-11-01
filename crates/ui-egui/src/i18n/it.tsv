@@ -546,6 +546,11 @@ font-technology	Variable	Variabili
 	Color Table ({n} colors)	Tabella colori ({n} colori)
 	Color Theme	Tema colore
 	Color Themes	Temi colore
+	Color Wheel	Ruota dei colori
+	Hue ring	Anello tonalità
+	Saturation and brightness	Saturazione e luminosità
+	Color field	Campo colore
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Tipo di colore:
 	Color:	Colore:
 	Colorize	Colora

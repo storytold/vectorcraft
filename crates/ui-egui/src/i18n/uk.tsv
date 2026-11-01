@@ -540,6 +540,11 @@ font-technology	Variable	Варіативні
 	Color Table ({n} colors)	Таблиця кольорів ({n} кольорів)
 	Color Theme	Колірна тема
 	Color Themes	Колірні теми
+	Color Wheel	Колірне коло
+	Hue ring	Кільце відтінків
+	Saturation and brightness	Насиченість і яскравість
+	Color field	Колірне поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати

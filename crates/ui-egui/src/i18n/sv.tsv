@@ -533,6 +533,11 @@ font-technology	Variable	Variabla
 	Color Table ({n} colors)	Färgtabell ({n} färger)
 	Color Theme	Färgtema
 	Color Themes	Färgteman
+	Color Wheel	Färghjul
+	Hue ring	Nyansring
+	Saturation and brightness	Mättnad och ljusstyrka
+	Color field	Färgfält
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
