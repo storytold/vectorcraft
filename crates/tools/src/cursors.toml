@@ -341,6 +341,7 @@ shown_when = [
     "The Gradient tool over its rotate zone, or rotating.",
     "Puppet Warp with Alt near a selected pin.",
     "The bounding-box rotate cursor when the pointer is exactly on the box's centre.",
+    "Selection and Objects on Path over an Objects on Path group's Rotate All widget, and while dragging it.",
 ]
 hotspot = "Below the arc, in its empty middle."
 look = "An arc with an arrowhead at each end. RotateToward is the same arc, turned."

@@ -288,6 +288,21 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
     }
+    rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
+}
+
+/// The Rotate All widget (Selection and Objects on Path tools, one Objects on Path group
+/// selected): joined by a line to the first object's attachment point. It stays while dragged.
+fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
+    use vectorcraft_tools::objects_on_path::{ROTATE_ALL_RADIUS_PX, RotateAllWidget};
+    if !matches!(tool, "selection" | "objectsOnPath") {
+        return;
+    }
+    let Some(w) = RotateAllWidget::of(doc, selection, xf.zoom) else { return };
+    let (on, c, color) = (xf.to_screen(w.pivot), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
+    p.line_segment([on, c], Stroke::new(1.0, color));
+    p.circle_filled(c, ROTATE_ALL_RADIUS_PX, Color32::WHITE);
+    p.circle_stroke(c, ROTATE_ALL_RADIUS_PX, Stroke::new(1.0, color));
 }
 
 /// Record where the Type tool's IME candidate window goes this pass, if it has an editor.
