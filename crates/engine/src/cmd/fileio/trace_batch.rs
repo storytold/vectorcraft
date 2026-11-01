@@ -32,7 +32,12 @@ fn images(folder: &str, deep: bool, depth: usize, out: &mut Vec<String>) -> Resu
     if depth > MAX_DEPTH {
         return Err(bad("imageTrace.batchFolder", format!("folders deeper than {MAX_DEPTH} levels")));
     }
-    let (entries, _) = super::list_dir(folder, MAX_FILES.saturating_mul(2))?;
+    let max = MAX_FILES.saturating_mul(2);
+    let (entries, truncated) = super::list_dir(folder, max)?;
+    // The listing is cut before it is sorted, so a cut one could skip any image: refuse it.
+    if truncated {
+        return Err(bad("imageTrace.batchFolder", format!("{folder}: more than {max} files and folders")));
+    }
     let mut subdirs = vec![];
     for e in entries {
         let name = e.get("name").and_then(Value::as_str).unwrap_or("");
@@ -175,6 +180,24 @@ mod tests {
         ] {
             assert!(s.execute("imageTrace.batchFolder", &bad).is_err(), "{bad}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A folder too big to list in full is refused rather than traced in part.
+    #[test]
+    fn batch_trace_folder_refuses_a_folder_it_cannot_list_in_full() {
+        let dir = std::env::temp_dir().join(format!("vc-batch-trace-big-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let src = dir.join("in");
+        std::fs::create_dir_all(&src).unwrap();
+        for i in 0..=super::MAX_FILES * 2 {
+            std::fs::write(src.join(format!("note-{i}.txt")), "").unwrap();
+        }
+        png(&src.join("logo.png"), true);
+        let mut s = Session::new();
+        let e = s.execute("imageTrace.batchFolder", &json!({"folder": src, "destinationFolder": dir.join("out")})).unwrap_err();
+        assert!(e.to_string().contains("more than"), "{e}");
+        assert!(!dir.join("out").exists(), "nothing traced");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
