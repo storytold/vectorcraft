@@ -246,6 +246,9 @@ fn copies_per_sheet_fill_the_page_in_a_grid() {
     // The placement places the grid, inside the margin.
     let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "margin": 9, "placement": {"origin": "topLeft"}}))).unwrap();
     assert_eq!(corners(&pv), grid(&[9.0, 153.0, 297.0, 441.0], &[9.0, 261.0, 513.0]));
+    // Moved 400 pt right, two columns leave the paper: the TrimBox holds the copies still on it.
+    let pv = preview(&d, &settings(json!({"copiesPerSheet": true, "placement": {"origin": "topLeft", "x": 400}}))).unwrap();
+    assert_eq!(pv.sheets[0].trim, [400.0, 0.0, 612.0, 756.0]);
 }
 
 #[test]
