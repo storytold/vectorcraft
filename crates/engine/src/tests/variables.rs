@@ -1709,8 +1709,8 @@ fn a_saved_variable_library_has_the_library_layout() {
 
 /// Save Variable Library refuses a document without variables or without text variables, a text
 /// variable whose name can't name an element, a data set name or text value with a character XML
-/// can't hold, and a library past the caps that Load Variable Library reads. A refused save writes
-/// no file.
+/// can't hold, a name that Load Variable Library would read differently or refuse, and a library
+/// past the caps that Load Variable Library reads. A refused save writes no file.
 #[test]
 fn save_variable_library_refuses_what_a_library_cant_hold() {
     let dir = Folder::new("vars-save-refused");
@@ -1749,6 +1749,37 @@ fn save_variable_library_refuses_what_a_library_cant_hold() {
     s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
     s.execute("dataset.new", &json!({"name": "B\u{1}"})).unwrap();
     refused(&mut s, "holds a control character");
+
+    // A document opened from a file can hold names that the commands don't make, and Load Variable
+    // Library would read them differently or refuse them.
+    let renamed = |dataset: Option<&str>, variable: Option<&str>| {
+        let mut s = session();
+        s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+        s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+        s.execute("dataset.new", &json!({"name": "A"})).unwrap();
+        s.execute("dataset.new", &json!({"name": "B"})).unwrap();
+        let vars = &mut std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).variables;
+        if let Some(name) = dataset {
+            vars.datasets[1].name = name.to_string();
+        }
+        if let Some(name) = variable {
+            vars.variables[1].name = name.to_string();
+        }
+        s
+    };
+    for name in [" B", "B\t", "B\n"] {
+        refused(&mut renamed(Some(name), None), "starts or ends with white space");
+    }
+    refused(&mut renamed(Some(""), None), "missing `dataSetName`");
+    refused(&mut renamed(Some(&"d".repeat(256)), None), "`dataSetName` is longer than 255 characters");
+    refused(&mut renamed(Some("A"), None), "dataset `A` already exists");
+    refused(&mut renamed(None, Some(&"v".repeat(256))), "`varName` is longer than 255 characters");
+    refused(&mut renamed(None, Some("Name")), "variable `Name` is already defined");
+    let mut s = renamed(Some(&"d".repeat(255)), Some(&"v".repeat(255)));
+    let xml = s.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].clone();
+    let mut other = session();
+    other.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(other.doc().unwrap().doc.variables.datasets, s.doc().unwrap().doc.variables.datasets);
 
     let mut s = session();
     for i in 0..257 {

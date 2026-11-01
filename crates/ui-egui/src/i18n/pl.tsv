@@ -5315,6 +5315,7 @@ mark-style	Japanese	Japońskie
 @msg	a variable library holds text variables, and the document has none	biblioteka zmiennych zawiera zmienne tekstowe, a dokument nie ma żadnej
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	nie można zapisać zmiennej `{name}` w bibliotece zmiennych: zmień jej nazwę tak, aby zaczynała się literą lub `_`, bez spacji i symboli innych niż `-`, `_` i `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	zestaw danych `{name}` zawiera znak sterujący, którego biblioteka zmiennych nie może zawierać
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	zestaw danych `{name}` zaczyna się lub kończy białym znakiem, którego biblioteka zmiennych nie może zawierać
 	Make Graph Dynamic	Uczyń wykres dynamicznym
 	Batch…	Przetwarzanie wsadowe…
 	Source Folder:	Folder źródłowy:

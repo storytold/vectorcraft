@@ -5120,6 +5120,7 @@ lighting	Light	ライト
 @msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
 @msg	data set `{name}` holds a control character, which a variable library can't hold	データセット `{name}` に変数ライブラリに保存できない制御文字が含まれています
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	データセット `{name}` の先頭または末尾に変数ライブラリに保存できない空白があります
 	Make Graph Dynamic	グラフを動的にする
 	Batch…	バッチ…
 	Source Folder:	ソースフォルダー:

@@ -5460,6 +5460,7 @@ theme	Appearance	Apparence
 @msg	a variable library holds text variables, and the document has none	une bibliothèque de variables contient des variables de texte, et le document n’en a aucune
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` ne peut pas être enregistrée dans une bibliothèque de variables : renommez-la pour qu’elle commence par une lettre ou `_`, sans espaces ni symboles autres que `-`, `_` et `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	le jeu de données `{name}` contient un caractère de contrôle, qu’une bibliothèque de variables ne peut pas contenir
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	le jeu de données `{name}` commence ou se termine par une espace, qu’une bibliothèque de variables ne peut pas contenir
 	Make Graph Dynamic	Rendre le graphe dynamique
 	Batch…	Traitement par lots…
 	Source Folder:	Dossier source :

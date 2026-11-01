@@ -5303,6 +5303,7 @@ lighting	Light	光源
 @msg	a variable library holds text variables, and the document has none	变量库包含文本变量，而文档中没有文本变量
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	无法将变量 `{name}` 保存到变量库中：请重命名，使其以字母或 `_` 开头，且不含空格或 `-`、`_`、`.` 以外的符号
 @msg	data set `{name}` holds a control character, which a variable library can't hold	数据集 `{name}` 包含变量库无法保存的控制字符
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	数据集 `{name}` 的开头或结尾有变量库无法保存的空白字符
 	Make Graph Dynamic	使图表动态化
 	Batch…	批处理…
 	Source Folder:	源文件夹：

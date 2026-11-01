@@ -5448,6 +5448,7 @@ imageTrace	Outline	Körvonal
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
 @msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
 	Batch…	Kötegelt feldolgozás…
 	Source Folder:	Forrásmappa:

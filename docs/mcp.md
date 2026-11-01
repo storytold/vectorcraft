@@ -1670,8 +1670,9 @@ already walks Image Trace. Short agent entry points:
   other kinds are left out with their values: the reply lists them in `skipped` (`name`, `kind`), and its `warning`
   names each kind with its count. Saving is refused for a document without a text variable, for a text variable whose
   name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and `.`), for a
-  data set whose name or text value holds a control character, and past `variable.loadLibrary`'s caps (256
-  variables, 1,000 data sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets, skipped, warning?}`;
+  data set whose name or text value holds a control character, for a data set name with white space at either end,
+  for a name longer than 255 characters or used twice, and past `variable.loadLibrary`'s caps (256 variables, 1,000
+  data sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets, skipped, warning?}`;
   with it, the file is written and the reply is `{path, variables, datasets, skipped, warning?}`.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an

@@ -5055,6 +5055,7 @@ lighting	Light	Світло
 @msg	a variable library holds text variables, and the document has none	бібліотека змінних містить текстові змінні, а в документі їх немає
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	змінну `{name}` не можна зберегти в бібліотеці змінних: перейменуйте її так, щоб ім’я починалося з літери або `_` і не містило пробілів і символів, крім `-`, `_` і `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	набір даних `{name}` містить керівний символ, який бібліотека змінних не може містити
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набір даних `{name}` починається або закінчується пробілом, який бібліотека змінних не може містити
 	Make Graph Dynamic	Зробити діаграму динамічною
 	Batch…	Пакетна обробка…
 	Source Folder:	Вихідна папка:

@@ -5400,6 +5400,7 @@ mark-style	Japanese	Japanski
 @msg	a variable library holds text variables, and the document has none	biblioteka varijabli sadrži tekstualne varijable, a dokument ih nema
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	varijabla `{name}` ne može se sačuvati u biblioteci varijabli: preimenujte je tako da počinje slovom ili sa `_`, bez razmaka i simbola osim `-`, `_` i `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	skup podataka `{name}` sadrži kontrolni znak, koji biblioteka varijabli ne može sadržavati
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	skup podataka `{name}` počinje ili završava razmakom, koji biblioteka varijabli ne može sadržavati
 	Make Graph Dynamic	Učini grafikon dinamičkim
 	Batch…	Paketna obrada…
 	Source Folder:	Izvorni folder:

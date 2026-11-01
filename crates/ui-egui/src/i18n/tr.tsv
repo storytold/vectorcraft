@@ -5459,6 +5459,7 @@ theme	Appearance	Görünüm
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
 @msg	data set `{name}` holds a control character, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir denetim karakteri içeriyor
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir boşlukla başlıyor veya bitiyor
 	Long	Uzun
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası

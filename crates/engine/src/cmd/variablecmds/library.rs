@@ -367,8 +367,9 @@ fn push_escaped(out: &mut String, c: char, attribute: bool) {
 /// data set names and text values. A text value is written as one `p` element per line. Variables
 /// of other kinds are left out with their values, named in `skipped` and in a warning. A text
 /// variable whose name can't name an element ([`element_name`]), a data set name or text value that
-/// holds a character XML can't hold, and a library past the caps Load Variable Library reads are
-/// refused. With `path` the library is written to the file; without it the reply carries it as
+/// holds a character XML can't hold, a name that Load Variable Library would read differently or
+/// refuse (white space at either end of a data set name, a name longer than `MAX_NAME` characters,
+/// a name used twice), and a library past the caps Load Variable Library reads are refused. With `path` the library is written to the file; without it the reply carries it as
 /// `xml`.
 pub(super) fn save_library(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.saveLibrary";
@@ -387,6 +388,15 @@ pub(super) fn save_library(s: &mut Session, p: &Value) -> Result<Value> {
                 "variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`"
             ),
         ));
+    }
+    // Load Variable Library refuses a name longer than `MAX_NAME` characters and a name declared
+    // twice.
+    let mut declared = BTreeSet::new();
+    for v in &text {
+        named(Some(&v.name), "varName", C)?;
+        if !declared.insert(v.name.as_str()) {
+            return Err(bad(C, format!("variable `{}` is already defined", v.name)));
+        }
     }
     if text.len() > MAX_LIBRARY_VARIABLES {
         return Err(bad(C, format!("the variable library declares more than {MAX_LIBRARY_VARIABLES} variables")));
@@ -423,8 +433,17 @@ pub(super) fn save_library(s: &mut Session, p: &Value) -> Result<Value> {
     let growth = text.len() * grows(NS_FLOWS, "&ns_flows;") + 2 * grows(NS_VARIABLES, "&ns_vars;") + grows(NS_CUSTOM, "&ns_custom;");
     let room = MAX_LIBRARY_BYTES.saturating_sub(growth);
     let too_large = || bad(C, format!("the variable library is larger than {MAX_LIBRARY_BYTES} bytes"));
+    let mut seen = BTreeSet::new();
     for ds in &vars.datasets {
         let name = &ds.name;
+        // Load Variable Library reads a data set's name trimmed and at most `MAX_NAME` characters
+        // long ([`named`]), and refuses a name declared twice.
+        if named(Some(name), "dataSetName", C)? != *name {
+            return Err(bad(C, format!("data set `{name}` starts or ends with white space, which a variable library can't hold")));
+        }
+        if !seen.insert(name.as_str()) {
+            return Err(bad(C, format!("dataset `{name}` already exists")));
+        }
         if !name.chars().all(xml_char) || text.iter().filter_map(|v| text_value(ds, &v.name)).any(|t| !t.chars().all(xml_char)) {
             return Err(bad(C, format!("data set `{name}` holds a control character, which a variable library can't hold")));
         }

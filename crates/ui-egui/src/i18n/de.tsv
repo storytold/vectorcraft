@@ -5040,6 +5040,7 @@ effect	Soft	Weich
 @msg	a variable library holds text variables, and the document has none	eine Variablenbibliothek enthält Textvariablen, und das Dokument hat keine
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	die Variable `{name}` kann nicht in einer Variablenbibliothek gespeichert werden: Benennen Sie sie so um, dass sie mit einem Buchstaben oder `_` beginnt, ohne Leerzeichen oder andere Symbole als `-`, `_` und `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	der Datensatz `{name}` enthält ein Steuerzeichen, das eine Variablenbibliothek nicht enthalten kann
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	der Datensatz `{name}` beginnt oder endet mit Leerraum, den eine Variablenbibliothek nicht enthalten kann
 	Make Graph Dynamic	Diagramm dynamisch machen
 	Batch…	Stapelverarbeitung…
 	Source Folder:	Quellordner:

@@ -5463,6 +5463,7 @@ mark-style	Japanese	Japonské
 @msg	a variable library holds text variables, and the document has none	knihovna proměnných obsahuje textové proměnné a dokument žádné nemá
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	proměnnou `{name}` nelze uložit do knihovny proměnných: přejmenujte ji tak, aby začínala písmenem nebo `_` a neobsahovala mezery ani jiné symboly než `-`, `_` a `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	sada dat `{name}` obsahuje řídicí znak, který knihovna proměnných nemůže obsahovat
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	sada dat `{name}` začíná nebo končí prázdným znakem, který knihovna proměnných nemůže obsahovat
 	Make Graph Dynamic	Nastavit graf jako dynamický
 	Batch…	Dávka…
 	Source Folder:	Zdrojová složka:
