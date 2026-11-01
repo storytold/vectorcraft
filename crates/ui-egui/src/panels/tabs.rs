@@ -264,10 +264,26 @@ fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64
         return None;
     }
     let width = span as f32 * per + RULER_LEFT * 2.0;
-    let height = crate::panel_docking::layout_of(&app.ui).floating.iter().find(|w| w.contains(&"tabs".to_string())).map_or(240.0, |w| w.rect[3]);
-    let pos = egui::pos2(on_screen.left() - RULER_LEFT, on_screen.top() - height - 6.0);
-    let _ = ctx;
-    crate::panel_docking::place_floating(app, "tabs", pos, width).ok()?;
+    let height = crate::panel_docking::layout_of(&app.ui)
+        .floating
+        .iter()
+        .find(|w| w.contains(&"tabs".to_string()))
+        .map_or(crate::panel_docking::floating_size("tabs").y, |w| w.rect[3]);
+    // Text near the top of the window: the panel goes just below the text when that place is in
+    // the window and the panel fits there in the canvas, else at the window's top, so its bar
+    // stays where it can be grabbed rather than above the screen.
+    let above = on_screen.top() - height - 6.0;
+    let below = on_screen.bottom() + 6.0;
+    let top = if above >= 0.0 {
+        above
+    } else if below >= 0.0 && below + height <= app.canvas_rect.map_or(f32::NEG_INFINITY, |c| c.bottom()) {
+        below
+    } else {
+        0.0
+    };
+    let pos = egui::pos2(on_screen.left() - RULER_LEFT, top);
+    let origin = ctx.input(|i| i.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)).map(|r| r.min);
+    crate::panel_docking::place_floating(app, "tabs", pos, width, origin).ok()?;
     Some(())
 }
 
