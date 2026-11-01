@@ -614,9 +614,12 @@ pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     area.show(ctx, |ui| crate::dock::panel_body(app, ui, &panel, 256.0, 400.0));
 }
 
-/// Select items `names` in library `id`'s panel (of kind `kind`), as a click on them does.
+/// Select items `names` in library `id`'s panel (of kind `kind`), as a click on them does. The
+/// Find field is cleared, so a selected item it would hide shows.
 pub(crate) fn select_items(ctx: &egui::Context, kind: &str, id: &str, names: Vec<String>) {
-    set_pstate(ctx, &key(&panel_id(kind, id), "selected"), names);
+    let panel = panel_id(kind, id);
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(key(&panel, "find")), String::new()));
+    set_pstate(ctx, &key(&panel, "selected"), names);
 }
 
 /// The selected items and folders of panel `panel`.
