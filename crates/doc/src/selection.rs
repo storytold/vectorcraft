@@ -175,6 +175,34 @@ impl Selection {
     }
     /// Drop ids that no longer exist or are no longer editable.
     pub fn prune(&mut self, doc: &Document) {
+        if self.objects.is_empty() && self.anchors.is_empty() && self.segments.is_empty() && self.key.is_none() && self.target.is_none() {
+            self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
+            self.slices.retain(|id| doc.is_slice(*id));
+            if self.key.is_some() || self.objects.is_empty() || self.key_guide.is_some_and(|k| !self.guides.contains(&k)) {
+                self.key_guide = None;
+            }
+            return;
+        }
+        if self.anchors.is_empty() && self.segments.is_empty() && self.key.is_none() && self.target.is_none() {
+            if doc.has_lookup_cache() || self.objects.len() <= 16 {
+                self.objects.retain(|id| doc.node(*id).is_some());
+            } else {
+                let want: std::collections::HashSet<NodeId> = self.objects.iter().copied().collect();
+                let mut found = std::collections::HashSet::with_capacity(want.len());
+                doc.walk(|n| {
+                    if want.contains(&n.id) {
+                        found.insert(n.id);
+                    }
+                });
+                self.objects.retain(|id| found.contains(id));
+            }
+            self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
+            self.slices.retain(|id| doc.is_slice(*id));
+            if self.key.is_some() || self.objects.is_empty() || self.key_guide.is_some_and(|k| !self.guides.contains(&k)) {
+                self.key_guide = None;
+            }
+            return;
+        }
         // Every id this looks up, found in one walk of the tree.
         let ids = self.objects.iter().chain(self.anchors.keys()).chain(self.segments.keys()).copied().chain(self.key).chain(self.target);
         let found = doc.index_paths(ids);
