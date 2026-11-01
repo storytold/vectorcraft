@@ -419,17 +419,12 @@ fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<Sy
 }
 
 /// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
-/// through an edit of the editing layer (see [`follow_paths`]). The instances in the art of the
+/// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes to
+/// objects the art still has. That covers the instances on the layers and in the art of the
 /// document's other symbols, graph designs, pattern tiles (the tiles pattern editing's Cancel puts
-/// back included) and brushes follow too, and keep only the changes to objects the art still has.
+/// back included) and brushes, opacity-mask art included. The editing layer holds no instance of
+/// the symbol, since [`sync`] refuses one.
 fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
-    for id in super::brushsym::instances_of(d, Some(name)) {
-        let Some(n) = d.node_mut(id) else { continue };
-        if n.extras().symbol_overrides.is_empty() {
-            continue;
-        }
-        follow_paths(&mut n.extras_mut().symbol_overrides, old, new);
-    }
     let art = d.symbols.iter().find(|s| s.name == name).filter(|s| s.dynamic).map(|s| s.art.clone());
     let mut follow = |o: &mut Vec<SymbolOverride>| {
         follow_paths(o, old, new);
@@ -439,7 +434,7 @@ fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: 
         }
     };
     let symbols = d.symbols.iter_mut().filter(|s| s.name != name).map(|s| &mut s.art);
-    let trees = symbols.chain(d.graph_designs.iter_mut().map(|g| &mut g.art));
+    let trees = d.layers.iter_mut().chain(symbols).chain(d.graph_designs.iter_mut().map(|g| &mut g.art));
     let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
     for root in trees.chain(patterns.flat_map(|p| &mut p.art)) {
         if holds_changed_instance(root, name) {
@@ -522,7 +517,6 @@ pub(crate) fn sync(before: &Document, d: &mut Document) -> Result<()> {
     };
     d.symbols[index].art = Arc::new(new_art);
     follow_objects(d, &se.symbol, (&old, old_group), (&art, group));
-    super::brushsym::fit_instances_of(d, &se.symbol);
     if let Some(e) = d.symbol_edit.as_mut() {
         e.changed = true;
         e.group = group;
