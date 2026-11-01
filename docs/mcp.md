@@ -1982,6 +1982,16 @@ swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back
 {"name":"run_command","arguments":{"command":"swatch.library.get","params":{"library":"earth-tones"}}}
 {"name":"run_command","arguments":{"command":"swatch.library.add","params":{"library":"earth-tones","names":["Clay"]}}}
 ```
+`swatch.library.nearest {library, color?, count?}` (a query) lists the colour swatches of a library (or of the document
+with `"document"`, a color book a user loaded included) closest to `color`, or to the solid fill of the first selected
+object that has one, closest first by CIEDE2000 colour difference: `{color, matches: [{name, hex, deltaE, spot}]}`,
+`count` 1..50 (5 by default). A deltaE under about 1 looks the same, under about 3 is a close match; tint swatches are
+left out. A swatch library panel's menu has Select Nearest to Fill, which selects the closest one in the panel and
+names it in the status bar (#4923).
+
+```json
+{"name":"run_command","arguments":{"command":"swatch.library.nearest","params":{"library":"brights","color":"cmyk 0 90 85 0","count":3}}}
+```
 `swatch.library.save {path?, format?: "vcswatches"|"gpl"|"ase"|"css", names?, name?, user?}` writes the document's
 swatches as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour
 groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in their own model

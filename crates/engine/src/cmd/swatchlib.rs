@@ -41,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             get
         ),
         cmd!(
+            query "swatch.library.nearest",
+            "Find Nearest Swatch",
+            [],
+            None,
+            "{library: id or name (\"document\": the document's swatches), color? (as paint.setFill's color; default: the solid fill of the first selected object that has one), count?: 1..50 (5)} the colour swatches of the library closest to the colour, closest first, by CIEDE2000 colour difference (deltaE: under about 1 looks the same, under about 3 is a close match; tint swatches left out) → {color: \"#rrggbb\", matches: [{name, hex, deltaE, spot}]} (#4923)",
+            always,
+            nearest
+        ),
+        cmd!(
             "swatch.library.add",
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
@@ -440,6 +449,45 @@ pub fn library_swatches(s: &Session, key: &str) -> Option<Vec<Swatch>> {
         return Some(s.active()?.doc.swatches_iter().filter(own).cloned().collect());
     }
     Some(library(s, key)?.1.iter().filter(own).cloned().collect())
+}
+
+/// Most matches `swatch.library.nearest` lists.
+const MAX_NEAREST: u64 = 50;
+
+/// Find Nearest Swatch (#4923): the colour swatches of a library closest to a colour (CIEDE2000).
+fn nearest(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.library.nearest";
+    let key = text_param(p, "library", C)?.ok_or_else(|| bad(C, "missing `library` (see swatch.library.list)"))?;
+    let color = match p.get("color") {
+        Some(v) => super::color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?,
+        None => {
+            let st = s.doc().map_err(|_| bad(C, "give `color`, or select an object with a solid fill"))?;
+            st.selection
+                .objects
+                .iter()
+                .filter_map(|id| st.doc.node(*id))
+                .find_map(|n| n.appearance.fill_paint().color())
+                .ok_or_else(|| bad(C, "give `color`, or select an object with a solid fill"))?
+        }
+    };
+    let count = match p.get("count") {
+        None | Some(Value::Null) => 5,
+        Some(v) => v.as_u64().filter(|n| (1..=MAX_NEAREST).contains(n)).ok_or_else(|| bad(C, format!("`count` must be 1..{MAX_NEAREST}")))?,
+    };
+    let swatches = library_swatches(s, key).ok_or_else(|| bad(C, format!("no swatch library `{key}` (see swatch.library.list)")))?;
+    let want = color.to_lab();
+    let mut matches: Vec<(f32, &Swatch, Color)> = swatches
+        .iter()
+        .filter_map(|w| w.paint.color().map(|c| (vectorcraft_color::cms::delta_e2000(want, c.to_lab()), w, c)))
+        .filter(|(d, ..)| d.is_finite())
+        .collect();
+    matches.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let rows: Vec<Value> = matches
+        .iter()
+        .take(count as usize)
+        .map(|(d, w, c)| json!({ "name": w.name, "hex": c.to_hex(), "deltaE": (f64::from(*d) * 100.0).round() / 100.0, "spot": w.spot }))
+        .collect();
+    Ok(json!({ "color": color.to_hex(), "matches": rows }))
 }
 
 /// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "" or null).

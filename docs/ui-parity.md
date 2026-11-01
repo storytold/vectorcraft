@@ -391,6 +391,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Swatch library panels: Select Nearest to Fill selects the library's colour closest to the selection's fill (CIEDE2000) and names it in the status bar (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Arrange Tools add-on (a VectorCraft addition): Randomize Opacity (#4925); scores and estimates unchanged |
 | 2026-11-01 | minor | Arrange Tools add-on (a VectorCraft addition): Sort Objects (#4917); scores and estimates unchanged |
 | 2026-11-01 | minor | Blob Brush and Eraser: the tip's outline (size, angle, roundness, at the zoom) follows the pointer before and while painting, around a small centre dot, updating at once with `[` / `]` and Tool Options; precise cursors (Caps Lock) show only the crosshair (#4977); scores and estimates unchanged (estimated) |

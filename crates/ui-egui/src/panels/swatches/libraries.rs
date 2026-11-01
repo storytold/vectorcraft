@@ -6,6 +6,22 @@ use super::{
     VectorcraftApp, json, library_panel, menu_item, swatch_tile, swatchlib,
 };
 
+/// Select Nearest to Fill in library `id`'s panel: its closest colour to the selection's fill.
+pub(crate) fn select_nearest(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str) {
+    match app.run("swatch.library.nearest", json!({ "library": id, "count": 1 })) {
+        Ok(r) => match r["matches"].get(0) {
+            Some(m) => {
+                let name = m["name"].as_str().unwrap_or_default().to_string();
+                let d = m["deltaE"].as_f64().unwrap_or_default();
+                library_panel::select_items(ctx, <SwatchLibraries as LibraryKind>::KIND, id, vec![name.clone()]);
+                app.status(format!("Nearest to the fill: {name} (ΔE {d:.2})"));
+            }
+            None => app.status("This library has no colours"),
+        },
+        Err(e) => app.status(e),
+    }
+}
+
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
     libs.into_iter().map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
 }
@@ -87,6 +103,17 @@ impl LibraryKind for SwatchLibraries {
     }
     fn row_icons(ui: &Ui, r: Rect, w: &Swatch) {
         list_icons(ui, r, &w.paint, w.global, w.spot);
+    }
+    /// Select Nearest to Fill (#4923): the library's colour closest to the selected object's fill
+    /// (CIEDE2000) is selected in the panel, and the status bar names it with its difference.
+    fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
+        let has_fill = app
+            .session
+            .active()
+            .is_some_and(|st| st.selection.objects.iter().filter_map(|n| st.doc.node(*n)).any(|n| n.appearance.fill_paint().color().is_some()));
+        if menu_item(ui, tl!("Select Nearest to Fill"), has_fill, false) {
+            select_nearest(app, ui.ctx(), id);
+        }
     }
     fn describe(w: &Swatch) -> String {
         describe(&w.paint, w.global, w.spot)

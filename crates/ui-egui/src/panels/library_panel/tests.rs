@@ -661,3 +661,26 @@ fn the_panel_menu_has_persistent() {
         assert!(text.contains(item), "{item}: {text}");
     }
 }
+
+/// #4923: a swatch library's Select Nearest to Fill selects its colour closest to the selected
+/// object's fill and names it in the status bar.
+#[test]
+fn select_nearest_to_fill_selects_the_closest_colour_of_the_library() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let r = app.run("swatch.library.get", json!({"library": "brights"})).unwrap();
+    let first = r["swatches"].as_array().unwrap().iter().find(|w| w["hex"].is_string()).unwrap().clone();
+    app.run("paint.setFill", json!({"color": first["hex"], "ids": [id]})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::panels::swatches::select_nearest(&mut app, &ctx, "brights");
+    assert_eq!(selection(&ctx, "library:swatches:brights"), [first["name"].as_str().unwrap()]);
+    assert!(app.ui.status.starts_with("Nearest to the fill: "), "{}", app.ui.status);
+    // Nothing with a fill selected: nothing selected in the panel, the reason in the status bar.
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    crate::panels::swatches::select_nearest(&mut app, &ctx, "brights");
+    assert!(selection(&ctx, "library:swatches:brights").is_empty());
+    assert!(app.ui.status.contains("solid fill"), "{}", app.ui.status);
+}

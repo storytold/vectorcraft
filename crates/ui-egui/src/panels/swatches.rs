@@ -26,6 +26,8 @@ mod actions;
 mod body;
 mod dnd;
 mod libraries;
+#[cfg(test)]
+pub(crate) use libraries::select_nearest;
 mod tiles;
 
 pub use actions::menu;

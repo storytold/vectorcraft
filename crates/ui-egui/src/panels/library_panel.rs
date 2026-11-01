@@ -124,6 +124,8 @@ pub(crate) trait LibraryKind {
     fn menu_head(_app: &mut VectorcraftApp, _ui: &mut Ui) {}
     /// Items closing the libraries menu.
     fn menu_tail(_app: &mut VectorcraftApp, _ui: &mut Ui) {}
+    /// Items of library `id`'s own (≡) menu, after Add to the document.
+    fn panel_menu_items(_app: &mut VectorcraftApp, _ui: &mut Ui, _id: &str) {}
 }
 
 /// A library looked up by its id or name: its id, name and item count.
@@ -612,6 +614,11 @@ pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     area.show(ctx, |ui| crate::dock::panel_body(app, ui, &panel, 256.0, 400.0));
 }
 
+/// Select items `names` in library `id`'s panel (of kind `kind`), as a click on them does.
+pub(crate) fn select_items(ctx: &egui::Context, kind: &str, id: &str, names: Vec<String>) {
+    set_pstate(ctx, &key(&panel_id(kind, id), "selected"), names);
+}
+
 /// The selected items and folders of panel `panel`.
 fn selection(ctx: &egui::Context, panel: &str) -> Vec<String> {
     pstate(ctx, &key(panel, "selected"))
@@ -763,6 +770,7 @@ fn panel_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     if menu_item(ui, K::ADD, !selected.is_empty(), false) {
         K::add(app, id, selected);
     }
+    K::panel_menu_items(app, ui, id);
     ui.separator();
     let s = settings(&app.ui, K::KIND, id);
     let (view, hide_find, persistent) = s.map_or((K::VIEW, false, false), |s| (s.view.unwrap_or(K::VIEW), s.hide_find, s.persistent));

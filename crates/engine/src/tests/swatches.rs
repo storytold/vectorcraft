@@ -728,3 +728,41 @@ fn global_swatch_edits_reach_the_tile_that_pattern_cancel_puts_back() {
     }
     assert_eq!(fills, [Paint::Solid { color: Color::rgb(0.0, 0.0, 1.0), swatch: Some("Tone".into()), tint: 1.0 }]);
 }
+
+/// #4923: Find Nearest Swatch lists a library's colour swatches closest to a colour, or to the
+/// selection's fill, by CIEDE2000, closest first.
+#[test]
+fn nearest_swatch_lists_the_closest_colours_of_a_library() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brick", "color": "#b03020"}));
+    run(&mut s, "swatch.new", json!({"name": "Navy", "color": "#102060"}));
+    run(&mut s, "swatch.new", json!({"name": "Spot Red", "color": "#e01010", "spot": true}));
+    let near = |s: &mut Session, p: Value| run(s, "swatch.library.nearest", p);
+    let r = near(&mut s, json!({"library": "document", "color": "#e41212", "count": 2}));
+    let names: Vec<&str> = r["matches"].as_array().unwrap().iter().map(|m| m["name"].as_str().unwrap()).collect();
+    // The default swatches count too: their Red comes second.
+    assert_eq!(names, ["Spot Red", "Red"], "{r}");
+    assert_eq!(r["matches"][0]["spot"], true);
+    let d: Vec<f64> = r["matches"].as_array().unwrap().iter().map(|m| m["deltaE"].as_f64().unwrap()).collect();
+    assert!(d[0] < 2.0 && d[0] <= d[1], "{d:?}");
+    // Without a colour: the selected object's fill.
+    let id = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#122262", "ids": [id.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(near(&mut s, json!({"library": "document", "count": 1}))["matches"][0]["name"], "Navy");
+    // A built-in library answers too, with at most `count` matches.
+    let lib = vectorcraft_color::libraries::SWATCH_LIBRARIES[0].id;
+    assert!(near(&mut s, json!({"library": lib, "color": "#336699"}))["matches"].as_array().unwrap().len() <= 5);
+    // Refused: no library, unknown library, a bad colour, a count out of range, nothing to match.
+    for bad in [
+        json!({"color": "#fff"}),
+        json!({"library": "Nope", "color": "#fff"}),
+        json!({"library": "document", "color": "teal-ish"}),
+        json!({"library": "document", "color": "#fff", "count": 0}),
+        json!({"library": "document", "color": "#fff", "count": 51}),
+    ] {
+        assert!(s.execute("swatch.library.nearest", &bad).is_err(), "{bad}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("swatch.library.nearest", &json!({"library": "document"})).is_err(), "nothing selected, no colour");
+}
