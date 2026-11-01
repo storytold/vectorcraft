@@ -44,7 +44,7 @@
       );
     in
     {
-      devShells = forAllSystems ({ pkgs, ... }:
+      devShells = forAllSystems ({ pkgs, commonDeps, ... }:
         let
           rust = pkgs.rust-bin.stable.latest.default.override {
             extensions = [ "rustfmt" "clippy" "rust-src" ];
@@ -79,7 +79,7 @@
         }
       );
 
-      packages = forAllSystems ({ pkgs, ... }: {
+      packages = forAllSystems ({ pkgs, commonDeps, ... }: {
         default = pkgs.rustPlatform.buildRustPackage {
           pname = "vectorcraft";
           version = version;
