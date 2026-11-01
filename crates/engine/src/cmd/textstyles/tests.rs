@@ -246,6 +246,18 @@ fn character_style_options_edit_keeps_a_language_tag_from_a_file() {
 }
 
 #[test]
+fn new_character_style_keeps_a_language_tag_from_the_text() {
+    let (mut s, id) = session_with_text("Text");
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        t.runs[0].style.language = Some("x-file".into());
+    }
+    s.execute("charStyle.new", &json!({"name":"Body","id":id,"attrs":{"size":18.0,"language":"x-file"}})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs["language"], json!("x-file"));
+    let error = s.execute("charStyle.new", &json!({"name":"Other","id":id,"attrs":{"language":"x-other"}})).unwrap_err().to_string();
+    assert!(error.contains("unknown language"), "{error}");
+}
+
+#[test]
 fn editing_character_style_clears_removed_size_without_losing_local_override() {
     let (mut s, id) = session_with_text("One two");
     s.execute("charStyle.setAttrs", &json!({"name": NORMAL_CHAR, "attrs": {"size": 15.0}})).unwrap();
