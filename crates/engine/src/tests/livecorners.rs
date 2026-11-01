@@ -513,17 +513,42 @@ fn arrows_while_dragging_a_corner_widget_change_the_corner_kind() {
     assert_eq!(kinds, [CornerKind::Chamfer; 4], "every shown corner takes the kind");
     assert!(radii.iter().all(|r| *r > 0.0), "and the radius: {radii:?}");
     assert_eq!(steps(&s), n + 1, "one undo step");
-    // A press and Down without a drag: the previous kind, the radius kept, one more step.
+    // A press and Down without a drag: the previous kind, the radius kept, one more step. A
+    // pointer move within the drag threshold after the press leaves the radii alone too.
     let st = s.doc().unwrap();
     let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).unwrap();
     let at = w.visible().next().unwrap();
     ptr(&mut s, PointerKind::Down, at.x, at.y);
     s.tool_key(ToolKey::Down, Mods::default(), v).unwrap();
-    ptr(&mut s, PointerKind::Up, at.x, at.y);
+    ptr(&mut s, PointerKind::Drag, at.x + 1.0, at.y + 1.0);
+    ptr(&mut s, PointerKind::Up, at.x + 1.0, at.y + 1.0);
     let (after, kinds, _) = corners(&s, id);
     assert_eq!(kinds, [CornerKind::InvertedRound; 4]);
     assert_eq!(after, radii);
     assert_eq!(steps(&s), n + 2);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(corners(&s, id).1, [CornerKind::Chamfer; 4]);
+}
+
+/// An arrow press without a drag changes only the corners' kind: corners with different radii
+/// keep each their own (#2898 review).
+#[test]
+fn an_arrow_press_without_a_drag_keeps_mixed_radii() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let (mut s, id) = session();
+    run(&mut s, json!({"id": id.0, "corners": [0], "radius": 5}));
+    run(&mut s, json!({"id": id.0, "corners": [2], "radius": 15}));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let before = corners(&s, id).0;
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).unwrap();
+    let at = w.visible().next().unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(Mods::default()), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(Mods::default()), v).unwrap();
+    let (radii, kinds, _) = corners(&s, id);
+    assert_eq!(radii, before, "each corner keeps its radius");
+    assert!(kinds.iter().all(|k| *k == CornerKind::InvertedRound), "{kinds:?}");
 }
