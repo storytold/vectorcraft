@@ -154,11 +154,12 @@ pub fn default_history_budget() -> usize {
         return 256 << 20;
     }
     static BUDGET: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-    *BUDGET.get_or_init(|| vectorcraft_render::physical_memory().filter(|&m| m > 0).map_or(1 << 30, history_budget_for))
+    *BUDGET.get_or_init(|| history_budget_for(vectorcraft_render::physical_memory()))
 }
 
-/// The default [`History::byte_budget`] on a machine with `memory` bytes installed: a quarter of it,
-/// at least 64 MiB, and at most a quarter of the address space (on 32-bit builds).
-pub(crate) fn history_budget_for(memory: u64) -> usize {
-    usize::try_from(memory / 4).unwrap_or(usize::MAX).clamp(64 << 20, usize::MAX / 4)
+/// The default [`History::byte_budget`] for a reading of `memory` bytes installed: a quarter of it,
+/// at least 64 MiB, and at most a quarter of the address space (on 32-bit builds); 1 GiB when the
+/// reading is `None` or 0.
+pub(crate) fn history_budget_for(memory: Option<u64>) -> usize {
+    memory.filter(|&m| m > 0).map_or(1 << 30, |m| usize::try_from(m / 4).unwrap_or(usize::MAX).clamp(64 << 20, usize::MAX / 4))
 }
