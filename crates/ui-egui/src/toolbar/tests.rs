@@ -1037,9 +1037,9 @@ fn tab_skips_the_grip_and_the_tear_off_bars() {
     assert!(!buttons.is_empty(), "the Tools panel's buttons are drawn");
     let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 120, frame);
     assert!(stops.iter().any(|id| buttons.contains(id)), "Tab reaches the Tools panel's buttons: {stops:?}");
-    let close = egui::Id::unique(("tool-flyout-close", "polygon"));
+    let close = bar_id(None, "polygon").with("close");
     assert!(stops.contains(&close), "Tab reaches the strip's Put back in the toolbar button: {stops:?}");
-    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id("rectangle")), ("the strip's bar", bar_id("polygon"))] {
+    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id(None, "rectangle")), ("the strip's bar", bar_id(None, "polygon"))] {
         assert!(!stops.contains(&id), "Tab stops on {name}: {stops:?}");
     }
 }
