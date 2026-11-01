@@ -80,7 +80,7 @@ impl<'a> Reader<'a> {
         // Only `Bh` reads an undefined number. Anywhere else it would reach a point or a size, so
         // the operator is one the reader doesn't know, as before.
         if w != "Bh" && !self.frames.is_empty() && vals.iter().any(|v| matches!(v, V::Num(n) if n.is_nan())) {
-            self.note_unknown("--");
+            self.note_unknown("--", hidden);
             return Ok(());
         }
         if let Some(d) = self.gradient_def.as_mut() {
@@ -303,7 +303,7 @@ impl<'a> Reader<'a> {
             _ if IGNORED.contains(&w) => {}
             // Before the art, the setup runs procedures of the printing format.
             _ if self.frames.is_empty() => {}
-            _ => self.note_unknown(w),
+            _ => self.note_unknown(w, hidden),
         }
         Ok(())
     }
@@ -340,19 +340,35 @@ impl<'a> Reader<'a> {
         }
         let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None });
         let Some(tile) = name.as_deref().and_then(|n| self.pattern_tiles.get(n)).copied() else {
-            self.unreadable("pattern fills");
+            self.unread_pattern(w);
             return;
         };
         let matrix = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { paint::affine(&Self::nums(a)) } else { None });
         let Some(xf) = pattern_xf(self.space(), matrix, tile) else {
-            self.unreadable("pattern fills");
+            self.unread_pattern(w);
             return;
         };
         let p = Paint::Pattern { pattern: name.unwrap_or_default(), xf };
         if w == "p" {
+            self.pending_unread_fill = false;
             self.gs.fill = p;
         } else {
+            self.pending_unread_stroke = false;
             self.gs.stroke = p;
+        }
+    }
+
+    fn unread_pattern(&mut self, w: &str) {
+        if self.shown() {
+            if w == "p" {
+                self.pending_unread_fill = true;
+            } else {
+                self.pending_unread_stroke = true;
+            }
+        }
+        // In a pattern's definition, only art painted with it makes the tile unreadable (see `paint`).
+        if self.pattern.is_none() && (!self.shown() || self.gs.hidden) {
+            self.hidden_unread.insert("pattern fills".into());
         }
     }
 
@@ -373,9 +389,11 @@ impl<'a> Reader<'a> {
         if w.ends_with(|c: char| c.is_ascii_lowercase()) {
             self.gs.fill = p;
             self.pending_fill = None;
+            self.pending_unread_fill = false;
         } else {
             self.gs.stroke = p;
             self.pending_stroke = None;
+            self.pending_unread_stroke = false;
         }
     }
 
@@ -446,6 +464,28 @@ impl<'a> Reader<'a> {
             // art moves on, so a path's state before its paint isn't read as its layer's.
             self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
         }
+        self.note_state();
+    }
+
+    /// Inside a dictionary in the art (a text's frame, a mask's art), the transparency just set
+    /// stays after the dictionary: the writer goes on from it, so the objects after an area text
+    /// whose frame sets one have no `Xy` of their own.
+    fn note_state(&mut self) {
+        let gs = &self.gs;
+        let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+        if self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_)))
+            && let Some(f) = self.frames.iter_mut().rev().find(|f| matches!(f.kind, Kind::Obj(_)))
+        {
+            f.state = Some(state);
+        }
+    }
+
+    /// A dictionary's art set transparency `state` (see [`Self::note_state`]): it is the current
+    /// one now, and the enclosing dictionary's.
+    pub(super) fn keep_state(&mut self, state: (f32, BlendMode, bool, Knockout, bool)) {
+        let gs = &mut self.gs;
+        (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape) = state;
+        self.note_state();
     }
 
     /// `n (style) XW` after an object: `1 (style)` after the object written on `%_` lines, its

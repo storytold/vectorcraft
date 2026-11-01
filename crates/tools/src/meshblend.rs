@@ -232,10 +232,12 @@ impl Tool for MeshTool {
                     (Paint::Solid { color, .. }, false) => Some(crate::params::color_json(color)),
                     _ => None,
                 };
+                // A click that hits an edge from just outside adds the lines at the edge.
+                let tol = cx.hit_options().tol;
                 for id in [leaf, top] {
                     match cx.doc.node(id).map(|n| &n.kind) {
                         Some(NodeKind::Mesh(_)) => {
-                            let mut params = json!({"id": id.0, "x": p.x, "y": p.y});
+                            let mut params = json!({"id": id.0, "x": p.x, "y": p.y, "tolerance": tol});
                             if let Some(c) = &color {
                                 params["color"] = c.clone();
                                 params["keepModel"] = json!(true);
@@ -243,10 +245,10 @@ impl Tool for MeshTool {
                             return vec![Action::Exec("object.mesh.addLine".into(), params)];
                         }
                         Some(NodeKind::Envelope { .. }) if cx.doc.node(id).and_then(grid_of).is_some() => {
-                            return vec![Action::Exec("object.mesh.addLine".into(), json!({"id": id.0, "x": p.x, "y": p.y}))];
+                            return vec![Action::Exec("object.mesh.addLine".into(), json!({"id": id.0, "x": p.x, "y": p.y, "tolerance": tol}))];
                         }
                         Some(NodeKind::Path { guide: false, .. }) | Some(NodeKind::Compound { .. }) => {
-                            return vec![Action::Exec("object.mesh.create".into(), json!({"ids": [id.0], "at": [p.x, p.y]}))];
+                            return vec![Action::Exec("object.mesh.create".into(), json!({"ids": [id.0], "at": [p.x, p.y], "tolerance": tol}))];
                         }
                         _ => {}
                     }
@@ -490,6 +492,9 @@ mod tests {
         let c = cx(&d, &s, &p);
         let mut t = create("mesh").unwrap();
         let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 160.0));
-        assert_eq!(acts, vec![Action::Exec("object.mesh.create".into(), json!({"ids": [a.0], "at": [150.0, 160.0]}))]);
+        assert_eq!(
+            acts,
+            vec![Action::Exec("object.mesh.create".into(), json!({"ids": [a.0], "at": [150.0, 160.0], "tolerance": c.hit_options().tol}))]
+        );
     }
 }

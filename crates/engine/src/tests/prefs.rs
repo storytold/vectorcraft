@@ -389,6 +389,31 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
+/// Caps Lock gives the drawing tools the precise crosshair while it is on, and leaves the saved
+/// Use Precise Cursors preference as it was.
+#[test]
+fn caps_lock_gives_drawing_tools_the_crosshair() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let cursor = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        s.cursor(vectorcraft_geom::Point::new(300.0, 300.0), Mods::default(), ViewInfo::default())
+    };
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+    assert_eq!(s.execute("view.capsLock", &json!({"on": true})).unwrap(), json!({"on": true}));
+    assert!(!s.prefs.use_precise_cursors, "Caps Lock leaves the preference off");
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "lasso"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    assert_eq!(s.execute("view.capsLock", &json!({"on": false})).unwrap(), json!({"on": false}));
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
+    assert!(s.execute("view.capsLock", &json!({"on": 1})).is_err());
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+}
+
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
 /// pointer; on, a crosshair. Every other drawing tool shows a crosshair either way, and the Type tool and the
 /// Scissors over no path keep theirs.

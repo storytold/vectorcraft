@@ -21,9 +21,13 @@ impl<'a> Reader<'a> {
             after: self.after_object,
             mesh_ended: self.mesh_ended,
             gs: self.gs.clone(),
+            pending_unread_fill: self.pending_unread_fill,
+            pending_unread_stroke: self.pending_unread_stroke,
             base,
             clips: Vec::new(),
             compound_members: false,
+            unread: Vec::new(),
+            state: None,
         });
         self.after_object = false;
         Ok(())
@@ -75,10 +79,27 @@ impl<'a> Reader<'a> {
             "*U" => self.close(what, |k| matches!(k, Kind::Compound))?,
             _ => self.close(what, |k| matches!(k, Kind::Clip))?,
         };
-        let Frame { kind, children: kids, gs, clips, hidden: opened_hidden, compound_members, .. } = f;
+        let Frame {
+            kind,
+            children: kids,
+            gs,
+            clips,
+            hidden: opened_hidden,
+            compound_members,
+            unread,
+            pending_unread_fill,
+            pending_unread_stroke,
+            ..
+        } = f;
+        if matches!(kind, Kind::Clip) {
+            self.gs = gs.clone();
+            self.pending_unread_fill = pending_unread_fill;
+            self.pending_unread_stroke = pending_unread_stroke;
+        }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
         // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
         if matches!(kind, Kind::Group)
+            && unread.is_empty()
             && !clips.is_empty()
             && clips.len() == kids.len()
             && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
@@ -108,7 +129,14 @@ impl<'a> Reader<'a> {
                 // painted copies make a compound of their own, under what it clips.
                 let (fills, kids): (Vec<Node>, Vec<Node>) = ungrouped(kids).into_iter().partition(|n| self.clip_fills.contains(&n.id));
                 painted = self.compound(fills, &gs);
-                let Some(n) = self.compound(kids, &gs) else { return Ok(()) };
+                let Some(n) = self.compound(kids, &gs) else {
+                    if gs.hidden || !self.shown() {
+                        self.hidden_unread.extend(unread);
+                    } else {
+                        self.unsupported.extend(unread);
+                    }
+                    return Ok(());
+                };
                 n
             }
             // A group with a clipping path (`q` … `Q`, or a `W` path in a group) is a clipping group.
@@ -122,6 +150,13 @@ impl<'a> Reader<'a> {
         }
         if compound_members {
             self.compound_groups.insert(node.id);
+        }
+        if !unread.is_empty() {
+            if !node.visible || !self.shown() {
+                self.hidden_unread.extend(unread);
+            } else {
+                self.unread.push((node.id, unread));
+            }
         }
         self.add(node, opened_hidden || hidden)?;
         if let Some(p) = painted {
@@ -172,6 +207,8 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn end_layer(&mut self) -> Result<(), String> {
+        self.pending_unread_fill = false;
+        self.pending_unread_stroke = false;
         let mut f = self.close("LB", |k| matches!(k, Kind::Layer(_)))?;
         let state = self.layer_state.take();
         // An `Xy` right after the layer's last mesh or blend, then `LB`: the layer's, not theirs.
@@ -207,15 +244,16 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// An operator the reader doesn't know: on hidden art it is only noted, on shown art the file
-    /// is read from its PDF part.
-    pub(super) fn note_unknown(&mut self, w: &str) {
+    /// An operator the reader doesn't know is scoped to its top-level object when possible.
+    pub(super) fn note_unknown(&mut self, w: &str, hidden: bool) {
         let op: String = w.chars().take(24).collect();
-        if !self.shown() {
+        // A pattern definition or an owning mask can be on `%_` lines while still
+        // determining visible art. Unknown operators there must remain unread.
+        if (self.gs.hidden && self.pattern.is_none()) || (hidden && self.pattern.is_none() && !self.in_mask()) || !self.shown() {
             if self.hidden_unread.len() < 16 {
                 self.hidden_unread.insert(format!("`{op}`"));
             }
-        } else if self.unknown.len() < 16 {
+        } else if !self.defer_to_mask(&format!("`{op}`")) && !self.mark_unread(format!("`{op}`")) && self.unknown.len() < 16 {
             self.unknown.insert(op);
         }
     }
@@ -233,6 +271,8 @@ impl<'a> Reader<'a> {
         self.open(Kind::Obj(Box::new(Obj { ty, ..Obj::default() })), hidden)?;
         // A dictionary's state starts afresh (styles set theirs inside).
         self.gs = GState::default();
+        self.pending_unread_fill = false;
+        self.pending_unread_stroke = false;
         Ok(())
     }
 
@@ -243,6 +283,8 @@ impl<'a> Reader<'a> {
         let (children, clip) = self.clip_first(f.children, &f.clips);
         let art = self.new_node(NodeKind::Group { children, clip }, &f.gs);
         self.gs = f.gs;
+        self.pending_unread_fill = f.pending_unread_fill;
+        self.pending_unread_stroke = f.pending_unread_stroke;
         self.after_object = f.after;
         self.mesh_ended = f.mesh_ended;
         let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last_mut() else {
@@ -251,6 +293,7 @@ impl<'a> Reader<'a> {
         if o.art.replace(Arc::new(art)).is_some() {
             return Err("a mask has more than one art block".into());
         }
+        o.unread = f.unread;
         Ok(())
     }
 
@@ -260,13 +303,18 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         let Some(f) = self.frames.pop() else { return Ok(()) };
-        let Frame { kind, children, base, hidden, gs, after, mesh_ended, .. } = f;
+        let Frame { kind, children, base, hidden, gs, pending_unread_fill, pending_unread_stroke, after, mesh_ended, state, .. } = f;
         let Kind::Obj(mut o) = kind else { return Ok(()) };
         obj::close(&mut o, &mut self.stack, base);
         self.obj_hidden = hidden;
         // Art made inside a dictionary (type's paths, a mask's art) isn't kept, and doesn't end what
         // follows the object the dictionary is about: a mesh's state comes after its mask.
         self.gs = gs;
+        self.pending_unread_fill = pending_unread_fill;
+        self.pending_unread_stroke = pending_unread_stroke;
+        if let Some(state) = state {
+            self.keep_state(state);
+        }
         self.after_object = after;
         self.mesh_ended = mesh_ended;
         if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
@@ -291,7 +339,7 @@ impl<'a> Reader<'a> {
             }
             "Document" => self.document(&o),
             "AI11Text" => self.text_slot(&o)?,
-            "SymbolInstance" => self.unreadable("symbols"),
+            "SymbolInstance" => self.symbol_instance(&o)?,
             "ForeignObject" => self.foreign_art(&o)?,
             _ => {}
         }
@@ -326,31 +374,115 @@ impl<'a> Reader<'a> {
 
     /// Note something the data has that isn't read: an error on a layer that shows, left out of a
     /// layer that doesn't.
-    pub(super) fn unreadable(&mut self, what: &str) {
-        if self.shown() {
-            self.unsupported.insert(what.into());
+    pub(super) fn unreadable(&mut self, what: &str, hidden: bool) {
+        if (!hidden || self.in_mask()) && !self.gs.hidden && self.shown() {
+            if !self.defer_to_mask(what) && !self.mark_unread(what.to_string()) {
+                self.unsupported.insert(what.into());
+            }
         } else {
             self.hidden_unread.insert(what.into());
         }
     }
 
-    /// Drop the object just read when it is an envelope's own mesh: a group on `%_` lines holding
-    /// only gradient meshes. Whether it was dropped.
-    pub(super) fn drop_envelope_mesh(&mut self) -> bool {
-        fn only_meshes(n: &Node) -> bool {
-            match &n.kind {
-                NodeKind::Mesh(_) => true,
-                NodeKind::Group { children, .. } => !children.is_empty() && children.iter().all(|c| only_meshes(c)),
-                _ => false,
+    /// Keep what an opacity mask's art doesn't read with the mask, until its dictionary says
+    /// whether the mask is enabled. Whether art of a mask is being read. Operators it doesn't know
+    /// are kept up to 16, as [`Reader::note_unknown`] keeps them.
+    fn defer_to_mask(&mut self, what: &str) -> bool {
+        let Some(f) = self.frames.iter_mut().rev().find(|f| matches!(f.kind, Kind::Mask)) else { return false };
+        let full = what.starts_with('`') && f.unread.iter().filter(|w| w.starts_with('`')).count() >= 16;
+        if !full && !f.unread.iter().any(|w| w == what) {
+            f.unread.push(what.into());
+        }
+        true
+    }
+
+    /// Mark the first object container below the innermost layer.
+    pub(super) fn mark_unread(&mut self, what: String) -> bool {
+        let Some(layer) = self.frames.iter().rposition(|f| matches!(f.kind, Kind::Layer(_))) else { return false };
+        let Some(frame) = self.frames.get_mut(layer + 1).filter(|f| matches!(f.kind, Kind::Group | Kind::Compound | Kind::Clip)) else {
+            return false;
+        };
+        if !frame.unread.contains(&what) {
+            frame.unread.push(what);
+        }
+        true
+    }
+
+    /// Stand in for one unread object with a box that the page can match.
+    pub(super) fn unread_box(&mut self, what: &str, bounds: super::Rect, hidden: bool) -> Result<Option<NodeId>, String> {
+        if (hidden && !self.in_mask()) || self.gs.hidden || !self.shown() {
+            self.hidden_unread.insert(what.into());
+            return Ok(None);
+        }
+        // A mask's art isn't an object of the layers: its object, or the file, is what isn't read.
+        if self.in_mask() {
+            self.unreadable(what, false);
+            return Ok(None);
+        }
+        let in_container = self
+            .frames
+            .iter()
+            .rposition(|f| matches!(f.kind, Kind::Layer(_)))
+            .is_some_and(|layer| self.frames.get(layer + 1).is_some_and(|f| matches!(f.kind, Kind::Group | Kind::Compound | Kind::Clip)));
+        if !super::art::sane(bounds) || bounds.area() <= 0.0 {
+            self.unsupported.insert(what.into());
+            return Ok(None);
+        }
+        let path = vectorcraft_geom::shapes::rectangle(bounds);
+        let gs = self.gs.clone();
+        let node = self.new_node(NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: false }, &gs);
+        let id = node.id;
+        if in_container {
+            self.mark_unread(what.into());
+        }
+        self.add(node, hidden)?;
+        if !in_container {
+            self.unread.push((id, vec![what.into()]));
+        }
+        Ok(Some(id))
+    }
+
+    fn symbol_instance(&mut self, o: &Obj) -> Result<(), String> {
+        let bounds = o.get("SymbolRef").and_then(|v| v.iter().find_map(V::text)).and_then(|name| self.symbol_bounds.get(&name).copied());
+        let matrix = o
+            .get("Matrix")
+            .or_else(|| o.get("Transform"))
+            .map(|v| v.iter().find_map(|item| if let V::Arr(a) = item { Some(Self::nums(a)) } else { None }).unwrap_or_else(|| Self::nums(v)));
+        let box_at_canvas = match (bounds, matrix.as_deref()) {
+            (Some(b), Some([a, c, d, e, x, y])) if [*a, *c, *d, *e, *x, *y].iter().all(|n| n.is_finite()) => {
+                Some(self.space().transform_rect_bbox(super::Affine::new([*a, *c, *d, *e, *x, *y]).transform_rect_bbox(b)))
+            }
+            _ => None,
+        };
+        match box_at_canvas {
+            Some(b) => self.unread_box("symbols", b, self.obj_hidden).map(|_| ()),
+            None => {
+                self.unreadable("symbols", self.obj_hidden);
+                Ok(())
             }
         }
+    }
+
+    /// Drop the object just read when it is an envelope's own: a group on `%_` lines, before the
+    /// envelope's dictionary. It holds the mesh that shapes the envelope, or, while the envelope's
+    /// contents are being edited, those contents (the mesh then is in the dictionary); either way the
+    /// distorted art follows on plain lines. The source text in the contents stays, hidden, as the
+    /// dictionary's does. Whether it was dropped.
+    pub(super) fn drop_envelope_art(&mut self) -> bool {
         let Some(n) = self.last_object() else { return false };
         let id = n.id;
-        if !matches!(n.kind, NodeKind::Group { .. }) || !only_meshes(n) || !self.hidden_ids.contains(&id) {
+        if !matches!(n.kind, NodeKind::Group { .. }) || !self.hidden_ids.contains(&id) {
             return false;
         }
-        if let Some(f) = self.frames.last_mut() {
-            f.children.pop();
+        let mut slots = vec![];
+        if let Some(f) = self.frames.last_mut()
+            && let Some(group) = f.children.pop()
+        {
+            envelope_text_slots(&group, &mut slots);
+            for mut slot in slots {
+                slot.visible = false;
+                f.children.push(slot);
+            }
         }
         self.hidden_ids.remove(&id);
         self.after_object = false;
@@ -358,8 +490,13 @@ impl<'a> Reader<'a> {
     }
 
     /// Do the layers being read show?
-    fn shown(&self) -> bool {
+    pub(super) fn shown(&self) -> bool {
         self.frames.iter().all(|f| !matches!(&f.kind, Kind::Layer(a) if !a.visible))
+    }
+
+    /// Is the art being read an opacity mask's? It is on `%_` lines and still shapes what shows.
+    pub(super) fn in_mask(&self) -> bool {
+        self.frames.iter().any(|f| matches!(f.kind, Kind::Mask))
     }
 
     /// A blend's record read: the blend's own art (the group of its key objects and spine, on `%_`

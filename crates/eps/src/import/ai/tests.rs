@@ -33,6 +33,13 @@ fn read_ok(body: &str) -> Structure {
     }
 }
 
+fn assert_unread(r: &Structure, kind: &str) {
+    assert_eq!(r.unread.len(), 1);
+    let (id, kinds) = &r.unread[0];
+    assert_eq!(kinds, &[kind]);
+    assert!(r.doc.node(*id).is_some(), "the unread object has a placeholder");
+}
+
 #[test]
 fn ruler_units_from_the_header_set_the_documents_units() {
     let body = layer("");
@@ -286,16 +293,39 @@ fn a_pattern_it_cant_read_is_an_error_only_where_it_fills() {
     let s = read_ok(&format!("{unread}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
     assert!(s.doc.patterns.is_empty() && s.doc.swatches.iter().all(|w| !matches!(w.paint, Paint::Pattern { .. })));
     for name in ["Old", "Odd", "Flat"] {
-        let e = read(
+        let r = read(
             stream(&format!("{unread}{}", layer(&format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(0.0, 0.0, 1.0, 1.0)))))
                 .as_bytes(),
         )
-        .unwrap_err();
-        assert!(e.contains("pattern fills"), "{name}: {e}");
+        .unwrap();
+        assert_unread(&r, "pattern fills");
     }
     // Type in a pattern isn't read either.
     let typed = "%AI3_BeginPattern: (Words)\n(Words) 0 0 8 8\n%_/AI11Text :\n%_0 /StoryIndex ,\n%_;\nE\n%AI3_EndPattern\n";
     assert!(read_ok(&format!("{typed}{}", layer(""))).doc.patterns.is_empty());
+}
+
+/// A pattern whose definition paints with a pattern it doesn't have isn't kept, on `%_` lines or
+/// not: a fill with it is something the file has that isn't read.
+#[test]
+fn a_pattern_painting_with_an_unread_pattern_is_not_kept() {
+    for prefix in ["%_", ""] {
+        let tile = rect_path(0.0, 0.0, 8.0, 8.0).replace('\n', &format!("\n{prefix}"));
+        let def = format!(
+            "%AI3_BeginPattern: (Nest)\n(Nest) 0 0 8 8\n{prefix}(Missing) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{prefix}{tile}f\nE\n%AI3_EndPattern\n"
+        );
+        let s = read_ok(&format!("{def}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
+        assert!(s.doc.patterns.is_empty(), "{prefix:?}: {:?}", s.doc.patterns.iter().map(|p| &p.name).collect::<Vec<_>>());
+        let r = read(
+            stream(&format!("{def}{}", layer(&format!("(Nest) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(0.0, 0.0, 1.0, 1.0))))).as_bytes(),
+        )
+        .unwrap();
+        assert_unread(&r, "pattern fills");
+        // A color set before the tile is drawn replaces the missing pattern, and the pattern is kept.
+        let repainted = def.replace(&format!("{prefix}{tile}f"), &format!("{prefix}0 g\n{prefix}{tile}f"));
+        let s = read_ok(&format!("{repainted}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
+        assert!(s.doc.pattern("Nest").is_some(), "{prefix:?}");
+    }
 }
 
 #[test]
@@ -506,6 +536,21 @@ fn a_masked_gradient_mesh_takes_the_transparency_written_after_its_mask() {
         assert_eq!((a[0].opacity, a[0].blend), expected, "{state:?}: the state after the mask is the mesh's");
         assert_eq!((a[1].opacity, a[1].blend), (1.0, BlendMode::Normal), "the next object's own state");
     }
+}
+
+#[test]
+fn a_transparency_set_in_a_dictionary_s_art_stays_after_it() {
+    // GUARDS: an area text's frame (its `/ConfiningPath` art) sets its own transparency; the objects
+    // after the text, with no `Xy` of their own, draw with it. Read as the dictionary's alone, they
+    // drew with the Lighten of the path before the text and vanished on a light background.
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n/Art :\nX=\n0 Ap\n0 1 0 0 0 Xy\n0 w\n100 0 m\n100 10 L\nn\nX+\n\
+                ; /ConfiningPath ,\n2 /TextAntialiasing ,\n;\n";
+    let body = format!("9 0.5 0 0 0 Xy\n{RED}{}f\n{text}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let a = art(&read_ok(&layer(&body)).doc);
+    let paths: Vec<_> = a.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).collect();
+    assert_eq!(paths.len(), 2, "{a:#?}");
+    assert_eq!((paths[0].opacity, paths[0].blend), (0.5, BlendMode::Lighten), "the state before the text");
+    assert_eq!((paths[1].opacity, paths[1].blend), (1.0, BlendMode::Normal), "the state the text's art set");
 }
 
 #[test]
@@ -968,6 +1013,42 @@ fn a_placed_file_on_commented_lines_is_read() {
 }
 
 #[test]
+fn hidden_placed_file_ended_by_comment_stays_hidden() {
+    let mut data = hide_placed(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", None, ""));
+    let end = data.windows(4).position(|w| w == b"%_~\r").unwrap();
+    data.drain(end..end + 4);
+    let r = read(&data).unwrap();
+    assert!(art(&r.doc).is_empty());
+    assert!(r.unread.is_empty(), "hidden placement has no shown placeholder");
+    assert!(r.hidden_unread.contains("placed files"));
+}
+
+#[test]
+fn previewless_placement_records_box_corner_as_alternative() {
+    let mut data = placed(true, "[1 0 0 -1 -7970 8070]", "missing.png", None, "");
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginLayer").unwrap();
+    data.splice(at..at, *b"%AI3_TemplateBox: 100 50 100 50\n");
+    let r = read(&data).unwrap();
+    assert_unread(&r, "placed files");
+    assert_eq!(r.unread_elsewhere.len(), 1);
+    assert_eq!(r.unread_elsewhere[0].0, r.unread[0].0);
+    assert_ne!(r.unread_elsewhere[0].1, r.doc.node(r.unread[0].0).unwrap().visual_bounds().unwrap());
+}
+
+/// A previewless locked placement keeps its edit lock on the page-art placeholder.
+#[test]
+fn previewless_placement_placeholder_inherits_lock() {
+    let mut data = placed(true, "[5 0 0 -5 0 200]", "missing.png", None, "");
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginPlace").unwrap();
+    data.splice(at..at, *b"1 A\n");
+    let result = read(&data).unwrap();
+    assert_unread(&result, "placed files");
+    let node = result.doc.node(result.unread[0].0).unwrap();
+    assert!(node.locked);
+    assert!(node.visible);
+}
+
+#[test]
 fn placed_files_are_linked_images_showing_their_preview() {
     // A 2×1 preview (premultiplied ARGB, a padded row) of a file of 4×2 pixels.
     let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
@@ -996,8 +1077,7 @@ fn placed_files_are_linked_images_showing_their_preview() {
     let xf = pixels(&r.doc).1;
     assert_eq!((xf * Point::ZERO, xf * Point::new(2.0, 1.0)), (Point::new(100.0, 50.0), Point::new(110.0, 30.0)));
 
-    // Without a preview it can read (none, cut short, not 32 bits, absurd sizes), without a path or
-    // a matrix, the file isn't read from its editing data.
+    // A placed file with a box but no usable preview is marked for page-art replacement.
     let cut = &preview[..preview.len() - 6];
     let huge = b"70000 70000 280000 32 17 \0\0\0\0";
     let overflow = b"1 2 18446744073709551615 32 17 \0\0\0\0\0\0\0\0";
@@ -1012,8 +1092,13 @@ fn placed_files_are_linked_images_showing_their_preview() {
         ("[0 0 0 0 0 0]", "a.png", Some(&preview[..])),
         ("[1 2 3]", "a.png", Some(&preview[..])),
     ] {
-        let e = read(&placed(true, matrix, path, preview, "")).unwrap_err();
-        assert!(e.contains("placed files"), "{matrix} {path} {preview:?}: {e}");
+        let result = read(&placed(true, matrix, path, preview, ""));
+        if matrix == "[0 0 0 0 0 0]" || matrix == "[1 2 3]" {
+            let e = result.err().unwrap_or_else(|| panic!("expected missing bounds for {matrix} {path}"));
+            assert!(e.contains("placed files"), "{matrix} {path} {preview:?}: {e}");
+        } else {
+            assert_unread(&result.unwrap(), "placed files");
+        }
     }
     // On a layer that doesn't show, such a file is left out of it.
     let r = read(&placed(false, "[5 0 0 -5 0 200]", "a.png", None, "")).unwrap();
@@ -1055,8 +1140,8 @@ fn text_objects_are_slots_named_after_their_story() {
 fn what_it_doesnt_read_is_an_error_where_it_shows() {
     let e = read(stream(&layer("1 2 frobnicate\n")).as_bytes()).unwrap_err();
     assert!(e.contains("`frobnicate`"), "{e}");
-    let e = read(stream(&layer("(Jive) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n")).as_bytes()).unwrap_err();
-    assert!(e.contains("pattern fills"), "{e}");
+    let r = read(stream(&layer(&format!("(Jive) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(0.0, 0.0, 1.0, 1.0)))).as_bytes()).unwrap();
+    assert_unread(&r, "pattern fills");
     let e = read(stream(&layer("/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")).as_bytes()).unwrap_err();
     assert!(e.contains("symbols"), "{e}");
     // A mask with no owner must still be reported (#2004).
@@ -1076,6 +1161,206 @@ fn what_it_doesnt_read_is_an_error_where_it_shows() {
     assert!(read(stream("").as_bytes()).is_err());
     // The setup's procedures and what follows the page don't count.
     read_ok(&format!("Adobe_level2_AI5 /initialize get exec\n{}", layer("")));
+}
+
+#[test]
+fn unresolved_pattern_reset_before_group_path_keeps_live_art() {
+    for (operator, draw, reset) in [("p", "f", "0 0 0 1 k"), ("P", "S", "0 0 0 1 K")] {
+        let body = format!("u\n(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n{reset}\n{}{draw}\nU\n", rect_path(0.0, 0.0, 4.0, 4.0),);
+        let result = read_ok(&layer(&body));
+        assert!(result.unread.is_empty(), "{operator}: {:?}", result.unread);
+        let children = art(&result.doc);
+        assert_eq!(children.len(), 1, "{operator}: group count");
+        let group_art = children[0].children().expect("group children");
+        assert_eq!(group_art.len(), 1, "{operator}: live path count");
+        assert!(matches!(group_art[0].kind, NodeKind::Path { .. }));
+    }
+}
+
+#[test]
+fn unresolved_pattern_in_dictionary_does_not_mark_following_path_unread() {
+    for (operator, draw) in [("p", "f"), ("P", "S")] {
+        let body = format!("/Unused :\n(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n;\n{}{draw}\n", rect_path(0.0, 0.0, 4.0, 4.0),);
+        let result = read_ok(&layer(&body));
+        assert!(result.unread.is_empty(), "{operator}: {:?}", result.unread);
+        let children = art(&result.doc);
+        assert_eq!(children.len(), 1, "{operator}: live path count");
+        assert!(matches!(children[0].kind, NodeKind::Path { .. }));
+    }
+}
+
+#[test]
+fn color_in_dictionary_does_not_clear_outer_unresolved_pattern() {
+    for (operator, draw, color) in [("p", "f", "0 0 0 1 k"), ("P", "S", "0 0 0 1 K")] {
+        let body = format!("(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n/Unused :\n{color}\n;\n{}{draw}\n", rect_path(0.0, 0.0, 4.0, 4.0),);
+        let result = read_ok(&layer(&body));
+        assert_unread(&result, "pattern fills");
+        assert_eq!(art(&result.doc).len(), 1, "{operator}: unread path placeholder");
+    }
+}
+
+#[test]
+fn gradient_instance_after_unresolved_pattern_is_read() {
+    let defs =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    for (operator, flag, draw) in [("p", "", "f"), ("P", "1 ", "S")] {
+        let body = format!(
+            "(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n{}{draw}\n{}{flag}Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 0 10 100 50 Xm\n{draw}\n0 BB\n",
+            rect_path(0.0, 0.0, 4.0, 4.0),
+            rect_path(10.0, 0.0, 14.0, 4.0),
+        );
+        let result = read(stream(&format!("{defs}{}", layer(&body))).as_bytes()).unwrap();
+        assert_unread(&result, "pattern fills");
+        let a = art(&result.doc);
+        assert_eq!(a.len(), 2, "{operator}");
+        assert_eq!(result.unread[0].0, a[0].id, "{operator}: only the pattern's path is unread");
+    }
+}
+
+#[test]
+fn unresolved_pattern_in_mask_art_stays_unread() {
+    let mask_path = rect_path(0.0, 0.0, 4.0, 4.0).lines().map(|line| format!("%_{line}\n")).collect::<String>();
+    let patterned = format!("%_(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{mask_path}%_f\n");
+    // A placed file with no preview, and a symbol whose definition the file doesn't have.
+    let placed = "%_%AI5_BeginPlace\n%_%%FileType: 1\n%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\n%_(missing.png)`\n%_%%IncludeFile:missing.png\n%_~\n%_%AI5_EndPlace\n";
+    let symbol = "%_/SymbolInstance :\n%_(Absent) /SymbolRef ,\n%_;\n";
+    for (art_, kind) in [
+        (patterned.as_str(), "pattern fills"),
+        ("%_/Mesh X!\n%_/End X!\n", "gradient meshes it can't read"),
+        (placed, "placed files"),
+        (symbol, "symbols"),
+        ("%_1 2 frobnicate\n", "`frobnicate`"),
+    ] {
+        let mask = format!(
+            "%_/ArtDictionary :\n%_/Mask :\n%_X=\n{art_}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_1 /Bool (Linked) ,\n%_; (AI9_Mask) ,\n%_;\n"
+        );
+        let masked = format!("{RED}{}f\n{mask}", rect_path(0.0, 0.0, 4.0, 4.0));
+        let e = read(stream(&layer(&masked)).as_bytes()).unwrap_err();
+        assert!(e.contains(kind), "{e}");
+        // In a group, the group is the unread object.
+        let result = read_ok(&layer(&format!("u\n{masked}U\n")));
+        assert_unread(&result, kind);
+        assert!(result.hidden_unread.is_empty(), "{kind}: {:?}", result.hidden_unread);
+        // A disabled mask doesn't change how its object looks: what it holds is left out.
+        let disabled = masked.replace("%_1 /Bool (Linked) ,\n", "%_1 /Bool (Linked) ,\n%_1 /Bool (Disabled) ,\n");
+        for body in [disabled.clone(), format!("u\n{disabled}U\n")] {
+            let result = read_ok(&layer(&body));
+            assert!(result.unread.is_empty(), "{kind}: {:?}", result.unread);
+            assert!(result.hidden_unread.contains(kind), "{kind}: {:?}", result.hidden_unread);
+        }
+    }
+    // Operators a mask's art doesn't know are kept up to 16.
+    let ops = (0..40).map(|i| format!("%_op{i}\n")).collect::<String>();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{ops}%_X+\n%_(Art) ,\n%_1 /Bool (Linked) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let result = read_ok(&layer(&format!("u\n{RED}{}f\n{mask}U\n", rect_path(0.0, 0.0, 4.0, 4.0))));
+    assert_eq!(result.unread.len(), 1);
+    assert_eq!(result.unread[0].1.len(), 16);
+}
+
+#[test]
+fn hidden_unread_art_beside_drawn_look_needs_no_page_replacement() {
+    let hidden_path = rect_path(0.0, 0.0, 4.0, 4.0).lines().map(|line| format!("%_{line}\n")).collect::<String>();
+    for (operator, draw, reset) in [("p", "f", "0 0 0 1 k"), ("P", "S", "0 0 0 1 K")] {
+        let body = format!(
+            "u\n%_(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n{hidden_path}%_{draw}\n{reset}\n{}{draw}\nU\n",
+            rect_path(10.0, 0.0, 14.0, 4.0),
+        );
+        let result = read_ok(&layer(&body));
+        assert!(result.unread.is_empty(), "{operator}: {:?}", result.unread);
+        assert!(result.hidden_unread.contains("pattern fills"));
+        let children = art(&result.doc);
+        let group_art = children[0].children().expect("group children");
+        assert_eq!(group_art.len(), 2);
+        assert!(matches!(group_art[1].kind, NodeKind::Path { .. }));
+    }
+}
+
+#[test]
+fn unknown_operator_on_hidden_line_does_not_mark_drawn_group_unread() {
+    let body = format!("u\n%_1 2 frobnicate\n{RED}{}f\nU\n", rect_path(10.0, 0.0, 14.0, 4.0));
+    let result = read_ok(&layer(&body));
+    assert!(result.unread.is_empty(), "{:?}", result.unread);
+    assert!(result.hidden_unread.contains("`frobnicate`"));
+    assert_eq!(art(&result.doc)[0].children().expect("group children").len(), 1);
+}
+
+/// A commented closing delimiter does not hide a visible group's unread content.
+#[test]
+fn visible_group_closed_on_hidden_line_stays_unread() {
+    let body = format!("u\n1 2 frobnicate\n{RED}{}f\n%_U\n", rect_path(10.0, 0.0, 14.0, 4.0));
+    let result = read_ok(&layer(&body));
+    assert_eq!(result.unread.len(), 1);
+    assert!(result.unread[0].1.contains(&"`frobnicate`".to_string()));
+    assert!(!result.hidden_unread.contains("`frobnicate`"));
+}
+
+/// `Xw` hides unread objects even when their operators are on ordinary lines.
+#[test]
+fn xw_hidden_unread_keeps_visible_group_sibling() {
+    for unread in
+        ["1 2 frobnicate\n", "(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 0 m\n4 0 L\n4 4 L\nf\n", "/SymbolInstance :\n(Absent) /SymbolRef ,\n;\n"]
+    {
+        let body = format!("u\n1 Xw\n{unread}0 Xw\n0 0 0 1 k\n{}f\nU\n", rect_path(10.0, 0.0, 14.0, 4.0));
+        let result = read_ok(&layer(&body));
+        assert!(result.unread.is_empty(), "{unread}: {:?}", result.unread);
+        assert!(!result.hidden_unread.is_empty(), "{unread}");
+        let children = art(&result.doc);
+        let group_art = children[0].children().expect("group children");
+        assert_eq!(group_art.iter().filter(|node| node.visible).count(), 1, "{unread}");
+    }
+    let mut data = placed(true, "[5 0 0 -5 0 200]", "missing.png", None, "0 Xw\n");
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginPlace").unwrap();
+    data.splice(at..at, *b"1 Xw\n");
+    let result = read(&data).unwrap();
+    assert!(result.unread.is_empty());
+    assert!(result.hidden_unread.contains("placed files"));
+}
+
+#[test]
+fn hidden_unread_symbol_does_not_mark_drawn_group_unread() {
+    let body = format!("u\n%_/SymbolInstance :\n%_(Absent) /SymbolRef ,\n%_;\n{RED}{}f\nU\n", rect_path(10.0, 0.0, 14.0, 4.0));
+    let result = read_ok(&layer(&body));
+    assert!(result.unread.is_empty(), "{:?}", result.unread);
+    assert!(result.hidden_unread.contains("symbols"));
+    assert_eq!(art(&result.doc)[0].children().expect("group children").len(), 1);
+}
+
+#[test]
+fn unresolved_pattern_paint_persists_past_plain_group_until_replaced() {
+    for (operator, draw, reset) in [("p", "f", "0 0 0 1 k"), ("P", "S", "0 0 0 1 K")] {
+        let body = format!(
+            "u\n(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n{}{draw}\nU\n{}{draw}\n{reset}\n{}{draw}\n",
+            rect_path(0.0, 0.0, 4.0, 4.0),
+            rect_path(10.0, 0.0, 14.0, 4.0),
+            rect_path(20.0, 0.0, 24.0, 4.0),
+        );
+        let result = read_ok(&layer(&body));
+        assert_eq!(result.unread.len(), 2, "{operator}: {:?}", result.unread);
+        assert_eq!(art(&result.doc).len(), 3);
+    }
+}
+
+#[test]
+fn unresolved_pattern_paint_inside_clip_restores_at_q() {
+    for (operator, draw, reset) in [("p", "f", "0 0 0 1 k"), ("P", "S", "0 0 0 1 K")] {
+        let body = format!(
+            "q\n(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n{}{draw}\nQ\n{}{draw}\n",
+            rect_path(0.0, 0.0, 4.0, 4.0),
+            rect_path(10.0, 0.0, 14.0, 4.0),
+        );
+        let result = read_ok(&layer(&body));
+        assert_eq!(result.unread.len(), 1, "{operator}: {:?}", result.unread);
+        assert_eq!(art(&result.doc).len(), 2);
+
+        let body = format!(
+            "(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\nq\n{reset}\n{}{draw}\nQ\n{}{draw}\n",
+            rect_path(0.0, 0.0, 4.0, 4.0),
+            rect_path(10.0, 0.0, 14.0, 4.0),
+        );
+        let result = read_ok(&layer(&body));
+        assert_eq!(result.unread.len(), 1, "{operator}: {:?}", result.unread);
+        assert_eq!(result.unread[0].0, art(&result.doc)[1].id);
+    }
 }
 
 #[test]
@@ -1457,6 +1742,19 @@ fn many_zstandard_frames_are_read_in_one_pass_and_capped() {
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
 }
 
+/// A Zstandard frame that ends in a zero byte keeps it: only the zeros after the last frame are
+/// padding.
+#[test]
+fn a_zstandard_frame_ending_in_a_zero_byte_is_read_whole() {
+    // Magic number, a single-segment header with a 1-byte content size of 3, and one raw block
+    // (last, 3 bytes) holding `ab` and a zero byte.
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    for padding in [0, 64] {
+        let raw = [&b"%AI24_ZStandard_Data"[..], &frame, &frame, &vec![0; padding]].concat();
+        assert_eq!(decode_private(&raw).unwrap(), b"ab\0ab\0");
+    }
+}
+
 #[test]
 fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let n = 200_000;
@@ -1670,6 +1968,33 @@ fn an_envelope_mesh_is_not_read_as_art() {
     // A mesh in a group with no distortion is still art.
     let doc = read_ok(&layer(&envelope(""))).doc;
     assert!(art(&doc).iter().any(|n| has_mesh(n)), "{:#?}", art(&doc));
+}
+
+/// An envelope whose contents are being edited is written the other way round: its contents, a
+/// group on `%_` lines, then its dictionary, which holds the mesh that shapes them. The contents
+/// aren't drawn as they are, only the distorted art on the plain lines after them.
+#[test]
+fn an_envelope_s_contents_being_edited_are_not_read_as_art() {
+    let corner = |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
+        format!("%_[0.82 0.83 0.83 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1)
+    };
+    let mesh = format!(
+        "%_/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n%_/End X!\n%_0 0 Xd\n%_6 () XW\n",
+        corner(0, 0, (0, 10), (10, 0)),
+        corner(0, 40, (10, 40), (0, 30)),
+        corner(40, 40, (40, 30), (30, 40)),
+        corner(40, 0, (30, 0), (40, 10)),
+    );
+    let contents: String = rect_path(0.0, 0.0, 80.0, 20.0).lines().map(|l| format!("%_{l}\n")).collect();
+    let body = format!(
+        "%_u\n%_u\n%_0 0 1 0 0 0 1 Xa\n{contents}%_f\n%_U\n%_9 () XW\n%_U\n%_/ArtDictionary :\n%_1 /Bool (AIDeformEditModeKey) ,\n\
+         %_3 /Int (AIDeformStyle) ,\n%_X=\n{mesh}%_X+\n%_ (AIDeformArtKey) ,\n%_;\n%_\n%_9 () XW\n{RED}{}f\n",
+        rect_path(0.0, 0.0, 40.0, 40.0)
+    );
+    let doc = read_ok(&layer(&body)).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
 #[test]

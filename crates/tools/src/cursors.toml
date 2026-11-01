@@ -583,14 +583,16 @@ look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClos
 [[cursor]]
 id = "BlobBrush"
 group = "Drawing and editing tools"
-shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. No brush-size outline shows while hovering."]
+shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while painting; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The brush centre."
+look = "Only a small dot at the centre: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Eraser"
 group = "Drawing and editing tools"
-shown_when = ["The Eraser tool: a drag erases the area it covers. No size outline shows while hovering."]
+shown_when = ["The Eraser tool: a drag erases the area it covers. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while erasing; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The eraser's centre."
+look = "Only a small dot at the centre, as the Blob Brush's: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Smooth"

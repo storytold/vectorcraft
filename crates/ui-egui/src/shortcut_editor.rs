@@ -271,6 +271,57 @@ pub fn chord_from_event(key: Key, m: Modifiers) -> Option<String> {
     crate::shortcuts::parse(&s).map(|_| s)
 }
 
+ui_mirror!(fn backtick_store() -> Option<String>);
+
+/// Notes what the backtick key (left of 1) typed in `events`: the one-character text whose key, a
+/// press of it without modifiers, comes right before it (egui-winit) or, when no press comes
+/// before, right after it (eframe's web build with no text field focused). egui reports that key
+/// as [`Key::Backtick`] on layouts where it types a character egui has no key for, such as `"` on
+/// Turkish Q.
+pub(crate) fn note_backtick_text(events: &[egui::Event]) {
+    let is_press = |e: Option<&egui::Event>| matches!(e, Some(egui::Event::Key { pressed: true, .. }));
+    let is_backtick =
+        |e: Option<&egui::Event>| matches!(e, Some(egui::Event::Key { key: Key::Backtick, pressed: true, modifiers, .. }) if modifiers.is_none());
+    let typed = events.iter().enumerate().rev().find_map(|(j, e)| match e {
+        egui::Event::Text(t) if t.chars().count() == 1 && !t.chars().any(char::is_whitespace) => {
+            let before = j.checked_sub(1).and_then(|j| events.get(j));
+            (is_backtick(before) || (!is_press(before) && is_backtick(events.get(j + 1)))).then(|| t.clone())
+        }
+        _ => None,
+    });
+    if let Some(t) = typed
+        && let Ok(mut store) = backtick_store().write()
+        && store.as_deref() != Some(t.as_str())
+    {
+        *store = Some(t);
+    }
+}
+
+/// The character the backtick key types on the layout in use, once a press of it has been seen,
+/// when it is neither `` ` `` nor `~`.
+pub(crate) fn backtick_text() -> Option<String> {
+    backtick_store().read().ok().and_then(|t| t.clone()).filter(|t| t != "`" && t != "~")
+}
+
+/// `text` as the editor shows it: an unshifted backtick key shows the character it types on the
+/// layout in use (`"` on Turkish Q), so it reads as the key the user pressed.
+fn on_layout(text: String, typed: Option<&str>) -> String {
+    let Some(typed) = typed else { return text };
+    match vc_chord(&text) {
+        Some(c) if c.key == craft_keymap::Key::Backtick && !c.mods.shift => match text.strip_suffix('~') {
+            Some(mods) => format!("{mods}{typed}"),
+            None => text,
+        },
+        _ => text,
+    }
+}
+
+/// `text` with the backtick key shown as the character it types on the layout in use
+/// ([`backtick_text`]), as the editor shows it.
+pub(crate) fn as_typed(text: &str) -> String {
+    on_layout(text.to_string(), backtick_text().as_deref())
+}
+
 // ---------- entries & conflicts ----------
 
 #[derive(Clone, Debug)]
@@ -506,15 +557,17 @@ pub fn reset_one(overrides: &mut Overrides, key: &str) {
     overrides.remove(&crate::keymap::stored_key(key));
 }
 
-/// Text shown for all active chords in a dialog row.
-fn dialog_shortcuts_with(km: &Keymap, key: &str) -> Option<String> {
+/// Text shown for all active chords in a dialog row, with the backtick key shown as `typed`
+/// ([`backtick_text`]).
+fn dialog_shortcuts_with(km: &Keymap, key: &str, typed: Option<&str>) -> Option<String> {
+    let shown = |s: String| menus::pretty_shortcut(&on_layout(s, typed));
     let bindings = km.bindings(&command_of(key));
     if bindings.len() > 1 {
-        let primary = effective_with(km, key).map(|s| menus::pretty_shortcut(&s))?;
-        let additional = bindings.iter().skip(1).map(|b| menus::pretty_shortcut(&crate::keymap::binding_text(b)));
+        let primary = effective_with(km, key).map(shown)?;
+        let additional = bindings.iter().skip(1).map(|b| shown(crate::keymap::binding_text(b)));
         return Some(std::iter::once(primary).chain(additional).collect::<Vec<_>>().join(" · "));
     }
-    effective_with(km, key).map(|s| menus::pretty_shortcut(&s))
+    effective_with(km, key).map(shown)
 }
 
 /// Overrides of a preset (both presets are the registry defaults for now).
@@ -698,6 +751,8 @@ pub fn is_recording(app: &VectorcraftApp) -> bool {
 struct DialogView {
     /// The dialog's `overrides` field this was built from.
     source: Value,
+    /// The [`backtick_text`] the texts show.
+    backtick: Option<String>,
     keymap: Keymap,
     texts: Vec<Option<String>>,
     conflicts: usize,
@@ -706,17 +761,19 @@ struct DialogView {
 impl DialogView {
     fn new(overrides: Overrides) -> DialogView {
         let keymap = keymap_with(&overrides);
-        let texts = entries().iter().map(|e| dialog_shortcuts_with(&keymap, &e.key)).collect();
+        let backtick = backtick_text();
+        let texts = entries().iter().map(|e| dialog_shortcuts_with(&keymap, &e.key, backtick.as_deref())).collect();
         let conflicts = conflicts_in(&keymap).len();
-        DialogView { source: stored::to_value(keymap.overrides()), keymap, texts, conflicts }
+        DialogView { source: stored::to_value(keymap.overrides()), backtick, keymap, texts, conflicts }
     }
 
-    /// The view of `d`'s working set, from the cache unless the set changed. The dialog's
-    /// `overrides` field is left in its stored form.
+    /// The view of `d`'s working set, from the cache unless the set or the backtick key's
+    /// character changed. The dialog's `overrides` field is left in its stored form.
     fn of(ctx: &egui::Context, d: &mut Dialog) -> Arc<DialogView> {
         let id = egui::Id::unique("dialog-shortcuts-view");
         let source = d.fields.get("overrides").unwrap_or(&Value::Null);
-        if let Some(v) = ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source) {
+        let backtick = backtick_text();
+        if let Some(v) = ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source && v.backtick == backtick) {
             return v;
         }
         let v = Arc::new(DialogView::new(dialog_overrides(d)));
@@ -729,6 +786,7 @@ impl DialogView {
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
+    ctx.input(|i| note_backtick_text(&i.events));
     // The working set, as a keymap: copied only by an edit this frame.
     let view = DialogView::of(ctx, &mut d);
     let mut km = Cow::Borrowed(&view.keymap);
@@ -823,7 +881,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 for (i, e) in entries().iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e)) {
                     let sc = match &km {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
-                        Cow::Owned(km) => dialog_shortcuts_with(km, &e.key),
+                        Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
                     };
                     let matches = e.label.to_lowercase().contains(&q)
                         || tl!(&e.label).to_lowercase().contains(&q)
@@ -1010,7 +1068,10 @@ fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
                     "__message".into(),
                     json!(crate::i18n::fmt(
                         tl!("⚠ {chord} was already used by {names} — it has been removed there."),
-                        &[("chord", &menus::pretty_shortcut(chord)), ("names", &names.join(", "))]
+                        &[
+                            ("chord", &menus::pretty_shortcut(&on_layout(chord.to_string(), backtick_text().as_deref()))),
+                            ("names", &names.join(", "))
+                        ]
                     )),
                 );
                 d.fields.insert("__conflict".into(), json!(first));
@@ -1124,6 +1185,61 @@ mod tests {
         let d = press(Key::A, Modifiers::SHIFT);
         assert_eq!(d.str("__recording"), "");
         assert_eq!(crate::keymap::override_text(&dialog_overrides(&d), "tool:groupSelection").as_deref(), Some("Shift+A"));
+    }
+
+    /// On Turkish Q the key left of 1 types `"`, which egui reports as the backtick key: the
+    /// recorded shortcut is that key, saved as `~` as before, and its row shows `"`. On a US
+    /// layout the row still shows `~`.
+    #[test]
+    fn the_backtick_key_shows_what_it_types() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut app);
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let at = entries().iter().position(|e| e.key == "edit.clear").unwrap();
+        let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        let text = |t: &str| egui::Event::Text(t.into());
+        let mut record_with = |events: Vec<egui::Event>| {
+            app.ui.dialog.as_mut().unwrap().fields.insert("__recording".into(), json!("edit.clear"));
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let d = app.ui.dialog.clone().unwrap();
+            let shown = DialogView::new(dialog_overrides(&d)).texts[at].clone();
+            (crate::keymap::override_text(&dialog_overrides(&d), "edit.clear"), shown)
+        };
+        assert_eq!(record_with(vec![press(Key::Backtick), text("\"")]), (Some("~".to_string()), Some("\"".to_string())));
+        assert_eq!(record_with(vec![press(Key::Backtick), text("`")]), (Some("~".to_string()), Some("~".to_string())));
+        // eframe's web build with no text field focused sends the text before its key.
+        assert_eq!(record_with(vec![text("\""), press(Key::Backtick)]), (Some("~".to_string()), Some("\"".to_string())));
+        // A text right after another key's press is that key's.
+        note_backtick_text(&[press(Key::Num2), text("'"), press(Key::Backtick)]);
+        assert_eq!(backtick_text().as_deref(), Some("\""));
+        note_backtick_text(&[text("`"), press(Key::Backtick)]);
+        assert_eq!(backtick_text(), None);
+        // Only the unshifted key types that character.
+        assert_eq!(on_layout("Shift+~".into(), Some("\"")), "Shift+~");
+        assert_eq!(on_layout("Cmd+~".into(), Some("\"")), "Cmd+\"");
+        assert_eq!(on_layout("Cmd+K".into(), Some("\"")), "Cmd+K");
+    }
+
+    #[test]
+    fn menus_and_tooltips_show_the_backtick_key_as_it_types() {
+        let mut ui = UiState::default();
+        // Not Cmd+~: macOS reserves it, so the override would leave Edit › Clear on Delete there.
+        crate::keymap::set_override(&mut ui.shortcut_overrides, "edit.clear", "Alt+~");
+        crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:measure", "~");
+        sync(&ui);
+        let measure = vectorcraft_tools::tool_info("measure").unwrap();
+        let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        let clear = || menus::shown_shortcut(menus::shortcut_of("edit.clear").unwrap());
+        note_backtick_text(&[press(Key::Backtick), egui::Event::Text("`".into())]);
+        assert_eq!(clear(), menus::pretty_shortcut("Alt+~"));
+        assert!(crate::toolbar::tip(measure).ends_with("(~)"));
+        note_backtick_text(&[press(Key::Backtick), egui::Event::Text("\"".into())]);
+        assert_eq!(clear(), menus::pretty_shortcut("Alt+\""));
+        assert!(crate::toolbar::tip(measure).ends_with("(\")"), "{}", crate::toolbar::tip(measure));
+        assert_eq!(menus::shown_shortcut("Shift+~"), menus::pretty_shortcut("Shift+~"));
+        sync(&UiState::default());
     }
 
     #[test]

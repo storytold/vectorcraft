@@ -1,4 +1,4 @@
-use super::entries::{Row, entry, pretty_shortcut};
+use super::entries::{Row, entry, shown_shortcut};
 use super::invoke::{field_event, focused_text_field, invoke, to_field, with_held_keys};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Tokens, Value, VectorcraftApp, widgets};
@@ -124,7 +124,7 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
 /// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
 /// and Type › Font's samples.
 fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, clicked: &mut Option<(String, Value)>) {
-    let sc = row.shortcut.map(pretty_shortcut).unwrap_or_default();
+    let sc = row.shortcut.map(shown_shortcut).unwrap_or_default();
     let Some((id, p)) = row.command else {
         ui.add_enabled_ui(false, |ui| {
             ui.add(egui::Button::new(row.label.as_ref()).shortcut_text(sc));

@@ -229,9 +229,10 @@ impl<'a> Reader<'a> {
             self.blend_roles.insert(id, (kind, o.text("ShapeBlendPathID")));
         }
         // An envelope (a distortion, `AIDeformStyle` / `DeformValue`) is written on `%_` lines as
-        // a group holding the mesh that shapes it; the distorted art the file's PDF part draws
-        // follows on plain lines. That mesh isn't art, so it goes (#2405).
-        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_mesh() {
+        // a group holding the mesh that shapes it (or its contents, while they are being edited);
+        // the distorted art the file's PDF part draws follows on plain lines. That group isn't
+        // art, so it goes (#2405).
+        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_art() {
             return;
         }
         if let Some(mask) = o.obj("AI9_Mask").or_else(|| o.obj("Mask")) {
@@ -242,10 +243,20 @@ impl<'a> Reader<'a> {
                 if let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })) {
                     n.extras_mut().mask = Some(Box::new(value));
                 } else if !on("Disabled") {
-                    self.unreadable("opacity masks without an owning object");
+                    self.unreadable("opacity masks without an owning object", false);
+                }
+                // What the art doesn't read matters only when the mask shapes what shows.
+                for what in &mask.unread {
+                    if on("Disabled") {
+                        self.hidden_unread.insert(what.clone());
+                    } else if let Some(op) = what.strip_prefix('`').and_then(|w| w.strip_suffix('`')) {
+                        self.note_unknown(op, false);
+                    } else {
+                        self.unreadable(what, false);
+                    }
                 }
             } else if mask.nums("Disabled").first().copied() != Some(1.0) {
-                self.unreadable("opacity masks without readable art");
+                self.unreadable("opacity masks without readable art", false);
             }
         }
         let name = match o.text("AIArtName") {
@@ -452,6 +463,8 @@ impl<'a> Reader<'a> {
             artboard,
             template: self.template,
             hidden_unread: self.hidden_unread,
+            unread: self.unread,
+            unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
             restyled: self.restyled,
             placed_elsewhere: self.placed_elsewhere,

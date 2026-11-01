@@ -130,6 +130,38 @@ fn kerning_at_a_caret_sets_the_pair_not_the_whole_text() {
     assert_eq!((kerning(&app, 1), kerning(&app, 2), kerning(&app, 3)), (Some(-50.0), Some(30.0), Some(30.0)));
 }
 
+#[test]
+fn character_kerning_setter_and_automatic_pair_value() {
+    let german = crate::i18n::Lang::from_code("de").unwrap();
+    assert!(crate::i18n::has(german, "Optical"));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "III", "size": 100, "font": "JetBrains Mono"})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    set_kerning(&mut app, json!("optical"));
+    assert!(text_style(&app).unwrap().0.optical_kerning);
+    let ctx = egui::Context::default();
+    let mut shown = None;
+    ctx.run_ui(Default::default(), |ui| {
+        shown = caret_kerning(&app, ui);
+    })
+    .textures_delta
+    .clear();
+    let (value, automatic) = shown.unwrap();
+    assert!(automatic && value != 0.0);
+    set_kerning(&mut app, json!(50));
+    ctx.run_ui(Default::default(), |ui| {
+        shown = caret_kerning(&app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert_eq!(shown, Some((50.0, false)));
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    assert_eq!(shared(&app, |s| (s.optical_kerning, s.kerning)), None, "a mixed range shows a blank Kerning field");
+}
+
 /// Highlight Kerning and Highlight Tracking show the Character panel and give its field the
 /// keyboard focus with the value selected: what is typed replaces it, and Enter applies it.
 /// Highlight Font Name opens the font family menu with its search field focused. Without
@@ -494,6 +526,42 @@ fn tate_chu_yoko_menu_item_shows_with_east_asian_options_and_toggles() {
     assert!(!on(&app));
 }
 
+/// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
+/// marks the selected characters, one undo step each way; its check shows only while every
+/// selected character has it, and a mixed selection turns it on.
+#[test]
+fn standard_vertical_roman_alignment_menu_item_toggles() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "ABC"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let label = "Standard Vertical Roman Alignment";
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains(label));
+    app.session.prefs.show_east_asian_options = true;
+    let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().all(|r| r.style.standard_vertical_roman),
+        _ => panic!("text"),
+    };
+    // Only the first letter has it: the item is unchecked.
+    app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "standardVerticalRoman": true})).unwrap();
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let before = undo(&app);
+    assert!(!on(&app));
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains(&format!("✓ {label}")));
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{texts:?}")).1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(on(&app));
+    assert_eq!(undo(&app), before + 1);
+    assert!(crate::tests_labels::painted_text(&mut app, menu).contains(&format!("✓ {label}")));
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap().1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(!on(&app));
+    assert_eq!(undo(&app), before + 2);
+}
+
 /// Digits is in the panel menu with the Middle Eastern (Indic) options only, as Paragraph
 /// Direction is in the Paragraph panel.
 #[test]
@@ -506,6 +574,19 @@ fn digits_show_with_the_indic_options() {
     assert!(!shown(&mut app));
     app.session.prefs.show_indic_options = true;
     assert!(shown(&mut app));
+}
+
+/// The Digits submenu lists Default, the Arabic-script numeral systems and the Indic scripts'
+/// digits (#4942), and checks the selected characters' system.
+#[test]
+fn digits_submenu_lists_the_indic_scripts_and_checks_the_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| digits_items(app, ui, Some(vectorcraft_doc::Digits::Tamil)));
+    let items: Vec<_> = text.lines().map(|l| l.trim().trim_start_matches("✓ ")).collect();
+    let want =
+        ["Default", "Arabic", "Hindi", "Farsi", "Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Odia", "Tamil", "Telugu", "Kannada", "Malayalam"];
+    assert!(want.iter().all(|w| items.contains(w)), "{items:?}");
+    assert_eq!(text.lines().filter_map(|l| l.strip_prefix("✓ ")).collect::<Vec<_>>(), ["Tamil"]);
 }
 
 /// Character Direction is in the panel menu with the Middle Eastern (Indic) options, beside
@@ -670,6 +751,7 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.char_align != d.char_align,
             s.proportional_metrics != d.proportional_metrics,
             s.tate_chu_yoko != d.tate_chu_yoko,
+            s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
             s.digits != d.digits,
@@ -681,17 +763,17 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             json!({
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
-                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "noBreak": true,
-                "charDirection": "rightToLeft", "digits": "hindi"
+                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "standardVerticalRoman": true,
+                "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 18]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 19]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 18]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 19]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);

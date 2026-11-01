@@ -117,6 +117,7 @@ fn pin_to_page(n: &mut Node, m: Affine) {
 
 /// What SVG Tiny 1.2 does without masks.
 const TINY_MASKS: &str = "SVG Tiny 1.2 has no masks: opacity masks are left out and knockout groups written as plain groups";
+pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
 /// A region covering any artwork (mask and filter extents).
 const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
@@ -565,6 +566,18 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
+                if let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref()
+                    && let Some(blob) = self.doc.image_blob(im)
+                    && blob.gray_source().is_some()
+                {
+                    self.colorized_image(n, im, *color, blob);
+                    return;
+                }
+                if matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. })) && self.doc.image_blob(im).is_none_or(|b| b.bytes.is_empty()) {
+                    // Missing pixels cannot show the original file in place of a colorized image.
+                    self.warn(UNDECODED);
+                    return;
+                }
                 let id = self.id_attr(n);
                 let m = self.matrix(self.xf * im.xf);
                 let mut props = css::transparency(n);
@@ -640,7 +653,7 @@ impl Writer<'_> {
     /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
     fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
         // SVG Tiny has no `<symbol>`.
-        if self.tiny() || vectorcraft_brush::stain(inst).is_some() {
+        if self.tiny() || vectorcraft_brush::stain(inst).is_some() || !inst.extras().symbol_overrides.is_empty() {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {

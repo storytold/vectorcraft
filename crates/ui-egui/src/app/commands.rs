@@ -92,7 +92,11 @@ impl VectorcraftApp {
         let ime_view = self.view_info();
         let ime_target = crate::ime::target(&mut self.session, ime_view);
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
+        let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
+            self.canvas.hover_cursor = None;
+        }
         if r.is_ok()
             && let Some(ctx) = self.ui_ctx.clone()
         {

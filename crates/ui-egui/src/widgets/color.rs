@@ -135,6 +135,24 @@ pub fn color_slider_stepped(
 ) -> (Option<f32>, Live, Option<f64>) {
     let id = id_with(ui.scope_id(), id);
     let (resp, picked, phase) = color_rail(ui, id, name, shown.clone(), value, width, track);
+    let stepped = slider_keys(ui, &resp, shown);
+    (picked, phase, stepped.filter(|_| picked.is_none()))
+}
+
+/// A control that its caller draws and reads the pointer on (`resp`, from a click-and-drag
+/// [`Ui::interact`]), which screen readers get as a slider named `name` (already translated) with
+/// `shown`, and which takes the focus, the keys and the screen readers' actions as the rail of
+/// [`color_slider_stepped`] does, with the focus outline around `resp.rect`. Returns the number in
+/// `shown`'s units that a key or an action gives.
+pub fn stepped_area(ui: &Ui, resp: &Response, name: &str, shown: Option<SliderValue>) -> Option<f64> {
+    slider_info(ui, resp, name, shown.clone());
+    slider_keys(ui, resp, shown)
+}
+
+/// The focus, keys, actions and focus outline of [`color_slider_stepped`] on the control `resp`:
+/// the number a key or an action gives.
+fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f64> {
+    let id = resp.id;
     // Focus a click or a drag gave shows no outline until a key steps the rail: the outline tells
     // a keyboard user where the focus is, and after a drag it only framed the rail.
     let by_pointer = id.with("focused-by-pointer");
@@ -161,7 +179,7 @@ pub fn color_slider_stepped(
         let t = Tokens::get(ui.ctx());
         ui.painter().rect_stroke(resp.rect, 2.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
     }
-    (picked, phase, stepped.filter(|_| picked.is_none()))
+    stepped
 }
 
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
