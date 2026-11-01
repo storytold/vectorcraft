@@ -315,6 +315,128 @@ fn an_effect_not_read_here_keeps_the_drawn_look() {
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
 }
 
+fn stroke(paint: &str) -> String {
+    basic("Stroke Style Filter", &format!("/StrokeStyle : 0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d0 XR\n{paint}\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n"))
+}
+
+fn offset(ofst: f64, jntp: i64, mlim: f64) -> String {
+    basic("Adobe Offset Path", &format!("{ofst} /Real (ofst) ,\n{mlim} /Real (mlim) ,\n{jntp} /Int (jntp) ,\n"))
+}
+
+/// Style `Fx`: `effects` on the whole object over a stack of a fill (with `on_fill` before its
+/// fill style, `after_fill` after it) and a stroke (with `on_stroke` and `after_stroke`).
+fn path_style(effects: &[String], on_fill: &[String], after_fill: &[String], on_stroke: &[String], after_stroke: &[String]) -> ArtStyle {
+    let item = |before: &[String], paint: String, after: &[String]| {
+        if before.is_empty() && after.is_empty() {
+            return paint;
+        }
+        compound("Chain Style Filter", &[before.concat(), paint, after.concat()])
+    };
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            item(on_stroke, stroke("0 0 0 1 0 0 0 XA"), after_stroke),
+            item(on_fill, fill("0 0 0 0 1 0 0 Xa"), after_fill),
+            basic("Conduit Filter", ""),
+        ],
+    );
+    let root = compound("Chain Style Filter", &[effects.concat(), stack]);
+    let data = format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}");
+    art_styles(data.as_bytes()).remove("Fx").unwrap()
+}
+
+fn ids(effects: &[Effect]) -> Vec<&str> {
+    effects.iter().map(|e| e.id.as_str()).collect()
+}
+
+#[test]
+fn offset_path_on_the_object_is_read_with_its_settings() {
+    // GUARDS: an object with Offset Path kept its drawn look, and the effect was read only on type.
+    let st = path_style(&[offset(4.0, 1, 6.0)], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let [e] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
+    assert_eq!((e.id.as_str(), &e.params), ("path.offsetPath", &json!({"offset": 4.0, "joins": "bevel", "miterLimit": 6.0})));
+    assert!(e.visible);
+    for (jntp, joins) in [(0, "round"), (2, "miter")] {
+        let st = path_style(&[offset(-5.0, jntp, 7.0)], &[], &[], &[], &[]);
+        assert_eq!((&st.effects[0].params["joins"], &st.effects[0].params["offset"]), (&json!(joins), &json!(-5.0)));
+    }
+}
+
+#[test]
+fn outline_object_and_outline_stroke_are_read_with_no_settings() {
+    // GUARDS: `Adobe Outline Type` and `Adobe Outline Stroke` weren't read, so the style kept its drawn look.
+    let outline = basic("Adobe Outline Type", "");
+    let outline_stroke = basic("Adobe Outline Stroke", "");
+    let st = path_style(&[outline.clone(), outline_stroke.clone()], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    assert_eq!(ids(&st.effects), ["path.outlineObject", "path.outlineStroke"]);
+    // No `width`: the stroke gives it.
+    assert!(st.effects.iter().all(|e| e.params == json!({})), "{:?}", st.effects);
+    // On a fill and on a stroke: Outline Object before the item's own style, Outline Stroke after it.
+    let (before, after) = (std::slice::from_ref(&outline), std::slice::from_ref(&outline_stroke));
+    let st = path_style(&[], before, after, before, after);
+    assert!(st.plain && !st.simple, "{st:?}");
+    // Bottom first: the fill, then the stroke.
+    assert!(matches!(st.items.as_slice(), [StyleItem::Fill(_), StyleItem::Stroke { .. }]), "{:?}", st.items);
+    for look in &st.looks {
+        assert_eq!(ids(&look.effects), ["path.outlineObject", "path.outlineStroke"]);
+    }
+}
+
+#[test]
+fn path_effects_keep_their_order_and_visibility() {
+    let hidden = offset(3.0, 0, 4.0).replacen("1 /Visible", "0 /Visible", 1);
+    let st = path_style(&[hidden, offset(6.0, 1, 4.0)], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let offsets: Vec<_> = st.effects.iter().map(|e| (e.params["offset"].as_f64(), e.visible)).collect();
+    assert_eq!(offsets, [(Some(3.0), false), (Some(6.0), true)]);
+    // On a fill and a stroke, with another effect after it.
+    let transform = basic("Adobe Transform", "2 /Int (numCopies) ,\n");
+    let after = std::slice::from_ref(&transform);
+    let st = path_style(&[], &[offset(2.0, 2, 4.0)], after, &[offset(-1.0, 0, 4.0)], after);
+    assert!(st.plain, "{st:?}");
+    assert_eq!(ids(&st.looks[0].effects), ["path.offsetPath", "distort.transform"]);
+    assert_eq!(ids(&st.looks[1].effects), ["path.offsetPath", "distort.transform"]);
+    assert_eq!((st.looks[0].effects[0].params["offset"].as_f64(), st.looks[1].effects[0].params["offset"].as_f64()), (Some(2.0), Some(-1.0)));
+}
+
+#[test]
+fn offset_path_with_settings_not_read_keeps_the_drawn_look() {
+    // GUARDS: a missing setting was read as 10 pt, miter or 4, and an out-of-range one was clamped.
+    let complete = "4 /Real (ofst) ,\n1 /Int (jntp) ,\n6 /Real (mlim) ,\n";
+    let bodies = [
+        String::new(),
+        "4 /Real (ofst) ,\n".into(),
+        "1 /Int (jntp) ,\n".into(),
+        "4 /Real (ofst) ,\n1 /Int (jntp) ,\n".into(),
+        format!("{complete}1 /Int (later) ,\n"),
+        format!("{complete}(x) /UnicodeString (DisplayString) ,\n"),
+        complete.replace("/Int (jntp)", "/Real (jntp)"),
+        complete.replace("4 /Real (ofst)", "(4) /Real (ofst)"),
+        complete.replace("4 /Real (ofst)", "1e999 /Real (ofst)"),
+        complete.replace("4 /Real (ofst)", "100001 /Real (ofst)"),
+        complete.replace("6 /Real (mlim)", "0.5 /Real (mlim)"),
+        complete.replace("6 /Real (mlim)", "501 /Real (mlim)"),
+        complete.replace("1 /Int (jntp)", "3 /Int (jntp)"),
+        complete.replace("1 /Int (jntp)", "-1 /Int (jntp)"),
+        complete.replace("1 /Int (jntp)", "0.5 /Int (jntp)"),
+    ];
+    for body in &bodies {
+        let filter = basic("Adobe Offset Path", body);
+        let one = std::slice::from_ref(&filter);
+        for st in [path_style(one, &[], &[], &[], &[]), path_style(&[], one, &[], &[], &[])] {
+            assert!(!st.plain, "{body:?}: {st:?}");
+        }
+    }
+    assert!(path_style(&[basic("Adobe Offset Path", complete)], &[], &[], &[], &[]).plain);
+    // The outline effects have no settings.
+    for name in ["Adobe Outline Type", "Adobe Outline Stroke"] {
+        assert!(!path_style(&[basic(name, "1 /Real (width) ,\n")], &[], &[], &[], &[]).plain, "{name}");
+        assert!(!path_style(&[basic(name, "/Array : 1 /Real , ; (width) ,\n")], &[], &[], &[], &[]).plain, "{name}");
+    }
+}
+
 #[test]
 fn a_hidden_fill_comes_in_hidden() {
     let hidden = fill("0 0 0 1 0 0 0 Xa").replacen("1 /Visible", "0 /Visible", 1);

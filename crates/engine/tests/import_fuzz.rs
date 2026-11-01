@@ -3385,6 +3385,17 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "(Fill Style Filter) 0 0 /Filter ,",
             "(Adobe Outer Glow) 1 0 /Filter ,",
             "(Adobe Drop Shadow) 1 0 /Filter ,",
+            "(Adobe Offset Path) 1 0 /Filter ,",
+            "(Adobe Outline Type) 1 0 /Filter ,",
+            "(Adobe Outline Stroke) 1 0 /Filter ,",
+            "(Chain Style Filter) 0 0 /Filter ,",
+            "-1e308 /Real (ofst) ,",
+            "1e999 /Real (ofst) ,",
+            "2 /Int (jntp) ,",
+            "7 /Int (jntp) ,",
+            "NaN /Real (mlim) ,",
+            "(x) /UnicodeString (mlim) ,",
+            "0 /Visible ,",
             "1 /Visible ,",
             "2 /FillOrStroke ,",
             "1 /Bool (BSDashAdj) ,",
@@ -3449,6 +3460,59 @@ proptest! {
         // An EPS whose page is its art's box, not its artboard: what prints outside it is compared too.
         let boxed = ai::eps(data.replace("%AI3_Cropmarks: 0 0 200 100", "%AI3_Cropmarks: -50 -50 300 200").as_bytes(), ai::page_ps());
         survive("hostile editing data in an EPS of its art's box", || vectorcraft_engine::cmd::fileio::load("x.eps", &boxed).ok().map(|l| l.doc))?;
+    }
+
+    /// Art styles with Offset Path, Outline Object and Outline Stroke, in any order, shown or hidden,
+    /// whose dictionaries hold any of Offset Path's entries and unknown ones, as any kind, with any
+    /// value (huge, tiny, not a number, a string), repeated or left out, on the whole object, a fill
+    /// or a stroke, of a path, a group and type.
+    #[test]
+    fn ai_path_effects_never_panic(
+        effects in prop::collection::vec((
+            prop::sample::select(vec!["Adobe Offset Path", "Adobe Outline Type", "Adobe Outline Stroke"]),
+            prop::collection::vec((
+                prop::sample::select(vec!["ofst", "jntp", "mlim", "width", "DisplayString"]),
+                prop::sample::select(vec!["Int", "Real", "Bool", "UnicodeString"]),
+                prop_oneof![
+                    (-2e5f64..2e5).prop_map(|v| v.to_string()),
+                    prop::sample::select(vec!["0", "1", "2", "3", "-1", "0.5", "1e-300", "1e308", "-1e308", "1e999", "NaN", "(x)", ""]).prop_map(str::to_string),
+                ],
+            ), 0..6),
+            any::<bool>(),
+        ), 0..5),
+        target in 0..3usize,
+    ) {
+        use vectorcraft_testkit::ai;
+        let basic = |name: &str, body: &str| format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n");
+        let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+        let filters: Vec<String> = effects
+            .iter()
+            .map(|(name, entries, visible)| {
+                let keys: String = entries.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+                basic(name, &keys).replacen("1 /Visible", if *visible { "1 /Visible" } else { "0 /Visible" }, 1)
+            })
+            .collect();
+        let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+        let stroke = basic("Stroke Style Filter", "/StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 4 w 10 M []0 d0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n");
+        let conduit = basic("Conduit Filter", "");
+        let chain = |item: String| compound("Chain Style Filter", &[filters.concat(), item, filters.concat()]);
+        let root = match target {
+            0 => compound("Chain Style Filter", &[filters.concat(), compound("Stack Style Filter", &[stroke, fill, conduit])]),
+            1 => compound("Chain Style Filter", &[compound("Stack Style Filter", &[stroke, chain(fill), conduit])]),
+            _ => compound("Chain Style Filter", &[compound("Stack Style Filter", &[chain(stroke), fill, conduit])]),
+        };
+        let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n");
+        let hidden = ai::rect(20.0, 20.0, 80.0, 60.0).replace('\n', "\n%_");
+        let art = format!(
+            "0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{hidden}f\n1 (Fx) XW\n0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_0 Ae\n%_u\n%_{hidden}f\n%_U\n1 (Fx) XW\nu\n/AI11Text :\n1 /FreeUndo ,\n;\n0 0 1 0 k\n{}f\nU\n1 (Fx) XW\n",
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(100.0, 20.0, 180.0, 60.0)
+        );
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
+        survive("Path effect art style", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("Path effect art style in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
     /// Layer options (`Lb`) of any number of operands with any values, and guide paths (`(N) *`,
