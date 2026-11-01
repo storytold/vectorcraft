@@ -1237,7 +1237,7 @@ const DOCK_LABELS: &[(&str, &str)] = &[
 ];
 
 /// The size a panel floats at (tab strip included), whatever the size of the dock it left.
-fn floating_size(panel: &str) -> egui::Vec2 {
+pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
     match panel {
         "properties" | "layers" | "libraries" => egui::vec2(300.0, 420.0),
         // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
