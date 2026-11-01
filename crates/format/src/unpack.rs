@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use std::io::{self, Read};
 use std::sync::Arc;
 
+use craft_vectorcraft_format::{entry, split_tail};
 use flate2::read::GzDecoder;
 
-use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED, is_compressed, split_tail};
+use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED, is_compressed};
 
 /// Bytes unpacked at a time while looking for the end of the JSON.
 const CHUNK: u64 = 64 << 10;
@@ -152,7 +153,7 @@ impl<'a> Unpacked<'a> {
                     *slot = e.clone();
                     continue;
                 }
-                let bytes = range(w[0], w[1]).and_then(|(a, b)| tail.get(a..b));
+                let bytes = entry(tail, w);
                 copied = copied.saturating_add(bytes.map_or(0, |b| b.len() as u64));
                 if copied > tail.len() as u64 {
                     return Err(FormatError::TooBig);
@@ -218,12 +219,6 @@ fn within(wanted: &[[u64; 2]], each: u64, all: u64) -> Result<(), FormatError> {
         total = total.saturating_add(len);
     }
     if total > all { Err(FormatError::TooBig) } else { Ok(()) }
-}
-
-/// `offset..offset + len` as indices, when they fit.
-fn range(offset: u64, len: u64) -> Option<(usize, usize)> {
-    let a = usize::try_from(offset).ok()?;
-    Some((a, a.checked_add(usize::try_from(len).ok()?)?))
 }
 
 /// The data after a compressed file's JSON, being unpacked.
