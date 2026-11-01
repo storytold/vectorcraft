@@ -33,7 +33,7 @@ fn a_legend_draws_a_labelled_chip_per_colour_swatch_in_one_undo_step() {
     s.execute("swatch.new", &json!({"name": "Paper", "color": "#f8f4e8"})).unwrap();
     let colours = s.doc().unwrap().doc.swatches_iter().filter(|w| w.paint.color().is_some()).count();
     let undo = s.doc().unwrap().history.undo.len();
-    let r = s.execute("swatch.legend", &json!({"columns": 3, "size": 60, "gap": 10})).unwrap();
+    let r = s.execute("addon.color.swatchLegend", &json!({"columns": 3, "size": 60, "gap": 10})).unwrap();
     assert_eq!(r["count"].as_u64().unwrap() as usize, colours);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
     assert_eq!(s.doc().unwrap().selection.objects, [NodeId(r["id"].as_u64().unwrap())], "the legend is selected");
@@ -65,7 +65,8 @@ fn a_legend_draws_a_labelled_chip_per_colour_swatch_in_one_undo_step() {
 fn a_legend_takes_names_values_and_a_position() {
     let mut s = session();
     s.execute("swatch.new", &json!({"name": "Signal", "color": "cmyk 0 100 100 0", "spot": true})).unwrap();
-    let r = s.execute("swatch.legend", &json!({"names": ["Signal"], "values": ["hex", "cmyk", "lab", "gray"], "x": 100, "y": 50})).unwrap();
+    let r =
+        s.execute("addon.color.swatchLegend", &json!({"names": ["Signal"], "values": ["hex", "cmyk", "lab", "gray"], "x": 100, "y": 50})).unwrap();
     assert_eq!(r["count"], 1);
     let g = group(&s, r["id"].as_u64().unwrap());
     let (text, _) = labels(&g).remove(0);
@@ -87,8 +88,9 @@ fn a_legend_takes_names_values_and_a_position() {
         json!({"gap": -1}),
         json!({"x": f64::MAX}),
         json!({"names": []}),
+        json!({"values": ["rgb", "rgb"]}),
     ] {
-        assert!(s.execute("swatch.legend", &bad).is_err(), "{bad}");
+        assert!(s.execute("addon.color.swatchLegend", &bad).is_err(), "{bad}");
     }
     assert_eq!(s.doc().unwrap().history.undo.len(), before);
 }
@@ -99,7 +101,9 @@ fn a_legend_takes_names_values_and_a_position() {
 fn chips_stay_linked_and_labels_stay_on_their_chips() {
     let mut s = session();
     s.execute("swatch.new", &json!({"name": "A Rather Long Brand Colour Name", "color": "#2050a0", "global": true})).unwrap();
-    let r = s.execute("swatch.legend", &json!({"names": ["A Rather Long Brand Colour Name"], "size": 40, "values": ["hex", "rgb", "cmyk"]})).unwrap();
+    let r = s
+        .execute("addon.color.swatchLegend", &json!({"names": ["A Rather Long Brand Colour Name"], "size": 40, "values": ["hex", "rgb", "cmyk"]}))
+        .unwrap();
     let id = r["id"].as_u64().unwrap();
     s.execute("swatch.edit", &json!({"name": "A Rather Long Brand Colour Name", "color": "#a02050"})).unwrap();
     let g = group(&s, id);

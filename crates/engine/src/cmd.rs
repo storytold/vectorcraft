@@ -84,7 +84,6 @@ mod stroke;
 mod style;
 pub mod stylelib;
 mod swatch;
-pub mod swatchlegend;
 pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
@@ -298,7 +297,6 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(paint::proxy_specs());
         v.extend(overprint::specs());
         v.extend(swatchlib::specs());
-        v.extend(swatchlegend::specs());
         v.extend(freeform::specs());
         v.extend(flatten::specs());
         v.extend(stylelib::specs());
