@@ -231,9 +231,7 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     let n = s.edit("Delete Variables", |d, _| Ok(d.variables.prune(&names)))?;
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
-    if st.variables_highlight.as_ref().is_some_and(|h| st.doc.variables.variable(h).is_none()) {
-        st.variables_highlight = None;
-    }
+    st.drop_stale_variables_highlight();
     st.revision += 1;
     Ok(json!({"deleted": n}))
 }
