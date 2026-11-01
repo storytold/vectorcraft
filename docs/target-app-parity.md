@@ -220,7 +220,7 @@ generative AI, pen tilt, languages beyond their own) are left out. **Essentials:
 The discounts, with the evidence:
 
 - **Illustrator's own files (×0.92).** `.ai` and EPS open as editable art by reading their PDF/PostScript and the
-  structure of the editing data. Users do open legacy files a lot: 28 of the 350 issues (8%, ~22 people) are
+  structure of the editing data. Users do open legacy files a lot: 28 of the 350 issues measured on 2026-10-10 (8%, ~22 people) are
   about `.ai`/EPS, the most common single format theme. 20 of the 28 are fixed (often the same day). The 8 open
   ones are about structure, not missing art: layers flattened or multiplied (#951: 109 layers instead of 14;
   #868), guides lost (#779), slower opening (#758), live effects, brushes and symbols as their drawn look

@@ -169,7 +169,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   omitted, hidden objects go to a hidden layer, are omitted or made visible), and type is set again in the
   reader's fonts. Legacy type in `.ai` files in PostScript form is read on open. It waits for testing by users
   who hand files back.
-- **Evidence:** the issues above; 28 of the 350 issues are about `.ai`/EPS (about 22 people, the most common single
+- **Evidence:** the issues above; 28 of the 350 issues measured on 2026-10-10 are about `.ai`/EPS (about 22 people, the most common single
   format theme), 20 fixed, and the 8 open ones are about structure (layers, guides, speed, live objects), not missing
   art. No real-file `.ai` corpus (users' files may be used locally, never committed).
 - **Impact:** blocks anyone who hands files back to Illustrator users. Opening and reworking their own archive
