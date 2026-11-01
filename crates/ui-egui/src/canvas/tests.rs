@@ -3830,6 +3830,34 @@ fn a_selected_ellipse_shows_its_pie_widgets() {
     assert_eq!(widgets(&mut app), 0, "no bounding box, no widgets");
 }
 
+/// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
+/// Path tools.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_rotate_all_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap();
+    let ctx = egui::Context::default();
+    let widgets = |app: &mut VectorcraftApp| {
+        let r = vectorcraft_tools::objects_on_path::ROTATE_ALL_RADIUS_PX;
+        shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill == Color32::WHITE)).count()
+    };
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+}
+
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
 fn hidden_chars(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) -> Vec<Shape> {
     let raw = egui::RawInput { screen_rect: Some(xf.rect), ..Default::default() };

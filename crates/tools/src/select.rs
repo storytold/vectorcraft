@@ -44,6 +44,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
+use crate::objects_on_path::{RotateAllDrag, over_rotate_all};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -96,6 +97,8 @@ enum State {
     Corner(CornerDrag),
     /// Dragging a live ellipse's pie widget.
     Pie(PieDrag),
+    /// Dragging an Objects on Path group's Rotate All widget.
+    RotateAll(RotateAllDrag),
     /// Move or rotate a live mirror axis.
     Mirror(crate::mirror::MirrorDrag),
     /// Drag a grid repeat's row, column or corner handle or a spacing slider.
@@ -609,7 +612,7 @@ impl Tool for SelectionTool {
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
-    /// rotation, a marquee, a corner widget, a pie widget, the brackets of type on a path, a mirror
+    /// rotation, a marquee, a corner widget, a pie widget, the Rotate All widget, the brackets of type on a path, a mirror
     /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
@@ -670,6 +673,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
             State::Corner(c) => c.adjusting(),
             State::Pie(d) => d.adjusting(),
+            State::RotateAll(d) => d.adjusting(),
             State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
@@ -824,6 +828,15 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 d.finish()
             }
+            (PointerKind::Drag, State::RotateAll(mut d)) => {
+                let out = d.drag(cx, p, m.shift);
+                self.state = State::RotateAll(d);
+                out
+            }
+            (PointerKind::Up, State::RotateAll(d)) => {
+                self.state = State::Idle;
+                d.finish()
+            }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
                 self.state = State::Bracket(b);
@@ -877,6 +890,7 @@ impl Tool for SelectionTool {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             State::Corner(c) => o.extend(c.overlays(cx)),
             State::Pie(d) => o.extend(d.overlays(cx)),
+            State::RotateAll(d) => o.extend(d.overlays(cx)),
             State::Loaded { press: Some((start, cur)), .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             _ => {}
         }
@@ -921,6 +935,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } => return if self.snapped { Cursor::ArrowHollow } else { Cursor::Arrow },
             State::Corner(_) => return Cursor::CornerRadius,
             State::Pie(_) => return Cursor::ArrowHollow,
+            State::RotateAll(_) => return Cursor::Rotate,
             State::Bracket(_) => return Cursor::PathBracket,
             State::Loaded { .. } => return Cursor::LoadedText,
             _ => {}
@@ -933,6 +948,9 @@ impl Tool for SelectionTool {
         }
         if pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
+        }
+        if over_rotate_all(cx, p) {
+            return Cursor::Rotate;
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
@@ -1187,7 +1205,7 @@ impl SelectionTool {
             self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
             return Some(vec![]);
         }
-        // 1. Live Corners widgets, pie widgets and type on a path's brackets, then the
+        // 1. Live Corners widgets, pie widgets, the Rotate All widget and type on a path's brackets, then the
         // bounding-box handles of the current selection.
         if let Some(c) = CornerDrag::hit(cx, ev, false) {
             self.state = State::Corner(c);
@@ -1195,6 +1213,10 @@ impl SelectionTool {
         }
         if let Some(d) = PieDrag::hit(cx, ev) {
             self.state = State::Pie(d);
+            return Some(vec![]);
+        }
+        if let Some(d) = RotateAllDrag::hit(cx, ev) {
+            self.state = State::RotateAll(d);
             return Some(vec![]);
         }
         if let Some(b) = BracketDrag::hit(cx, ev) {
