@@ -4,7 +4,7 @@
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-22.
+**Feature evidence last updated:** 2026-11-01.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -671,7 +671,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
     While an opacity mask or a pattern is edited, a Shaper double-click on a Shaper Group in the mask or pattern art selects the original shape under the pointer without entering Construction mode, the Shaper Group's mode widget does not show, and a Shaper scribble, Release and Expand keep the editing layer isolated.
     A marquee selects an Intertwine group only when it reaches one of the group's members, as for a plain group, and it selects a repeat only when it reaches one of the copies the repeat draws. Direct and Group Selection's marquees select the anchor points of an Intertwine group's members, not the group, and Group Selection's E marquee selects the members inside it.
     A key object needs another selected object outside it. A Shift-click or any other change that leaves one object selected clears the key, and `select.key` sets none on one object or on a group selected with only its own members. With one object selected, the Align panel, the Control bar and the Properties panel align it to the artboard whatever Align To is set to.
-    With two or more objects selected and no key object, Align to Key Object makes the topmost of them the key, whatever order they were selected in, and the Align panel, the Control bar and the Properties panel align to it. Align To keeps its Selection or Artboard choice and shows it again once the key is cleared.
+    With two or more objects selected and no key object, Align to Key Object makes the topmost of them the key, whatever order they were selected in, and the Align panel, the Control bar and the Properties panel align to it. Align To keeps its Selection or Artboard choice and shows it again once the key is cleared. With the Selection tool, a click or Alt-click on an already selected object of two or more (or of one selected with ruler guides) makes it the key, drawn with a thicker outline than the rest of the selection, and a click on the key again lets it go (#541).
     Object › Align aligns objects as the align buttons do: it aligns one object to the active artboard whatever Align To is set to, and otherwise it aligns to the key object while there is one, else to the Align To choice, which is saved with the preferences (`ui.inspect` → `ui.align_to`). With direct-selected anchor points, Object › Align aligns the points to their own bounds. While one object is selected, Align To shows Artboard.
     Edit › Keyboard Shortcuts lists each of the Align panel's Align Objects, Distribute Objects and Distribute Spacing buttons under Align, with no default shortcut, as the reference app's [release notes](https://web.archive.org/web/20261006170350/https://helpx.adobe.com/illustrator/desktop/new-features/release-notes.html) describe for its Align and Distribute commands. A shortcut set there runs what a click on the button runs, with the Align To choice, the key object and the Distribute Spacing value (`align.horizontalLeft` and the other `align.*` UI commands).
     The command palette lists `select.key` as Cancel Key Object, and a pick cancels the key object (#541).

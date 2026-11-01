@@ -68,9 +68,9 @@ enum State {
         /// Shift-pressed on this selected object: released without a drag, it leaves the
         /// selection.
         deselect: Option<NodeId>,
-        /// Pressed (no modifier) on this object of a selection of several, or of one with ruler
-        /// guides: released without a drag, it becomes the key object that Align aligns to if
-        /// `can_be_key` allows it (the key again: no key).
+        /// Pressed (plain or Alt-click) on this object of a selection of several, or of one
+        /// with ruler guides: released without a drag, it becomes the key object that Align
+        /// aligns to if `can_be_key` allows it (the key again: no key).
         key: Option<NodeId>,
     },
     Scaling {
@@ -741,7 +741,7 @@ impl Tool for SelectionTool {
                             }
                         } else if !cx.selection.contains(top) {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
-                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
+                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd {
                             key = Some(top);
                         }
                         // Grabbed by no anchor or centre, a press on a path's stroke or beside its
