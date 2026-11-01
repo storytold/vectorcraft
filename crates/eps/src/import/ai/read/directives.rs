@@ -1,5 +1,5 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{FLIP, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -47,6 +47,9 @@ impl<'a> Reader<'a> {
             if r.hex.len() < MAX_HEX {
                 r.hex.extend_from_slice(line.as_bytes());
             }
+            return Ok(());
+        }
+        if self.note_comment(c) {
             return Ok(());
         }
         let m = marker(line);
@@ -155,6 +158,44 @@ impl<'a> Reader<'a> {
             self.color_model = Some(v.trim() == "2");
         }
         Ok(())
+    }
+
+    /// `%AI3_Note:` (or `%%Note:`) sets the note of the paths that follow, an empty one clearing it,
+    /// and `%AI5_NoteMore:` adds a line to it. The text is kept as written, up to [`MAX_NOTE`]
+    /// characters.
+    fn note_comment(&mut self, c: &[u8]) -> bool {
+        let (text, more) = if let Some(t) = c.strip_prefix(b"AI3_Note:").or_else(|| c.strip_prefix(b"%Note:")) {
+            (t, false)
+        } else if let Some(t) = c.strip_prefix(b"AI5_NoteMore:") {
+            (t, true)
+        } else {
+            return false;
+        };
+        // Only as much of the line as the note can keep is decoded; a UTF-8 character the cut
+        // splits is left out.
+        let mut head = text.get(..text.len().min(4 * MAX_NOTE)).unwrap_or(text);
+        if head.len() < text.len()
+            && let Err(e) = std::str::from_utf8(head)
+            && e.error_len().is_none()
+        {
+            head = head.get(..e.valid_up_to()).unwrap_or(head);
+        }
+        let text = super::obj::text(head);
+        match (&mut self.gs.note, more) {
+            (Some(note), true) => {
+                note.push('\n');
+                note.push_str(&text);
+            }
+            // A continuation with no note to continue.
+            (None, true) => return true,
+            (note, false) => *note = Some(text),
+        }
+        if let Some(note) = self.gs.note.as_mut()
+            && let Some((at, _)) = note.char_indices().nth(MAX_NOTE)
+        {
+            note.truncate(at);
+        }
+        true
     }
 
     /// Skip to the comment with marker `end` (sections of the same kind nested in it count, and

@@ -232,6 +232,11 @@ impl<'a> Reader<'a> {
             .into();
             copy
         });
+        // The note and Show Center are the path's, not its painted copy's.
+        node.edit_attrs(|a| {
+            a.note = gs.note.clone().unwrap_or_default();
+            a.show_center = gs.show_center;
+        });
         let unread_bounds = unread.then(|| node.visual_bounds()).flatten();
         let unread_id = node.id;
         self.add(node, hidden)?;
