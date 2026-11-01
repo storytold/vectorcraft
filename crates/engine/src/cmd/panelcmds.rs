@@ -322,8 +322,8 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
     let kerning = match p.get("kerning") {
         None | Some(Value::Null) => None,
-        Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(Value::String(a)) if a.eq_ignore_ascii_case("optical") => None,
+        // Auto and Optical both clear manual pair values.
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") || a.eq_ignore_ascii_case("optical") => Some(None),
         Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(C, "kerning must be a number, \"auto\", or \"optical\""))?.clamp(-1000.0, 10000.0))),
     };
     let optical_kerning = match p.get("kerning") {
