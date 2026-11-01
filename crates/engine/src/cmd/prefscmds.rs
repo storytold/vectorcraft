@@ -81,21 +81,16 @@ pub const UNITS: &[(&str, &str)] = &[
     ("yards", "Yards"),
     ("feet", "Feet"),
 ];
-/// What Units › East Asian Type offers: every unit, then Q and Ha ([`Unit::EAST_ASIAN`]).
-pub const EAST_ASIAN_UNITS: &[(&str, &str)] = &[
-    ("points", "Points"),
-    ("picas", "Picas"),
-    ("inches", "Inches"),
-    ("millimeters", "Millimeters"),
-    ("centimeters", "Centimeters"),
-    ("pixels", "Pixels"),
-    ("feetInches", "Feet & Inches"),
-    ("meters", "Meters"),
-    ("yards", "Yards"),
-    ("feet", "Feet"),
-    ("q", "Q"),
-    ("ha", "Ha"),
-];
+/// What Units › East Asian Type offers, as (`Unit::key`, `Unit::label`): [`Unit::EAST_ASIAN`].
+pub const EAST_ASIAN_UNITS: &[(&str, &str)] = &{
+    let mut out = [("", ""); Unit::EAST_ASIAN.len()];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = (Unit::EAST_ASIAN[i].key(), Unit::EAST_ASIAN[i].label());
+        i += 1;
+    }
+    out
+};
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup. The
 /// values are WebGPU's power preferences plus `automatic`; 0.5.0's default, `powerSaving`, reads as

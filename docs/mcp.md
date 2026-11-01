@@ -3320,8 +3320,7 @@ string takes the same arithmetic as the desktop app's fields, where `%` is a sha
 `"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
 four: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
-(weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (the same font size, leading and
-baseline shift fields while the text they act on holds East Asian characters). General is the active document's units
+(weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units
 (`document.inspect` → `units`): `document.setUnits {units}` (Document Setup) sets it for that document, and
 `prefs.set {key: "unitsGeneral", value}` sets it for the active document too (one undo step) and is the units
 `file.new` starts in when it gets no `units`. Stroke, Type and East Asian Type are the preferences `unitsStroke`,

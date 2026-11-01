@@ -81,7 +81,7 @@ impl Unit {
             Unit::Ha => "H",
         }
     }
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Unit::Points => "Points",
             Unit::Picas => "Picas",
@@ -161,7 +161,7 @@ impl Unit {
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
-    pub fn key(self) -> &'static str {
+    pub const fn key(self) -> &'static str {
         match self {
             Unit::Points => "points",
             Unit::Picas => "picas",

@@ -401,17 +401,13 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   [InDesign's unit notation table](https://helpx.adobe.com/in/indesign/desktop/layout-and-grid-tools/rulers-and-measure-tools/change-ruler-measurement-units.html)
   lists `q` and `h` as the Q and Ha suffixes a field takes, and Ha is the same length as Q, used for spacing
   instead of type size ([Toshi Omagari on Q and Ha](https://tosche.net/jp/blog/font-size-in-the-metric-system)). The
-  public pages do not say which fields follow East Asian Type, so VectorCraft applies it only where it can tell
-  East Asian text: the Font Size, Leading and Baseline Shift fields (Character panel, Properties, Control bar) and
-  the Info panel's size read in it while the text they act on (the Type tool's selection, at a caret the character
-  before it, else the selected type) holds East Asian characters, and in Units › Type otherwise. It offers Points,
+  public pages do not say which fields follow East Asian Type, so no field uses it yet (that waits for a source). It offers Points,
   Picas, Inches, Millimeters, Centimeters, Pixels, Feet & Inches, Meters, Yards, Feet, Q and Ha (`unitsAsianType`,
-  Points by default: with Units › Type on another unit, East Asian text reads in Points until this is set too); only
+  Points by default); only
   it lists Q and Ha, not the rulers, Document Setup or
   the other Units preferences. The model stays in points; any length field reads `13q` or `13h` (`Ha`, `H`) with or
-  without a space. Not done: the Size/Leading and Baseline Shift keyboard increments (Preferences › Type) stay in
-  Units › Type, and the size presets are the point ladder converted. Tests `east_asian_*` and `q_and_ha_*` in
-  `crates/doc`, `crates/engine` and `crates/ui-egui`. Estimate unchanged.
+  without a space. Not done: no field shows in it (it waits for a source). Tests `east_asian_*` and `q_and_ha_*` in
+  `crates/doc` and `crates/engine`. Estimate unchanged.
 - **Audited (2026-10-30, #394):** every Preferences dialog option but the four below is read by shipped code,
   by its field or its key; Highlight Alternate Glyphs (the canvas's render options), Real-time Drawing and Editing
   (tool previews wait for the commit), Show Tool Tips, Anti-aliased Artwork, Use Precise Cursors and Devices ›
@@ -677,7 +673,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers, and the Font Size, Leading and Baseline Shift fields and the Info panel's size read in it for East Asian text; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
+| 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
 | 2026-10-30 | minor | G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | G1: Object › Path › Average & Join… (`path.averageJoin`, Cmd+Alt+Shift+J) moves two open path ends to their midpoint and joins them there, the joined anchor a corner or a smooth point as its dialog's Points choice asks, in one undo step; the "Average and Join in one step" entry is done. Estimate unchanged |
 | 2026-10-30 | minor | G12: Preferences audit (#394): 5 options are stored but not acted on (Open Documents As Tabs, Units › East Asian Type, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard), each waiting on a subsystem; Highlight Alternate Glyphs, Real-time Drawing and the Devices options act. Estimate unchanged. |

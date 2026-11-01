@@ -4,8 +4,8 @@
 //! units, so they travel with the file: Document Setup (`document.setUnits`) changes them, and
 //! Preferences ▸ Units ▸ General changes them too and is also the units new documents start in (and
 //! the unit shown while no document is open). Stroke (weights, dashes), Type (sizes, leading,
-//! baseline shift) and East Asian Type (the same fields while the text is East Asian, and the only
-//! preference that offers Q and Ha) are application preferences. Typed values with a unit
+//! baseline shift) and East Asian Type (the only
+//! preference that offers Q and Ha, and no field reads it yet) are application preferences. Typed values with a unit
 //! ("5 mm", "12 pt", "13 Q") work in any unit.
 
 use vectorcraft_doc::Unit;
@@ -69,8 +69,7 @@ impl Session {
         self.unit(Measure::Type)
     }
 
-    /// Units ▸ East Asian Type: the unit those fields show in while the text they act on is East
-    /// Asian.
+    /// Units ▸ East Asian Type: no field shows in it yet.
     pub fn east_asian_type_unit(&self) -> Unit {
         self.unit(Measure::AsianType)
     }

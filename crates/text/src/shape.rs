@@ -304,9 +304,7 @@ pub(crate) fn mark_word_ends(text: &str, start: usize, sg: &mut [SGlyph]) {
     }
 }
 
-/// Is `c` an East Asian character: Han, kana and CJK punctuation, Hangul, compatibility
-/// ideographs, and the half- and full-width forms?
-pub fn is_cjk(c: char) -> bool {
+pub(crate) fn is_cjk(c: char) -> bool {
     matches!(c as u32, 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
 }
 
