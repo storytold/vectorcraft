@@ -103,14 +103,18 @@ fn a_damaged_preview_leaves_the_pdf_readable() {
 }
 
 /// A repeated `generator`, `preview` or `pdf` opens, of any shape; any other repeated member is
-/// refused. The crate's `Contents` accepts and refuses the same files.
+/// refused. The crate's `Contents` and `File` accept and refuse the same files.
 #[test]
 fn repeated_members_open_only_when_skipped() {
     let o = SaveOptions { version: 3, ..SaveOptions::default() };
     let text = String::from_utf8(save_with(&doc_with_image("small", 100), &o).unwrap()).unwrap();
     let document = serde_json::from_str::<Value>(&text).unwrap()["document"].to_string();
     let with = |members: &str| text.replacen('{', &format!("{{{members},"), 1);
-    let contents_reads = |s: &str| serde_json::from_str::<craft_vectorcraft_format::Contents<serde::de::IgnoredAny>>(s).is_ok();
+    let contents_reads = |s: &str| {
+        let contents = craft_vectorcraft_format::Contents::<serde::de::IgnoredAny>::read(s.as_bytes()).is_ok();
+        assert_eq!(craft_vectorcraft_format::File::<serde::de::IgnoredAny>::read(s.as_bytes()).is_ok(), contents, "{s}");
+        contents
+    };
     let skipped = with(r#""preview":5,"preview":{"mime":"image/png","data":"AA=="},"generator":[],"generator":"x","pdf":{},"pdf":null"#);
     let back = load_file(skipped.as_bytes()).unwrap();
     assert_eq!(back.doc.images["small"].bytes.len(), 100);
@@ -150,9 +154,9 @@ fn a_file_read_back_saves_to_the_same_bytes() {
                 let first = save_with(&d, &o).unwrap();
                 if !compress {
                     let json = vectorcraft_format::json_part(&first);
-                    let env: craft_vectorcraft_format::File<serde::de::IgnoredAny> = serde_json::from_slice(json).unwrap();
+                    let env = craft_vectorcraft_format::File::<serde::de::IgnoredAny>::read(json).unwrap();
                     assert_eq!((env.version, env.images.len(), env.profiles.len()), (version, 2, 2));
-                    assert!(env.check().is_ok() && env.preview.is_some() && env.pdf.is_some());
+                    assert!(env.preview.is_some() && env.pdf.is_some());
                 }
                 let back = load_file(&first).unwrap();
                 assert_eq!(back.profiles, profiles, "v{version} compress {compress} pretty {pretty}");

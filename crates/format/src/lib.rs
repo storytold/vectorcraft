@@ -41,8 +41,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::sync::Arc;
 
-use craft_vectorcraft_format::{Head, Image, Tail};
-use serde::{Deserialize, Serialize};
+use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
+use serde::Serialize;
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -62,7 +62,7 @@ use stream::{Gz, Indent, KeyScan, Out};
 pub const MAX_JSON: u64 = if cfg!(target_arch = "wasm32") { 256 << 20 } else { 1 << 30 };
 /// Most bytes one entry of the data after the JSON (an image, a placed document, the PDF, a
 /// profile) may have in a compressed file.
-pub const MAX_BLOB: u64 = 1 << 30;
+pub const MAX_BLOB: u64 = craft_vectorcraft_format::MAX_ENTRY;
 /// Most bytes the entries after the JSON may have together in a compressed file: 1 GiB in the web
 /// build, whose 4 GiB address space also holds the JSON, the document and the app, so 4 GiB of
 /// entries failed to allocate rather than being refused.
@@ -455,19 +455,6 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
 }
 
-/// The members of a file that [`load_file`] reads: those of [`craft_vectorcraft_format::File`]
-/// without `generator`, `preview` and `pdf`, whose data is skipped without being kept.
-#[derive(Deserialize)]
-struct Opened {
-    format: String,
-    version: u32,
-    document: Document,
-    #[serde(default)]
-    images: BTreeMap<String, Image>,
-    #[serde(default)]
-    profiles: BTreeMap<String, Image>,
-}
-
 /// [`load_file`] reading at most `max_nodes` objects and buffering at most `max_values` values
 /// before objects' types, so a test can exercise the budgets without documents that large
 /// ([`vectorcraft_doc::node::MAX_READ_NODES`], [`vectorcraft_doc::node::MAX_BUFFERED_VALUES`]).
@@ -475,17 +462,21 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     let file = unpack::Unpacked::new(bytes)?;
     // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
     // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
-    // fields read before an object's type at `MAX_BUFFERED_VALUES` values.
+    // fields read before an object's type at `MAX_BUFFERED_VALUES` values. The preview and the
+    // PDF are skipped without being kept.
     let read = || {
         vectorcraft_doc::node::with_node_budget(max_nodes, || {
-            vectorcraft_doc::node::with_buffered_value_budget(max_values, || serde_json::from_slice::<Opened>(file.json()))
+            vectorcraft_doc::node::with_buffered_value_budget(max_values, || Contents::<Document>::read(file.json()))
         })
     };
-    let f: Opened = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| {
-        let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
-        FormatError::NotVectorcraft(why)
+    let f = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| match e {
+        ReadError::Json(e) => {
+            let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
+            FormatError::NotVectorcraft(why)
+        }
+        ReadError::Envelope(e) => e.into(),
+        e => FormatError::NotVectorcraft(e.to_string()),
     })?;
-    craft_vectorcraft_format::check(&f.format, f.version)?;
     let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION };
     // The bytes after the JSON, read in one pass: the images' first, then the profiles'.
     let entries: Vec<[u64; 2]> = f.images.values().chain(f.profiles.values()).filter_map(|i| i.blob).collect();
@@ -635,6 +626,116 @@ mod tests {
         let e = FormatError::from(craft_vectorcraft_format::Error::Format("x".into()));
         assert_eq!(e.to_string(), "not a VectorCraft file: format is `x`");
         assert!(matches!(FormatError::from(craft_vectorcraft_format::Error::TooNew(9)), FormatError::TooNew(9)));
+    }
+
+    /// `save_to` writes the file member by member and streams the document in. For every version
+    /// it writes, compact, pretty and compressed, its bytes are those of the crate's `File`
+    /// holding the same members, serialized with `serde_json::to_vec` or `to_vec_pretty` and
+    /// followed by the crate's `Tail`.
+    #[test]
+    fn save_to_writes_the_bytes_of_the_crates_file() {
+        use std::io::Read;
+
+        /// The document as `save_to` writes it: its version 1 form, or the document.
+        struct Written<'a>(&'a Body);
+        impl Serialize for Written<'_> {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                match &self.0.v1 {
+                    Some(v) => v.serialize(s),
+                    None => self.0.d.serialize(s),
+                }
+            }
+        }
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        // An image large enough to go after the JSON from version 4, a small one, and one that
+        // nothing uses.
+        let big: Vec<u8> = (0..INLINE_MAX as u32 + 5).map(|i| (i % 251) as u8).collect();
+        for (key, bytes) in [("big", big), ("small", vec![1, 2, 3, 250]), ("unused", vec![9])] {
+            d.images.insert(key.into(), ImageBlob::new("image/png", bytes));
+        }
+        for (i, key) in ["big", "small"].into_iter().enumerate() {
+            let img = d.alloc_id();
+            let im =
+                ImageObject { key: key.into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+            d.insert(Some(l), i + 1, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
+        }
+        let png = vec![0x89, b'P', b'N', b'G'];
+        let icc = vec![7u8; INLINE_MAX];
+        let mut pdf = b"%PDF-1.7\n".to_vec();
+        pdf.resize(INLINE_MAX + 1, b' ');
+        let full = SaveOptions {
+            preview: Some(png.clone()),
+            profiles: [("Gray".to_string(), icc.clone())].into(),
+            pdf: Some(pdf.clone()),
+            ..SaveOptions::default()
+        };
+        let mut checked = 0;
+        for version in MIN_VERSION..=VERSION {
+            for members in [&full, &SaveOptions::default()] {
+                for pretty in [false, true] {
+                    let o = SaveOptions { version, pretty, ..members.clone() };
+                    let b = body(&d, &o).unwrap();
+                    let mut file = craft_vectorcraft_format::File::new(Written(&b));
+                    file.format = if version < 3 { LEGACY_EXTENSION } else { EXTENSION }.into();
+                    file.version = version;
+                    file.generator = Some(format!("VectorCraft {}", env!("CARGO_PKG_VERSION")));
+                    file.preview = o.preview.as_deref().map(|p| Image::inline("image/png", p));
+                    // The images come first in the data after the JSON, then the profiles and the PDF.
+                    let mut tail = file.tail();
+                    for key in ["big", "small"] {
+                        file.images.insert(key.into(), tail.image("image/png", b.blobs[key].bytes.as_slice(), false));
+                    }
+                    for (name, icc) in &o.profiles {
+                        file.profiles.insert(name.clone(), tail.image(ICC_MIME, icc, false));
+                    }
+                    file.pdf = o.pdf.as_deref().map(|p| tail.image("application/pdf", p, false));
+                    let mut expected = if pretty { serde_json::to_vec_pretty(&file) } else { serde_json::to_vec(&file) }.unwrap();
+                    tail.write_to(&mut expected).unwrap();
+                    assert_eq!(tail.is_empty(), version < 4, "version {version}");
+                    assert!(save_with(&d, &o).unwrap() == expected, "version {version}, pretty {pretty}, {} profiles", o.profiles.len());
+                    checked += 1;
+                    if version >= COMPRESSED_SINCE && !pretty {
+                        let gz = save_with(&d, &SaveOptions { compress: true, ..o.clone() }).unwrap();
+                        let mut unpacked = Vec::new();
+                        flate2::read::GzDecoder::new(gz.as_slice()).read_to_end(&mut unpacked).unwrap();
+                        assert!(unpacked == expected, "version {version}, compressed, {} profiles", o.profiles.len());
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(checked, 20);
+    }
+
+    /// Files are read through the crate's `Contents` with the messages VectorCraft gave before,
+    /// and a top-level array holds the format, version, document, images and profiles in that
+    /// order.
+    #[test]
+    fn files_read_through_the_crates_contents_as_before() {
+        let message = |json: &str| load(json.as_bytes()).err().map(|e| e.to_string());
+        assert_eq!(
+            message(r#""x""#).as_deref(),
+            Some(r#"not a VectorCraft file: invalid type: string "x", expected struct File at line 1 column 3"#)
+        );
+        assert!(
+            message(r#"{"format":"vectorcraft","version":4}"#).is_some_and(|m| m.starts_with("not a VectorCraft file: missing field `document`"))
+        );
+        let v: serde_json::Value = serde_json::from_slice(&save(&Document::new(10.0, 10.0), false)).unwrap();
+        let doc = v["document"].to_string();
+        let file = |format: &str, version: u32| format!(r#"{{"format":"{format}","version":{version},"document":{doc}}}"#);
+        assert_eq!(message(&file("svg", 4)).as_deref(), Some("not a VectorCraft file: format is `svg`"));
+        assert_eq!(message(&file("vectorcraft", 9)).as_deref(), Some("file version 9 is newer than this VectorCraft supports (4)"));
+        // A document that does not read is reported first, as before.
+        assert!(
+            message(r#"{"format":"vectorcraft","version":9,"document":7}"#).is_some_and(|m| m.starts_with("not a VectorCraft file: invalid type"))
+        );
+        for json in [format!(r#"["vectorcraft",3,{doc},{{}},{{}}]"#), format!(r#"["vectorcraft",3,{doc}]"#)] {
+            assert_eq!(load(json.as_bytes()).map(|d| d.artboards.len()).ok(), Some(1), "{json}");
+        }
+        assert!(load(format!(r#"["vectorcraft",3,{{}},{doc},{{}}]"#).as_bytes()).is_err());
     }
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};

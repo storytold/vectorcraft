@@ -1084,7 +1084,7 @@ dependencies = [
 [[package]]
 name = "craft-vectorcraft-format"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=0fd7e75fe6889b9670a0bd3157275426275a7f13#0fd7e75fe6889b9670a0bd3157275426275a7f13"
+source = "git+https://github.com/storytold/craft-libs?rev=420a27f18fa1dc20a291a17ca903ea39349adb7b#420a27f18fa1dc20a291a17ca903ea39349adb7b"
 dependencies = [
  "flate2",
  "serde",
