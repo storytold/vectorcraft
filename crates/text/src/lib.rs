@@ -142,6 +142,9 @@ pub struct PositionedGlyph {
     /// Font units → font units: `xf * unturned` places the glyph as it would be placed without
     /// its Character Rotation. The identity for a glyph without one.
     pub unturned: Affine,
+    /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
+    /// position on the baseline moved by its baseline shift.
+    pub pivot: Point,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
