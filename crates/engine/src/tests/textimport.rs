@@ -503,6 +503,8 @@ struct Word97 {
     ccp_extra: u32,
     /// A Clx to write instead of the pieces'.
     clx: Option<Vec<u8>>,
+    /// Changes the character properties' bin table: its file positions, then its page numbers.
+    chpx_bin: Option<fn(&mut Vec<u32>)>,
 }
 
 /// One 512-byte property page of `runs` (file positions and properties), written to `wd`; its
@@ -578,7 +580,8 @@ impl Word97 {
                     _ => runs.push((fc, fc + w, key, props)),
                 }
             }
-            // Pages of contiguous runs, 16 at most.
+            // Pages of contiguous runs, 16 at most, in file order.
+            runs.sort_by_key(|r| r.0);
             let mut groups: Vec<Vec<(u32, u32, Vec<u8>)>> = vec![];
             for (start, end, _, props) in runs {
                 match groups.last_mut() {
@@ -589,7 +592,11 @@ impl Word97 {
             let mut fcs: Vec<u32> = groups.iter().map(|g| g[0].0).collect();
             fcs.extend(groups.last().map(|g| g.last().unwrap().1));
             let pns: Vec<u32> = groups.iter().map(|g| property_page(g, papx, &mut wd)).collect();
-            bins.push([fcs, pns].concat().into_iter().flat_map(u32::to_le_bytes).collect::<Vec<u8>>());
+            let mut bin = [fcs, pns].concat();
+            if let Some(edit) = self.chpx_bin.filter(|_| !papx) {
+                edit(&mut bin);
+            }
+            bins.push(bin.into_iter().flat_map(u32::to_le_bytes).collect::<Vec<u8>>());
         }
         let mut cps = vec![0u32];
         for (text, _) in &self.pieces {
@@ -835,9 +842,64 @@ fn malformed_doc_fails_cleanly() {
     let r = place(&mut s, "a.doc", &Word97 { pieces: vec![("a\rb\u{13} PAGE c\r", true)], ..Word97::default() }.build()).unwrap();
     assert_eq!(placed(&s, &r).0, "a\nb");
     assert_eq!(r["warnings"], json!(["the Word document's fields without a result that could be read were left out"]));
+    // A bin table whose file positions don't rise, and one that lists a property page twice.
+    let e = place(&mut s, "a.doc", &Word97 { chpx_bin: Some(|b| b.swap(0, 1)), ..words() }.build()).unwrap_err();
+    assert!(e.contains("properties are damaged"), "{e}");
+    let twice = |b: &mut Vec<u32>| *b = vec![b[0], b[1], b[1] + 1, b[2], b[2]];
+    let e = place(&mut s, "a.doc", &Word97 { chpx_bin: Some(twice), ..words() }.build()).unwrap_err();
+    assert!(e.contains("properties are damaged"), "{e}");
+    // Styles based on each other.
+    let styles = vec![Some((1, 1, vec![], vec![])), Some((1, 0, vec![], vec![]))];
+    let e = place(&mut s, "a.doc", &Word97 { styles, ..words() }.build()).unwrap_err();
+    assert!(e.contains("style sheet is damaged"), "{e}");
     let r = place(&mut s, "a.doc", &words().build()).unwrap();
     assert_eq!(placed(&s, &r).0, "words");
     assert_eq!(s.doc().unwrap().history.undo.len(), 5, "failed places leave no undo step");
+}
+
+#[test]
+fn doc_styles_are_worked_out_once_however_many_paragraphs_use_them() {
+    // Two chains of 32 styles, each with 21,000 character properties: paragraph styles 0 to 31
+    // (the first 12 pt) and character styles 32 to 63 (the first italic).
+    let filler = prls(&[(0x0835, &[0])]).repeat(21_000);
+    let mut styles = vec![];
+    for (stk, first, size) in [(1, 0u16, (0x4A43, &[24u8, 0][..])), (2, 32, (0x0836, &[1][..]))] {
+        for i in first..first + 32 {
+            let mut chpx = filler.clone();
+            if i == first {
+                chpx.extend(prls(&[size]));
+            }
+            styles.push(Some((stk, if i == first { 0x0FFF } else { i - 1 }, vec![], chpx)));
+        }
+    }
+    // 20,000 hidden paragraphs in the last paragraph style with the last character style, then one
+    // shown.
+    let text: &'static str = format!("{}x\r", "\r".repeat(20_000)).leak();
+    let doc = Word97 {
+        pieces: vec![(text, true)],
+        chpx: vec![(0, 20_000, prls(&[(0x4A30, &[63, 0]), (0x083C, &[1])])), (20_000, 20_002, prls(&[(0x4A30, &[63, 0])]))],
+        papx: vec![(20_001, 31, vec![])],
+        styles,
+        ..Word97::default()
+    }
+    .build();
+    let mut s = session();
+    let started = std::time::Instant::now();
+    let r = s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc)})).unwrap();
+    let took = started.elapsed();
+    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+    let NodeKind::Text(t) = &n.kind else { panic!("not type") };
+    assert_eq!((t.runs.len(), t.runs[0].text.as_str(), t.runs[0].style.font_style.as_str(), t.runs[0].style.size), (1, "x", "Italic", 12.0));
+    assert!(took < std::time::Duration::from_secs(10), "placing took {took:?}");
+    // A chain of 34 paragraph styles, each based on the next; the last is 12 pt. Styles 31 and 0
+    // both take its size.
+    let mut styles: Vec<_> = (0..33u16).map(|i| Some((1, i + 1, vec![], vec![]))).collect();
+    styles.push(Some((1, 0x0FFF, vec![], prls(&[(0x4A43, &[24, 0])]))));
+    let doc = Word97 { pieces: vec![("a\rb\r", true)], papx: vec![(1, 31, vec![]), (3, 0, vec![])], styles, ..Word97::default() }.build();
+    let r = s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc)})).unwrap();
+    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+    let NodeKind::Text(t) = &n.kind else { panic!("not type") };
+    assert_eq!(t.runs.iter().map(|r| (r.text.as_str(), r.style.size)).collect::<Vec<_>>(), [("a\nb", 12.0)]);
 }
 
 #[test]

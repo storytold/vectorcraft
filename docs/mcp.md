@@ -3863,8 +3863,9 @@ are left out, and `warnings` names each kind of content left out or changed once
 tracked changes, tables, and the other stories the document has); a field with no result is left out with its own
 warning. Documents saved by Word 6.0 or Word 95, encrypted or password-protected documents and documents last saved with
 fast save are refused, and so are a stream larger than 64 MiB, a document with more than 4 MiB of text, 100,000 pieces,
-16,384 pages of properties or 100,000 paragraphs or runs, one whose 16-bit text holds half of a surrogate pair, and one
-whose structures lie outside their streams.
+16,384 pages of properties or 100,000 paragraphs or runs, one whose 16-bit text holds half of a surrogate pair, one
+whose structures lie outside their streams, one whose property pages are out of order, listed twice or overlap, and one
+whose styles are based on each other in a loop.
 `file.place` answers `format: "doc"`.
 
 ## PDF presets
