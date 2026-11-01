@@ -845,6 +845,38 @@ fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
     assert_eq!(grid(&mut app, &[Key::ArrowLeft, Key::ArrowDown]), (rows, columns + 1));
 }
 
+/// Grid letters change the stored skews once per press while a polar grid is dragged, plain or
+/// with Shift; with Alt, Ctrl or Cmd they do not reach the grid.
+#[test]
+fn grid_drag_letters_take_plain_and_shift_presses() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let skews = |app: &VectorcraftApp| (app.session.tool_options()["radialSkew"].clone(), app.session.tool_options()["concentricSkew"].clone());
+    frame(&mut app, press(Key::V, Modifiers::NONE));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::F, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(0.0), json!(0.0)));
+    frame(&mut app, press(Key::V, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(-10.0)));
+    frame(&mut app, press(Key::C, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::ALT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    for key in [Key::F, Key::X] {
+        frame(&mut app, press(key, command_key()));
+        assert_eq!(skews(&app), (json!(10.0), json!(0.0)), "{key:?} with Ctrl/Cmd");
+    }
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)), "the options stay after release");
+}
+
 /// A press of `key` with `m` held.
 fn press(key: Key, m: Modifiers) -> Vec<egui::Event> {
     vec![egui::Event::ModifiersChanged(m), egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: m }]

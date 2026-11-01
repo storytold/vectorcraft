@@ -566,8 +566,14 @@ pub const RTF_EXTS: &[&str] = &["rtf"];
 /// Word documents: File → Place sets them as area type with their formatting.
 pub const DOCX_EXTS: &[&str] = &["docx"];
 
-/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`] and
-/// [`DOCX_EXTS`].
+/// Word 97-2003 documents: File → Place sets them as area type with their formatting.
+pub const DOC_EXTS: &[&str] = &["doc"];
+
+/// The Place dialog's Word filter: Word documents and Word 97-2003 documents.
+const WORD_EXTS: &[&str] = &["docx", "doc"];
+
+/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`],
+/// [`DOCX_EXTS`] and [`DOC_EXTS`].
 pub const PLACE_EXTS: &[&str] = &[
     "vectorcraft",
     "drawcraft",
@@ -610,6 +616,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "txt",
     "rtf",
     "docx",
+    "doc",
 ];
 
 /// One dialog filter per readable format.
@@ -645,13 +652,13 @@ pub fn library_open_filters(
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
-/// RTF and Word.
+/// RTF and Word (`.docx` and `.doc`).
 pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All placeable files", PLACE_EXTS))
         .chain(format_filters().filter(|(_, exts)| exts.iter().all(|ext| PLACE_EXTS.contains(ext))))
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
-        .chain(std::iter::once(("Word", DOCX_EXTS)))
+        .chain(std::iter::once(("Word", WORD_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in

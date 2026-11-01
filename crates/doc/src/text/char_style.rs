@@ -104,6 +104,14 @@ pub struct CharStyle {
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
     #[serde(default, rename = "tateChuYoko", skip_serializing_if = "crate::skip::is_default")]
     pub tate_chu_yoko: bool,
+    /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): in vertical
+    /// type the half-width characters among these (Latin letters, digits and other characters that
+    /// would lie on their side) stand upright one below the other instead of being rotated
+    /// individually. Spaces and tate-chu-yoko blocks do not change, and horizontal type keeps the
+    /// mark and does not change.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "standardVerticalRoman", skip_serializing_if = "crate::skip::is_default")]
+    pub standard_vertical_roman: bool,
     /// Digits (Character panel menu, Middle Eastern options): the numeral system the digits of
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
@@ -369,6 +377,7 @@ impl Default for CharStyle {
             char_direction: None,
             proportional_metrics: false,
             tate_chu_yoko: false,
+            standard_vertical_roman: false,
             small_caps: None,
             digits: Digits::Default,
             no_break: false,

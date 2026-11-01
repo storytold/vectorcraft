@@ -664,6 +664,9 @@
 	Delete Swatch	Excluir Amostra
 	Delete Symbol	Excluir Símbolo
 	Delete the selected symbol?	Excluir o símbolo selecionado?
+	Delete the selected symbols?	Excluir os símbolos selecionados?
+	No unused symbols	Nenhum símbolo não utilizado
+	Delete Symbols	Excluir símbolos
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Um ou mais símbolos estão em uso e não podem ser excluídos até que suas instâncias sejam expandidas ou excluídas.
 	Expand Instances	Expandir Instâncias
 	Delete Instances	Excluir Instâncias
@@ -1113,6 +1116,9 @@
 	Hide Live Paint Gaps	Ocultar Lacunas da Pintura ao Vivo
 	Select Fills	Selecionar Preenchimentos
 	Select Strokes	Selecionar Traçados
+	Paint Fills	Pintar Preenchimentos
+	Paint Strokes	Pintar Traçados
+	Highlight	Destaque
 	Gaussian Blur…	Desfoque Gaussiano…
 	General	Geral
 	Generate CSS	Gerar CSS
@@ -2702,6 +2708,7 @@ digits	Malayalam	Malaiala
 	Superscript:	Sobrescrito:
 	Swap Fill and Stroke	Trocar Preenchimento e Traçado
 	Swap start and end arrowheads	Trocar pontas de seta inicial e final
+	Stylistic Alternates	Variantes Estilísticas
 	Swash	Ornamento
 	Swatch Conflict	Conflito de Amostra
 	Swatch Conflicts	Conflitos de Amostra
@@ -2884,7 +2891,6 @@ digits	Malayalam	Malaiala
 	Update Links	Atualizar Links
 	Update Changed Links	Atualizar Links alterados
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} imagem vinculada alterada no disco. Mostrar a nova versão?|{n} imagens vinculadas alteradas no disco. Mostrar as novas versões?
-@msg	Updated {_1} linked file(s) changed on disk	{_1} arquivo(s) vinculado(s) alterado(s) no disco atualizado(s)
 	Update Modified Links	Atualizar Links Modificados
 	Use 	Use 
 	Use Artboards	Usar Mesas de Trabalho
@@ -3484,7 +3490,6 @@ axis	Both	Ambos
 @msg	Combine Slices: the slices have no bounds	Combinar fatias: as fatias não têm limites
 @msg	Convert to Artboards: selection has no area	Converter em pranchetas: a seleção não tem área
 @msg	Convert to Shape: no rectangles or ellipses selected	Converter em forma: nenhum retângulo ou elipse selecionado
-@msg	Copied the CSS of {rules} object(s)	CSS de {rules} objeto(s) copiado
 @msg	Corners edits the corners of a path	Cantos edita os cantos de um traçado
 @msg	Couldn't copy to the system clipboard: {e}	Não foi possível copiar para a área de transferência do sistema: {e}
 @msg	Couldn't open {name}: {e}	Não foi possível abrir {name}: {e}
@@ -3500,13 +3505,11 @@ axis	Both	Ambos
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecione diretamente os pontos de ancoragem onde cortar (não as extremidades de traçados abertos)
 @msg	Divide Objects Below: select a path	Dividir objetos abaixo: selecione um traçado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
-@msg	Downloaded {_1} file(s)	{_1} arquivo(s) baixado(s)
 @msg	Downloaded {what}	{what} baixado
 @msg	Expand Appearance: the selection has a basic appearance	Expandir aparência: a seleção tem uma aparência básica
 @msg	Expand: no brush strokes selected	Expandir: nenhum traço de pincel selecionado
 @msg	Expand: no gradient fills	Expandir: nenhum preenchimento em gradiente
 @msg	Expand: nothing to expand	Expandir: nada para expandir
-@msg	Exported {count} file(s) to {folder}	{count} arquivo(s) exportado(s) para {folder}
 @msg	Exported {path}	{path} exportado
 @msg	Flatten Transparency: select objects to flatten	Achatar transparência: selecione os objetos a achatar
 @msg	Flatten Transparency: {e}	Achatar transparência: {e}
@@ -4055,9 +4058,6 @@ axis	Both	Ambos
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` tem {size} bytes (limite {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} já é usado por {_2}
 @msg	{_1} is reserved by the system	{_1} é reservado pelo sistema
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} arquivo(s) vinculado(s) não podem ser lidos aqui: suas visualizações são exibidas
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	não foi possível decodificar {undecoded} imagem(ns): elas aparecem como caixas marcadas com um X
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imagem(ns) vinculada(s) mudou(aram) no disco: Atualizar links mostra as novas versões
 @msg	{_1}: not saved, so not closed	{_1}: não salvo, portanto não fechado
 @msg	{bpp}-bit bitmaps can't be read	bitmaps de {bpp} bits não podem ser lidos
 @msg	{command} didn't create an object	{command} não criou um objeto
@@ -4076,7 +4076,6 @@ axis	Both	Ambos
 @msg	Couldn't place {name}: {e}	Não foi possível inserir {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Não foi possível colar da área de transferência: {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} salvo com {_1} observação(ões): {first}
-@msg	Exported {what} with {_1} note(s): {first}	{what} exportado com {_1} observação(ões): {first}
 @msg	Exported {what}	{what} exportado
 @msg	Saved {n} files beside {path}	{n} arquivos salvos ao lado de {path}
 @msg	Saving	Salvando
@@ -4087,12 +4086,26 @@ axis	Both	Ambos
 @msg	Saving recovery data for {_1}	Salvando dados de recuperação de {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} documento(s) recuperado(s) descartado(s)
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} documento(s) recuperado(s) restaurado(s): salve-os para mantê-los
-@msg	Embedded {n} image(s); {missing} missing: relink them first	{n} imagem(ns) incorporada(s); {missing} ausente(s): revincule-as primeiro
-@msg	Embedded {n} image(s)	{n} imagem(ns) incorporada(s)
-@msg	Relinked {_1} image(s)	{_1} imagem(ns) revinculada(s)
-@msg	Relinked {n} image(s)	{n} imagem(ns) revinculada(s)
-@msg	Relinked {n} image(s); not in that folder: {_1}	{n} imagem(ns) revinculada(s); fora dessa pasta: {_1}
-@msg	Updated {_1} image(s)	{_1} imagem(ns) atualizada(s)
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} imagem incorporada; faltam {missing}: revincule-as primeiro|{n} imagens incorporadas; faltam {missing}: revincule-as primeiro
+@msgplural	Embedded {n} image|Embedded {n} images	{n} imagem incorporada|{n} imagens incorporadas
+@msgplural	Relinked {n} image|Relinked {n} images	{n} imagem revinculada|{n} imagens revinculadas
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} imagem revinculada; fora dessa pasta: {names}|{n} imagens revinculadas; fora dessa pasta: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} imagem revinculada; não foi possível revincular {name}: {reason}|{n} imagens revinculadas; não foi possível revincular {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} imagem atualizada|{n} imagens atualizadas
+@msgplural	Replaced {n} image|Replaced {n} images	{n} imagem substituída|{n} imagens substituídas
+@msgplural	Broke {n} link|Broke {n} links	{n} vínculo quebrado|{n} vínculos quebrados
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} vínculo quebrado; não é possível ler {missing}: revincule-os ou atualize-os primeiro|{n} vínculos quebrados; não é possível ler {missing}: revincule-os ou atualize-os primeiro
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} arquivo vinculado não pode ser lido aqui: sua visualização é exibida|{n} arquivos vinculados não podem ser lidos aqui: suas visualizações são exibidas
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	não foi possível decodificar {n} imagem: ela aparece como uma caixa marcada com um X|não foi possível decodificar {n} imagens: elas aparecem como caixas marcadas com um X
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imagem vinculada mudou no disco: Atualizar links mostra a nova versão|{n} imagens vinculadas mudaram no disco: Atualizar links mostra as novas versões
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} arquivo vinculado alterado no disco atualizado|{n} arquivos vinculados alterados no disco atualizados
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} exportado com {n} observação: {first}|{what} exportado com {n} observações: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} arquivo de fonte agora está em {folder}|{n} arquivos de fonte agora estão em {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} arquivo de fonte agora está em {folder}; não foi possível adicionar {failed}: {reason}|{n} arquivos de fonte agora estão em {folder}; não foi possível adicionar {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} fonte não está disponível aqui: o texto dela aparece em outra fonte|{n} fontes não estão disponíveis aqui: o texto delas aparece em outra fonte
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS de {n} objeto copiado|CSS de {n} objetos copiado
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} arquivo baixado|{n} arquivos baixados
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} arquivo exportado para {folder}|{n} arquivos exportados para {folder}
 @msg	Unembedded to {_1}	Desincorporado para {_1}
 @msg	Reset {_1}	Redefinir {_1}
 @msg	Sent to {_1}	Enviado para {_1}
@@ -4142,9 +4155,6 @@ axis	Both	Ambos
 @msg	every search thread stopped on an internal error (please report this bug)	todos os processos de pesquisa pararam por um erro interno (relate este bug)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	A pasta Fontes do VectorCraft não está definida aqui: o aplicativo para desktop e o vectorcraft-cli a definem
 @msg	choose the font files to add	escolha os arquivos de fonte a adicionar
-@msg	{n} font file(s) are now in {folder}	{n} arquivo(s) de fonte agora está(ão) em {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} arquivo(s) de fonte agora está(ão) em {folder}; {failed} não pôde(puderam) ser adicionado(s): {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} fonte(s) não está(ão) disponível(is) aqui: o texto delas aparece em outra fonte
 @msg	not a file	não é um arquivo
 @msg	not a font file	não é um arquivo de fonte
 @msg	that document is no longer open	esse documento não está mais aberto
@@ -4619,6 +4629,7 @@ axis	Both	Ambos
 	Preset {}	Predefinido {}
 	Preview in Browser needs the desktop app (the web downloads files instead)	A visualização no navegador exige o aplicativo para desktop (na web, os arquivos são baixados)
 	Print presets	Predefinidos de impressão
+	Proportional Lining	Alinhado Proporcional
 	Proportional Oldstyle	Antigo Proporcional
 	Punctuation	Pontuação
 	Radius 1	Raio 1
@@ -4722,6 +4733,7 @@ axis	Both	Ambos
 	System Layout	Layout do Sistema
 	Tabular Lining	Alinhado Tabular
 	Tabular Oldstyle	Antigo Tabular
+	Titling Alternates	Variantes de Titulação
 	Tate-chu-yoko	Tate-chu-yoko
 	Temperature	Temperatura
 	Templates	Modelos
@@ -4783,7 +4795,6 @@ axis	Both	Ambos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} imagem(ns) revinculada(s); não foi possível revincular {name}: {reason}
 	De-Interlace	Desentrelaçar
 	Eliminate	Eliminar
 	Create New Fields by	Criar Novos Campos por
@@ -5959,6 +5970,9 @@ breakText	Glyphs	Glifos
 	Gap 4	Lacuna 4
 	Dash 5	Traço 5
 	Gap 5	Lacuna 5
+
+@msg	{_1}: they came in as the page's art	{_1}: foram importados como arte da página
+
 @msg	You must choose a side pattern.	Você deve escolher um padrão lateral.
 @msg	invalid pattern tile choice	escolha inválida de ladrilho de padrão
 @msg	no pattern named `{choice}`	não há padrão chamado `{choice}`
@@ -5989,6 +6003,9 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandir traços em demarcadores
+@msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora
@@ -6011,6 +6028,11 @@ breakText	Glyphs	Glifos
 	Odia	Oriá
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} e posteriores (versão {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportar todos os documentos abertos como PDF
+	Export All Open Documents as SVG	Exportar todos os documentos abertos como SVG
+@msgplural	Exported {n} document|Exported {n} documents	{n} documento exportado|{n} documentos exportados
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} documento exportado; {title} não foi gravado: {error}|{n} documentos exportados; {title} não foi gravado: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipo de símbolo:
 	Dynamic Symbol	Símbolo dinâmico
@@ -6181,3 +6203,22 @@ swatch	Yellow Green	Verde-amarelado
 	Text Flow	Fluxo do texto
 	By Rows	Por linhas
 	By Columns	Por colunas
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Opacidade aleatória…
+	Randomize Opacity	Opacidade aleatória
+	Minimum:	Mínimo:
+	Maximum:	Máximo:
+	Seed:	Semente:
+@msg	`min` is greater than `max`	`min` é maior que `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Classificar objetos…
+	Sort Objects	Classificar objetos
+	Sort By:	Classificar por:
+	Apply To:	Aplicar a:
+	Area	Área
+	X Position	Posição X
+	Y Position	Posição Y
+	Stacking Order	Ordem de empilhamento
+	Small to Large	Do menor para o maior
+	Large to Small	Do maior para o menor
+	Distribute Evenly	Distribuir uniformemente

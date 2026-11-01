@@ -198,7 +198,8 @@ impl Node {
     /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
-    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`].
+    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
+    /// takes in where its spine can put its keys and steps.
     pub fn reach_bounds(&self) -> Option<Rect> {
         self.reach(None)
     }
@@ -234,6 +235,11 @@ impl Node {
                 let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
                 vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
             }),
+            // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
+            // keys and the spine.
+            NodeKind::Blend { children, spec } => {
+                vectorcraft_geom::union_opt(self.visual(symbols), crate::blend::rail_reach(children, spec, symbols))
+            }
             _ => self.visual(symbols),
         }
     }

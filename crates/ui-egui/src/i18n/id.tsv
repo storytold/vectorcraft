@@ -626,7 +626,6 @@
 	Links	Tautan
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} gambar tertaut di disk telah berubah. Tampilkan versi baru?
 	Update Changed Links	Perbarui tautan yang berubah
-@msg	Updated {_1} linked file(s) changed on disk	Telah memperbarui {_1} berkas tertaut yang berubah di disk
 	Magic Wand	Tongkat ajaib
 	Navigator	Navigator
 	Pattern Options	Opsi pola
@@ -1622,13 +1621,16 @@ digits	Malayalam	Malayalam
 	Fractions	Pecahan
 	Ligatures are off while the text is tracked.	Ligatur nonaktif saat teks diberi tracking.
 	Ordinals	Ordinal
+	Proportional Lining	Lining proporsional
 	Proportional Oldstyle	Oldstyle proporsional
 	Reset OpenType Features	Setel ulang fitur OpenType
 	Select text to set its OpenType features.	Pilih teks untuk mengatur fitur OpenType-nya.
 	Standard Ligatures	Ligatur standar
+	Stylistic Alternates	Alternatif gaya
 	Swash	Swash
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
+	Titling Alternates	Alternatif judul
 	Every-line Composer	Komposer tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
@@ -2853,6 +2855,9 @@ theme	Appearance	Tampilan
 	Delete Brush	Hapus kuas
 	Delete Symbol	Hapus simbol
 	Delete the selected symbol?	Hapus simbol yang dipilih?
+	Delete the selected symbols?	Hapus simbol yang dipilih?
+	No unused symbols	Tidak ada simbol yang tidak digunakan
+	Delete Symbols	Hapus Simbol
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Satu atau beberapa simbol sedang digunakan dan tidak dapat dihapus sampai instansinya diperluas atau dihapus.
 	Expand Instances	Perluas instansi
 	Delete Instances	Hapus instansi
@@ -3920,7 +3925,6 @@ imageTrace	Outline	Kontur
 @msg	Combine Slices: the slices have no bounds	Gabungkan irisan: irisan tidak memiliki batas
 @msg	Convert to Artboards: selection has no area	Konversi ke artboard: seleksi tidak memiliki area
 @msg	Convert to Shape: no rectangles or ellipses selected	Konversi ke bentuk: tidak ada persegi panjang atau elips yang dipilih
-@msg	Copied the CSS of {rules} object(s)	Berhasil menyalin CSS dari {rules} objek
 @msg	Copied the script report	Berhasil menyalin laporan skrip
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
@@ -3937,13 +3941,11 @@ imageTrace	Outline	Kontur
 @msg	direct-select anchor points to cut at (not the end points of open paths)	pilih langsung titik jangkar yang akan dipotong (bukan titik ujung jalur terbuka)
 @msg	Divide Objects Below: select a path	Bagi objek di bawah: pilih satu jalur
 @msg	Divide Objects Below: select exactly one path	Bagi objek di bawah: pilih tepat satu jalur
-@msg	Downloaded {_1} file(s)	Berhasil mengunduh {_1} file
 @msg	Downloaded {what}	Berhasil mengunduh {what}
 @msg	Expand Appearance: the selection has a basic appearance	Perluas tampilan: seleksi memiliki tampilan dasar
 @msg	Expand: no brush strokes selected	Perluas: tidak ada sapuan kuas yang dipilih
 @msg	Expand: no gradient fills	Perluas: tidak ada isian gradien
 @msg	Expand: nothing to expand	Perluas: tidak ada yang dapat diperluas
-@msg	Exported {count} file(s) to {folder}	Berhasil mengekspor {count} file ke {folder}
 @msg	Exported {path}	Berhasil mengekspor {path}
 @msg	Flatten Transparency: select objects to flatten	Ratakan transparansi: pilih objek yang akan diratakan
 @msg	Flatten Transparency: {e}	Ratakan transparansi: {e}
@@ -4445,8 +4447,6 @@ imageTrace	Outline	Kontur
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} adalah efek langsung (Efek › Plug-in)
 @msg	{_1} is already used by {_2}	{_1} sudah digunakan oleh {_2}
 @msg	{_1} is reserved by the system	{_1} dicadangkan oleh sistem
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} berkas tertaut tidak dapat dibaca di sini: yang ditampilkan adalah pratinjaunya
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
 @msg	{_1}: not saved, so not closed	{_1}: tidak disimpan, sehingga tidak ditutup
 @msg	{bpp}-bit bitmaps can't be read	bitmap {bpp}-bit tidak dapat dibaca
 @msg	{command} didn't create an object	{command} tidak membuat objek
@@ -4466,7 +4466,6 @@ imageTrace	Outline	Kontur
 @msg	Couldn't place {name}: {e}	Tidak dapat menempatkan {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} disimpan dengan {_1} catatan: {first}
-@msg	Exported {what} with {_1} note(s): {first}	{what} diekspor dengan {_1} catatan: {first}
 @msg	Exported {what}	{what} diekspor
 @msg	Saved {n} files beside {path}	{n} berkas disimpan di sebelah {path}
 @msg	Saving	Menyimpan
@@ -4477,12 +4476,26 @@ imageTrace	Outline	Kontur
 @msg	Saving recovery data for {_1}	Menyimpan data pemulihan untuk {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} dokumen hasil pemulihan dibuang
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
-@msg	Embedded {n} image(s); {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
-@msg	Embedded {n} image(s)	{n} gambar tersemat
-@msg	Relinked {_1} image(s)	{_1} gambar ditautkan ulang
-@msg	Relinked {n} image(s)	{n} gambar ditautkan ulang
-@msg	Relinked {n} image(s); not in that folder: {_1}	{n} gambar ditautkan ulang; tidak ada di folder tersebut: {_1}
-@msg	Updated {_1} image(s)	{_1} gambar diperbarui
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
+@msgplural	Embedded {n} image|Embedded {n} images	{n} gambar tersemat
+@msgplural	Relinked {n} image|Relinked {n} images	{n} gambar ditautkan ulang
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} gambar ditautkan ulang; tidak ada di folder tersebut: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} gambar ditautkan ulang; {name} tidak dapat ditautkan ulang: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} gambar diperbarui
+@msgplural	Replaced {n} image|Replaced {n} images	{n} gambar diganti
+@msgplural	Broke {n} link|Broke {n} links	{n} tautan diputus
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} tautan diputus; {missing} tidak dapat dibaca: tautkan ulang atau perbarui dulu
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} berkas tertaut tidak dapat dibaca di sini: yang ditampilkan adalah pratinjaunya
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} gambar tidak dapat didekode dan ditampilkan sebagai kotak bersilang
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Telah memperbarui {n} berkas tertaut yang berubah di disk
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} diekspor dengan {n} catatan: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} berkas font kini berada di {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} berkas font kini berada di {folder}; {failed} tidak dapat ditambahkan: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} font tidak tersedia di sini: teksnya ditampilkan dalam font lain
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Berhasil menyalin CSS dari {n} objek
+@msgplural	Downloaded {n} file|Downloaded {n} files	Berhasil mengunduh {n} file
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Berhasil mengekspor {n} file ke {folder}
 @msg	Unembedded to {_1}	Gambar tersemat dilepas ke {_1}
 @msg	Reset {_1}	{_1} diatur ulang
 @msg	Sent to {_1}	Dikirim ke {_1}
@@ -4532,9 +4545,6 @@ imageTrace	Outline	Kontur
 @msg	every search thread stopped on an internal error (please report this bug)	semua utas pencarian berhenti karena kesalahan internal (mohon laporkan bug ini)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	folder Fonts VectorCraft tidak diatur di sini: aplikasi desktop dan vectorcraft-cli yang mengaturnya
 @msg	choose the font files to add	pilih berkas font yang akan ditambahkan
-@msg	{n} font file(s) are now in {folder}	{n} berkas font kini berada di {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} berkas font kini berada di {folder}; {failed} tidak dapat ditambahkan: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} font tidak tersedia di sini: teksnya ditampilkan dalam font lain
 @msg	not a file	bukan berkas
 @msg	not a font file	bukan berkas font
 @msg	that document is no longer open	dokumen tersebut tidak lagi terbuka
@@ -4543,7 +4553,6 @@ imageTrace	Outline	Kontur
 @msg	every numbered name for it is taken in the Fonts folder	semua nama bernomor untuk font tersebut sudah dipakai di folder Fonts
 @msg	every numbered name for {name} is taken in the document's folder	semua nama bernomor untuk {name} sudah dipakai di folder dokumen
 @msg	No linked files to look for	Tidak ada berkas tertaut untuk dicari
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} gambar ditautkan ulang; {name} tidak dapat ditautkan ulang: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` adalah referensi langkah {r}, yang hanya diselesaikan oleh `run` dan `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` harus berupa array id objek, bukan {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` harus berupa array indeks jangkar, bukan {v}
@@ -5303,6 +5312,9 @@ swatch	Bright Violet	Violet cerah
 	Close Gaps With Paths	Tutup celah dengan jalur
 	Select Fills	Pilih isian
 	Select Strokes	Pilih stroke
+	Paint Fills	Cat isian
+	Paint Strokes	Cat stroke
+	Highlight	Sorotan
 	Column Type:	Jenis kolom:
 	Each Design Represents:	Setiap desain mewakili:
 	Event:	Peristiwa:
@@ -5938,6 +5950,9 @@ breakText	Glyphs	Glif
 	Gap 4	Jarak 4
 	Dash 5	Garis 5
 	Gap 5	Jarak 5
+
+@msg	{_1}: they came in as the page's art	{_1}: diimpor sebagai gambar halaman
+
 @msg	You must choose a side pattern.	Anda harus memilih pola sisi.
 @msg	invalid pattern tile choice	pilihan ubin pola tidak valid
 @msg	no pattern named `{choice}`	tidak ada pola bernama `{choice}`
@@ -5968,6 +5983,9 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Perluas garis putus menjadi jalur
+@msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu
@@ -5990,6 +6008,11 @@ breakText	Glyphs	Glif
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} dan yang lebih baru (versi {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Ekspor Semua Dokumen Terbuka sebagai PDF
+	Export All Open Documents as SVG	Ekspor Semua Dokumen Terbuka sebagai SVG
+@msgplural	Exported {n} document|Exported {n} documents	Berhasil mengekspor {n} dokumen
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Berhasil mengekspor {n} dokumen; {title} tidak ditulis: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Jenis simbol:
 	Dynamic Symbol	Simbol dinamis
@@ -6005,3 +6028,22 @@ breakText	Glyphs	Glif
 	Text Flow	Alur teks
 	By Rows	Per baris
 	By Columns	Per kolom
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Opasitas acak…
+	Randomize Opacity	Opasitas acak
+	Minimum:	Minimum:
+	Maximum:	Maksimum:
+	Seed:	Benih:
+@msg	`min` is greater than `max`	`min` lebih besar dari `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Urutkan objek…
+	Sort Objects	Urutkan objek
+	Sort By:	Urutkan menurut:
+	Apply To:	Terapkan ke:
+	Area	Luas
+	X Position	Posisi X
+	Y Position	Posisi Y
+	Stacking Order	Urutan tumpukan
+	Small to Large	Kecil ke besar
+	Large to Small	Besar ke kecil
+	Distribute Evenly	Distribusikan merata

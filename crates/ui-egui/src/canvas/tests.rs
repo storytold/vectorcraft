@@ -2015,7 +2015,7 @@ fn undecodable_images_are_marked_and_reported_once() {
     app.status("");
     frame(&mut app, &ctx, vec![]);
     assert!(app.canvas.shown.as_ref().is_some_and(|(_, o)| o.mark_undecoded_images), "the canvas marks them");
-    assert_eq!(app.ui.status, "2 image(s) couldn't be decoded and show as crossed boxes");
+    assert_eq!(app.ui.status, "2 images couldn't be decoded and show as crossed boxes");
     app.status("");
     app.session.doc_mut().unwrap().revision += 1;
     frame(&mut app, &ctx, vec![]);

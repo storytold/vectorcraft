@@ -20,7 +20,14 @@ pub const KIND: &str = "deleteSymbol";
 pub const USED: &str = "deleteUsedSymbol";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Delete the selected symbol?").into(),
+    heading: |d| {
+        if d.fields.get("names").and_then(Value::as_array).is_some_and(|n| n.len() > 1) {
+            tl!("Delete the selected symbols?")
+        } else {
+            tl!("Delete the selected symbol?")
+        }
+        .into()
+    },
     body: |_, _, _| false,
     confirm: confirm_unused,
     ok: Some("Yes"),
@@ -55,6 +62,37 @@ pub(crate) fn ask(app: &mut VectorcraftApp, name: &str, now: bool) {
     }
 }
 
+/// Delete Symbol for the unused symbols `names` that Select All Unused picked (#4918): asked once
+/// ("Delete the selected symbols?", or the singular for one), or at once with `now`. Only those still
+/// unused then (`symbol.unused`: brush art, patterns and nested instances count) go, in one undo step.
+pub(crate) fn ask_many(app: &mut VectorcraftApp, names: &[String], now: bool) {
+    let Some(uid) = app.session.active().map(|st| st.uid) else { return };
+    if now {
+        // An error already went to the status bar.
+        let _ = delete_unused(app, uid, names);
+    } else {
+        app.ui.dialog = Some(Dialog::new(KIND, json!({ "names": names, "doc": uid })));
+    }
+}
+
+/// Deletes those of `names` that are still unused in document `uid` while it is the active one.
+fn delete_unused(app: &mut VectorcraftApp, uid: u64, names: &[String]) -> DialogResult {
+    if app.session.active().map(|st| st.uid) != Some(uid) {
+        return Ok(Value::Null);
+    }
+    let unused: Vec<String> =
+        app.run("symbol.unused", json!({})).ok().and_then(|r| serde_json::from_value(r["names"].clone()).ok()).unwrap_or_default();
+    let names: Vec<&String> = names.iter().filter(|n| unused.contains(n)).collect();
+    if names.is_empty() {
+        return Ok(Value::Null);
+    }
+    let r = app.run("symbol.delete", json!({ "names": names }));
+    if let Err(e) = &r {
+        app.status(e.clone());
+    }
+    r
+}
+
 fn open(app: &mut VectorcraftApp, kind: &str, name: &str, uid: u64) {
     app.ui.dialog = Some(Dialog::new(kind, json!({ "name": name, "doc": uid })));
 }
@@ -78,6 +116,9 @@ fn target(d: &Dialog) -> (u64, String) {
 fn confirm_unused(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     app.ui.dialog = None;
     let (uid, name) = target(d);
+    if let Some(names) = d.fields.get("names").and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok()) {
+        return delete_unused(app, uid, &names);
+    }
     match instances(app, uid, &name) {
         None => Ok(Value::Null),
         Some(0) => app.run("symbol.delete", json!({ "name": name })),
@@ -97,4 +138,20 @@ fn confirm_used(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         return Ok(Value::Null);
     }
     app.run("symbol.delete", json!({ "name": name, "expandInstances": !d.bool("discard") }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The question for the symbols Select All Unused picked is plural (#4918).
+    #[test]
+    fn several_symbols_get_the_plural_question() {
+        let one = Dialog::new(KIND, json!({"name": "A", "doc": 1}));
+        let many = Dialog::new(KIND, json!({"names": ["A", "B"], "doc": 1}));
+        assert_eq!((SPEC.heading)(&one), "Delete the selected symbol?");
+        assert_eq!((SPEC.heading)(&many), "Delete the selected symbols?");
+        let picked_one = Dialog::new(KIND, json!({"names": ["A"], "doc": 1}));
+        assert_eq!((SPEC.heading)(&picked_one), "Delete the selected symbol?");
+    }
 }
