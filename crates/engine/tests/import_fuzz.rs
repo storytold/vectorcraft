@@ -2799,14 +2799,48 @@ fn text_eps(document: &str) -> Vec<u8> {
 
 /// An EPS with the text `objects` on a hidden layer, their stories in `document`.
 fn text_eps_of(document: &str, objects: &str) -> Vec<u8> {
+    editing_eps(&text_editing_of(document, objects))
+}
+
+/// The editing data of [`text_eps_of`].
+fn text_editing_of(document: &str, objects: &str) -> String {
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
-    let editing = format!(
+    format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
          %AI5_BeginLayer\n0 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Spare) Ln\n{objects}LB\n%AI5_EndLayer--\n\
          %AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
         lines.join("\n")
-    );
-    editing_eps(&editing)
+    )
+}
+
+/// Area Type Options as an area frame's data may keep them: rows, columns, gutters and the first
+/// baseline, and keys besides, each with a value of any kind, in or out of range.
+fn arb_area_options() -> impl Strategy<Value = String> {
+    let keys = prop::sample::select(vec!["3", "4", "5", "7", "8", "10", "13", "14"]);
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "2.5",
+        "-3",
+        "1e9",
+        "1e400",
+        "NaN",
+        "inf",
+        "-inf",
+        "(x)",
+        "true",
+        "/Name",
+        "[ 1 2 ]",
+        "<< /0 0 /1 30 >>",
+        "<< /0 3 /1 NaN >>",
+        "<< /0 4 /1 -inf >>",
+        "<< /0 99 /1 1e300 >>",
+        "<< /0 << /0 1 >> /1 [ ] >>",
+        "<< /1 30 >>",
+    ]);
+    prop::collection::vec((keys, values), 0..8).prop_map(|kv| kv.iter().map(|(k, v)| format!("/{k} {v}")).collect::<Vec<_>>().join(" "))
 }
 
 /// A text document of `kinds.len()` stories, story `i` in frame `i` of kind `kinds[i]` (0 point type,
@@ -2944,6 +2978,18 @@ proptest! {
         let text = mutate_text(&frames_document_text(), cut, &edits);
         let bytes = text_eps_of(&text, FRAME_OBJECTS);
         survive("mutated EPS text frames", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    /// The threaded area type of the same text document with hostile Area Type Options in each of its
+    /// frames, opened as an EPS document and as a `.ai`'s editing data.
+    #[test]
+    fn text_frames_with_hostile_area_options_never_panic(first in arb_area_options(), second in arb_area_options()) {
+        let text = frames_document_text().replacen("/0 1 /7 18", &format!("/0 1 {first}"), 1).replacen("/0 1 /7 18", &format!("/0 1 {second}"), 1);
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile area options", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile area options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
     /// An Illustrator EPS whose editing data is damaged or hostile: read as its layers, or as its page.

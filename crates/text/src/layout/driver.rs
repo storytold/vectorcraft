@@ -14,6 +14,7 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         rows: a.rows,
         columns: a.columns,
         gutter: a.gutter,
+        row_gutter: a.row_gutter,
         inset: a.inset,
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,

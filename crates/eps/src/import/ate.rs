@@ -245,15 +245,88 @@ const MAX_FRAMES: usize = 4096;
 const MAX_SEGMENTS: usize = 1 << 16;
 
 /// Where a frame puts its story's text.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum FrameKind {
     /// Point type: the matrix carries the layout (its anchor at the origin of its lines) onto the
     /// canvas.
     Point([f64; 6]),
-    /// Area type flowed inside a path: its cubic segments on the canvas, four points each.
-    Area(Vec<[f64; 8]>),
+    /// Area type flowed inside a path: its cubic segments on the canvas, four points each, and the
+    /// Area Type Options the frame keeps.
+    Area(Vec<[f64; 8]>, AreaFrame),
     /// Type on a path, from `start` to `end` (segment index and the place in that segment).
     OnPath { segments: Vec<[f64; 8]>, start: f64, end: f64 },
+}
+
+/// The Area Type Options an area frame keeps, in the units of the text document: each `None`
+/// where the frame leaves the key out or keeps a value that can't be read, so the option stays as
+/// it was.
+#[derive(Debug, Clone, Default, PartialEq)]
+struct AreaFrame {
+    /// Key 3, the rows.
+    rows: Option<usize>,
+    /// Key 4, the columns.
+    columns: Option<usize>,
+    /// Key 7, the gutter between rows.
+    row_gutter: Option<f64>,
+    /// Key 8, the gutter between columns.
+    column_gutter: Option<f64>,
+    /// Key 10, the first baseline (`0` its kind, `1` its minimum). Without it the first baseline
+    /// is Ascent.
+    first_baseline: Option<(vectorcraft_doc::FirstBaseline, f64)>,
+}
+
+/// Longest gutter or first-baseline minimum read (units of the text document), as
+/// `text.areaOptions` caps them.
+const MAX_AREA_LENGTH: f64 = 10_000.0;
+
+impl AreaFrame {
+    /// The options frame data `carries` keeps.
+    fn read(carries: &Val) -> AreaFrame {
+        // A whole number, at most `max`.
+        let whole = |v: &Val, max: f64| v.num().filter(|n| n.fract() == 0.0 && *n >= 0.0).map(|n| n.min(max) as usize);
+        let max = vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS;
+        let count = |k: &str| carries.get(k).and_then(|v| whole(v, max as f64)).filter(|n| *n >= 1);
+        let length = |v: Option<&Val>| v.and_then(Val::num).filter(|n| *n >= 0.0).map(|n| n.min(MAX_AREA_LENGTH));
+        let first_baseline = carries.get("10").and_then(|b| {
+            use vectorcraft_doc::FirstBaseline as F;
+            let kind = match whole(b.get("0")?, 99.0)? {
+                0 => F::Fixed,
+                2 => F::CapHeight,
+                3 => F::Leading,
+                4 => F::XHeight,
+                // Em Box Height (5) and Legacy (6) have no first baseline of their own here: the
+                // first baseline stays as it was.
+                _ => return None,
+            };
+            Some((kind, length(b.get("1")).unwrap_or(0.0)))
+        });
+        AreaFrame {
+            rows: count("3"),
+            columns: count("4"),
+            row_gutter: length(carries.get("7")),
+            column_gutter: length(carries.get("8")),
+            first_baseline,
+        }
+    }
+
+    /// Sets the options it keeps on `area`, its lengths at `scale` (document points to a unit).
+    fn apply(&self, area: &mut vectorcraft_doc::AreaOptions, scale: f64) {
+        if let Some(n) = self.rows {
+            area.rows = n;
+        }
+        if let Some(n) = self.columns {
+            area.columns = n;
+        }
+        // A gutter the frame leaves out stays as it was.
+        let (row, column) = (area.row_gutter.unwrap_or(area.gutter), area.gutter);
+        let row = self.row_gutter.map_or(row, |g| g * scale);
+        area.gutter = self.column_gutter.map_or(column, |g| g * scale);
+        area.row_gutter = (row != area.gutter).then_some(row);
+        if let Some((kind, min)) = self.first_baseline {
+            area.first_baseline = kind;
+            area.first_baseline_min = min * scale;
+        }
+    }
 }
 
 /// A paragraph's attributes, as the text document keeps them.
@@ -390,7 +463,7 @@ impl Texts {
                 None => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
                 Some(m) => m.nums()?.try_into().ok()?,
             })),
-            1 => Some(FrameKind::Area(segments()?)),
+            1 => Some(FrameKind::Area(segments()?, AreaFrame::read(carries))),
             2 => {
                 let range = carries.get("6").and_then(Val::nums).unwrap_or_default();
                 let segments = segments()?;
@@ -690,7 +763,7 @@ impl Story {
         let size = self.runs.iter().map(|(_, s)| s.size).fold(0.0, f64::max) * art_scale(to_doc);
         let bounds = |segments: &[[f64; 8]]| path_of(segments, template, to_doc).bounds();
         let r = match self.frames.first()? {
-            FrameKind::Area(s) => bounds(s)?,
+            FrameKind::Area(s, _) => bounds(s)?,
             FrameKind::OnPath { segments, .. } => bounds(segments)?.inflate(size * 1.5, size * 1.5),
             FrameKind::Point(m) => {
                 let longest = self.text.split(['\r', '\x03']).map(|l| l.chars().count()).max().unwrap_or(0) as f64;
@@ -735,7 +808,7 @@ impl Story {
                 let at = to_doc * Point::new(x, y);
                 (scale, Affine::new([a / scale, b / scale, c / scale, d / scale, at.x, at.y]), TextKind::Point)
             }
-            FrameKind::Area(s) => (1.0, Affine::IDENTITY, TextKind::Area { frame: path_of(s, template, to_doc) }),
+            FrameKind::Area(s, _) => (1.0, Affine::IDENTITY, TextKind::Area { frame: path_of(s, template, to_doc) }),
             FrameKind::OnPath { segments, start, end } => {
                 let n = segments.len() as f64;
                 // A closed path keeps its end bracket wherever it is (the same place as the start: a
@@ -795,6 +868,10 @@ impl Story {
         if matches!(kind, TextKind::OnPath { .. }) && !threaded {
             t.path_spacing = self.path_spacing * scale;
         }
+        // Each frame of a thread keeps its own options.
+        if let Some(FrameKind::Area(_, options)) = self.frames.get(frame) {
+            options.apply(&mut t.area, scale);
+        }
         t.kind = kind;
         t.xf = xf;
         Some(Node::new(id, NodeKind::Text(Box::new(t))))
@@ -812,10 +889,14 @@ impl Story {
     /// `to_doc`) whose first line the file lays out higher or lower than it is laid out here, as its
     /// page draws it: its first baseline is fixed where the file has it. The font's ascent below the
     /// frame's top, the first baseline here, isn't where the app that wrote the file puts it for
-    /// every font. Whether it was.
-    pub(super) fn place_first_line(&self, node: &mut Node, template: (f64, f64), to_doc: Affine) -> bool {
+    /// every font. A first baseline its frame `frame` keeps (other than Ascent) stays as it is.
+    /// Whether it was.
+    pub(super) fn place_first_line(&self, node: &mut Node, frame: usize, template: (f64, f64), to_doc: Affine) -> bool {
         // Closer than this (points of the document) and the line is where the file has it.
         const SAME: f64 = 0.5;
+        if matches!(self.frames.get(frame), Some(FrameKind::Area(_, AreaFrame { first_baseline: Some(_), .. }))) {
+            return false;
+        }
         let NodeKind::Text(t) = &mut node.kind else { return false };
         if !matches!(t.kind, TextKind::Area { .. }) || t.area.vertical_align != vectorcraft_doc::VerticalAlign::Top {
             return false;
@@ -1314,13 +1395,13 @@ mod tests {
         let (template, to_doc) = ((CANVAS_CENTRE, -CANVAS_CENTRE), Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]));
         let first = |s: &Story| {
             let mut node = s.node(NodeId(0), 0, template, to_doc).unwrap();
-            let placed = s.place_first_line(&mut node, template, to_doc);
+            let placed = s.place_first_line(&mut node, 0, template, to_doc);
             let NodeKind::Text(t) = node.kind else { panic!("area type") };
             let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
             (placed, l.lines.first().map(|l| l.baseline), t.area.first_baseline)
         };
         let mut s = story("Heading\r", &[], &Para::default());
-        s.frames = vec![FrameKind::Area(frame)];
+        s.frames = vec![FrameKind::Area(frame, AreaFrame::default())];
         // Where this lays the line out on its own: the file agrees, and nothing changes.
         s.lines = vec![(10.0, 20.0)];
         let (_, Some(own), _) = first(&s) else { panic!("a line") };
@@ -1331,5 +1412,144 @@ mod tests {
         let (placed, at, fb) = first(&s);
         assert!(placed && fb == vectorcraft_doc::FirstBaseline::Fixed, "{fb:?}");
         assert!(at.is_some_and(|y| (y - (own - 3.0)).abs() < 1e-6), "{at:?} for {}", own - 3.0);
+    }
+
+    /// A text document's area frame, the rectangle 10, 20 to 210, 120 of the canvas, whose frame
+    /// data has `options` besides its kind, written by hand.
+    fn area_frame(options: &str) -> FrameKind {
+        let line = |a: (f64, f64), b: (f64, f64)| format!("{} {} {} {} {} {} {} {}", a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1);
+        let segments = [
+            line((10.0, 20.0), (210.0, 20.0)),
+            line((210.0, 20.0), (210.0, 120.0)),
+            line((210.0, 120.0), (10.0, 120.0)),
+            line((10.0, 120.0), (10.0, 20.0)),
+        ];
+        let doc = format!("/0 << /1 << /0 [ {} ] >> /2 << /0 1 {options} >> >>", segments.join(" "));
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            frames: vec![read(doc.as_bytes()).unwrap()],
+        };
+        texts.frame(0).unwrap()
+    }
+
+    /// The area options of the text object a story of `frames` comes in as at frame `frame`, the
+    /// art's units `scale` document points each.
+    fn area_of(frames: Vec<FrameKind>, frame: usize, scale: f64) -> vectorcraft_doc::AreaOptions {
+        let mut s = story("Some area type\r", &[], &Para::default());
+        s.frames = frames;
+        let to_doc = Affine::scale(scale) * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
+        let NodeKind::Text(t) = s.node(NodeId(0), frame, (CANVAS_CENTRE, -CANVAS_CENTRE), to_doc).unwrap().kind else { panic!("area type") };
+        t.area
+    }
+
+    #[test]
+    fn area_frame_options_are_read() {
+        // GUARDS: area type came in with one row, one column and the 18 pt gutter whatever its frame kept.
+        let a = area_of(vec![area_frame("/3 2 /4 3 /7 20 /8 24")], 0, 1.0);
+        assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (2, 3, 24.0, Some(20.0)));
+        // The same gutter between rows and columns is one gutter.
+        let a = area_of(vec![area_frame("/3 2 /4 3 /7 20 /8 20")], 0, 1.0);
+        assert_eq!((a.gutter, a.row_gutter), (20.0, None));
+        // Lengths scale with the art's units (a Large Canvas copy measures in tenths of the page).
+        let a = area_of(vec![area_frame("/7 2 /8 2.4 /10 << /0 3 /1 3 >>")], 0, 10.0);
+        assert!((a.gutter - 24.0).abs() < 1e-9 && a.row_gutter == Some(20.0), "{a:?}");
+        assert!((a.first_baseline_min - 30.0).abs() < 1e-9, "{a:?}");
+    }
+
+    #[test]
+    fn area_frame_first_baseline_kinds_and_minimum_are_read() {
+        use vectorcraft_doc::FirstBaseline as F;
+        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight)] {
+            let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 2.0);
+            assert_eq!((a.first_baseline, a.first_baseline_min), (kind, 60.0), "code {code}");
+        }
+        // A kind without its own first baseline here, or none known, leaves Ascent.
+        for code in ["1", "5", "6", "7", "-1", "2.5", "(x)"] {
+            let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 1.0);
+            assert_eq!((a.first_baseline, a.first_baseline_min), (F::Ascent, 0.0), "code {code}");
+        }
+        // A minimum that can't be read is none.
+        let a = area_of(vec![area_frame("/10 << /0 3 /1 -4 >>")], 0, 1.0);
+        assert_eq!((a.first_baseline, a.first_baseline_min), (F::Leading, 0.0));
+    }
+
+    /// A first baseline the frame keeps stays as it is: the first line isn't moved to where the
+    /// file lays it out.
+    #[test]
+    fn a_first_baseline_the_frame_keeps_is_not_moved() {
+        let (template, to_doc) = ((CANVAS_CENTRE, -CANVAS_CENTRE), Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]));
+        // Where this lays the first line out on its own.
+        let mut s = story("Heading\r", &[], &Para::default());
+        s.frames = vec![area_frame("")];
+        let NodeKind::Text(t) = s.node(NodeId(0), 0, template, to_doc).unwrap().kind else { panic!("area type") };
+        let own = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).lines.first().map(|l| l.baseline).unwrap();
+        let placed_in = |frames: &[&str]| {
+            let mut s = story("Heading\r", &[], &Para::default());
+            s.frames = frames.iter().map(|o| area_frame(o)).collect();
+            // Higher in the file.
+            s.lines = vec![(10.0, own - 3.0)];
+            let mut node = s.node(NodeId(0), 0, template, to_doc).unwrap();
+            let placed = s.place_first_line(&mut node, 0, template, to_doc);
+            let NodeKind::Text(t) = node.kind else { panic!("area type") };
+            (placed, t.area.first_baseline)
+        };
+        let placed = |options: &str| placed_in(&[options]);
+        assert_eq!(placed("/10 << /0 2 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::CapHeight));
+        // Without one (Ascent), or with one that isn't read, the line goes where the file has it.
+        assert_eq!(placed(""), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        // Another frame of the thread keeping one doesn't count for the first.
+        assert_eq!(placed_in(&["", "/10 << /0 2 /1 0 >>"]), (true, vectorcraft_doc::FirstBaseline::Fixed));
+    }
+
+    #[test]
+    fn area_frame_options_that_cannot_be_read_keep_their_defaults() {
+        let defaults = vectorcraft_doc::AreaOptions::default();
+        let bad = [
+            "/3 0 /4 2.5 /7 -1 /8 (x)",
+            "/3 NaN /4 inf /7 NaN /8 -inf /10 [ 1 2 ]",
+            "/3 (2) /4 [ 3 ] /7 << /0 1 >> /8 true /10 3",
+            "/10 << /1 30 >>",
+        ];
+        for options in bad {
+            assert_eq!(area_of(vec![area_frame(options)], 0, 1.0), defaults, "{options}");
+        }
+        // Too many rows and columns, and too long gutters, are capped.
+        let a = area_of(vec![area_frame("/3 1e9 /4 101 /7 1e300 /8 5e4")], 0, 1.0);
+        assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (100, 100, MAX_AREA_LENGTH, None));
+        // One that can be read is read beside one that can't.
+        let a = area_of(vec![area_frame("/3 2 /4 -3 /8 12 /7 NaN")], 0, 1.0);
+        assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (2, 1, 12.0, Some(18.0)));
+    }
+
+    #[test]
+    fn area_frame_without_options_comes_in_as_before() {
+        assert_eq!(area_of(vec![area_frame("")], 0, 1.0), vectorcraft_doc::AreaOptions::default());
+        assert_eq!(area_frame(""), FrameKind::Area(area_segments(), AreaFrame::default()));
+    }
+
+    /// The segments [`area_frame`] writes.
+    fn area_segments() -> Vec<[f64; 8]> {
+        let line = |a: (f64, f64), b: (f64, f64)| [a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1];
+        vec![
+            line((10.0, 20.0), (210.0, 20.0)),
+            line((210.0, 20.0), (210.0, 120.0)),
+            line((210.0, 120.0), (10.0, 120.0)),
+            line((10.0, 120.0), (10.0, 20.0)),
+        ]
+    }
+
+    #[test]
+    fn each_frame_of_a_thread_keeps_its_own_options() {
+        let frames = vec![area_frame("/3 2 /7 10 /8 10 /10 << /0 0 /1 12 >>"), area_frame("/4 3 /7 6 /8 8")];
+        let (first, second) = (area_of(frames.clone(), 0, 1.0), area_of(frames, 1, 1.0));
+        assert_eq!((first.rows, first.columns, first.gutter, first.row_gutter), (2, 1, 10.0, None));
+        assert_eq!((first.first_baseline, first.first_baseline_min), (vectorcraft_doc::FirstBaseline::Fixed, 12.0));
+        assert_eq!((second.rows, second.columns, second.gutter, second.row_gutter), (1, 3, 8.0, Some(6.0)));
+        assert_eq!(second.first_baseline, vectorcraft_doc::FirstBaseline::Ascent);
     }
 }

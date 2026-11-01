@@ -1545,3 +1545,43 @@ fn area_options_columns_change_layout() {
     assert_eq!(lay(&s).frames.len(), 1);
     assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
 }
+
+/// `rowGutter` sets a gutter between rows of its own, the reply passes it back, and a gutter
+/// given alone is the rows' and the columns' again.
+#[test]
+fn area_options_set_a_gutter_between_rows_of_its_own() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "word ".repeat(80), "area": {"width": 300, "height": 120}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // Without one of its own, the rows' is the gutter, and passing the reply back keeps it unset.
+    let q = s.execute("text.areaOptions", &json!({})).unwrap();
+    assert_eq!((q["gutter"].as_f64(), q["rowGutter"].as_f64()), (Some(18.0), Some(18.0)));
+    s.execute("text.areaOptions", &q).unwrap();
+    // Both given: the rows keep theirs even at the old gutter's value.
+    let r = s.execute("text.areaOptions", &json!({"gutter": 10, "rowGutter": 18})).unwrap();
+    assert_eq!((r["gutter"].as_f64(), r["rowGutter"].as_f64()), (Some(10.0), Some(18.0)));
+    s.execute("text.areaOptions", &json!({"gutter": 18})).unwrap();
+    let r = s.execute("text.areaOptions", &json!({"rows": 2, "gutter": 12, "rowGutter": 30})).unwrap();
+    assert_eq!((r["gutter"].as_f64(), r["rowGutter"].as_f64()), (Some(12.0), Some(30.0)));
+    let area = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(area(&s).row_gutter, Some(30.0));
+    // The reply passed back keeps it; out of range it is capped; the gutter's value is none of its own.
+    s.execute("text.areaOptions", &json!({"rowGutter": 12})).unwrap();
+    assert_eq!(area(&s).row_gutter, None);
+    s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
+    s.execute("text.areaOptions", &r).unwrap();
+    assert_eq!(area(&s).row_gutter, Some(30.0));
+    s.execute("text.areaOptions", &json!({"rowGutter": -5})).unwrap();
+    assert_eq!(area(&s).row_gutter, Some(0.0));
+    s.execute("text.areaOptions", &json!({"gutter": 8})).unwrap();
+    assert_eq!((area(&s).gutter, area(&s).row_gutter), (8.0, None));
+    s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
+    s.execute("text.areaOptions", &json!({"rowGutter": null})).unwrap();
+    assert_eq!(area(&s).row_gutter, None);
+}

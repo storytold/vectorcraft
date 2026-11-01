@@ -207,6 +207,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
             Ok(mut fields) => {
                 if let Some(o) = fields.as_object_mut() {
                     o.retain(|k, _| !hidden.contains(&k.as_str()));
+                    // Area type whose rows have no gutter of their own: its Row Gutter follows the
+                    // Gutter unless it is changed (see `dialogs::command`).
+                    if id == "text.areaOptions"
+                        && let Some(g) = o.get("rowGutter").filter(|g| Some(*g) == o.get("gutter")).cloned()
+                    {
+                        o.insert("__rowGutterLinked".into(), g);
+                    }
                 }
                 let _ = app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields}));
             }
