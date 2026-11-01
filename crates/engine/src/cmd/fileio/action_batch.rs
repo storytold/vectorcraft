@@ -161,7 +161,25 @@ pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
 /// data set's own file in the destination folder (`redirected`). Such a step makes that file the
 /// document's own, so Save and Close then saves each data set to its own file.
 fn saves_move_to_each_file(steps: &[Value], redirected: bool) -> bool {
-    redirected && steps.iter().any(|c| matches!(c.get("command").and_then(Value::as_str), Some("document.save" | "file.save" | "file.saveAs")))
+    redirected && steps.iter().any(|c| retargeting_save(c, true))
+}
+
+/// Whether step `c` is a Save, Save As or `document.save` that writes a file (its own `path`, or one
+/// in the destination folder when `redirected`) and makes that file the document's own: a save in
+/// the native template format writes a copy and leaves the document's file as it was.
+fn retargeting_save(c: &Value, redirected: bool) -> bool {
+    if !matches!(c.get("command").and_then(Value::as_str), Some("document.save" | "file.save" | "file.saveAs")) {
+        return false;
+    }
+    let params = c.get("params");
+    let path = params.and_then(|p| p.get("path")).and_then(Value::as_str).filter(|p| !p.is_empty());
+    let format_ok = match params.and_then(|p| p.get("format")).and_then(Value::as_str).filter(|f| !f.is_empty()) {
+        Some(f) => super::format(f).is_some_and(|f| f.id != "template"),
+        // Override Save gives the step a native file name; else its own path names the format.
+        None if redirected => true,
+        None => path.and_then(super::format_for_name).is_none_or(|f| f.id != "template"),
+    };
+    format_ok && (redirected || path.is_some())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -209,7 +227,9 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     if names.len() > MAX_BATCH_FILES {
         return Err(bad(cmd, format!("more than {MAX_BATCH_FILES} data sets")));
     }
-    if run.destination == "saveAndClose" && !saves_move_to_each_file(run.steps, run.override_save && run.dest_folder.is_some()) {
+    let redirected = run.override_save && run.dest_folder.is_some();
+    // A recorded save with a file to write gives the document a file of its own before Save and Close.
+    if run.destination == "saveAndClose" && !run.steps.iter().any(|c| retargeting_save(c, redirected)) {
         if st.path.is_none() {
             return Err(bad(cmd, "the document has never been saved"));
         }
@@ -1450,6 +1470,25 @@ mod tests {
         assert_eq!(r["failed"], 0, "{r}");
         assert!(r.get("warning").is_none(), "{r}");
         assert_eq!(file_names(&dest), ["Untitled_a.vectorcraft", "Untitled_b.vectorcraft"], "{r}");
+        // A template save writes a copy: Save and Close still saves over the document's own file.
+        let mut template = save_close(&dest);
+        template["commands"] = json!([{"command": "document.save", "params": {"format": "template"}}]);
+        assert!(batch_overwrites_one_file(&s, &template), "{template}");
+        let mut never = with_data_sets(&["a", "b"]);
+        let msg = never.execute("action.batch", &template).unwrap_err().to_string();
+        assert!(msg.ends_with("the document has never been saved"), "{msg}");
+        // A recorded Save As with its own path gives a never-saved document its file, the same one
+        // for every data set.
+        let one = tmp("save-as-then-close").join("one.vectorcraft");
+        let p = json!({
+            "source": "datasets",
+            "destination": "saveAndClose",
+            "commands": [{"command": "file.saveAs", "params": {"path": one.to_string_lossy()}}]
+        });
+        let r = never.execute("action.batch", &p).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(r["warning"], ONE_FILE_WARNING, "{r}");
+        assert!(one.exists(), "{r}");
     }
 
     #[test]

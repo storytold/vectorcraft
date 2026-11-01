@@ -3517,7 +3517,8 @@ an earlier version 1 set without that flag includes every step. The Actions pane
 destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. With a Data Sets source,
 `saveAndClose` saves the open document over its own file after each data set, so the file keeps only the last one,
 and a document that was never saved, was converted from an older version or was restored by Data Recovery is
-refused before a data set is selected. When `destinationFolder` is set and Override Save points a recorded Save or
+refused before a data set is selected, unless a recorded Save or Save As step (not in the template format) writes a
+file and makes it the document's own first. When `destinationFolder` is set and Override Save points a recorded Save or
 Save As step into it, that step makes each data set's file the document's own, and `saveAndClose` saves each data
 set to its own file. The result carries `warning` when every data set saves over the same file:
 with `saveAndClose` without such a step, or with a Save, Save a Copy, Save as Template or export step (PDF, EPS, DXF, Save for Web and
