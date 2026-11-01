@@ -6040,6 +6040,9 @@ breakText	Glyphs	Glifs
 	Gap 4	Separació 4
 	Dash 5	Guió 5
 	Gap 5	Separació 5
+
+@msg	{_1}: they came in as the page's art	{_1}: han entrat com a art de la pàgina
+
 @msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el fitxer JPEG 2000 té un espai de color o contingut JPX no compatible
 @msg	You must choose a side pattern.	Heu de triar un patró lateral.
@@ -6072,6 +6075,9 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandeix els guions en camins
+@msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Eines del document
 	Save a Timestamped Copy	Desa una còpia amb data i hora
@@ -6094,6 +6100,11 @@ breakText	Glyphs	Glifs
 	Odia	Oriya
 	Urdu	Urdú
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i posteriors (versió {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exporta tots els documents oberts com a PDF
+	Export All Open Documents as SVG	Exporta tots els documents oberts com a SVG
+@msgplural	Exported {n} document|Exported {n} documents	S’ha exportat {n} document|S’han exportat {n} documents
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	S’ha exportat {n} document; no s’ha escrit {title}: {error}|S’han exportat {n} documents; no s’ha escrit {title}: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipus de símbol:
 	Dynamic Symbol	Símbol dinàmic
