@@ -318,14 +318,14 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
 }
 
 /// The on-canvas handles of a selected live blend: the step-count handle on the selection's
-/// bounding box's right edge (white with up/down chevrons; its height is the count), and the Ease
-/// knob on the spine with the linked Ramp handle above it and the Colour handle below (white with
-/// a dark outline, the Colour knob's middle the accent).
+/// bounding box's right edge (white with up/down chevrons; its height is the count), the Ease knob
+/// on the spine and the Colour handle below (white with a dark outline, the Colour knob's middle
+/// the accent).
 /// Hovering one names it on a pill; the drag's own value label comes from the tool. Visible with
 /// the Selection tool (the one blend selected whole) and with the Blend tool (every selected
 /// blend).
 pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    use vectorcraft_tools::blendhandles::{BlendHandles, BlendPart, HANDLE_RADIUS, RAMP_RADIUS, hit_part};
+    use vectorcraft_tools::blendhandles::{BlendHandles, BlendPart, HANDLE_RADIUS, hit_part};
     let tool = app.session.tool_id();
     if tool != "selection" && tool != "blend" {
         return;
@@ -361,10 +361,8 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
         }
         p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, KNOB_STROKE));
         if let Some(e) = h.easing_handles() {
-            let (ease, ramp, color) = (xf.to_screen(e.ease), xf.to_screen(e.ramp), xf.to_screen(e.color));
-            p.line_segment([ease, ramp], Stroke::new(1.5, KNOB_STROKE));
+            let (ease, color) = (xf.to_screen(e.ease), xf.to_screen(e.color));
             knob(p, ease, HANDLE_RADIUS);
-            knob(p, ramp, RAMP_RADIUS);
             knob(p, color, HANDLE_RADIUS);
             p.circle_filled(color, 2.5, t.accent);
         }
@@ -378,20 +376,15 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
     let Some(h) = handles.get(i) else { return };
     let (at, text) = match part {
         BlendPart::Steps => (h.steps_at, tl!("Modify Steps").to_string()),
-        BlendPart::Ease | BlendPart::Ramp | BlendPart::Color => {
+        BlendPart::Ease | BlendPart::Color => {
             let Some(e) = h.easing_handles() else { return };
             let values = |n: &vectorcraft_doc::Node| match &n.kind {
                 vectorcraft_doc::NodeKind::Blend { spec, .. } => Some((spec.ease.kind.id(), spec.ease.ramp * 100.0, spec.color_shift)),
                 _ => None,
             };
-            let at = match part {
-                BlendPart::Ease => e.ease,
-                BlendPart::Ramp => e.ramp,
-                _ => e.color,
-            };
+            let at = if part == BlendPart::Ease { e.ease } else { e.color };
             match (part, st.doc.node(h.id).and_then(values)) {
                 (BlendPart::Ease, Some((kind, ramp, _))) => (at, format!("{} {} %", ease_label(kind), ramp.round())),
-                (BlendPart::Ramp, Some((_, ramp, _))) => (at, format!("{} {} %", tl!("Ramp:"), ramp.round())),
                 (_, Some((_, _, shift))) => (at, format!("{} {}{} %", tl!("Shift Colors"), if shift < 0.0 { "−" } else { "" }, shift.abs().round())),
                 _ => return,
             }

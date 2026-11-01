@@ -832,8 +832,8 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
   lines between the keys, and Never leaves the spine off the distribution and the canvas. With a blend
   selected, the Blend tool and the Selection tool show its on-canvas handles — the step-count handle riding
   the selection bounding box's right edge, its height the count on a fixed exponential scale (1 at the bottom
-  of the box, 1000 at its top, the place kept when the box rotates), the Ease knob on the spine with a linked
-  Ramp handle beside it and the Colour handle below, each drag one undo step in step with the panel, Escape
+  of the box, 1000 at its top, the place kept when the box rotates), the Ease knob on the spine (its drag
+  sets Type and Ramp) and the Colour handle below, each drag one undo step in step with the panel, Escape
   cancelling it, hover naming a handle on a pill (`tools::blendhandles`,
   `canvas::tool_overlays::blend_handles_overlay`). Blend Options carries the same controls in a compact
   dialog.

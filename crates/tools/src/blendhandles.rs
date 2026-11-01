@@ -1,13 +1,12 @@
 //! The on-canvas controls of a selected live blend: the step-count handle on the bbox edge (dragging it
 //! down or up sets the Specified Steps count, on an exponential scale — 1 at the bottom, 1000 at the top
 //! — and the handle rests where the current count lands instead of always at the top), the Ease knob
-//! at the blend's midpoint with a linked Ramp handle beside it (bezier-handle style: its distance from
-//! the knob is the Ramp) and the Colour handle under the spine. The Selection tool and the Blend tool
-//! hit-test through here, and the canvas draws the handles white with a dark outline, like the other
-//! on-canvas handles (`ui-egui::canvas::tool_overlays`).
+//! at the blend's midpoint (its drag sets the Type and the Ramp) and the Colour handle under the spine.
+//! The Selection tool and the Blend tool hit-test through here, and the canvas draws the handles white
+//! with a dark outline, like the other on-canvas handles (`ui-egui::canvas::tool_overlays`).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::live::{BlendEaseType, BlendSpec, Spine, blend_key_stops, blend_step_count};
+use vectorcraft_doc::live::{BlendSpec, Spine, blend_key_stops, blend_step_count};
 use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox, Selection};
 use vectorcraft_geom::{Point, Vec2};
 
@@ -15,9 +14,6 @@ use crate::{Action, Cursor, Mods, ToolContext};
 
 /// Radius of a handle, in screen points (the grid repeat handles').
 pub const HANDLE_RADIUS: f32 = 6.0;
-
-/// Radius of the linked Ramp handle, in screen points.
-pub const RAMP_RADIUS: f32 = 4.0;
 
 /// Gap between the selection's bounding box and the step-count handle, in screen points.
 const HANDLE_GAP: f64 = 22.0;
@@ -28,11 +24,6 @@ const REACH: f64 = 8.0;
 /// The largest Specified Steps count, where dragging above the box tops out.
 const STEPS_MAX: f64 = 1000.0;
 
-/// Where the linked Ramp handle rests at Ramp 0, and how far past that it goes at Ramp 100, in
-/// screen points from the Ease knob, perpendicular to the spine.
-const RAMP_REST: f64 = 10.0;
-const RAMP_REACH: f64 = 26.0;
-
 /// Which handle of a blend a drag moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlendPart {
@@ -40,8 +31,6 @@ pub enum BlendPart {
     Steps,
     /// The easing Type and Ramp together: dragging toward a key eases toward it.
     Ease,
-    /// The Ramp alone: how far the linked handle sits from the Ease knob.
-    Ramp,
     /// The easing of the colours, independent of the positions (Shift).
     Color,
 }
@@ -66,20 +55,14 @@ pub struct BlendHandles {
     spine: Spine,
     stops: Vec<f64>,
     easing: Option<EasingHandles>,
-    /// The blend's easing Type (the Ramp handle's drag keeps it).
-    ease_kind: BlendEaseType,
 }
 
-/// Where the easing handles sit: the Ease knob on the spine, the linked Ramp handle hanging off
-/// it perpendicular to the spine, and the Colour handle on the spine's other side.
+/// Where the easing handles sit: the Ease knob on the spine and the Colour handle on the spine's
+/// other side.
 #[derive(Clone, Copy, Debug)]
 pub struct EasingHandles {
     pub ease: Point,
-    pub ramp: Point,
     pub color: Point,
-    /// The Ramp handle's rest and total reach from the Ease knob, in document points.
-    ramp_rest: f64,
-    ramp_reach: f64,
 }
 
 impl BlendHandles {
@@ -141,38 +124,17 @@ impl BlendHandles {
         // knob at the 1000 cap; releasing leaves it at the count's position.
         let steps_height = (steps_now as f64).ln() / STEPS_MAX.ln();
         let steps_at = steps_place(edge_base, edge_up, edge_out, gap, h, steps_height.clamp(0.0, 1.0));
-        // The Ease knob sits at the shape's halfway point under the easing, the linked Ramp
-        // handle hangs off it perpendicular to the spine (its distance the Ramp), and the Colour
-        // handle sits at the colour's halfway point on the spine's other side. The easing moves
-        // the steps between any two keys (spine or not), so these show in every spine mode.
+        // The Ease knob sits at the shape's halfway point under the easing, and the Colour handle
+        // sits at the colour's halfway point on the spine's other side. The easing moves the steps
+        // between any two keys (spine or not), so these show in every spine mode.
         let total = spine.length();
         let easing = (total > 1e-9).then(|| {
             let (a, b) = (stops.first().copied().unwrap_or(0.0) / total, stops.get(1).copied().unwrap_or(total) / total);
             let (ease, angle) = spine.at(a + (b - a) * spec.ease.apply(0.5));
             let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
-            let (rest, reach) = (RAMP_REST / zoom, RAMP_REACH / zoom);
-            EasingHandles {
-                ease,
-                ramp: ease + Vec2::new(angle.sin(), -angle.cos()) * (rest + spec.ease.ramp.clamp(0.0, 1.0) * (reach - rest)),
-                color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom),
-                ramp_rest: rest,
-                ramp_reach: reach,
-            }
+            EasingHandles { ease, color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom) }
         });
-        Some(Self {
-            id,
-            steps_at,
-            steps_now,
-            edge_base,
-            edge_up,
-            edge_out,
-            edge_gap: gap,
-            edge_h: h,
-            spine,
-            stops,
-            easing,
-            ease_kind: spec.ease.kind,
-        })
+        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h: h, spine, stops, easing })
     }
 
     /// The handles of a single blend selected whole (`frame` is the bounding box shown).
@@ -221,14 +183,6 @@ impl BlendHandles {
         let local = self.local_at(p);
         let (kind, ramp) = ease_at(local);
         json!({ "easingType": kind, "ramp": ramp * 100.0 })
-    }
-
-    /// The Ramp the linked handle at `p` gives: its distance from the Ease knob, past its rest,
-    /// keeping the blend's easing Type.
-    fn ramp_params(&self, p: Point) -> Value {
-        let Some(e) = self.easing else { return json!({}) };
-        let ramp = (e.ease.distance(p) - e.ramp_rest).max(0.0) / (e.ramp_reach - e.ramp_rest);
-        json!({ "easingType": self.ease_kind.id(), "ramp": ramp.clamp(0.0, 1.0) * 100.0 })
     }
 
     /// The colour Shift the pointer at `p` gives, in its pair.
@@ -304,7 +258,6 @@ pub fn hit_part(handles: &[BlendHandles], p: Point, reach: f64) -> Option<(usize
         take(BlendPart::Steps, Some(h.steps_at));
         let Some(e) = h.easing_handles() else { continue };
         take(BlendPart::Ease, Some(e.ease));
-        take(BlendPart::Ramp, Some(e.ramp));
         take(BlendPart::Color, Some(e.color));
     }
     best.map(|(i, part, _)| (i, part))
@@ -393,7 +346,6 @@ impl BlendDrag {
         let from = match part {
             BlendPart::Steps => handles.steps_params(handles.steps_at),
             BlendPart::Ease => handles.ease_params(e.map_or(handles.steps_at, |e| e.ease)),
-            BlendPart::Ramp => handles.ramp_params(e.map_or(handles.steps_at, |e| e.ramp)),
             BlendPart::Color => handles.color_params(e.map_or(handles.steps_at, |e| e.color)),
         };
         Self { handles, part, from, last: None, label: None }
@@ -409,11 +361,10 @@ impl BlendDrag {
     pub fn handle(&self) -> (NodeId, BlendPart, Point) {
         let at = match self.part {
             BlendPart::Steps => self.label.as_ref().map_or(self.handles.steps_at, |(p, _)| self.handles.steps_point_at(*p)),
-            BlendPart::Ease | BlendPart::Ramp | BlendPart::Color => {
+            BlendPart::Ease | BlendPart::Color => {
                 let Some(e) = self.handles.easing_handles() else { return (self.handles.id, self.part, self.handles.steps_at) };
                 match self.part {
                     BlendPart::Ease => e.ease,
-                    BlendPart::Ramp => e.ramp,
                     _ => e.color,
                 }
             }
@@ -429,7 +380,7 @@ impl BlendDrag {
     pub fn cursor(&self, cx: &ToolContext) -> Cursor {
         match self.part {
             BlendPart::Steps => crate::select::handle_cursor(crate::bbox::Handle::Bottom, -cx.view_angle()),
-            BlendPart::Ease | BlendPart::Ramp | BlendPart::Color => Cursor::Move,
+            BlendPart::Ease | BlendPart::Color => Cursor::Move,
         }
     }
 
@@ -447,7 +398,6 @@ impl BlendDrag {
         let v = match self.part {
             BlendPart::Steps => self.handles.steps_params(p),
             BlendPart::Ease => self.handles.ease_params(p),
-            BlendPart::Ramp => self.handles.ramp_params(p),
             BlendPart::Color => self.handles.color_params(p),
         };
         self.label = Some((p, drag_text(self.part, &v)));
@@ -484,7 +434,6 @@ fn drag_text(part: BlendPart, v: &Value) -> String {
         BlendPart::Ease => {
             format!("{} {}%", ease_name(v["easingType"].as_str().unwrap_or("easeIn")), v["ramp"].as_f64().unwrap_or_default().round())
         }
-        BlendPart::Ramp => format!("{}%", v["ramp"].as_f64().unwrap_or_default().round()),
         BlendPart::Color => {
             let shift = v["colorShift"].as_f64().unwrap_or_default();
             format!("Shift {}%", if shift < 0.0 { format!("-{}", (-shift).round()) } else { format!("{}", shift.round()) })
@@ -584,22 +533,17 @@ mod tests {
     }
 
     #[test]
-    fn the_ease_handle_sets_type_and_ramp_and_the_ramp_handle_only_ramp() {
+    fn the_ease_handle_sets_type_and_ramp() {
         let (d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
         // Toward the second key: Ease Out; toward the first: Ease In; Ramp 1 at the keys.
         assert_eq!(ease_at(0.75), ("easeOut", 1.0));
         assert_eq!(ease_at(0.25), ("easeIn", 1.0));
-        // With the default Ease In at Ramp 0, the knob is at the spine's middle, the linked Ramp
-        // handle 10 pt above it, and the colour handle 14 pt below.
+        // With the default Ease In at Ramp 0, the knob is at the spine's middle and the colour
+        // handle 14 pt below.
         let e = h.easing_handles().unwrap();
         assert!(e.ease.distance(Point::new(60.0, 10.0)) < 1e-6, "{:?}", e.ease);
-        assert!(e.ramp.distance(Point::new(60.0, 0.0)) < 1e-6, "{:?}", e.ramp);
         assert!(e.color.distance(Point::new(60.0, 24.0)) < 1e-6, "{:?}", e.color);
-        // The Ramp handle's distance past its rest is the Ramp.
-        assert_eq!(h.ramp_params(Point::new(60.0, 0.0))["ramp"], 0.0);
-        assert_eq!(h.ramp_params(Point::new(60.0, -16.0))["ramp"], 100.0);
-        assert_eq!(h.ramp_params(Point::new(60.0, -3.0))["ramp"], 18.75);
     }
 
     #[test]
@@ -612,14 +556,11 @@ mod tests {
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
         // The handle rests at its count's height on the fixed 1..1000 scale, so rest there.
         let rest = h.steps_at.y;
-        // The steps handle at its count height, the ease knob on the spine, the linked Ramp
-        // handle above it and the colour handle below.
-        for (at, part) in [
-            (Point::new(142.0, rest), BlendPart::Steps),
-            (Point::new(60.0, 10.0), BlendPart::Ease),
-            (Point::new(60.0, 0.0), BlendPart::Ramp),
-            (Point::new(60.0, 24.0), BlendPart::Color),
-        ] {
+        // The steps handle at its count height, the ease knob on the spine and the colour handle
+        // below.
+        for (at, part) in
+            [(Point::new(142.0, rest), BlendPart::Steps), (Point::new(60.0, 10.0), BlendPart::Ease), (Point::new(60.0, 24.0), BlendPart::Color)]
+        {
             assert_eq!(BlendDrag::hit_any(&c, at, Mods::default()).unwrap().grab(), (b, part), "{part:?}");
         }
         // The Selection tool reaches the same handles on the blend selected whole.
@@ -641,17 +582,6 @@ mod tests {
         assert_eq!((id, part), (b, BlendPart::Steps));
         // Dragging above the box clamps the knob to the top (count 1000).
         assert!(at.distance(Point::new(142.0, 0.0)) < 1e-6, "{at:?}");
-        assert_eq!(drag.finish(), vec![Action::Commit]);
-        // Dragging the linked Ramp handle away from the Ease knob raises the Ramp, keeping the
-        // Type.
-        let mut drag = BlendDrag::hit_any(&c, Point::new(60.0, 0.0), Mods::default()).unwrap();
-        let acts = drag.drag(Point::new(60.0, -16.0));
-        assert!(
-            matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
-                if id == "object.blend.options" && p["easingType"] == json!("easeIn") && p["ramp"] == json!(100.0)),
-            "{acts:?}"
-        );
-        assert_eq!(drag.label(), Some((Point::new(60.0, -16.0), "100%".into())));
         assert_eq!(drag.finish(), vec![Action::Commit]);
         // Dragging the Ease knob toward the second key eases out.
         let mut drag = BlendDrag::hit_any(&c, Point::new(60.0, 10.0), Mods::default()).unwrap();

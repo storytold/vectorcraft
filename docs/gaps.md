@@ -426,9 +426,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   and up — the pointer's height is the count on a fixed exponential scale (a box height covers 1–1000
   steps, and the handle keeps its place when the box rotates) and it rests where the count lands
   instead of pinning to the top — switching a Smooth Color or Distance blend to Specified Steps with
-  the first drag; the Ease knob on the spine with its linked Ramp handle (Type and Ramp) and the
-  Colour handle (Shift), shown in every spine mode, each drag one undo step and Escape cancelling
-  it. The Blend Options dialog carries the same controls as the panel in a compact size. The step
+  the first drag; the Ease knob on the spine (Type and Ramp) and the Colour handle (Shift), shown
+  in every spine mode, each drag one undo step and Escape cancelling it. The Blend Options dialog carries the same controls as the panel in a compact size. The step
   positions and Align to Path's angles come from the spine's own bezier, so a blend with many steps keeps
   turning smoothly instead of in polyline jumps.
   The original polynomial distributions approximate the public description; easing is one curve for the whole
@@ -649,6 +648,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | G1: the linked Ramp handle is off the canvas; the Ease knob still sets Type and Ramp, and the Colour handle Shift. fmt, clippy -D warnings, tools/ui-egui tests and wasm check pass |
 | 2026-10-31 | minor | G1: the Ease knob, linked Ramp handle and Colour handle are back on the canvas (Type and Ramp set the curve, Shift the colours; they show in every spine mode) with no Midpoint slider, and Escape cancels any handle drag. Blend Options is compact — 320–360 pt wide, with a 170 pt Direction button and a fit-width Reverse Spine button. A hidden replaced spine no longer stretches the Distance spacing. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |
 | 2026-10-30 | minor | G1: Blend Options dialog no longer spans the window — capped at 460 pt wide (min 420). Reverted the easing canvas handles (Ease knob, linked Ramp, Colour) and the Midpoint slider from panel and dialog; midpoint clamp back to 0.05–0.95. The step-count knob still rests at its count's height on the fixed 1–1000 exponential scale. Direction and Reverse Spine buttons remain in panel and dialog. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |
 | 2026-10-30 | minor | G1: blend step-count knob now rests at a height that matches the count on a fixed 1–1000 exponential scale (1 at the bottom of the box, 1000 at the top) instead of always pinning to the top corner, so a blend with few steps sits low; dragging follows the pointer live and the knob stays at the released count's height. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |

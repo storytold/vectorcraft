@@ -7149,8 +7149,7 @@ fn a_selected_blend_shows_its_step_handle_and_hovering_names_it() {
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, vec![]);
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
-    // The step-count knob and the Ease, linked Ramp and Colour handles draw, white with a dark
-    // outline.
+    // The step-count knob and the Ease and Colour handles draw, white with a dark outline.
     let stroke = super::tool_overlays::KNOB_STROKE;
     let knobs = |app: &mut VectorcraftApp| -> Vec<egui::Pos2> {
         shapes(app, &ctx)
@@ -7166,11 +7165,10 @@ fn a_selected_blend_shows_its_step_handle_and_hovering_names_it() {
     let st = app.session.active().unwrap();
     let h = vectorcraft_tools::blendhandles::BlendHandles::selected(&st.doc, &st.selection, frame_box, xf.zoom).unwrap();
     let at = knobs(&mut app);
-    assert_eq!(at.len(), 4, "{at:?}");
+    assert_eq!(at.len(), 3, "{at:?}");
     near(&at, "the steps handle", xf.to_screen(h.steps_at));
     let e = h.easing_handles().unwrap();
     near(&at, "the Ease knob", xf.to_screen(e.ease));
-    near(&at, "the Ramp handle", xf.to_screen(e.ramp));
     near(&at, "the Colour handle", xf.to_screen(e.color));
     // Hovering the steps handle names it, on a pill.
     let raw = |events: Vec<egui::Event>| egui::RawInput {
@@ -7186,7 +7184,7 @@ fn a_selected_blend_shows_its_step_handle_and_hovering_names_it() {
     // not.
     app.run("object.blend.options", json!({"spineMode": "never"})).unwrap();
     let at = knobs(&mut app);
-    assert_eq!(at.len(), 4, "{at:?}");
+    assert_eq!(at.len(), 3, "{at:?}");
     assert!(at.iter().any(|q| q.distance(xf.to_screen(h.steps_at)) < 2.0), "{at:?}");
 }
 
