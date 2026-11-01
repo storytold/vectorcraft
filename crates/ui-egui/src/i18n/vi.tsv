@@ -4587,6 +4587,7 @@ theme	Appearance	Giao diện
 @msg	no user library folder here	không có thư mục thư viện người dùng ở đây
 @msg	no user workspace `{from}`	không có không gian làm việc người dùng `{from}`
 @msg	node {_1} is not text	nút {_1} không phải là văn bản
+@msg	node {_1} is on a locked artboard	nút {_1} nằm trên bảng vẽ bị khóa
 @msg	not a blend	không phải đối tượng hòa trộn
 @msg	not a DXF drawing	không phải bản vẽ DXF
 @msg	not a file	không phải tệp

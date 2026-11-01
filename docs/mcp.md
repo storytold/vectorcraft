@@ -1741,7 +1741,7 @@ Their OK runs `brush.new {type, name, params, ids?}`, and Cancel adds no brush.
 `dataset.select`, `dataset.next` and `dataset.prev` reply `{name, applied, skipped}`. They add `overflow: [id…]`
 when area type or type on a path whose text they rewrote doesn't fit, as `text.setText` does (see
 [Fitting area type](#fitting-area-type-auto-size-shrink-text-to-fit-overflow)). They skip an object that is
-locked or inside a locked layer or group, and count it in `skipped`. They rewrite hidden objects and objects inside
+locked, inside a locked layer or group, or on a locked artboard, and count it in `skipped`. They rewrite hidden objects and objects inside
 a hidden layer or group, which stay hidden unless one of the data set's visibility values shows them. When such a
 layer is shown again, its type holds the data set's text. They apply the values in the order the variables are
 defined. Of two variables of the same kind on one object, the one defined last wins. `dataset.list`,
@@ -1766,7 +1766,7 @@ locked; `skipped` counts those objects.
 
 `dataset.update {all?}` writes what the bound objects hold now into the active data set, for each variable that the
 data set holds. A variable whose objects report no value, because they are locked, inside a locked layer or group,
-or deleted, keeps the data set's value. With `all: true` it also adds every other variable that the
+on a locked artboard, or deleted, keeps the data set's value. With `all: true` it also adds every other variable that the
 objects report a value for. The reply gives `values`, the number of values it wrote, and `left`, the variables it
 did not write.
 

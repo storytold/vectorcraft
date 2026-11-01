@@ -331,6 +331,46 @@ fn locked_art_is_neither_bound_nor_rewritten() {
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible, "the unlocked rectangle still applied");
 }
 
+/// The art on a locked artboard acts as locked art: a data set skips it, Update Data Set reads
+/// nothing from it, and it takes no new binding. Unlocking the artboard lets the data set rewrite it.
+#[test]
+fn art_on_a_locked_artboard_is_neither_bound_nor_rewritten() {
+    let mut s = session();
+    let t = NodeId(s.execute("text.create", &json!({"x": 2050, "y": 50, "text": "cat"})).unwrap()["id"].as_u64().unwrap());
+    let fresh = NodeId(s.execute("text.create", &json!({"x": 2100, "y": 100, "text": "new"})).unwrap()["id"].as_u64().unwrap());
+    let r = rect(&mut s);
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Box", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Box", "ids": [r.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "A"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob", "Show": false, "Box": false}})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+
+    let e = s.execute("variable.bind", &json!({"variable": "Name", "ids": [fresh.0]})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is on a locked artboard", fresh.0)), "{e}");
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(2)), "{v}");
+    assert_eq!(plain(&s, t), "cat", "the text on the locked artboard was left alone");
+    assert!(s.doc().unwrap().doc.node(t).unwrap().visible, "and still shows");
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible, "the rectangle off it applied");
+    // Update Data Set keeps the row's values for the art it can't read.
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!(v["values"], 1, "{v}");
+    let row = s.doc().unwrap().doc.variables.dataset("B").unwrap().values.clone();
+    assert_eq!(row.get("Name"), Some(&vectorcraft_doc::DataValue::Text("Bob".into())));
+    assert_eq!(row.get("Show"), Some(&vectorcraft_doc::DataValue::Visible(false)));
+
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(3), Some(0)), "{v}");
+    assert_eq!(plain(&s, t), "Bob");
+}
+
 /// Binding fails for locked art and for art in a hidden or locked group or layer, and the
 /// error names which of the three applies.
 #[test]

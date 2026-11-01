@@ -5229,6 +5229,7 @@ digits	Malayalam	Malaiàlam
 @msg	no user library folder here	aquí no hi ha cap carpeta de biblioteca d’usuari
 @msg	no user workspace `{from}`	no hi ha l’espai de treball d’usuari `{from}`
 @msg	node {_1} is not text	el node {_1} no és text
+@msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat
 @msg	Non-finite dimension	Cota no finita
 @msg	not a blend	no és una fusió
 @msg	not a DXF drawing	no és un dibuix DXF

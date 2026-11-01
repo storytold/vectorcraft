@@ -4181,6 +4181,7 @@ axis	Both	Båda
 @msg	no user library folder here	ingen mapp för användarbibliotek här
 @msg	no user workspace `{from}`	ingen användararbetslayout `{from}`
 @msg	node {_1} is not text	nod {_1} är inte text
+@msg	node {_1} is on a locked artboard	nod {_1} ligger på en låst rityta
 @msg	not a DXF drawing	inte en DXF-ritning
 @msg	not a VectorCraft file: {0}	inte en VectorCraft-fil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	inte en kortkommandouppsättning för VectorCraft (`overrides` saknas)

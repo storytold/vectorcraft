@@ -4935,6 +4935,7 @@ imageTrace	Outline	Körvonal
 @msg	no user library folder here	itt nincs felhasználói könyvtármappa
 @msg	no user workspace `{from}`	nincs ilyen felhasználói munkaterület: `{from}`
 @msg	node {_1} is not text	a csomópont nem szöveg: {_1}
+@msg	node {_1} is on a locked artboard	a csomópont zárolt rajztáblán van: {_1}
 @msg	not a DXF drawing	nem DXF-rajz
 @msg	not a file	nem fájl
 @msg	not a font file	nem betűtípusfájl

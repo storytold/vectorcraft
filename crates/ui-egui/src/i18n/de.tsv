@@ -4191,6 +4191,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no user library folder here	hier gibt es keinen Ordner für Benutzerbibliotheken
 @msg	no user workspace `{from}`	kein Benutzerarbeitsbereich `{from}`
 @msg	node {_1} is not text	Knoten {_1} ist kein Text
+@msg	node {_1} is on a locked artboard	Knoten {_1} liegt auf einer gesperrten Zeichenfläche
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	kein VectorCraft-Tastaturbefehlssatz (`overrides` fehlt)

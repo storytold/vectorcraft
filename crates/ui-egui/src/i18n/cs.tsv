@@ -4583,6 +4583,7 @@ imageTrace	Outline	Obrys
 @msg	no user library folder here	zde není složka uživatelských knihoven
 @msg	no user workspace `{from}`	uživatelský pracovní prostor `{from}` neexistuje
 @msg	node {_1} is not text	uzel {_1} není text
+@msg	node {_1} is on a locked artboard	uzel {_1} je na zamčené pracovní ploše
 @msg	not a DXF drawing	nejde o výkres DXF
 @msg	not a VectorCraft file: {0}	nejde o soubor VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	nejde o sadu klávesových zkratek VectorCraft (chybí `overrides`)

@@ -4276,6 +4276,7 @@ axis	Both	Ambos
 @msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
+@msg	node {_1} is on a locked artboard	el nodo {_1} está en una mesa de trabajo bloqueada
 @msg	not a DXF drawing	no es un dibujo DXF
 @msg	not a VectorCraft file: {0}	no es un archivo de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no es un conjunto de atajos de VectorCraft (falta `overrides`)
