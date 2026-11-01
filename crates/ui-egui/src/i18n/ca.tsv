@@ -4751,6 +4751,7 @@ digits	Malayalam	Malaiàlam
 3d	Solid	Sòlid
 3d	Space	Espai
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" no és un color: escriviu-lo com a #rrggbb
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` ha de ser "none", "sharp", "crisp" o "strong"
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un interval com ara 1, 3-5, no {v}
 @msg	`aspect` must be a number (%)	`aspect` ha de ser un nombre (%)
 @msg	`at` must be [x, y]	`at` ha de ser [x, y]
@@ -5908,7 +5909,6 @@ anchor	Points:	Punts:
 	CMYK Images	Imatges CMYK
 	Grayscale Images	Imatges en escala de grisos
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` ha de ser spotColors, colorEffects, rgbImages, cmykImages o grayImages
-@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` ha de ser "none", "sharp", "crisp" o "strong"
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Color dels punts de la il·lustració
