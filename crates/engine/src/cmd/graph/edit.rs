@@ -4,7 +4,7 @@ use super::generate::{children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
     Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, bool_or, f64_or,
-    f64_req, id_param, json, str_param,
+    f64_req, json, named_id, str_param,
 };
 
 /// Regenerate graph `id` from `spec` (adjusting the plot rect for any move/scale since the last
@@ -57,10 +57,14 @@ pub(super) fn create(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
-/// The selected graph (or the graph containing the selection).
+/// The graph `id` names (or the graph containing it), else the selected graph (or the graph
+/// containing the selection).
 pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
     let st = s.doc()?;
-    let start = id_param(p, "id").into_iter().chain(st.selection.objects.iter().copied());
+    let start = match named_id(p)? {
+        Some(id) => vec![id],
+        None => st.selection.objects.clone(),
+    };
     for id in start {
         let mut cur = Some(id);
         while let Some(c) = cur {
