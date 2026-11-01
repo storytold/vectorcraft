@@ -48,6 +48,8 @@ pub struct Session {
     docs: Vec<DocState>,
     active: Option<usize>,
     pub prefs: Prefs,
+    /// Whether Caps Lock is on, as the desktop host reports it; never saved with the preferences.
+    pub caps_lock: bool,
     /// Fill/stroke for new art (the toolbar proxy).
     pub paint: PaintDefaults,
     /// Which proxy is in front (true = Fill, false = Stroke) — the X key toggles.

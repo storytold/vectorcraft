@@ -220,7 +220,7 @@ fn hidden_and_culled() {
 fn far_instance(art: Rect) -> Document {
     let mut d = Document::new(100.0, 100.0);
     let art = rect_node(&mut d, art, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })).unwrap();
     d
@@ -250,7 +250,7 @@ fn an_instance_is_culled_by_the_effects_in_its_art() {
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-5.0, 20.0)) })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
@@ -264,7 +264,7 @@ fn a_repeat_of_an_instance_is_culled_by_the_effects_in_its_art() {
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-5.0, 20.0)) });
     let grid = vectorcraft_doc::TileType::Grid;
     let kind =
@@ -287,11 +287,11 @@ fn past_the_measured_placements_an_instance_is_culled_by_an_estimate_of_its_art_
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Spot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Spot".into(), art: Arc::new(art) });
     for name in ["Dot", "Late"] {
         let spot = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Spot".into(), xf: Affine::IDENTITY });
         let group = Node::group(d.alloc_id(), vec![Arc::new(spot)]);
-        d.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: Arc::new(group) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(group) });
     }
     let l = d.layers[0].id;
     for i in 0..4100 {
@@ -317,7 +317,7 @@ fn nested_instances_are_culled_in_bounded_time(effect: Option<vectorcraft_doc::E
     let mut art = rect_node(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 2, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S30".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S30".into(), art: Arc::new(art) });
     let instance = |d: &mut Document, symbol: String, xf: Affine| {
         let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol, xf });
         n.appearance.effects.extend(effect.clone());
@@ -330,7 +330,7 @@ fn nested_instances_are_culled_in_bounded_time(effect: Option<vectorcraft_doc::E
             pair.push(Arc::new(instance(&mut d, next.clone(), xf)));
         }
         let group = Node::group(d.alloc_id(), pair);
-        d.symbols.push(vectorcraft_doc::Symbol { name: format!("S{i}"), art: Arc::new(group) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(group) });
     }
     let first = instance(&mut d, "S0".into(), Affine::translate((-100_000.0, 0.0)));
     let l = d.layers[0].id;
@@ -369,7 +369,7 @@ fn a_scaled_instance_is_culled_by_the_effects_in_its_art_as_placed() {
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     let double = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"scaleH": 200, "scaleV": 200}), visible: true };
     art.appearance.effects.push(double);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let xf = Affine::translate((-50.0, 50.0)) * Affine::scale(30.0);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
@@ -401,7 +401,7 @@ fn an_instance_with_a_geometry_effect_is_culled_by_the_effects_in_its_reshaped_a
     let effect = || vectorcraft_doc::Effect { id: "distort.transform".into(), params: scale.clone(), visible: true };
     let mut art = rect_node(&mut d, Rect::new(-1.0, -1.0, 1.0, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     art.appearance.effects.push(effect());
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let mut instance = Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((-11.0, 20.0)) });
     instance.appearance.effects.push(effect());
@@ -845,7 +845,7 @@ fn placed_symbol_art_root_applies_its_own_mask() {
         let mut art = if grouped { Node::group(d.alloc_id(), vec![Arc::new(red)]) } else { red };
         let inner = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
         art.extras_mut().mask = Some(Box::new(OpacityMask::new(inner, true)));
-        d.symbols.push(vectorcraft_doc::Symbol { name: "Masked".into(), art: Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Masked".into(), art: Arc::new(art) });
         let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Masked".into(), xf: Affine::IDENTITY });
         d.insert(Some(d.layers[0].id), 0, instance).unwrap();
 
@@ -867,6 +867,22 @@ fn node_thumbnail_applies_the_root_mask() {
     let img = Renderer::new().render_node_thumbnail(&d, &node, 100, Some([255; 4])).unwrap();
     assert_eq!(img.pixel(25, 50), [255, 0, 0, 255]);
     assert_eq!(img.pixel(75, 50), [255, 255, 255, 255]);
+}
+
+/// #3602: a thumbnail reports the size it was drawn at, and one too small for its 1-pixel margin
+/// still draws the art.
+#[test]
+fn node_thumbnail_reports_the_size_it_draws() {
+    let mut d = Document::new(100.0, 100.0);
+    let node = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut r = Renderer::new();
+    for size in 0..4 {
+        let img = r.render_node_thumbnail(&d, &node, size, None).unwrap();
+        assert_eq!(img.pixels.len(), img.width as usize * img.height as usize * 4, "size {size}");
+        assert_eq!(img.width, size.max(1), "size {size}");
+        assert_eq!(img.height, size.max(1), "size {size}");
+        assert!(img.pixels.chunks(4).any(|p| p[3] > 0), "size {size}: the art is drawn");
+    }
 }
 
 #[test]

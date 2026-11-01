@@ -293,7 +293,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // decode, once per image in the process.
     let undecoded = vectorcraft_render::newly_undecodable(doc.images.values());
     if undecoded > 0 {
-        app.status(format!("{undecoded} image(s) couldn't be decoded and show as crossed boxes"));
+        app.status(crate::i18n::msg_n(
+            undecoded as u64,
+            "{n} image couldn't be decoded and shows as a crossed box",
+            "{n} images couldn't be decoded and show as crossed boxes",
+            &[],
+        ));
     }
     fill_uncovered(app, ui.ctx(), &painter, &key, &doc, rect, &xf);
     reproject_frame(app, &painter, &xf, rect, (key.doc, v.rotation));

@@ -52,8 +52,8 @@ pub(super) fn grid_set(s: &mut Session, p: &Value) -> Result<Value> {
             old.adopt_stored_attachments(d);
             for (id, plane, depth) in persp::attached_roots(d) {
                 let h = old.homography_at(plane, depth).and_then(|h| h.inverse()).zip(g.homography_at(plane, depth));
-                let (hi, h) = h.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
-                let m = h.then_after(&hi);
+                let m = h.and_then(|(hi, h)| h.checked_then_after(&hi));
+                let m = m.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
                 warp_checked(d, id, &m)?;
             }
         }
@@ -98,17 +98,15 @@ pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     }
 }
 
-/// Map `n` with `f`, failing if any point would leave the plane's visible side.
 /// Map `n` with `h` (type and symbols in perspective keep their art and are drawn through it),
-/// failing if any point would leave the plane's visible side.
+/// failing if any point would leave the plane's visible side or a projection would not be finite.
 fn warp_checked(d: &mut Document, id: NodeId, h: &Homography) -> Result<()> {
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
     let mut pts = vec![];
     collect_points(n, &mut pts);
-    if pts.iter().any(|q| h.apply(*q).is_none()) {
+    if pts.iter().any(|q| h.apply(*q).is_none()) || !project_node(n, h) {
         return Err(EngineError::Other("the object would cross the horizon of the perspective plane".into()));
     }
-    project_node(n, h);
     Ok(())
 }
 
@@ -599,11 +597,14 @@ pub(super) fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
         let NodeKind::Text(t) = &mut n.kind else { return Err(EngineError::Other("select type in perspective".into())) };
         // Shown flat where it is drawn: the type moves there and the projection moves the other
         // way, so the picture stays.
-        let (Some(flat), Some(drawn)) = (t.bounds(), t.bounds().and_then(|b| h.map_rect_bbox(b))) else { return Ok(()) };
+        let Some(flat) = t.bounds() else { return Ok(()) };
+        let cross = || EngineError::Other("the object would cross the horizon of the perspective plane".into());
+        let drawn = h.map_rect_bbox(flat).ok_or_else(cross)?;
         let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
+        let moved = h.checked_then_after(&Homography::from_affine(shift.inverse())).ok_or_else(cross)?;
         t.transform(shift);
         if let Some(rec) = n.extras_if_any().and_then(|e| e.perspective.as_deref_mut()) {
-            rec.projection = Some(h.then_after(&Homography::from_affine(shift.inverse())).to_array());
+            rec.projection = Some(moved.to_array());
             rec.editing = true;
         }
         Ok(())

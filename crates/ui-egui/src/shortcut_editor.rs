@@ -1225,17 +1225,18 @@ mod tests {
     #[test]
     fn menus_and_tooltips_show_the_backtick_key_as_it_types() {
         let mut ui = UiState::default();
-        crate::keymap::set_override(&mut ui.shortcut_overrides, "edit.clear", "Cmd+~");
+        // Not Cmd+~: macOS reserves it, so the override would leave Edit › Clear on Delete there.
+        crate::keymap::set_override(&mut ui.shortcut_overrides, "edit.clear", "Alt+~");
         crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:measure", "~");
         sync(&ui);
         let measure = vectorcraft_tools::tool_info("measure").unwrap();
         let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
         let clear = || menus::shown_shortcut(menus::shortcut_of("edit.clear").unwrap());
         note_backtick_text(&[press(Key::Backtick), egui::Event::Text("`".into())]);
-        assert_eq!(clear(), menus::pretty_shortcut("Cmd+~"));
+        assert_eq!(clear(), menus::pretty_shortcut("Alt+~"));
         assert!(crate::toolbar::tip(measure).ends_with("(~)"));
         note_backtick_text(&[press(Key::Backtick), egui::Event::Text("\"".into())]);
-        assert_eq!(clear(), menus::pretty_shortcut("Cmd+\""));
+        assert_eq!(clear(), menus::pretty_shortcut("Alt+\""));
         assert!(crate::toolbar::tip(measure).ends_with("(\")"), "{}", crate::toolbar::tip(measure));
         assert_eq!(menus::shown_shortcut("Shift+~"), menus::pretty_shortcut("Shift+~"));
         sync(&UiState::default());

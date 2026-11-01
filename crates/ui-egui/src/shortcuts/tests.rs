@@ -264,7 +264,7 @@ fn cmd_shift_o_creates_outlines() {
 
 /// Cmd+Alt+Shift+3 is Object › Hide › Unselected Artwork: it hides the object that is not
 /// selected. Cmd+Alt+3 still shows all, and Cmd+3 still hides the selection. In isolation mode
-/// the item is disabled.
+/// the shortcut hides unselected members of the isolated group.
 #[test]
 fn cmd_alt_shift_3_hides_unselected_artwork() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -285,15 +285,15 @@ fn cmd_alt_shift_3_hides_unselected_artwork() {
     app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     frame(&mut app, vec![three(Modifiers::COMMAND)]);
     assert_eq!(shown(&app), [false, true], "Cmd+3 hides the selection");
-    // In isolation mode the menu item is off, and the shortcut hides nothing.
+    // In isolation mode the shortcut hides only the group's unselected member.
     app.session.execute("object.showAll", &json!({})).unwrap();
     app.session.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     let g = app.session.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("object.isolate", &json!({"id": g})).unwrap();
     app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
-    assert!(!crate::menus::enabled(&app, "object.hide.unselected"));
+    assert!(crate::menus::enabled(&app, "object.hide.unselected"));
     frame(&mut app, vec![three(Modifiers::COMMAND | Modifiers::ALT | Modifiers::SHIFT)]);
-    assert_eq!(shown(&app), [true, true], "nothing is hidden in isolation mode");
+    assert_eq!(shown(&app), [true, false], "the unselected member is hidden in isolation mode");
 }
 
 /// Cmd+Alt+Shift+J opens Average & Join's dialog, Points: Corner the first time. Cancel changes
@@ -843,6 +843,38 @@ fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
     let (rows, columns) = grid(&mut app, &[]);
     assert_eq!(grid(&mut app, &[Key::ArrowRight, Key::ArrowRight, Key::ArrowUp]), (rows + 1, columns + 2));
     assert_eq!(grid(&mut app, &[Key::ArrowLeft, Key::ArrowDown]), (rows, columns + 1));
+}
+
+/// Grid letters change the stored skews once per press while a polar grid is dragged, plain or
+/// with Shift; with Alt, Ctrl or Cmd they do not reach the grid.
+#[test]
+fn grid_drag_letters_take_plain_and_shift_presses() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let skews = |app: &VectorcraftApp| (app.session.tool_options()["radialSkew"].clone(), app.session.tool_options()["concentricSkew"].clone());
+    frame(&mut app, press(Key::V, Modifiers::NONE));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::F, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(0.0), json!(0.0)));
+    frame(&mut app, press(Key::V, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(-10.0)));
+    frame(&mut app, press(Key::C, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::ALT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    for key in [Key::F, Key::X] {
+        frame(&mut app, press(key, command_key()));
+        assert_eq!(skews(&app), (json!(10.0), json!(0.0)), "{key:?} with Ctrl/Cmd");
+    }
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)), "the options stay after release");
 }
 
 /// A press of `key` with `m` held.

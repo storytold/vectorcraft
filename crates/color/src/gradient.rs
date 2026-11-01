@@ -78,6 +78,14 @@ const PERCEPTUAL_TOLERANCE: f32 = 0.4 / 255.0;
 /// Most times each half of a Perceptual gradient's segment (either side of its midpoint) is
 /// halved to keep within [`PERCEPTUAL_TOLERANCE`].
 const PERCEPTUAL_DEPTH: u32 = 10;
+/// How many times [`Gradient::ink_tints`] halves the range of tints it searches: to within
+/// 1/65536 of a tint, finer than the 1/255 steps PDF writes.
+const TINT_STEPS: u32 = 16;
+/// The least OKLab lightness by which an ink at 100% must differ from paper white for
+/// [`Gradient::ink_tints`] to tell its tints apart by lightness.
+const MIN_INK_LIGHTNESS_SPAN: f64 = 1.0 / 255.0;
+/// Most stops on a gradient's curve that [`Gradient::ink_tints`] finds tints for.
+const MAX_INK_TINTS: usize = 4096;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
 /// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
@@ -283,6 +291,43 @@ impl Gradient {
             });
             std::iter::once((s.offset, s.color, s.opacity, None)).chain(classic).chain(perceptual.into_iter().flatten())
         })
+    }
+    /// A gradient of tints of one ink `ink` (its color at 100%; paper white is 0% of it) as
+    /// (offset, tint, opacity) at each of [`Self::expanded_stops`]: the tint (0..1) whose OKLab
+    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings. Mixed
+    /// linearly between them, the tints follow a Perceptual gradient's curve. `None` when the
+    /// ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of paper white's (a white or nearly
+    /// white ink), so lightness does not tell its tints apart, and when the curve has more than
+    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_tints(&self, ink: &Color) -> Option<Vec<(f32, f32, f32)>> {
+        use crate::libraries::srgb_to_oklab;
+        let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+        if lightness(&ink.tinted(0.0)) - lightness(ink) < MIN_INK_LIGHTNESS_SPAN {
+            return None;
+        }
+        let curve: Vec<_> = self.expanded().take(MAX_INK_TINTS + 1).collect();
+        if curve.len() > MAX_INK_TINTS {
+            return None;
+        }
+        let tint = |c: &Color| {
+            let want = lightness(c);
+            let (mut lo, mut hi) = (0.0f32, 1.0f32);
+            for _ in 0..TINT_STEPS {
+                let mid = (lo + hi) / 2.0;
+                if lightness(&ink.tinted(mid)) > want {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        Some(curve.into_iter().map(|(t, c, o, _)| (t, tint(&c), o)).collect())
+    }
+    /// Does the gradient's curve ([`Self::expanded`]) have at most [`MAX_INK_TINTS`] stops, so
+    /// [`Self::ink_tints`] finds tints for it?
+    pub fn fits_ink_tints(&self) -> bool {
+        self.expanded().nth(MAX_INK_TINTS).is_none()
     }
     /// The same ramp the other way round: the stops in reverse order at mirrored offsets, each
     /// segment's midpoint mirrored with it.

@@ -1,6 +1,6 @@
 //! File → Export → Export for Screens, laid out as Illustrator's: on the left the Artboards and
 //! Assets tabs (thumbnails with checkboxes, in a grid or a list), Clear Selection and the prefix;
-//! on the right Select (All, a range or Full Document, Include Bleed), the destination (folder
+//! on the right Select (All, a range or Full Document, Include Bleed, Include Artboard Fill), the destination (folder
 //! picker, Open Location after Export, Create Sub-folders by scale or by format; the web downloads
 //! instead), Export PDFs As (one file of every artboard or a file each), and the format rows (scale
 //! as `2x`, `100w`, `100h` or `72ppi`, suffix, format) with the iOS and Android rows, the format
@@ -16,6 +16,7 @@
 //!
 //! Fields (`ui.dialog.set`): `tab` (artboards|assets), `select` (all|range|full), `range`,
 //! `boards` ([bool] per artboard), `assets` ([asset id] checked on the Assets tab), `includeBleed`,
+//! `includeArtboardFill`,
 //! `folder`, `openLocation`, `subfolders`, `subfolderBy` (scale|format), `pdfs` (single|multiple),
 //! `prefix`, `preset` (""|mobile|density: where the rows came from), `formats` (rows of
 //! `document.exportForScreens`, `scale` as text), `settings` ({png|png8|jpg|webp|gif|tiff|svg|pdf:
@@ -164,6 +165,7 @@ pub fn open(app: &mut VectorcraftApp) {
         "boards": boards,
         "assets": assets,
         "includeBleed": flag("includeBleed", false),
+        "includeArtboardFill": flag("includeArtboardFill", true),
         "folder": folder.unwrap_or_default(),
         "openLocation": flag("openLocation", true),
         "subfolders": subfolders,
@@ -324,6 +326,7 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
     let pdf_rows = rows.iter().filter(|r| r["format"].as_str().and_then(fileio::format).is_some_and(|f| f.id == "pdf")).count();
     let files = if single { (rows.len() - pdf_rows) * pieces + pdf_rows } else { rows.len() * pieces };
     p.insert("includeBleed".into(), json!(d.bool("includeBleed")));
+    p.insert("includeArtboardFill".into(), json!(d.bool("includeArtboardFill")));
     let folders = match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
         (false, _) => "none",
         (true, "format") => "format",
@@ -448,7 +451,8 @@ fn boards(app: &VectorcraftApp, d: &Dialog) -> Vec<bool> {
     boards
 }
 
-/// Select: All or a Range (which checks the artboards it names), Include Bleed and Full Document.
+/// Select: All or a Range (which checks the artboards it names), Include Bleed, Include Artboard
+/// Fill and Full Document.
 fn select_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
     let select = d.str("select");
@@ -470,7 +474,10 @@ fn select_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     });
-    form::check(ui, d, "includeBleed", tl!("Include Bleed"));
+    ui.horizontal(|ui| {
+        form::check(ui, d, "includeBleed", tl!("Include Bleed"));
+        form::check(ui, d, "includeArtboardFill", tl!("Include Artboard Fill"));
+    });
     if widgets::radio(ui, tl!("Full Document"), d.str("select") == "full", true) {
         set_select(d, "full");
     }
@@ -740,8 +747,10 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
     if let Some(prefix) = st["prefix"].as_str() {
         d.fields.insert("prefix".into(), json!(prefix));
     }
-    if let Some(b) = st["includeBleed"].as_bool() {
-        d.fields.insert("includeBleed".into(), json!(b));
+    for key in ["includeBleed", "includeArtboardFill"] {
+        if let Some(b) = st[key].as_bool() {
+            d.fields.insert(key.into(), json!(b));
+        }
     }
     d.fields.insert("exportPreset".into(), json!(preset["name"]));
 }

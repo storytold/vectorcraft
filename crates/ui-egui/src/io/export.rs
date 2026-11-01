@@ -91,7 +91,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         };
         let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
         app.status(match warnings.first() {
-            Some(first) => format!("Exported {what} with {} note(s): {first}", warnings.len()),
+            Some(first) => exported_with_notes(&what, warnings.len(), first),
             None => format!("Exported {what}"),
         });
         Ok(r)
@@ -100,6 +100,12 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         r["path"] = json!(target);
     }
     Ok(r)
+}
+
+/// The status bar's line for an export of `what` with `n` notes, the first of them `first`.
+pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
+    let (one, other) = ("Exported {what} with {n} note: {first}", "Exported {what} with {n} notes: {first}");
+    crate::i18n::msg_n(n as u64, one, other, &[("what", what), ("first", first)])
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
@@ -273,7 +279,7 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
     };
     if returned.is_empty() {
         let first = r["path"].as_str().or_else(|| r["files"][0].as_str());
-        let mut status = format!("Exported {count} file(s) to {folder}");
+        let mut status = crate::i18n::msg_n(count as u64, "Exported {n} file to {folder}", "Exported {n} files to {folder}", &[("folder", folder)]);
         if warned {
             status = saved_status(r["path"].as_str().unwrap_or(folder), &r);
         }

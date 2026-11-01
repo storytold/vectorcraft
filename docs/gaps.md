@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G4: PDF import finds installed fonts whose PDF names hold hyphens or a composite font's CMap; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -57,7 +57,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 1–2 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 13–23 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 4–10 | Wayland pressure | [hardware-parity.md](hardware-parity.md) |
-| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 16–27 | no | [target-app-parity.md](target-app-parity.md) |
+| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 15–25 | no | [target-app-parity.md](target-app-parity.md) |
 | 12 | [G3 3D and Materials](#g3-3d-and-materials) | 25–45 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 4–8 | no | [target-app-parity.md](target-app-parity.md) |
@@ -435,13 +435,17 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** TIFF choices and format settings in Export for Screens and Asset Export (30.2), using the existing encoder; UI-to-file regressions cover selection, scaling, options and persistence.
 - **Done:** artboard background colors on the canvas (30.0): Properties › Artboards › Fill and Artboard Options set
-  each artboard's color, and the canvas draws its paper in it. Exports and print do not draw the color yet.
+  each artboard's color, and the canvas draws its paper in it. Exports (raster, PDF, SVG, EPS, `.ai` PDF pages,
+  Export for Screens with Include Artboard Fill) and print draw it behind the art (#4937). Left: the color isn't read
+  from or written to the reference app's own `.ai` data.
 
 - **Done:** Object › Intertwine (#1763): Make, Edit and Release; the Intertwine tool highlights the overlap area under
   the pointer, a click swaps which object is on top there, and a path (Shift: a rectangle) drawn around overlaps
-  arranges each one inside it; `object.intertwine.arrange` also brings an object to the front or sends it to the back
-  where three or more overlap. The group renders, saves and exports through its live expansion. Still missing: the
-  right-click Bring Forward / Send Backward menu where three or more objects overlap; adding objects to the group by
+  arranges each one inside it. Where three or more objects overlap, hovering highlights the object nearest to the
+  pointer, and a right-click offers Bring to Front, Bring Forward, Send Backward and Send to Back for it in that area
+  (`object.intertwine.arrange` with `order` front, forward, backward or back;
+  <https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/create-intertwined-objects.html>).
+  The group renders, saves and exports through its live expansion. Still missing: adding objects to the group by
   dragging them in the Layers panel is untested.
 - **Done (from users' reports):** Object › Create Gradient Mesh on an embedded image turns it into a mesh over its
   rectangle, with the image's transform kept; each point takes the average colour and opacity of the picture around it
@@ -516,7 +520,15 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art); Select ›
   Start Global Edit (#3521) on paths, compound paths and symbol instances: the objects of the same shape at
   any place and size, narrowed by Appearance, Size and the artboards to search, take an edit of any one of
-  them in proportion, as one undo step ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html)).
+  them in proportion, as one undo step ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
+  on a group (#4939), the groups like it (the same objects at the same places, moved or scaled) take an edit
+  made to an object inside it at the object in the same place ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html));
+  dynamic symbols (#4938): Symbol Options › Symbol Type (Dynamic Symbol / Static Symbol; `type` on
+  `symbol.new` / `symbol.options` / `symbol.list`), an instance's own fill, stroke, opacity and blend for an
+  object of a dynamic symbol's art (`symbol.instance.setAppearance`, by child-index path), drawn and exported
+  with the instance; redefining the symbol keeps each change whose object remains, Break Link bakes them,
+  Reset (`symbol.instance.reset`, the Properties panel and the Symbols panel menu) drops them, and making the
+  symbol static drops them; stored in the native format.
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art);
   symbol libraries ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-or-import-symbol-libraries.html)): Window › Symbol Libraries and the Symbols panel's Symbol
   Libraries Menu open each library in a library panel of its own (one original library generated in code,
@@ -535,14 +547,13 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   dragging one onto the Brushes panel adds it; Save Brushes / Save Brush Library writes the document's brushes
   as a `.vectorcraft` library into the user library folder (listed under User Defined) or a file
   (`brush.libraries`, `brush.addFromLibrary`, `brush.saveLibrary`, `brush.loadLibrary`).
-- **Missing:** the Art brush's Overlap, auto-generated Pattern brush corners, new tile art in Pattern Brush
-  Options; more built-in brush, symbol and graphic-style libraries (original, generated in code, never
-  Adobe's); dynamic symbols; Global Edit of similar groups (edits to an object inside a group reaching the
-  matching objects of similar groups, [public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html)),
-  rotated copies as matches, Shift-click to leave a match out and highlighting matches before the start;
+- **Missing:** the Art brush's Overlap; more built-in brush, symbol and graphic-style libraries (original,
+  generated in code, never Adobe's); dynamic symbols' on-canvas editing (Direct Selection of an object inside a
+  dynamic instance, with the Fill/Stroke controls and Appearance panel then setting its change) and their `.ai`
+  read and write; Global Edit of groups holding type or
+  images, rotated copies as matches, Shift-click to leave a match out and highlighting matches before the start;
   drawing the 9-slice guides on the canvas in symbol edit mode and scaling by them.
-  Options; more built-in brush and symbol libraries (original, never Adobe's); dynamic symbols; Start Global Edit; drawing the 9-slice guides on the canvas in symbol edit mode and scaling by them.
-- **Estimate:** 15–26 h.
+- **Estimate:** 14–24 h.
 
 ## G3 3D and Materials
 
@@ -677,6 +688,9 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | G5: dynamic symbols (#4938): Symbol Options › Symbol Type, per-instance fill, stroke, opacity and blend for objects of a dynamic symbol's art that stay linked (redefining keeps them, Break Link bakes them, Reset and Static drop them; `symbol.instance.setAppearance`, `symbol.instance.reset`; `crates/engine/src/tests/dynamic_symbols.rs`); on-canvas Direct Selection of the parts and `.ai` round trip remain. Estimate 15–26 → 14–24 h. |
+| 2026-11-01 | minor | G13: Artboard background colors in output (#4937): raster exports (a transparent background too), PDF, SVG and EPS pages, `.ai` files' PDF pages, Export for Screens and print (and its preview) draw each artboard's color behind its art, inside the artboard and in the color's own model; Export for Screens has Include Artboard Fill beside Include Bleed (on by default, remembered; `includeArtboardFill`, also on `document.export` and `file.print`); editing data keeps the color as the artboard's, and Export for Screens' document rows keep it too; estimate unchanged. |
+| 2026-11-01 | minor | G5: Select › Start Global Edit on a group takes the groups like it (the same objects at the same places, moved or scaled; Appearance, Size and the artboard options apply) and gives an edit made to an object inside one to the object at its place in each of the others, in proportion, as one undo step (#4939); rotated copies and Shift-click exclusion remain. Estimate unchanged. |
 | 2026-10-31 | minor | G4: PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`. Estimate unchanged. |
 | 2026-10-31 | minor | G13: Direct Selection snaps the end of an existing straight line, dragged by its end anchor, square to straight paths and grazing curves (Smart Guides › Geometric Guides: Snap to Perpendicular and Snap to Tangent), the case the public Snap to Perpendicular and Snap to Tangent pages add to drawing with the Line Segment and Pen tools (#2530). Scores and estimates unchanged. |
 | 2026-10-31 | minor | G8: a gradient mesh read from a file is budgeted: at most about a million quads per tessellation, and a mesh with more patches than that is malformed (#3592); estimate unchanged. |

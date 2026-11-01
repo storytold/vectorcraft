@@ -166,6 +166,76 @@ impl Coons {
 // Gradient meshes
 // =====================================================================================
 
+/// The handles, as offsets from `ends`, of the cubic from `ends.0` to `ends.1` that comes closest
+/// (least squares) to `side` between `span.0` and `span.1`; `None` when they can't be computed.
+/// Each point of the side is matched to the curve's nearest point, refined over a few rounds.
+fn fit_edge(side: &[Point], span: (f64, f64), ends: (Point, Point)) -> Option<(Vec2, Vec2)> {
+    const N: usize = 32;
+    const ROUNDS: usize = 6;
+    let (p0, p3) = (ends.0, ends.1);
+    let qs: Vec<Point> = (1..N).map(|i| Coons::sample(side, span.0 + (span.1 - span.0) * i as f64 / N as f64)).collect();
+    let mut ts: Vec<f64> = (1..N).map(|i| i as f64 / N as f64).collect();
+    let mut fit = None;
+    for _ in 0..ROUNDS {
+        let (mut c11, mut c12, mut c22) = (0.0, 0.0, 0.0);
+        let (mut x1, mut x2) = (Vec2::ZERO, Vec2::ZERO);
+        for (q, &t) in qs.iter().zip(&ts) {
+            let s = 1.0 - t;
+            let (b0, b1, b2, b3) = (s * s * s, 3.0 * s * s * t, 3.0 * s * t * t, t * t * t);
+            let r = q.to_vec2() - b0 * p0.to_vec2() - b3 * p3.to_vec2();
+            c11 += b1 * b1;
+            c12 += b1 * b2;
+            c22 += b2 * b2;
+            x1 += b1 * r;
+            x2 += b2 * r;
+        }
+        let det = c11 * c22 - c12 * c12;
+        if det.abs() < 1e-12 {
+            break;
+        }
+        let (p1, p2) = (((c22 * x1 - c12 * x2) / det).to_point(), ((c11 * x2 - c12 * x1) / det).to_point());
+        if !(p1.is_finite() && p2.is_finite()) {
+            break;
+        }
+        fit = Some((p1 - p0, p2 - p3));
+        // One Newton step towards the nearest point of the curve for each point of the side.
+        let c = CubicBez::new(p0, p1, p2, p3);
+        let (a, b, k) = (p1 - p0, p2 - p1, p3 - p2);
+        for (q, t) in qs.iter().zip(ts.iter_mut()) {
+            let s = 1.0 - *t;
+            let v = 3.0 * (s * s * a + 2.0 * s * *t * b + *t * *t * k);
+            let acc = 6.0 * (s * (b - a) + *t * (k - b));
+            let e = c.eval(*t) - *q;
+            let den = v.hypot2() + e.dot(acc);
+            if den.abs() > 1e-12 {
+                *t = (*t - e.dot(v) / den).clamp(0.0, 1.0);
+            }
+        }
+    }
+    fit
+}
+
+/// The handles of one cubic standing for two edges that meet at point `mid.0`, whose handles
+/// towards them are `mid.1` (towards `a`) and `mid.2` (towards `b`), as offsets from their outer
+/// ends: each outer handle grown back by the share of the curve its edge had, which undoes the
+/// split [`GradientMesh::insert_row`] and [`GradientMesh::insert_col`] make, so deleting a mesh
+/// line keeps the curve of the border it crossed (#3187). The share is the split parameter, read
+/// from the lengths of the middle handles. When the edges no longer fit one cubic (a point or a
+/// handle was moved since the split), the cubic grown back would not pass through the middle
+/// point, and the merged edge is straight.
+fn merged_handles(a: (Point, Vec2), mid: (Point, Vec2, Vec2), b: (Point, Vec2)) -> (Vec2, Vec2) {
+    let straight = ((b.0 - a.0) / 3.0, (a.0 - b.0) / 3.0);
+    let (la, lb) = (mid.1.hypot(), mid.2.hypot());
+    let t = la / (la + lb);
+    if !(0.01..=0.99).contains(&t) {
+        return straight;
+    }
+    let (ha, hb) = (a.1 / t, b.1 / (1.0 - t));
+    let through = CubicBez::new(a.0, a.0 + ha, b.0 + hb, b.0).eval(t);
+    let tol = 1e-3 * (a.0.distance(mid.0) + mid.0.distance(b.0)).max(1e-9);
+    if ha.is_finite() && hb.is_finite() && through.distance(mid.0) <= tol { (ha, hb) } else { straight }
+}
+
 /// `0, 1/n, …, 1` for `n` (clamped to 1..=200) even steps.
 fn even_steps(n: u32) -> Vec<f64> {
     let n = n.clamp(1, 200);
@@ -283,7 +353,49 @@ impl GradientMesh {
     /// colour and opacity `color_at` gives at its position (a gradient fill's, say).
     pub fn for_path_with(path: &PathData, rows: u32, cols: u32, color_at: &dyn Fn(Point) -> (Color, f32)) -> Option<Self> {
         let coons = Coons::from_path(path)?;
-        Some(Self::from_grid(&even_steps(cols), &even_steps(rows), &|u, v| coons.eval(u, v), &|_, _, p| color_at(p)))
+        let (us, vs) = (even_steps(cols), even_steps(rows));
+        let mut m = Self::from_grid(&us, &vs, &|u, v| coons.eval(u, v), &|_, _, p| color_at(p));
+        m.fit_border(&coons, &us, &vs);
+        Some(m)
+    }
+
+    /// Give each edge on the mesh's border the handles that make it follow the outline it stands
+    /// for, in place of the handles [`Self::from_grid`] estimates from the surface's derivatives
+    /// (#3187). Where two border edges meet along a side, their handles are made collinear, so the
+    /// border stays smooth there; the four corners keep the handles their own edges were fitted with.
+    fn fit_border(&mut self, coons: &Coons, us: &[f64], vs: &[f64]) {
+        let (rows, cols) = (self.rows as usize, self.cols as usize);
+        if !self.is_valid() || us.len() != cols + 1 || vs.len() != rows + 1 {
+            return;
+        }
+        let edges = [(0, &coons.top), (rows, &coons.bottom)]
+            .map(|(r, side)| (r, side, true))
+            .into_iter()
+            .chain([(0, &coons.left), (cols, &coons.right)].map(|(c, side)| (c, side, false)));
+        for (line, side, along_u) in edges {
+            let (n, steps) = if along_u { (cols, us) } else { (rows, vs) };
+            for k in 0..n {
+                let (a, b, out, back) = if along_u {
+                    (self.idx(line, k), self.idx(line, k + 1), H_RIGHT, H_LEFT)
+                } else {
+                    (self.idx(k, line), self.idx(k + 1, line), H_DOWN, H_UP)
+                };
+                if let Some((h1, h2)) = fit_edge(side, (steps[k], steps[k + 1]), (self.points[a].p, self.points[b].p)) {
+                    self.points[a].handles[out] = h1;
+                    self.points[b].handles[back] = h2;
+                }
+            }
+            for k in 1..n {
+                let (i, out, back) = if along_u { (self.idx(line, k), H_RIGHT, H_LEFT) } else { (self.idx(k, line), H_DOWN, H_UP) };
+                let h = &mut self.points[i].handles;
+                let (fwd, bwd) = (h[out], h[back]);
+                let dir = (fwd.normalize() - bwd.normalize()).normalize();
+                if fwd.hypot2() > 0.0 && bwd.hypot2() > 0.0 && dir.is_finite() {
+                    h[out] = dir * fwd.hypot();
+                    h[back] = -dir * bwd.hypot();
+                }
+            }
+        }
     }
 
     /// Create Gradient Mesh → Appearance: lighten the points towards white, to the centre or to
@@ -592,12 +704,21 @@ impl GradientMesh {
 
     /// Which patch and local (u, v) contains `p` (sampled search; `None` outside the mesh).
     pub fn locate(&self, p: Point) -> Option<(usize, usize, f64, f64)> {
+        self.locate_within(p, 0.0)
+    }
+
+    /// As [`Self::locate`], and for a point outside the mesh within `tol` of its outline, the
+    /// patch and local (u, v) of the nearest point of the mesh's edge.
+    pub fn locate_within(&self, p: Point, tol: f64) -> Option<(usize, usize, f64, f64)> {
         if !self.is_valid() {
             return None;
         }
         let bp = self.outline().to_bezpath();
         if bp.winding(p) == 0 {
-            return None;
+            if tol.is_nan() || tol <= 0.0 {
+                return None;
+            }
+            return self.nearest_edge(p).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
@@ -632,6 +753,30 @@ impl GradientMesh {
             }
         }
         Some((r, c, u, v))
+    }
+
+    /// The point of the mesh's outer edge nearest `p`: its squared distance from `p`, and its
+    /// boundary patch and local (u, v).
+    fn nearest_edge(&self, p: Point) -> Option<(f64, usize, usize, f64, f64)> {
+        use vectorcraft_geom::kurbo::ParamCurveNearest;
+        let (rows, cols) = (self.rows as usize, self.cols as usize);
+        let mut best: Option<(f64, usize, usize, f64, f64)> = None;
+        let mut take = |e: CubicBez, at: (usize, usize, Option<f64>, Option<f64>)| {
+            let n = e.nearest(p, 1e-9);
+            if best.is_none_or(|b| n.distance_sq < b.0) {
+                let (r, c, u, v) = at;
+                best = Some((n.distance_sq, r, c, u.unwrap_or(n.t), v.unwrap_or(n.t)));
+            }
+        };
+        for c in 0..cols {
+            take(self.edge_u(0, c), (0, c, None, Some(0.0)));
+            take(self.edge_u(rows, c), (rows - 1, c, None, Some(1.0)));
+        }
+        for r in 0..rows {
+            take(self.edge_v(r, 0), (r, 0, Some(0.0), None));
+            take(self.edge_v(r, cols), (r, cols - 1, Some(1.0), None));
+        }
+        best
     }
 
     /// Index of the mesh point within `tol` of `p`.
@@ -721,9 +866,10 @@ impl GradientMesh {
         self.cols += 1;
     }
 
-    /// Mesh tool click: add a row and a column through `p` (inside the mesh). Returns the new point index.
-    pub fn add_lines_at(&mut self, p: Point) -> Option<usize> {
-        let (r, c, u, v) = self.locate(p)?;
+    /// Mesh tool click: add a row and a column through `p` (inside the mesh, or outside within
+    /// `tol` of its edge, through the nearest point of the edge). Returns the new point index.
+    pub fn add_lines_at(&mut self, p: Point, tol: f64) -> Option<usize> {
+        let (r, c, u, v) = self.locate_within(p, tol)?;
         let mut rr = r;
         let mut cc = c;
         let row_new = v > 0.02 && v < 0.98;
@@ -758,10 +904,11 @@ impl GradientMesh {
                 let above = self.idx(r - 1, cc);
                 let below = self.idx(r + 1, cc);
                 let mid = self.idx(r, cc);
-                let (pa, pm, pb) = (self.points[above].p, self.points[mid].p, self.points[below].p);
-                let _ = pm;
-                self.points[above].handles[H_DOWN] = (pb - pa) / 3.0;
-                self.points[below].handles[H_UP] = (pa - pb) / 3.0;
+                let (pa, pb, m) = (self.points[above].p, self.points[below].p, &self.points[mid]);
+                let hm = (m.p, m.handles[H_UP], m.handles[H_DOWN]);
+                let (down, up) = merged_handles((pa, self.points[above].handles[H_DOWN]), hm, (pb, self.points[below].handles[H_UP]));
+                self.points[above].handles[H_DOWN] = down;
+                self.points[below].handles[H_UP] = up;
             }
             self.points.drain(r * w..(r + 1) * w);
             self.rows -= 1;
@@ -772,9 +919,11 @@ impl GradientMesh {
             let rows = self.rows as usize;
             for rr in 0..=rows {
                 let (l, rt) = (rr * w + c - 1, rr * w + c + 1);
-                let (pl, pr) = (self.points[l].p, self.points[rt].p);
-                self.points[l].handles[H_RIGHT] = (pr - pl) / 3.0;
-                self.points[rt].handles[H_LEFT] = (pl - pr) / 3.0;
+                let (pl, pr, m) = (self.points[l].p, self.points[rt].p, &self.points[rr * w + c]);
+                let hm = (m.p, m.handles[H_LEFT], m.handles[H_RIGHT]);
+                let (right, left) = merged_handles((pl, self.points[l].handles[H_RIGHT]), hm, (pr, self.points[rt].handles[H_LEFT]));
+                self.points[l].handles[H_RIGHT] = right;
+                self.points[rt].handles[H_LEFT] = left;
             }
             let mut k = 0;
             self.points.retain(|_| {

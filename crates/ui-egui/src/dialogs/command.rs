@@ -3,11 +3,12 @@
 
 use std::sync::LazyLock;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::{DialogSpec, form};
-use crate::VectorcraftApp;
 use crate::state::Dialog;
+use crate::theme::Tokens;
+use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |d| tl!(&d.str("__label")).to_string(),
@@ -15,7 +16,28 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let command = d.str("__command");
         let (lengths, order) = (lengths(&command), order(&command));
         let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
+        // Area Type Options › Text Flow is a pair of radio buttons after the other options.
+        let flow = if command == "text.areaOptions" { d.fields.remove("flow") } else { None };
         form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &rank, app.session.general_unit());
+        if let Some(v) = flow {
+            let mut rows = v.as_str() == Some("rows");
+            ui.add_space(4.0);
+            egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                let row = ui.label(egui::RichText::new(format!("{}:", tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
+                ui.label_inputs_by(row.id, |ui| {
+                    ui.horizontal(|ui| {
+                        if widgets::radio(ui, tl!("By Rows"), rows, true) {
+                            rows = true;
+                        }
+                        if widgets::radio(ui, tl!("By Columns"), !rows, true) {
+                            rows = false;
+                        }
+                    });
+                });
+                ui.end_row();
+            });
+            d.fields.insert("flow".into(), json!(if rows { "rows" } else { "columns" }));
+        }
         if previews(d) {
             let (cmd, params) = call(d);
             form::preview(app, ui, d, &d.str("__label"), &cmd, params);
@@ -175,6 +197,28 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    }
+
+    /// Area Type Options › Text Flow (#4978): two radio buttons, By Columns as new area type has
+    /// it, and OK fills the cells by rows when By Rows is picked.
+    #[test]
+    fn area_type_options_dialog_sets_the_text_flow() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("flow"), "columns", "drawing the radio buttons keeps the value");
+        app.ui.dialog.as_mut().unwrap().fields.insert("flow".into(), json!("rows"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!(t.area.flow, vectorcraft_doc::TextFlow::Rows);
     }
 
     /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the
