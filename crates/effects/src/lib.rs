@@ -77,7 +77,7 @@ pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_par
 pub use live::{expand_live, expand_live_deep, expanded_live_group, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
-pub use raster::{RASTERIZE, RasterFx, Rasterize, outset, raster_effects};
+pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, outset, raster_effects};
 pub use reshape::{
     expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_options, image_paint, needs_outline, outline_art,
     outline_text, reshape,

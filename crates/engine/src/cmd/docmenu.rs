@@ -234,7 +234,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks included), symbols, graph designs, pattern tiles, graphic styles, brushes and swatches through the color settings; swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks, effect colors and graphs' series and label paints included), symbols, graph designs, pattern tiles, graphic styles (their effect colors included), brushes, swatches and the paints new art takes through the color settings, together in one undo step (Undo restores their original values; Redo reapplies the conversion); swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
             has_doc,
             super::colormgmt::convert_mode
         ),

@@ -109,7 +109,16 @@ impl Session {
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         let r = r?;
         if self.depth == 0 {
-            self.inherit_new_art();
+            // A color-mode history step restores exact new-art colors; selection inheritance
+            // must not immediately replace that restoration.
+            let restored = self.active().is_some_and(|d| match id {
+                "edit.undo" => d.history.redo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                "edit.redo" => d.history.undo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                _ => false,
+            });
+            if !restored {
+                self.inherit_new_art();
+            }
         }
         if let Some(open) = open {
             self.open_undo_groups_in_new_documents(&open);

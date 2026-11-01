@@ -199,6 +199,33 @@ fn effect_dialog_refuses_a_color_it_cannot_draw() {
     }
 }
 
+/// After File › Document Color Mode, a Drop Shadow's, an Outer Glow's and a Shift to Color's
+/// dialog show the converted color as its hex in an editable field, and OK without editing it
+/// keeps the color.
+#[test]
+fn effect_dialogs_edit_a_color_that_document_color_mode_converted() {
+    for effect in ["stylize.dropShadow", "stylize.outerGlow", "adjust.shiftToColor"] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("effect.apply", json!({"ids": [id], "effect": effect, "item": null, "params": {"color": "#ff0000"}})).unwrap();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let color = |app: &VectorcraftApp| {
+            app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["color"].clone()
+        };
+        let converted = color(&app);
+        let hex = serde_json::from_value::<vectorcraft_doc::color::Color>(converted.clone())
+            .unwrap_or_else(|e| panic!("{effect}: {converted}: {e}"))
+            .to_hex();
+        app.run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert!(text.lines().any(|l| l.trim() == hex), "{effect}: no {hex} in {text}");
+        assert!(!text.contains("\"model\""), "{effect}: {text}");
+        confirm(&mut app).unwrap();
+        assert_eq!(color(&app), converted, "{effect}");
+    }
+}
+
 #[test]
 fn raster_filter_dialogs_preview_and_apply() {
     for (effect, key, value) in [
