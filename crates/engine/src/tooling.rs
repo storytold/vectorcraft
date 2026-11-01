@@ -869,13 +869,28 @@ impl Session {
     }
 }
 
+/// The most points the outlines of [`outlines_for_selection`] are drawn for, the same number as the
+/// canvas's limit on the anchor points it outlines (`OVERLAY_MAX_ANCHORS` in
+/// `crates/ui-egui/src/canvas/outline.rs`). Past it the selection's bounds are drawn instead.
+const FEEDBACK_MAX_POINTS: usize = 100_000;
+
+/// The outline of every selected object, or the selection's bounds when the outlines have more than
+/// [`FEEDBACK_MAX_POINTS`] points.
 fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    selection
-        .objects
-        .iter()
-        .filter_map(|&id| {
-            let n = doc.node(id)?;
-            vectorcraft_render::drawn_outline(doc, n).map(|(path, _)| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false })
-        })
-        .collect()
+    let mut left = FEEDBACK_MAX_POINTS;
+    let mut outlines = vec![];
+    for &id in &selection.objects {
+        let Some((path, _)) = doc.node(id).and_then(|n| vectorcraft_render::drawn_outline(doc, n)) else { continue };
+        let points = path.elements().iter().filter(|el| !matches!(el, kurbo::PathEl::ClosePath)).count();
+        let Some(l) = left.checked_sub(points) else {
+            return doc
+                .bounds_of(&selection.objects, true)
+                .map(|b| Overlay::Path { path: vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color: FEEDBACK, width: 1.0, dashed: false })
+                .into_iter()
+                .collect();
+        };
+        left = l;
+        outlines.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false });
+    }
+    outlines
 }
