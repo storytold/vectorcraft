@@ -70,7 +70,8 @@ fn physical_memory() -> Option<u64> {
 /// `memory.limit_in_bytes` under cgroup v1. Each cgroup is looked up under the mount in
 /// `/proc/self/mountinfo` (`mounts`) whose root holds it, or under `/sys/fs/cgroup` (v2) or
 /// `/sys/fs/cgroup/memory` (v1) when `mounts` lists no mount of its hierarchy; a cgroup that no
-/// listed mount holds sets no limit. `read` reads a file; a file that can't be read, or that holds
+/// listed mount holds sets no limit. A mount whose root lies above the cgroup namespace's root
+/// (`/..`) gives the limit of its mount point alone. `read` reads a file; a file that can't be read, or that holds
 /// `max`, sets no limit.
 #[cfg(any(target_os = "linux", test))]
 fn cgroup_limit(cgroups: &str, mounts: &str, read: impl Fn(&str) -> Option<String>) -> Option<u64> {
@@ -93,7 +94,13 @@ fn cgroup_limit(cgroups: &str, mounts: &str, read: impl Fn(&str) -> Option<Strin
             mounted
                 .into_iter()
                 .filter_map(|(root, point)| {
-                    let rest = path.strip_prefix(root.trim_end_matches('/')).filter(|rest| rest.is_empty() || rest.starts_with('/'))?;
+                    let root = root.trim_end_matches('/');
+                    // A root of `..` steps is an ancestor of the cgroup namespace's root, so of every
+                    // cgroup listed: only the mount point's own limit can be read.
+                    if !root.is_empty() && root.split('/').skip(1).all(|step| step == "..") {
+                        return Some((String::new(), point));
+                    }
+                    let rest = path.strip_prefix(root).filter(|rest| rest.is_empty() || rest.starts_with('/'))?;
                     Some((rest.to_owned(), point))
                 })
                 .collect()
@@ -579,7 +586,8 @@ mod tests {
     #[test]
     #[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
     fn installed_memory_is_read() {
-        assert!(physical_memory().is_some_and(|m| m >= 256 << 20), "{:?}", physical_memory());
+        // A cgroup's limit can be far below the installed memory.
+        assert!(physical_memory().is_some_and(|m| m > 0), "{:?}", physical_memory());
     }
 
     #[test]
@@ -632,6 +640,23 @@ mod tests {
         let files = [("/mnt/child/memory.max", "max\n"), ("/sys/fs/cgroup/parent/memory.max", "1073741824\n")];
         let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
         assert_eq!(cgroup_limit("0::/parent/child\n", both, read), Some(1 << 30), "the ancestor that only the full mount shows");
+    }
+
+    #[test]
+    fn cgroup_limit_reads_a_mount_above_the_namespace_root() {
+        let mounts = "40 25 0:30 /.. /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/sys/fs/cgroup/memory.max", "1073741824\n"), ("/sys/fs/cgroup/worker/memory.max", "4096\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/\n", mounts, read), Some(1 << 30), "the namespace root's ancestor");
+        assert_eq!(cgroup_limit("0::/worker\n", mounts, read), Some(1 << 30), "the cgroup's directory is hidden");
+        let v1 = "31 25 0:27 /../.. /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory\n";
+        let files = [("/sys/fs/cgroup/memory/memory.limit_in_bytes", "536870912\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("5:memory:/\n", v1, read), Some(512 << 20));
+        let sibling = "40 25 0:30 /../other /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/sys/fs/cgroup/memory.max", "1048576\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/\n", sibling, read), None, "a sibling of the namespace root is not an ancestor");
     }
 
     #[test]
