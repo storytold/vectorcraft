@@ -474,6 +474,50 @@ fn editing_a_dynamic_symbol_keeps_the_instances_changes_to_the_objects_still_the
     assert!(s.doc().unwrap().doc.node(inst).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })));
 }
 
+/// An instance of the edited dynamic symbol inside another symbol's art keeps its appearance
+/// changes on the same objects when the edit reorders them, and drops the change to an object the
+/// edit deleted.
+#[test]
+fn an_instance_inside_another_symbols_art_follows_an_edit_of_its_dynamic_symbol() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let a = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})));
+    let b = id(&run(&mut s, "shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})));
+    let inst = id(&run(&mut s, "symbol.new", json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [0], "fill": "#00ff00"}));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [1], "fill": "#ff0000"}));
+    run(&mut s, "symbol.new", json!({"name": "Outer", "ids": [inst.0]}));
+    // The changes of the instance of "Pair" in the art of "Outer", by path and color.
+    let nested = |s: &Session| -> Vec<(Vec<u32>, String)> {
+        let d = &s.doc().unwrap().doc;
+        let outer = d.symbols.iter().find(|x| x.name == "Outer").expect("Outer");
+        let mut out = vec![];
+        outer.art.walk(&mut |n| {
+            if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Pair") {
+                out.extend(n.extras().symbol_overrides.iter().map(|o| (o.path.clone(), o.fill.as_ref().and_then(|p| p.color()).unwrap().to_hex())));
+            }
+        });
+        out
+    };
+    let start = vec![(vec![0], "#00ff00".to_string()), (vec![1], "#ff0000".to_string())];
+    assert_eq!(nested(&s), start);
+    let other = id(&run(&mut s, "symbol.place", json!({"name": "Pair", "x": 200, "y": 200})));
+    run(&mut s, "symbol.edit", json!({"id": other.0}));
+    let art = layer_art(&s);
+    assert_eq!(art.len(), 2);
+    // Sending the second object to the back: each change follows its object.
+    run(&mut s, "select.set", json!({"ids": [art[1].0]}));
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    assert_eq!(layer_art(&s), vec![art[1], art[0]]);
+    assert_eq!(nested(&s), vec![(vec![1], "#00ff00".to_string()), (vec![0], "#ff0000".to_string())]);
+    // Deleting the first object: the change to it goes.
+    run(&mut s, "select.set", json!({"ids": [art[0].0]}));
+    run(&mut s, "edit.clear", json!({}));
+    assert_eq!(nested(&s), vec![(vec![0], "#ff0000".to_string())]);
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(nested(&s), vec![(vec![0], "#ff0000".to_string())]);
+}
+
 #[test]
 fn undo_back_into_an_earlier_edit_leaves_it_to_its_own_isolation() {
     let (mut s, first, second) = two_instances();
