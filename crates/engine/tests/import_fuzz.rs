@@ -6,7 +6,9 @@
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor FreeHand
+//! drawings (mutated record streams, including a 63-level shared-record chain, many modest paths
+//! and a compound path with a repeated child), nor the
 //! font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -393,6 +395,156 @@ proptest! {
         let bytes = affinity_sample_file(&stream, embedded.as_deref());
         survive(s.name, || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
     }
+
+    #[test]
+    fn freehand_garbage_never_panics(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = b"AGD4".to_vec();
+        bytes.extend(tail);
+        survive("FreeHand garbage", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn freehand_mutated_files_render_and_export(
+        edits in prop::collection::vec((0usize..4000, any::<u8>()), 0..16),
+        cut in 0usize..4000,
+    ) {
+        let mut bytes = vectorcraft_freehand::synth::demo();
+        let n = bytes.len().max(1);
+        for (at, b) in edits {
+            if let Some(slot) = bytes.get_mut(at % n) {
+                *slot = b;
+            }
+        }
+        let keep = cut.max(8).min(bytes.len());
+        bytes.truncate(keep);
+        survive("FreeHand mutated", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    // Shallow shared records through the importer: group A_k names List[A_{k-1}, A_{k-1}].
+    // Depth stays under 8 so the default work budget is not asked to build millions of items.
+    #[test]
+    fn freehand_shared_records_render_and_export(levels in 1u32..8) {
+        let bytes = vectorcraft_freehand::synth::shared_groups(levels);
+        survive("FreeHand shared records", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    // A few modest paths, and a short compound-path child list, through the importer.
+    // The counts stay under the default geometry and work budgets.
+    #[test]
+    fn freehand_many_paths_render_and_export(paths in 1u32..6, nodes in 2u32..6) {
+        let bytes = vectorcraft_freehand::synth::many_paths(paths, nodes);
+        survive("FreeHand many paths", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn freehand_compound_children_render_and_export(children in 1u32..6, nodes in 2u32..6) {
+        let bytes = vectorcraft_freehand::synth::compound_children(children, nodes);
+        survive("FreeHand compound children", || vectorcraft_engine::cmd::fileio::load("x.fh9", &bytes).ok().map(|l| l.doc))?;
+    }
+}
+
+#[test]
+fn deeply_nested_freehand_groups_and_cycles_are_read_within_the_cap() {
+    let deep = vectorcraft_freehand::synth::nested_groups(10_000);
+    let cycle = vectorcraft_freehand::synth::cyclic_groups();
+    let symbol = vectorcraft_freehand::synth::cyclic_symbol();
+    on_a_small_stack(move || {
+        let (doc, warnings) = open_deep("deep.fh9", &deep).expect("10_000 groups open or the reader refuses them before they overflow");
+        assert!(merged(&warnings) || warnings.iter().any(|w| w.contains("deeply nested")), "{warnings:?}");
+        assert!(!doc.too_deep(None));
+        open_deep("cycle.fh9", &cycle).expect("a group cycle opens");
+        open_deep("symbol.fh9", &symbol).expect("a symbol cycle opens");
+    });
+}
+
+/// Group `A_k` names `List[A_{k-1}, A_{k-1}]` for k = 1..=63, with one path at the bottom.
+/// About 130 records, and about 2^63 visits if sharing is walked again. The reader's work
+/// budget is tightened here (the importer's default `max_items` is 2_000_000) so the test
+/// stops quickly, without a panic, and the built tree stays inside that budget.
+#[test]
+fn shared_freehand_records_sixty_three_deep_stay_inside_the_work_budget() {
+    let bytes = vectorcraft_freehand::synth::shared_groups(63);
+    assert!(vectorcraft_freehand::is_freehand(&bytes));
+    let limits = vectorcraft_freehand::Limits { max_items: 4_096, ..vectorcraft_freehand::Limits::default() };
+    let started = std::time::Instant::now();
+    let read = vectorcraft_freehand::read(&bytes, limits);
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "shared-record read took {elapsed:?}");
+    let doc = read.expect("63-level shared records stay readable");
+    assert!(doc.warnings.iter().any(|w| w.contains("the drawing has more objects than can be read")), "{:?}", doc.warnings);
+    let n: usize = doc.layers.iter().map(|layer| freehand_items(&layer.items)).sum();
+    assert!(n <= limits.max_items, "built {n} items, budget {}", limits.max_items);
+}
+
+/// Thousands of modest paths. Each one is a few cubics; together they pass the object budget
+/// and miss the geometry budget. The read must fail quickly, before that geometry is built.
+#[test]
+fn many_modest_freehand_paths_stop_at_the_geometry_budget() {
+    let bytes = vectorcraft_freehand::synth::many_paths(4_000, 8);
+    assert!(vectorcraft_freehand::is_freehand(&bytes));
+    let limits = vectorcraft_freehand::Limits { max_geometry: 256, ..vectorcraft_freehand::Limits::default() };
+    let started = std::time::Instant::now();
+    let err = vectorcraft_freehand::read(&bytes, limits).expect_err("many paths over the geometry budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "many-paths read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more path geometry than can be read");
+    let kept = vectorcraft_freehand::read(&vectorcraft_freehand::synth::many_paths(4, 4), limits).expect("four paths fit");
+    let n: usize = kept.layers.iter().map(|layer| freehand_cubics(&layer.items)).sum();
+    assert!(n <= limits.max_geometry, "built {n} cubics, budget {}", limits.max_geometry);
+}
+
+/// One compound path whose child list repeats a single path. The children have to spend the
+/// object budget and the geometry budget. Either cap, tightened, fails the read quickly.
+#[test]
+fn compound_freehand_children_stop_at_the_work_and_geometry_budgets() {
+    // One child list fits in the object cap. Two copies of the compound walk it again and do not.
+    let bytes = vectorcraft_freehand::synth::repeated_compound(3_000, 8, 2);
+    assert!(vectorcraft_freehand::is_freehand(&bytes));
+    let work = vectorcraft_freehand::Limits { max_items: 4_096, ..vectorcraft_freehand::Limits::default() };
+    let started = std::time::Instant::now();
+    let err = vectorcraft_freehand::read(&bytes, work).expect_err("compound children over the work budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "compound work-budget read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more objects than can be read");
+
+    let geometry = vectorcraft_freehand::Limits { max_geometry: 40, ..vectorcraft_freehand::Limits::default() };
+    let started = std::time::Instant::now();
+    let err = vectorcraft_freehand::read(&vectorcraft_freehand::synth::compound_children(4_000, 8), geometry)
+        .expect_err("compound children over the geometry budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "compound geometry-budget read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more path geometry than can be read");
+    let kept = vectorcraft_freehand::read(&vectorcraft_freehand::synth::compound_children(3, 4), geometry).expect("three children fit");
+    let n: usize = kept.layers.iter().map(|layer| freehand_cubics(&layer.items)).sum();
+    assert!(n <= geometry.max_geometry, "built {n} cubics, budget {}", geometry.max_geometry);
+}
+
+fn freehand_cubics(items: &[vectorcraft_freehand::Item]) -> usize {
+    items
+        .iter()
+        .map(|item| match item {
+            vectorcraft_freehand::Item::Group(kids) => freehand_cubics(kids),
+            vectorcraft_freehand::Item::ClipGroup { clip, children } => freehand_path_cubics(clip) + freehand_cubics(children),
+            vectorcraft_freehand::Item::Path(path) | vectorcraft_freehand::Item::Compound(path) => freehand_path_cubics(path),
+            vectorcraft_freehand::Item::Text(_) => 0,
+        })
+        .sum()
+}
+
+fn freehand_path_cubics(path: &vectorcraft_freehand::Path) -> usize {
+    path.subpaths.iter().map(|sub| sub.cubics.len()).sum()
+}
+
+fn freehand_items(items: &[vectorcraft_freehand::Item]) -> usize {
+    items
+        .iter()
+        .map(|item| {
+            1 + match item {
+                vectorcraft_freehand::Item::Group(kids) | vectorcraft_freehand::Item::ClipGroup { children: kids, .. } => freehand_items(kids),
+                _ => 0,
+            }
+        })
+        .sum()
 }
 
 /// Import must not panic; whatever comes back must render and export without panicking either.

@@ -5768,3 +5768,28 @@ breakText	Glyphs	Glyph
 	Small to Large	Từ nhỏ đến lớn
 	Large to Small	Từ lớn đến nhỏ
 	Distribute Evenly	Phân bố đều
+
+@msg	the FreeHand file is empty	tệp FreeHand trống
+@msg	the FreeHand file is cut off in the header	tệp FreeHand bị cắt ở phần đầu
+@msg	not a FreeHand file	không phải tệp FreeHand
+@msg	the FreeHand file is cut off in its compressed data	tệp FreeHand bị cắt trong dữ liệu nén
+@msg	the FreeHand file's compressed data is damaged	dữ liệu nén của tệp FreeHand bị hỏng
+@msg	the FreeHand file is cut off in the dictionary	tệp FreeHand bị cắt ở từ điển
+@msg	the FreeHand file is cut off in the record list	tệp FreeHand bị cắt ở danh sách bản ghi
+@msg	the FreeHand file is cut off in a record	tệp FreeHand bị cắt ở một bản ghi
+@msg	the FreeHand file claims more records than can be read	tệp FreeHand khai báo nhiều bản ghi hơn mức có thể đọc
+@msg	the FreeHand file claims a dictionary larger than can be read	tệp FreeHand khai báo từ điển lớn hơn mức có thể đọc
+@msg	the FreeHand file claims more path nodes than can be read	tệp FreeHand khai báo nhiều nút đường dẫn hơn mức có thể đọc
+@msg	the FreeHand file claims more list entries than can be read	tệp FreeHand khai báo nhiều mục danh sách hơn mức có thể đọc
+@msg	a FreeHand record id points past the end of the file	một mã bản ghi FreeHand trỏ ra ngoài cuối tệp
+@msg	the FreeHand file decompresses past the safety limit	tệp FreeHand giải nén vượt quá giới hạn an toàn
+@msg	the FreeHand file's data block runs past the end of the file	khối dữ liệu của tệp FreeHand vượt quá cuối tệp
+@msg	the FreeHand file is larger than can be read	tệp FreeHand lớn hơn mức có thể đọc
+@msg	the FreeHand file claims more entries than can be read	tệp FreeHand khai báo nhiều mục hơn mức có thể đọc
+@msg	the FreeHand file has a record whose size is not known	tệp FreeHand có một bản ghi chưa rõ kích thước
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	phiên bản FreeHand {n} không được hỗ trợ: VectorCraft mở FreeHand 8 đến MX (11); hãy mở trong FreeHand mới hơn rồi lưu, hoặc xuất thành EPS, PDF hoặc AI
+@msg	the drawing has more objects than can be read; the rest were left out	bản vẽ có nhiều đối tượng hơn mức có thể đọc; phần còn lại được bỏ qua
+@msg	the FreeHand file claims more path geometry than can be read	tệp FreeHand khai báo nhiều hình học đường dẫn hơn mức có thể đọc
+@msg	the FreeHand file claims more objects than can be read	tệp FreeHand khai báo nhiều đối tượng hơn mức có thể đọc
+
+@msg	text expansion exceeded the safety limit	phần mở rộng văn bản đã vượt giới hạn an toàn

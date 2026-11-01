@@ -493,6 +493,14 @@ pub const FORMATS: &[Format] = &[
     reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
     // JP2 and raw codestreams are decoded to PNG; JPX composition is not supported.
     reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
+    // FreeHand templates share the drawing format. Never written.
+    reader(
+        "freehand",
+        "FreeHand",
+        &["fh", "fh3", "fh4", "fh5", "fh7", "fh8", "fh9", "fh10", "fh11", "ft8", "ft9", "ft10", "ft11"],
+        "application/x-freehand",
+        false,
+    ),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -535,6 +543,19 @@ pub const OPEN_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "fh",
+    "fh3",
+    "fh4",
+    "fh5",
+    "fh7",
+    "fh8",
+    "fh9",
+    "fh10",
+    "fh11",
+    "ft8",
+    "ft9",
+    "ft10",
+    "ft11",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
@@ -613,6 +634,19 @@ pub const PLACE_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "fh",
+    "fh3",
+    "fh4",
+    "fh5",
+    "fh7",
+    "fh8",
+    "fh9",
+    "fh10",
+    "fh11",
+    "ft8",
+    "ft9",
+    "ft10",
+    "ft11",
     "txt",
     "rtf",
     "docx",

@@ -5751,3 +5751,28 @@ breakText	Glyphs	Glyphen
 	Small to Large	Von klein nach groß
 	Large to Small	Von groß nach klein
 	Distribute Evenly	Gleichmäßig verteilen
+
+@msg	the FreeHand file is empty	die FreeHand-Datei ist leer
+@msg	the FreeHand file is cut off in the header	die FreeHand-Datei ist im Kopf abgeschnitten
+@msg	not a FreeHand file	keine FreeHand-Datei
+@msg	the FreeHand file is cut off in its compressed data	die FreeHand-Datei ist in den komprimierten Daten abgeschnitten
+@msg	the FreeHand file's compressed data is damaged	die komprimierten Daten der FreeHand-Datei sind beschädigt
+@msg	the FreeHand file is cut off in the dictionary	die FreeHand-Datei ist im Wörterbuch abgeschnitten
+@msg	the FreeHand file is cut off in the record list	die FreeHand-Datei ist in der Datensatzliste abgeschnitten
+@msg	the FreeHand file is cut off in a record	die FreeHand-Datei ist in einem Datensatz abgeschnitten
+@msg	the FreeHand file claims more records than can be read	die FreeHand-Datei beansprucht mehr Datensätze, als gelesen werden können
+@msg	the FreeHand file claims a dictionary larger than can be read	die FreeHand-Datei beansprucht ein Wörterbuch, das größer ist, als gelesen werden kann
+@msg	the FreeHand file claims more path nodes than can be read	die FreeHand-Datei beansprucht mehr Pfadpunkte, als gelesen werden können
+@msg	the FreeHand file claims more list entries than can be read	die FreeHand-Datei beansprucht mehr Listeneinträge, als gelesen werden können
+@msg	a FreeHand record id points past the end of the file	eine FreeHand-Datensatzkennung zeigt hinter das Ende der Datei
+@msg	the FreeHand file decompresses past the safety limit	die FreeHand-Datei wird über die Sicherheitsgrenze hinaus dekomprimiert
+@msg	the FreeHand file's data block runs past the end of the file	der Datenblock der FreeHand-Datei reicht über das Ende der Datei hinaus
+@msg	the FreeHand file is larger than can be read	die FreeHand-Datei ist größer, als gelesen werden kann
+@msg	the FreeHand file claims more entries than can be read	die FreeHand-Datei beansprucht mehr Einträge, als gelesen werden können
+@msg	the FreeHand file has a record whose size is not known	die FreeHand-Datei enthält einen Datensatz, dessen Größe nicht bekannt ist
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	nicht unterstützte FreeHand-Version {n}: VectorCraft öffnet FreeHand 8 bis MX (11); öffnen Sie sie in einem neueren FreeHand und speichern Sie, oder exportieren Sie sie als EPS, PDF oder AI
+@msg	the drawing has more objects than can be read; the rest were left out	die Zeichnung hat mehr Objekte, als gelesen werden können; der Rest wurde ausgelassen
+@msg	the FreeHand file claims more path geometry than can be read	die FreeHand-Datei beansprucht mehr Pfadgeometrie, als gelesen werden kann
+@msg	the FreeHand file claims more objects than can be read	die FreeHand-Datei beansprucht mehr Objekte, als gelesen werden können
+
+@msg	text expansion exceeded the safety limit	die Textausweitung hat die Sicherheitsgrenze überschritten

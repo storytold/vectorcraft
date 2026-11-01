@@ -6117,3 +6117,28 @@ breakText	Glyphs	Γλύφοι
 	Small to Large	Από μικρό σε μεγάλο
 	Large to Small	Από μεγάλο σε μικρό
 	Distribute Evenly	Ομοιόμορφη κατανομή
+
+@msg	the FreeHand file is empty	το αρχείο FreeHand είναι κενό
+@msg	the FreeHand file is cut off in the header	το αρχείο FreeHand είναι περικομμένο στην κεφαλίδα
+@msg	not a FreeHand file	δεν είναι αρχείο FreeHand
+@msg	the FreeHand file is cut off in its compressed data	το αρχείο FreeHand είναι περικομμένο στα συμπιεσμένα δεδομένα του
+@msg	the FreeHand file's compressed data is damaged	τα συμπιεσμένα δεδομένα του αρχείου FreeHand είναι κατεστραμμένα
+@msg	the FreeHand file is cut off in the dictionary	το αρχείο FreeHand είναι περικομμένο στο λεξικό
+@msg	the FreeHand file is cut off in the record list	το αρχείο FreeHand είναι περικομμένο στη λίστα εγγραφών
+@msg	the FreeHand file is cut off in a record	το αρχείο FreeHand είναι περικομμένο σε μια εγγραφή
+@msg	the FreeHand file claims more records than can be read	το αρχείο FreeHand δηλώνει περισσότερες εγγραφές από όσες μπορούν να διαβαστούν
+@msg	the FreeHand file claims a dictionary larger than can be read	το αρχείο FreeHand δηλώνει λεξικό μεγαλύτερο από όσο μπορεί να διαβαστεί
+@msg	the FreeHand file claims more path nodes than can be read	το αρχείο FreeHand δηλώνει περισσότερα σημεία διαδρομής από όσα μπορούν να διαβαστούν
+@msg	the FreeHand file claims more list entries than can be read	το αρχείο FreeHand δηλώνει περισσότερες καταχωρίσεις λίστας από όσες μπορούν να διαβαστούν
+@msg	a FreeHand record id points past the end of the file	ένα αναγνωριστικό εγγραφής FreeHand δείχνει πέρα από το τέλος του αρχείου
+@msg	the FreeHand file decompresses past the safety limit	η αποσυμπίεση του αρχείου FreeHand ξεπερνά το όριο ασφαλείας
+@msg	the FreeHand file's data block runs past the end of the file	το μπλοκ δεδομένων του αρχείου FreeHand εκτείνεται πέρα από το τέλος του αρχείου
+@msg	the FreeHand file is larger than can be read	το αρχείο FreeHand είναι μεγαλύτερο από όσο μπορεί να διαβαστεί
+@msg	the FreeHand file claims more entries than can be read	το αρχείο FreeHand δηλώνει περισσότερες καταχωρίσεις από όσες μπορούν να διαβαστούν
+@msg	the FreeHand file has a record whose size is not known	το αρχείο FreeHand περιέχει μια εγγραφή άγνωστου μεγέθους
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	μη υποστηριζόμενη έκδοση FreeHand {n}: το VectorCraft ανοίγει τις εκδόσεις FreeHand 8 έως MX (11)· ανοίξτε το σε νεότερο FreeHand και αποθηκεύστε το ή εξαγάγετέ το ως EPS, PDF ή AI
+@msg	the drawing has more objects than can be read; the rest were left out	το σχέδιο έχει περισσότερα αντικείμενα από όσα μπορούν να διαβαστούν· τα υπόλοιπα παραλείφθηκαν
+@msg	the FreeHand file claims more path geometry than can be read	το αρχείο FreeHand δηλώνει περισσότερη γεωμετρία διαδρομής από όση μπορεί να διαβαστεί
+@msg	the FreeHand file claims more objects than can be read	το αρχείο FreeHand δηλώνει περισσότερα αντικείμενα από όσα μπορούν να διαβαστούν
+
+@msg	text expansion exceeded the safety limit	η επέκταση του κειμένου ξεπέρασε το όριο ασφαλείας

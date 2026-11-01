@@ -6239,3 +6239,28 @@ swatch	Yellow Green	Verde-amarelado
 	Small to Large	Do menor para o maior
 	Large to Small	Do maior para o menor
 	Distribute Evenly	Distribuir uniformemente
+
+@msg	the FreeHand file is empty	o arquivo FreeHand está vazio
+@msg	the FreeHand file is cut off in the header	o arquivo FreeHand está cortado no cabeçalho
+@msg	not a FreeHand file	não é um arquivo FreeHand
+@msg	the FreeHand file is cut off in its compressed data	o arquivo FreeHand está cortado nos dados compactados
+@msg	the FreeHand file's compressed data is damaged	os dados compactados do arquivo FreeHand estão danificados
+@msg	the FreeHand file is cut off in the dictionary	o arquivo FreeHand está cortado no dicionário
+@msg	the FreeHand file is cut off in the record list	o arquivo FreeHand está cortado na lista de registros
+@msg	the FreeHand file is cut off in a record	o arquivo FreeHand está cortado em um registro
+@msg	the FreeHand file claims more records than can be read	o arquivo FreeHand declara mais registros do que é possível ler
+@msg	the FreeHand file claims a dictionary larger than can be read	o arquivo FreeHand declara um dicionário maior do que é possível ler
+@msg	the FreeHand file claims more path nodes than can be read	o arquivo FreeHand declara mais nós de caminho do que é possível ler
+@msg	the FreeHand file claims more list entries than can be read	o arquivo FreeHand declara mais entradas de lista do que é possível ler
+@msg	a FreeHand record id points past the end of the file	um identificador de registro FreeHand aponta além do fim do arquivo
+@msg	the FreeHand file decompresses past the safety limit	o arquivo FreeHand descompacta além do limite de segurança
+@msg	the FreeHand file's data block runs past the end of the file	o bloco de dados do arquivo FreeHand ultrapassa o fim do arquivo
+@msg	the FreeHand file is larger than can be read	o arquivo FreeHand é maior do que é possível ler
+@msg	the FreeHand file claims more entries than can be read	o arquivo FreeHand declara mais entradas do que é possível ler
+@msg	the FreeHand file has a record whose size is not known	o arquivo FreeHand tem um registro cujo tamanho não é conhecido
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	versão FreeHand {n} não suportada: o VectorCraft abre FreeHand 8 até MX (11); abra-o num FreeHand mais recente e salve, ou exporte como EPS, PDF ou AI
+@msg	the drawing has more objects than can be read; the rest were left out	o desenho tem mais objetos do que é possível ler; o restante foi deixado de fora
+@msg	the FreeHand file claims more path geometry than can be read	o arquivo FreeHand declara mais geometria de caminho do que é possível ler
+@msg	the FreeHand file claims more objects than can be read	o arquivo FreeHand declara mais objetos do que é possível ler
+
+@msg	text expansion exceeded the safety limit	a expansão do texto ultrapassou o limite de segurança

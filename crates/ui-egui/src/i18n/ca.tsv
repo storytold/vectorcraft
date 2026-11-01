@@ -6155,3 +6155,27 @@ breakText	Glyphs	Glifs
 	Small to Large	De petit a gran
 	Large to Small	De gran a petit
 	Distribute Evenly	Distribueix uniformement
+
+@msg	the FreeHand file is empty	el fitxer FreeHand és buit
+@msg	the FreeHand file is cut off in the header	el fitxer FreeHand està tallat a la capçalera
+@msg	not a FreeHand file	no és un fitxer FreeHand
+@msg	the FreeHand file is cut off in its compressed data	el fitxer FreeHand està tallat a les dades comprimides
+@msg	the FreeHand file's compressed data is damaged	les dades comprimides del fitxer FreeHand estan malmeses
+@msg	the FreeHand file is cut off in the dictionary	el fitxer FreeHand està tallat al diccionari
+@msg	the FreeHand file is cut off in the record list	el fitxer FreeHand està tallat a la llista de registres
+@msg	the FreeHand file is cut off in a record	el fitxer FreeHand està tallat en un registre
+@msg	the FreeHand file claims more records than can be read	el fitxer FreeHand declara més registres dels que es poden llegir
+@msg	the FreeHand file claims a dictionary larger than can be read	el fitxer FreeHand declara un diccionari més gran del que es pot llegir
+@msg	the FreeHand file claims more path nodes than can be read	el fitxer FreeHand declara més nodes de traçat dels que es poden llegir
+@msg	the FreeHand file claims more list entries than can be read	el fitxer FreeHand declara més entrades de llista de les que es poden llegir
+@msg	a FreeHand record id points past the end of the file	un identificador de registre FreeHand apunta més enllà del final del fitxer
+@msg	the FreeHand file decompresses past the safety limit	el fitxer FreeHand es descomprimeix més enllà del límit de seguretat
+@msg	the FreeHand file's data block runs past the end of the file	el bloc de dades del fitxer FreeHand sobrepassa el final del fitxer
+@msg	the FreeHand file is larger than can be read	el fitxer FreeHand és més gran del que es pot llegir
+@msg	the FreeHand file claims more entries than can be read	el fitxer FreeHand declara més entrades de les que es poden llegir
+@msg	the FreeHand file has a record whose size is not known	el fitxer FreeHand té un registre la mida del qual no es coneix
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	versió de FreeHand {n} no admesa: VectorCraft obre FreeHand 8 a MX (11); obriu-lo en un FreeHand més recent i deseu-lo, o exporteu-lo com a EPS, PDF o AI
+@msg	the drawing has more objects than can be read; the rest were left out	el dibuix té més objectes dels que es poden llegir; la resta s’ha deixat fora
+@msg	the FreeHand file claims more path geometry than can be read	el fitxer FreeHand declara més geometria de traçat de la que es pot llegir
+@msg	the FreeHand file claims more objects than can be read	el fitxer FreeHand declara més objectes dels que es poden llegir
+@msg	text expansion exceeded the safety limit	l’expansió del text ha superat el límit de seguretat

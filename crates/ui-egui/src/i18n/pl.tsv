@@ -6020,3 +6020,28 @@ breakText	Glyphs	Glify
 	Small to Large	Od najmniejszego do największego
 	Large to Small	Od największego do najmniejszego
 	Distribute Evenly	Rozmieść równomiernie
+
+@msg	the FreeHand file is empty	plik FreeHand jest pusty
+@msg	the FreeHand file is cut off in the header	plik FreeHand jest ucięty w nagłówku
+@msg	not a FreeHand file	to nie jest plik FreeHand
+@msg	the FreeHand file is cut off in its compressed data	plik FreeHand jest ucięty w skompresowanych danych
+@msg	the FreeHand file's compressed data is damaged	skompresowane dane pliku FreeHand są uszkodzone
+@msg	the FreeHand file is cut off in the dictionary	plik FreeHand jest ucięty w słowniku
+@msg	the FreeHand file is cut off in the record list	plik FreeHand jest ucięty na liście rekordów
+@msg	the FreeHand file is cut off in a record	plik FreeHand jest ucięty w rekordzie
+@msg	the FreeHand file claims more records than can be read	plik FreeHand deklaruje więcej rekordów, niż można odczytać
+@msg	the FreeHand file claims a dictionary larger than can be read	plik FreeHand deklaruje słownik większy, niż można odczytać
+@msg	the FreeHand file claims more path nodes than can be read	plik FreeHand deklaruje więcej węzłów ścieżki, niż można odczytać
+@msg	the FreeHand file claims more list entries than can be read	plik FreeHand deklaruje więcej pozycji listy, niż można odczytać
+@msg	a FreeHand record id points past the end of the file	identyfikator rekordu FreeHand wskazuje poza koniec pliku
+@msg	the FreeHand file decompresses past the safety limit	plik FreeHand po dekompresji przekracza limit bezpieczeństwa
+@msg	the FreeHand file's data block runs past the end of the file	blok danych pliku FreeHand wykracza poza koniec pliku
+@msg	the FreeHand file is larger than can be read	plik FreeHand jest większy, niż można odczytać
+@msg	the FreeHand file claims more entries than can be read	plik FreeHand deklaruje więcej pozycji, niż można odczytać
+@msg	the FreeHand file has a record whose size is not known	plik FreeHand zawiera rekord o nieznanym rozmiarze
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	nieobsługiwana wersja FreeHand {n}: VectorCraft otwiera FreeHand 8 do MX (11); otwórz go w nowszym FreeHandzie i zapisz albo wyeksportuj jako EPS, PDF lub AI
+@msg	the drawing has more objects than can be read; the rest were left out	rysunek ma więcej obiektów, niż można odczytać; resztę pominięto
+@msg	the FreeHand file claims more path geometry than can be read	plik FreeHand deklaruje więcej geometrii ścieżki, niż można odczytać
+@msg	the FreeHand file claims more objects than can be read	plik FreeHand deklaruje więcej obiektów, niż można odczytać
+
+@msg	text expansion exceeded the safety limit	rozwinięcie tekstu przekroczyło limit bezpieczeństwa

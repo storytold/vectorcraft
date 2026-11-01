@@ -5765,3 +5765,28 @@ breakText	Glyphs	Гліфи
 	Small to Large	Від меншого до більшого
 	Large to Small	Від більшого до меншого
 	Distribute Evenly	Розподілити рівномірно
+
+@msg	the FreeHand file is empty	файл FreeHand порожній
+@msg	the FreeHand file is cut off in the header	файл FreeHand обрізаний у заголовку
+@msg	not a FreeHand file	це не файл FreeHand
+@msg	the FreeHand file is cut off in its compressed data	файл FreeHand обрізаний у стиснутих даних
+@msg	the FreeHand file's compressed data is damaged	стиснуті дані файла FreeHand пошкоджені
+@msg	the FreeHand file is cut off in the dictionary	файл FreeHand обрізаний у словнику
+@msg	the FreeHand file is cut off in the record list	файл FreeHand обрізаний у списку записів
+@msg	the FreeHand file is cut off in a record	файл FreeHand обрізаний у записі
+@msg	the FreeHand file claims more records than can be read	файл FreeHand заявляє більше записів, ніж можна прочитати
+@msg	the FreeHand file claims a dictionary larger than can be read	файл FreeHand заявляє словник, більший, ніж можна прочитати
+@msg	the FreeHand file claims more path nodes than can be read	файл FreeHand заявляє більше вузлів контуру, ніж можна прочитати
+@msg	the FreeHand file claims more list entries than can be read	файл FreeHand заявляє більше елементів списку, ніж можна прочитати
+@msg	a FreeHand record id points past the end of the file	ідентифікатор запису FreeHand вказує за кінець файла
+@msg	the FreeHand file decompresses past the safety limit	файл FreeHand під час розпакування перевищує межу безпеки
+@msg	the FreeHand file's data block runs past the end of the file	блок даних файла FreeHand виходить за кінець файла
+@msg	the FreeHand file is larger than can be read	файл FreeHand більший, ніж можна прочитати
+@msg	the FreeHand file claims more entries than can be read	файл FreeHand заявляє більше елементів, ніж можна прочитати
+@msg	the FreeHand file has a record whose size is not known	у файлі FreeHand є запис, розмір якого невідомий
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	непідтримувана версія FreeHand {n}: VectorCraft відкриває FreeHand від 8 до MX (11); відкрийте файл у новішому FreeHand і збережіть або експортуйте як EPS, PDF чи AI
+@msg	the drawing has more objects than can be read; the rest were left out	у малюнку більше об’єктів, ніж можна прочитати; решту пропущено
+@msg	the FreeHand file claims more path geometry than can be read	файл FreeHand заявляє більше геометрії контуру, ніж можна прочитати
+@msg	the FreeHand file claims more objects than can be read	файл FreeHand заявляє більше об’єктів, ніж можна прочитати
+
+@msg	text expansion exceeded the safety limit	розгортання тексту перевищило межу безпеки

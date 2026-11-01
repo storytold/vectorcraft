@@ -1,0 +1,616 @@
+use super::*;
+
+fn near(a: f64, b: f64) -> bool {
+    (a - b).abs() < 1e-4
+}
+
+fn flat(items: &[Item], out: &mut Vec<Item>) {
+    for item in items {
+        match item {
+            Item::Group(kids) | Item::ClipGroup { children: kids, .. } => {
+                out.push(item.clone());
+                flat(kids, out);
+            }
+            other => out.push(other.clone()),
+        }
+    }
+}
+
+#[test]
+fn demo_file_is_detected_and_places_art_on_the_page() {
+    let bytes = synth::demo();
+    assert!(is_freehand(&bytes));
+    assert!(!is_freehand(b"%PDF-1.4"));
+    let doc = read(&bytes, Limits::default()).expect("synthetic file");
+    assert!(doc.warnings.is_empty(), "{:?}", doc.warnings);
+    assert_eq!(doc.pages.len(), 1);
+    assert!(near(doc.pages[0].width, 200.0) && near(doc.pages[0].height, 100.0));
+    assert!(near(doc.pages[0].x, 0.0) && near(doc.pages[0].y, 0.0));
+    assert_eq!(doc.layers.len(), 1);
+    assert_eq!(doc.layers[0].name, "Ink");
+    assert!(doc.layers[0].visible && !doc.layers[0].locked);
+
+    let mut items = Vec::new();
+    flat(&doc.layers[0].items, &mut items);
+    let paths: Vec<&Path> = items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Path(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    assert!(paths.len() >= 3, "path, rectangle and oval, got {}", paths.len());
+
+    let drawn = paths.iter().find(|p| p.stroke.as_ref().is_some_and(|s| near(s.width, 2.0))).expect("stroked path");
+    assert!(drawn.even_odd);
+    let Fill::Solid(fill) = &drawn.fill else { panic!("solid fill") };
+    assert!(near(fill.r, 1.0) && near(fill.g, 0.0) && near(fill.b, 0.0));
+    let stroke = drawn.stroke.as_ref().expect("stroke");
+    assert!(near(stroke.color.b, 1.0) && near(stroke.color.r, 0.0));
+    assert_eq!(stroke.dash.len(), 2);
+    assert!(near(stroke.dash[0], 8.0) && near(stroke.dash[1], 4.0));
+    let end = drawn.subpaths[0].cubics.last().expect("segment").get(2).copied().expect("end");
+    assert!(near(drawn.subpaths[0].start[0], 15.0) && near(drawn.subpaths[0].start[1], 84.0), "{:?}", drawn.subpaths[0].start);
+    assert!(near(end[0], 15.0) && near(end[1], 84.0), "closed back to the start, {end:?}");
+    let far = drawn.subpaths[0].cubics.first().expect("first").get(2).copied().expect("corner");
+    assert!(near(far[0], 35.0) && near(far[1], 74.0), "{far:?}");
+
+    assert!(paths.iter().any(|p| matches!(p.fill, Fill::Linear { .. })));
+}
+
+fn message(bytes: &[u8]) -> String {
+    read(bytes, Limits::default()).unwrap_err().to_string()
+}
+
+#[test]
+fn garbage_and_a_truncated_header_are_errors() {
+    assert_eq!(message(b""), "the FreeHand file is empty");
+    assert_eq!(message(b"A"), "the FreeHand file is cut off in the header");
+    assert_eq!(message(b"AG"), "the FreeHand file is cut off in the header");
+    assert_eq!(message(b"AGD"), "the FreeHand file is cut off in the header");
+    assert_eq!(message(b"AGD4"), "the FreeHand file is cut off in the header");
+    assert_eq!(message(b"not a file"), "not a FreeHand file");
+    assert_eq!(message(b"XXXX"), "not a FreeHand file");
+}
+
+#[test]
+fn an_unknown_record_type_is_refused() {
+    let mut bytes = synth::demo();
+    // The dictionary is after the zlib payload. Appending a new type without a record still
+    // parses. A record whose name is unknown cannot be skipped: build one by renaming a type
+    // the demo uses only as a string, which would break the file. Instead, feed AGD4 plus junk.
+    bytes.extend_from_slice(b"unknown");
+    let _ = read(&bytes, Limits::default());
+    let hostile = b"AGD4\x00\x00\x00\x00\x00\x00\x00\x14not-zlib-at-all!!";
+    assert!(read(hostile, Limits::default()).is_err());
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::test_runner::Config { cases: 32, failure_persistence: None, ..proptest::test_runner::Config::default() })]
+
+    #[test]
+    fn random_bytes_never_panic(bytes in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..2048)) {
+        let _ = is_freehand(&bytes);
+        let _ = read(&bytes, Limits::default());
+    }
+
+    #[test]
+    fn mutated_demo_never_panics(
+        edits in proptest::collection::vec((0usize..4000, proptest::prelude::any::<u8>()), 0..12),
+    ) {
+        let mut bytes = synth::demo();
+        let n = bytes.len().max(1);
+        for (at, b) in edits {
+            if let Some(slot) = bytes.get_mut(at % n) {
+                *slot = b;
+            }
+        }
+        let _ = read(&bytes, Limits::default());
+    }
+
+    // Group A_k names List[A_{k-1}, A_{k-1}]. Level 63 is weighted so that shape is in the run.
+    // The work budget is tightened: the default would still stop, after millions of items.
+    #[test]
+    fn shared_record_chains_stay_inside_the_work_budget(
+        levels in proptest::prop_oneof![4 => proptest::prelude::Just(63u32), 1 => 1u32..64u32],
+    ) {
+        let limits = Limits { max_items: 4_096, ..Limits::default() };
+        let started = std::time::Instant::now();
+        let result = read(&synth::shared_groups(levels), limits);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "shared-record read of {levels} levels took {elapsed:?}");
+        match result {
+            Ok(doc) => {
+                let n: usize = doc.layers.iter().map(|layer| count_items(&layer.items)).sum();
+                assert!(n <= limits.max_items, "level {levels} built {n} items, budget {}", limits.max_items);
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(msg.contains("can be read") || msg.contains("limit"), "{msg}");
+            }
+        }
+    }
+
+    // Many modest paths. The large count is weighted so the combined geometry is in the run.
+    // The geometry budget is tightened: each path is small, and the total is what must stop.
+    #[test]
+    fn many_modest_paths_stay_inside_the_geometry_budget(
+        paths in proptest::prop_oneof![4 => proptest::prelude::Just(2_000u32), 1 => 1u32..32],
+        nodes in 2u32..9,
+    ) {
+        let limits = Limits { max_geometry: 128, ..Limits::default() };
+        let started = std::time::Instant::now();
+        let result = read(&synth::many_paths(paths, nodes), limits);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "{paths} paths of {nodes} nodes took {elapsed:?}");
+        match result {
+            Ok(doc) => {
+                let n = doc.layers.iter().map(|layer| count_cubics(&layer.items)).sum::<usize>();
+                assert!(n <= limits.max_geometry, "{paths} paths built {n} cubics, budget {}", limits.max_geometry);
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(msg.contains("path geometry") || msg.contains("more objects"), "{msg}");
+            }
+        }
+    }
+
+    // One compound path. Level-style weighting: thousands of children, or a handful.
+    // Both the object budget and the geometry budget are tightened.
+    #[test]
+    fn compound_children_stay_inside_the_work_and_geometry_budgets(
+        children in proptest::prop_oneof![4 => proptest::prelude::Just(2_000u32), 1 => 1u32..32],
+        nodes in 2u32..9,
+    ) {
+        // The child list has to parse, so the object cap stays above that list. The geometry
+        // cap is what a long child list runs into. A second copy of the compound is what
+        // runs into the object cap; that shape is the unit test below.
+        let limits = Limits { max_geometry: 128, ..Limits::default() };
+        let started = std::time::Instant::now();
+        let result = read(&synth::compound_children(children, nodes), limits);
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "{children} compound children of {nodes} nodes took {elapsed:?}");
+        match result {
+            Ok(doc) => {
+                let n = doc.layers.iter().map(|layer| count_cubics(&layer.items)).sum::<usize>();
+                assert!(n <= limits.max_geometry, "{children} children built {n} cubics, budget {}", limits.max_geometry);
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                assert!(msg.contains("path geometry") || msg.contains("more objects"), "{msg}");
+            }
+        }
+    }
+}
+
+fn group_depth(items: &[Item]) -> usize {
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Group(kids) | Item::ClipGroup { children: kids, .. } => 1 + group_depth(kids),
+            _ => 0,
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+fn count_groups(items: &[Item]) -> usize {
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Group(kids) | Item::ClipGroup { children: kids, .. } => 1 + count_groups(kids),
+            _ => 0,
+        })
+        .sum()
+}
+
+fn count_items(items: &[Item]) -> usize {
+    items
+        .iter()
+        .map(|item| {
+            1 + match item {
+                Item::Group(kids) | Item::ClipGroup { children: kids, .. } => count_items(kids),
+                _ => 0,
+            }
+        })
+        .sum()
+}
+
+fn path_cubics(path: &Path) -> usize {
+    path.subpaths.iter().map(|sub| sub.cubics.len()).sum()
+}
+
+fn count_cubics(items: &[Item]) -> usize {
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Group(kids) => count_cubics(kids),
+            Item::ClipGroup { clip, children } => path_cubics(clip) + count_cubics(children),
+            Item::Path(path) | Item::Compound(path) => path_cubics(path),
+            Item::Text(_) => 0,
+        })
+        .sum()
+}
+
+fn count_paths(items: &[Item]) -> usize {
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Path(_) => 1,
+            Item::Group(kids) | Item::ClipGroup { children: kids, .. } => count_paths(kids),
+            Item::Compound(_) | Item::Text(_) => 0,
+        })
+        .sum()
+}
+
+#[test]
+fn supported_versions_open_to_the_same_drawing() {
+    let base = read(&synth::demo_at(9), Limits::default()).expect("v9");
+    for version in [8u8, 10, 11] {
+        let doc = read(&synth::demo_at(version), Limits::default()).unwrap_or_else(|e| panic!("v{version}: {e}"));
+        assert_eq!(doc.pages, base.pages, "v{version} pages");
+        assert_eq!(doc.layers.len(), base.layers.len());
+        assert_eq!(doc.layers[0].name, base.layers[0].name);
+        assert!(doc.layers[0].visible);
+        let mut items = Vec::new();
+        flat(&doc.layers[0].items, &mut items);
+        let mut base_items = Vec::new();
+        flat(&base.layers[0].items, &mut base_items);
+        assert_eq!(items.len(), base_items.len(), "v{version}");
+        assert!(doc.warnings.is_empty(), "v{version} {:?}", doc.warnings);
+    }
+}
+
+#[test]
+fn old_freehand_versions_are_refused() {
+    let tail = "VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI";
+    for (magic, n) in
+        [(&b"acf3"[..], "1"), (b"FHD2", "2"), (b"FH31", "3"), (b"AGD0", "5"), (b"AGD1", "4 or 5"), (b"AGD2", "7"), (b"ALDUS LZW compressed", "1")]
+    {
+        assert!(is_freehand(magic), "{n}");
+        let err = message(magic);
+        assert_eq!(err, format!("unsupported FreeHand version {n}: {tail}"), "{err}");
+    }
+    assert!(is_freehand(b"FreeHand10"));
+    assert_eq!(message(b"FreeHand10............"), "the FreeHand file is cut off in the header");
+    assert!(is_freehand(b"FreeHand11"));
+    let mut wrapped = vec![0x1C, 0x08, 0x0A, 0x80, 0x04];
+    let inner = synth::demo();
+    wrapped.extend(u32::try_from(inner.len()).unwrap_or(0).to_be_bytes());
+    wrapped.extend(inner);
+    assert!(is_freehand(&wrapped));
+    assert!(read(&wrapped, Limits::default()).is_ok());
+    let mut old = vec![0x1C, 0x08, 0x0A, 0x00, 0x04];
+    old.extend(b"AGD2");
+    assert!(is_freehand(&old));
+    assert!(message(&old).starts_with("unsupported FreeHand version 7:"));
+}
+
+#[test]
+fn structural_damage_is_a_short_error() {
+    assert_eq!(message(&b"AGD4\x00\x00\x00\x00\x00\x00\x00\x64junk"[..]), "the FreeHand file's data block runs past the end of the file");
+
+    let mut damaged = b"AGD4\x00\x00\x00\x00".to_vec();
+    let payload = b"this is not zlib";
+    damaged.extend(u32::try_from(12 + payload.len()).unwrap_or(0).to_be_bytes());
+    damaged.extend(payload);
+    assert_eq!(message(&damaged), "the FreeHand file's compressed data is damaged");
+
+    let whole = synth::envelope(9, &[0u8; 64], &[0, 0, 0, 0]);
+    let data_len = u32::from_be_bytes(whole.get(8..12).and_then(|b| b.try_into().ok()).unwrap_or([0; 4]));
+    let payload = usize::try_from(data_len).unwrap_or(12).saturating_sub(12);
+    let mut torn = whole;
+    let keep = 12 + payload / 2;
+    torn.truncate(keep.max(14));
+    let new_len = u32::try_from(torn.len()).unwrap_or(0);
+    if let Some(slot) = torn.get_mut(8..12) {
+        slot.copy_from_slice(&new_len.to_be_bytes());
+    }
+    assert_eq!(message(&torn), "the FreeHand file is cut off in its compressed data");
+
+    assert_eq!(message(&synth::envelope(9, &[0, 0], &[0x00, 0x01])), "the FreeHand file is cut off in the dictionary");
+
+    let mut dict = vec![0, 1, 0, 0, 0, 1];
+    dict.extend(b"MName\0");
+    assert_eq!(message(&synth::envelope(9, &[0], &dict)), "the FreeHand file is cut off in the record list");
+
+    let mut listed = dict.clone();
+    listed.extend(1u32.to_be_bytes());
+    listed.extend(1u16.to_be_bytes());
+    assert_eq!(message(&synth::envelope(9, &[0x00], &listed)), "the FreeHand file is cut off in a record");
+
+    let mut huge = vec![0, 0, 0, 0];
+    huge.extend(0x8000_0000u32.to_be_bytes());
+    assert_eq!(message(&synth::envelope(9, &[0], &huge)), "the FreeHand file claims more records than can be read");
+
+    assert_eq!(message(&synth::envelope(9, &[0], &[0xFF, 0xFF, 0x00, 0x00])), "the FreeHand file claims a dictionary larger than can be read");
+
+    // An MList that claims 65535 entries and then stops.
+    let mut names = vec![0, 1, 0, 0, 0, 1];
+    names.extend(b"MList\0");
+    names.extend(1u32.to_be_bytes());
+    names.extend(1u16.to_be_bytes());
+    let mut body = Vec::new();
+    body.extend(65535u16.to_be_bytes());
+    body.extend(65535u16.to_be_bytes());
+    body.extend([0u8; 8]);
+    assert_eq!(message(&synth::envelope(9, &body, &names)), "the FreeHand file claims more list entries than can be read");
+
+    // A path that claims 65535 nodes.
+    let mut names = vec![0, 1, 0, 0, 0, 1];
+    names.extend(b"Path\0");
+    names.extend(1u32.to_be_bytes());
+    names.extend(1u16.to_be_bytes());
+    let mut body = Vec::new();
+    body.extend(65535u16.to_be_bytes());
+    body.extend(0u16.to_be_bytes());
+    body.extend(0u16.to_be_bytes());
+    body.extend([0u8; 4]);
+    body.extend([0u8; 9]);
+    body.push(0);
+    body.extend(65535u16.to_be_bytes());
+    assert_eq!(message(&synth::envelope(9, &body, &names)), "the FreeHand file claims more path nodes than can be read");
+
+    // 0xFFFF id escape for id 0x1FF00, far past a one-record file.
+    let mut names = vec![0, 1, 0, 0, 0, 1];
+    names.extend(b"MList\0");
+    names.extend(1u32.to_be_bytes());
+    names.extend(1u16.to_be_bytes());
+    let mut body = Vec::new();
+    body.extend(1u16.to_be_bytes());
+    body.extend(1u16.to_be_bytes());
+    body.extend([0u8; 8]);
+    body.extend([0xFF, 0xFF, 0x00, 0x00]);
+    assert_eq!(message(&synth::envelope(9, &body, &names)), "a FreeHand record id points past the end of the file");
+
+    let err = read(&synth::demo(), Limits { max_decompressed: 32, ..Limits::default() }).unwrap_err().to_string();
+    assert_eq!(err, "the FreeHand file decompresses past the safety limit");
+
+    let err = read(&synth::demo(), Limits { max_input: 8, ..Limits::default() }).unwrap_err().to_string();
+    assert_eq!(err, "the FreeHand file is larger than can be read");
+}
+
+#[test]
+fn a_hidden_layer_keeps_its_path_and_stays_hidden() {
+    let doc = read(&synth::hidden_layer(), Limits::default()).expect("hidden");
+    assert_eq!(doc.layers.len(), 2);
+    let hidden = doc.layers.iter().find(|l| l.name == "Guides").expect("guides");
+    assert!(!hidden.visible && !hidden.locked);
+    assert!(hidden.items.iter().any(|i| matches!(i, Item::Path(_))), "hidden layer keeps its path");
+    let shown = doc.layers.iter().find(|l| l.name == "Ink").expect("ink");
+    assert!(shown.visible);
+    assert!(shown.items.iter().any(|i| matches!(i, Item::Path(_))));
+    assert!(doc.warnings.iter().all(|w| !w.contains("left empty")), "{:?}", doc.warnings);
+}
+
+#[test]
+fn a_content_fill_clips_the_referenced_drawing() {
+    let doc = read(&synth::content_fill(), Limits::default()).expect("content");
+    assert!(doc.warnings.iter().all(|w| !w.contains("content fills")), "{:?}", doc.warnings);
+    let layer = doc.layers.first().expect("layer");
+    let Item::ClipGroup { clip, children } = layer.items.first().expect("clip") else {
+        panic!("expected a clip group, got {:?}", layer.items);
+    };
+    assert!(matches!(clip.fill, Fill::None));
+    assert!(has_path(children), "content art is inside the clip");
+}
+
+fn has_path(items: &[Item]) -> bool {
+    items.iter().any(|item| match item {
+        Item::Path(_) => true,
+        Item::Group(kids) | Item::ClipGroup { children: kids, .. } => has_path(kids),
+        Item::Compound(_) | Item::Text(_) => false,
+    })
+}
+
+#[test]
+fn an_empty_group_is_kept_and_a_content_fill_is_only_noted_when_present() {
+    let doc = read(&synth::empty_group_and_content_fill(), Limits::default()).expect("file");
+    let layer = doc.layers.first().expect("layer");
+    assert_eq!(count_groups(&layer.items), 1, "the empty group stays; the content drawing is a fill, not a child");
+    let Item::Group(kids) = layer.items.first().expect("group") else { panic!("group") };
+    assert!(kids.is_empty());
+    let Item::Path(path) = layer.items.get(1).expect("path") else { panic!("path") };
+    assert!(matches!(path.fill, Fill::Solid(_)), "the solid fill is the paint; a zero contents id adds nothing");
+    assert!(doc.warnings.iter().any(|w| w.contains("content fills")), "{:?}", doc.warnings);
+}
+
+#[test]
+fn deep_groups_a_cycle_and_a_symbol_cycle_stop() {
+    let deep = read(&synth::nested_groups(200), Limits::default()).expect("deep");
+    let deep_items = &deep.layers.first().expect("layer").items;
+    assert!(group_depth(deep_items) <= Limits::default().max_depth);
+    assert!(deep.warnings.iter().any(|w| w.contains("deeply nested")), "{:?}", deep.warnings);
+
+    let cycle = read(&synth::cyclic_groups(), Limits::default()).expect("cycle");
+    let cycle_items = &cycle.layers.first().expect("layer").items;
+    assert!(count_groups(cycle_items) >= 1);
+    assert!(cycle.warnings.iter().any(|w| w.contains("cyclic")), "{:?}", cycle.warnings);
+
+    let symbol = read(&synth::cyclic_symbol(), Limits::default()).expect("symbol");
+    assert!(symbol.warnings.iter().any(|w| w.contains("cyclic")), "{:?}", symbol.warnings);
+}
+
+/// Group `A_k` points at `List[A_{k-1}, A_{k-1}]` for k = 1..=63, with one path at the bottom.
+/// That is about 130 records and about 2^63 visits if each shared record is walked again.
+/// The work budget is `Limits::max_items` (tightened here so the bounded tree stays small).
+#[test]
+fn shared_records_sixty_three_deep_stop_at_the_work_budget() {
+    let small = read(&synth::shared_groups(2), Limits::default()).expect("two levels");
+    let small_layer = small.layers.first().expect("layer");
+    assert_eq!(count_paths(&small_layer.items), 4, "each list names its child twice");
+    assert!(small.warnings.iter().all(|w| !w.contains("more objects")), "{:?}", small.warnings);
+
+    let limits = Limits { max_items: 4_096, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let read = read(&synth::shared_groups(63), limits);
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "shared-record read took {elapsed:?}");
+    match read {
+        Ok(doc) => {
+            assert!(doc.warnings.iter().any(|w| w.contains("the drawing has more objects than can be read")), "{:?}", doc.warnings);
+            let n: usize = doc.layers.iter().map(|layer| count_items(&layer.items)).sum();
+            assert!(n <= limits.max_items, "built {n} items, budget {}", limits.max_items);
+        }
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(msg.contains("can be read") || msg.contains("limit"), "{msg}");
+        }
+    }
+}
+
+/// Four closed 4-node paths are 16 cubics. The same shape with thousands of paths is over the
+/// geometry budget and must fail before those cubics exist. Each path stays a handful of points.
+#[test]
+fn many_modest_paths_stop_at_the_geometry_budget() {
+    let modest = read(&synth::many_paths(4, 4), Limits { max_geometry: 16, ..Limits::default() }).expect("four paths fit");
+    let modest_layer = modest.layers.first().expect("layer");
+    assert_eq!(count_paths(&modest_layer.items), 4);
+    assert_eq!(count_cubics(&modest_layer.items), 16, "built cubics stay on the budget");
+
+    let limits = Limits { max_geometry: 256, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::many_paths(4_000, 8), limits).expect_err("4_000 modest paths over the geometry budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "many-paths read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more path geometry than can be read");
+}
+
+/// A compound path builds one cubic list per child. Children have to spend the object budget and
+/// the geometry budget. A short child list still opens; a long one fails on whichever cap is tight.
+#[test]
+fn compound_children_stop_at_the_work_and_geometry_budgets() {
+    let small = read(&synth::compound_children(3, 4), Limits::default()).expect("three children");
+    let Item::Compound(path) = small.layers.first().expect("layer").items.first().expect("compound") else {
+        panic!("compound path");
+    };
+    assert_eq!(path.subpaths.len(), 3);
+    assert_eq!(path_cubics(path), 12);
+
+    // The child list itself fits in `max_items` (the parser counts each id once). Naming the
+    // compound twice walks those children again, and that second walk passes the object budget.
+    let work = Limits { max_items: 4_096, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::repeated_compound(3_000, 8, 2), work).expect_err("compound children over the work budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "compound work-budget read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more objects than can be read");
+
+    let geometry = Limits { max_geometry: 40, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::compound_children(4_000, 8), geometry).expect_err("compound children over the geometry budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "compound geometry-budget read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more path geometry than can be read");
+
+    // Under the cap, the cubics that were kept are within it.
+    let kept = read(&synth::compound_children(3, 4), geometry).expect("three children fit in 40");
+    let n = kept.layers.iter().map(|layer| count_cubics(&layer.items)).sum::<usize>();
+    assert!(n <= geometry.max_geometry && n == 12, "built {n} cubics");
+}
+
+/// One graphic style whose attribute list names that style twice. The red fill is kept, and the
+/// second edge does not walk the style again.
+#[test]
+fn a_style_referenced_twice_is_applied_once() {
+    let started = std::time::Instant::now();
+    let doc = read(&synth::doubled_style(), Limits::default()).expect("doubled style");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "doubled style took {elapsed:?}");
+    assert!(doc.warnings.iter().all(|w| !w.contains("deeply nested")), "{:?}", doc.warnings);
+    let layer = doc.layers.first().expect("layer");
+    let mut items = Vec::new();
+    flat(&layer.items, &mut items);
+    let Some(Item::Path(path)) = items.iter().find(|item| matches!(item, Item::Path(_))) else { panic!("path") };
+    let Fill::Solid(fill) = &path.fill else { panic!("fill {:?}", path.fill) };
+    assert!(near(fill.r, 1.0) && near(fill.g, 0.0) && near(fill.b, 0.0));
+}
+
+/// A list of zero ids, named by several groups. The parser counts the list once. Each group
+/// walks it again, and those zeros have to spend the object budget or the walk is free.
+#[test]
+fn repeated_zero_id_lists_spend_the_work_budget() {
+    let once = read(&synth::repeated_zero_list(40, 1), Limits { max_items: 100, ..Limits::default() }).expect("one group of zeros fits");
+    let once_layer = once.layers.first().expect("layer");
+    assert!(once_layer.items.iter().all(|item| matches!(item, Item::Group(kids) if kids.is_empty())));
+    assert!(once.warnings.iter().all(|w| !w.contains("more objects")), "{:?}", once.warnings);
+
+    let limits = Limits { max_items: 100, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::repeated_zero_list(40, 8), limits).expect_err("eight walks of the zero list pass the budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "zero-list read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more objects than can be read");
+}
+
+/// One paragraph, named several times. Each copy spends twice its UTF-8 length from the
+/// decompressed-size budget before the string is allocated. A spent budget keeps earlier runs.
+#[test]
+fn repeated_paragraphs_stop_at_the_text_budget() {
+    let text = "a".repeat(400);
+    let paras = 6u32;
+    let bytes = synth::repeated_paragraph(&text, paras);
+    let full = read(&bytes, Limits::default()).expect("text");
+    let shown = text_of(&full);
+    let want = std::iter::repeat_n(text.clone(), usize::try_from(paras).unwrap_or(0)).collect::<Vec<_>>().join("\n");
+    assert_eq!(shown, want);
+    assert!(full.warnings.iter().all(|w| !w.contains("text expansion")), "{:?}", full.warnings);
+
+    let stream = raw_stream_len(&bytes);
+    assert!(stream > text.len().saturating_mul(2), "the first paragraph has to fit in the stream budget");
+    assert!(stream < text.len().saturating_mul(2).saturating_mul(usize::try_from(paras).unwrap_or(0)), "later copies have to pass it");
+    let tight = Limits { max_decompressed: stream, ..Limits::default() };
+    let doc = read(&bytes, tight).expect("bounded text still opens");
+    let kept = text_of(&doc);
+    assert!(kept.starts_with(&text), "runs already produced stay: {kept:?}");
+    assert!(kept.len() < want.len(), "later copies were not taken: {kept:?}");
+    assert_eq!(doc.warnings.iter().filter(|w| w.contains("text expansion exceeded the safety limit")).count(), 1, "{:?}", doc.warnings);
+}
+
+fn text_of(doc: &crate::Document) -> String {
+    let mut out = String::new();
+    fn walk(items: &[Item], out: &mut String) {
+        for item in items {
+            match item {
+                Item::Text(text) => {
+                    for run in &text.runs {
+                        out.push_str(&run.text);
+                    }
+                }
+                Item::Group(kids) | Item::ClipGroup { children: kids, .. } => walk(kids, out),
+                Item::Path(_) | Item::Compound(_) => {}
+            }
+        }
+    }
+    for layer in &doc.layers {
+        walk(&layer.items, &mut out);
+    }
+    out
+}
+
+/// FreeHand 8 stores the record stream raw. Its length is the data block after the 12-byte header.
+fn raw_stream_len(bytes: &[u8]) -> usize {
+    let Some(head) = bytes.get(8..12) else { return 0 };
+    let data_len = u32::from_be_bytes([head[0], head[1], head[2], head[3]]);
+    usize::try_from(data_len).unwrap_or(0).saturating_sub(12)
+}
+
+/// Writes synthetic fixtures into `$FREEHAND_SEED_DIR` for a fuzz corpus. Does nothing when the
+/// variable is unset. Not run by `cargo test`.
+#[test]
+#[ignore]
+fn write_fuzz_seeds() {
+    let Ok(dir) = std::env::var("FREEHAND_SEED_DIR") else { return };
+    std::fs::create_dir_all(&dir).expect("seed dir");
+    for version in 8u8..=11 {
+        std::fs::write(format!("{dir}/demo-v{version}.fh"), synth::demo_at(version)).expect("write");
+    }
+    std::fs::write(format!("{dir}/hidden.fh"), synth::hidden_layer()).expect("write");
+    std::fs::write(format!("{dir}/content.fh"), synth::content_fill()).expect("write");
+    std::fs::write(format!("{dir}/empty-group.fh"), synth::empty_group_and_content_fill()).expect("write");
+    std::fs::write(format!("{dir}/nested.fh"), synth::nested_groups(4)).expect("write");
+    // Group A_k -> List[A_{k-1}, A_{k-1}] for k = 1..=63, one path at the bottom.
+    std::fs::write(format!("{dir}/shared-63.fh"), synth::shared_groups(63)).expect("write");
+    std::fs::write(format!("{dir}/many-paths.fh"), synth::many_paths(32, 4)).expect("write");
+    std::fs::write(format!("{dir}/compound-children.fh"), synth::compound_children(32, 4)).expect("write");
+}

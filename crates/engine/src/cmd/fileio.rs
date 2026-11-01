@@ -29,6 +29,7 @@ pub mod dxfimport;
 mod encode;
 pub mod eps;
 mod export;
+mod freehand;
 pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
@@ -133,6 +134,8 @@ pub use formats::{
 mod tests;
 #[cfg(test)]
 mod tests_affinity;
+#[cfg(test)]
+mod tests_freehand;
 #[cfg(test)]
 mod tests_artboard_fill;
 #[cfg(test)]

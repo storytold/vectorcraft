@@ -34,6 +34,7 @@ vectorcraft-eps = { workspace = true }
 vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
+vectorcraft-freehand = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 image = { workspace = true }
 hayro-jpeg2000 = { version = "=0.3.5", default-features = false, features = ["std", "simd"] }
@@ -55,6 +56,7 @@ rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
+vectorcraft-freehand = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }

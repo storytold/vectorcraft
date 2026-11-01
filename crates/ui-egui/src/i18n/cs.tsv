@@ -6165,3 +6165,28 @@ breakText	Glyphs	Glyfy
 	Small to Large	Od nejmenšího po největší
 	Large to Small	Od největšího po nejmenší
 	Distribute Evenly	Rozmístit rovnoměrně
+
+@msg	the FreeHand file is empty	soubor FreeHand je prázdný
+@msg	the FreeHand file is cut off in the header	soubor FreeHand je uříznutý v záhlaví
+@msg	not a FreeHand file	není soubor FreeHand
+@msg	the FreeHand file is cut off in its compressed data	soubor FreeHand je uříznutý v komprimovaných datech
+@msg	the FreeHand file's compressed data is damaged	komprimovaná data souboru FreeHand jsou poškozená
+@msg	the FreeHand file is cut off in the dictionary	soubor FreeHand je uříznutý ve slovníku
+@msg	the FreeHand file is cut off in the record list	soubor FreeHand je uříznutý v seznamu záznamů
+@msg	the FreeHand file is cut off in a record	soubor FreeHand je uříznutý v záznamu
+@msg	the FreeHand file claims more records than can be read	soubor FreeHand uvádí více záznamů, než lze přečíst
+@msg	the FreeHand file claims a dictionary larger than can be read	soubor FreeHand uvádí slovník větší, než lze přečíst
+@msg	the FreeHand file claims more path nodes than can be read	soubor FreeHand uvádí více uzlů cesty, než lze přečíst
+@msg	the FreeHand file claims more list entries than can be read	soubor FreeHand uvádí více položek seznamu, než lze přečíst
+@msg	a FreeHand record id points past the end of the file	identifikátor záznamu FreeHand ukazuje za konec souboru
+@msg	the FreeHand file decompresses past the safety limit	soubor FreeHand se po rozbalení nevejde do bezpečnostního limitu
+@msg	the FreeHand file's data block runs past the end of the file	datový blok souboru FreeHand přesahuje konec souboru
+@msg	the FreeHand file is larger than can be read	soubor FreeHand je větší, než lze přečíst
+@msg	the FreeHand file claims more entries than can be read	soubor FreeHand uvádí více položek, než lze přečíst
+@msg	the FreeHand file has a record whose size is not known	soubor FreeHand obsahuje záznam, jehož velikost není známa
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	nepodporovaná verze FreeHand {n}: VectorCraft otevírá FreeHand 8 až MX (11); otevřete jej v novějším FreeHandu a uložte, nebo jej exportujte jako EPS, PDF nebo AI
+@msg	the drawing has more objects than can be read; the rest were left out	kresba má více objektů, než lze přečíst; zbytek byl vynechán
+@msg	the FreeHand file claims more path geometry than can be read	soubor FreeHand uvádí více geometrie cesty, než lze přečíst
+@msg	the FreeHand file claims more objects than can be read	soubor FreeHand uvádí více objektů, než lze přečíst
+
+@msg	text expansion exceeded the safety limit	rozšíření textu překročilo bezpečnostní limit

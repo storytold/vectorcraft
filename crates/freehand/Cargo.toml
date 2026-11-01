@@ -1,0 +1,20 @@
+[package]
+name = "vectorcraft-freehand"
+description = "Bounded reader for Macromedia / Aldus FreeHand drawings (FH8–11 and templates)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Synthetic-file builders for tests and fuzz seeds; not a FreeHand exporter.
+synth = []
+
+[dependencies]
+flate2 = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

@@ -6217,3 +6217,28 @@ breakText	Glyphs	Glyfer
 	Small to Large	Från liten till stor
 	Large to Small	Från stor till liten
 	Distribute Evenly	Fördela jämnt
+
+@msg	the FreeHand file is empty	FreeHand-filen är tom
+@msg	the FreeHand file is cut off in the header	FreeHand-filen är avkortad i huvudet
+@msg	not a FreeHand file	inte en FreeHand-fil
+@msg	the FreeHand file is cut off in its compressed data	FreeHand-filen är avkortad i sina komprimerade data
+@msg	the FreeHand file's compressed data is damaged	FreeHand-filens komprimerade data är skadade
+@msg	the FreeHand file is cut off in the dictionary	FreeHand-filen är avkortad i ordlistan
+@msg	the FreeHand file is cut off in the record list	FreeHand-filen är avkortad i postlistan
+@msg	the FreeHand file is cut off in a record	FreeHand-filen är avkortad i en post
+@msg	the FreeHand file claims more records than can be read	FreeHand-filen anger fler poster än vad som kan läsas
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand-filen anger en större ordlista än vad som kan läsas
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand-filen anger fler banpunkter än vad som kan läsas
+@msg	the FreeHand file claims more list entries than can be read	FreeHand-filen anger fler listposter än vad som kan läsas
+@msg	a FreeHand record id points past the end of the file	ett post-id i FreeHand pekar förbi filens slut
+@msg	the FreeHand file decompresses past the safety limit	FreeHand-filen packas upp förbi säkerhetsgränsen
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand-filens datablock går förbi filens slut
+@msg	the FreeHand file is larger than can be read	FreeHand-filen är större än vad som kan läsas
+@msg	the FreeHand file claims more entries than can be read	FreeHand-filen anger fler poster än vad som kan läsas
+@msg	the FreeHand file has a record whose size is not known	FreeHand-filen har en post med okänd storlek
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	FreeHand-version {n} stöds inte: VectorCraft öppnar FreeHand 8 till MX (11); öppna filen i en nyare FreeHand och spara, eller exportera den som EPS, PDF eller AI
+@msg	the drawing has more objects than can be read; the rest were left out	ritningen har fler objekt än vad som kan läsas; resten utelämnades
+@msg	the FreeHand file claims more path geometry than can be read	FreeHand-filen anger mer bangeometri än vad som kan läsas
+@msg	the FreeHand file claims more objects than can be read	FreeHand-filen anger fler objekt än vad som kan läsas
+
+@msg	text expansion exceeded the safety limit	textutökningen överskred säkerhetsgränsen

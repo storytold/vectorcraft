@@ -6048,3 +6048,27 @@ breakText	Glyphs	Глифи
 	Small to Large	От малко към голямо
 	Large to Small	От голямо към малко
 	Distribute Evenly	Равномерно разпределение
+
+@msg	the FreeHand file is empty	файлът FreeHand е празен
+@msg	the FreeHand file is cut off in the header	файлът FreeHand е отрязан в заглавната част
+@msg	not a FreeHand file	не е файл FreeHand
+@msg	the FreeHand file is cut off in its compressed data	файлът FreeHand е отрязан в компресираните данни
+@msg	the FreeHand file's compressed data is damaged	компресираните данни на файла FreeHand са повредени
+@msg	the FreeHand file is cut off in the dictionary	файлът FreeHand е отрязан в речника
+@msg	the FreeHand file is cut off in the record list	файлът FreeHand е отрязан в списъка със записи
+@msg	the FreeHand file is cut off in a record	файлът FreeHand е отрязан в запис
+@msg	the FreeHand file claims more records than can be read	файлът FreeHand заявява повече записи, отколкото могат да се прочетат
+@msg	the FreeHand file claims a dictionary larger than can be read	файлът FreeHand заявява речник, по-голям, отколкото може да се прочете
+@msg	the FreeHand file claims more path nodes than can be read	файлът FreeHand заявява повече възли на пътя, отколкото могат да се прочетат
+@msg	the FreeHand file claims more list entries than can be read	файлът FreeHand заявява повече елементи в списъка, отколкото могат да се прочетат
+@msg	a FreeHand record id points past the end of the file	идентификатор на запис FreeHand сочи след края на файла
+@msg	the FreeHand file decompresses past the safety limit	файлът FreeHand се разархивира отвъд границата за безопасност
+@msg	the FreeHand file's data block runs past the end of the file	блокът с данни на файла FreeHand минава след края на файла
+@msg	the FreeHand file is larger than can be read	файлът FreeHand е по-голям, отколкото може да се прочете
+@msg	the FreeHand file claims more entries than can be read	файлът FreeHand заявява повече елементи, отколкото могат да се прочетат
+@msg	the FreeHand file has a record whose size is not known	файлът FreeHand има запис, чийто размер не е известен
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	неподдържана версия на FreeHand {n}: VectorCraft отваря FreeHand 8 до MX (11); отворете я в по-нов FreeHand и я запазете, или я експортирайте като EPS, PDF или AI
+@msg	the drawing has more objects than can be read; the rest were left out	чертежът има повече обекти, отколкото могат да се прочетат; останалото е пропуснато
+@msg	the FreeHand file claims more path geometry than can be read	файлът FreeHand заявява повече геометрия на пътя, отколкото може да се прочете
+@msg	the FreeHand file claims more objects than can be read	файлът FreeHand заявява повече обекти, отколкото могат да се прочетат
+@msg	text expansion exceeded the safety limit	разширяването на текста надхвърли границата за безопасност

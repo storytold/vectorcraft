@@ -6154,3 +6154,28 @@ breakText	Glyphs	გლიფები
 	Small to Large	პატარიდან დიდისკენ
 	Large to Small	დიდიდან პატარისკენ
 	Distribute Evenly	თანაბრად განაწილება
+
+@msg	the FreeHand file is empty	FreeHand ფაილი ცარიელია
+@msg	the FreeHand file is cut off in the header	FreeHand ფაილი სათაურშია წაკვეთილი
+@msg	not a FreeHand file	ეს FreeHand ფაილი არ არის
+@msg	the FreeHand file is cut off in its compressed data	FreeHand ფაილი შეკუმშულ მონაცემებშია წაკვეთილი
+@msg	the FreeHand file's compressed data is damaged	FreeHand ფაილის შეკუმშული მონაცემები დაზიანებულია
+@msg	the FreeHand file is cut off in the dictionary	FreeHand ფაილი ლექსიკონშია წაკვეთილი
+@msg	the FreeHand file is cut off in the record list	FreeHand ფაილი ჩანაწერთა სიაშია წაკვეთილი
+@msg	the FreeHand file is cut off in a record	FreeHand ფაილი ჩანაწერშია წაკვეთილი
+@msg	the FreeHand file claims more records than can be read	FreeHand ფაილი იმაზე მეტ ჩანაწერს აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand ფაილი იმაზე დიდ ლექსიკონს აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand ფაილი იმაზე მეტ ტრაექტორიის წერტილს აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file claims more list entries than can be read	FreeHand ფაილი იმაზე მეტ სიის ელემენტს აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	a FreeHand record id points past the end of the file	FreeHand ჩანაწერის იდენტიფიკატორი ფაილის ბოლოს მიღმა მიუთითებს
+@msg	the FreeHand file decompresses past the safety limit	FreeHand ფაილი უსაფრთხოების ზღვარს მიღმა იშლება
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand ფაილის მონაცემთა ბლოკი ფაილის ბოლოს სცდება
+@msg	the FreeHand file is larger than can be read	FreeHand ფაილი იმაზე დიდია, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file claims more entries than can be read	FreeHand ფაილი იმაზე მეტ ელემენტს აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file has a record whose size is not known	FreeHand ფაილს აქვს ჩანაწერი, რომლის ზომა უცნობია
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	მხარდაუჭერელი FreeHand ვერსია {n}: VectorCraft ხსნის FreeHand 8-დან MX-მდე (11); გახსენით ის უფრო ახალ FreeHand-ში და შეინახეთ, ან გაიტანეთ EPS, PDF ან AI ფორმატში
+@msg	the drawing has more objects than can be read; the rest were left out	ნახატს იმაზე მეტი ობიექტი აქვს, ვიდრე წაკითხვა შეიძლება; დანარჩენი გამოტოვებულია
+@msg	the FreeHand file claims more path geometry than can be read	FreeHand ფაილი იმაზე მეტ ტრაექტორიის გეომეტრიას აცხადებს, ვიდრე წაკითხვა შეიძლება
+@msg	the FreeHand file claims more objects than can be read	FreeHand ფაილი იმაზე მეტ ობიექტს აცხადებს, ვიდრე წაკითხვა შეიძლება
+
+@msg	text expansion exceeded the safety limit	ტექსტის გაშლამ უსაფრთხოების ზღვარი გადააჭარბა

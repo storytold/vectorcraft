@@ -6195,3 +6195,28 @@ breakText	Glyphs	Merkit
 	Small to Large	Pienestä suureen
 	Large to Small	Suuresta pieneen
 	Distribute Evenly	Jaa tasaisesti
+
+@msg	the FreeHand file is empty	tämä FreeHand-tiedosto on tyhjä
+@msg	the FreeHand file is cut off in the header	tämä FreeHand-tiedosto on katkennut otsakkeessa
+@msg	not a FreeHand file	ei FreeHand-tiedosto
+@msg	the FreeHand file is cut off in its compressed data	tämä FreeHand-tiedosto on katkennut pakatussa datassa
+@msg	the FreeHand file's compressed data is damaged	tämän FreeHand-tiedoston pakattu data on vioittunut
+@msg	the FreeHand file is cut off in the dictionary	tämä FreeHand-tiedosto on katkennut sanakirjassa
+@msg	the FreeHand file is cut off in the record list	tämä FreeHand-tiedosto on katkennut tietueluettelossa
+@msg	the FreeHand file is cut off in a record	tämä FreeHand-tiedosto on katkennut tietueessa
+@msg	the FreeHand file claims more records than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän tietueita kuin voidaan lukea
+@msg	the FreeHand file claims a dictionary larger than can be read	tämä FreeHand-tiedosto ilmoittaa sanakirjan, joka on suurempi kuin voidaan lukea
+@msg	the FreeHand file claims more path nodes than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän polun pisteitä kuin voidaan lukea
+@msg	the FreeHand file claims more list entries than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän luettelon merkintöjä kuin voidaan lukea
+@msg	a FreeHand record id points past the end of the file	FreeHand-tietueen tunniste osoittaa tiedoston lopun yli
+@msg	the FreeHand file decompresses past the safety limit	tämän FreeHand-tiedoston purku ylittää turvarajan
+@msg	the FreeHand file's data block runs past the end of the file	tämän FreeHand-tiedoston datalohko ulottuu tiedoston lopun yli
+@msg	the FreeHand file is larger than can be read	tämä FreeHand-tiedosto on suurempi kuin voidaan lukea
+@msg	the FreeHand file claims more entries than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän merkintöjä kuin voidaan lukea
+@msg	the FreeHand file has a record whose size is not known	tässä FreeHand-tiedostossa on tietue, jonka koko on tuntematon
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	FreeHand-versiota {n} ei tueta: VectorCraft avaa FreeHand-versiot 8–MX (11); avaa tiedosto uudemmassa FreeHandissa ja tallenna, tai vie se EPS-, PDF- tai AI-muotoon
+@msg	the drawing has more objects than can be read; the rest were left out	piirustuksessa on enemmän objekteja kuin voidaan lukea; loput jätettiin pois
+@msg	the FreeHand file claims more path geometry than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän polun geometriaa kuin voidaan lukea
+@msg	the FreeHand file claims more objects than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän objekteja kuin voidaan lukea
+
+@msg	text expansion exceeded the safety limit	tekstin laajennus ylitti turvarajan

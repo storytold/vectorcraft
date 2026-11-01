@@ -5748,3 +5748,28 @@ breakText	Glyphs	글리프
 	Small to Large	작은 것부터
 	Large to Small	큰 것부터
 	Distribute Evenly	균등 분포
+
+@msg	the FreeHand file is empty	FreeHand 파일이 비어 있습니다
+@msg	the FreeHand file is cut off in the header	FreeHand 파일이 헤더 중간에서 잘렸습니다
+@msg	not a FreeHand file	FreeHand 파일이 아닙니다
+@msg	the FreeHand file is cut off in its compressed data	FreeHand 파일이 압축 데이터 중간에서 잘렸습니다
+@msg	the FreeHand file's compressed data is damaged	FreeHand 파일의 압축 데이터가 손상되었습니다
+@msg	the FreeHand file is cut off in the dictionary	FreeHand 파일이 사전 중간에서 잘렸습니다
+@msg	the FreeHand file is cut off in the record list	FreeHand 파일이 레코드 목록 중간에서 잘렸습니다
+@msg	the FreeHand file is cut off in a record	FreeHand 파일이 레코드 중간에서 잘렸습니다
+@msg	the FreeHand file claims more records than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 레코드를 선언합니다
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand 파일이 읽을 수 있는 것보다 큰 사전을 선언합니다
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 패스 노드를 선언합니다
+@msg	the FreeHand file claims more list entries than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 목록 항목을 선언합니다
+@msg	a FreeHand record id points past the end of the file	FreeHand 레코드 ID가 파일 끝을 지나 가리킵니다
+@msg	the FreeHand file decompresses past the safety limit	FreeHand 파일의 압축 해제 결과가 안전 한도를 넘습니다
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand 파일의 데이터 블록이 파일 끝을 넘습니다
+@msg	the FreeHand file is larger than can be read	FreeHand 파일이 읽을 수 있는 크기보다 큽니다
+@msg	the FreeHand file claims more entries than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 항목을 선언합니다
+@msg	the FreeHand file has a record whose size is not known	FreeHand 파일에 크기를 알 수 없는 레코드가 있습니다
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	지원하지 않는 FreeHand 버전 {n}: VectorCraft는 FreeHand 8부터 MX(11)까지 엽니다. 더 새로운 FreeHand에서 열어 저장하거나 EPS, PDF 또는 AI로 내보내세요
+@msg	the drawing has more objects than can be read; the rest were left out	도면의 객체가 읽을 수 있는 것보다 많습니다. 나머지는 빼 두었습니다
+@msg	the FreeHand file claims more path geometry than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 패스 도형을 선언합니다
+@msg	the FreeHand file claims more objects than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 객체를 선언합니다
+
+@msg	text expansion exceeded the safety limit	텍스트 확장이 안전 한도를 넘었습니다
