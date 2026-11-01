@@ -434,6 +434,7 @@ mod tests {
         set(&mut app, "firstLineIndent", json!(-12));
         frame(&mut app);
         assert!(app.session.in_interaction(), "the preview runs");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "the preview adds no undo step");
         let want = Some(ParaList::bulleted(Bullet::Square).aligned(ListAlign::Right));
         assert_eq!(first(&app, id), (want, 24.0, -12.0), "previewed on the type");
         super::super::confirm(&mut app).unwrap();
@@ -469,12 +470,20 @@ mod tests {
         app.run("text.setFormat", json!({"number": "arabic"})).unwrap();
         let before = first(&app, id);
         assert_eq!(before, (Some(ParaList::numbered(NumberStyle::Arabic)), 18.0, -18.0));
+        let undo = app.session.active().unwrap().history.undo.len();
         app.run("ui.bulletsAndNumbering", json!({})).unwrap();
         pick_preset(&mut app, "number", Some("lowerLetters"));
         set(&mut app, "listAlign", json!("right"));
         set(&mut app, "leftIndent", json!(30));
         frame(&mut app);
         assert_eq!(first(&app, id), (Some(ParaList::numbered(NumberStyle::LowerLetters).aligned(ListAlign::Right)), 30.0, -18.0));
+        // Another change previews again, still without an undo step.
+        set(&mut app, "leftIndent", json!(36));
+        frame(&mut app);
+        assert_eq!(first(&app, id).1, 36.0);
+        set(&mut app, "leftIndent", json!(30));
+        frame(&mut app);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "the preview adds no undo step");
         // Changed back in the dialog, the type is as it was.
         set(&mut app, "listAlign", json!("left"));
         set(&mut app, "leftIndent", json!(18));
@@ -488,6 +497,7 @@ mod tests {
         super::super::cancel(&mut app);
         assert!(app.ui.dialog.is_none());
         assert_eq!(first(&app, id), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "Cancel leaves no undo step");
     }
 
     /// A preset picked for paragraphs in no list and without indents fills in the 18 pt and

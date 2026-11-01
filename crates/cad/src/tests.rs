@@ -879,6 +879,16 @@ fn a_number_is_text_of_its_own_before_its_paragraph() {
     assert!(right[0].1 > 10.0 && right[0].1 < 40.0, "{right:?}");
     let rtl = numbered_aligned("שלום", 11, ListAlign::Right);
     assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
+    // A mixed paragraph: the period follows the paragraph's direction, not the script of the
+    // words it holds, with either alignment.
+    let marker = |text: &str, align: ListAlign| {
+        let out = numbered_aligned(text, 11, align);
+        out.into_iter().filter_map(|(s, _)| s).find(|s| s.contains("12")).unwrap_or_default()
+    };
+    for align in [ListAlign::Left, ListAlign::Right] {
+        assert_eq!(marker("Item שלום", align), "12.", "{align:?}");
+        assert_eq!(marker("שלום Item", align), ".12", "{align:?}");
+    }
 }
 
 /// Area type that Shrink Text to Fit scales down is written at the height it draws at.
