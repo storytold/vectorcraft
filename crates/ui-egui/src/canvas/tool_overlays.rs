@@ -354,10 +354,18 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
         let c = xf.to_screen(steps);
         p.circle_filled(c, HANDLE_RADIUS, KNOB_FILL);
         let (d, w) = (2.5_f32, 3.0_f32);
-        for (dy, dir) in [(-3.5, 1.0), (3.5, -1.0)] {
-            let m = c + vec2(0.0, dy);
-            p.line_segment([m + vec2(-w, dir * d), m], Stroke::new(1.5, KNOB_STROKE));
-            p.line_segment([m, m + vec2(w, dir * d)], Stroke::new(1.5, KNOB_STROKE));
+        // The chevrons point up and down the box's own edge, so they turn with the box (and the
+        // view).
+        let up = {
+            let v = xf.to_screen(h.steps_at + h.edge_up) - xf.to_screen(h.steps_at);
+            if v.length() > 1e-6 { v.normalized() } else { vec2(0.0, -1.0) }
+        };
+        let right = vec2(-up.y, up.x);
+        for (offset, dir) in [(3.5, 1.0), (-3.5, -1.0)] {
+            let m = c + up * offset;
+            let arm = up * (-dir * d);
+            p.line_segment([m - right * w + arm, m], Stroke::new(1.5, KNOB_STROKE));
+            p.line_segment([m, m + right * w + arm], Stroke::new(1.5, KNOB_STROKE));
         }
         p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, KNOB_STROKE));
         if let Some(e) = h.easing_handles() {
