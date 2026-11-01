@@ -137,6 +137,36 @@ fn an_ai_file_opens_with_the_swatches_of_its_palette() {
     );
 }
 
+/// A `.ai` opens with the graphic styles of its style list, in the list's order, and an object read
+/// as itself with a listed style is linked to it.
+#[test]
+fn an_ai_file_opens_with_the_graphic_styles_of_its_style_list() {
+    let style = |name: &str, xa: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+             /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+        )
+    };
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Blue)\n%AI9_EndArtStyleList\n",
+        style("Blue", "0 0 0 0 0 0 1 Xa\n"),
+        style("Red", "0 0 0 0 1 0 0 Xa\n")
+    );
+    let hidden = ai::rect(10.0, 50.0, 40.0, 90.0).replace('\n', "\n%_");
+    let art = format!("0 Ae\nu\n0 0 0 0 1 0 0 Xa\n{}f\nU\n%_{hidden}f\n1 (Red) XW\n", ai::rect(10.0, 50.0, 40.0, 90.0));
+    let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("Art", &art)));
+    let mut s = Session::new();
+    let r = open(&mut s, "styles.ai", &ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"], "opened from the editing data: {r}");
+    let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
+    assert_eq!(styles, [("Red", 1), ("Blue", 2)]);
+    let square = &doc.layers[0].children().unwrap()[0];
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
 /// A `.ai` whose editing data has a palette and no layers, as a swatch library is saved, opens as its
 /// PDF part with the swatches and color groups of its palette in place of the default swatches.
 #[test]

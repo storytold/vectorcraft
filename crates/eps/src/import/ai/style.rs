@@ -41,7 +41,7 @@ use std::collections::HashMap;
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Dash, Effect, LineCap, LineJoin, WidthProfile};
+use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, WidthProfile};
 
 use super::lex::{Lexer, Tok};
 use super::obj::V;
@@ -106,6 +106,9 @@ pub(super) struct ArtStyle {
     pub effects: Vec<Effect>,
     /// How many of [`Self::items`] paint below the object's contents (`None`: none do).
     pub contents_index: Option<usize>,
+    /// The object's own opacity, blend mode, isolation and knockout (its blend filter), when the
+    /// style has them.
+    pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -174,6 +177,8 @@ struct Filter {
     pattern: Option<(String, Option<[f64; 6]>)>,
     /// `mode opacity … Xy`.
     xy: Option<(usize, f32)>,
+    /// `… isolate knockout … Xy`.
+    xy_group: Option<(bool, Knockout)>,
 }
 
 impl Default for Filter {
@@ -197,12 +202,62 @@ impl Default for Filter {
             gradient_of: None,
             pattern: None,
             xy: None,
+            xy_group: None,
         }
     }
 }
 
 /// Most filters read in one style.
 const MAX_FILTERS: usize = 4096;
+
+/// Most entries read from a style list.
+const MAX_LISTED: usize = 4096;
+/// The longest style name read from a style list, in bytes.
+const MAX_LISTED_NAME: usize = 1024;
+
+/// The style list (`%AI9_BeginArtStyleList`, between its markers): one literal string per style,
+/// the Graphic Styles panel's order. Each name is its string's bytes, escapes undone; other tokens,
+/// a string the data ends inside and names past [`MAX_LISTED_NAME`] are left out.
+pub(super) fn art_style_list(data: &[u8]) -> Vec<Vec<u8>> {
+    let mut names = vec![];
+    let mut lex = Lexer::new(data);
+    loop {
+        let before = lex.offset();
+        if names.len() >= MAX_LISTED {
+            break;
+        }
+        let Some(t) = lex.next_token() else { break };
+        // The lexer stops a string at its closing `)` or at the end of the data.
+        let closed = lex.offset() < data.len() || data.get(before..).is_some_and(closes);
+        if let Tok::Str(s) = t.tok
+            && closed
+            && s.len() <= MAX_LISTED_NAME
+        {
+            names.push(s);
+        }
+    }
+    names
+}
+
+/// Does the first literal string in `data` end with its own `)` (not an escaped one or one that
+/// closes a nested pair)?
+fn closes(data: &[u8]) -> bool {
+    let Some(start) = data.iter().position(|b| *b == b'(') else { return false };
+    let mut depth = 0usize;
+    let mut bytes = data.iter().skip(start + 1);
+    while let Some(b) = bytes.next() {
+        match b {
+            b'\\' => {
+                bytes.next();
+            }
+            b'(' => depth += 1,
+            b')' if depth == 0 => return true,
+            b')' => depth -= 1,
+            _ => {}
+        }
+    }
+    false
+}
 
 /// The styles of the section `data` (between its markers), by name.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
@@ -370,11 +425,18 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
         }
         "Xy" => {
             let n: Vec<f64> = vals.iter().filter_map(V::num).collect();
-            if let [mode, opacity, ..] = n.as_slice()
+            if let [mode, opacity, rest @ ..] = n.as_slice()
                 && mode.is_finite()
                 && opacity.is_finite()
             {
                 f.xy = Some((mode.max(0.0) as usize, opacity.clamp(0.0, 1.0) as f32));
+                // As an object's own `Xy` reads them.
+                let knockout = match rest.get(1).map(|v| *v as i64) {
+                    Some(1) => Knockout::On,
+                    Some(2) => Knockout::Neutral,
+                    _ => Knockout::Off,
+                };
+                f.xy_group = Some((rest.first().is_some_and(|v| *v != 0.0), knockout));
             }
         }
         // `flag (name) x y angle length a b c d tx ty Bg`.
@@ -643,7 +705,12 @@ fn style(filters: &[Filter]) -> ArtStyle {
             }
             CONDUIT => {}
             // The object's own transparency, which its look carries too.
-            BLEND => {}
+            BLEND => {
+                if let Some((mode, opacity)) = f.xy {
+                    let (isolate, knockout) = f.xy_group.unwrap_or((false, Knockout::Off));
+                    st.transparency = Some((opacity, super::read::blend_mode(mode), isolate, knockout));
+                }
+            }
             _ => match effect(f) {
                 Some(e) => st.effects.push(e),
                 None => b.plain = false,

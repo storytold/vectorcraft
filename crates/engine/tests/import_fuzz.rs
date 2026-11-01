@@ -3026,6 +3026,46 @@ proptest! {
         survive("mutated .ai Objects on Path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
     }
 
+    /// Style lists (`%AI9_BeginArtStyleList`) of any entries, repeated, empty, malformed or not
+    /// defined, with or without their end, and objects whose `XW` has any code and any style name.
+    #[test]
+    fn ai_style_lists_and_style_links_never_panic(
+        listed in prop::collection::vec(prop_oneof![
+            prop::sample::select(vec!["(A)", "(B)", "()", "(Caf\\303\\251)", "(A(B))", "(x\\)", "(", ")", "<41>", "/A", "1"]).prop_map(str::to_string),
+            "[ -~]{0,12}",
+        ], 0..12),
+        ended in any::<bool>(),
+        objects in prop::collection::vec((prop_oneof![arb_num(), prop::sample::select(vec!["1".to_string(), "6".into(), "9".into()])], prop::sample::select(vec!["A", "B", "", "Caf\u{e9}", "Missing"]), any::<bool>()), 0..6),
+    ) {
+        use vectorcraft_testkit::ai;
+        let style = |name: &str| {
+            format!(
+                "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 1 0 0 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+                 /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n; /Part ,\n;\n"
+            )
+        };
+        let end = if ended { "%AI9_EndArtStyleList\n" } else { "" };
+        let header = format!(
+            "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n{}\n{end}",
+            style("A"),
+            style("B"),
+            style("Caf\u{e9}"),
+            listed.join("\n")
+        );
+        let art: String = objects
+            .iter()
+            .map(|(code, name, group)| {
+                let object = if *group { "%_0 Ae\n%_u\n%_0 0 m\n%_0 9 L\n%_9 9 L\n%_f\n%_U\n" } else { "%_0 0 m\n%_0 9 L\n%_9 9 L\n%_f\n" };
+                format!("0 Ae\nu\n0 0 m\n0 9 L\n9 9 L\nf\nU\n{object}{code} ({name}) XW\n")
+            })
+            .collect();
+        let data = ai::editing_data(200.0, 100.0, &format!("{header}%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n{art}LB\n%AI5_EndLayer--\n"));
+        survive("style lists and links", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("style lists and links in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+
     /// Objects on Path records of any shape: ids in any order, repeated or missing, any number of
     /// objects, pivots and angles out of range or not finite, spacings, order tags that disagree,
     /// groups nested or cut short, and versioned content left open.
@@ -3378,6 +3418,18 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "9 () XW",
             "\n%AI9_BeginArtStyles\n",
             "\n%AI9_EndArtStyles\n",
+            "\n%AI9_BeginArtStyleList\n",
+            "\n%AI9_EndArtStyleList\n",
+            "(style)\n",
+            "(st\\)y(le)\n",
+            "(\\303\\251",
+            "(style) XW",
+            "1 () XW",
+            "6 (style) XW",
+            "7 (style) XW",
+            "-1 (style) XW",
+            "1e308 (style) XW",
+            "1 (Caf\\351) XW",
             "/KnownStyle :",
             "(style) /Name ,",
             "/ActiveStyle :",

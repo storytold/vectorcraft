@@ -66,6 +66,11 @@ impl<'a> Reader<'a> {
             self.styles = crate::import::ai::style::art_styles(section);
             return Ok(());
         }
+        if m == "BeginArtStyleList" {
+            let section = self.section("EndArtStyleList")?;
+            self.style_list = crate::import::ai::style::art_style_list(section);
+            return Ok(());
+        }
         if m == "BeginPalette" {
             let section = self.section("EndPalette")?;
             self.palette = crate::import::ai::palette::palette(section);

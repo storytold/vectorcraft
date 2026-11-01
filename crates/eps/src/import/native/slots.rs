@@ -216,6 +216,8 @@ pub(super) fn fill_slots(
             let transparent = see_through(n);
             // An art style read onto the slot (fills, strokes and effects round the characters) is the type's.
             let styled = (!n.appearance.items.is_empty() || !n.appearance.effects.is_empty()).then(|| n.appearance.clone());
+            // The graphic style it is linked to, which the type made from the text document keeps with it.
+            let linked = n.extras().graphic_style;
             let replacement = match content.next() {
                 Some(Content::Page(parts)) if !parts.is_empty() => {
                     // The page's type (and the strokes round it) take the slot's place as they are.
@@ -257,6 +259,15 @@ pub(super) fn fill_slots(
                             parts.push(Arc::new(group));
                         }
                     }
+                    // One text object with the slot's appearance and transparency keeps its graphic style.
+                    if let ([p], Some(a)) = (parts.as_mut_slice(), styled.as_ref())
+                        && linked.is_some()
+                        && matches!(p.kind, NodeKind::Text(_))
+                        && a.approx_eq(&p.appearance)
+                        && (p.opacity, p.blend, p.isolate, p.knockout) == state
+                    {
+                        Arc::make_mut(p).extras_mut().graphic_style = linked;
+                    }
                     let n = parts.len();
                     nodes.splice(i..=i, parts);
                     i += n;
@@ -272,6 +283,9 @@ pub(super) fn fill_slots(
                     let seen = seen || styled.is_some();
                     if let Some(appearance) = styled {
                         text.appearance = appearance;
+                        if linked.is_some() {
+                            text.extras_mut().graphic_style = linked;
+                        }
                     }
                     // Type the page shows is kept; other made type is weighed against the page.
                     text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
