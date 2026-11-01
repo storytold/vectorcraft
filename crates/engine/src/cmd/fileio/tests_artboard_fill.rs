@@ -98,6 +98,18 @@ fn pdf_and_svg_show_the_color_and_their_editing_data_keeps_it_as_the_artboards()
 }
 
 #[test]
+fn the_ai_editing_copy_for_other_apps_draws_the_color_as_the_pages_do() {
+    let mut s = session();
+    let opts = LoadOptions { native: false, ..Default::default() };
+    for (more, fill) in [(json!({}), true), (json!({"includeArtboardFill": false}), false)] {
+        let l = load::load_with("a.ai", &file(&mut s, with(json!({"format": "ai"}), &more)), &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{more}: {:?}", l.warnings);
+        let names: Vec<String> = l.doc.layers.iter().filter_map(|l| l.name.clone()).collect();
+        assert_eq!(names.iter().any(|n| n == "Artboard Fill"), fill, "{more}: {names:?}");
+    }
+}
+
+#[test]
 fn eps_and_postscript_print_draw_the_color() {
     let mut s = session();
     // The only red the document has, the first artboard's color: RGB, or CMYK PostScript's (its
