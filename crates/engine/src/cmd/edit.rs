@@ -699,7 +699,7 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     copy(s, p)?;
     // The selected ruler guides it copied go with the objects, in the same undo step (#3226).
-    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids, "guides": true })) } else { clear(s, &json!({})) }
+    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids, "guides": true })) } else { clear(s, &json!({ "guides": true })) }
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
