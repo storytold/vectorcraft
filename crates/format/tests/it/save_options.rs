@@ -229,7 +229,7 @@ fn precise_doc() -> Document {
     n.extras_mut().mask = Some(Box::new(OpacityMask::new(precise_path(&mut d, 7.77777777, 1.0), false)));
     d.insert(Some(layer), 0, n).unwrap();
     let art = precise_path(&mut d, 1.23456789, 0.0);
-    d.symbols.push(Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let xf = Affine::new([1.0, 0.0, 0.0, 1.0, 0.123456789, 0.0]);
     let id = d.alloc_id();
     d.insert(Some(layer), 1, Node::new(id, NodeKind::SymbolInstance { symbol: "S".into(), xf })).unwrap();
@@ -274,12 +274,13 @@ fn precision_rounds_the_paths_objects_keep_besides_their_own() {
     let mut d = Document::new(100.0, 100.0);
     let layer = d.layers[0].id;
     let path = || PathData::single(SubPath::polyline(&[Point::new(1.23456789, 0.0), Point::new(9.87654321, 5.0)], false));
-    // Live Corners' uncut outline, and an Intertwine area.
+    // Live Corners' uncut outline, and Intertwine areas of tiers 1 and 2.
     let mut n = precise_path(&mut d, 1.0, 1.0);
     if let NodeKind::Path { live, .. } = &mut n.kind {
         *live = Some(Box::new(LiveShape::Path { base: path(), radii: vec![2.0], kinds: vec![], radii_relative: false }));
     }
     n.extras_mut().intertwine = Some(Box::new(path()));
+    n.extras_mut().intertwine_tiers = vec![path()];
     d.insert(Some(layer), 0, n).unwrap();
     // A blend's replaced spine and an envelope's top-object outline.
     let keys = vec![Arc::new(precise_path(&mut d, 1.0, 1.0)), Arc::new(precise_path(&mut d, 50.0, 1.0))];
@@ -303,10 +304,10 @@ fn precision_rounds_the_paths_objects_keep_besides_their_own() {
     d.unknown.insert("brushes".into(), Value::Array(brushes));
     let text = |precision| String::from_utf8(save_with(&d, &SaveOptions { precision, ..SaveOptions::default() }).unwrap()).unwrap();
     let exact = text(None);
-    assert_eq!((exact.matches("1.23456789").count(), exact.matches("9.87654321").count()), (9, 8), "{exact}");
+    assert_eq!((exact.matches("1.23456789").count(), exact.matches("9.87654321").count()), (11, 10), "{exact}");
     let rounded = text(Some(4));
     assert_eq!((rounded.matches("1.23456789").count(), rounded.matches("9.87654321").count()), (1, 0), "{rounded}");
-    assert_eq!((rounded.matches("1.2346").count(), rounded.matches("9.8765").count()), (8, 8), "{rounded}");
+    assert_eq!((rounded.matches("1.2346").count(), rounded.matches("9.8765").count()), (10, 10), "{rounded}");
 }
 
 #[test]

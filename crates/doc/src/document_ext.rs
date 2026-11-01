@@ -164,8 +164,10 @@ impl Document {
                 }
                 _ => {}
             }
-            if let Some(area) = n.extras_if_any().and_then(|e| e.intertwine.as_deref_mut()) {
-                round_path(area);
+            if let Some(e) = n.extras_if_any() {
+                for area in e.intertwine.as_deref_mut().into_iter().chain(e.intertwine_tiers.iter_mut()) {
+                    round_path(area);
+                }
             }
         };
         let roots = self
