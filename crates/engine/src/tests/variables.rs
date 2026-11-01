@@ -1270,13 +1270,13 @@ fn datasets_csv_header_prefixes_define_variables() {
 #[test]
 fn datasets_csv_exact_names_win_over_prefixes() {
     let mut s = session();
-    for (name, kind) in [("#Shown", "text"), ("@Photo", "visibility"), ("%Chart", "graph"), ("Shown", "visibility")] {
+    for (name, kind) in [("#Shown", "text"), ("@Photo", "visibility"), ("%Chart", "graph"), ("Shown", "image")] {
         s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
     }
-    let values = json!({"#Shown": "hello", "@Photo": true, "%Chart": ",Q\nX,3", "Shown": false});
+    let values = json!({"#Shown": "hello", "@Photo": true, "%Chart": ",Q\nX,3", "Shown": "s.png"});
     s.execute("dataset.new", &json!({"name": "A", "values": values})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    assert!(csv.starts_with("name,#Shown,@Photo,%Chart,Shown\n"), "{csv}");
+    assert!(csv.starts_with("name,#Shown,#@Photo,%Chart,@Shown\n"), "{csv}");
     s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
     let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     assert_eq!((imp["imported"].as_u64(), imp["defined"].clone()), (Some(1), json!([])));
@@ -1284,8 +1284,62 @@ fn datasets_csv_exact_names_win_over_prefixes() {
     assert_eq!(value("#Shown"), Some(vectorcraft_doc::DataValue::Text("hello".into())));
     assert_eq!(value("@Photo"), Some(vectorcraft_doc::DataValue::Visible(true)));
     assert_eq!(value("%Chart"), Some(vectorcraft_doc::DataValue::Graph(",Q\nX,3".into())));
-    assert_eq!(value("Shown"), Some(vectorcraft_doc::DataValue::Visible(false)));
+    assert_eq!(value("Shown"), Some(vectorcraft_doc::DataValue::Image("s.png".into())));
     assert_eq!(s.doc().unwrap().doc.variables.variables.len(), 4);
+}
+
+/// `dataset.export` writes `#` before a visibility variable's header and `@` before an image
+/// variable's, so a document without the variables reads the file back with their kinds. The
+/// reply's `warning` names the variables it doesn't: a text variable whose name starts with `#`,
+/// `@` or `%`, and a graph variable.
+#[test]
+fn datasets_csv_export_marks_visibility_and_image_columns() {
+    let mut s = session();
+    for (name, kind) in [("Name", "text"), ("Show", "visibility"), ("Photo", "image")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Ann", "Show": false, "Photo": "a.png"}})).unwrap();
+    let out = s.execute("dataset.export", &json!({})).unwrap();
+    assert_eq!(out["csv"], "name,Name,#Show,@Photo\nA,Ann,false,a.png\n");
+    assert!(out.get("warning").is_none(), "{out}");
+
+    let mut fresh = session();
+    let imp = fresh.execute("dataset.import", &json!({"csv": out["csv"]})).unwrap();
+    assert_eq!(imp["defined"], json!(["Name", "Show", "Photo"]));
+    let listed = fresh.execute("variable.list", &json!({})).unwrap();
+    let kinds: Vec<_> = listed["variables"].as_array().unwrap().iter().map(|v| v["kind"].clone()).collect();
+    assert_eq!(kinds, [json!("text"), json!("visibility"), json!("image")]);
+    let value = |var: &str| fresh.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get(var)).cloned();
+    assert_eq!(value("Show"), Some(vectorcraft_doc::DataValue::Visible(false)));
+    assert_eq!(value("Photo"), Some(vectorcraft_doc::DataValue::Image("a.png".into())));
+
+    for (name, kind) in [("#Tag", "text"), ("Chart", "graph"), ("@Note", "text"), ("%Rate", "text")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    let out = s.execute("dataset.export", &json!({})).unwrap();
+    assert_eq!(out["warning"], "a new document won't read these variables back with their kind: `#Tag`, `Chart`, `@Note`, `%Rate`");
+    assert!(out["csv"].as_str().unwrap().starts_with("name,Name,#Show,@Photo,#Tag,Chart,@Note,%Rate\n"), "{out}");
+}
+
+/// `dataset.export` is refused, naming both variables, when a variable's header is another
+/// variable's name, which an import reads as that variable; with `path`, no file is written.
+#[test]
+fn datasets_csv_export_refuses_a_header_that_names_another_variable() {
+    let dir = Folder::new("vars-csv-header");
+    for (first, second) in
+        [(("Show", "visibility"), ("#Show", "text")), (("Photo", "image"), ("@Photo", "graph")), (("X", "visibility"), ("#X", "image"))]
+    {
+        let mut s = session();
+        for (name, kind) in [first, second] {
+            s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+        }
+        let e = s.execute("dataset.export", &json!({})).unwrap_err().to_string();
+        let (name, other) = (first.0, second.0);
+        assert!(e.contains(&format!("for `{name}` would read back as the variable `{other}`")), "{e}");
+        let out = dir.file("sets.csv");
+        assert!(s.execute("dataset.export", &json!({"path": out})).is_err());
+        assert!(!std::path::Path::new(&out).exists(), "{out}");
+    }
 }
 
 /// A `%` header cell that isn't a variable's name (graph data files) is refused with its column,
@@ -1348,7 +1402,7 @@ fn datasets_csv_round_trips_and_rejects_bad_input() {
 
     let exported = s.execute("dataset.export", &json!({})).unwrap();
     let csv = exported["csv"].as_str().unwrap().to_string();
-    assert!(csv.starts_with("name,Name,Show,Photo\n"), "{csv}");
+    assert!(csv.starts_with("name,Name,#Show,@Photo\n"), "{csv}");
     assert!(csv.contains("Alice") && csv.contains("Bob") && csv.contains("false"), "{csv}");
 
     // Clear rows, import again, apply B.

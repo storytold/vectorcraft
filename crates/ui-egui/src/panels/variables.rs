@@ -489,6 +489,35 @@ mod tests {
         }
     }
 
+    /// Export Data Sets…'s warning about variables a new document doesn't read back with their
+    /// kind shows in the status bar, and so does its refusal of a header that is another
+    /// variable's name; both are translated in every language but English.
+    #[test]
+    fn the_export_data_sets_warning_shows_in_the_status_bar() {
+        use crate::i18n::{Lang, message};
+        let mut app = app_with_data();
+        let dir = std::env::temp_dir().join(format!("vc-export-warning-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("sets.csv");
+        app.run("variable.define", json!({"name": "#Tag", "kind": "text"})).unwrap();
+        app.run("dataset.export", json!({"path": path})).unwrap();
+        assert_eq!(app.ui.status, "a new document won't read these variables back with their kind: `#Tag`");
+        let warning = app.ui.status.clone();
+        app.run("variable.define", json!({"name": "Tag", "kind": "visibility"})).unwrap();
+        assert!(app.run("dataset.export", json!({"path": path})).is_err());
+        let refused = app.ui.status.clone();
+        assert!(refused.contains("would read back as the variable `#Tag`"), "{refused}");
+        let _ = std::fs::remove_dir_all(&dir);
+        let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
+        assert!(langs.len() >= 23, "{} languages", langs.len());
+        for l in langs {
+            let shown = message(l, &warning);
+            assert!(!shown.contains("won't read") && shown.contains("`#Tag`"), "{}: {shown}", l.code());
+            let shown = message(l, &refused);
+            assert!(!shown.contains("would read back") && shown.contains("`#Tag`") && shown.contains("`Tag`"), "{}: {shown}", l.code());
+        }
+    }
+
     /// What the panel acts on is the highlight, and only while it names a variable: a stale one
     /// (deleted elsewhere, undone) highlights nothing, so Delete and Options… stay disabled.
     #[test]

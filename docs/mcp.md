@@ -1637,7 +1637,12 @@ already walks Image Trace. Short agent entry points:
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, values?}`, `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
-  `dataset.export {path?}` (CSV: `name`, then one column per variable). `dataset.import` also reads tab-separated
+  `dataset.export {path?}` (CSV: `name`, then one column per variable). Export writes a visibility variable's header
+  as `#Shown` and an image variable's as `@Photo`, and a text or graph variable's as its name alone. Its reply's
+  `warning` names the text variables whose names start with `#`, `@` or `%` and the graph variables, which an import
+  into a document without them does not read back with their kind. Export is refused, naming both variables, when a
+  variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`).
+  `dataset.import` also reads tab-separated
   files, and files whose first header cell isn't `name`: every header cell is then a variable, and the rows take the
   first free names `Data Set 1`, `Data Set 2` and so on. An import error about a row's values or name gives the file
   line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the

@@ -5251,6 +5251,8 @@ imageTrace	Outline	Körvonal
 @msg	unsupported: {0}	nem támogatott: {0}
 @msg	variables are locked	a változók zárolva vannak
 @msg	variables that aren't text were left out: {kinds}	a nem szöveges változók kimaradtak: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	egy új dokumentum nem a fajtájukkal olvassa vissza ezeket a változókat: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	a(z) `{name}` változó `{header}` fejléce a(z) `{other}` változóként olvasódna vissza: nevezze át az egyiket
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	a VectorCraft nem keres más alkalmazások és a rendszer mappáiban: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	a VectorCraft nem keres a Users alatti Shared és Public mappában: {path}
 @msg	VectorCraft failed to start: {e}	A VectorCraft nem tudott elindulni: {e}

@@ -5,7 +5,8 @@
 //! variable, or a graph root to a `graph` variable (CSV data), put a row of values in
 //! each dataset, and `dataset.select` swaps the whole document to that row in one undo
 //! step. `dataset.import` / `dataset.export` move those rows as CSV (header: `name`
-//! then variable names); import also reads tab-separated files, files without the
+//! then variable names, which export writes with `#` before a visibility variable and `@`
+//! before an image variable); import also reads tab-separated files, files without the
 //! `name` column, and header cells that define new variables (`#` for visibility, `@` for
 //! image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! text variables and data sets of a variable library, the XML file of the reference app's Save
@@ -732,7 +733,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then variables); without path → {csv, datasets}",
+            "{path?} write every dataset as CSV (header: name, then one column per variable: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the text variables whose names start with #, @ or % and the graph variables: a document without them doesn't read them back with their kind",
             has_doc,
             dataset_export
         ),

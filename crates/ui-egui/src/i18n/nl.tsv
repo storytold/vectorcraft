@@ -5493,6 +5493,8 @@ swatch	Bright Violet	Felviolet
 @msg	the spine has no segments	de as heeft geen segmenten
 @msg	variables are locked	variabelen zijn vergrendeld
 @msg	variables that aren't text were left out: {kinds}	variabelen die geen tekst zijn, zijn weggelaten: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	een nieuw document leest deze variabelen niet terug met hun soort: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	de kop `{header}` voor `{name}` zou worden gelezen als de variabele `{other}`: wijzig de naam van een van beide
 @msg	x and y must be finite	x en y moeten eindig zijn
 @msg	Persistent libraries not found: {files}	Permanente bibliotheken niet gevonden: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` is geen bibliotheekpaneel (zie window.swatchLibrary)

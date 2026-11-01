@@ -4460,6 +4460,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Unlock Variables	解除鎖定變數
 @msg	variables are locked	變數已鎖定
 @msg	variables that aren't text were left out: {kinds}	已略過非文字變數：{kinds}
+@msg	a new document won't read these variables back with their kind: {names}	新文件不會以原類型讀回這些變數：{names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` 的標題 `{header}` 會被讀作變數 `{other}`：請重新命名其中一個
 	List Variables	列出變數
 	Bind Variable	綁定變數
 	Unbind Variable	解除變數綁定

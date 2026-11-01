@@ -185,12 +185,43 @@ fn value_to_cell(v: &DataValue) -> String {
     }
 }
 
-/// Build the CSV of every dataset (header `name` then variables in definition order).
-fn datasets_to_csv(vars: &Variables) -> String {
+/// The header cell that [`datasets_to_csv`] writes for `v`, as [`header_variable`] reads it: `#`
+/// before a visibility variable's name, `@` before an image variable's name, and the name alone
+/// for a text or graph variable.
+fn export_header(v: &Variable) -> String {
+    match v.kind {
+        VariableKind::Visibility => format!("#{}", v.name),
+        VariableKind::Image => format!("@{}", v.name),
+        VariableKind::Text | VariableKind::Graph => v.name.clone(),
+    }
+}
+
+/// The variables whose column a document without them doesn't read back with their kind: a
+/// text variable whose name starts with `#`, `@` or `%`, which the import reads as a prefix, and
+/// a graph variable, which no header cell defines.
+fn kinds_a_new_document_loses(vars: &Variables) -> Vec<&str> {
+    let lost = |v: &&Variable| match v.kind {
+        VariableKind::Text => v.name.starts_with(['#', '@', '%']),
+        VariableKind::Graph => true,
+        VariableKind::Visibility | VariableKind::Image => false,
+    };
+    vars.variables.iter().filter(lost).map(|v| v.name.as_str()).collect()
+}
+
+/// Build the CSV of every dataset (header `name` then each variable's [`export_header`] in
+/// definition order). Refused when a variable's header is another variable's name, which the
+/// import reads as that variable (a visibility variable `Show` next to a text variable `#Show`).
+fn datasets_to_csv(vars: &Variables, cmd: &str) -> Result<String> {
+    let names: BTreeSet<&str> = vars.variables.iter().map(|v| v.name.as_str()).collect();
     let mut out = String::from("name");
     for v in &vars.variables {
+        let header = export_header(v);
+        if header != v.name && names.contains(header.as_str()) {
+            let (name, other) = (&v.name, &header);
+            return Err(bad(cmd, format!("the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them")));
+        }
         out.push(',');
-        out.push_str(&csv_escape(&v.name));
+        out.push_str(&csv_escape(&header));
     }
     out.push('\n');
     for ds in &vars.datasets {
@@ -203,7 +234,7 @@ fn datasets_to_csv(vars: &Variables) -> String {
         }
         out.push('\n');
     }
-    out
+    Ok(out)
 }
 
 /// The variable that a datasets CSV header cell (trimmed, not empty) in 1-based `column` names,
@@ -340,23 +371,31 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"imported": imported, "updated": updated, "names": names, "defined": new_variables}))
 }
 
-/// Export every dataset as CSV (`name` then variables). With `path`, write the file; else return `{csv}`.
+/// Export every dataset as CSV ([`datasets_to_csv`]). With `path`, write the file; else return
+/// `{csv}`. The reply's `warning` names the variables a document without them doesn't read back
+/// with their kind ([`kinds_a_new_document_loses`]); the app shows it in its status bar.
 pub(super) fn dataset_export(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.export";
     let st = s.doc()?;
     if st.doc.variables.variables.is_empty() {
         return Err(bad(C, "define a variable first"));
     }
-    let csv = datasets_to_csv(&st.doc.variables);
+    let csv = datasets_to_csv(&st.doc.variables, C)?;
     if csv.len() > MAX_CSV_BYTES {
         return Err(bad(C, format!("CSV would be larger than {MAX_CSV_BYTES} bytes")));
     }
-    match str_param(p, "path") {
+    let mut out = match str_param(p, "path") {
         Some(path) => {
             let path = absolute_path(path);
             write_file(&path, csv.as_bytes())?;
-            Ok(json!({"path": path, "datasets": st.doc.variables.datasets.len()}))
+            json!({"path": path, "datasets": st.doc.variables.datasets.len()})
         }
-        None => Ok(json!({"csv": csv, "datasets": st.doc.variables.datasets.len()})),
+        None => json!({"csv": csv, "datasets": st.doc.variables.datasets.len()}),
+    };
+    let lost = kinds_a_new_document_loses(&st.doc.variables);
+    if !lost.is_empty() {
+        let names = lost.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+        out["warning"] = json!(format!("a new document won't read these variables back with their kind: {names}"));
     }
+    Ok(out)
 }
