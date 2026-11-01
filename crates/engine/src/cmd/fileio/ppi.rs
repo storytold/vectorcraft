@@ -40,29 +40,34 @@ fn jp2_axis(n: u16, d: u16, e: i8) -> Option<f64> {
     (ppi.is_finite() && (1.0..=100_000.0).contains(&ppi)).then_some(ppi)
 }
 
-/// JP2 resolution is independent on each axis. Later capture or display boxes replace earlier
-/// valid values for that axis; an invalid later axis leaves the earlier value intact.
+/// JP2 resolution is independent on each axis. A valid display (`resd`) value, the resolution the
+/// image is meant to be reproduced at, wins over a capture (`resc`) value whichever box comes first;
+/// the capture value is used for an axis with no valid display value. Within one box type, later
+/// boxes replace earlier valid values for that axis; an invalid later axis leaves the earlier value intact.
 fn jp2(b: &[u8]) -> Option<(f64, f64)> {
     if !b.starts_with(b"\0\0\0\x0cjP  \r\n\x87\n") {
         return Some((72.0, 72.0));
     }
-    let (mut x, mut y) = (None, None);
+    // [capture, display], each (x, y).
+    let mut found = [(None, None); 2];
     for (_, header) in super::jp2read::boxes(b).filter(|(ty, _)| *ty == b"jp2h") {
         for (_, res) in super::jp2read::boxes(header).filter(|(ty, _)| *ty == b"res ") {
-            for (_, data) in super::jp2read::boxes(res).filter(|(ty, _)| *ty == b"resc" || *ty == b"resd") {
+            for (ty, data) in super::jp2read::boxes(res).filter(|(ty, _)| *ty == b"resc" || *ty == b"resd") {
                 let Some([vn0, vn1, vd0, vd1, hn0, hn1, hd0, hd1, ve, he]): Option<[u8; 10]> = data.get(..10).and_then(|v| v.try_into().ok()) else {
                     continue;
                 };
+                let (x, y) = &mut found[usize::from(ty == b"resd")];
                 if let Some(value) = jp2_axis(u16::from_be_bytes([hn0, hn1]), u16::from_be_bytes([hd0, hd1]), he as i8) {
-                    x = Some(value);
+                    *x = Some(value);
                 }
                 if let Some(value) = jp2_axis(u16::from_be_bytes([vn0, vn1]), u16::from_be_bytes([vd0, vd1]), ve as i8) {
-                    y = Some(value);
+                    *y = Some(value);
                 }
             }
         }
     }
-    Some((x.unwrap_or(72.0), y.unwrap_or(72.0)))
+    let [(cx, cy), (dx, dy)] = found;
+    Some((dx.or(cx).unwrap_or(72.0), dy.or(cy).unwrap_or(72.0)))
 }
 
 /// `n` bytes at `at` (`None` past the end; offsets come from the file, so no overflow either).
