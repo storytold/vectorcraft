@@ -1,25 +1,30 @@
-//! Create Swatch Legend (#4919): a grid of chips on the artboard, one per colour swatch, each
-//! filled with its swatch and labelled with the swatch's name and colour values, as one group made
-//! in one undo step.
+//! Create Swatch Legend (`addon.color.swatchLegend`; Object › Plug-ins › Color Effects › Create
+//! Swatch Legend…, #4919): a grid of chips on the artboard, one per colour swatch, each filled with
+//! its swatch and labelled with the swatch's name and colour values, as one group made in one undo
+//! step.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint, cms::Model};
 use vectorcraft_doc::{Appearance, AreaFit, Node, NodeKind, TextKind, TextObject};
 use vectorcraft_geom::{Point, Rect, shapes};
 
-use super::{CommandSpec, Result, Session, bad, cmd, has_doc};
+use super::super::super::{CommandSpec, bad, cmd, has_doc};
+use crate::{Result, Session};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
-        "swatch.legend",
+        "addon.color.swatchLegend",
         "Create Swatch Legend",
-        ["Window", "Swatches"],
+        ["Object", "Plug-ins", "Color Effects"],
         None,
-        "{names?: [swatch name…] (default: every colour swatch of the document, in panel order), columns?: 1..50 (4), size?: chip side in pt 8..1000 (72), gap?: pt 0..1000 (12), values?: [hex|rgb|cmyk|lab|gray…] (default: each swatch's own colour model; spot swatches also say spot), x?, y? (the legend's top-left; default: the first artboard's, inset by `gap`)} draw a legend of colour swatches: one square chip per swatch filled with it (linked to it), labelled inside with the swatch name and the values asked for, in black on light chips and white on dark ones, as one group in one undo step; the group is selected → {id, count} (#4919)",
+        "{names?: [swatch name…] (default: every colour swatch of the document, in panel order), columns?: 1..50 (4), size?: chip side in pt 8..1000 (72), gap?: pt 0..1000 (12), values?: [hex|rgb|cmyk|lab|gray…] (each at most once; default: each swatch's own colour model; spot swatches also say spot), x?, y? (the legend's top-left; default: the first artboard's, inset by `gap`)} draw a legend of colour swatches: one square chip per swatch filled with it (linked to it), labelled inside with the swatch name and the values asked for, in black on light chips and white on dark ones, as one group in one undo step; the group is selected → {id, count} (#4919)",
         has_doc,
         legend
     )]
 }
+
+/// The command.
+pub const COMMAND: &str = "addon.color.swatchLegend";
 
 /// Most swatches one legend draws.
 const MAX_CHIPS: usize = 2000;
@@ -78,7 +83,7 @@ fn value_lines(c: Color, values: &[String], spot: bool) -> Vec<String> {
 }
 
 fn legend(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "swatch.legend";
+    const C: &str = COMMAND;
     let columns = number(p, "columns", 4.0, 1.0..=50.0, C)?;
     if columns.fract() != 0.0 {
         return Err(bad(C, "`columns` must be a whole number 1..50"));
@@ -96,6 +101,10 @@ fn legend(s: &mut Session, p: &Value) -> Result<Value> {
             .collect::<Result<_>>()?,
         Some(_) => return Err(bad(C, "`values` must be a list")),
     };
+    // Each kind once: every value line goes into every chip, so repeats would only multiply them.
+    if values.iter().enumerate().any(|(i, v)| values[..i].contains(v)) {
+        return Err(bad(C, "`values` names a kind twice"));
+    }
     let st = s.doc()?;
     let doc = &st.doc;
     let colour = |w: &&vectorcraft_color::Swatch| w.paint.color().is_some();
@@ -128,11 +137,12 @@ fn legend(s: &mut Session, p: &Value) -> Result<Value> {
     let parent = st.target_parent()?;
     let text_size = (size / 7.0).clamp(4.0, 12.0);
     let pad = (size / 12.0).clamp(1.0, 8.0);
-    let style = super::create::new_type_style(s, &json!({ "size": text_size }));
+    let style = super::super::super::create::new_type_style(s, &json!({ "size": text_size }));
     let count = swatches.len();
     // Each chip's fill links to its swatch, as paint.setFill {swatch} links art: editing a global or
     // spot swatch then recolours the legend too.
-    let fills: Vec<Paint> = swatches.iter().map(|w| super::paint::swatch_solid(doc, &w.name, None).unwrap_or_else(|_| w.paint.clone())).collect();
+    let fills: Vec<Paint> =
+        swatches.iter().map(|w| super::super::super::paint::swatch_solid(doc, &w.name, None).unwrap_or_else(|_| w.paint.clone())).collect();
     let gid = s.edit("Create Swatch Legend", |d, sel| {
         let mut children = Vec::with_capacity(count * 2);
         for (i, (w, fill)) in swatches.iter().zip(fills).enumerate() {
@@ -154,9 +164,9 @@ fn legend(s: &mut Session, p: &Value) -> Result<Value> {
             let inner = (size - 2.0 * pad).max(1.0);
             t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, inner, inner)) };
             t.area.fit = AreaFit::ShrinkText { min_percent: AreaFit::MIN_PERCENT };
-            t.para = super::create::new_type_para();
+            t.para = super::super::super::create::new_type_para();
             t.system_layout = system_layout;
-            super::typecmd::refresh_bounds(&mut t);
+            super::super::super::typecmd::refresh_bounds(&mut t);
             children.push(std::sync::Arc::new(Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)))));
         }
         let gid = d.alloc_id();

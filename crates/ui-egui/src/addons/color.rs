@@ -3,8 +3,10 @@
 //! filter, into the colours themselves (`addon.color.filter`); below, under Inks, it opens Duotone's
 //! dialog and Print Ink Fixes' (`addon.color.printFixes`). The submenu applies the add-on's live
 //! effects, Duotone and Vector Halftone among them (Effect › Color Effects has them too), opens
-//! Print Ink Fixes and Find Nearest Swatch ([`nearest`]) and opens the panel.
+//! Print Ink Fixes, Find Nearest Swatch ([`nearest`]) and Create Swatch Legend ([`legend`]) and
+//! opens the panel.
 
+pub mod legend;
 pub mod nearest;
 
 use egui::Ui;
@@ -100,6 +102,7 @@ pub fn menu() -> Vec<Item> {
         Item::Sep,
         cmd(print_fixes()),
         Item::Cmd("Find Nearest Swatch…", nearest::COMMAND, Value::Null),
+        Item::Cmd("Create Swatch Legend…", legend::COMMAND, Value::Null),
         Item::Sep,
         Item::Sub(
             "Select by Color Kind",
