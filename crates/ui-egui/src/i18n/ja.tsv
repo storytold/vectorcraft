@@ -4281,6 +4281,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a key object sits on that point	そのポイントにはキーオブジェクトがあります
 @msg	no graphic style `{name}`	グラフィックスタイル `{name}` が見つかりません
 @msg	node {_1} is not text	ノード {_1} はテキストではありません
+@msg	node {_1} is on a locked artboard	ノード {_1} はロックされたアートボード上にあります
 @msg	Text Wrap: select a wrap object	テキストの回り込み: 回り込みオブジェクトを選択してください
 @msg	layers can't be wrap objects	レイヤーは回り込みオブジェクトにできません
 @msg	no threaded text selected	スレッドテキストが選択されていません

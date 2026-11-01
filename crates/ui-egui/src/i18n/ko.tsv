@@ -4208,6 +4208,7 @@ theme	Appearance	외관
 @msg	a key object sits on that point	그 포인트에 키 개체가 있습니다
 @msg	no graphic style `{name}`	`{name}` 그래픽 스타일이 없습니다
 @msg	node {_1} is not text	노드 {_1}은(는) 텍스트가 아닙니다
+@msg	node {_1} is on a locked artboard	노드 {_1}이(가) 잠긴 아트보드에 있습니다
 @msg	Text Wrap: select a wrap object	텍스트 감싸기: 감싸기 개체를 선택하세요
 @msg	layers can't be wrap objects	레이어는 감싸기 개체가 될 수 없습니다
 @msg	no threaded text selected	선택한 연결 텍스트가 없습니다
