@@ -277,9 +277,7 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
-    if st.variables_highlight.as_ref().is_some_and(|h| st.doc.variables.variable(h).is_none()) {
-        st.variables_highlight = None;
-    }
+    st.drop_stale_variables_highlight();
     st.revision += 1;
     let skipped: Vec<Value> = lib.other.iter().map(|(name, t)| json!({"name": name, "trait": t})).collect();
     let mut out = json!({

@@ -498,6 +498,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     super::symboledit::follow_history(st, editing_symbol.as_ref());
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
+    st.drop_stale_variables_highlight();
     Ok(json!({ "undone": label }))
 }
 
@@ -525,6 +526,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     super::symboledit::follow_history(st, editing_symbol.as_ref());
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
+    st.drop_stale_variables_highlight();
     Ok(json!({ "redone": label }))
 }
 
