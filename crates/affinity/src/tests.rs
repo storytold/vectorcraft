@@ -1,4 +1,4 @@
-//! Unit tests on synthetic inputs; `tests/real_files.rs` covers public Affinity documents.
+//! Unit tests on synthetic inputs; `tests/it/real_files.rs` covers public Affinity documents.
 
 mod preview {
     use crate::container::header;
@@ -259,6 +259,32 @@ mod archive {
         let mut a = Archive::open(&file, Limits { max_entry: usize::MAX, max_total: d.len() + 1 }).unwrap();
         a.read("doc.dat").unwrap();
         assert!(matches!(a.read("doc.dat"), Err(Error::Limit(_))));
+    }
+
+    // Regression test for #1710: ruzstd 0.9.0 let a block decompress to more than its frame's
+    // window allows (RUSTSEC-2026-0344), so a crafted entry made the decoder produce far more than
+    // the format permits for a block. 0.9.1 refuses it.
+    #[test]
+    fn a_zstd_block_larger_than_its_frames_window_is_refused() {
+        const LEN: u32 = 100_000;
+        let plain = vec![0x61u8; LEN as usize];
+        let file = synth::container(&[("doc.dat", &plain, Method::Zstd)], None);
+        // A Zstandard frame with a 1 KiB window (descriptor byte 0, window byte 0) holding one RLE
+        // block, the last, that repeats a byte LEN times: block header = last | RLE << 1 | LEN << 3.
+        let mut frame = vec![0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x00];
+        frame.extend((1 | (1 << 1) | (LEN << 3)).to_le_bytes().get(..3).unwrap());
+        frame.push(0x61);
+        // Swap it in for the entry's compressed bytes (they follow the "#Fil" tag at offset 72).
+        let fat = u64::from_le_bytes(file[16..24].try_into().unwrap()) as usize;
+        let old_len = u64::from_le_bytes(file[fat + 59 + 21..fat + 59 + 29].try_into().unwrap()) as usize;
+        let mut swapped = file[..76].to_vec();
+        swapped.extend(&frame);
+        swapped.extend(&file[76 + old_len..]);
+        let new_fat = fat - old_len + frame.len();
+        swapped[16..24].copy_from_slice(&(new_fat as u64).to_le_bytes());
+        swapped[new_fat + 59 + 21..new_fat + 59 + 29].copy_from_slice(&(frame.len() as u64).to_le_bytes());
+        let mut a = Archive::open(&swapped, Limits::default()).unwrap();
+        assert!(a.read("doc.dat").is_err(), "a block of {LEN} bytes was decompressed from a frame with a 1 KiB window");
     }
 
     #[test]

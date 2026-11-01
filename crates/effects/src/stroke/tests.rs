@@ -128,6 +128,25 @@ fn dot_outlines_take_the_cap_shape_and_wind_like_stroked_dashes() {
 }
 
 #[test]
+fn expand_stroke_region_of_a_round_line_stays_compact() {
+    use std::f64::consts::PI;
+    use vectorcraft_geom::{FillRule, PathData, Point, SubPath};
+    let path = PathData::single(SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false));
+    let st = stroke(10.0, |s| s.cap = vectorcraft_doc::LineCap::Round);
+    let region = crate::stroke::outline::outline_region(&path, FillRule::NonZero, &st);
+    let anchors = region.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    assert!(anchors <= 8, "expand stroke should use few anchors for a round line, got {anchors}");
+    let area = region.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+    assert!(near(area, 100.0 * 10.0 + PI * 5.0 * 5.0, 1.0), "{area}");
+    // Extra colinear anchors along the spine must not multiply outline anchors (#3446).
+    let dense: Vec<Point> = (0..=20).map(|i| Point::new(i as f64 * 5.0, 50.0)).collect();
+    let dense_path = PathData::single(SubPath::polyline(&dense, false));
+    let dense_region = crate::stroke::outline::outline_region(&dense_path, FillRule::NonZero, &st);
+    let dense_anchors = dense_region.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
+}
+
+#[test]
 fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let l = line(0.0, 100.0);
     let plain = line_outline(&l, &stroke(10.0, |_| {}), 10.0, 1e-3);

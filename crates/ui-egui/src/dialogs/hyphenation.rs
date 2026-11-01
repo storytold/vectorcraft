@@ -1,8 +1,9 @@
 //! Paragraph panel menu › Hyphenation… (or `ui.hyphenation`): the Hyphenation checkbox and the
 //! limits automatic hyphenation keeps to in the paragraphs the Paragraph panel acts on: Words
 //! Longer Than, After First, Before Last, Hyphen Limit, Hyphenation Zone and Hyphenate Capitalized
-//! Words. The dialog opens on the values the Paragraph panel shows. OK runs `text.setFormat` with
-//! the values that changed, as one undo step, and paragraphs that differ keep the values left alone.
+//! Words. The dialog opens on the values the Paragraph panel shows (blank fields and dashed
+//! checkboxes where paragraphs in scope disagree). OK runs `text.setFormat` with the values that
+//! changed, as one undo step, and paragraphs that differ keep the values left alone.
 //!
 //! Fields: `hyphenate`, `wordsLongerThan` (letters, 1..25), `afterFirst` and `beforeLast`
 //! (letters, 1..15), `hyphenLimit` (hyphens, 0..25, 0: no limit), `hyphenationZone` (pt) and
@@ -22,30 +23,53 @@ pub const KIND: &str = "hyphenation";
 /// The field holding the values the dialog opened with.
 const INITIAL: &str = "__initial";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Hyphenation").into(), body, confirm, min_width: 300.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Hyphenation").into(),
+    body,
+    confirm,
+    min_width: 300.0,
+    // A value the paragraphs don't share opens blank, without its field.
+    inputs: |_| &["hyphenate", "wordsLongerThan", "afterFirst", "beforeLast", "hyphenLimit", "hyphenationZone", "hyphenateCapitalized"],
+    ..DialogSpec::FORM
+};
 
 /// Open Hyphenation on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let (_, para) = crate::panels::character::text_style(app).ok_or("select some type first")?;
-    let h = &para.hyphenation;
-    let values = json!({
-        "hyphenate": para.hyphenate,
-        "wordsLongerThan": h.words_longer_than,
-        "afterFirst": h.after_first,
-        "beforeLast": h.before_last,
-        "hyphenLimit": h.hyphen_limit,
-        "hyphenationZone": h.zone,
-        "hyphenateCapitalized": h.capitalized,
-    });
-    let mut fields = values.clone();
-    fields[INITIAL] = values;
+    crate::panels::character::text_style(app).ok_or("select some type first")?;
+    let mut values = Map::new();
+    if let Some(v) = crate::panels::paragraph::shared_hyphenate(app) {
+        values.insert("hyphenate".into(), json!(v));
+    }
+    if let Some(v) = crate::panels::paragraph::shared_hyphenation_field(app, |h| h.words_longer_than) {
+        values.insert("wordsLongerThan".into(), json!(v));
+    }
+    if let Some(v) = crate::panels::paragraph::shared_hyphenation_field(app, |h| h.after_first) {
+        values.insert("afterFirst".into(), json!(v));
+    }
+    if let Some(v) = crate::panels::paragraph::shared_hyphenation_field(app, |h| h.before_last) {
+        values.insert("beforeLast".into(), json!(v));
+    }
+    if let Some(v) = crate::panels::paragraph::shared_hyphenation_field(app, |h| h.hyphen_limit) {
+        values.insert("hyphenLimit".into(), json!(v));
+    }
+    if let Some(v) = crate::panels::paragraph::shared_hyphenation_zone(app) {
+        values.insert("hyphenationZone".into(), json!(v));
+    }
+    if let Some(v) = crate::panels::paragraph::shared_hyphenation_field(app, |h| h.capitalized) {
+        values.insert("hyphenateCapitalized".into(), json!(v));
+    }
+    let mut fields = Value::Object(values.clone());
+    fields[INITIAL] = Value::Object(values);
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let unit = app.session.general_unit();
-    form::check(ui, d, "hyphenate", tl!("Hyphenation"));
+    let hyphenate = d.fields.get("hyphenate").and_then(|v| v.as_bool());
+    if widgets::check3(ui, tl!("Hyphenation"), hyphenate, true) {
+        d.fields.insert("hyphenate".into(), json!(hyphenate != Some(true)));
+    }
     ui.add_space(8.0);
     // The whole-number fields: (field, label, unit, range).
     let counts = [
@@ -58,7 +82,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         for (key, text, suffix, (lo, hi)) in counts {
             label(ui, text);
             ui.horizontal(|ui| {
-                if let Some(v) = widgets::range_field(ui, ("hyphenation", key), d.f64(key, lo), lo..=hi, "", 0, 60.0) {
+                let value = d.fields.get(key).and_then(|v| v.as_f64());
+                if let Some(v) = widgets::range_field(ui, ("hyphenation", key), value, lo..=hi, "", 0, 60.0) {
                     d.fields.insert(key.into(), json!(v));
                 }
                 ui.label(suffix);
@@ -70,7 +95,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.end_row();
     });
     ui.add_space(8.0);
-    form::check(ui, d, "hyphenateCapitalized", tl!("Hyphenate Capitalized Words"));
+    let capitalized = d.fields.get("hyphenateCapitalized").and_then(|v| v.as_bool());
+    if widgets::check3(ui, tl!("Hyphenate Capitalized Words"), capitalized, true) {
+        d.fields.insert("hyphenateCapitalized".into(), json!(capitalized != Some(true)));
+    }
     false
 }
 
@@ -163,8 +191,6 @@ mod tests {
         app.run("ui.hyphenation", json!({})).unwrap();
         let d = app.ui.dialog.as_mut().unwrap();
         d.fields.insert("beforeLast".into(), json!(4));
-        // Edited and set back to the value it opened with, as a field stores it.
-        d.fields.insert("afterFirst".into(), json!(3.0));
         super::super::confirm(&mut app).unwrap();
         let (first, second) = paras(&app, id);
         assert_eq!((first.hyphenation.after_first, first.hyphenation.before_last), (3, 4));
@@ -178,5 +204,23 @@ mod tests {
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(app.run("ui.hyphenation", json!({})).is_err());
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// When paragraphs in scope disagree, only shared hyphenation values are filled in.
+    #[test]
+    fn hyphenation_dialog_mixed_paragraph_fields_show_blank() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"ids": [id], "afterFirst": 3})).unwrap();
+        app.run("text.setFormat", json!({"ids": [id], "afterFirst": 2, "start": 5, "end": 5})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert!(!d.fields.contains_key("afterFirst"));
+        assert_eq!(d.f64("beforeLast", 0.0), 3.0);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("afterFirst".into(), json!(4));
+        super::super::confirm(&mut app).unwrap();
+        let (first, second) = paras(&app, id);
+        assert_eq!((first.hyphenation.after_first, second.hyphenation.after_first), (4, 4));
+        assert_eq!((first.hyphenation.before_last, second.hyphenation.before_last), (3, 3));
     }
 }

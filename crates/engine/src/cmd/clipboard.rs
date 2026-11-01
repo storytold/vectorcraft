@@ -10,7 +10,7 @@
 //! text besides it (see `flavours`).
 
 mod flavours;
-mod resources;
+pub(crate) mod resources;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -21,10 +21,11 @@ use vectorcraft_color::Swatch;
 use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDef, Symbol, TextStyleDef};
 use vectorcraft_geom::Rect;
 
-pub use flavours::{BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
+pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
 pub(crate) use resources::SwatchChoices;
+pub use resources::{ArtResources, art_resources};
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, cmd, f64_or, has_doc, point_param, str_param};
 use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -80,22 +81,22 @@ pub struct Clipboard {
     pub para_styles: Vec<TextStyleDef>,
     /// Brushes the objects' strokes use.
     pub brushes: Vec<Brush>,
-    /// The artboard the objects were copied from (none when they lie on no artboard): Paste on All
-    /// Artboards keeps their offset to it.
+    /// The artboard the objects were copied from (none when they lie on no artboard; the first of
+    /// [`Self::artboards`] when there are any): Paste on All Artboards keeps their offset to it.
     pub source_artboard: Option<Rect>,
     /// Per object: the name of the layer it was copied from (Paste Remembers Layers).
     pub source_layers: Vec<Option<String>>,
     /// The open document the objects came from ([`DocState::uid`]): pasting back into it uses its
     /// own resources as they are now.
     pub source_doc: Option<u64>,
-    /// An artboard copied with the Artboard tool (`artboard.copy`); `nodes` are then its art. Pasting
-    /// adds a copy of it with the art.
-    pub artboard: Option<vectorcraft_doc::Artboard>,
+    /// The artboards copied with the Artboard tool (`artboard.copy`); `nodes` are then their art.
+    /// Pasting adds a copy of each with the art.
+    pub artboards: Vec<vectorcraft_doc::Artboard>,
 }
 
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty() && self.artboard.is_none()
+        self.nodes.is_empty() && self.artboards.is_empty()
     }
 
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
@@ -109,7 +110,9 @@ impl Clipboard {
             // The nearest enclosing layer (or sublayer).
             source_layers.push(anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone()));
         }
-        let bounds = nodes.iter().filter_map(Node::visual_bounds).reduce(|a, b| a.union(b));
+        // Symbol instances are measured by their art.
+        let symbols = d.symbol_boxes();
+        let bounds = nodes.iter().filter_map(|n| n.visual_bounds_with(&symbols)).reduce(|a, b| a.union(b));
         // Art on no artboard has no source artboard: in-place pastes put it back where it was (#1924).
         let board = bounds.and_then(|b| d.artboard_at(b.center()));
         Self {
@@ -127,9 +130,13 @@ impl Clipboard {
         Self::gather(src, nodes)
     }
 
-    /// Union of the objects' visual bounds.
+    /// Union of the objects' visual bounds, with symbol instances measured by the art of the
+    /// symbols the clipboard holds.
     pub fn bounds(&self) -> Option<Rect> {
-        self.nodes.iter().filter_map(Node::visual_bounds).reduce(|a, b| a.union(b))
+        let mut d = Document::new(100.0, 100.0);
+        d.symbols = self.symbols.clone();
+        let symbols = d.symbol_boxes();
+        self.nodes.iter().filter_map(|n| n.visual_bounds_with(&symbols)).reduce(|a, b| a.union(b))
     }
 
     /// The swatch name conflicts pasting into `st` raises, as (pasted, document) swatches: none

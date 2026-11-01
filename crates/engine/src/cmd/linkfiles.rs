@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 
 use super::findfiles::{self, Limits, Visitor};
-use super::*;
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, checked_ids_param, cmd};
 
 /// The most linked files one search looks for.
 const MAX_LINKS: usize = 1_000;
@@ -96,7 +96,15 @@ impl Visitor for LinkFiles {
             if let Some((Some(saved_size), Some(saved_hash))) = self.saved.get(i)
                 && *saved_size == size
                 && size <= MAX_HASHED
-                && hash.get_or_insert_with(|| std::fs::File::open(path).and_then(vectorcraft_doc::links::hash_reader).ok()).as_ref()
+                && hash
+                    .get_or_insert_with(|| {
+                        // Only the size looked at is read: a file growing meanwhile no longer
+                        // matches, rather than being hashed to its new end.
+                        let file = std::fs::File::open(path).ok()?;
+                        let (hash, read) = vectorcraft_doc::links::hash_reader_within(file, size).ok()?;
+                        (read == size).then_some(hash)
+                    })
+                    .as_ref()
                     == Some(saved_hash)
             {
                 items.push(n + i);

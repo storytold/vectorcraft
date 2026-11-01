@@ -85,6 +85,42 @@ impl Remote {
         Ok(())
     }
 
+    /// Wait until the app starts to answer, giving up when the call is cancelled
+    /// ([`vectorcraft_engine::cancel`]): the app has no way to stop what it runs, but this server
+    /// stops waiting for it (the connection is dropped, so a late answer can't be mistaken for
+    /// the next call's). Without a cancellable call this is just the read the caller does next.
+    fn wait_for_reply(stream: &TcpStream) -> std::io::Result<()> {
+        const POLL: Duration = Duration::from_millis(100);
+        const LIMIT: Duration = Duration::from_secs(90);
+        if !vectorcraft_engine::cancel::is_cancellable() {
+            return Ok(());
+        }
+        let start = std::time::Instant::now();
+        let kept = stream.read_timeout()?;
+        stream.set_read_timeout(Some(POLL))?;
+        let outcome = loop {
+            match stream.peek(&mut [0]) {
+                // Bytes (or the end of the stream) to read now.
+                Ok(_) => break Ok(()),
+                Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {
+                    if vectorcraft_engine::cancel::is_cancelled() {
+                        break Err(std::io::Error::new(
+                            std::io::ErrorKind::Interrupted,
+                            "cancelled; the app may still finish what it was asked, which can't be stopped from here",
+                        ));
+                    }
+                    if start.elapsed() >= LIMIT {
+                        break Err(e);
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => break Err(e),
+            }
+        };
+        stream.set_read_timeout(kept)?;
+        outcome
+    }
+
     fn roundtrip(&mut self, line: &str) -> std::io::Result<String> {
         let Some((reader, writer)) = self.conn.as_mut() else {
             return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "not connected to the app"));
@@ -92,6 +128,7 @@ impl Remote {
         writer.write_all(line.as_bytes())?;
         writer.write_all(b"\n")?;
         writer.flush()?;
+        Self::wait_for_reply(writer)?;
         let mut buf = Vec::new();
         if !crate::server::read_line_capped(reader, &mut buf, MAX_REPLY_BYTES)? {
             return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "control channel closed"));

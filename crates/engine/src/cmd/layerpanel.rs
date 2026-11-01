@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::layer::{NewLayers, row_roots, rows_param};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, id_param, ok, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -225,7 +225,7 @@ fn template(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let ids: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(Node::is_layer)).collect();
     let Some(first) = ids.first().and_then(|id| d.node(*id)) else { return Err(bad("layer.template", "select a layer")) };
-    let on = bool_or(p, "on", !first.is_template());
+    let on = switch_or(p, "on", !first.is_template(), "layer.template")?;
     s.execute("layer.setProps", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "template": on}))?;
     Ok(json!({ "on": on }))
 }
@@ -271,8 +271,19 @@ fn merge(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.len() < 2 {
         return Err(bad(C, "highlight two or more rows to merge"));
     }
-    let into =
-        ids.iter().rev().copied().find(|id| d.node(*id).is_some_and(Node::is_layer)).ok_or_else(|| bad(C, "highlight a layer to merge into"))?;
+    // The last highlighted layer that is not inside another highlighted row: with a layer and its
+    // sublayer both highlighted (Select All in the panel), the sublayer travels with its layer
+    // instead of becoming the target (#2383).
+    let roots: HashSet<NodeId> = row_roots(d, &ids).into_iter().collect();
+    let is_layer = |id: &NodeId| d.node(*id).is_some_and(Node::is_layer);
+    let into = ids
+        .iter()
+        .rev()
+        .copied()
+        .filter(is_layer)
+        .find(|id| roots.contains(id))
+        .or_else(|| ids.iter().rev().copied().find(is_layer))
+        .ok_or_else(|| bad(C, "highlight a layer to merge into"))?;
     let around = d.ancestry(into).unwrap_or_default();
     // (Rows inside the target layer merge too: only rows inside other listed rows go with those.)
     let rest: Vec<NodeId> = ids.iter().copied().filter(|id| *id != into).collect();
@@ -323,7 +334,7 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.releaseToLayers";
-    let build = bool_or(p, "build", false);
+    let build = switch_or(p, "build", false, C)?;
     let st = s.doc()?;
     let id = match id_param(p, "id") {
         Some(id) => id,
@@ -377,6 +388,10 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         let ch = d.children_mut(Some(parent))?;
         let at = index.min(ch.len());
         ch.splice(at..at, layers);
+        // Copied type whose layout caches `reid` dropped has them again.
+        if build {
+            super::typecmd::refresh_bounds_of(d, &new);
+        }
         sel.prune(d);
         Ok(new)
     })?;

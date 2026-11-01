@@ -301,6 +301,9 @@ impl<'p> Colors<'p> {
         let process = cmyk.iter().any(|v| *v > 0.0);
         let (c, t) = match (ink, first_ink) {
             (Some(_), _) if several || process => {
+                // The color can't link to one swatch, but each ink it paints with is still a
+                // spot swatch.
+                self.mark_inks(Space::Inks(space), comps);
                 self.mixed = true;
                 return None;
             }
@@ -317,6 +320,24 @@ impl<'p> Colors<'p> {
                 Some(Native { color: ink.color.tinted(t), link: Some((ink.name.clone(), t)) })
             }
             _ => Some(Native { color: Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(t), link: Some((REGISTRATION.to_string(), t)) }),
+        }
+    }
+
+    /// Mark each ink that components `comps` of `space` paint with (a tint above 0) as used, so it
+    /// becomes a spot swatch; nothing for a space with a colorant that can't be read.
+    pub fn mark_inks(&mut self, space: Space, comps: &[f32]) {
+        let Space::Inks(i) = space else { return };
+        let Some(s) = self.spaces.get(i) else { return };
+        if s.colorants.iter().any(|c| matches!(c, Colorant::Unknown)) {
+            return;
+        }
+        for (c, t) in s.colorants.iter().zip(comps) {
+            if let Colorant::Ink(k) = *c
+                && round3(t.clamp(0.0, 1.0)) > 0.0
+                && let Some(ink) = self.inks.get_mut(k)
+            {
+                ink.used = true;
+            }
         }
     }
 
@@ -362,7 +383,8 @@ impl<'p> Colors<'p> {
         let alt = alt_model(&it.next::<Object<'_>>()?);
         let tint = Function::new(&it.next::<Object<'_>>()?)?;
         let key = debug_text(&tint)?;
-        if names.is_empty() || self.spaces.iter().any(|s| s.key == key && s.device_n == device_n && s.names == names) {
+        // (PDF's limit is 32 colorants; each gets a vector of that length below.)
+        if names.is_empty() || names.len() > MAX_COLORANTS || self.spaces.iter().any(|s| s.key == key && s.device_n == device_n && s.names == names) {
             return None;
         }
         let colorants = names
@@ -521,3 +543,6 @@ fn alt_color(alt: Alt, v: &[f32]) -> Option<Color> {
         Alt::Lab => Color::lab(round3(c(0)?.clamp(0.0, 100.0)), round3(c(1)?.clamp(-128.0, 127.0)), round3(c(2)?.clamp(-128.0, 127.0))),
     })
 }
+
+/// The most colorants of a DeviceN space read.
+const MAX_COLORANTS: usize = 64;

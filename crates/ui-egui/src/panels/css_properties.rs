@@ -129,12 +129,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     let notes = (shown.more > 0)
-        .then(|| crate::i18n::fmt(tl!("{count} more rules: Export writes every one."), &[("count", &shown.more.to_string())]))
+        .then(|| crate::i18n::tn(shown.more as u64, "{n} more rule: Export writes it.", "{n} more rules: Export writes every one."))
         .into_iter()
         .chain((shown.skipped > 0).then(|| {
-            crate::i18n::fmt(
-                tl!("{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu."),
-                &[("count", &shown.skipped.to_string())],
+            crate::i18n::tn(
+                shown.skipped,
+                "{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.",
+                "{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.",
             )
         }))
         .chain(shown.warnings.iter().map(|w| sentence(w)));
@@ -181,12 +182,13 @@ pub(crate) fn copy(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     let css = r["css"].as_str().filter(|c| !c.is_empty()).ok_or("no CSS to copy: select objects with CSS of their own")?.to_string();
     let rules = r["rules"].as_array().map_or(0, Vec::len);
     app.clipboard_out = Some(css.clone());
-    app.status(format!("Copied the CSS of {rules} object(s)"));
+    app.status(crate::i18n::msg_n(rules as u64, "Copied the CSS of {n} object", "Copied the CSS of {n} objects", &[]));
     Ok(json!({ "css": css, "rules": rules }))
 }
 
 /// `css.exportFile {path?, scope?, …css.selection options}`: `css.export` written to `path`, else
-/// a picked file (the web downloads it), its pictures next to it → `{path, rules, images}`.
+/// a picked file (the web downloads it), its pictures next to it → `{path, rules, images,
+/// warnings}`.
 pub(crate) fn export_file(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mut q = p.clone();
     let path = q.as_object_mut().and_then(|o| o.remove("path")).and_then(|v| v.as_str().map(str::to_string));
@@ -202,8 +204,14 @@ pub(crate) fn export_file(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
         io::write_to(&mut app.services, &at, &bytes)?;
         images.push(at);
     }
-    app.status(format!("Exported {path}"));
-    Ok(json!({ "path": path, "rules": r["rules"], "images": images }))
+    // The status bar shows the first warning in Export As's message.
+    let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let what = &path;
+    app.status(match warnings.first() {
+        Some(first) => io::exported_with_notes(what, warnings.len(), first),
+        None => format!("Exported {path}"),
+    });
+    Ok(json!({ "path": path, "rules": r["rules"], "images": images, "warnings": r["warnings"] }))
 }
 
 /// The panel (≡) menu: copy and export, Generate CSS and the export options.

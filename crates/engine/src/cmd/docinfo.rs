@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{ColorMode, Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{ColorMode, Document, Node, NodeId, NodeKind, RepeatKind, RepeatSpec};
 use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_text::embed::Embedding;
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, has_selection, str_param, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its licence lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -35,10 +35,11 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Document Info's categories: (id, title), in the order the panel and the report show them.
-pub const CATEGORIES: [(&str, &str); 11] = [
+pub const CATEGORIES: [(&str, &str); 13] = [
     ("document", "Document"),
     ("objects", "Objects"),
     ("graphicStyles", "Graphic Styles"),
+    ("brushes", "Brushes"),
     ("spotColors", "Spot Colors"),
     ("patterns", "Pattern Objects"),
     ("gradients", "Gradient Swatches"),
@@ -47,6 +48,7 @@ pub const CATEGORIES: [(&str, &str); 11] = [
     ("fontDetails", "Font Details"),
     ("linkedImages", "Linked Images"),
     ("embeddedImages", "Embedded Images"),
+    ("repeats", "Repeat Objects"),
 ];
 
 /// The object counts of `document.info` and their labels.
@@ -96,9 +98,47 @@ pub fn embedding_label(fs_type: u16) -> &'static str {
 /// An image object as Document Info lists it: (name, width, height, linked file).
 type ImageRow = (String, u32, u32, Option<String>);
 
+/// A Repeat object as Document Info lists it: its `repeatObjects` entry, and its row, which gives
+/// its name and then its kind with the number of instances it draws (for a grid, its rows and
+/// columns, followed by the number it draws when that is fewer).
+fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, String)) {
+    let name = n.display_name();
+    let count = |n: usize, one: &str, many: &str| if n == 1 { format!("1 {one}") } else { format!("{n} {many}") };
+    let instances = spec.instances(Some(d));
+    let mut entry = json!({ "id": n.id.0, "name": name, "instances": instances });
+    let kind = &spec.kind;
+    let detail = match kind {
+        RepeatKind::Radial { .. } => {
+            entry["type"] = json!("radial");
+            count(instances, "instance", "instances")
+        }
+        RepeatKind::Mirror { .. } => {
+            entry["type"] = json!("mirror");
+            count(instances, "instance", "instances")
+        }
+        RepeatKind::Grid { rows, cols, .. } => {
+            // `repeat_transforms` clamps the rows and columns the same way.
+            let (rows, cols) = ((*rows).clamp(1, 500), (*cols).clamp(1, 500));
+            entry["type"] = json!("grid");
+            entry["rows"] = json!(rows);
+            entry["cols"] = json!(cols);
+            let grid = format!("{} × {}", count(rows as usize, "row", "rows"), count(cols as usize, "column", "columns"));
+            if instances < (rows * cols) as usize { format!("{grid}, {}", count(instances, "instance", "instances")) } else { grid }
+        }
+    };
+    (entry, (name, format!("{}, {detail}", kind.label())))
+}
+
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts `(family, style)`, image objects and used patterns.
-fn sections(d: &Document, info: &Value, fonts: &BTreeSet<super::fonts::UsedFont>, images: &[ImageRow], category: Option<&str>) -> Vec<Section> {
+/// `document.info` reports), its fonts, its image objects and the rows of its Repeat objects.
+fn sections(
+    d: &Document,
+    info: &Value,
+    fonts: &BTreeSet<super::fonts::UsedFont>,
+    images: &[ImageRow],
+    repeats: &[(String, String)],
+    category: Option<&str>,
+) -> Vec<Section> {
     let names = |k: &str| -> Vec<(String, String)> {
         info[k].as_array().into_iter().flatten().filter_map(Value::as_str).map(|n| (n.to_string(), String::new())).collect()
     };
@@ -138,6 +178,7 @@ fn sections(d: &Document, info: &Value, fonts: &BTreeSet<super::fonts::UsedFont>
                     rows
                 }
                 "graphicStyles" => names("graphicStyleNames"),
+                "brushes" => names("brushNames"),
                 "spotColors" => names("spotColors"),
                 "patterns" => names("patternNames"),
                 "gradients" => d.swatches_iter().filter(|s| matches!(s.paint, Paint::Gradient(_))).map(|s| (s.name.clone(), String::new())).collect(),
@@ -174,6 +215,7 @@ fn sections(d: &Document, info: &Value, fonts: &BTreeSet<super::fonts::UsedFont>
                 "linkedImages" => {
                     images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
                 }
+                "repeats" => repeats.to_vec(),
                 _ => images.iter().filter(|i| i.3.is_none()).map(|(name, w, h, _)| (name.clone(), format!("{w} × {h} px"))).collect(),
             };
             Section { id, title, rows }
@@ -246,6 +288,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut symbols = BTreeSet::new();
     let mut spot = BTreeSet::new();
     let mut styles: Vec<&str> = if selection_only { vec![] } else { d.graphic_styles.iter().map(|g| g.name.as_str()).collect() };
+    // `brushes` holds the Brushes panel's brushes, or with selectionOnly it holds the brushes that the selected objects' strokes use.
+    let mut brushes: Vec<String> = if selection_only { vec![] } else { vectorcraft_brush::library(d).into_iter().map(|b| b.name).collect() };
+    // `repeats` and `repeat_rows` hold the `repeatObjects` entries and the rows of the Repeat objects that the walk visits, in walk order.
+    let mut repeats: Vec<Value> = vec![];
+    let mut repeat_rows: Vec<(String, String)> = vec![];
     for r in roots {
         r.walk(&mut |n| {
             let k = match &n.kind {
@@ -319,6 +366,21 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             {
                 styles.push(&g.name);
             }
+            if selection_only {
+                for item in &n.appearance.items {
+                    if let vectorcraft_doc::AppearanceItem::Stroke(st) = item
+                        && let Some(b) = &st.brush
+                        && !brushes.contains(b)
+                    {
+                        brushes.push(b.clone());
+                    }
+                }
+            }
+            if let NodeKind::Repeat(spec) = &n.kind {
+                let (entry, row) = repeat_entry(d, n, spec);
+                repeats.push(entry);
+                repeat_rows.push(row);
+            }
         });
     }
     let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
@@ -333,6 +395,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "swatches": d.swatches_iter().count(),
         "graphicStyles": d.graphic_styles.len(),
         "graphicStyleNames": styles,
+        "brushNames": brushes,
+        "repeatObjects": repeats,
         "characterStyles": d.char_styles.len(),
         "paragraphStyles": d.para_styles.len(),
         "patterns": d.patterns.len(),
@@ -340,7 +404,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &image_rows, category);
+    let sections = sections(d, &out, &fonts, &image_rows, &repeat_rows, category);
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -372,8 +436,11 @@ fn snap_xf(b: Rect, half: bool) -> Affine {
 }
 
 fn pixel_perfect(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids: Vec<NodeId> =
-        if p.get("ids").is_some() { super::edit::outermost(&s.doc()?.doc, targets(s, p)?) } else { super::edit::selected_roots(s)? };
+    let ids: Vec<NodeId> = if p.get("ids").is_some() || p.get("id").is_some() {
+        super::edit::outermost(&s.doc()?.doc, targets(s, p)?)
+    } else {
+        super::edit::selected_roots(s)?
+    };
     let n = ids.len();
     s.edit("Make Pixel Perfect", |d, _| {
         for id in &ids {
@@ -446,6 +513,109 @@ mod tests {
         // Nothing with no paths, and no length row.
         s.execute("select.none", &json!({})).unwrap();
         assert_eq!(length(&mut s, json!({"selectionOnly": true})), 0.0);
+    }
+
+    /// Document Info › Brushes lists the Brushes panel's brushes, and with Selection Only it lists
+    /// the brushes the selected objects' strokes use, each once.
+    #[test]
+    fn info_lists_the_brushes() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let panel: Vec<Value> =
+            s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().iter().map(|b| b["name"].clone()).collect();
+        let i = s.execute("document.info", &json!({"category": "brushes"})).unwrap();
+        assert_eq!(i["brushNames"], json!(panel));
+        assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("brushes"), Some("Brushes")));
+        let rows: Vec<Value> = panel.iter().map(|n| json!([n, ""])).collect();
+        assert_eq!(i["sections"][0]["rows"], json!(rows));
+        let a = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let b = s.execute("shape.rectangle", &json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let c = s.execute("shape.rectangle", &json!({"x": 40, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("brush.apply", &json!({"ids": [a], "name": "Charcoal"})).unwrap();
+        s.execute("brush.apply", &json!({"ids": [b], "name": "Arrow"})).unwrap();
+        s.execute("brush.apply", &json!({"ids": [c], "name": "Charcoal"})).unwrap();
+        let names =
+            |s: &mut Session| s.execute("document.info", &json!({"selectionOnly": true, "category": "brushes"})).unwrap()["brushNames"].clone();
+        s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+        assert_eq!(names(&mut s), json!(["Charcoal", "Arrow"]));
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        assert_eq!(names(&mut s), json!(["Arrow"]));
+        // A stroke without a brush lists none.
+        let plain = s.execute("shape.rectangle", &json!({"x": 60, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [plain]})).unwrap();
+        assert_eq!(names(&mut s), json!([]));
+        let text = s.execute("document.info", &json!({"category": "brushes", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains(&format!("\nBRUSHES\n{}\n", panel[0].as_str().unwrap())), "{text}");
+        assert!(text.contains("\nCharcoal\n") && text.contains("\nArrow\n") && !text.contains("OBJECTS"), "{text}");
+    }
+
+    /// Document Info › Repeat Objects lists each Repeat object by name with its kind and the number
+    /// of instances it makes (for a grid, its rows and columns, followed by the number it draws when
+    /// that is fewer), one in a group included. With Selection Only it lists the Repeat objects in
+    /// the selection.
+    #[test]
+    fn info_lists_the_repeat_objects() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let (a, b, c, d) = (square(&mut s, 0.0), square(&mut s, 100.0), square(&mut s, 200.0), square(&mut s, 300.0));
+        let radial = s.execute("object.repeat.radial", &json!({"ids": [a], "instances": 6})).unwrap()["id"].clone();
+        let grid = s.execute("object.repeat.grid", &json!({"ids": [b], "rows": 2, "cols": 1})).unwrap()["id"].clone();
+        s.execute("layer.setProps", &json!({"id": grid, "name": "Tiles"})).unwrap();
+        let mirror = s.execute("object.repeat.mirror", &json!({"ids": [c]})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [mirror, d]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        let i = s.execute("document.info", &json!({"category": "repeats"})).unwrap();
+        assert_eq!(
+            i["repeatObjects"],
+            json!([
+                {"id": radial, "name": "<Radial Repeat>", "type": "radial", "instances": 6},
+                {"id": grid, "name": "Tiles", "type": "grid", "rows": 2, "cols": 1, "instances": 2},
+                {"id": mirror, "name": "<Mirror Repeat>", "type": "mirror", "instances": 2},
+            ])
+        );
+        assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("repeats"), Some("Repeat Objects")));
+        assert_eq!(
+            i["sections"][0]["rows"],
+            json!([
+                ["<Radial Repeat>", "Radial Repeat, 6 instances"],
+                ["Tiles", "Grid Repeat, 2 rows × 1 column"],
+                ["<Mirror Repeat>", "Mirror Repeat, 2 instances"],
+            ])
+        );
+        let names = |s: &mut Session| -> Vec<Value> {
+            let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "repeats"})).unwrap();
+            i["repeatObjects"].as_array().unwrap().iter().map(|r| r["name"].clone()).collect()
+        };
+        s.execute("select.set", &json!({"ids": [grid, group]})).unwrap();
+        assert_eq!(names(&mut s), ["Tiles", "<Mirror Repeat>"]);
+        s.execute("select.set", &json!({"ids": [radial]})).unwrap();
+        assert_eq!(names(&mut s), ["<Radial Repeat>"]);
+        s.execute("select.set", &json!({"ids": [d]})).unwrap();
+        assert!(names(&mut s).is_empty());
+        let text = s.execute("document.info", &json!({"category": "repeats", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nREPEAT OBJECTS\n<Radial Repeat>: Radial Repeat, 6 instances\nTiles: Grid Repeat, 2 rows × 1 column\n"), "{text}");
+        assert!(!text.contains("\nOBJECTS\n"), "{text}");
+        // A radial of 1,000 copies of a 500 × 500 grid draws one copy within the instance budget,
+        // and Document Info reports 1 instance.
+        let e = square(&mut s, 350.0);
+        let big = s.execute("object.repeat.grid", &json!({"ids": [e], "rows": 500, "cols": 500})).unwrap()["id"].clone();
+        let outer = s.execute("object.repeat.radial", &json!({"ids": [big], "instances": 1000})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [outer]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "repeats"})).unwrap();
+        assert_eq!((i["repeatObjects"][0]["id"].clone(), i["repeatObjects"][0]["instances"].clone()), (outer, json!(1)));
+        assert_eq!((i["repeatObjects"][1]["id"].clone(), i["repeatObjects"][1]["instances"].clone()), (big, json!(250_000)));
+        assert_eq!(i["sections"][0]["rows"][0], json!(["<Radial Repeat>", "Radial Repeat, 1 instance"]));
+        // A 500 × 500 grid of a mirror draws 125,000 copies within the budget, and its row gives
+        // that number after its rows and columns.
+        let f = square(&mut s, 380.0);
+        let pair = s.execute("object.repeat.mirror", &json!({"ids": [f]})).unwrap()["id"].clone();
+        let tiles = s.execute("object.repeat.grid", &json!({"ids": [pair], "rows": 500, "cols": 500})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [tiles]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "repeats"})).unwrap();
+        assert_eq!((i["repeatObjects"][0]["id"].clone(), i["repeatObjects"][0]["instances"].clone()), (tiles, json!(125_000)));
+        assert_eq!(i["sections"][0]["rows"][0], json!(["<Grid Repeat>", "Grid Repeat, 500 rows × 500 columns, 125000 instances"]));
     }
 
     #[test]

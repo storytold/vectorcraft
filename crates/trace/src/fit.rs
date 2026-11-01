@@ -4,7 +4,7 @@ use kurbo::ParamCurveArea;
 use vectorcraft_geom::{Anchor, AnchorKind, Point, SubPath};
 
 use crate::contour::Loop;
-use crate::logo::{Cubic, Stats, Style, all_within, fit_open, fit_outline, resample_closed, resample_open, sample_cubics};
+use crate::logo::{Cubic, Stats, Style, all_within, fit_cubics, fit_open, fit_outline, resample_closed, resample_open, sample_cubics, tangent};
 use crate::subpixel::{self, Crack};
 
 #[cfg(test)]
@@ -148,7 +148,9 @@ pub(crate) fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
     // a component (or hole) which survived Noise. Keep the positioned outline
     // instead; do not simplify it again with the tolerance that collapsed it.
     if segs.len() < 2 {
-        segs = polygon(&pts, 0.0);
+        // Try the fewest segments that keep the loop first (see `collapsed_loop`): the whole
+        // positioned outline made a looser Paths give more segments than a tighter one.
+        segs = collapsed_loop(&pts, style).unwrap_or_else(|| polygon(&pts, 0.0));
     }
     if style.upright {
         snap_upright(&mut segs, true, false);
@@ -169,6 +171,67 @@ pub(crate) fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
         segs = polygon(&pts, 0.0);
     }
     Some(if flip { reversed(segs) } else { segs })
+}
+
+/// Whether `segs`, a closed chain of at least two cubics, keeps an area and follows `pts` (the
+/// points it was fitted to) within `reach` both ways.
+fn keeps_loop(segs: &[Cubic], pts: &[Point], reach: f64) -> bool {
+    let Some(&origin) = pts.first() else { return false };
+    // (The area about a nearby origin, which keeps the sum from cancelling far from zero.)
+    let area: f64 = segs
+        .iter()
+        .map(|c| {
+            let [a, b, cc, d] = c.map(|p| kurbo::Point::new(p.x - origin.x, p.y - origin.y));
+            kurbo::PathSeg::Cubic(kurbo::CubicBez::new(a, b, cc, d)).signed_area()
+        })
+        .sum();
+    segs.len() >= 2 && area.abs() > 0.25 && all_within(&sample_cubics(segs, 0.25), pts, reach) && all_within(pts, &sample_cubics(segs, 0.1), reach)
+}
+
+/// `style` with its tolerances made no looser than `tol`.
+fn tighter(style: &Style, tol: f64) -> Style {
+    Style { tol, line_tol: style.line_tol.min(tol), circle_tol: style.circle_tol.min(tol), ..*style }
+}
+
+/// The fewest-segment fit of a closed loop whose fit collapsed to one cubic (see `fit_closed`),
+/// if one keeps an area and stays within 1.5 × max(tol, 0.5) of the points: the fit at somewhat
+/// tighter tolerances (what a slightly higher Paths gives), then two cubics (split at the loop's
+/// start and its farthest point), then the outline simplified at `tol` and finer.
+fn collapsed_loop(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
+    let tol = style.tol;
+    let first = *pts.first()?;
+    let dist = |i: usize| pts.get(i).map_or(0.0, |p| p.distance_squared(first));
+    let far = (1..pts.len()).max_by(|&i, &j| dist(i).total_cmp(&dist(j)).then(j.cmp(&i)))?;
+    let reach = tol.max(0.5) * 1.5;
+    let mut t = tol;
+    for _ in 0..3 {
+        t /= 1.5;
+        if let Some(segs) = fit_outline(pts, &tighter(style, t), &mut Stats::default())
+            && keeps_loop(&segs, pts, reach)
+        {
+            return Some(segs);
+        }
+    }
+    let mut halves = vec![];
+    for half in [pts.get(..=far)?.to_vec(), pts.get(far..)?.iter().copied().chain(std::iter::once(first)).collect::<Vec<_>>()] {
+        if half.len() < 2 {
+            return None;
+        }
+        let k = (half.len() / 4).max(1);
+        halves.extend(fit_cubics(&half, tangent(&half, 0, k, 1), tangent(&half, half.len() - 1, k, -1), f64::INFINITY));
+    }
+    if keeps_loop(&halves, pts, reach) {
+        return Some(halves);
+    }
+    let mut t = tol;
+    for _ in 0..4 {
+        let simple = polygon(pts, t);
+        if keeps_loop(&simple, pts, reach) {
+            return Some(simple);
+        }
+        t /= 2.0;
+    }
+    None
 }
 
 /// A piece of a loop between two junctions fitted, from its first point to its last. The same
@@ -205,7 +268,21 @@ pub(crate) fn fit_piece(pts: &[Point], style: &Style, fixed_ends: bool) -> Vec<C
     if fixed_ends && first == last && segs.len() < 2 {
         let area2: f64 = pts.windows(2).map(|p| (p[0] - first).cross(p[1] - first)).sum();
         if area2.is_finite() && area2.abs() > 1e-8 {
-            segs = pts.windows(2).filter(|p| p[0] != p[1]).map(|p| [p[0], p[0], p[1], p[1]]).collect();
+            // First the fit at somewhat tighter tolerances (what a slightly higher Paths gives), if
+            // it keeps two cubics, an area and the points' course; only then every positioned
+            // point (which made a looser Paths give more segments than a tighter one).
+            let reach = style.tol.max(0.5) * 1.5;
+            let mut t = style.tol;
+            let mut found = None;
+            for _ in 0..3 {
+                t /= 1.5;
+                let c = fit_open(&pts, &tighter(style, t), &mut Stats::default());
+                if keeps_loop(&c, &pts, reach) {
+                    found = Some(c);
+                    break;
+                }
+            }
+            segs = found.unwrap_or_else(|| pts.windows(2).filter(|p| p[0] != p[1]).map(|p| [p[0], p[0], p[1], p[1]]).collect());
         }
     }
     if flip { reversed(segs) } else { segs }

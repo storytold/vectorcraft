@@ -48,13 +48,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let units = app.session.general_unit();
     let p = app.hover_doc.unwrap_or_default();
+    // X and Y count from the rulers' zero point, as the rulers and the Transform panel do.
+    let origin = app.ruler_origin();
     let bounds = app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false));
     let mono = |ui: &mut Ui, s: String| {
         ui.label(egui::RichText::new(s).monospace().color(t.text));
     };
     ui.columns(2, |cols| {
-        mono(&mut cols[0], format!("X: {}", units.format(p.x)));
-        mono(&mut cols[0], format!("Y: {}", units.format(p.y)));
+        mono(&mut cols[0], format!("X: {}", units.format(p.x - origin.x)));
+        mono(&mut cols[0], format!("Y: {}", units.format(p.y - origin.y)));
         let (w, h) = bounds.map(|b| (units.format(b.width()), units.format(b.height()))).unwrap_or_default();
         mono(&mut cols[1], format!("W: {w}"));
         mono(&mut cols[1], format!("H: {h}"));

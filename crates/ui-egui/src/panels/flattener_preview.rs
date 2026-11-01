@@ -349,7 +349,7 @@ fn render(
             }
         }
     }
-    egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels)
+    crate::canvas::color_image(&img)
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {

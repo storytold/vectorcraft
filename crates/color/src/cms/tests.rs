@@ -245,6 +245,20 @@ fn loads_system_cmyk_icc() {
     assert_eq!(c.cmyk_to_srgb([0.0; 4], false).map(|v| (v * 255.0).round() as u8), [255, 255, 255]);
 }
 
+/// With black-point compensation, sRGB black separates to the press's darkest black and that black
+/// displays as black again (hex 000000 -> C67 M67 Y67 K100 -> 000000, not a dark grey).
+#[test]
+fn generic_cmyk_black_round_trips_with_bpc() {
+    let c = cms();
+    let cmyk = c.srgb_to_cmyk([0.0; 3], Intent::RelativeColorimetric);
+    let back = c.cmyk_to_srgb(cmyk, false).map(|v| (v * 255.0).round() as u8);
+    assert_eq!(back, [0, 0, 0], "{cmyk:?}");
+    // The paper still shows as white, and without compensation the press black stays a dark grey.
+    assert_eq!(c.cmyk_to_srgb([0.0; 4], false), [1.0, 1.0, 1.0]);
+    let raw = cms_no_bpc().cmyk_to_srgb(cmyk, false);
+    assert!(raw.iter().all(|v| *v > 0.05), "{raw:?}");
+}
+
 #[test]
 fn lab_colours_round_trip_through_the_cms() {
     let c = cms_no_bpc();

@@ -25,6 +25,9 @@ use crate::PtrHasher;
 
 /// Glyph outlines per text object (`Renderer::text_geom_of`).
 pub(crate) const TEXT_BUDGET: usize = 128 << 20;
+/// Expanded character strokes per run of the glyph outlines kept in `texts`
+/// (`Renderer::cached_stroke`).
+pub(crate) const CHAR_STROKE_BUDGET: usize = 128 << 20;
 /// Clip regions per clipping path (`Renderer::clip_of`), and separately what clipping paths
 /// paint (`Renderer::clip_paint_of`).
 pub(crate) const CLIP_BUDGET: usize = 32 << 20;
@@ -36,6 +39,8 @@ pub(crate) const PLACED_ART_BUDGET: usize = 64 << 20;
 pub(crate) const BRUSH_BUDGET: usize = 64 << 20;
 /// Evaluated blends, envelopes and repeats (`Renderer::live_expanded`).
 pub(crate) const LIVE_BUDGET: usize = 64 << 20;
+/// What the walks of live objects and effect art found (`Renderer::live_found`).
+pub(crate) const WALK_BUDGET: usize = 16 << 20;
 /// Tessellated gradient meshes (`Renderer::mesh_quads`).
 pub(crate) const MESH_BUDGET: usize = 32 << 20;
 /// Pattern tile rasters, per thread and ink plane (`pattern::set_pattern_paint`): a tile is at
@@ -43,6 +48,9 @@ pub(crate) const MESH_BUDGET: usize = 32 << 20;
 pub(crate) const PATTERN_BUDGET: usize = 128 << 20;
 /// Freeform gradient grids, per thread (`freeform::set_freeform_paint`).
 pub(crate) const FREEFORM_BUDGET: usize = 32 << 20;
+/// Dithered gradient grids, per thread (`dither::set_dithered_paint`): a grid is at most 4096²
+/// pixels, 64 MiB.
+pub(crate) const DITHER_BUDGET: usize = 64 << 20;
 
 /// Frames an entry may go unused before [`FrameCache::sweep`] drops it.
 const AGE: u64 = 3;
@@ -169,6 +177,12 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.map.len()
+    }
+
+    /// The values of the entries frame `stamp` made or used.
+    #[cfg(test)]
+    pub(crate) fn used_in(&self, stamp: u64) -> impl Iterator<Item = &V> {
+        self.map.values().filter(move |s| s.stamp == stamp).map(|s| &s.value)
     }
 
     #[cfg(test)]

@@ -26,7 +26,7 @@ fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
     let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
-    let id = egui::Id::new("tr-state");
+    let id = egui::Id::unique("tr-state");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (TransparencyInfo, Option<Node>))>(id))
         && k == key
     {
@@ -105,7 +105,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         app.run("transparency.setOpacityMask", json!({"linked": !m.linked})).ok();
                     }
                     let (mr, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
-                    let mresp = ui.interact(mr, egui::Id::new(MASK_THUMB), Sense::click());
+                    let mresp = ui.interact(mr, egui::Id::unique(MASK_THUMB), Sense::click());
                     let bg = if m.clip != m.invert { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
                     ui.painter().rect_filled(mr, 0.0, egui::Color32::from_rgb(bg[0], bg[1], bg[2]));
                     node_thumb(app, ui, "tr-mask", &m.art, mr.shrink(2.0), Some(bg));
@@ -143,7 +143,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.vertical(|ui| {
             let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
-            let enabled = mask.is_some() || (has && editing.is_none());
+            // Make Mask is off in isolation mode and pattern editing mode for one object, which it would take into mask editing.
+            let enabled = mask.is_some() || (has && editing.is_none() && crate::menus::enabled(app, "transparency.makeOpacityMask"));
             let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
             if r.on_disabled_hover_text(tl!("Select the art (and, on top of it, the mask object)")).clicked() {
                 let id = if mask.is_some() { "transparency.releaseOpacityMask" } else { "transparency.makeOpacityMask" };
@@ -196,7 +197,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing = app.session.active().is_some_and(|d| d.doc.mask_edit.is_some());
     let (_, n) = state(app, ui.ctx());
     let mask = n.as_ref().and_then(|n| n.extras().mask.as_deref());
-    for (label, id, enabled) in mask_items(mask, n.is_some() && !editing) {
+    let can_make = n.is_some() && !editing && crate::menus::enabled(app, "transparency.makeOpacityMask");
+    for (label, id, enabled) in mask_items(mask, can_make) {
         if menu_item(ui, tl!(label), enabled, false) {
             app.run(id, json!({})).ok();
         }
@@ -257,13 +259,13 @@ fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::No
     }
     let Some(st) = app.session.active() else { return false };
     let px = (r.width().min(r.height()) * ui.ctx().pixels_per_point()).round().max(8.0) as u32;
-    let (slot_id, key) = (egui::Id::new(slot), egui::Id::new((st.uid, n.id, bg, px)));
+    let (slot_id, key) = (egui::Id::unique(slot), egui::Id::unique((st.uid, n.id, bg, px)));
     let busy = st.interaction.is_some() || app.session.tool_busy();
     let cached: Option<(egui::Id, u64, egui::TextureHandle)> = ui.ctx().data(|d| d.get_temp(slot_id));
     let tex = match cached {
         Some((k, rev, tex)) if k == key && (rev == st.revision || busy) => Some(tex),
         _ => RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail_with(&st.doc, n, px, bg, &super::layers::thumb_options())).map(|img| {
-            let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+            let color = crate::canvas::color_image(&img);
             let tex = ui.ctx().load_texture(slot, color, egui::TextureOptions::LINEAR);
             ui.ctx().data_mut(|d| d.insert_temp(slot_id, (key, st.revision, tex.clone())));
             tex

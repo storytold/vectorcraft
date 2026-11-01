@@ -44,6 +44,10 @@ impl Crack {
     pub fn new(inside: (i32, i32), step: (i32, i32), w: usize, h: usize) -> Self {
         Self { inside, step, w, h }
     }
+    /// The same crack seen from its other side: the outside pixel becomes the inside one.
+    pub fn flipped(&self) -> Self {
+        Self { inside: (self.inside.0 + self.step.0, self.inside.1 + self.step.1), step: (-self.step.0, -self.step.1), w: self.w, h: self.h }
+    }
     /// The index of the pixel `k` steps out from the inside pixel (0: the inside pixel, 1: the
     /// outside one, −1: the one behind the inside pixel), if the image has it.
     pub fn at(&self, k: i32) -> Option<usize> {
@@ -218,6 +222,11 @@ pub(crate) fn outline(
             && free(s1)
             && free(s2)
             && free(b)
+            // The three cracks of `a` and of `b` next to the notch must lie in this piece. An edge
+            // that runs on past a junction is shorter in the loop of the region across it, which
+            // turns there: that region makes no notch, and the two would get different points.
+            && !(1..=2).any(|k| junction(edges[a].first + edges[a].len - k))
+            && !(1..=2).any(|k| junction(edges[b].first + k))
         {
             let (ea, eb) = (&edges[a], &edges[b]);
             // Edge `a` carried on one pixel further meets edge `b` carried back one.

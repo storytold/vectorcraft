@@ -30,15 +30,19 @@ pub type Stamp = (u64, u128);
 /// object ids, stamp)]).
 pub type LinkScan = Arc<Mutex<Option<(u64, Vec<(String, Vec<u64>, Option<Stamp>)>)>>>;
 
+/// The stamp of the linked file stored as `path` in the document saved at `doc_path`; `None` when
+/// there is no file, its path isn't followed ([`crate::cmd::fileio::document_path`]) or
+/// automation may not read it.
 #[cfg(not(target_arch = "wasm32"))]
-fn stamp(path: &str) -> Option<Stamp> {
-    let meta = std::fs::metadata(path).ok()?;
+fn stamp(path: &str, doc_path: Option<&str>) -> Option<Stamp> {
+    let path = crate::cmd::fileio::document_path(path, doc_path).ok()?;
+    let meta = crate::cmd::fileio::file_metadata(&path)?;
     let modified = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
     Some((meta.len(), modified.as_nanos()))
 }
 
 #[cfg(target_arch = "wasm32")]
-fn stamp(_: &str) -> Option<Stamp> {
+fn stamp(_: &str, _: Option<&str>) -> Option<Stamp> {
     None
 }
 
@@ -52,7 +56,7 @@ pub fn linked_files(d: &vectorcraft_doc::Document) -> Vec<(String, Vec<u64>)> {
 pub(crate) fn update_changed(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
     let (uid, files) = (st.uid, crate::cmd::links::linked_groups(&st.doc));
-    let now = files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p))).collect();
+    let now = files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, st.path.as_deref()))).collect();
     s.apply_link_stamps(uid, now, true)
 }
 
@@ -64,14 +68,15 @@ impl Session {
             return;
         }
         let Some(st) = self.active() else { return };
-        let (uid, files) = (st.uid, crate::cmd::links::linked_groups(&st.doc));
+        let (uid, files, doc_path) = (st.uid, crate::cmd::links::linked_groups(&st.doc), st.path.clone());
         if files.is_empty() {
             return;
         }
         let slot: LinkScan = Arc::default();
         let out = slot.clone();
+        let scope = crate::file_access::ScopeHandle::capture();
         let spawned = std::thread::Builder::new().name("link-watch".into()).spawn(move || {
-            let stamps = files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p))).collect();
+            let stamps = scope.run(|| files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect());
             *out.lock().unwrap_or_else(PoisonError::into_inner) = Some((uid, stamps));
         });
         if spawned.is_ok() {

@@ -110,7 +110,8 @@ fn fit(size: [f32; 2], room: [f32; 2]) -> [f32; 2] {
 }
 
 /// Size and place the new window (eframe shows it after drawing the first frame) and return its
-/// geometry.
+/// geometry. On Linux the window may not be mapped yet, so [`apply_pending_maximize`] must run
+/// until the host reports maximized (fixes #3635).
 pub fn restore(window: &winit::window::Window, saved: Option<WindowGeometry>) -> WindowGeometry {
     let handles: Vec<_> = window.available_monitors().collect();
     let monitors: Vec<Monitor> = handles.iter().map(|m| Monitor::new(m.position(), m.size(), m.scale_factor())).collect();
@@ -121,22 +122,41 @@ pub fn restore(window: &winit::window::Window, saved: Option<WindowGeometry>) ->
     }
     // Returns the new size when it applies at once; either way the window gets it.
     let _ = window.request_inner_size(LogicalSize::new(g.size[0], g.size[1]));
+    #[cfg(not(target_os = "linux"))]
     if g.maximized {
         window.set_maximized(true);
     }
     g
 }
 
+/// Keep asking the host to maximize until it sticks, or give up after a few frames.
+pub fn apply_pending_maximize(window: &winit::window::Window, want: bool, tries: &mut u8) -> bool {
+    if !want {
+        return false;
+    }
+    if window.is_maximized() {
+        return false;
+    }
+    if *tries == 0 {
+        return false;
+    }
+    *tries -= 1;
+    window.set_maximized(true);
+    true
+}
+
 /// Per frame: remember the window's geometry for the next launch. Minimized or full screen keeps
 /// the last one; maximized only sets its flag, so un-maximizing next time restores the last size.
-pub fn track(ctx: &egui::Context, geometry: &mut Option<WindowGeometry>) {
+/// `host_maximized` is the window manager's idea of maximized when egui does not report it (#3635).
+pub fn track(ctx: &egui::Context, geometry: &mut Option<WindowGeometry>, host_maximized: Option<bool>) {
     let zoom = ctx.zoom_factor();
     ctx.input(|i| {
         let v = i.viewport();
         if v.minimized == Some(true) || v.fullscreen == Some(true) {
             return;
         }
-        if v.maximized == Some(true) {
+        let maximized = v.maximized == Some(true) || host_maximized == Some(true);
+        if maximized {
             if let Some(g) = geometry {
                 g.maximized = true;
             }
@@ -222,7 +242,7 @@ mod tests {
         let mut frame = |info: egui::ViewportInfo| {
             let mut input = egui::RawInput::default();
             input.viewports.insert(egui::ViewportId::ROOT, info);
-            ctx.run_ui(input, |ui| track(ui.ctx(), &mut geometry)).textures_delta.clear();
+            ctx.run_ui(input, |ui| track(ui.ctx(), &mut geometry, None)).textures_delta.clear();
             geometry
         };
         let rect = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(1000.0, 600.0));
@@ -252,5 +272,20 @@ mod tests {
         assert!(json.get("window").is_none());
         let back: vectorcraft_ui_egui::UiState = serde_json::from_value(json).unwrap();
         assert_eq!(back.window, None);
+    }
+
+    #[test]
+    fn the_host_maximized_flag_is_remembered_when_egui_does_not_report_it() {
+        let ctx = egui::Context::default();
+        let mut geometry = Some(WindowGeometry { pos: Some([10, 20]), size: [800.0, 600.0], maximized: false });
+        let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1920.0, 1080.0));
+        let mut input = egui::RawInput::default();
+        input.viewports.insert(
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo { inner_rect: Some(rect), outer_rect: Some(rect), maximized: None, ..Default::default() },
+        );
+        let mut out = ctx.run_ui(input, |ui| track(ui.ctx(), &mut geometry, Some(true)));
+        out.textures_delta.clear();
+        assert_eq!(geometry, Some(WindowGeometry { pos: Some([10, 20]), size: [800.0, 600.0], maximized: true }));
     }
 }

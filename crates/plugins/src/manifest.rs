@@ -1,14 +1,24 @@
-//! The plug-in manifest (`vc_manifest`) and parameter schema.
+//! The plug-in manifest (`vc_manifest`) and parameter schema: what each parameter holds
+//! ([`ParamSpec`]) and how dialogs show it ([`ParamUi`], in [`crate::dialog`]).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+use crate::dialog::ParamUi;
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
 pub const MAX_MANIFEST_BYTES: usize = 64 * 1024;
 /// Most parameters a plug-in may declare.
-pub const MAX_PARAMS: usize = 64;
+pub const MAX_PARAMS: usize = 256;
+/// Most parameters outside groups (`group`): a dialog of more is sorted into sections.
+pub const MAX_UNGROUPED: usize = 64;
+/// Longest text a `string` parameter may hold, in characters.
+pub const MAX_TEXT: usize = 4_096;
+/// Most numbers a `numberList` parameter may hold.
+pub const MAX_LIST: usize = 256;
+/// Most file extensions an exporter may declare.
+pub const MAX_EXTENSIONS: usize = 8;
 
 /// What a plug-in is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +30,9 @@ pub enum Kind {
     /// A live effect: rewrites one object's geometry each time it is drawn, from its appearance
     /// stack (Effect › Plug-ins, `effect.apply`).
     Effect,
+    /// An exporter: writes the document in a file format of its own, whose extensions the manifest
+    /// lists (File › Export › Export As, `document.export`; see [`crate::export`]).
+    Exporter,
 }
 
 impl Kind {
@@ -27,7 +40,29 @@ impl Kind {
         match self {
             Kind::Filter => "filter",
             Kind::Effect => "effect",
+            Kind::Exporter => "exporter",
         }
+    }
+}
+
+/// How much one run of a plug-in may compute.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Budget {
+    /// The usual budget ([`crate::Limits::default`]).
+    #[default]
+    Light,
+    /// A filter's larger budget for heavy but legitimate work (routing, packing, simulation):
+    /// [`crate::HEAVY_FUEL`] instructions and [`crate::HEAVY_WALL_TIME_MS`]. The
+    /// user allows it once, when the plug-in is installed, and the app runs it in the background
+    /// with Cancel.
+    Heavy,
+}
+
+impl Budget {
+    /// The usual budget, which a manifest written back leaves out (`skip_serializing_if`).
+    fn is_light(&self) -> bool {
+        *self == Budget::Light
     }
 }
 
@@ -57,6 +92,27 @@ pub enum ParamSpec {
         #[serde(default)]
         default: Option<String>,
     },
+    /// Text of at most `max_length` characters (a text field).
+    #[serde(rename = "string")]
+    Text {
+        #[serde(default)]
+        default: String,
+        #[serde(default = "text_max", rename = "maxLength")]
+        max_length: usize,
+    },
+    /// `min_items` to `max_items` numbers, each in `min..=max` (a field of numbers separated by
+    /// commas or spaces).
+    #[serde(rename_all = "camelCase")]
+    NumberList {
+        min: f64,
+        max: f64,
+        #[serde(default)]
+        default: Vec<f64>,
+        #[serde(default)]
+        min_items: usize,
+        #[serde(default = "list_max")]
+        max_items: usize,
+    },
 }
 
 fn int_min() -> i64 {
@@ -64,6 +120,28 @@ fn int_min() -> i64 {
 }
 fn int_max() -> i64 {
     1_000_000
+}
+fn text_max() -> usize {
+    256
+}
+fn list_max() -> usize {
+    16
+}
+
+/// One declared parameter: what it holds, and how dialogs show it. In the manifest both are keys of
+/// the same object: `{"type": "number", "min": 0, "max": 10, "default": 1, "unit": "mm"}`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Param {
+    #[serde(flatten)]
+    pub spec: ParamSpec,
+    #[serde(flatten)]
+    pub ui: ParamUi,
+}
+
+impl From<ParamSpec> for Param {
+    fn from(spec: ParamSpec) -> Self {
+        Param { spec, ui: ParamUi::default() }
+    }
 }
 
 impl ParamSpec {
@@ -74,6 +152,40 @@ impl ParamSpec {
             ParamSpec::Int { min, max, default } => json!((*default).clamp(*min, *max)),
             ParamSpec::Bool { default } => json!(default),
             ParamSpec::Choice { options, default } => json!(default.clone().or_else(|| options.first().cloned()).unwrap_or_default()),
+            ParamSpec::Text { default, max_length } => json!(default.chars().take(*max_length).collect::<String>()),
+            ParamSpec::NumberList { min, max, default, .. } => json!(default.iter().map(|x| x.clamp(*min, *max)).collect::<Vec<f64>>()),
+        }
+    }
+
+    /// Checks the spec of parameter `k`.
+    fn validate(&self, k: &str) -> Result<()> {
+        let bad = |what: &str| Err(Error::Manifest(format!("parameter `{k}`: {what}")));
+        match self {
+            ParamSpec::Number { min, max, default } if !(min.is_finite() && max.is_finite() && default.is_finite()) || min > max => bad("bad range"),
+            ParamSpec::Int { min, max, .. } if min > max => bad("bad range"),
+            ParamSpec::Choice { options, default } => {
+                if options.is_empty() || options.len() > 64 || options.iter().any(|o| o.is_empty() || o.len() > 64 || o.chars().any(char::is_control))
+                {
+                    return bad("choices must be 1-64 non-empty, printable strings");
+                }
+                if default.as_ref().is_some_and(|d| !options.contains(d)) {
+                    return bad("default is not one of the options");
+                }
+                Ok(())
+            }
+            ParamSpec::Text { default, max_length } if !(1..=MAX_TEXT).contains(max_length) || default.chars().count() > *max_length => {
+                bad(&format!("`maxLength` must be 1-{MAX_TEXT}, and the default no longer"))
+            }
+            ParamSpec::NumberList { min, max, default, min_items, max_items } => {
+                if !(min.is_finite() && max.is_finite()) || min > max || default.iter().any(|x| !x.is_finite()) {
+                    return bad("bad range");
+                }
+                if !(1..=MAX_LIST).contains(max_items) || min_items > max_items || !(*min_items..=*max_items).contains(&default.len()) {
+                    return bad(&format!("`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many"));
+                }
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 }
@@ -95,7 +207,14 @@ pub struct Manifest {
     pub author: String,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
-    pub params: Vec<(String, ParamSpec)>,
+    pub params: Vec<(String, Param)>,
+    /// An exporter's file extensions, lower case and without the dot; the first is the one its
+    /// files get. Only exporters declare them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
+    /// How much a run may compute: only a filter may be [`Budget::Heavy`].
+    #[serde(default, skip_serializing_if = "Budget::is_light")]
+    pub budget: Budget,
 }
 
 impl Manifest {
@@ -120,9 +239,13 @@ impl Manifest {
             description: String::new(),
             author: String::new(),
             params: Vec::new(),
+            extensions: Vec::new(),
+            budget: Budget::Light,
         }
     }
 
+    /// Checks what the module declared: its id, name and text lengths, its extensions, a budget its
+    /// kind may have (only a filter may be heavy), and each parameter and its dialog layout.
     fn validate(&self) -> Result<()> {
         if !valid_id(&self.id) {
             return Err(Error::Manifest(format!("invalid id {:?}: use 1-64 characters from A-Z a-z 0-9 . _ -", self.id)));
@@ -134,27 +257,47 @@ impl Manifest {
         if self.version.len() > 32 || self.description.len() > 1024 || self.author.len() > 128 {
             return Err(Error::Manifest("`version`, `description` or `author` is too long".into()));
         }
-        for (k, spec) in &self.params {
+        self.validate_extensions()?;
+        match (self.budget, self.kind) {
+            (Budget::Light, _) | (Budget::Heavy, Kind::Filter) => {}
+            (Budget::Heavy, Kind::Effect) => {
+                return Err(Error::Manifest("a live effect runs while the document is drawn, so it can't be `heavy`".into()));
+            }
+            (Budget::Heavy, Kind::Exporter) => {
+                return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
+            }
+        }
+        for (i, (k, p)) in self.params.iter().enumerate() {
             if !valid_key(k) {
                 return Err(Error::Manifest(format!("invalid parameter name {k:?}")));
             }
-            match spec {
-                ParamSpec::Number { min, max, default } if !(min.is_finite() && max.is_finite() && default.is_finite()) || min > max => {
-                    return Err(Error::Manifest(format!("parameter `{k}`: bad range")));
-                }
-                ParamSpec::Int { min, max, .. } if min > max => return Err(Error::Manifest(format!("parameter `{k}`: bad range"))),
-                ParamSpec::Choice { options, default } => {
-                    if options.is_empty()
-                        || options.len() > 64
-                        || options.iter().any(|o| o.is_empty() || o.len() > 64 || o.chars().any(char::is_control))
-                    {
-                        return Err(Error::Manifest(format!("parameter `{k}`: choices must be 1-64 non-empty, printable strings")));
-                    }
-                    if default.as_ref().is_some_and(|d| !options.contains(d)) {
-                        return Err(Error::Manifest(format!("parameter `{k}`: default is not one of the options")));
-                    }
-                }
-                _ => {}
+            p.spec.validate(k)?;
+            p.ui.validate(self, i, k)?;
+        }
+        if self.params.iter().filter(|(_, p)| p.ui.group.is_none()).count() > MAX_UNGROUPED {
+            return Err(Error::Manifest(format!("at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`")));
+        }
+        Ok(())
+    }
+
+    /// An exporter lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16 lower-case
+    /// letters and digits; other kinds list none.
+    fn validate_extensions(&self) -> Result<()> {
+        let exts = &self.extensions;
+        match self.kind {
+            Kind::Exporter => {}
+            _ if exts.is_empty() => return Ok(()),
+            _ => return Err(Error::Manifest("only an exporter declares `extensions`".into())),
+        }
+        if exts.is_empty() || exts.len() > MAX_EXTENSIONS {
+            return Err(Error::Manifest(format!("an exporter declares 1 to {MAX_EXTENSIONS} `extensions`")));
+        }
+        for (i, e) in exts.iter().enumerate() {
+            if !(1..=16).contains(&e.len()) || !e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) {
+                return Err(Error::Manifest(format!("extension {e:?}: use 1-16 lower-case letters and digits, without the dot")));
+            }
+            if exts.get(..i).is_some_and(|before| before.contains(e)) {
+                return Err(Error::Manifest(format!("extension {e:?} is listed twice")));
             }
         }
         Ok(())
@@ -166,13 +309,17 @@ impl Manifest {
         let parts: Vec<String> = self
             .params
             .iter()
-            .map(|(k, spec)| match spec {
+            .map(|(k, p)| match &p.spec {
                 ParamSpec::Number { min, max, default } => format!("{k}: {min}..{max} ({})", default.clamp(*min, *max)),
                 ParamSpec::Int { min, max, default } => format!("{k}: int {min}..{max} ({})", (*default).clamp(*min, *max)),
                 ParamSpec::Bool { default } => format!("{k}: bool ({default})"),
                 ParamSpec::Choice { options, .. } => {
                     let opts: Vec<String> = options.iter().map(|o| format!("{o:?}")).collect();
-                    format!("{k}: {} ({})", opts.join("|"), spec.default_value().as_str().unwrap_or_default())
+                    format!("{k}: {} ({})", opts.join("|"), p.spec.default_value().as_str().unwrap_or_default())
+                }
+                ParamSpec::Text { max_length, .. } => format!("{k}: string of at most {max_length} ({})", p.spec.default_value()),
+                ParamSpec::NumberList { min, max, min_items, max_items, .. } => {
+                    format!("{k}: {min_items} to {max_items} numbers {min}..{max} ({})", p.spec.default_value())
                 }
             })
             .collect();
@@ -181,7 +328,7 @@ impl Manifest {
 
     /// Every parameter at its default value.
     pub fn defaults(&self) -> Map<String, Value> {
-        self.params.iter().map(|(k, spec)| (k.clone(), spec.default_value())).collect()
+        self.params.iter().map(|(k, p)| (k.clone(), p.spec.default_value())).collect()
     }
 
     /// Validates user `params` against the schema: missing keys take their defaults, numbers are
@@ -194,7 +341,8 @@ impl Manifest {
             _ => return Err(Error::Params("plug-in parameters must be a JSON object".into())),
         };
         let mut out = Map::new();
-        for (k, spec) in &self.params {
+        for (k, p) in &self.params {
+            let spec = &p.spec;
             let Some(v) = given.get(k).filter(|v| !v.is_null()) else {
                 out.insert(k.clone(), spec.default_value());
                 continue;
@@ -223,6 +371,17 @@ impl Manifest {
                     }
                     json!(s)
                 }
+                ParamSpec::Text { max_length, .. } => {
+                    json!(v.as_str().ok_or_else(|| wrong("a string"))?.chars().take(*max_length).collect::<String>())
+                }
+                ParamSpec::NumberList { min, max, min_items, max_items, .. } => {
+                    let items = v.as_array().ok_or_else(|| wrong("a list of numbers"))?;
+                    if !(*min_items..=*max_items).contains(&items.len()) {
+                        return Err(wrong(&format!("a list of {min_items} to {max_items} numbers")));
+                    }
+                    let numbers: Option<Vec<f64>> = items.iter().map(|x| x.as_f64().filter(|f| f.is_finite()).map(|f| f.clamp(*min, *max))).collect();
+                    json!(numbers.ok_or_else(|| wrong("a list of numbers"))?)
+                }
             };
             out.insert(k.clone(), resolved);
         }
@@ -231,10 +390,10 @@ impl Manifest {
 }
 
 /// Reads the `params` object keeping its key order (serde_json's `Map` would sort it).
-fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<(String, ParamSpec)>, D::Error> {
+fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<(String, Param)>, D::Error> {
     struct V;
     impl<'de> serde::de::Visitor<'de> for V {
-        type Value = Vec<(String, ParamSpec)>;
+        type Value = Vec<(String, Param)>;
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             f.write_str("an object of parameter specs")
         }
@@ -242,8 +401,8 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
             Ok(Vec::new())
         }
         fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> std::result::Result<Self::Value, A::Error> {
-            let mut out: Vec<(String, ParamSpec)> = Vec::new();
-            while let Some((k, v)) = map.next_entry::<String, ParamSpec>()? {
+            let mut out: Vec<(String, Param)> = Vec::new();
+            while let Some((k, v)) = map.next_entry::<String, Param>()? {
                 if out.len() >= MAX_PARAMS {
                     return Err(serde::de::Error::custom(format!("too many parameters (limit {MAX_PARAMS})")));
                 }
@@ -258,7 +417,7 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
     d.deserialize_any(V)
 }
 
-fn params_as_object<S: serde::Serializer>(p: &[(String, ParamSpec)], s: S) -> std::result::Result<S::Ok, S::Error> {
+fn params_as_object<S: serde::Serializer>(p: &[(String, Param)], s: S) -> std::result::Result<S::Ok, S::Error> {
     use serde::ser::SerializeMap;
     let mut m = s.serialize_map(Some(p.len()))?;
     for (k, v) in p {
@@ -356,6 +515,90 @@ mod tests {
     }
 
     #[test]
+    fn an_exporter_lists_its_extensions_and_other_kinds_list_none() {
+        let m = Manifest::parse(br#"{"id":"org.example.plotter","name":"Plotter","kind":"exporter","extensions":["plt","plot"]}"#).unwrap();
+        assert_eq!((m.kind, m.extensions.as_slice()), (Kind::Exporter, &["plt".to_string(), "plot".to_string()][..]));
+        assert_eq!(serde_json::to_value(&m).unwrap()["extensions"], json!(["plt", "plot"]));
+        let filter = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter"}"#).unwrap();
+        assert!(serde_json::to_value(&filter).unwrap().get("extensions").is_none());
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"exporter"}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":[]}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":["PLT"]}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":[".plt"]}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":[""]}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":["abcdefghijklmnopq"]}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt","plt"]}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":["a","b","c","d","e","f","g","h","i"]}"#,
+            r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#,
+            r#"{"id":"a","name":"x","kind":"effect","extensions":["plt"]}"#,
+        ] {
+            assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    /// A filter may ask for a heavy budget; a live effect runs while the document is drawn and an
+    /// exporter has an export's budget, so they can't. Light, the default, isn't written back.
+    #[test]
+    fn only_a_filter_asks_for_a_heavy_budget() {
+        let heavy = Manifest::parse(br#"{"id":"org.example.route","name":"Route","kind":"filter","budget":"heavy"}"#).unwrap();
+        assert_eq!(heavy.budget, Budget::Heavy);
+        assert_eq!(serde_json::to_value(&heavy).unwrap()["budget"], json!("heavy"));
+        for light in [r#"{"id":"a","name":"x","kind":"filter"}"#, r#"{"id":"a","name":"x","kind":"effect","budget":"light"}"#] {
+            let m = Manifest::parse(light.as_bytes()).unwrap();
+            assert_eq!(m.budget, Budget::Light);
+            assert!(serde_json::to_value(&m).unwrap().get("budget").is_none(), "{light}");
+        }
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"effect","budget":"heavy"}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"budget":"heavy"}"#,
+            r#"{"id":"a","name":"x","kind":"filter","budget":"huge"}"#,
+            r#"{"id":"a","name":"x","kind":"filter","budget":true}"#,
+        ] {
+            assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn strings_and_number_lists_resolve_like_the_other_types() {
+        let m = Manifest::parse(
+            br#"{"id":"org.example.text","name":"Text","kind":"filter","params":{
+                "label":{"type":"string","default":"Rose","maxLength":8},
+                "angles":{"type":"numberList","min":0,"max":360,"default":[45,135],"minItems":1,"maxItems":3},
+                "free":{"type":"string"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(Value::Object(m.defaults()), json!({"label": "Rose", "angles": [45.0, 135.0], "free": ""}));
+        let p = m.resolve_params(&json!({"label": "Sunflowers", "angles": [-10, 90, 400]})).unwrap();
+        assert_eq!((&p["label"], &p["angles"]), (&json!("Sunflowe"), &json!([0.0, 90.0, 360.0])), "cut and clamped");
+        for bad in [json!({"label": 3}), json!({"angles": []}), json!({"angles": [1, 2, 3, 4]}), json!({"angles": [1, "x"]}), json!({"angles": 5})] {
+            assert!(m.resolve_params(&bad).is_err(), "{bad}");
+        }
+        assert_eq!(
+            m.params_doc(),
+            r#"{label: string of at most 8 ("Rose"), angles: 1 to 3 numbers 0..360 ([45.0,135.0]), free: string of at most 256 ("")}"#
+        );
+    }
+
+    #[test]
+    fn up_to_256_parameters_with_at_most_64_outside_groups() {
+        let manifest = |n: usize, grouped: usize| {
+            let params: Vec<String> = (0..n)
+                .map(|i| match i < grouped {
+                    true => format!(r#""p{i}":{{"type":"bool","group":"G{}"}}"#, i % 4),
+                    false => format!(r#""p{i}":{{"type":"bool"}}"#),
+                })
+                .collect();
+            format!(r#"{{"id":"a","name":"x","kind":"filter","params":{{{}}}}}"#, params.join(","))
+        };
+        assert!(Manifest::parse(manifest(MAX_UNGROUPED, 0).as_bytes()).is_ok());
+        assert!(Manifest::parse(manifest(MAX_UNGROUPED + 1, 0).as_bytes()).is_err(), "too many outside groups");
+        let all = Manifest::parse(manifest(MAX_PARAMS, MAX_PARAMS - MAX_UNGROUPED).as_bytes()).unwrap();
+        assert_eq!(all.params.len(), MAX_PARAMS);
+        assert!(Manifest::parse(manifest(MAX_PARAMS + 1, MAX_PARAMS).as_bytes()).is_err(), "too many in all");
+    }
+
+    #[test]
     fn rejects_bad_manifests() {
         for bad in [
             "",
@@ -372,6 +615,13 @@ mod tests {
             r#"{"id":"a","name":"x","kind":"filter","params":{"preview":{"type":"bool"}}}"#,
             r#"{"id":"a","name":"x","kind":"filter","params":{"a":{"type":"bool"},"a":{"type":"bool"}}}"#,
             r#"{"id":"a","name":"x","kind":"filter","params":[1]}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"t":{"type":"string","maxLength":0}}}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"t":{"type":"string","default":"abc","maxLength":2}}}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"l":{"type":"numberList","min":1,"max":0}}}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"l":{"type":"numberList","min":0,"max":1,"maxItems":0}}}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"l":{"type":"numberList","min":0,"max":1,"maxItems":257}}}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"l":{"type":"numberList","min":0,"max":1,"minItems":2,"maxItems":1}}}"#,
+            r#"{"id":"a","name":"x","kind":"filter","params":{"l":{"type":"numberList","min":0,"max":1,"minItems":2,"default":[1]}}}"#,
         ] {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
         }

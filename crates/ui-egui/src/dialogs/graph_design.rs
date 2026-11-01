@@ -1,14 +1,18 @@
-//! Object › Graph › Design… and Marker…: the document's graph designs in a list.
+//! Object › Graph › Design…, Column… and Marker…: the document's graph designs in a list.
 //!
 //! Graph Design: the designs, a preview of the selected one, and New Design (the selected art as a
 //! design named "New Design"), Rename (to the name typed), Delete Design (the selected designs),
 //! Paste Design (a copy of the selected design into the document, selected, to edit) and Select
 //! Unused (the designs no graph draws with), each run at once by `graph.design`; Close closes.
+//! Column: the design the selected graph series draw their columns or bars with, or None (plain
+//! columns), a preview of it, Column Type, and for a repeating design Each Design Represents and
+//! For Fractions; OK runs `graph.column`.
 //! Marker: the design the selected graph series draw their data points with, or None (the default
 //! square marker); OK runs `graph.marker`.
 //!
-//! Fields: `selected` (the selected designs' names; Marker: one name, null for None) and, in Graph
-//! Design, `name` (the name Rename gives).
+//! Fields: `selected` (the selected designs' names; Column and Marker: one name, null for None),
+//! in Graph Design `name` (the name Rename gives), and in Column `columnType`, `each` and
+//! `fractions`.
 
 use serde_json::{Value, json};
 
@@ -18,6 +22,7 @@ use crate::{VectorcraftApp, widgets};
 
 /// The dialog kinds.
 pub const DESIGN: &str = "graphDesign";
+pub const COLUMN: &str = "graphColumn";
 pub const MARKER: &str = "graphMarker";
 
 /// The preview's size.
@@ -31,6 +36,22 @@ pub(super) const DESIGN_SPEC: DialogSpec = DialogSpec {
         Ok(Value::Null)
     },
     ok: None,
+    min_width: 420.0,
+    ..DialogSpec::FORM
+};
+
+pub(super) const COLUMN_SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Graph Column").into(),
+    body: column_body,
+    confirm: |app, d| {
+        let p = json!({
+            "design": d.fields.get("selected").and_then(Value::as_str),
+            "columnType": d.str("columnType"),
+            "each": d.f64("each", vectorcraft_doc::ColumnDesign::EACH),
+            "fractions": d.str("fractions"),
+        });
+        run_and_close(app, "graph.column", p)
+    },
     min_width: 420.0,
     ..DialogSpec::FORM
 };
@@ -49,6 +70,15 @@ pub fn open_design(app: &mut VectorcraftApp) -> Result<Value, String> {
     let first: Vec<String> = names.first().cloned().into_iter().collect();
     let name = first.first().cloned().unwrap_or_default();
     app.ui.dialog = Some(Dialog::new(DESIGN, json!({ "selected": first, "name": name })));
+    Ok(Value::Null)
+}
+
+/// Open Column for the selected graph series, on the design and options they draw their columns with (None for plain
+/// columns).
+pub fn open_column(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let v = app.session.execute("graph.column", &json!({})).map_err(|e| e.to_string())?;
+    let fields = json!({ "selected": v["design"].as_str(), "columnType": v["columnType"], "each": v["each"], "fractions": v["fractions"] });
+    app.ui.dialog = Some(Dialog::new(COLUMN, fields));
     Ok(Value::Null)
 }
 
@@ -89,7 +119,7 @@ fn preview(ui: &egui::Ui, app: &VectorcraftApp, name: &str, r: egui::Rect) {
     let px = (r.width() * ui.ctx().pixels_per_point()).round() as u32;
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
         let img = RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(&st.doc, &art, px.max(16), Some([255, 255, 255, 255])))?;
-        let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+        let color = crate::canvas::color_image(&img);
         let tex = ui.ctx().load_texture(format!("graph-design-{key}"), color, egui::TextureOptions::LINEAR);
         CACHE.with(|c| {
             let mut c = c.borrow_mut();
@@ -190,25 +220,66 @@ fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> b
     false
 }
 
-fn marker_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let names = names(app).unwrap_or_default();
-    // A list as wide as Graph Design's, not the whole window.
-    ui.set_width(220.0);
+/// The list of Column and Marker: None, then the designs `names`; a click picks one into `selected` (null for None).
+fn one_design_list(ui: &mut egui::Ui, d: &mut Dialog, names: &[String], salt: &str) {
     widgets::list_box(ui, |ui| {
-        egui::ScrollArea::vertical().id_salt("graph-markers").min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt(salt).min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.set_min_height(160.0);
             let current = d.fields.get("selected").and_then(Value::as_str).map(str::to_string);
             if ui.selectable_label(current.is_none(), tl!("None")).clicked() {
                 d.fields.insert("selected".into(), Value::Null);
             }
-            for n in &names {
+            for n in names {
                 if ui.selectable_label(current.as_deref() == Some(n.as_str()), n.as_str()).clicked() {
                     d.fields.insert("selected".into(), json!(n));
                 }
             }
         });
     });
+}
+
+fn column_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let names = names(app).unwrap_or_default();
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(220.0);
+            one_design_list(ui, d, &names, "graph-columns");
+        });
+        ui.add_space(10.0);
+        let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
+        ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)), egui::StrokeKind::Inside);
+        if let Some(n) = d.fields.get("selected").and_then(Value::as_str).filter(|n| names.iter().any(|x| x == n)) {
+            preview(ui, app, n, r.shrink(4.0));
+        }
+    });
+    ui.add_space(8.0);
+    const LABEL_W: f32 = 150.0;
+    let types =
+        [("vertical", tl!("Vertically Scaled")), ("uniform", tl!("Uniformly Scaled")), ("repeating", tl!("Repeating")), ("sliding", tl!("Sliding"))];
+    form::choice(ui, d, "columnType", tl!("Column Type:"), (LABEL_W, 160.0), &types);
+    // Each Design Represents and For Fractions are for repeating designs.
+    ui.add_enabled_ui(d.str("columnType") == "repeating", |ui| {
+        widgets::label_row(ui, tl!("Each Design Represents:"), LABEL_W, |ui| {
+            let each = d.f64("each", vectorcraft_doc::ColumnDesign::EACH);
+            if let Some(v) = widgets::range_field(ui, ("graph-column", "each"), each, EACH_RANGE, "", 4, 72.0) {
+                d.fields.insert("each".into(), json!(v));
+            }
+        });
+        let fractions = [("chop", tl!("Chop Design")), ("scale", tl!("Scale Design"))];
+        form::choice(ui, d, "fractions", tl!("For Fractions:"), (LABEL_W, 160.0), &fractions);
+    });
+    false
+}
+
+/// The values Each Design Represents takes in the dialog (`graph.column` takes any value more than 0).
+const EACH_RANGE: std::ops::RangeInclusive<f64> = 0.0001..=1_000_000_000.0;
+
+fn marker_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let names = names(app).unwrap_or_default();
+    // A list as wide as Graph Design's, not the whole window.
+    ui.set_width(220.0);
+    one_design_list(ui, d, &names, "graph-markers");
     false
 }
 
@@ -275,5 +346,35 @@ mod tests {
         d.fields.insert("selected".into(), json!(null));
         (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
         assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], json!(null));
+    }
+
+    #[test]
+    fn column_opens_from_the_graph_menu_and_applies_the_design_and_its_options() {
+        let mut app = app_with_design();
+        let g = app.run("graph.create", json!({"type": "column", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+        crate::menus::invoke(&mut app, "graph.column", json!({}));
+        let mut d: Dialog = app.ui.dialog.clone().unwrap();
+        assert_eq!(d.kind, super::COLUMN);
+        assert_eq!(
+            (d.fields["selected"].clone(), d.str("columnType"), d.f64("each", 0.0), d.str("fractions")),
+            (json!(null), "vertical".into(), 10.0, "chop".into())
+        );
+        frame(&mut app);
+        assert!(app.ui.dialog.is_some());
+        d.fields.insert("selected".into(), json!("New Design"));
+        d.fields.insert("columnType".into(), json!("repeating"));
+        d.fields.insert("each".into(), json!(0.5));
+        d.fields.insert("fractions".into(), json!("scale"));
+        (super::COLUMN_SPEC.confirm)(&mut app, &d).unwrap();
+        let v = app.session.execute("graph.column", &json!({})).unwrap();
+        assert_eq!(v, json!({"designs": ["New Design"], "design": "New Design", "columnType": "repeating", "each": 0.5, "fractions": "scale"}));
+        // It opens again on what the series draw with, and None goes back to plain columns.
+        super::open_column(&mut app).unwrap();
+        let mut d: Dialog = app.ui.dialog.take().unwrap();
+        assert_eq!((d.str("selected"), d.str("columnType"), d.f64("each", 0.0)), ("New Design".into(), "repeating".into(), 0.5));
+        d.fields.insert("selected".into(), json!(null));
+        (super::COLUMN_SPEC.confirm)(&mut app, &d).unwrap();
+        assert_eq!(app.session.execute("graph.column", &json!({})).unwrap()["design"], json!(null));
     }
 }

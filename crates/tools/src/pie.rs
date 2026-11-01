@@ -98,7 +98,8 @@ impl PieWidget {
         if !selection.anchors.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return vec![];
         }
-        let shown = |id: &&NodeId| doc.is_editable(**id) && !selection.segments.contains_key(*id);
+        let editable = doc.editable();
+        let shown = |id: &&NodeId| editable(**id) && !selection.segments.contains_key(*id);
         let mut out = vec![];
         for id in selection.objects.iter().filter(shown) {
             let Some((e, (start, end))) = Ellipse::of(doc, *id) else { continue };
@@ -187,8 +188,8 @@ impl PieDrag {
     }
 
     /// The angle readout next to the pointer.
-    pub fn overlays(&self) -> Vec<Overlay> {
-        if !self.began {
+    pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if !self.began || !cx.measurement_labels {
             return vec![];
         }
         vec![Overlay::Measure { p: self.at, text: format!("{:.1}°", self.angle) }]
@@ -275,6 +276,8 @@ mod tests {
         assert!(v.get("pieStart").is_none(), "{v}");
         assert!(t.transforming());
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "90.0°")));
+        let quiet = ToolContext { measurement_labels: false, ..cx(&d, &s, &p) };
+        assert!(!t.overlays(&quiet).iter().any(|o| matches!(o, Overlay::Measure { .. })));
         // Below the center and to the left: 225°, on the ellipse's own angles (not the page's).
         let a = t.pointer(&c, &ev(PointerKind::Drag, Point::new(100.0, 200.0)));
         assert!(matches!(&a[0], Action::Preview(_, v) if (v["pieEnd"].as_f64().unwrap() - 225.0).abs() < 1e-9), "{a:?}");
@@ -282,6 +285,24 @@ mod tests {
         // A click that doesn't move sends no action.
         assert!(t.pointer(&c, &ev(PointerKind::Down, Point::new(312.0, 150.0))).is_empty());
         assert!(t.pointer(&c, &ev(PointerKind::Up, Point::new(312.0, 150.0))).is_empty());
+    }
+
+    /// Escape during a pie widget drag with the Selection tool cancels it: the angle readout is removed,
+    /// and the release after it commits nothing.
+    #[test]
+    fn escape_cancels_a_pie_widget_drag() {
+        let (d, _, s) = doc_with_ellipse((0.0, 360.0));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &ev(PointerKind::Down, Point::new(312.0, 150.0))).is_empty());
+        let a = t.pointer(&c, &ev(PointerKind::Drag, Point::new(200.0, 20.0)));
+        assert_eq!(a[0], Action::Begin("Live Shape".into()));
+        assert_eq!(t.key(&c, crate::ToolKey::Escape, Mods::default()), vec![Action::Cancel], "Escape cancels the drag");
+        assert!(!t.busy() && !t.transforming());
+        assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { .. })), "the readout is removed");
+        assert!(t.pointer(&c, &ev(PointerKind::Drag, Point::new(100.0, 200.0))).is_empty(), "the drag is over");
+        assert!(t.pointer(&c, &ev(PointerKind::Up, Point::new(100.0, 200.0))).is_empty(), "the release commits nothing");
     }
 
     /// On a whole ellipse the two widgets sit at the very same point, whatever its size, place or

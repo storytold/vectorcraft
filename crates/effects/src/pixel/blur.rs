@@ -102,6 +102,40 @@ fn close(a: &Px16, b: &Px16, t: i32) -> bool {
     a.iter().zip(b).all(|(a, b)| (*a as i32 - *b as i32).abs() <= t)
 }
 
+/// The offsets Smart Blur looks at around a pixel out to about `r` pixels (up to round(`r`)),
+/// with the radius of the box blur of the copy they are read from (0: the pixels themselves):
+/// every pixel of the square of side 2 · round(`r`) + 1, or `samples` × `samples` points spread
+/// over the square once it is wider than `samples` pixels, read from a copy box-blurred over the
+/// gaps between them. The callers keep the offsets inside their disc.
+fn smart_grid(r: f64, samples: u32) -> (Vec<Vec2>, usize) {
+    let n = samples.clamp(3, 15) as f64;
+    let k = r.round();
+    if 2.0 * k < n {
+        let k = k as i32;
+        ((-k..=k).flat_map(|dy| (-k..=k).map(move |dx| Vec2::new(dx as f64, dy as f64))).collect(), 0)
+    } else {
+        let gap = 2.0 * r / (n - 1.0);
+        let grid = (0..n as i32).map(|i| -r + gap * i as f64);
+        (grid.clone().flat_map(|dy| grid.clone().map(move |dx| Vec2::new(dx.round(), dy.round()))).collect(), (gap / 2.0).floor() as usize)
+    }
+}
+
+/// How far from a pixel Smart Blur's edge modes ([`smart_edges`]) read, in the units of `radius`:
+/// `radius`, and the box blur of the copy that a wide radius's offsets are read from.
+pub(super) fn edge_reach(radius: f64, samples: u32) -> f64 {
+    radius + radius / (samples.clamp(3, 15) as f64 - 1.0)
+}
+
+/// `src` (rows of `w` pixels) box-blurred with radius `prefilter`, the copy that the offsets of
+/// [`smart_grid`] are read from; `None` when they are read from `src` itself.
+fn smart_near(src: &[Px16], w: usize, prefilter: usize) -> Option<Vec<Px16>> {
+    (prefilter > 0).then(|| {
+        let mut b = src.to_vec();
+        box_blur(&mut b, w, prefilter);
+        b
+    })
+}
+
 /// Smart Blur (Normal mode): each pixel averaged with itself and the neighbours within `radius`
 /// pixels whose premultiplied channels all lie within `threshold` levels of its own. Wide radii
 /// look at `samples` × `samples` neighbours spread over the disc, read from a copy box-blurred
@@ -113,28 +147,12 @@ pub(super) fn smart(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, thresho
         return;
     }
     let r = radius.min(MAX_SMART);
-    let n = samples.clamp(3, 15) as f64;
-    let k = r.round();
-    let (offsets, prefilter): (Vec<Vec2>, usize) = if 2.0 * k < n {
-        let k = k as i32;
-        ((-k..=k).flat_map(|dy| (-k..=k).map(move |dx| Vec2::new(dx as f64, dy as f64))).collect(), 0)
-    } else {
-        let gap = 2.0 * r / (n - 1.0);
-        let grid = (0..n as i32).map(|i| -r + gap * i as f64);
-        (grid.clone().flat_map(|dy| grid.clone().map(move |dx| Vec2::new(dx.round(), dy.round()))).collect(), (gap / 2.0).floor() as usize)
-    };
+    let (offsets, prefilter) = smart_grid(r, samples);
     let offsets: Vec<(isize, isize)> =
         offsets.into_iter().filter(|o| o.hypot() <= r + 0.5 && *o != Vec2::ZERO).map(|o| (o.x as isize, o.y as isize)).collect();
     let src = to16(px);
-    let blurred;
-    let near: &[Px16] = if prefilter > 0 {
-        let mut b = src.clone();
-        box_blur(&mut b, w, prefilter);
-        blurred = b;
-        &blurred
-    } else {
-        &src
-    };
+    let blurred = smart_near(&src, w, prefilter);
+    let near = blurred.as_deref().unwrap_or(&src);
     let t = levels(threshold);
     for (y, (row, out)) in src.chunks_exact(w).zip(px.chunks_exact_mut(w)).enumerate().take(h) {
         for (x, (c, o)) in row.iter().zip(out.iter_mut()).enumerate() {
@@ -162,33 +180,41 @@ pub(super) fn smart(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, thresho
 
 /// Smart Blur's Edge Only (`overlay` false) and Overlay Edge (`overlay` true) modes: the pixels on
 /// an edge drawn white, over black or over the Normal mode's result ([`smart`]). A pixel is on an
-/// edge when one of its four nearest neighbors (transparent beyond the raster) has a premultiplied
-/// channel more than `threshold` levels from its own and its channels add up to at least the
-/// neighbor's, so a step between two colors gives a line one pixel wide on the side whose channels
-/// add up to more, and two pixels wide when the sums are equal. The white and the black keep the
-/// pixel's coverage.
+/// edge when one of the pixels the search reads within `radius` pixels of it (transparent beyond
+/// the raster) has a premultiplied channel more than `threshold` levels from its own and its
+/// channels add up to at least that pixel's. The search reads the Normal mode's offsets ([`smart_grid`]) for the whole
+/// pixels of `radius`, kept within `radius`, from the pixels and, for a wide radius, from the
+/// box-blurred copy, and always the four nearest pixels. A straight step between two colors gives
+/// a line on the side whose channels add up to more, about `radius` wide (the whole pixels of
+/// `radius` while every pixel within it is read, and at least one pixel), and lines on both sides
+/// when the sums are equal. The white and the black keep the pixel's coverage.
 pub(super) fn smart_edges(px: &mut [[u8; 4]], w: usize, h: usize, radius: f64, threshold: f64, samples: u32, overlay: bool) {
     let src = to16(px);
     let t = levels(threshold);
     let sum = |p: &Px16| p.iter().map(|v| u32::from(*v)).sum::<u32>();
-    let at = |x: usize, y: usize, dx: isize, dy: isize| -> Px16 {
-        let (Some(x), Some(y)) = (x.checked_add_signed(dx), y.checked_add_signed(dy)) else { return [0; 4] };
-        if x >= w || y >= h {
-            return [0; 4];
+    let r = if radius.is_nan() { 0.0 } else { radius.min(MAX_SMART) };
+    // Spread over whole pixels, so that the outermost offsets lie within `r` and are kept.
+    let (offsets, prefilter) = smart_grid(r.floor(), samples);
+    let wide: Vec<(isize, isize)> = offsets.into_iter().filter(|o| o.hypot() > 1.0 && o.hypot() <= r).map(|o| (o.x as isize, o.y as isize)).collect();
+    let nearest = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    let blurred = smart_near(&src, w, prefilter);
+    let mut edge = vec![false; src.len()];
+    for (y, (row, out)) in src.chunks_exact(w).zip(edge.chunks_exact_mut(w)).enumerate().take(h) {
+        for (x, (c, e)) in row.iter().zip(out.iter_mut()).enumerate() {
+            let own = sum(c);
+            let differs = |n: &Px16| !close(n, c, t) && own >= sum(n);
+            // The pixel at the offset and, with `copy`, its blurred copy; transparent beyond the raster.
+            let found = |(dx, dy): &(isize, isize), copy: bool| {
+                let (sx, sy) = (x as isize + dx, y as isize + dy);
+                if sx < 0 || sy < 0 || sx as usize >= w || sy as usize >= h {
+                    return differs(&[0; 4]);
+                }
+                let i = sy as usize * w + sx as usize;
+                src.get(i).is_some_and(differs) || (copy && blurred.as_deref().and_then(|b| b.get(i)).is_some_and(differs))
+            };
+            *e = nearest.iter().any(|o| found(o, false)) || wide.iter().any(|o| found(o, true));
         }
-        src.get(y * w + x).copied().unwrap_or([0; 4])
-    };
-    let edge: Vec<bool> = src
-        .iter()
-        .enumerate()
-        .map(|(i, c)| {
-            let (x, y) = (i % w.max(1), i / w.max(1));
-            [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|(dx, dy)| {
-                let n = at(x, y, *dx, *dy);
-                !close(&n, c, t) && sum(c) >= sum(&n)
-            })
-        })
-        .collect();
+    }
     if overlay {
         smart(px, w, h, radius, threshold, samples);
     }

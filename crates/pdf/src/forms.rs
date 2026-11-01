@@ -1,9 +1,10 @@
-//! What the PDF writer has no operators for — optional content (PDF layers) and overprint — drawn
-//! as form XObjects of their own (without a transparency group, so they draw as if in place),
-//! each starting with a mark: an empty clip whose first point says what the form is. Marked
-//! forms also stay apart (the writer shares identical forms). [`finish`] completes them in the
-//! written file: a layer's form is drawn as the layer's optional content (`/OC … BDC`), and an
-//! overprinting form sets a graphics state that overprints first.
+//! What the PDF writer has no operators for — optional content (PDF layers), overprint and
+//! invisible text — drawn as form XObjects of their own (without a transparency group, so they
+//! draw as if in place), each starting with a mark: an empty clip whose first point says what the
+//! form is. Marked forms also stay apart (the writer shares identical forms). [`finish`] completes
+//! them in the written file: a layer's form is drawn as the layer's optional content (`/OC …
+//! BDC`), an overprinting form sets a graphics state that overprints first, and the text of an
+//! invisible form is drawn in rendering mode 3 (neither filled nor stroked).
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -28,6 +29,8 @@ pub(crate) enum Mark {
     Layer(usize),
     /// A fill or stroke that overprints.
     Overprint,
+    /// Text that draws nothing (rendering mode 3): characters with neither fill nor stroke.
+    Invisible,
 }
 
 /// A layer written as a PDF layer (an optional content group).
@@ -58,6 +61,8 @@ pub(crate) fn pdf_layers(doc: &Document) -> Vec<PdfLayer<'_>> {
 const LAYER_X: i32 = -32000;
 /// The x coordinate of an overprint mark's first point.
 const OVERPRINT_X: i32 = -32001;
+/// The x coordinate of an invisible text mark's first point.
+const INVISIBLE_X: i32 = -32002;
 
 impl Mark {
     fn at(self) -> (f32, f32) {
@@ -65,6 +70,7 @@ impl Mark {
             // Exact in `f32` up to 2^24 layers.
             Self::Layer(i) => (LAYER_X as f32, i as f32),
             Self::Overprint => (OVERPRINT_X as f32, 0.0),
+            Self::Invisible => (INVISIBLE_X as f32, 0.0),
         }
     }
 }
@@ -100,7 +106,7 @@ const LAYER_OC: &str = "VCoc";
 const HEAD: u64 = 64;
 
 fn bad(why: &str) -> PdfError {
-    PdfError::Write(format!("can't write PDF layers or overprint: {why}"))
+    PdfError::Write(format!("can't write PDF layers, overprint or invisible text: {why}"))
 }
 
 /// An object of the written file with a dictionary, and its stream's [`StreamSpans`].
@@ -149,6 +155,7 @@ impl Object<'_> {
         match x {
             _ if x == i64::from(LAYER_X) => usize::try_from(y).ok().map(Mark::Layer),
             _ if x == i64::from(OVERPRINT_X) && y == 0 => Some(Mark::Overprint),
+            _ if x == i64::from(INVISIBLE_X) && y == 0 => Some(Mark::Invisible),
             _ => None,
         }
     }
@@ -225,14 +232,52 @@ fn mark_layers(content: &[u8], forms: &HashMap<&[u8], usize>) -> Option<(Vec<u8>
     Some((out, layers))
 }
 
+/// `content` (an invisible form's) with its text drawn in rendering mode 3: the mode set first,
+/// and every mode the writer sets (it sets one for each run of glyphs) made 3. `None` when the
+/// content can't be read to its end.
+fn invisible_text(content: &[u8]) -> Option<Vec<u8>> {
+    let mut lx = Lexer::at(content, 0);
+    let mut operand = None;
+    let mut modes = vec![];
+    let mut read = 0;
+    while let Some((tok, start, end)) = lx.next() {
+        read = end;
+        operand = match tok {
+            Tok::Word(b"Tr") => {
+                modes.extend(operand);
+                None
+            }
+            Tok::Word(w) if int(w).is_some() => Some((start, end)),
+            // Inline image data isn't PDF syntax (the writer writes none).
+            Tok::Word(b"ID") => return None,
+            _ => None,
+        };
+    }
+    // The lexer also stops at a string it can't read: a mode after it would be missed.
+    if !content.get(read..)?.iter().all(u8::is_ascii_whitespace) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(content.len() + 8);
+    out.extend_from_slice(b"3 Tr\n");
+    let mut at = 0;
+    for (start, end) in modes {
+        out.extend_from_slice(content.get(at..start)?);
+        out.push(b'3');
+        at = end;
+    }
+    out.extend_from_slice(content.get(at..)?);
+    Some(out)
+}
+
 /// Finish the marked forms of `pdf` (as [`crate::export`] writes `doc` with `set`): with
 /// `layers`, each layer and sublayer (but template layers) becomes an optional content group —
 /// named as the layer, off when it is hidden, not printed (`/PrintState /OFF`) when its Print
 /// option is off, locked when it is locked — and the uses of its forms its optional content;
 /// with `overprint`, the overprinting forms get a graphics state that overprints (`/OP`, `/op`,
-/// `/OPM 1`; `/OPM 0` in PDF/A, which allows no other with ICC-based CMYK colours).
-pub(crate) fn finish(pdf: Vec<u8>, doc: &Document, set: &PdfSettings, layers: bool, overprint: bool) -> Result<Vec<u8>, PdfError> {
-    if !layers && !overprint {
+/// `/OPM 1`; `/OPM 0` in PDF/A, which allows no other with ICC-based CMYK colours); with
+/// `invisible`, the text of the invisible forms is drawn in rendering mode 3.
+pub(crate) fn finish(pdf: Vec<u8>, doc: &Document, set: &PdfSettings, layers: bool, overprint: bool, invisible: bool) -> Result<Vec<u8>, PdfError> {
+    if !layers && !overprint && !invisible {
         return Ok(pdf);
     }
     let xref = Xref::read(&pdf).ok_or_else(|| bad("the written PDF has no cross-reference table"))?;
@@ -251,6 +296,13 @@ pub(crate) fn finish(pdf: Vec<u8>, doc: &Document, set: &PdfSettings, layers: bo
             new.extend_from_slice(&content);
             o.rewrite(&mut patch, &new)?;
             add_resources(&mut patch, res, "ExtGState", &format!("/{OVERPRINT_GS} {gs} 0 R"))?;
+        }
+    }
+    if invisible {
+        for (n, _) in marks.iter().filter(|(_, m)| **m == Mark::Invisible) {
+            let Some(o) = objects.get(n) else { continue };
+            let content = o.data(&pdf, u64::MAX).ok_or_else(|| bad("an invisible text form can't be read"))?;
+            o.rewrite(&mut patch, &invisible_text(&content).ok_or_else(|| bad("an invisible text form can't be read"))?)?;
         }
     }
     if layers {

@@ -1,5 +1,6 @@
 //! Image resolution metadata (pixels per inch): PNG `pHYs`, JPEG JFIF density or EXIF, TIFF and
-//! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo. Place
+//! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo, a PCX
+//! header's HDpi and VDpi, or JP2 capture and display resolution boxes. Place
 //! sizes an image by it (72 ppi when the file has none); images converted to PNG on import keep it
 //! as a `pHYs` chunk.
 
@@ -21,10 +22,47 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
         bmp(bytes)
     } else if super::psdread::is_psd(bytes) {
         super::psdread::resolution(bytes)
+    } else if super::pcxread::is_pcx(bytes) {
+        super::pcxread::resolution(bytes)
+    } else if super::jp2read::is_jpeg2000(bytes) {
+        jp2(bytes)
     } else {
         None
     };
     r.filter(|(x, y)| [*x, *y].iter().all(|v| v.is_finite() && (1.0..=100_000.0).contains(v)))
+}
+
+fn jp2_axis(n: u16, d: u16, e: i8) -> Option<f64> {
+    if d == 0 {
+        return None;
+    }
+    let ppi = f64::from(n) / f64::from(d) * 10f64.powi(i32::from(e)) * INCH_M;
+    (ppi.is_finite() && (1.0..=100_000.0).contains(&ppi)).then_some(ppi)
+}
+
+/// JP2 resolution is independent on each axis. Later capture or display boxes replace earlier
+/// valid values for that axis; an invalid later axis leaves the earlier value intact.
+fn jp2(b: &[u8]) -> Option<(f64, f64)> {
+    if !b.starts_with(b"\0\0\0\x0cjP  \r\n\x87\n") {
+        return Some((72.0, 72.0));
+    }
+    let (mut x, mut y) = (None, None);
+    for (_, header) in super::jp2read::boxes(b).filter(|(ty, _)| *ty == b"jp2h") {
+        for (_, res) in super::jp2read::boxes(header).filter(|(ty, _)| *ty == b"res ") {
+            for (_, data) in super::jp2read::boxes(res).filter(|(ty, _)| *ty == b"resc" || *ty == b"resd") {
+                let Some([vn0, vn1, vd0, vd1, hn0, hn1, hd0, hd1, ve, he]): Option<[u8; 10]> = data.get(..10).and_then(|v| v.try_into().ok()) else {
+                    continue;
+                };
+                if let Some(value) = jp2_axis(u16::from_be_bytes([hn0, hn1]), u16::from_be_bytes([hd0, hd1]), he as i8) {
+                    x = Some(value);
+                }
+                if let Some(value) = jp2_axis(u16::from_be_bytes([vn0, vn1]), u16::from_be_bytes([vd0, vd1]), ve as i8) {
+                    y = Some(value);
+                }
+            }
+        }
+    }
+    Some((x.unwrap_or(72.0), y.unwrap_or(72.0)))
 }
 
 /// `n` bytes at `at` (`None` past the end; offsets come from the file, so no overflow either).
@@ -218,6 +256,21 @@ mod tests {
         jpg[jfif + 7] = 2;
         jpg[jfif + 8..jfif + 10].copy_from_slice(&100u16.to_be_bytes());
         assert!(close(resolution(&jpg).unwrap(), (254.0, 240.0 * 2.54)));
+    }
+
+    /// A CMYK JPEG carries no JFIF (it describes one- and three-component images), so its
+    /// resolution is written as EXIF instead and this reader still finds it (#3084).
+    #[test]
+    fn a_cmyk_jpeg_keeps_its_resolution_without_jfif() {
+        use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+        let o = JpegOptions { color_model: ColorModel::Cmyk, ..Default::default() };
+        let jpg = jpeg::encode(&[0; 4 * 4], 2, 2, 90, Some(240.0), &o).unwrap();
+        assert!(!jpg.windows(5).any(|w| w == b"JFIF\0"), "no JFIF on a CMYK file");
+        assert_eq!(resolution(&jpg), Some((240.0, 240.0)));
+        // An RGB file still says it in JFIF, as it always did.
+        let rgb = jpeg::encode(&[0; 3 * 4], 2, 2, 90, Some(240.0), &JpegOptions::default()).unwrap();
+        assert!(rgb.windows(5).any(|w| w == b"JFIF\0"));
+        assert_eq!(resolution(&rgb), Some((240.0, 240.0)));
     }
 
     /// A little-endian TIFF/EXIF block declaring `x`/`y` resolution in `unit`.

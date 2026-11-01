@@ -24,7 +24,7 @@ fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
     match &n.kind {
         NodeKind::SymbolInstance { symbol, xf } => {
             let sym = doc?.symbols.iter().find(|s| s.name == *symbol)?;
-            let mut art = (*sym.art).clone();
+            let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
             art.transform(*xf, false);
             Some(Node::group(n.id, vec![Arc::new(art)]))
         }
@@ -37,7 +37,7 @@ fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
 fn with_hooks<R>(doc: Option<&Document>, f: impl FnOnce(Hooks) -> R) -> R {
     let outline = |n: &Node| outline(doc, n);
     let tiles = |name: &str, xf: Affine, region: Rect| Some(doc?.pattern(name)?.instances_in(xf, region));
-    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles) })
+    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles), symbols: doc })
 }
 
 /// One level of evaluation of live object `n` ([`live::expand_live_hooks`]).

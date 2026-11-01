@@ -252,7 +252,7 @@ pub(crate) fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
     }
-    hay.windows(needle.len()).position(|w| w == needle)
+    memchr::memmem::find(hay, needle)
 }
 
 /// Hexadecimal digits (whitespace ignored, an odd last digit padded with 0); `None` on others.
@@ -286,6 +286,10 @@ fn number(w: &str) -> Option<Obj> {
     }
     if let Some((base, digits)) = w.split_once('#') {
         let base: u32 = base.parse().ok().filter(|b| (2..=36).contains(b))?;
+        // `from_str_radix` accepts a leading sign; a PostScript radix number has digits only.
+        if digits.starts_with(['+', '-']) {
+            return None;
+        }
         return i64::from_str_radix(digits, base).ok().map(Obj::Int);
     }
     // Rust reads `inf` and `nan`; PostScript doesn't.
@@ -294,4 +298,16 @@ fn number(w: &str) -> Option<Obj> {
     }
     let v: f64 = w.parse().ok()?;
     v.is_finite().then_some(Obj::Real(v))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn radix_number_with_sign_after_hash_is_not_a_number() {
+        assert!(number("16#+ff").is_none());
+        assert!(number("16#-ff").is_none());
+        assert!(matches!(number("16#ff"), Some(Obj::Int(255))));
+    }
 }

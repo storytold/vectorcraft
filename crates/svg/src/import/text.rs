@@ -60,6 +60,27 @@ fn style_name(weight: u16, italic: bool) -> String {
     }
 }
 
+/// The axis settings of a `font-variation-settings` value (`"wght" 650, "wdth" 87.5`), by tag:
+/// none for `normal` and `initial`. `None` when an item isn't a quoted tag of four printable ASCII
+/// characters and a finite number, as CSS then ignores the declaration.
+fn variation_settings(v: &str) -> Option<std::collections::BTreeMap<String, f64>> {
+    let mut out = std::collections::BTreeMap::new();
+    if ["normal", "initial"].iter().any(|k| v.trim().eq_ignore_ascii_case(k)) {
+        return Some(out);
+    }
+    for item in v.split(',') {
+        let item = item.trim();
+        let quote = item.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+        let (tag, value) = item.get(1..)?.split_once(quote)?;
+        let value = value.trim().parse::<f64>().ok().filter(|v| v.is_finite())?;
+        if tag.len() != 4 || !tag.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+            return None;
+        }
+        out.insert(tag.to_string(), value);
+    }
+    Some(out)
+}
+
 fn solid(c: svgtypes::Color) -> Paint {
     Paint::solid(Color::rgb8(c.red, c.green, c.blue))
 }
@@ -141,6 +162,7 @@ pub(super) struct PendingText {
 }
 
 /// The texts [`prepare`] replaced, by placeholder index.
+#[derive(Default)]
 pub(super) struct TextSlots {
     prefix: String,
     pub texts: Vec<PendingText>,
@@ -377,6 +399,10 @@ impl Ctx {
         st.size = size;
         let italic = css.prop(n, "font-style").is_some_and(|s| s == "italic" || s == "oblique");
         st.font_style = style_name(self.weight(n), italic);
+        // Inherited: `inherit`, `unset`, `revert` and a value CSS ignores leave the one inherited.
+        let inherits = |v: &String| ["inherit", "unset", "revert", "revert-layer"].iter().any(|k| v.trim().eq_ignore_ascii_case(k));
+        let own = |a: XNode| css.own(a, "font-variation-settings").filter(|v| !inherits(v)).and_then(|v| variation_settings(&v));
+        st.font_axes = n.ancestors().filter(|a| a.is_element()).find_map(own).unwrap_or_default();
         let (fill, mut fill_url) = self.paint(n, "fill");
         st.fill = fill;
         let (stroke, mut stroke_url) = self.paint(n, "stroke");

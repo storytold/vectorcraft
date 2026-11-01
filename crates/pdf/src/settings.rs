@@ -347,12 +347,17 @@ impl BleedSettings {
     }
 }
 
+/// The Output destination that names the CMYK profile of the colour settings in effect, in an RGB
+/// document as in a CMYK one (Illustrator's "Document CMYK"; #2950).
+pub const DOCUMENT_CMYK: &str = "Document CMYK";
+
 /// The Output section.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OutputSettings {
     pub conversion: ColorConversion,
-    /// Destination profile name (empty: the document's profile).
+    /// Destination profile name (empty: the document's profile; [`DOCUMENT_CMYK`]: the CMYK
+    /// profile in effect, whatever the document's colour mode).
     pub destination: String,
     pub profiles: ProfileInclusion,
     /// PDF/X output intent profile name.

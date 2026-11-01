@@ -4,8 +4,10 @@
 //!   (`c m y k (name) tint`; tint 0 is the full colour), `Xa`/`XA` RGB (`c m y k r g b`, the CMYK
 //!   values its equivalent), `Xx`/`XX` a named colour of any model
 //!   (`c m y k [r g b | L a b] (name) tint type`, type 0 CMYK, 1 RGB, 2 Lab), `Xk`/`XK` a global
-//!   process colour (its operands as `Xx`'s: a global swatch that isn't an ink of its own). Lower
-//!   case paints fills, upper case strokes.
+//!   process colour (its operands as `Xx`'s: a global swatch that isn't an ink of its own),
+//!   `Xs`/`XS` (`c m y k (name) tint`) and `Xz`/`XZ` (`c m y k r g b (name) tint type`) the
+//!   Registration colour at a tint, as written in files users sent. Lower case paints fills, upper
+//!   case strokes.
 //! - Gradient definitions: `(name) type stops Bd`, its stops as `colour style [opacity 6]
 //!   midpoint ramp Bs` (style 0 grey, 1 CMYK, 2 RGB with its CMYK, 3 and 4 named colours), `BD`.
 //! - A gradient on an object: `[flag] Bb` (1: the stroke), `flag (name) x y angle length a b c d
@@ -60,6 +62,7 @@ pub(super) fn color_op(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
         "x" => named(vals, Some(false)),
         "xx" => named(vals, None),
         "xk" => named(vals, None).map(|(p, n)| (p, n.map(|n| Named { spot: false, ..n }))),
+        "xs" | "xz" => registration(vals),
         _ => None,
     }
 }
@@ -90,6 +93,15 @@ fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
     };
     let paint = Paint::Solid { color: color.tinted(tint), swatch: Some(name.clone()), tint };
     Some((paint, Some(Named { name, color, tint, spot: true })))
+}
+
+/// `… (name) tint Xs` / `… (name) tint type Xz`: the built-in Registration swatch at the tint (its
+/// own colour, whatever values the operands give).
+fn registration(vals: &[V]) -> Option<(Paint, Option<Named>)> {
+    let at = vals.iter().rposition(|v| matches!(v, V::Str(_)))?;
+    let tint = 1.0 - vals.get(at + 1).and_then(V::num).unwrap_or(0.0).clamp(0.0, 1.0) as f32;
+    let full = Color::cmyk(1.0, 1.0, 1.0, 1.0);
+    Some((Paint::Solid { color: full.tinted(tint), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint }, None))
 }
 
 /// The colour of a gradient stop's colour values and style.
@@ -127,7 +139,7 @@ impl GradientDef {
         let name = vals.iter().find_map(|v| if let V::Str(_) = v { v.text() } else { None })?;
         let nums: Vec<f64> = vals.iter().filter_map(V::num).collect();
         let kind = if nums.first().copied() == Some(1.0) { GradientKind::Radial } else { GradientKind::Linear };
-        Some(Self { name, gradient: Gradient { kind, stops: vec![] } })
+        Some(Self { name, gradient: Gradient::new(kind, vec![]) })
     }
 
     /// A stop (`Bs`).
@@ -230,10 +242,13 @@ impl Instance {
         self.xm = Self::matrix(vals);
     }
 
-    /// `x y angle length Bh`.
+    /// `x y angle length Bh`. The point is `--` (undefined) when the gradient has no highlight.
     pub fn bh(&mut self, vals: &[V]) {
         let n: Vec<f64> = vals.iter().filter_map(V::num).collect();
-        if let [x, y, ..] = n.as_slice() {
+        if let [x, y, ..] = n.as_slice()
+            && x.is_finite()
+            && y.is_finite()
+        {
             self.hilight = Vec2::new(*x, *y);
         }
     }
@@ -319,6 +334,20 @@ mod tests {
     }
 
     #[test]
+    fn registration_paints_with_the_registration_swatch_at_its_tint() {
+        let mut v = nums(&[0.75, 0.68, 0.67, 0.9, 0.0, 0.0, 0.0]);
+        v.extend([V::Str(b"[Registration]".to_vec()), V::Num(0.1), V::Num(1.0)]);
+        let (p, named) = color_op("XZ", &v).unwrap();
+        assert!(named.is_none());
+        let Paint::Solid { swatch, tint, color } = p else { panic!() };
+        assert_eq!((swatch.as_deref(), color), (Some("[Registration]"), Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.9)));
+        assert!((tint - 0.9).abs() < 1e-6);
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Str(b"[Registration]".to_vec()), V::Num(0.0)]);
+        assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if tint == 1.0));
+    }
+
+    #[test]
     fn colours() {
         let (p, _) = color_op("g", &nums(&[0.7])).unwrap();
         assert!(matches!(p.color(), Some(Color::Gray { k }) if (k - 0.3).abs() < 1e-6));
@@ -391,6 +420,18 @@ mod tests {
         let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
         let geom = gp.geom.unwrap();
         assert_eq!((geom.start, geom.end), (Point::new(10.0, 10.0), Point::new(50.0, 10.0)));
+    }
+
+    #[test]
+    fn gradient_stops_beyond_the_cap_are_ignored() {
+        let mut d = GradientDef::begin(&[V::Str(b"H".to_vec()), V::Num(0.0)]).unwrap();
+        let mut spots = vec![];
+        for i in 0..257 {
+            let ramp = i as f64 / 256.0 * 100.0;
+            d.stop(&nums(&[0.2, 0.4, 0.6, 0.0, 1.0, 1.0, 6.0, 50.0, ramp]), &mut spots);
+        }
+        let (_, g) = d.finish().unwrap();
+        assert_eq!(g.stops.len(), MAX_STOPS);
     }
 
     /// A linear gradient of three stops as newer files place it: `Bg` with numbers that aren't in

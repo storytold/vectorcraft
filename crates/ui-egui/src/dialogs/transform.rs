@@ -1,7 +1,11 @@
 //! Transform dialogs: Move, Rotate, Scale, Reflect and Shear (with Transform Objects, Transform
 //! Patterns, Copy and Preview; Scale also has Uniform, Scale Corners and Scale Strokes & Effects;
-//! Reflect's axis is Horizontal, Vertical or an angle). With Preview on
-//! (`preview`, off when the dialog opens), the transform shows on the canvas as the values change.
+//! Reflect's axis is Horizontal, Vertical or an angle). With Preview on (`preview`), the transform
+//! shows on the canvas as the values change.
+//!
+//! Move opens on the offset moved last, by a drag or by itself, and with the checkboxes (Preview
+//! too) it was last confirmed with, so Enter, Enter repeats a move or a copy at the same spacing.
+//! The other dialogs open with Preview off.
 
 use serde_json::{Value, json};
 
@@ -9,7 +13,17 @@ use super::{DialogSpec, form, run_and_close};
 use crate::VectorcraftApp;
 use crate::state::Dialog;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, inputs, ..DialogSpec::FORM };
+
+/// The fields a transform dialog reads that it may not hold yet: Copy and the object options,
+/// Move's Distance and Angle, Scale's scale options, and the reference point of the others.
+fn inputs(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "move" => &["copy", "objects", "patterns", "distance", "angle"],
+        "scale" => &["copy", "objects", "patterns", "corners", "strokes", "origin"],
+        _ => &["copy", "objects", "patterns", "origin"],
+    }
+}
 
 fn title(kind: &str) -> &'static str {
     match kind {
@@ -70,6 +84,49 @@ fn link_distance_and_angle(d: &mut Dialog) {
 /// into 0.
 fn clean(v: f64) -> f64 {
     (v * 1e6).round() / 1e6 + 0.0
+}
+
+/// The Move dialog's fields as it opens: Horizontal and Vertical are the offset moved last, Distance
+/// and Angle are the same offset, and Copy, Transform Objects and Preview are as it was last
+/// confirmed with (Transform Patterns is General › Transform Pattern Tiles, which its OK sets).
+pub(crate) fn move_fields(app: &VectorcraftApp) -> Value {
+    let (dx, dy) = last_move(app).unwrap_or_default();
+    let [dx, dy, distance, angle] = [dx, dy, dx.hypot(dy), (-dy).atan2(dx).to_degrees()].map(clean);
+    let mut fields = json!({
+        "dx": format!("{dx} pt"),
+        "dy": format!("{dy} pt"),
+        "distance": distance,
+        "angle": angle,
+        "__polar": [dx, dy, distance, angle],
+    });
+    let kept = &app.ui.move_options;
+    let kept_bool = |k: &str| kept.get(k).and_then(Value::as_bool);
+    for k in ["copy", "objects", "preview"] {
+        if let Some(on) = kept_bool(k) {
+            fields[k] = json!(on);
+        }
+    }
+    fields
+}
+
+/// The offset of the last move the session's journal keeps: a drag that moved the selection (a
+/// Transform that only translates) or Move.
+fn last_move(app: &VectorcraftApp) -> Option<(f64, f64)> {
+    let length = |v: Option<&Value>| match v {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) => vectorcraft_doc::Unit::Points.parse(s),
+        _ => Some(0.0),
+    };
+    let finite = |(dx, dy): (f64, f64)| (dx.is_finite() && dy.is_finite()).then_some((dx, dy));
+    app.session.journal.iter().rev().find_map(|(id, p)| match id.as_str() {
+        "object.move" => finite((length(p.get("dx"))?, length(p.get("dy"))?)),
+        "object.transform" => {
+            let [a, b, c, d, e, f] = vectorcraft_engine::cmd::matrix_param(p, "matrix")?.as_coeffs();
+            let translates = (a, b, c, d) == (1.0, 0.0, 0.0, 1.0) && (e, f) != (0.0, 0.0);
+            translates.then_some((e, f)).and_then(finite)
+        }
+        _ => None,
+    })
 }
 
 /// Transform Patterns: the dialog's field, else General › Transform Pattern Tiles.
@@ -167,11 +224,26 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if app.session.in_interaction() {
         app.session.cancel_interaction().map_err(|e| e.to_string())?;
     }
+    // A Distance and Angle set since the last frame set the offset Move runs with.
+    let mut d = d.clone();
+    if d.kind == "move" {
+        link_distance_and_angle(&mut d);
+    }
+    let d = &d;
     let (id, mut params) = command(app, d);
     if d.kind == "scale" {
         params = with_scale_options(app, d, params)?;
     }
-    run_and_close(app, id, params)
+    let r = run_and_close(app, id, params)?;
+    if d.kind == "move" {
+        app.ui.move_options = json!({"copy": d.bool("copy"), "objects": transform_objects(d), "preview": d.bool("preview")});
+        // Move's Transform Patterns stays as confirmed: it is the preference it starts from.
+        let patterns = transform_patterns(app, d);
+        if patterns != app.session.prefs.transform_pattern_tiles {
+            app.run("prefs.set", json!({"key": "transformPatternTiles", "value": patterns}))?;
+        }
+    }
+    Ok(r)
 }
 
 #[cfg(test)]
@@ -334,6 +406,108 @@ mod tests {
         assert_eq!((cmd.as_str(), &p["dx"], &p["dy"]), ("object.move", &json!(0.0), &json!(-10.0)));
         let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
         assert_eq!((b.x0, b.y0), (100.0, 90.0));
+    }
+
+    /// A Distance and Angle set before the dialog's first frame, or just before OK, move by that
+    /// offset (as `ui.dialog.set` then `ui.dialog.confirm` from a control client).
+    #[test]
+    fn move_takes_a_distance_and_an_angle_set_before_a_frame() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let corner = |app: &VectorcraftApp| {
+            let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+            (b.x0, b.y0)
+        };
+        // Up 10 pt with no frame, then right 20 pt (Move opens on the last offset) with one.
+        for (with_frame, distance, angle, want, corner_after) in
+            [(false, 10.0, 90.0, (0.0, -10.0), (100.0, 90.0)), (true, 20.0, 0.0, (20.0, 0.0), (120.0, 90.0))]
+        {
+            crate::menus::invoke(&mut app, "object.move", json!({}));
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.extend([("distance".to_string(), json!(distance)), ("angle".to_string(), json!(angle))]);
+            if with_frame {
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+                out.textures_delta.clear();
+                let d = app.ui.dialog.as_ref().unwrap();
+                assert_eq!(["distance", "angle"].map(|k| d.f64(k, f64::NAN)), [distance, angle], "the first frame keeps them");
+            }
+            crate::dialogs::confirm(&mut app).unwrap();
+            let (cmd, p) = app.session.journal.last().unwrap();
+            assert_eq!((cmd.as_str(), &p["dx"], &p["dy"]), ("object.move", &json!(want.0), &json!(want.1)), "with a frame: {with_frame}");
+            assert_eq!(corner(&app), corner_after);
+        }
+    }
+
+    /// Move opens on the offset of the last drag or Move, and with the checkboxes it was last
+    /// confirmed with: Enter, Enter makes copies at the same spacing.
+    #[test]
+    fn move_opens_on_the_last_move_and_checkboxes() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let open = |app: &mut VectorcraftApp| {
+            crate::toolbar::open_options(app, "selection").unwrap();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            let d = app.ui.dialog.as_ref().unwrap();
+            ([d.f64("dx", f64::NAN), d.f64("dy", f64::NAN)], ["copy", "objects", "preview"].map(|k| d.bool(k)))
+        };
+        let lefts = |app: &VectorcraftApp| {
+            let kids = app.session.doc().unwrap().doc.layers[0].children().unwrap();
+            kids.iter().map(|n| n.geometric_bounds().unwrap().x0).collect::<Vec<_>>()
+        };
+        assert_eq!(open(&mut app), ([0.0, 0.0], [false, true, false]), "nothing moved yet");
+        crate::dialogs::cancel(&mut app);
+        // A drag: its offset, and a rotation since doesn't count.
+        app.session.begin_interaction("Move").unwrap();
+        app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 20, 5]})).unwrap();
+        app.session.commit_interaction().unwrap();
+        app.run("object.rotate", json!({"angle": 90})).unwrap();
+        app.run("object.rotate", json!({"angle": -90})).unwrap();
+        assert_eq!(open(&mut app).0, [20.0, 5.0]);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.extend([("dx".to_string(), json!(30)), ("dy".to_string(), json!(0)), ("copy".to_string(), json!(true))]);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(open(&mut app), ([30.0, 0.0], [true, true, false]));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(lefts(&app), [20.0, 50.0, 80.0], "a copy at 30 pt each time");
+        // A drag moves the next one by its offset instead; the checkboxes stay.
+        app.session.begin_interaction("Move").unwrap();
+        app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 12]})).unwrap();
+        app.session.commit_interaction().unwrap();
+        assert_eq!(open(&mut app), ([0.0, 12.0], [true, true, false]));
+        crate::dialogs::cancel(&mut app);
+    }
+
+    /// The Move dialog's Transform Patterns is as it was last confirmed with: its OK sets General ›
+    /// Transform Pattern Tiles, which it starts from.
+    #[test]
+    fn move_keeps_transform_patterns_in_the_preference() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let open = |app: &mut VectorcraftApp| {
+            crate::menus::invoke(app, "object.move", json!({}));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            app.ui.dialog.as_ref().unwrap().bool("patterns")
+        };
+        app.run("prefs.set", json!({"key": "transformPatternTiles", "value": false})).unwrap();
+        assert!(!open(&mut app));
+        app.ui.dialog.as_mut().unwrap().fields.insert("patterns".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(open(&mut app) && app.session.prefs.transform_pattern_tiles, "as confirmed");
+        crate::dialogs::cancel(&mut app);
+        app.run("prefs.set", json!({"key": "transformPatternTiles", "value": false})).unwrap();
+        assert!(!open(&mut app), "the preference");
+        crate::dialogs::cancel(&mut app);
     }
 
     /// Transform Patterns starts from General › Transform Pattern Tiles (#394) and goes with the

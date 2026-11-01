@@ -24,8 +24,9 @@ image = { workspace = true }
 jpeg-encoder = { workspace = true }
 craft-pdf = { workspace = true }
 log = { workspace = true }
+chrono = { workspace = true }
 smallvec = "1"
-weezl = "0.1"
+weezl = "0.2"
 serde = { workspace = true }
 # The XMP packet that File Info is read from (file_info.rs); the version usvg already uses.
 roxmltree = "0.21"
@@ -33,6 +34,12 @@ roxmltree = "0.21"
 aes = "0.8"
 md-5 = { version = "0.10", default-features = false }
 sha2 = { version = "0.10", default-features = false }
+# The seed of the file key, salts and IVs (encrypt.rs).
+getrandom = "0.4"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+# The browser's crypto.getRandomValues.
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

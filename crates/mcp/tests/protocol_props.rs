@@ -173,7 +173,7 @@ proptest! {
         let root = base.join("a/b/c/root");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::create_dir_all(base.join("outside")).unwrap();
-        let roots = vectorcraft_engine::file_access::AutomationRoots::new(Some(root.as_path()), Some(root.as_path())).unwrap();
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[root.as_path()]).unwrap();
         let mut s = Server::new(Box::new(Headless::with_document().with_automation_roots(roots)));
         let path = format!("{}{}{tail}", root.display(), std::path::MAIN_SEPARATOR);
         let r = catch_quiet(|| call(&mut s, tool, json!({"path": path})));
@@ -616,4 +616,65 @@ fn tools_never_leave_interactions_open() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
+
+    /// Requests mixed with `notifications/cancelled` (for ids that are queued, running, finished,
+    /// unknown or junk) read from one stream: the server ends, every request nobody cancelled is
+    /// answered exactly once, a cancelled one at most once, nothing is answered that wasn't asked,
+    /// replies keep the order of the requests, and the document stays valid.
+    #[test]
+    fn cancellation_never_loses_or_duplicates_an_answer(
+        steps in prop::collection::vec((0u8..6, 0u64..10), 1..40),
+    ) {
+        let mut input = String::new();
+        let mut asked: Vec<u64> = vec![];
+        let mut cancelled: Vec<u64> = vec![];
+        for (i, &(kind, n)) in steps.iter().enumerate() {
+            let id = i as u64 + 1;
+            let line = match kind {
+                0 => json!({"jsonrpc": "2.0", "id": id, "method": "ping"}),
+                1 => json!({"jsonrpc": "2.0", "id": id, "method": "tools/list"}),
+                2 => json!({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": {"name": "draw_shape", "arguments": {"shape": "rectangle", "x": 1, "y": 2, "width": 30, "height": 20}}}),
+                3 => json!({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": {"name": "command_run", "arguments": {"id": "select.all"}}, "_meta": {"progressToken": id}}),
+                // A cancel for an id that may be queued, finished or never asked.
+                4 => {
+                    let target = n.min(id.saturating_sub(1)).max(1);
+                    cancelled.push(target);
+                    input.push_str(&format!("{}\n", json!({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": target}})));
+                    continue;
+                }
+                // Junk cancels never take anything with them.
+                _ => {
+                    let junk = [json!(null), json!([1]), json!({"a": 1}), json!("nope"), json!(1.5), json!(-1)];
+                    input.push_str(&format!("{}\n", json!({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": junk[n as usize % junk.len()]}})));
+                    continue;
+                }
+            };
+            asked.push(id);
+            input.push_str(&format!("{line}\n"));
+        }
+        let mut s = server();
+        let mut out = Vec::new();
+        s.serve(input.as_bytes(), &mut out).unwrap();
+        let ids: Vec<u64> = String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str::<Value>(l).unwrap())
+            .filter(|v| v.get("method").is_none())
+            .map(|v| v["id"].as_u64().unwrap())
+            .collect();
+        prop_assert!(ids.windows(2).all(|w| w[0] < w[1]), "answered once each, in request order: {:?}", ids);
+        for id in &asked {
+            if !cancelled.contains(id) {
+                prop_assert!(ids.contains(id), "request {} was never answered: {:?}", id, ids);
+            }
+        }
+        for id in &ids {
+            prop_assert!(asked.contains(id), "answer to a request nobody made: {}", id);
+        }
+        check_document(&document(&mut s)).unwrap();
+    }
 }

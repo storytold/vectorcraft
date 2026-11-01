@@ -24,6 +24,39 @@ pub fn install_fonts() {
     }
 }
 
+/// The folder `name` next to the settings, for what the user keeps: none in a run without
+/// preferences (`VECTORCRAFT_NO_PREFS`), which keeps nothing.
+fn store_dir(name: &str) -> Option<PathBuf> {
+    if std::env::var_os("VECTORCRAFT_NO_PREFS").is_some() {
+        return None;
+    }
+    Some(prefs_path_for("VectorCraft", "vectorcraft")?.parent()?.join(name))
+}
+
+/// Register the ICC profiles `color.loadProfile` kept in the `Color Profiles` folder (#2174), and
+/// keep the ones loaded from now on there. Before anything names a profile.
+pub fn attach_profile_store(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Color Profiles") {
+        session.attach_profile_store(dir);
+    }
+}
+
+/// Install the plug-ins Install Plug-in kept in the `Plug-ins` folder (#2541), and keep the ones
+/// installed from now on there.
+pub fn attach_plugin_store(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Plug-ins") {
+        session.attach_plugin_store(dir);
+    }
+}
+
+/// Take the saved PDF presets from the `PDF Presets` folder (#2168), and keep the ones saved from
+/// now on there. After the preferences were restored: the folder is the one place the presets live.
+pub fn attach_pdf_preset_store(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("PDF Presets") {
+        session.attach_pdf_preset_store(dir);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,6 +1,7 @@
 //! The Shaper Group's mode widget: a small arrow beside the right side of the bounds of a Shaper
 //! Group's source shapes. It shows while the group or one of its faces is selected (Face Selection
-//! mode) and while the group's source shapes are isolated (Construction mode). A click on it
+//! mode) and while the group's source shapes are isolated (Construction mode), but not while an
+//! opacity mask or a pattern is edited. A click on it
 //! switches between the two modes: it isolates the source shapes (`object.isolate`), or it leaves
 //! isolation with the group selected (`object.exitIsolation`). The Shaper and Selection tools hit
 //! it and the canvas draws it from the same geometry.
@@ -33,9 +34,10 @@ impl ShaperWidget {
     /// The widget at `zoom` (screen px per document point), beside the bounds of the group's source
     /// shapes in both modes. Construction mode: `isolation` is a Shaper Group's source shapes. Face
     /// Selection mode: the selection is one Shaper Group, or one face or stroke of it. It returns
-    /// None otherwise, and when the group, or a layer or group that holds it, is hidden or locked.
+    /// None otherwise, when the group, or a layer or group that holds it, is hidden or locked, and
+    /// while an opacity mask or a pattern is edited.
     pub fn of(doc: &Document, selection: &Selection, isolation: Option<NodeId>, zoom: f64) -> Option<Self> {
-        if !zoom.is_finite() || zoom <= 0.0 {
+        if !zoom.is_finite() || zoom <= 0.0 || doc.mask_edit.is_some() || doc.pattern_edit.is_some() {
             return None;
         }
         let shaper = |id: NodeId| doc.node(id).is_some_and(|n| n.extras().shaper.is_some());
@@ -82,12 +84,6 @@ pub fn click(cx: &ToolContext, p: Point) -> Option<Action> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use vectorcraft_doc::shaper::FILL_PREFIX;
-    use vectorcraft_doc::{Appearance, Node};
-    use vectorcraft_geom::{Rect, shapes};
-
     use super::*;
     use crate::extra::ShaperTool;
     use crate::select::SelectionTool;
@@ -96,28 +92,6 @@ mod tests {
 
     fn ev(kind: PointerKind, p: Point) -> PointerEvent {
         PointerEvent::new(kind, p.x, p.y)
-    }
-
-    /// A Shaper Group of two source squares (x from 0 to 100 and from 50 to 150, y from 300 to 400)
-    /// whose visible face is the first square: the document, the group, its source shapes and the
-    /// face.
-    fn doc_with_shaper_group() -> (Document, NodeId, NodeId, NodeId) {
-        let (mut d, _) = doc_with_rect();
-        let l = d.layers[0].id;
-        let square = |x: f64| shapes::rectangle(Rect::new(x, 300.0, x + 100.0, 400.0));
-        let a = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
-        let b = Node::path(d.alloc_id(), square(50.0), Appearance::default_art());
-        let mut sources = Node::group(d.alloc_id(), vec![Arc::new(a), Arc::new(b)]);
-        sources.name = Some(SOURCES.into());
-        sources.opacity = 0.0;
-        let mut face = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
-        face.name = Some(format!("{FILL_PREFIX}0"));
-        let (sources_id, face_id) = (sources.id, face.id);
-        let mut group = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
-        group.extras_mut().shaper = Some(Box::default());
-        let group_id = group.id;
-        d.insert(Some(l), 1, group).unwrap();
-        (d, group_id, sources_id, face_id)
     }
 
     #[test]
@@ -180,5 +154,22 @@ mod tests {
         d.node_mut(g).unwrap().locked = true;
         assert!(widget(&d, &[g]).is_none());
         assert!(widget(&d, &[face]).is_none());
+    }
+
+    #[test]
+    fn no_widget_shows_while_an_opacity_mask_or_a_pattern_is_edited() {
+        let (mut d, g, sources, _) = doc_with_shaper_group();
+        let rect = d.layers[0].children().unwrap()[0].id;
+        let layer = d.layers[0].id;
+        let mut s = Selection::default();
+        s.add(g);
+        assert!(ShaperWidget::of(&d, &s, None, 1.0).is_some());
+        d.mask_edit = Some(vectorcraft_doc::MaskEdit { object: rect, layer });
+        assert!(ShaperWidget::of(&d, &s, Some(layer), 1.0).is_none(), "mask editing");
+        assert!(ShaperWidget::of(&d, &Selection::default(), Some(sources), 1.0).is_none(), "mask editing, sources isolated");
+        d.mask_edit = None;
+        d.pattern_edit = Some(vectorcraft_doc::pattern::PatternEdit { pattern: "P".into(), layer, original: None });
+        assert!(ShaperWidget::of(&d, &s, Some(layer), 1.0).is_none(), "pattern editing");
+        assert!(ShaperWidget::of(&d, &Selection::default(), Some(sources), 1.0).is_none(), "pattern editing, sources isolated");
     }
 }
