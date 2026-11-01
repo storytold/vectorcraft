@@ -180,6 +180,33 @@ fn copies_per_sheet_print_a_grid_of_the_artboard() {
 }
 
 #[test]
+fn print_presets_keep_copies_per_sheet_and_older_presets_leave_it_off() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 144, "height": 252})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 144, "height": 252})).unwrap();
+    // [Default] prints one copy per sheet.
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    assert_eq!((v["presets"][0]["settings"]["copiesPerSheet"].clone(), v["presets"][0]["settings"]["gutter"].clone()), (json!(false), json!(0.0)));
+    // A saved preset keeps the option and the gutter, lists them as changed, and prints with them.
+    s.execute("print.presets.save", &json!({"name": "Cards", "settings": {"copiesPerSheet": true, "gutter": 18}})).unwrap();
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    let changed: Vec<&str> = v["presets"][1]["changed"].as_array().unwrap().iter().filter_map(|c| c["option"].as_str()).collect();
+    assert_eq!(changed, ["copiesPerSheet", "gutter"]);
+    let v = s.execute("print.preview", &json!({"preset": "Cards"})).unwrap();
+    assert_eq!(v["sheets"][0]["copies"].as_array().map(Vec::len), Some(9));
+    // The option survives export and import.
+    let text = s.execute("print.presets.export", &json!({"names": ["Cards"]})).unwrap()["data"].as_str().unwrap().to_string();
+    let mut t = Session::new();
+    t.execute("print.presets.import", &json!({"data": text})).unwrap();
+    assert_eq!((t.prefs.print_presets[0].settings.copies_per_sheet, t.prefs.print_presets[0].settings.gutter), (true, 18.0));
+    // A presets file written without the option imports with it off and no gutter.
+    let old = r#"{"format": "vcprintpresets", "presets": [{"name": "Old", "settings": {"copies": 2}}]}"#;
+    t.execute("print.presets.import", &json!({"data": old})).unwrap();
+    let q = &t.prefs.print_presets[1].settings;
+    assert_eq!((q.copies, q.copies_per_sheet, q.gutter), (2, false, 0.0));
+}
+
+#[test]
 fn bad_settings_are_bad_params() {
     let (mut s, _) = session();
     for p in [
