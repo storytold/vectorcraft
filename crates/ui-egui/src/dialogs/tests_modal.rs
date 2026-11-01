@@ -576,11 +576,13 @@ fn smooth_slider_previews_auto_smooth_and_keeps_the_result() {
 }
 
 /// Tab goes through the controls of the Simplify and Smooth sliders' strip and does not stop on the
-/// backdrop that takes a click outside it.
+/// backdrop that takes a click outside it. After tabbing, Escape closes the strip from the keyboard
+/// and puts the paths back.
 #[test]
 fn tab_skips_the_backdrop_of_the_simplify_and_smooth_sliders() {
     for (menu, kind) in [("object.path.simplify", simplify_slider::KIND), ("object.path.smooth", smooth_slider::KIND)] {
         let (ctx, mut app) = (ctx(), app_with_dense_path());
+        let before = app.session.doc().unwrap().doc.clone();
         crate::menus::invoke(&mut app, menu, json!({}));
         settle(&ctx, &mut app);
         let strip = rect_of(&ctx, egui::Id::unique(("dialog", kind)));
@@ -594,6 +596,15 @@ fn tab_skips_the_backdrop_of_the_simplify_and_smooth_sliders() {
         });
         assert!(!backdrop.is_empty(), "{kind}: the backdrop is drawn");
         assert!(!stops.iter().any(|id| backdrop.contains(id)), "{kind}: Tab stops on the backdrop: {stops:?}");
+        let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events: vec![escape], ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        assert!(app.ui.dialog.is_none() && !app.session.in_interaction(), "{kind}: Escape closes the strip");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{kind}: Escape puts the paths back");
     }
 }
 
