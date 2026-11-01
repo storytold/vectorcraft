@@ -890,6 +890,11 @@ struct Para {
     /// The logical start and end indents (`sprmPDxaLeft`, `sprmPDxaRight`).
     start: Option<i16>,
     end: Option<i16>,
+    /// When `left`, `right`, `start` and `end` were last set, counted in [`Para::applied`]: of a
+    /// physical and a logical indent on the same side, the one set later holds.
+    set_at: [u32; 4],
+    /// The indent properties applied so far.
+    applied: u32,
     first: i16,
     before: u16,
     after: u16,
@@ -929,10 +934,19 @@ impl Para {
                         _ => self.align,
                     }
                 }
-                0x840F => self.left = word.map(|v| v as i16),
-                0x840E => self.right = word.map(|v| v as i16),
-                0x845E => self.start = word.map(|v| v as i16),
-                0x845D => self.end = word.map(|v| v as i16),
+                0x840F | 0x840E | 0x845E | 0x845D => {
+                    let (field, slot) = match sprm {
+                        0x840F => (&mut self.left, 0),
+                        0x840E => (&mut self.right, 1),
+                        0x845E => (&mut self.start, 2),
+                        _ => (&mut self.end, 3),
+                    };
+                    *field = word.map(|v| v as i16);
+                    self.applied = self.applied.saturating_add(1);
+                    if let Some(at) = self.set_at.get_mut(slot) {
+                        *at = self.applied;
+                    }
+                }
                 0x8411 | 0x8460 => self.first = word.map_or(self.first, |v| v as i16),
                 0xA413 => self.before = word.unwrap_or(self.before),
                 0xA414 => self.after = word.unwrap_or(self.after),
@@ -947,8 +961,14 @@ impl Para {
     /// The paragraph attributes of this formatting.
     fn style(&self) -> ParaStyle {
         let rtl = self.rtl == Some(true);
-        let (physical_start, physical_end) = if rtl { (self.right, self.left) } else { (self.left, self.right) };
-        let (start, end) = (self.start.or(physical_start).unwrap_or_default(), self.end.or(physical_end).unwrap_or_default());
+        let [left_at, right_at, start_at, end_at] = self.set_at;
+        let (physical_start, physical_end) =
+            if rtl { ((self.right, right_at), (self.left, left_at)) } else { ((self.left, left_at), (self.right, right_at)) };
+        let side = |logical: (Option<i16>, u32), physical: (Option<i16>, u32)| {
+            let (first, second) = if physical.1 > logical.1 { (physical.0, logical.0) } else { (logical.0, physical.0) };
+            first.or(second).unwrap_or_default()
+        };
+        let (start, end) = (side((self.start, start_at), physical_start), side((self.end, end_at), physical_end));
         let (left, right) = if rtl { (end, start) } else { (start, end) };
         let points = |v: f64| (v / 20.0).clamp(-1296.0, 1296.0);
         ParaStyle {

@@ -747,6 +747,33 @@ fn doc_places_as_area_type_with_its_styles_and_formatting() {
 }
 
 #[test]
+fn doc_indents_set_later_hold_over_the_styles_physical_or_logical_ones() {
+    let twips = |v: i16| v.to_le_bytes();
+    // Normal sets a logical start indent of 36 pt. The first paragraph sets only a physical left
+    // indent of 18 pt; the second sets a logical start indent of 9 pt over a style with a physical
+    // left indent; the third sets a physical right indent of 27 pt and then right-to-left.
+    let styles = vec![Some((1, 0x0FFF, prls(&[(0x845E, &twips(720))]), vec![])), Some((1, 0, prls(&[(0x840F, &twips(540))]), vec![]))];
+    let doc = Word97 {
+        pieces: vec![("one\rtwo\rthree\r", true)],
+        papx: vec![
+            (3, 0, prls(&[(0x840F, &twips(360))])),
+            (7, 1, prls(&[(0x845E, &twips(180))])),
+            (13, 0, prls(&[(0x840E, &twips(540)), (0x2441, &[1])])),
+        ],
+        styles,
+        fonts: vec!["Arial"],
+        ..Word97::default()
+    };
+    let mut s = session();
+    let file = json!({"name": "indents.doc", "dataBase64": vectorcraft_format::base64_encode(&doc.build())});
+    let r = s.execute("file.place", &file).unwrap();
+    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+    let NodeKind::Text(t) = &n.kind else { panic!("not type") };
+    let summary: Vec<_> = t.paragraph_styles().iter().map(|p| (p.left_indent, p.right_indent)).collect();
+    assert_eq!(summary, [(18.0, 0.0), (9.0, 0.0), (0.0, 27.0)]);
+}
+
+#[test]
 fn doc_tables_breaks_and_other_stories_place_as_paragraphs_and_tabs_with_warnings() {
     let in_table = prls(&[(0x2416, &[1])]);
     // A line break; a table row of two cells; a page break inside a paragraph and a section break
