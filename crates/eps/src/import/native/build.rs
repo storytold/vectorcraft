@@ -71,6 +71,7 @@ pub(super) fn build_from(
         slot_names,
         restyled,
         placed_elsewhere,
+        envelopes_drawn,
         warnings,
     } = structure;
     // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
@@ -190,6 +191,7 @@ pub(super) fn build_from(
             if let Some(a) = doc.artboards.first_mut() {
                 a.rect = rect;
             }
+            drop_guides_off_boards(&mut doc);
         }
         frame = Some(Frame { page: visible, page_rect, rect, whole, pages: page_moves });
     }
@@ -310,10 +312,10 @@ pub(super) fn build_from(
                         doc = other;
                         notes.extend(unseen_note(unseen).into_iter().chain(note));
                     }
-                    _ if trust => {
-                        notes.extend(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]))
+                    _ => {
+                        let more = drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow)?;
+                        notes.extend(more);
                     }
-                    _ => return Err(why),
                 },
             }
         }
@@ -754,6 +756,46 @@ fn slot_content(
     Ok((plan(infos, stories, made, template, to_doc, pages, notes), false))
 }
 
+/// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
+/// notes to add when `doc` with each live envelope `drawn` lists replaced by the drawn art it took
+/// the place of (see [`ai::Structure::envelopes_drawn`]) draws as the page, `doc` then being that;
+/// else, with `trust`, the notes for `doc` as it is. An error, `why`, otherwise. The envelope note
+/// is added unless `notes` has it.
+#[allow(clippy::too_many_arguments)]
+fn drawn_or_trusted(
+    frame: &Frame<'_>,
+    view: &mut PageView,
+    doc: &mut Document,
+    drawn: &[(NodeId, Node)],
+    notes: &[String],
+    unseen: usize,
+    trust: bool,
+    why: String,
+    reflow: bool,
+) -> Result<Vec<String>, String> {
+    let unseen_note = |n: usize| (n > 0).then(|| format!("{n} {UNSEEN_TEXT}"));
+    let mut put_back = doc.clone();
+    let mut any = false;
+    for (id, art) in drawn {
+        if let Some(n) = put_back.node_mut(*id) {
+            *n = art.clone();
+            any = true;
+        }
+    }
+    if any {
+        let more = prune_unseen(frame, view, &mut put_back, reflow);
+        if let Ok(note) = compare(frame, view, &put_back, reflow) {
+            *doc = put_back;
+            let envelope = (!notes.iter().any(|n| n == ai::ENVELOPE_DRAWN)).then(|| ai::ENVELOPE_DRAWN.to_string());
+            return Ok(envelope.into_iter().chain(unseen_note(unseen + more)).chain(note).collect());
+        }
+    }
+    if trust {
+        return Ok(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]).collect());
+    }
+    Err(why)
+}
+
 /// `doc` with the placed files `placed` lists at their other placement (see
 /// [`ai::Structure::placed_elsewhere`]): each image's transform followed by its move. `None` when
 /// no listed image survives replacement.
@@ -933,8 +975,14 @@ fn page_boards<'a>(boards: &'a [vectorcraft_doc::Artboard], first: usize, pages:
     ((first > 0 || pages.len() == boards.len()) && shown.iter().zip(pages).all(same)).then_some(shown)
 }
 
-/// Draw `doc`'s layers and artboards `k` times as large, from the origin, with their strokes,
-/// effects and pattern tiles.
+/// Drops the guides of artboards `doc` no longer has: an artboard guide goes with its artboard.
+fn drop_guides_off_boards(doc: &mut Document) {
+    let kept: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
+    doc.guides.retain(|g| g.artboard.is_none_or(|id| kept.contains(&id)));
+}
+
+/// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
+/// strokes, effects and pattern tiles.
 fn scale_document(doc: &mut Document, k: f64) {
     let a = Affine::scale(k);
     let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
@@ -943,6 +991,9 @@ fn scale_document(doc: &mut Document, k: f64) {
     }
     for board in &mut doc.artboards {
         board.rect = a.transform_rect_bbox(board.rect);
+    }
+    for guide in &mut doc.guides {
+        guide.pos *= k;
     }
 }
 

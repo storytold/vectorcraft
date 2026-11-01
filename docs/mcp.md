@@ -1155,7 +1155,8 @@ These commands refuse a string, a number or another value that is not true or fa
 `` `closed` must be true or false ``, naming the key, and leave the document and its undo history as they were:
 `clockwise` in `shape.spiral`; `closed` in `shape.arc` and `path.create`; `vertical` and `placeholder` in `text.create`
 and `text.createInPath`; `underline`, `strikethrough`, `allCaps`, `proportionalMetrics`, `tateChuYoko`, `standardVerticalRoman` and `noBreak`
-in `text.setRangeStyle`; `effective` in `text.getRange`; `on` in `type.opticalMarginAlignment`, `type.systemLayout`
+in `text.setRangeStyle` and `text.setFormat`, which also checks `hyphenate`, `hyphenateCapitalized` and
+`romanHangingPunctuation`; `effective` in `text.getRange`; `on` in `type.opticalMarginAlignment`, `type.systemLayout`
 and `type.fractionalWidths`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
 `symbol.spray` and `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
 `swatch.delete`; `fromArtwork`, `toGlobal` and `includeTints` in `swatch.newGroup`; `global` and `selection` in
@@ -1567,7 +1568,12 @@ already walks Image Trace. Short agent entry points:
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size; rows
   of `symbol.list` carry `nineSlice`: the guides or `null`; `type` is Symbol Type, `static` by default for the command
   and `dynamic` by default in the Symbol Options dialog),
-  `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`, `symbol.edit`, `symbol.duplicate`,
+  `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`,
+  `symbol.edit {id?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
+  isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
+  `artboard`, the active one the app passes, or in a document without artboards on `viewCenter`, the view's center the
+  app passes; every instance follows each edit and stays linked), `symbol.exitEditing`
+  (leaves the mode; without an edit it adds no undo step), `symbol.duplicate`,
   `symbol.selectInstances {name}`, `symbol.delete {name | names, expandInstances?}` (`names` deletes several in one
   undo step). `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
   name they are given, as `symbol.options` trims `newName`; a blank one gives "New Symbol" or "<name> copy".
@@ -1579,8 +1585,8 @@ already walks Image Trace. Short agent entry points:
   0..100 and `blend` a blend mode name; `null` gives one back to the symbol. It is refused for a static symbol and for
   a path that names no object. `symbol.instance.reset {ids?}` drops the selected instances' changes (the Properties
   panel's Reset). Redefining the symbol (`symbol.update`) reshapes every instance and keeps each change whose path the
-  new art still has; `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` expands the symbol's own
-  art; making the symbol static drops them.
+  new art still has; `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own
+  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them.
 
 ```json
 {"name":"run_command","arguments":{"command":"symbol.instance.setAppearance","params":{"id":42,"path":[1],"fill":"#d0021b","opacity":80}}}
@@ -4100,8 +4106,11 @@ sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {�
 format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
 prefix, a suffix, a name pattern or an item's name become `-` in file and folder names, a folder name ends without
 periods or spaces, and a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`) that
-is the whole name or comes before its first period gets a `-` after it (`CON-.png`). The document remembers the last
-params: `document.exportSettings`. As in `document.export`,
+is the whole name or comes before its first period gets a `-` after it (`CON-.png`). When a row's file would take a
+name another row's file already has, compared without case (two PNG rows with different backgrounds and no suffix),
+the later file is written as `-2`, `-3`… (`Artboard-1-2.png`) and listed under that name in `files`; two identical
+rows write one file, and row folders that differ only in case (`Print`, `print`) are one folder, spelled as the first
+row spells it. The document remembers the last params: `document.exportSettings`. As in `document.export`,
 the reply's `warnings` lists the notes of every file exported (an image that couldn't be decoded, type written in the
 fallback font…), each note once; the export still writes or returns every file.
 
@@ -5119,6 +5128,27 @@ A digit the font lacks comes from a fallback font. Default and saved only when s
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"digits":"hindi"}}}
 ```
 
+## Font height reference
+
+`text.setFormat {fontHeightReference: "emBox"|"capHeight"|"xHeight"|"icfBox"}` (the selected type, or `ids`) and
+`text.setRangeStyle {id, start, end, fontHeightReference}` (a range) set the height of the font that the characters' font
+size measures, as the Character panel's Set Font Height Reference dropdown does (panel menu › Show Font Height Options).
+With `emBox`, the default, the font size is the size of the em square. With `capHeight`, `xHeight` or `icfBox`, the
+characters are set at the em size at which the font's cap height or x height (OS/2 `sCapHeight`, `sxHeight`), or the
+height of its ideographic character face (the BASE table's `icfb` and `icft`, else the ink of some ideographs and kana;
+across a vertical line, its width), equals the font size: 20 pt Cap Height type in a font whose capitals are 0.7 em
+tall is set at about 28.6 pt, and its font size stays 20 pt. With a font that has no such value, or one outside 0.1 to 2
+em, the size measures the em box. Auto leading, tracking and kerning follow the em size the characters are set at (the
+Character panel's Leading field shows that Auto leading, and `type.step {attribute: "leading"}` starts from it);
+explicit leading and baseline shift stay in points, and an inline graphic keeps its size.
+SVG, PDF and legacy `.ai` export and the CSS Properties rules write the em size. DXF export writes 0.7 times the em
+size as each TEXT entity's height (group 40, the height of its capitals).
+Saved only when not `emBox`. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"fontHeightReference":"capHeight"}}}
+```
+
 ## Language
 
 `text.setFormat {language}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end, language}` (a range)
@@ -5146,9 +5176,10 @@ offset of the character; a ligature (one glyph for several characters) changes a
 `end` give its bytes. `dx` (document points, in reading order) changes the kerning of the character before it on
 its line and its own kerning, so the character moves by `dx` and the characters after it stay where they are. The first
 character of a line and a right-to-left character take no `dx`, and `dx` is limited to what kerning from -1000 to 10000 (1/1000 em) on the two
-characters can give. `dy` raises it by baseline shift, which moves a rotated character along its own up axis. The tool
-splits a drag of a character rotated by up to about 84 degrees between kerning and baseline shift, so the character
-follows the pointer; nearer a quarter turn, a drag moves it only along its line. `hScale`, `vScale`
+characters can give. `dy` raises it by baseline shift, which moves the character up from its line at any rotation, a quarter
+turn included; a character rotated with a baseline shift turns about its shifted pen position. The tool splits a drag
+into its part along the line (kerning) and its part up from the line (baseline shift), so the character follows the
+pointer at any rotation; the first character of a line and a right-to-left character follow it only up and down. `hScale`, `vScale`
 and `rotation` set its scales and rotation as `text.setRangeStyle` does. Where the font kerned the character with its
 neighbors, the kerning of the two characters keeps it and the characters after it where they were along the line; a
 wider or narrower character moves the characters after it by the change in its width. Touch Type gives the character
@@ -6358,6 +6389,30 @@ one, out of range values and a request with no fix on.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.color.printFixes","params":{"scope":"document","inkLimit":300,"removeWhiteOverprint":true,"overprintBlack":100}}}
+```
+
+### Find Nearest Swatch
+
+`addon.color.nearestSwatch {library?, color?, fill?, stroke?, count?, ids?}` (a query: no undo step) lists, for each
+colour of the selected objects, the colour swatches of a library closest to it, closest first, by CIEDE2000 difference
+(`deltaE`: under 1 hardly tells apart, about 2 to 3 close) (#4923). `library` is a swatch library's id or name, as
+`swatch.library.list` lists them: the built-in ones, and the libraries and colour books (`.acb`, `.ase`, `.gpl`) the
+user saved or loaded with `swatch.library.load`; `"document"` (the default) is the document's own swatches. The colours
+are the solid colours and gradient stops of the selection's fills (`fill`, true) and strokes (`stroke`, true), of the
+objects inside it and of its type, once each, the first 100; `color` looks one colour up instead. `count` is 1…50 (5).
+Tint swatches, None and Registration aren't matched. → `{library, colors: [{values, hex, matches: [{name, values, hex,
+spot, deltaE}]}]}` (`values` as a default swatch name reads them: `C=10 M=20 Y=30 K=0`, `R=255 G=128 B=0`…)
+
+`addon.color.applyNearestSwatch {library?, fill?, stroke?, ids?}` (Object › Plug-ins › Color Effects › Find Nearest
+Swatch…, whose dialog lists each colour's three closest swatches with their difference; Apply runs it) gives each solid
+colour and gradient stop of the selected objects' fills and strokes (and gradient meshes) the colour of its nearest
+swatch, as one undo step. A global or spot swatch's colour links to it. The library's swatches the colours take are
+added to the document's first, as `swatch.library.add` adds them, so a spot colour from a colour book stays spot;
+images and patterns keep their colours. → `{changed, swatches: [the document swatches the colours took], added}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.color.nearestSwatch","params":{"library":"web-safe-216","color":{"c":10,"m":80,"y":90,"k":0},"count":3}}}
+{"name":"run_command","arguments":{"command":"addon.color.applyNearestSwatch","params":{"library":"document","stroke":false}}}
 ```
 
 ## Arrange Tools add-on

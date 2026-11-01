@@ -773,9 +773,10 @@ fn select(s: &mut Session, p: &Value) -> Result<Value> {
     }
     Ok(json!({"id": target.0}))
 }
-/// The layer an opacity mask or a pattern is edited in, which stays isolated while that mode is on.
+/// The layer an opacity mask, a pattern or a symbol is edited in, which stays isolated while that
+/// mode is on.
 fn editing_layer(d: &Document) -> Option<NodeId> {
-    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer))
+    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer)).or_else(|| d.symbol_edit.as_ref().map(|e| e.layer))
 }
 /// Leave isolation mode, Construction mode included. While an opacity mask or a pattern is edited,
 /// its editing layer stays isolated.

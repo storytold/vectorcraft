@@ -1,11 +1,12 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::types::{
-    FLIP, IMAGE_TOO_LARGE, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, Place,
+    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
+    NON_NATIVE_ART_UNREAD, Place,
 };
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node, NodeId,
-    NodeKind, Obj, OpacityMask, Paint, PathData, Point, Reader, Rect, StrokeLayer, V, ps,
+    NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
 
 impl<'a> Reader<'a> {
@@ -162,6 +163,10 @@ impl<'a> Reader<'a> {
         if op.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
             close(&mut bp);
         }
+        let line = match bp.elements() {
+            [PathEl::MoveTo(a), PathEl::LineTo(b)] => Some((*a, *b)),
+            _ => None,
+        };
         let to_doc = self.space();
         let path = PathData::from_bezpath(&(to_doc * bp));
         let gs = self.gs.clone();
@@ -191,6 +196,19 @@ impl<'a> Reader<'a> {
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
+        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        if guide
+            && op == "N"
+            && !hidden
+            && !gs.hidden
+            && !clip
+            && self.pattern.is_none()
+            && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
+            && let Some((a, b)) = line
+            && [a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite())
+        {
+            self.ruler_guides.insert(node.id, (a, b));
+        }
         node.appearance = Appearance { items, ..Appearance::default() }.into();
         node.opacity = gs.opacity;
         node.blend = gs.blend;

@@ -298,6 +298,8 @@ impl<'a> Reader<'a> {
                 let len = Self::nums(&vals).last().copied().unwrap_or(0.0);
                 if name == crate::import::ai::blend::PLUGIN && len.is_finite() && len > 0.0 && len <= crate::import::ai::blend::MAX_RECORD as f64 {
                     self.blend_record = Some((len as usize, vec![]));
+                } else if name == crate::import::ai::envelope::PLUGIN {
+                    self.end_envelope();
                 }
             }
             _ if IGNORED.contains(&w) => {}
@@ -308,8 +310,11 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// `… Lb`: a layer's options. The legacy format's has ten operands, its colour index one place
-    /// earlier (`visible preview unlocked printing dimmed masks colorIndex r g b`).
+    /// `… Lb`: a layer's options, `visible preview unlocked printing dimmed`, then the colour index
+    /// and its RGB. The colour index is at 5 with fewer than ten operands, 6 with ten to twelve
+    /// (`masks` before it) and 7 with thirteen or more (one more flag before it). Four places after
+    /// the colour index comes the template flag (eleven operands or more), then the dimming
+    /// percentage (twelve or more, else 50). A fourteenth operand changes nothing here.
     fn layer_attrs(&mut self, vals: &[V]) {
         let n = Self::nums(vals);
         let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() else { return };
@@ -318,9 +323,10 @@ impl<'a> Reader<'a> {
         a.preview = flag(1, true);
         a.locked = !flag(2, true);
         a.printable = flag(3, true);
-        let dim_pct = n.get(12).copied().filter(|v| v.is_finite()).unwrap_or(50.0).clamp(0.0, 100.0);
+        let at = 5 + usize::from(n.len() >= 10) + usize::from(n.len() >= 13);
+        a.template = flag(at + 4, false);
+        let dim_pct = n.get(at + 5).copied().filter(|v| v.is_finite()).unwrap_or(50.0).clamp(0.0, 100.0);
         a.dim = flag(4, false).then_some(dim_pct.round() as u8);
-        let at = if n.len() <= 10 { 6 } else { 7 };
         let index = n.get(at).copied().unwrap_or(0.0);
         let rgb = |i: usize| n.get(at + i).map_or(0, |v| v.clamp(0.0, 255.0) as u8);
         a.color = Some(if (0.0..vectorcraft_doc::LAYER_COLORS.len() as f64).contains(&index) && index.fract() == 0.0 {
