@@ -786,6 +786,13 @@ mod tests {
         frames(&mut app);
         assert!(drawn(&ctx, area_id("Mine"), egui::Order::Middle), "a second Tab shows it again");
         assert!(!app.ui.dock && !app.ui.toolbar && !app.ui.control_bar, "and only it");
+        // Hidden with its item while Tab hides it, it stays hidden, and Tab turns no other bar on.
+        app.run("window.dock", json!({})).unwrap();
+        app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
+        app.run("window.dock", json!({})).unwrap();
+        frames(&mut app);
+        assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle));
+        assert!(!app.ui.dock && !app.ui.toolbar && !app.ui.control_bar, "the layout Tab hid comes back");
     }
 
     /// A group's button shows the tool chosen last from it however it was chosen (its flyout, a
