@@ -2,8 +2,8 @@ use super::actions::deletable;
 use super::dnd::selection;
 use super::tiles::{describe, global_mark, list_icons, pattern_thumb_in};
 use super::{
-    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, PATTERN_LIBRARIES, Paint, Rect, Row, SWATCH_LIBRARIES, Swatch,
-    SwatchLibrary, Ui, Value, VectorcraftApp, json, library_panel, menu_item, patternlib, swatch_tile, swatchlib,
+    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, PATTERN_LIBRARIES, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary,
+    Ui, Value, VectorcraftApp, json, library_panel, menu_item, patternlib, swatch_tile, swatchlib,
 };
 
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
@@ -82,9 +82,7 @@ impl LibraryKind for SwatchLibraries {
     fn draw(_: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
         swatch_tile(ui, r, &w.paint, selected, hovered);
         // A built-in pattern library's pattern, drawn from the library.
-        if let Paint::Pattern { pattern, .. } = &w.paint
-            && let Some(src) = patternlib::pattern_source(pattern)
-        {
+        if let Some(src) = patternlib::swatch_source(w) {
             pattern_thumb_in(&src, ui, r.shrink(1.0), &w.paint);
         }
         if w.global {

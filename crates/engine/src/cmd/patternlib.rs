@@ -71,10 +71,14 @@ pub fn library(id: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary>)> {
     Some((infos().nth(i)?, MADE.get(i)?.clone()))
 }
 
-/// The built-in library document that holds pattern `name` (a library panel draws its pattern
-/// swatches from it). Pattern names are unique across the built-in libraries.
-pub fn pattern_source(name: &str) -> Option<Arc<Document>> {
-    PATTERN_LIBRARIES.iter().filter_map(|b| library_doc(b.id)).find(|d| d.pattern(name).is_some())
+/// The built-in library document that holds the pattern of swatch `w`, when `w` is one of a
+/// built-in pattern library's own swatches (a library panel draws them from it). A swatch of
+/// another library is not, even under the same name.
+pub fn swatch_source(w: &Swatch) -> Option<Arc<Document>> {
+    let Paint::Pattern { pattern, .. } = &w.paint else { return None };
+    let own = |lib: &SwatchLibrary| lib.swatches.iter().any(|s| std::ptr::eq(s, w));
+    let b = PATTERN_LIBRARIES.iter().find(|b| library(b.id).is_some_and(|(_, lib)| own(&lib)))?;
+    library_doc(b.id).filter(|d| d.pattern(pattern).is_some())
 }
 
 /// Add pattern `name` of library `lib` to `d` with the resources its art uses, as pasting art

@@ -719,10 +719,10 @@ fn pattern_libraries_bring_their_patterns_and_add_each_once() {
 }
 
 /// The built-in pattern libraries: unique, tiling patterns with art, whose names no two libraries
-/// share.
+/// share. Each library's own swatches draw from it; a swatch of the same name elsewhere does not.
 #[test]
 fn built_in_pattern_libraries_hold_tiling_patterns_with_unique_names() {
-    use crate::cmd::patternlib::{PATTERN_LIBRARIES, library_doc, pattern_source};
+    use crate::cmd::patternlib::{PATTERN_LIBRARIES, library, library_doc, swatch_source};
     let mut names = std::collections::HashSet::new();
     for b in PATTERN_LIBRARIES {
         let d = library_doc(b.id).unwrap();
@@ -731,10 +731,13 @@ fn built_in_pattern_libraries_hold_tiling_patterns_with_unique_names() {
             assert!(names.insert(p.name.clone()), "{} is in two libraries", p.name);
             assert!(!p.art.is_empty() && p.width() > 0.0 && p.height() > 0.0, "{}", p.name);
             assert!(vectorcraft_render::render_pattern_swatch(&d, &p.name, 16).is_some(), "{}", p.name);
-            assert!(std::sync::Arc::ptr_eq(&pattern_source(&p.name).unwrap(), &d));
+        }
+        let (_, lib) = library(b.id).unwrap();
+        for w in &lib.swatches {
+            assert!(std::sync::Arc::ptr_eq(&swatch_source(w).unwrap(), &d), "{}", w.name);
+            assert!(swatch_source(&w.clone()).is_none(), "a copy of {} is another library's swatch", w.name);
         }
     }
-    assert!(pattern_source("No Such Pattern").is_none());
 }
 
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.
