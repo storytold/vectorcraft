@@ -5658,6 +5658,9 @@ axis	Y Axis	Axe Y
 	New Set	Nouveau jeu
 	Set Options…	Options du jeu…
 	Set Options	Options du jeu
+	Action Options…	Options de script…
+	Action Options	Options de script
+	Rename Action	Renommer le script
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale

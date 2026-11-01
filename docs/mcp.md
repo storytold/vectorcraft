@@ -1669,6 +1669,10 @@ already walks Image Trace. Short agent entry points:
   is one of the format's extensions (`.svg` and `SVG` give `.svg`, `.JPEG` gives `.jpeg`), and otherwise in the
   format's first extension (`png8` gives `.png`, `template` gives `.vctemplate`). A step without `format` keeps the
   source file's extension (`.vectorcraft` over data sets).
+- Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
+  the top set) to `name` with spaces trimmed from both ends, keeps its steps, and returns `{name}`. An index past the
+  last set or action, or an empty name, is an error, and then nothing is renamed. The panel menu's Action Options…
+  runs this for the selected action.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the

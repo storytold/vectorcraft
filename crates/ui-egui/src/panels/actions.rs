@@ -68,6 +68,24 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     app.run("command.batch", json!({"label": a.name, "commands": commands}))
 }
 
+/// The command that renames an action ([`rename_action`]).
+pub const RENAME_ACTION: &str = "ui.action.rename";
+
+/// `ui.action.rename {set, action, name}`: renames the action at index `action` of set `set` (0 is
+/// the top set) to `name` with spaces trimmed from both ends, and keeps its steps. An index past
+/// the last set or action, or a name with nothing but spaces, is an error, and then nothing is
+/// renamed. The panel menu's Action Options… runs this for the selected action. → {name}
+pub fn rename_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let name = p.get("name").and_then(Value::as_str).map(str::trim).unwrap_or_default();
+    let action = index("set").zip(index("action")).and_then(|(s, a)| app.ui.action_sets.get_mut(s)?.actions.get_mut(a)).ok_or("no such action")?;
+    if name.is_empty() {
+        return Err("name is empty".into());
+    }
+    action.name = name.to_string();
+    Ok(json!({ "name": name }))
+}
+
 /// The command that deletes action sets ([`delete_sets`]).
 pub const DELETE_SETS: &str = "ui.actionSet.delete";
 
@@ -195,6 +213,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         && let Err(e) = play(app, s, a)
     {
         app.status(e);
+    }
+    if widgets::menu_item(ui, tl!("Action Options…"), has, false)
+        && let Some((s, a)) = selected
+    {
+        crate::dialogs::action_set_options::open_action(app, s, a);
     }
 }
 
@@ -434,6 +457,61 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let names = app.ui.action_sets.iter().map(|s| (s.name.as_str(), s.actions.len())).collect::<Vec<_>>();
         assert_eq!(names, [("Default Actions", 6), ("Web", 0)], "the clicked set is renamed, the other kept");
+    }
+
+    /// #1629: the panel menu's Action Options… is off with no action selected, and with an action
+    /// selected it asks for a new name: OK renames that action and keeps its steps, Cancel keeps
+    /// the name.
+    #[test]
+    fn action_options_renames_the_selected_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        let action_options = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
+            click(ctx, app, item.center(), menu);
+        };
+        action_options(&ctx, &mut app);
+        assert!(app.ui.dialog.is_none(), "no action selected: Action Options… is off");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Nudge Again").center(), show);
+        frame_events(&ctx, &mut app, vec![], show);
+        action_options(&ctx, &mut app);
+        let d = app.ui.dialog.as_ref().expect("Action Options opens");
+        assert_eq!((d.kind.as_str(), d.str("name")), (crate::dialogs::action_set_options::KIND, "Nudge Again".to_string()));
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.ui.action_sets[1].actions[1].name, "Nudge Again", "Cancel keeps the name");
+        action_options(&ctx, &mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("  Nudge Right  "));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let names = app.ui.action_sets[1].actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>();
+        assert_eq!(names, ["Nudge", "Nudge Right"], "the selected action is renamed, trimmed; the other is kept");
+        assert_eq!(app.ui.action_sets[1].actions[1].steps, [("object.move".to_string(), json!({"dx": 1, "dy": 0}))], "the steps stay");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "no set is renamed");
+    }
+
+    /// `ui.action.rename` renames the action at its set and action indexes and refuses a missing
+    /// index or a name with nothing but spaces, renaming nothing.
+    #[test]
+    fn rename_action_renames_one_action_and_refuses_bad_params() {
+        let mut app = app_with_sets();
+        let names = |app: &VectorcraftApp| app.ui.action_sets[1].actions.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0, "name": "Push"})).unwrap(), json!({"name": "Push"}));
+        assert_eq!(names(&app), ["Push", "Nudge Again"]);
+        for p in [
+            json!({"set": 1, "action": 2, "name": "X"}),
+            json!({"set": 3, "action": 0, "name": "X"}),
+            json!({"set": 1, "name": "X"}),
+            json!({"action": 0, "name": "X"}),
+            json!({"set": 4_294_967_297u64, "action": 0, "name": "X"}),
+        ] {
+            assert_eq!(app.run(RENAME_ACTION, p.clone()).unwrap_err(), "no such action", "{p}");
+        }
+        assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0, "name": "   "})).unwrap_err(), "name is empty");
+        assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0})).unwrap_err(), "name is empty");
+        assert_eq!(names(&app), ["Push", "Nudge Again"], "a refused rename renames nothing");
     }
 
     /// An app with the default set and the sets Mine (two actions) and Other.

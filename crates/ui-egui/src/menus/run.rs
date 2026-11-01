@@ -779,6 +779,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::dialogs::find_links::find_in_folder_command(app, s("folder"), p.get("ids").and_then(Value::as_array).cloned())
         }
         "ui.packageDialog" => crate::dialogs::package::open(app),
+        crate::panels::actions::RENAME_ACTION => crate::panels::actions::rename_action(app, p),
         "ui.batchDialog" => {
             let set = p.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
             let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;

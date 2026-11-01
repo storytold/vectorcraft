@@ -5646,6 +5646,9 @@ axis	Y Axis	Y tengely
 	New Set	Új készlet
 	Set Options…	Készlet beállításai…
 	Set Options	Készlet beállításai
+	Action Options…	Művelet beállításai…
+	Action Options	Művelet beállításai
+	Rename Action	Művelet átnevezése
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
