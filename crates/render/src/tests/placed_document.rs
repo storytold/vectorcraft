@@ -27,7 +27,7 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
 
 /// A 100×100 document showing one placed file (`bytes` under `key`) in the box (10, 10)–(90, 50).
 fn doc_with(key: &str, bytes: &[u8]) -> Document {
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     d.images.insert(key.into(), ImageBlob::new("application/json", bytes.to_vec()));
     let l = d.layers[0].id;
@@ -53,6 +53,36 @@ fn placed_node(id: u64, key: &str, width: f64, height: f64, xf: Affine) -> Node 
 /// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
 /// generation and the jobs being made: one test's bitmaps don't push out another's, and
 /// [`settle`] waits for its own.
+/// Held shut, [`gated_blue_page`] makes the background worker wait before reading a file, so a
+/// frame drawn meanwhile shows the placeholders whatever the scheduler does (#5152: a fast worker
+/// could finish between scheduling a bitmap and the frame looking it up again).
+static GATE_SHUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The thread drawing while the gate is shut: it never waits (a file read there is drawn exactly).
+static GATE_HOLDER: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
+
+/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it. Every test
+/// here registers it: the first registration stays, so all of them must agree (open, it is
+/// `blue_page`).
+fn gated_blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
+    let here = std::thread::current().id();
+    let holder = *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let t = std::time::Instant::now();
+    while holder != Some(here) && GATE_SHUT.load(std::sync::atomic::Ordering::SeqCst) && t.elapsed().as_secs() < 10 {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    blue_page(p, bytes)
+}
+
+/// Shut the gate for the calling thread's frames.
+fn shut_gate() {
+    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
+    GATE_SHUT.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn open_gate() {
+    GATE_SHUT.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn serial() -> std::sync::MutexGuard<'static, ()> {
     static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
     SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -173,7 +203,7 @@ fn copies_of_one_placed_document_share_its_bitmap() {
 #[test]
 fn nine_large_bitmaps_on_screen_are_not_made_again() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     let l = d.layers[0].id;
     let keys: Vec<String> = (0..9).map(|i| format!("nine-{i}")).collect();
@@ -231,7 +261,7 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
 #[test]
 fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     for key in ["area-a", "area-b"] {
         d.images.insert(key.into(), ImageBlob::new("application/json", format!("{{\"doc\": \"{key}\"}}").into_bytes()));
@@ -251,7 +281,10 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), progressive_placed: true, ..Default::default() };
     let mut r = Renderer::new();
     let generation = placed_document::generation();
+    // The first frame shows the placeholders: the worker waits until it is drawn.
+    shut_gate();
     let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    open_gate();
     settle();
     let made = placed_document::made_between(generation, placed_document::generation()).expect("known");
     let files = |keys: &[&str]| keys.iter().map(|k| k.to_string()).collect::<std::collections::HashSet<_>>();
