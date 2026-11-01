@@ -12,7 +12,7 @@
 
   outputs = { self, nixpkgs, rust-overlay, craft-fonts }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
 
       version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
 
@@ -23,7 +23,12 @@
             overlays = [ rust-overlay.overlays.default ];
           };
           commonDeps = with pkgs; [
-            # pkg-config
+            fontconfig
+            freetype
+            zlib
+          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            vulkan-loader
+            wayland
             libxkbcommon
             libx11
             libxcursor
@@ -32,12 +37,7 @@
             libxcb
             libgcc
             libGL
-            vulkan-loader
-            wayland
-            fontconfig
-            freetype
             alsa-lib
-            zlib
           ];
         in
         f { inherit system pkgs commonDeps; }
@@ -62,6 +62,8 @@
               export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
             '';
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
+              # No path links possible for non Linux
+            ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
               # Graphic APIs
               libGL
               vulkan-loader
@@ -93,12 +95,12 @@
           nativeBuildInputs = with pkgs; [
             pkg-config
             libclang
-            # Hooks runtime dependencies to RPATH 
-            autoPatchelfHook
-          ];
+          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ autoPatchelfHook ]; # Hooks runtime dependencies to RPATH
           buildInputs = commonDeps;
   
           runtimeDependencies = with pkgs; [
+            # No dependencies for non Linux possible
+          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             # Graphic APIs
             libGL
             vulkan-loader
@@ -122,6 +124,7 @@
             description = "Vector illustration; an open-source, modern vector art application, built in pure Rust.";
             homepage = "https://github.com/storytold/vectorcraft";
             platforms = systems;
+            badPlatforms = [ "x86_64-darwin" ]; # Nixpkgs removed support for x86_64-darwin in 26.11 upstream so sadly but we can't provide nixpkgs to that platform.
           };
         };
       });
