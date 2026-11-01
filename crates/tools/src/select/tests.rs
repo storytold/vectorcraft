@@ -1964,3 +1964,37 @@ fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
     let c = cx(&moved, &s, &p);
     assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
 }
+
+/// A double-click on a symbol instance edits its symbol in symbol editing mode (`symbol.edit`), and
+/// one outside the symbol's art in that mode leaves it, as it leaves isolation mode. An instance
+/// inside the art of the symbol being edited is not entered.
+#[test]
+fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
+    use vectorcraft_doc::{Appearance, Node, NodeKind, Symbol, SymbolEdit};
+    let (mut d, rect) = doc_with_rect();
+    let art = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), Appearance::default_art());
+    d.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: std::sync::Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = Affine::translate((300.0, 300.0)) * Affine::scale(2.0);
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
+    let (s, p) = (Selection::default(), paint());
+    let double = |d: &vectorcraft_doc::Document, isolation: Option<NodeId>, x: f64, y: f64| {
+        let c = ToolContext { isolation, ..cx(d, &s, &p) };
+        SelectionTool::default().pointer(&c, &ev(PointerKind::DoubleClick, x, y))
+    };
+    assert_eq!(double(&d, None, 300.0, 300.0), vec![Action::Exec("symbol.edit".into(), json!({"id": id.0}))]);
+    assert_eq!(double(&d, None, 150.0, 150.0), vec![Action::Exec("object.isolate".into(), json!({"id": rect.0}))]);
+    // In symbol editing mode, with the instance on the editing layer.
+    d.symbol_edit = Some(SymbolEdit {
+        symbol: "Other".into(),
+        layer: l,
+        instance: None,
+        xf: Affine::IDENTITY,
+        group: false,
+        changed: false,
+        back_isolation: None,
+        back_layer: None,
+    });
+    assert_eq!(double(&d, Some(l), 300.0, 300.0), vec![]);
+    assert_eq!(double(&d, Some(l), 450.0, 50.0), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
+}

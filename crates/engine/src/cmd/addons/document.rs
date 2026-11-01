@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export All Open Documents",
             ["Object", "Plug-ins", "Document Tools"],
             None,
-            "{folder, format?: vectorcraft|pdf|svg|svgz|ai|eps (default: pdf)} write a copy of every open document, in tab order, to `folder` as File › Save a Copy writes it, each named after its document (<name>.<ext>; -2, -3… added when that name is taken, so no file is replaced): every document keeps its path, title and modified state, and no undo step is made. A document that can't be written is listed in `failed` and the others are still written; the active document stays active → {files: [{title, path, warnings}], failed: [{title, error}], format}",
+            "{folder, format?: vectorcraft|pdf|svg|svgz|ai|eps (default: pdf)} write a copy of every open document, in tab order, to `folder` as File › Save a Copy writes it, each named after its document (<name>.<ext>; -2, -3… added when that name is taken, so no file is replaced), one self-contained file each with all of its art (images embedded or included, every artboard; no remembered save options apply): every document keeps its path, title and modified state, and no undo step is made. A document that can't be written is listed in `failed` and the others are still written; the active document stays active → {files: [{title, path, warnings}], failed: [{title, error}], format}",
             has_doc,
             export_all_open
         ),
@@ -98,6 +98,20 @@ fn save_timestamped_copy(s: &mut Session, p: &Value) -> Result<Value> {
     fileio::save_document(s, SaveMode::Copy, &json!({ "path": path, "format": format.id }))
 }
 
+/// The save options of every copy, given in full so that no document's remembered options (linked
+/// SVG images, a PDF page range, separate artboard files) apply: one self-contained file per
+/// document with all of its art. Each format reads only the options it has, and `range` is left
+/// out of SVG, where it would pick artboards over `useArtboards`.
+fn copy_options(format: &str) -> Value {
+    match format {
+        "svg" | "svgz" => json!({ "images": "embed", "useArtboards": false }),
+        "pdf" => json!({ "range": "all" }),
+        "eps" => json!({ "includeLinkedFiles": true, "useArtboards": false }),
+        "ai" | "ait" => json!({ "range": "all", "includeLinked": true, "separateArtboards": false }),
+        _ => json!({ "includeLinked": true, "separateArtboards": false }),
+    }
+}
+
 fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.document.exportAllOpen";
     let format = fileio::save_format(Some(str_param(p, "format").unwrap_or("pdf")), None).map_err(|e| bad(C, e))?;
@@ -117,9 +131,18 @@ fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
             failed.push(json!({ "title": title, "error": "every numbered name for the copy is taken" }));
             continue;
         };
-        match fileio::save_document(s, SaveMode::Copy, &json!({ "path": path, "format": format.id })) {
+        let options = copy_options(format.id);
+        match fileio::save_document(s, SaveMode::Copy, &json!({ "path": path, "format": format.id, "options": options })) {
             Ok(r) => {
                 written.push(path.clone());
+                // Any other file the save wrote is taken for the copies still to come.
+                for key in ["files", "linked"] {
+                    for f in r.get(key).and_then(Value::as_array).into_iter().flatten() {
+                        if let Some(f) = f.as_str().or_else(|| f.get("path").and_then(Value::as_str)) {
+                            written.push(f.to_string());
+                        }
+                    }
+                }
                 files.push(json!({ "title": title, "path": r.get("path").cloned().unwrap_or(json!(path)), "warnings": r.get("warnings").cloned().unwrap_or(json!([])) }));
             }
             Err(e) => failed.push(json!({ "title": title, "error": e.to_string() })),
