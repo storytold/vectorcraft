@@ -54,6 +54,8 @@ pub struct BlendHandles {
     /// The spine the steps run along, with each key's arc length on it.
     spine: Spine,
     stops: Vec<f64>,
+    /// The easing the knob's drag starts from (a symmetric Type is left as it is).
+    ease: BlendEase,
     easing: Option<EasingHandles>,
 }
 
@@ -142,7 +144,7 @@ impl BlendHandles {
             let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
             EasingHandles { ease, color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom) }
         });
-        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h, spine, stops, easing })
+        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h, spine, stops, ease: spec.ease, easing })
     }
 
     /// The handles of a single blend selected whole (`frame` is the bounding box shown).
@@ -186,10 +188,14 @@ impl BlendHandles {
     }
 
     /// The easing Type and Ramp the pointer at `p` gives: the pair of keys it is between, and
-    /// where in that pair — toward a key bunches the steps toward it.
+    /// where in that pair — toward a key bunches the steps toward it. A symmetric Type (In Out,
+    /// Out In) has no halfway point to drag: it keeps its Type and Ramp.
     fn ease_params(&self, p: Point) -> Value {
         let local = self.local_at(p);
-        let (kind, ramp) = ease_at(local);
+        let (kind, ramp) = match self.ease.kind {
+            BlendEaseType::InOut | BlendEaseType::OutIn => (self.ease.kind, self.ease.ramp),
+            _ => ease_at(local),
+        };
         json!({ "easingType": kind.id(), "ramp": ramp * 100.0 })
     }
 
@@ -554,6 +560,20 @@ mod tests {
         let e = h.easing_handles().unwrap();
         assert!(e.ease.distance(Point::new(10.0 + 100.0 * 0.375, 10.0)) < 1e-6, "{:?}", e.ease);
         assert_eq!(h.ease_params(e.ease), json!({"easingType": "easeIn", "ramp": 50.0}));
+    }
+
+    #[test]
+    fn a_symmetric_ease_keeps_its_type_when_dragged() {
+        for kind in [BlendEaseType::InOut, BlendEaseType::OutIn] {
+            let (d, b) = blend_with(BlendSpec { ease: BlendEase { kind, ramp: 0.5 }, spine_mode: BlendSpineMode::Always, ..Default::default() });
+            let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+            let e = h.easing_handles().unwrap();
+            let at = Point::new(e.ease.x + 2.0, e.ease.y);
+            assert_eq!(h.ease_params(at), json!({"easingType": kind.id(), "ramp": 50.0}));
+            let mut drag = BlendDrag::new(h, BlendPart::Ease, e.ease);
+            assert!(drag.drag(at).is_empty(), "{kind:?} changed");
+            assert_eq!(drag.finish(), vec![]);
+        }
     }
 
     #[test]
