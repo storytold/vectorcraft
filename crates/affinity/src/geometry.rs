@@ -169,6 +169,55 @@ fn curves(r: &mut Reader, crvs: ObjId, budget: &mut OutlineBudget) -> Option<Pat
     Some(path)
 }
 
+/// Most segments a stroke's pressure curve may have; the curves in real documents have a handful.
+const MAX_PRESSURE_SEGMENTS: usize = 256;
+
+/// Most points a pressure curve is sampled at: each segment gets an equal share, at least 2 (its
+/// middle and its end) and 8 at most.
+const PRESSURE_POINTS: usize = 512;
+
+/// A stroke's pressure curve (`LDsc.LDeP`, a `CrvD` whose positional `Data` holds an array of
+/// 18-byte records as in [`curves`]): x is the position along the path (0 to 1) and y the width as
+/// a fraction of the stroke's weight. Each segment is sampled at 2 to 8 points, at most
+/// [`PRESSURE_POINTS`] in all → (position, width) in order along the path, positions clamped into
+/// 0..1 and never going back, widths clamped into 0..1. `None` when the curve can't be read or has
+/// more than [`MAX_PRESSURE_SEGMENTS`] segments.
+pub(crate) fn pressure(r: &Reader, crvd: ObjId) -> Option<Vec<(f64, f64)>> {
+    let s = r.s;
+    let data = s.obj(crvd, b"Data")?;
+    let records = s.positional(data).find_map(|v| if let Value::Array(a) = v { Some(a) } else { None })?;
+    // Every segment takes at least an anchor record.
+    if records.len() > MAX_PRESSURE_SEGMENTS * 3 + 1 {
+        return None;
+    }
+    let curve = subpath(&anchors(records)?, false, None)?;
+    if curve.segments.len() > MAX_PRESSURE_SEGMENTS {
+        return None;
+    }
+    let steps = u32::try_from((PRESSURE_POINTS / curve.segments.len().max(1)).clamp(2, 8)).unwrap_or(2);
+    let mut samples = vec![(curve.start.x, curve.start.y)];
+    let mut from = curve.start;
+    for [c1, c2, to] in &curve.segments {
+        for i in 1..=steps {
+            let t = f64::from(i) / f64::from(steps);
+            let u = 1.0 - t;
+            let at = |a: f64, b: f64, c: f64, d: f64| u * u * u * a + 3.0 * u * u * t * b + 3.0 * u * t * t * c + t * t * t * d;
+            samples.push((at(from.x, c1.x, c2.x, to.x), at(from.y, c1.y, c2.y, to.y)));
+        }
+        from = *to;
+    }
+    let mut last = 0.0f64;
+    Some(
+        samples
+            .into_iter()
+            .map(|(x, y)| {
+                last = x.clamp(last, 1.0);
+                (last, y.clamp(0.0, 1.0))
+            })
+            .collect(),
+    )
+}
+
 struct Anchor {
     p: Point,
     inh: Option<Point>,

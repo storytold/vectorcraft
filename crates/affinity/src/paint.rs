@@ -121,6 +121,9 @@ pub struct Stroke {
     pub dash: Option<(Vec<f64>, f64)>,
     /// Painted below the fill instead of above it.
     pub behind: bool,
+    /// The pressure curve: (position 0..1 along the path, width as a fraction of `width`) in
+    /// order along the path, `None` for a stroke of the same width all along.
+    pub profile: Option<Vec<(f64, f64)>>,
 }
 
 /// Gradient stops per gradient.
@@ -350,10 +353,20 @@ pub(crate) fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, beh
         }
         _ => None,
     };
-    if s.obj(lsty, b"Brus").is_some() || s.obj(ldsc, b"LDeP").is_some() {
-        r.warn("brush and pressure strokes (imported as plain strokes)");
+    if s.obj(lsty, b"Brus").is_some() {
+        r.warn("brush strokes (imported as plain strokes)");
     }
-    Some(Stroke { paint, width, cap, join, miter_limit, align, dash, behind })
+    // The pressure curve sets the width along the path; one at full width all along is a plain
+    // stroke.
+    let profile = match s.obj(ldsc, b"LDeP").map(|p| crate::geometry::pressure(r, p)) {
+        Some(Some(points)) => (!points.iter().all(|(_, w)| (w - 1.0).abs() < 1e-3)).then_some(points),
+        Some(None) => {
+            r.warn("pressure strokes whose pressure curve can't be read (imported as plain strokes)");
+            None
+        }
+        None => None,
+    };
+    Some(Stroke { paint, width, cap, join, miter_limit, align, dash, behind, profile })
 }
 
 #[cfg(test)]
