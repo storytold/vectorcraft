@@ -420,7 +420,8 @@ fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<Sy
 
 /// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
 /// through an edit of the editing layer (see [`follow_paths`]). The instances in the art of the
-/// document's other symbols follow too, and keep only the changes to objects the art still has.
+/// document's other symbols, graph designs, pattern tiles (the tiles pattern editing's Cancel puts
+/// back included) and brushes follow too, and keep only the changes to objects the art still has.
 fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
     for id in super::brushsym::instances_of(d, Some(name)) {
         let Some(n) = d.node_mut(id) else { continue };
@@ -430,17 +431,45 @@ fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: 
         follow_paths(&mut n.extras_mut().symbol_overrides, old, new);
     }
     let art = d.symbols.iter().find(|s| s.name == name).filter(|s| s.dynamic).map(|s| s.art.clone());
-    for sym in d.symbols.iter_mut().filter(|s| s.name != name) {
-        if !holds_changed_instance(&sym.art, name) {
-            continue;
+    let mut follow = |o: &mut Vec<SymbolOverride>| {
+        follow_paths(o, old, new);
+        match &art {
+            Some(art) => vectorcraft_doc::symbol_overrides::retain_parts(o, art),
+            None => o.clear(),
         }
-        each_changed_instance(Arc::make_mut(&mut sym.art), name, &mut |o| {
-            follow_paths(o, old, new);
-            match &art {
-                Some(art) => vectorcraft_doc::symbol_overrides::retain_parts(o, art),
-                None => o.clear(),
+    };
+    let symbols = d.symbols.iter_mut().filter(|s| s.name != name).map(|s| &mut s.art);
+    let trees = symbols.chain(d.graph_designs.iter_mut().map(|g| &mut g.art));
+    let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+    for root in trees.chain(patterns.flat_map(|p| &mut p.art)) {
+        if holds_changed_instance(root, name) {
+            each_changed_instance(Arc::make_mut(root), name, &mut follow);
+        }
+    }
+    // The default brushes hold no instances, so only a stored library can change. A stored entry
+    // whose art holds no changed instance, or that does not parse, is stored again as it was read;
+    // a changed one is merged into its entry, which keeps the fields the brush definition does not read.
+    let Some(stored) = d.unknown.get(vectorcraft_brush::DOC_KEY).and_then(Value::as_array).cloned() else { return };
+    let mut changed = false;
+    let lib: Vec<Value> = stored
+        .into_iter()
+        .map(|raw| {
+            let Ok(mut b) = vectorcraft_brush::Brush::from_json(raw.clone()) else { return raw };
+            if !b.art().into_iter().any(|n| holds_changed_instance(n, name)) {
+                return raw;
             }
-        });
+            let base = serde_json::to_value(&b).unwrap_or_default();
+            for art in b.art_mut() {
+                if holds_changed_instance(art, name) {
+                    each_changed_instance(art, name, &mut follow);
+                }
+            }
+            changed = true;
+            super::swatch::merge_stored(raw, &base, serde_json::to_value(&b).unwrap_or_default())
+        })
+        .collect();
+    if changed {
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(lib));
     }
 }
 

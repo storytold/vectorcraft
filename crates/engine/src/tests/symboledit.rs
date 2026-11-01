@@ -1,7 +1,7 @@
 //! Symbol editing mode (`symbol.edit`, `symbol.exitEditing`).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::Rect;
 
 use crate::*;
@@ -516,6 +516,69 @@ fn an_instance_inside_another_symbols_art_follows_an_edit_of_its_dynamic_symbol(
     assert_eq!(nested(&s), vec![(vec![0], "#ff0000".to_string())]);
     run(&mut s, "symbol.exitEditing", json!({}));
     assert_eq!(nested(&s), vec![(vec![0], "#ff0000".to_string())]);
+}
+
+/// Instances of the edited dynamic symbol in a pattern tile, a graph design and an art brush keep
+/// their appearance changes on the same objects when the edit reorders them, and drop the change
+/// to an object the edit deleted.
+#[test]
+fn instances_in_pattern_tiles_graph_designs_and_brushes_follow_an_edit_of_their_dynamic_symbol() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let a = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})));
+    let b = id(&run(&mut s, "shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})));
+    let inst = id(&run(&mut s, "symbol.new", json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [0], "fill": "#00ff00"}));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [1], "fill": "#ff0000"}));
+    run(&mut s, "object.pattern.make", json!({"ids": [inst.0], "name": "Tile", "edit": false}));
+    run(&mut s, "select.set", json!({"ids": [inst.0]}));
+    run(&mut s, "graph.design", json!({"new": "Pairs"}));
+    run(&mut s, "brush.new", json!({"type": "art", "name": "Pair Band", "ids": [inst.0]}));
+    // A stored entry that does not parse, and a field the brush definition does not read, are kept.
+    let junk = json!({"name": "Unreadable", "kind": 7});
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(Value::Array(entries)) = doc.unknown.get_mut(vectorcraft_brush::DOC_KEY) else { panic!("no stored brushes") };
+    entries.iter_mut().filter(|e| e["name"] == "Pair Band").for_each(|e| e["note"] = json!("kept"));
+    entries.push(junk.clone());
+    // The changes of each instance of "Pair" in `n`, by path and color.
+    fn changes(n: &Node, out: &mut Vec<(Vec<u32>, String)>) {
+        n.walk(&mut |n| {
+            if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Pair") {
+                out.extend(n.extras().symbol_overrides.iter().map(|o| (o.path.clone(), o.fill.as_ref().and_then(|p| p.color()).unwrap().to_hex())));
+            }
+        });
+    }
+    // The changes in the tile, the graph design and the brush.
+    let held = |s: &Session| -> [Vec<(Vec<u32>, String)>; 3] {
+        let d = &s.doc().unwrap().doc;
+        let mut out: [Vec<(Vec<u32>, String)>; 3] = Default::default();
+        d.patterns.iter().filter(|p| p.name == "Tile").flat_map(|p| &p.art).for_each(|n| changes(n, &mut out[0]));
+        d.graph_designs.iter().for_each(|g| changes(&g.art, &mut out[1]));
+        let brush = vectorcraft_brush::find(d, "Pair Band").expect("the brush");
+        brush.art().into_iter().for_each(|n| changes(n, &mut out[2]));
+        out
+    };
+    let start = vec![(vec![0], "#00ff00".to_string()), (vec![1], "#ff0000".to_string())];
+    assert_eq!(held(&s), [start.clone(), start.clone(), start]);
+    let other = id(&run(&mut s, "symbol.place", json!({"name": "Pair", "x": 200, "y": 200})));
+    run(&mut s, "symbol.edit", json!({"id": other.0}));
+    let art = layer_art(&s);
+    assert_eq!(art.len(), 2);
+    // Sending the second object to the back: each change follows its object.
+    run(&mut s, "select.set", json!({"ids": [art[1].0]}));
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    let swapped = vec![(vec![1], "#00ff00".to_string()), (vec![0], "#ff0000".to_string())];
+    assert_eq!(held(&s), [swapped.clone(), swapped.clone(), swapped]);
+    // Deleting the first object: the change to it goes.
+    run(&mut s, "select.set", json!({"ids": [art[0].0]}));
+    run(&mut s, "edit.clear", json!({}));
+    let left = vec![(vec![0], "#ff0000".to_string())];
+    assert_eq!(held(&s), [left.clone(), left.clone(), left.clone()]);
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(held(&s), [left.clone(), left.clone(), left]);
+    let stored = &s.doc().unwrap().doc.unknown[vectorcraft_brush::DOC_KEY];
+    assert!(stored.as_array().is_some_and(|a| a.contains(&junk)), "{stored}");
+    assert!(stored.as_array().is_some_and(|a| a.iter().any(|e| e["name"] == "Pair Band" && e["note"] == "kept")), "{stored}");
 }
 
 #[test]
