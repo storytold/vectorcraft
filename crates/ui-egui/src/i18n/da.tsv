@@ -1388,6 +1388,12 @@ digits	Malayalam	Malayalam
 	Axis	Akse
 	ICF Top/Right	ICF øverst/højre
 	ICF Bottom/Left	ICF nederst/venstre
+	Show Font Height Options	Vis indstillinger for skrifthøjde
+	Hide Font Height Options	Skjul indstillinger for skrifthøjde
+	Set Font Height Reference	Angiv reference for skrifthøjde
+	Em Box	Em-felt
+	x-Height	x-højde
+	ICF Box	ICF-felt
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
@@ -2868,6 +2874,7 @@ theme	Appearance	Udseende
 	Duplicate Brush	Duplikér pensel
 	Duplicate Symbol	Duplikér symbol
 	Edit Symbol	Redigér symbol
+	Exit Symbol Editing Mode	Afslut symbolredigeringstilstand
 	Expand Brush Strokes	Udvid penselstrøg
 	New Brush…	Ny pensel…
 	New Brush	Ny pensel
@@ -4319,6 +4326,8 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	markér en gentagelse
 @msg	select a stroke with a variable width	markér en streg med variabel bredde
 @msg	select a symbol instance	markér en symbolforekomst
+@msg	select instances of one symbol	markér forekomster af ét symbol
+@msg	a symbol can't hold an instance of itself	et symbol kan ikke indeholde en forekomst af sig selv
 @msg	select an Image Trace object	markér et Image Trace-objekt
 @msg	could not decode image: {0}	kunne ikke afkode billedet: {0}
 @msg	image is empty	billedet er tomt
@@ -5843,6 +5852,13 @@ anchor	Points:	Punkter:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	angiv `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Trykfarverettelser virker på CMYK-dokumenter: vælg først Filer › Dokumentets farvetilstand › CMYK-farve
 @msg	`{key}` must be 0..{max}	`{key}` skal være 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Find nærmeste farveprøve…
+	Find Nearest Swatch	Find nærmeste farveprøve
+	Apply Nearest Swatch	Anvend nærmeste farveprøve
+	Select objects to find the swatches nearest their colors.	Markér objekter for at finde de farveprøver, der ligger tættest på deres farver.
+@msg	select objects or give `color`	markér objekter, eller angiv `color`
+@msg	`color` is not a colour	`color` er ikke en farve
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hjørneværktøj
 	Slide Anchor Along Path	Skub ankerpunkt langs sti

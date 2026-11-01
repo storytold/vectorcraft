@@ -34,6 +34,8 @@ pub struct DocState {
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
     /// ([`cmd::globaledit`]). Editing state: not saved, not undoable.
     pub global_edit: Option<cmd::globaledit::GlobalEdit>,
+    /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
+    pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
@@ -246,6 +248,7 @@ impl DocState {
             variables_highlight: None,
             isolation: None,
             global_edit: None,
+            symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
             last_transform: None,
