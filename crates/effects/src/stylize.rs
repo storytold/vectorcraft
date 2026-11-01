@@ -29,17 +29,18 @@ pub fn convert_to_shape(id: &str, b: Rect, p: &Value) -> PathData {
 /// and trims a curved side to what is left of it. The cut is Live Corners' round cut
 /// ([`corners::cut_corners`], #1144); `radius` keeps this effect's meaning, the cut's reach along
 /// the sides, so the arc's own radius follows from the angle (equal to `radius` at a right angle).
-/// A cut reaches at most halfway along the shorter side, so an infinite `radius` rounds as much
-/// as fits. A closed subpath keeps starting where it did: at the start of its first anchor's cut.
+/// A cut reaches halfway along a side, or further, up to where the cut at the side's other end
+/// begins, so all of a side whose other end isn't cut ([`corners::fitted_radii`]); an infinite
+/// `radius` rounds as much as fits. A closed subpath keeps starting where it did: at the start of
+/// its first anchor's cut. Nearly straight anchors are no corners ([`corners::path_corners`]).
 pub fn round_corners(path: &PathData, radius: f64) -> PathData {
     if radius.is_nan() || radius <= 0.0 {
         return path.clone();
     }
     let mut radii = vec![0.0; path.anchor_count()];
     for c in corners::path_corners(path) {
-        // setback = r · (1 + cos) / sin, solved for r.
         if let Some(r) = radii.get_mut(c.index) {
-            *r = radius * c.sin() / (1.0 + c.cos());
+            *r = c.radius_at_setback(radius);
         }
     }
     let (mut out, sources) = corners::cut_corners(path, &radii, &[]);
