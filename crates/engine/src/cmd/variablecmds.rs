@@ -44,11 +44,21 @@ fn selection_and_unlocked(s: &Session) -> std::result::Result<(), String> {
     variables_unlocked(s)
 }
 
+/// Ends a typing session as [`Session::edit`] would, before a helper below compares the document,
+/// so the typing is its own undo step whether or not the command then changes anything.
+fn settle_typing(s: &mut Session) -> Result<()> {
+    if !s.previewing && super::typing_in_progress(s) {
+        super::settle_interaction(s)?;
+    }
+    Ok(())
+}
+
 /// [`Session::edit`] for a command that changes only the variables and data sets and may change
 /// nothing, such as binding art to the variable it already has: `f` runs on a copy of them, and
 /// only a copy that differs becomes an undo step. When nothing changed, the undo and redo steps and
 /// the saved state stay as they were.
 fn edit_variables<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Variables) -> Result<T>) -> Result<T> {
+    settle_typing(s)?;
     let st = s.doc()?;
     let mut vars = st.doc.variables.clone();
     let v = f(&mut vars)?;
@@ -67,6 +77,7 @@ fn edit_variables<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Variables
 /// undo and redo steps and the saved state stay as they were, and a selection `f` changed is set
 /// without an undo step.
 fn edit_if_changed<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+    settle_typing(s)?;
     let st = s.doc()?;
     let mut doc = (*st.doc).clone();
     let mut sel = st.selection.clone();

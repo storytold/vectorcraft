@@ -1890,6 +1890,37 @@ fn a_variables_command_that_changes_nothing_records_no_undo_step() {
     assert_eq!((super::history(&s), plain(&s, t)), ((undo + 1, 0, true), "Cy".to_string()));
 }
 
+/// A Variables command that changes nothing, run while the Type tool is typing, still ends the
+/// typing session as one that changes something does: the typing is its own undo step, and the
+/// next keystroke starts a new one.
+#[test]
+fn a_variables_command_that_changes_nothing_ends_the_typing() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::default();
+    let t = text(&mut s, "Hello");
+    let r = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 50, "height": 40})).unwrap();
+    let r = NodeId(r["id"].as_u64().unwrap());
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Show": true}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    for (cmd, p) in [("variable.bind", json!({"variable": "Show", "ids": [r.0]})), ("dataset.select", json!({"name": "A"}))] {
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[t], false).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        s.tool_text("!", v).unwrap();
+        assert!(crate::cmd::typing_in_progress(&s), "{cmd}");
+        let steps = s.doc().unwrap().history.undo.len();
+        s.execute(cmd, &p).unwrap();
+        assert!(!crate::cmd::typing_in_progress(&s), "{cmd}");
+        let labels: Vec<String> = s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+        assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Typing")), "{cmd}");
+    }
+}
+
 /// Applying the active data set again to a graph whose data already matches the row records no
 /// undo step, and a row with other data still rebuilds the graph in one.
 #[test]
