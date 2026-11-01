@@ -1,5 +1,6 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::raster::{end_hex, push_hex};
+use super::types::{FLIP, Kind, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -44,9 +45,7 @@ impl<'a> Reader<'a> {
             && !line.is_empty()
             && line.bytes().all(|b| b.is_ascii_hexdigit())
         {
-            if r.hex.len() < MAX_HEX {
-                r.hex.extend_from_slice(line.as_bytes());
-            }
+            push_hex(&mut r.samples, &mut r.half, line.as_bytes(), r.max);
             return Ok(());
         }
         let m = marker(line);
@@ -105,8 +104,9 @@ impl<'a> Reader<'a> {
         if line.starts_with("AI5_BeginRaster") {
             self.raster = Some(Raster::default());
         } else if line.starts_with("AI5_EndRaster") {
-            if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
-                return self.image_from(vals, &hex);
+            if let Some(Raster { operands: Some(vals), mut samples, half, max, .. }) = self.raster.take() {
+                end_hex(&mut samples, half, max);
+                return self.image_from(vals, &samples, true);
             }
         } else if line.starts_with("AI5_BeginPlace") {
             self.place = Some(Place::default());

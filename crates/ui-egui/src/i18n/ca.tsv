@@ -4879,6 +4879,7 @@ digits	Malayalam	Malaiàlam
 @msg	an image of {w} × {h} pixels is too large to draw	una imatge de {w} × {h} píxels és massa gran per dibuixar-la
 @msg	an image VectorCraft can't read was left out	s’ha omès una imatge que VectorCraft no pot llegir
 @msg	an image whose data is cut short was left out	s’ha omès una imatge les dades de la qual estan tallades
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imatge incrustada de {_1} × {_2} píxels s’ha reduït a {_3} × {_4} píxels per conservar les capes
 @msg	an object can't be read	no es pot llegir un objecte
 @msg	an object in perspective would leave the edited grid	un objecte en perspectiva sortiria de la quadrícula editada
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objecte admet un efecte 3D. Editeu les opcions de l’efecte existent o suprimiu-lo primer.

@@ -35,8 +35,10 @@ use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
-pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
-pub(crate) use read::{join_and, slot_frame, slot_of};
+#[cfg(test)]
+pub(crate) use read::with_image_limits;
+pub use read::{PaletteSwatches, Structure, artboards, palette, read, variables};
+pub(crate) use read::{join_and, read_over_page, slot_frame, slot_of};
 
 #[cfg(test)]
 mod tests;

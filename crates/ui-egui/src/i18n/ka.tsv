@@ -4328,6 +4328,7 @@ font-technology	Variable	ცვლადი
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
 @msg	an image whose data is cut short was left out	გამოსახულება, რომლის მონაცემებიც შეკვეცილია, გამოტოვებულია
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ჩაშენებული გამოსახულება ზომით {_1} × {_2} პიქსელი შემცირდა {_3} × {_4} პიქსელამდე, რომ შრეები შენარჩუნდეს
 @msg	its editing data doesn't say where its art is	მისი რედაქტირების მონაცემები არ მიუთითებს, სად არის მისი ნახატი
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ეს ფაილი PDF-თავსებადობის გარეშეა შენახული და მისი რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება ({why})
 @msg	No fonts are missing in this document	ამ დოკუმენტში შრიფტები არ აკლია

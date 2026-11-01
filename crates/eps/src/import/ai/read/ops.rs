@@ -288,8 +288,10 @@ impl<'a> Reader<'a> {
             "TE" => self.te(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
+                let max = self.sample_bytes(&vals);
                 if let Some(r) = self.raster.as_mut() {
                     r.operands = Some(vals);
+                    r.max = max;
                 }
             }
             // A plugin group ends; a blend's record follows on `%` lines.

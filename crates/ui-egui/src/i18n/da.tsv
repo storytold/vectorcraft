@@ -4541,6 +4541,7 @@ imageTrace	Outline	Kontur
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten »{name}« er ikke defineret i filen: der bruges en flad farve i stedet
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
 @msg	an image whose data is cut short was left out	et billede, hvis data er afkortet, blev udeladt
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	et indlejret billede på {_1} × {_2} pixel blev formindsket til {_3} × {_4} pixel for at bevare lagene
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	rammetekst i rammer, der er for lave til en tekstlinje i den skrifttype, den viser i, fik højere rammer ({_1}): teksten ville ellers ikke blive vist
 @msg	its editing data doesn't say where its art is	dens redigeringsdata siger ikke, hvor dens grafik er

@@ -4889,6 +4889,7 @@ imageTrace	Outline	Obrys
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	přechod „{name}“ není v souboru definován: zastupuje ho plná barva
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
 @msg	an image whose data is cut short was left out	obrázek s useknutými daty byl vynechán
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	vložený obrázek o rozměrech {_1} × {_2} pixelů byl zmenšen na {_3} × {_4} pixelů, aby se zachovaly vrstvy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	text v oblasti v rámcích příliš nízkých pro řádek písma, ve kterém se zde zobrazuje, dostal vyšší rámce ({_1}): jinak by nebyl vidět
 @msg	its editing data doesn't say where its art is	z jeho dat pro úpravy není zřejmé, kde je kresba

@@ -4325,6 +4325,7 @@ axis	Both	Her İkisi
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	“{name}” degradesi dosyada tanımlı değil: onun yerine düz bir renk geliyor
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	katmanları korumak için {_1} × {_2} piksellik gömülü bir resim {_3} × {_4} piksele küçültüldü
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	çerçevelerdeki alan türü, daha uzun çerçevelerde gösterdiği yazı tipinin bir satırı için çok kısa ({_1}): bunların türü aksi halde gösterilmez
 @msg	its editing data doesn't say where its art is	düzenleme verileri sanatın nerede olduğunu söylemiyor

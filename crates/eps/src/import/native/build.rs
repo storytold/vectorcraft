@@ -46,7 +46,9 @@ pub(super) fn build(
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+    let large_canvas = matches!(page, Page::Art);
+    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas)? } else { ai::read(data, large_canvas)? };
+    build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
 /// [`build`] from `structure`, the editing copy `data` already read.

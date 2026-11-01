@@ -23,7 +23,9 @@
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
-//!   become an RGBA PNG.
+//!   become an RGBA PNG. Images larger than 2^25 pixels keep their samples' channels (1-bit gray as
+//!   a 1-bit PNG), and are averaged down past a target size ([`raster`]); past the hard limits, one
+//!   is a box that the page's art replaces when there is a page ([`read_over_page`]).
 //! - Placed (linked) files, as written in files users sent: `%AI5_BeginPlace`, `[matrix] llx lly urx
 //!   ury … (path)` and the operator `` ` ``, the file's preview between `%AI26_BeginPlacedObjectPreview`
 //!   and its end (`w h rowBytes 32 n `, then rows of premultiplied ARGB, the top one first), `~`. The
@@ -77,13 +79,15 @@ mod directives;
 mod document;
 mod on_path;
 mod ops;
+mod raster;
 mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
 pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
-pub use types::IMAGE_TOO_LARGE;
+#[cfg(test)]
+pub(crate) use raster::with_image_limits;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, Raster};
 #[cfg(test)]
 pub use types::{NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
@@ -131,8 +135,20 @@ pub struct Structure {
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
 /// keep the reduced one, which the PDF import reads as it is (#2031).
 pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, false)
+}
+
+/// [`read`] for a file whose page art replaces the objects the reader doesn't read (see
+/// [`Reader::unread_box`]): an image past the hard limits ([`raster::Limits`]) is then such an
+/// object, where [`read`] leaves it out with a note.
+pub(crate) fn read_over_page(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, true)
+}
+
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool) -> Result<Structure, String> {
     let mut r = Reader::new(data);
     r.large_canvas = large_canvas.then_some(1.0);
+    r.page_art = page_art;
     r.run()?;
     r.finish()
 }
@@ -263,6 +279,8 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The file has page art to replace the objects that aren't read ([`read_over_page`]).
+    page_art: bool,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -359,6 +377,7 @@ impl<'a> Reader<'a> {
             art_size: None,
             template_center: None,
             large_canvas: None,
+            page_art: false,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),

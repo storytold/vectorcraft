@@ -4608,6 +4608,7 @@ axis	Both	Обидві
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вбудоване зображення {_1} × {_2} пікселів зменшено до {_3} × {_4} пікселів, щоб зберегти шари
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в області в рамках, занизьких для рядка шрифту, яким він показується, отримав вищі рамки ({_1}): інакше його не було б видно
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка

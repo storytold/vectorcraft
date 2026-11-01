@@ -4324,6 +4324,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	its section ending with `%{end}` doesn't end	`%{end}` で終わるはずのセクションが終わっていません
 @msg	an image VectorCraft can't read was left out	VectorCraft で読み込めない画像は除外されました
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	レイヤーを保持するため、{_1} × {_2} ピクセルの埋め込み画像を {_3} × {_4} ピクセルに縮小しました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています

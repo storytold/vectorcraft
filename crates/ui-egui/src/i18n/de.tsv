@@ -4498,6 +4498,7 @@ theme	Appearance	Erscheinungsbild
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
 @msg	an image VectorCraft can't read was left out	ein Bild, das VectorCraft nicht lesen kann, wurde ausgelassen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ein eingebettetes Bild mit {_1} × {_2} Pixeln wurde auf {_3} × {_4} Pixel verkleinert, damit die Ebenen erhalten bleiben
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
