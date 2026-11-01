@@ -192,6 +192,10 @@
 	Anti-Alias	Сглаживание
 	Anti-alias Rasters	Сглаживать растровые изображения
 	Anti-aliased Artwork	Сглаженный рисунок
+	Anti-aliasing Method	Метод сглаживания
+	Sharp	Резкое
+	Crisp	Чёткое
+	Strong	Сильное
 	Anti-aliasing:	Сглаживание:
 	Any Kind	Любой тип
 	Font Technology	Технология шрифта
@@ -4017,6 +4021,7 @@ axis	Both	Оба
 @msg	Targa files are RGB: colorModel rgb	файлы Targa являются RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обтекание текстом: выделите объект обтекания
 @msg	This shortcut file is in a form VectorCraft can't read.	Этот файл сочетаний клавиш записан в формате, который VectorCraft не может прочитать.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` должно быть "none", "sharp", "crisp" или "strong"
 @msg	`aspect` must be a number (%)	`aspect` должно быть числом (%)
 @msg	`at` must be [x, y]	`at` должно быть [x, y]
 @msg	`color` must be a colour	`color` должно быть цветом

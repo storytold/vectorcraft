@@ -182,6 +182,10 @@
 	Anti-Alias	Kantutjämning
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
+	Anti-aliasing Method	Kantutjämningsmetod
+	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Kantutjämning:
 	Any Kind	Alla typer
 	Font Technology	Typsnittsteknik
@@ -3892,6 +3896,7 @@ axis	Both	Båda
 @msg	Targa files are RGB: colorModel rgb	Targa-filer är RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textombrytning: markera ett ombrytningsobjekt
 @msg	This shortcut file is in a form VectorCraft can't read.	Den här kortkommandofilen har ett format som VectorCraft inte kan läsa.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` måste vara "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` måste vara ett tal (%)
 @msg	`at` must be [x, y]	`at` måste vara [x, y]
 @msg	`color` must be a colour	`color` måste vara en färg

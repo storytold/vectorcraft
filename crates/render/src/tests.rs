@@ -28,6 +28,7 @@ mod rasterize;
 mod setup;
 mod strokegradient;
 mod tileedge;
+mod typeedges;
 mod viewraster;
 mod widthzoom;
 

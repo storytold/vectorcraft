@@ -2613,6 +2613,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 s
 	[Unnamed]	[Nimetön]
 	Amount:	Määrä:
+	Anti-aliasing Method	Reunanpehmennystapa
+	Sharp	Terävä
+	Crisp	Selkeä
+	Strong	Vahva
 	Anti-aliasing:	Reunanpehmennys:
 	Artboard:	Piirtoalusta:
 	Color Table	Väritaulukko
@@ -4202,6 +4206,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Split Into Grid: select paths large enough for the grid	Jaa ruudukoksi: valitse ruudukolle riittävän suuret polut
 @msg	Targa files are RGB: colorModel rgb	Targa-tiedostot ovat RGB-muotoisia: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstin rivitys: valitse rivitysobjekti
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` on oltava "none", "sharp", "crisp" tai "strong"
 @msg	`aspect` must be a number (%)	`aspect` on oltava luku (%)
 @msg	`at` must be [x, y]	`at` on oltava [x, y]
 @msg	`color` must be a colour	`color` on oltava väri

@@ -5052,6 +5052,38 @@ Setting superscript on subscript characters replaces the subscript, and setting 
 replaces the superscript. When `document.setup {superscript, subscript, smallCapsSize}` changes the proportions, the
 characters take the new ones. One undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"position":"superscript","smallCaps":false}}}
+
+## Anti-aliasing method
+
+`text.setFormat {antiAlias: "none"|"sharp"|"crisp"|"strong"}` (the selected type, or `ids`) sets the Character panel's
+Anti-aliasing Method, which decides how the edges of the characters are drawn as pixels: on the canvas, in raster exports
+(Export As PNG, JPEG and the other raster formats, Export for Screens, Save for Web) and when Object › Rasterize or
+Effect › Rasterize draws the type. The method belongs to the whole type object, and each frame of a thread keeps its
+own method: a `start`/`end` range sets the whole frame, and threading frames or opening a file keeps each frame's
+method. VectorCraft defines what each method does, on the pixels of the picture being drawn (the canvas at its zoom,
+an export at its resolution):
+
+- `sharp`, the default, draws each edge pixel with the share of it the type covers, as before.
+- `none` draws hard edges: a pixel takes the type's color where the type covers at least half of it, and nothing
+  elsewhere.
+- `crisp` draws a pixel the type covers by a share c at `2c - 0.5`, kept between 0 and 1, so the edges are about half as
+  wide.
+- `strong` draws a pixel the type covers by a share c at `2c`, at most 1, so the type looks heavier.
+
+The opacity of the type's paints stays as it is inside the characters. Type is drawn as Sharp draws it when it holds
+inline graphics or color glyphs (bitmap or COLR), when its own fills or strokes in the Appearance panel include a brush
+stroke or a blend mode other than Normal, when it overprints while Overprint Preview is on, and on the canvas while it
+shows a substitution highlight.
+With Preferences › General › Anti-aliased Artwork off, the canvas draws all its art with hard edges, type included, and
+so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export draw the type unchanged. The native
+document such a file carries (an EPS VectorCraft wrote, or an SVG or PDF saved with Preserve Editing) keeps each frame's
+method, and opening the file restores it.
+Reset Panel sets Sharp. Saved as `antiAlias` only when not `sharp`. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"antiAlias":"crisp"}}}
+```
+
 ## Character Alignment
 
 `text.setFormat {charAlign}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end, charAlign}` (a range)

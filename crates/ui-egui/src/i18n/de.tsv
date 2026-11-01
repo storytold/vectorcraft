@@ -169,6 +169,10 @@
 	Anti-Alias	Glätten
 	Anti-alias Rasters	Pixelbilder glätten
 	Anti-aliased Artwork	Geglättete Grafik
+	Anti-aliasing Method	Glättungsmethode
+	Sharp	Scharf
+	Crisp	Klar
+	Strong	Stark
 	Anti-aliasing:	Glättung:
 	Any Kind	Beliebige Art
 	Font Technology	Schrifttechnologie
@@ -3895,6 +3899,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Targa files are RGB: colorModel rgb	Targa-Dateien sind RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Textumfluss: Wählen Sie ein Umflussobjekt aus
 @msg	This shortcut file is in a form VectorCraft can't read.	Diese Tastaturbefehlsdatei liegt in einem Format vor, das VectorCraft nicht lesen kann.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` muss "none", "sharp", "crisp" oder "strong" sein
 @msg	`aspect` must be a number (%)	`aspect` muss eine Zahl sein (%)
 @msg	`at` must be [x, y]	`at` muss [x, y] sein
 @msg	`color` must be a colour	`color` muss eine Farbe sein

@@ -143,6 +143,10 @@
 	Anti-Alias	消除锯齿
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
+	Anti-aliasing Method	消除锯齿方法
+	Sharp	锐利
+	Crisp	清晰
+	Strong	强
 	Anti-aliasing:	消除锯齿：
 	Appearance	外观
 	Appearance Attribute	外观属性
@@ -3873,6 +3877,7 @@ imageTrace	Outline	轮廓
 @msg	no point {i} (the gradient has {_1})	没有点 {i} (该渐变有 {_1} 个)
 @msg	no segment {segment} on line {line}	线 {line} 上没有线段 {segment}
 @msg	unknown freeform mode `{m}` (points, lines)	未知的任意形状模式 `{m}` (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` 必须是 "none"、"sharp"、"crisp" 或 "strong"
 @msg	`aspect` must be a number (%)	`aspect` 必须是数字 (%)
 @msg	`gradient` must be an object	`gradient` 必须是对象
 @msg	`groupColors` must be an array	`groupColors` 必须是数组

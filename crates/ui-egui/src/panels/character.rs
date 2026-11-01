@@ -1,12 +1,13 @@
 //! Character panel: font family / style, size, leading, kerning, tracking, vertical and horizontal
-//! scale, baseline shift, character rotation and the All Caps, Small Caps, Superscript, Subscript,
-//! Underline and Strikethrough toggles and the Language menu.
+//! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
+//! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -665,10 +666,11 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// The Character panel's grid of numeric fields, `w` wide: Font Size, Leading, Kerning and
-/// Tracking, then with `more` the scales, Baseline Shift and Character Rotation (`s`: the style
-/// shown). With Show Font Height Options on, a row under Font Size holds the Set Font Height
-/// Reference dropdown. The Properties panel shows its first rows.
+/// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
+/// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
+/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown). With Show Font
+/// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
+/// Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -744,7 +746,58 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             }
         });
         ui.end_row();
+        // Anti-aliasing Method, under Character Rotation.
+        ui.label("");
+        cell(ui, "aa", tl!("Anti-aliasing Method"), |ui| anti_alias_method(app, ui, fw));
+        ui.end_row();
     });
+}
+
+/// The Anti-aliasing Method dropdown, `width` wide: how the edges of the type objects the panel acts
+/// on are drawn as pixels ([`set_anti_alias`]), blank where their methods differ.
+fn anti_alias_method(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
+    // The labels of [`TypeAntiAlias::ALL`], in its order.
+    let labels = [tl!("None"), tl!("Sharp"), tl!("Crisp"), tl!("Strong")];
+    let current = shared_anti_alias(app);
+    let shown = TypeAntiAlias::ALL.iter().zip(labels).find(|(m, _)| Some(**m) == current).map_or("", |(_, l)| l);
+    if let Some(m) = widgets::dropdown_names(ui, "ch-anti-alias", shown, &labels, width).and_then(|i| TypeAntiAlias::ALL.get(i)) {
+        set_anti_alias(app, *m);
+    }
+}
+
+/// The anti-aliasing method of the type objects the panel acts on: the one the Type tool edits,
+/// else the selected type (groups' included). `None` where they differ, or with no type.
+fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
+    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    match text_editing(app) {
+        Some((id, _, _)) => {
+            if let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) {
+                acc.add(t.anti_alias);
+            }
+        }
+        None => {
+            for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+                n.walk(&mut |c| {
+                    if let NodeKind::Text(t) = &c.kind {
+                        acc.add(t.anti_alias);
+                    }
+                });
+            }
+        }
+    }
+    acc.value()
+}
+
+/// Set the anti-aliasing method `m` of the frame the Type tool edits, whatever part of its text
+/// is selected, else the selected type objects (`text.setFormat {antiAlias}`).
+fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
+    let mut p = json!({"antiAlias": m.id()});
+    if let Some((id, _, _)) = text_editing(app) {
+        end_typing(app);
+        p["ids"] = json!([id.0]);
+    }
+    app.run("text.setFormat", p).ok();
 }
 
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
@@ -1235,14 +1288,22 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
     first_selected_text(app).is_none_or(|t| t.fractional_widths)
 }
 
-/// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
+/// Reset Panel, in one undo step: the type objects the panel acts on take the Sharp anti-aliasing
+/// method, and the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
 /// No Break off, the Default character direction, the Default digits and the Em Box font height
 /// reference, whether or not Show East Asian Options, Show Indic Options and Show Font Height
-/// Options are on.
+/// Options are on. Inside an undo group that is already open, the reset is part of that group's
+/// step.
 fn reset_panel(app: &mut VectorcraftApp) {
+    // Typing in progress stays an undo step of its own.
+    end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
     format(
@@ -1255,6 +1316,12 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );
+    set_anti_alias(app, TypeAntiAlias::Sharp);
+    // Closes the active document's undo group only, so an undo group open in another document
+    // stays open.
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
 }
 
 #[cfg(test)]

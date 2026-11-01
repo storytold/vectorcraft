@@ -193,6 +193,10 @@
 	Anti-alias	Suavizar bordas
 	Anti-alias Rasters	Suavizar Rasters
 	Anti-aliased Artwork	Arte Suavizada
+	Anti-aliasing Method	Método de Suavização
+	Sharp	Nítido
+	Crisp	Definido
+	Strong	Forte
 	Anti-aliasing:	Suavização:
 	Appearance	Aparência
 	Appearance Attribute	Atributo de Aparência
@@ -3563,6 +3567,7 @@ axis	Both	Ambos
 @msg	Split Into Grid: select paths large enough for the grid	Dividir em grade: selecione traçados grandes o bastante para a grade
 @msg	Targa files are RGB: colorModel rgb	arquivos Targa são RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Quebra de texto: selecione um objeto de quebra
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` deve ser "none", "sharp", "crisp" ou "strong"
 @msg	`aspect` must be a number (%)	`aspect` deve ser um número (%)
 @msg	`at` must be [x, y]	`at` deve ser [x, y]
 @msg	`color` must be a colour	`color` deve ser uma cor

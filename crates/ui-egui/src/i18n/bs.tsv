@@ -2641,6 +2641,10 @@ digits	Malayalam	Malajalam
 	< 1 sec	< 1 sek.
 	[Unnamed]	[Bez naziva]
 	Amount:	Količina:
+	Anti-aliasing Method	Metoda zaglađivanja ivica
+	Sharp	Oštro
+	Crisp	Jasno
+	Strong	Snažno
 	Anti-aliasing:	Zaglađivanje ivica:
 	Artboard:	Radna ploča:
 	Color Table	Tabela boja
@@ -4249,6 +4253,7 @@ imageTrace	Outline	Obris
 @msg	Split Into Grid: select paths large enough for the grid	Podijeli u mrežu: odaberite putanje dovoljno velike za mrežu
 @msg	Targa files are RGB: colorModel rgb	Targa datoteke su RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Omotavanje teksta: odaberite objekat omotavanja
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` mora biti "none", "sharp", "crisp" ili "strong"
 @msg	`aspect` must be a number (%)	`aspect` mora biti broj (%)
 @msg	`at` must be [x, y]	`at` mora biti [x, y]
 @msg	`color` must be a colour	`color` mora biti boja

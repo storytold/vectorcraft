@@ -2470,6 +2470,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 sec
 	[Unnamed]	[Naamloos]
 	Amount:	Hoeveelheid:
+	Anti-aliasing Method	Anti-aliasingmethode
+	Sharp	Scherp
+	Crisp	Helder
+	Strong	Krachtig
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Tekenbord:
 	Color Table	Kleurentabel
@@ -4010,6 +4014,7 @@ imageTrace	Outline	Contour
 @msg	Split Into Grid: select paths large enough for the grid	In raster verdelen: selecteer paden die groot genoeg zijn voor het raster
 @msg	Targa files are RGB: colorModel rgb	Targa-bestanden zijn RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstomloop: selecteer een omloopobject
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` moet "none", "sharp", "crisp" of "strong" zijn
 @msg	`aspect` must be a number (%)	`aspect` moet een getal zijn (%)
 @msg	`at` must be [x, y]	`at` moet [x, y] zijn
 @msg	`color` must be a colour	`color` moet een kleur zijn

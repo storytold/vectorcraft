@@ -524,7 +524,8 @@ impl Renderer {
             (true, false) => crate::AntiAlias::Art,
         };
         let opts = crate::RenderOptions { anti_alias, ..f.opts.clone() };
-        let frame = Frame { mt: false, view, visible: rect, px: cell, opts: &opts, ..*f };
+        // The image's pixels are the output's.
+        let frame = Frame { mt: false, view, visible: rect, px: cell, opts: &opts, output: view, ..*f };
         let mut off = frame.offscreen_context(w, h);
         self.inside_layer(|s| paint(s, &mut off, &frame));
         off.flush();

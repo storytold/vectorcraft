@@ -526,6 +526,98 @@ fn small_caps_superscript_and_subscript_menu_items_set_and_check_the_text() {
     }
 }
 
+/// The Anti-aliasing Method dropdown under Character Rotation shows the method of the selected
+/// type, blank where the selected objects differ, and a pick sets it for the whole object, also
+/// while the Type tool has part of its text selected. Reset Panel sets Sharp.
+#[test]
+fn the_anti_aliasing_method_dropdown_shows_and_sets_the_types_method() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hamburg", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    let method = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.anti_alias,
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    let texts = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], show);
+    let shown = |app: &mut VectorcraftApp| {
+        texts(app).into_iter().map(|(t, _)| t).filter(|t| ["None", "Sharp", "Crisp", "Strong"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    assert_eq!(shown(&mut app), ["Sharp"]);
+    // Open the dropdown and pick Crisp.
+    let at = text_rect(&texts(&mut app), "Sharp").center();
+    click(&ctx, &mut app, at, show);
+    let listed = texts(&mut app);
+    let crisp = text_rect(&listed, "Crisp").center();
+    click(&ctx, &mut app, crisp, show);
+    assert_eq!(method(&app, a), TypeAntiAlias::Crisp);
+    assert_eq!(shown(&mut app), ["Crisp"]);
+    // Another object with Sharp selected as well: blank.
+    let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert!(shown(&mut app).is_empty(), "the methods differ");
+    // The Type tool with two letters selected: the whole object takes the method.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 3}));
+    assert!(text_editing(&app).is_some());
+    set_anti_alias(&mut app, TypeAntiAlias::Strong);
+    assert_eq!(method(&app, a), TypeAntiAlias::Strong);
+    assert_eq!(method(&app, b), TypeAntiAlias::Sharp, "the other selected type is unchanged while editing");
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+    // Reset Panel sets Sharp, with the characters' attributes, in one undo step.
+    range_style(&mut app, json!({"tracking": 50}));
+    let tracking = |app: &VectorcraftApp| shared(app, |s| s.tracking);
+    assert_eq!(tracking(&app), Some(50.0));
+    reset_panel(&mut app);
+    assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Sharp, Some(0.0)));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Strong, Some(50.0)), "one undo step");
+}
+
+/// Reset Panel closes only the undo group it opens: in an undo group that is already open,
+/// the reset is part of that group's step, and an undo group open in another document stays
+/// open, with that document's later edits part of its step.
+#[test]
+fn reset_panel_closes_only_its_own_undo_group() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "A"})).unwrap()["id"].clone();
+    let steps = |st: &vectorcraft_engine::DocState| (st.history.undo.len(), st.history.undo.last().map(|e| e.label.clone()));
+    // An undo group open in the same document (MCP `command_batch` with `atomic`).
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+    reset_panel(&mut app);
+    assert!(app.session.active().unwrap().undo_group.is_some(), "the batch's undo group stays open");
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "strong"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    let a_steps = steps(app.session.active().unwrap());
+    assert_eq!(a_steps.1, Some("Batch".to_string()), "the reset is part of the Batch step");
+    // An undo group open in another document. The second document is open before the group
+    // begins, so switching to it opens no group there.
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    assert_eq!(app.session.active_index(), Some(1));
+    let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    app.session.set_active(0);
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "none"})).unwrap();
+    let a_steps = steps(app.session.active().unwrap());
+    app.session.set_active(1);
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    let b_steps = steps(app.session.active().unwrap()).0;
+    reset_panel(&mut app);
+    assert_eq!(steps(app.session.active().unwrap()), (b_steps + 1, Some("Reset Panel".to_string())));
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    assert!(app.session.documents()[0].undo_group.is_some(), "the other document's undo group stays open");
+    app.session.set_active(0);
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
+}
+
 /// Character panel menu › System Layout is off for a new document, and a click turns whole-point
 /// spacing on and back off for every text object.
 #[test]
