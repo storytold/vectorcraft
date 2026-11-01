@@ -36,5 +36,6 @@ fn a_double_click_on_a_repeat_isolates_it_to_edit_its_text() {
     let NodeKind::Text(t) = &s.doc().unwrap().doc.node(text).unwrap().kind else { panic!("not type") };
     assert_eq!(t.plain_text(), "Bob");
     assert_eq!(s.doc().unwrap().doc.position(text).and_then(|(p, ..)| p), Some(repeat), "still the repeat's source");
-    assert_eq!(spec(&s)["rows"], before["rows"], "the repeat keeps its settings");
+    assert_eq!(spec(&s)["kind"], before["kind"], "the repeat keeps its settings (rows, columns, spacing)");
+    assert!(before["kind"].is_object(), "the settings are read: {before}");
 }
