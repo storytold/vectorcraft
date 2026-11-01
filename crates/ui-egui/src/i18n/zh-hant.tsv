@@ -5637,7 +5637,7 @@ breakText	Glyphs	字符
 	File + Data Set Name	檔案 + 資料集名稱
 	Data Set Name	資料集名稱
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` 必須是 `fileNumber`、`fileDataSetName` 或 `dataSetName`
-@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	「儲存並關閉」無法批次處理資料集：請選擇「資料夾」，將每個資料集儲存為個別檔案
+	Each data set saves over the same file, which keeps only the last data set.	每個資料集都會儲存到同一個檔案並覆寫它，該檔案只保留最後一個資料集。
 @msg	no free data set file name in destination folder	目的地資料夾中沒有可用的資料集檔案名稱
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

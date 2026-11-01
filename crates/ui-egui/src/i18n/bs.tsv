@@ -5890,7 +5890,7 @@ shape	Open	Otvoren
 	File + Data Set Name	Datoteka + naziv skupa podataka
 	Data Set Name	Naziv skupa podataka
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` mora biti `fileNumber`, `fileDataSetName` ili `dataSetName`
-@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	„Sačuvaj i zatvori“ ne može obraditi skupove podataka: odaberite „Folder“ da biste svaki skup podataka sačuvali u zasebnu datoteku
+	Each data set saves over the same file, which keeps only the last data set.	Svaki skup podataka se sačuva preko iste datoteke, u kojoj ostaje samo posljednji skup podataka.
 @msg	no free data set file name in destination folder	Nema slobodnog naziva datoteke skupa podataka u odredišnoj mapi
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

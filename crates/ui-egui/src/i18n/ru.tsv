@@ -5976,7 +5976,7 @@ breakText	Glyphs	Глифы
 	File + Data Set Name	Файл + имя набора данных
 	Data Set Name	Имя набора данных
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` должно быть `fileNumber`, `fileDataSetName` или `dataSetName`
-@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	«Сохранить и закрыть» не работает с наборами данных: выберите «Папка», чтобы сохранить каждый набор данных в отдельный файл
+	Each data set saves over the same file, which keeps only the last data set.	Каждый набор данных сохраняется поверх одного и того же файла, в котором остаётся только последний набор данных.
 @msg	no free data set file name in destination folder	В папке назначения нет свободного имени файла для набора данных
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

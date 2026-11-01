@@ -5617,7 +5617,7 @@ breakText	Glyphs	Glifi
 	File + Data Set Name	File + nome set di dati
 	Data Set Name	Nome set di dati
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` deve essere `fileNumber`, `fileDataSetName` o `dataSetName`
-@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	«Salva e chiudi» non può elaborare i set di dati: scegli «Cartella» per salvare ogni set di dati in un file a sé
+	Each data set saves over the same file, which keeps only the last data set.	Ogni set di dati viene salvato sullo stesso file, che conserva solo l'ultimo set di dati.
 @msg	no free data set file name in destination folder	Nessun nome file libero per il set di dati nella cartella di destinazione
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
