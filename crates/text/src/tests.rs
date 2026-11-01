@@ -1091,6 +1091,114 @@ fn a_right_to_left_numbered_paragraph_has_its_period_left_of_its_number() {
     assert!((last.origin.x + last.advance - 200.0).abs() < 1e-6, "the number ends the line at the right: {last:?}");
 }
 
+/// Bullets and Numbering › Alignment: Left puts a list paragraph's marker at the first line's
+/// start, and Right puts it against the text, which starts at the same place with either. Numbers
+/// of different widths aligned right end at the same place, the caret before the first character
+/// stands at the text, and the lines the paragraph wraps to start at the left indent. A number
+/// wider than the room before the left indent takes the text to the next tab stop and ends there.
+/// In a right-to-left paragraph, a marker aligned right starts where the text ends.
+#[test]
+fn a_list_marker_aligned_right_ends_where_the_text_starts() {
+    use vectorcraft_doc::text::{Bullet, ListAlign, NumberStyle, ParaList};
+    // Each marker's characters' left and right edges, and where its line's text starts.
+    let spans = |t: &TextObject| -> Vec<(f64, f64, f64)> {
+        let lay = layout(db(), t);
+        let mut out = vec![];
+        for m in &lay.markers {
+            let chars: Vec<usize> = m.glyphs.clone().filter(|&i| i != m.tab).collect();
+            let left = chars.iter().map(|&i| lay.glyphs[i].origin.x).fold(f64::MAX, f64::min);
+            let right = chars.iter().map(|&i| lay.glyphs[i].origin.x + lay.glyphs[i].advance).fold(f64::MIN, f64::max);
+            let line = &lay.lines[lay.glyphs[m.tab].line];
+            let text = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+            out.push((left, right, text.origin.x));
+        }
+        out
+    };
+    let numbered = |align: ListAlign, count: u32| {
+        let mut t = listed("One\nTwo", &[Some(ParaList::numbered(NumberStyle::Arabic).aligned(align)); 2]);
+        t.list_count = count;
+        t
+    };
+    // "9." and "10.": aligned left, both start at the first-line indent (0); aligned right, both end
+    // at the left indent (18), where the text starts either way.
+    let left = spans(&numbered(ListAlign::Left, 8));
+    let right = spans(&numbered(ListAlign::Right, 8));
+    assert_eq!((left.len(), right.len()), (2, 2));
+    for (k, ((l0, r0, text0), (l, r, text))) in left.iter().zip(&right).enumerate() {
+        assert!(l0.abs() < 1e-6 && (text0 - 18.0).abs() < 1e-6, "item {k} aligned left: {l0} {text0}");
+        assert!((r - 18.0).abs() < 1e-6 && (text - text0).abs() < 1e-6, "item {k} aligned right ends at the text: {r} {text}");
+        assert!(((r - l) - (r0 - l0)).abs() < 1e-6, "item {k} keeps its width");
+    }
+    assert!(right[1].0 < right[0].0, "the wider number starts further left: {right:?}");
+    let t = numbered(ListAlign::Right, 0);
+    let lay = layout(db(), &t);
+    let m = &lay.markers[0];
+    assert_eq!((m.tab, lay.marker_text(m.tab), lay.marker_text(m.glyphs.start + 1)), (m.glyphs.start, Some("\t"), Some("1.")));
+    let (top, _) = caret_position(&lay, 0);
+    assert!((top.x - 18.0).abs() < 1e-6, "the caret before the first character: {top:?}");
+    // A wrapped paragraph's other lines start at the left indent.
+    let long = listed(LOREM, &[Some(ParaList::bulleted(Bullet::Dot).aligned(ListAlign::Right))]);
+    let lay = layout(db(), &long);
+    assert!(lay.lines.len() > 2, "the paragraph wraps");
+    for (i, line) in lay.lines.iter().enumerate() {
+        let first = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+        assert!((first.origin.x - 18.0).abs() < 1e-6, "line {i} starts at {}", first.origin.x);
+    }
+    let bullet = &spans(&long)[0];
+    assert!((bullet.1 - 18.0).abs() < 1e-6 && bullet.0 > 0.0, "{bullet:?}");
+    // "1000." is wider than the 18 pt before the left indent: the text and the number's end go to
+    // the next default stop.
+    let mut wide = listed("One", &[Some(ParaList::numbered(NumberStyle::ThreeDigits).aligned(ListAlign::Right))]);
+    wide.list_count = 999;
+    let (_, end, text) = spans(&wide)[0];
+    assert!((text - 36.0).abs() < 1e-6 && (end - 36.0).abs() < 1e-6, "{end} {text}");
+    // Right to left: aligned left the bullet ends the line at the right; aligned right it starts
+    // where the text ends, and the text ends where it does aligned left.
+    let rtl = |align: ListAlign| {
+        let mut t = listed("שלום עולם", &[Some(ParaList::bulleted(Bullet::Dot).aligned(align))]);
+        t.edit_paras(None, |p| p.justify = Justify::Auto);
+        let lay = layout(db(), &t);
+        let m = &lay.markers[0];
+        let bullet = m.glyphs.clone().find(|&i| i != m.tab).map(|i| (lay.glyphs[i].origin.x, lay.glyphs[i].origin.x + lay.glyphs[i].advance));
+        let text_right = lay.glyphs.iter().filter(|g| g.len > 0).map(|g| g.origin.x + g.advance).fold(0.0, f64::max);
+        (bullet.unwrap(), text_right)
+    };
+    let ((_, end), text_left_aligned) = rtl(ListAlign::Left);
+    assert!((end - 200.0).abs() < 1e-6, "{end}");
+    let ((start, _), text_right_aligned) = rtl(ListAlign::Right);
+    assert!((start - text_right_aligned).abs() < 1e-6 && (text_right_aligned - text_left_aligned).abs() < 1e-6, "{start} {text_right_aligned}");
+}
+
+/// A list paragraph breaks its lines where the same paragraph without a marker, its text at the
+/// same indent, breaks them: with either marker alignment, a bullet or a letter, and either
+/// composer, the marker and its gap count at their own width and the first word hyphenates.
+#[test]
+fn a_list_paragraph_breaks_its_lines_as_its_text_alone_does() {
+    use vectorcraft_doc::text::{Bullet, ListAlign, NumberStyle, ParaList};
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    // Each line's end, and whether it ends with a hyphen.
+    let breaks = |list: Option<ParaList>, composer: vectorcraft_doc::Composer| {
+        let mut t = area(text, style(14.0), Rect::new(0.0, 0.0, 98.0, 600.0), Justify::Left);
+        t.para.left_indent = 18.0;
+        t.para.first_line_indent = if list.is_some() { -18.0 } else { 0.0 };
+        t.para.hyphenate = true;
+        t.para.composer = composer;
+        t.para.list = list;
+        let lay = layout(db(), &t);
+        let hyphen = |k: usize| lay.glyphs[k].len == 0 && lay.marker_of(k).is_none();
+        lay.lines.iter().map(|l| (l.end, (l.glyph_start..l.glyph_end).any(hyphen))).collect::<Vec<_>>()
+    };
+    for composer in [vectorcraft_doc::Composer::SingleLine, vectorcraft_doc::Composer::EveryLine] {
+        let alone = breaks(None, composer);
+        assert!(alone.first().is_some_and(|&(_, hyphen)| hyphen), "the first word hyphenates: {alone:?}");
+        for list in [ParaList::bulleted(Bullet::Dot), ParaList::numbered(NumberStyle::UpperLetters)] {
+            for align in [ListAlign::Left, ListAlign::Right] {
+                assert_eq!(breaks(Some(list.aligned(align)), composer), alone, "{composer:?} {list:?} {align:?}");
+            }
+        }
+    }
+}
+
 /// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
 /// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
 fn japanese_fonts() -> bool {

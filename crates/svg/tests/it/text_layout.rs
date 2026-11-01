@@ -417,6 +417,17 @@ fn numbers_are_written_as_their_characters_where_they_are_drawn() {
     assert!(at(">I.\t<") < at("alpha") && at("alpha") < at(">II.\t<") && at(">II.\t<") < at("zeta") && at("zeta") < at(">III.\t<"), "{svg}");
     assert!(!svg.contains(">-<"), "{svg}");
     assert_drawn_in_place(&d);
+    // Aligned right: the gap comes before each number, which a viewer draws where the canvas does,
+    // against the text.
+    let mut t = TextObject::point(Point::new(20.0, 20.0), "alpha beta gamma delta epsilon\nzeta\neta", style(12.0));
+    t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 160.0)) };
+    t.para.list = Some(ParaList::numbered(NumberStyle::UpperRoman).aligned(vectorcraft_doc::text::ListAlign::Right));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let d = doc(t);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(">III.<") && !svg.contains(">III.\t<") && !svg.contains(">-<"), "{svg}");
+    assert_drawn_in_place(&d);
     let mut line = BezPath::new();
     line.move_to((0.0, 50.0));
     line.line_to((250.0, 50.0));

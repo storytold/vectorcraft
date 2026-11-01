@@ -252,7 +252,8 @@ pub struct ListMarker {
     /// takes the text to the next tab stop.
     pub glyphs: std::ops::Range<usize>,
     /// The tab's glyph, which draws nothing: the last of [`Self::glyphs`], or the first in a
-    /// right-to-left paragraph.
+    /// right-to-left paragraph. A marker aligned right
+    /// ([`vectorcraft_doc::text::ListAlign::Right`]) has it the other way round.
     pub tab: usize,
     /// The marker's characters ("•").
     pub text: String,

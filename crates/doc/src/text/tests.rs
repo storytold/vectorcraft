@@ -211,6 +211,20 @@ fn number_styles_write_their_numbers_and_roll_over() {
     );
 }
 
+/// A list's marker alignment: Left by default and not saved, Right saved as `"align": "right"`;
+/// a list saved without it reads as Left.
+#[test]
+fn a_list_saves_its_marker_alignment_only_when_it_is_right() {
+    let right = ParaList::numbered(NumberStyle::Arabic).aligned(ListAlign::Right);
+    assert_eq!(ParaList::bulleted(Bullet::Dot).align, ListAlign::Left);
+    assert_eq!(serde_json::to_value(right).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "align": "right"}));
+    assert_eq!(serde_json::to_value(ParaList::bulleted(Bullet::Dash)).unwrap(), serde_json::json!({"bullet": "dash"}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
+    assert_eq!(read(serde_json::json!({"bullet": "dot", "number": "arabic", "align": "right"})), right);
+    assert_eq!(read(serde_json::json!({"bullet": "square"})).align, ListAlign::Left);
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"align": "center"})).is_err());
+}
+
 /// Typed list detection: "1.", "1)", "A." and "A)" and a space at the start of a paragraph
 /// start a numbered list, and "*", "#", ">" and "+" and a space start a bulleted list with the
 /// filled dot. Other text, the same characters later in a paragraph or without the space, and

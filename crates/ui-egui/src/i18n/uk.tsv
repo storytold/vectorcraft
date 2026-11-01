@@ -352,6 +352,12 @@ font-technology	Variable	Варіативні
 	Apply Bullets	Застосувати маркери
 	Numbered List	Нумерований список
 	Apply Numbers	Застосувати нумерацію
+	Bullets and Numbering…	Маркери та нумерація…
+	Numbers	Номери
+	Bullet Character:	Символ маркера:
+	Number Style:	Стиль нумерації:
+	Left Indent:	Відступ зліва:
+	First Line Indent:	Відступ першого рядка:
 	Convert to Text	Перетворити на текст
 	Filled Dot	Заповнена крапка
 	Dash	Тире
