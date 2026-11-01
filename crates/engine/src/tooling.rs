@@ -23,6 +23,9 @@ pub struct ViewInfo {
     pub guides: bool,
     pub snap_to_grid: bool,
     pub show_bbox: bool,
+    /// View → Show Bounding Box (View → Hide Edges hides the box and its handles, not the blend
+    /// knobs).
+    pub bounding_box: bool,
     /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
     pub snap_to_pixel: bool,
     /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
@@ -46,6 +49,7 @@ impl Default for ViewInfo {
             guides: true,
             snap_to_grid: false,
             show_bbox: true,
+            bounding_box: true,
             snap_to_pixel: false,
             snap_to_point: true,
             snap_to_glyph: false,
@@ -255,6 +259,7 @@ impl Session {
             guides: view.guides && !self.menu.guides_locked,
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
+            bounding_box: view.bounding_box,
             // Snap to Grid and Snap to Pixel are exclusive, as in Illustrator; left both on, the grid
             // wins instead of pixels quietly rounding every drag to whole points (#1816).
             snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,

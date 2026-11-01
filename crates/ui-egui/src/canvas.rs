@@ -577,7 +577,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         selection_overlay(app, &painter, &xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
         mirror_axis_overlay(app, &painter, &xf);
         grid_repeat_overlay(app, &painter, &xf);
-        blend_handles_overlay(app, &painter, &xf);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);
@@ -591,6 +590,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.canvas.hidden_chars = hidden_chars;
             hidden_chars_overlay(app, &painter, &xf);
         }
+    }
+    // The blend knobs are widgets, not edges: View → Hide Edges leaves them visible and live.
+    if !revolve_edit {
+        blend_handles_overlay(app, &painter, &xf);
     }
     draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
     if !revolve_edit {

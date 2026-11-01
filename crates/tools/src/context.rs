@@ -85,6 +85,9 @@ pub struct ToolContext<'a> {
     pub snap_to_grid: bool,
     /// Bounding box shown (View → Show/Hide Bounding Box).
     pub show_bbox: bool,
+    /// View → Show Bounding Box, even when View → Hide Edges hides its handles: the blend knobs
+    /// are widgets and stay live.
+    pub bounding_box: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
     /// View → Snap to Point: with Smart Guides off, dragged selections, drawn points and picked

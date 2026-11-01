@@ -7186,6 +7186,17 @@ fn a_selected_blend_shows_its_step_handle_and_hovering_names_it() {
     let at = knobs(&mut app);
     assert_eq!(at.len(), 3, "{at:?}");
     assert!(at.iter().any(|q| q.distance(xf.to_screen(h.steps_at)) < 2.0), "{at:?}");
+    // View → Hide Edges hides the box but keeps the blend knobs: they are widgets, not edges,
+    // and a drag on one still changes the count.
+    app.ui.view.edges = false;
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(knobs(&mut app).len(), 3, "Hide Edges keeps the blend handles");
+    let view = app.view_info();
+    let rest = h.steps_at;
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, rest.x, rest.y), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, rest.x, 10.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, rest.x, 10.0), view).unwrap();
+    assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["steps"], 32);
 }
 
 /// The step-count knob follows the pointer up the box's edge while it drags, and when it is let

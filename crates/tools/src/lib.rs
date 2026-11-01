@@ -459,6 +459,7 @@ pub(crate) mod testutil {
             guides: true,
             snap_to_grid: false,
             show_bbox: true,
+            bounding_box: true,
             snap_to_pixel: false,
             snap_to_point: true,
             snap_tangent: true,

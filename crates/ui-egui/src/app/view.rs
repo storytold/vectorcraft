@@ -96,6 +96,7 @@ impl VectorcraftApp {
             // View › Hide Edges: the canvas draws neither the bounding box (with the type widget)
             // nor the Live Corners widgets, and the tools do not answer the pointer on them.
             show_bbox: self.ui.view.bounding_box && self.ui.view.edges,
+            bounding_box: self.ui.view.bounding_box,
             snap_to_point: self.ui.view.snap_to_point,
             snap_to_glyph: self.ui.view.snap_to_glyph,
             corner_widgets: self.ui.view.corner_widgets && self.ui.view.edges,
