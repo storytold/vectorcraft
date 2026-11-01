@@ -5471,6 +5471,7 @@ mark-style	Japanese	Japonské
 @msg	choose a source folder	vyberte zdrojovou složku
 @msg	open a document with data sets	otevřete dokument se sadami dat
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
+@msg	no bound object reports a value (locked objects and embedded images report none)	žádný svázaný objekt nevrací hodnotu (zamčené objekty a vložené obrazy žádnou nevracejí)
 @msg	the action has no steps	akce nemá žádné kroky
 
 # User Interface › Accent Color

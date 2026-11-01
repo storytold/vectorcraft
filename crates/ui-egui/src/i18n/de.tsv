@@ -5048,6 +5048,7 @@ effect	Soft	Weich
 @msg	choose a source folder	wählen Sie einen Quellordner
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
+@msg	no bound object reports a value (locked objects and embedded images report none)	kein gebundenes Objekt liefert einen Wert (gesperrte Objekte und eingebettete Bilder liefern keinen)
 @msg	the action has no steps	die Aktion hat keine Schritte
 
 # User Interface › Accent Color

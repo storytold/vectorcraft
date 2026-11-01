@@ -5128,6 +5128,7 @@ lighting	Light	ライト
 @msg	choose a source folder	ソースフォルダーを選択してください
 @msg	open a document with data sets	データセットのあるドキュメントを開いてください
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	データセット {name} から何も適用されませんでした: 値のある変数にバインドされたオブジェクトがありません
+@msg	no bound object reports a value (locked objects and embedded images report none)	値を返すバインドされたオブジェクトがありません (ロックされたオブジェクトと埋め込み画像は値を返しません)
 @msg	the action has no steps	アクションにステップがありません
 
 # User Interface › Accent Color

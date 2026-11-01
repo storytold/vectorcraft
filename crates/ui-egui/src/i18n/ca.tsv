@@ -5248,6 +5248,7 @@ digits	Malayalam	Malaiàlam
 @msg	finish editing the pattern first	acabeu primer l’edició del motiu
 @msg	nothing encoded	no s’ha codificat res
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no s’ha aplicat res del conjunt de dades {name}: cap objecte està vinculat a una variable per a la qual tingui un valor
+@msg	no bound object reports a value (locked objects and embedded images report none)	cap objecte vinculat no informa d’un valor (els objectes bloquejats i les imatges incrustades no n’informen cap)
 @msg	nothing selected	no hi ha res seleccionat
 @msg	nothing to align	no hi ha res per alinear
 @msg	nothing to distort	no hi ha res per distorsionar

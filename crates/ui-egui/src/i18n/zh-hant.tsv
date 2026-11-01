@@ -2448,6 +2448,7 @@ file-filter	Templates	範本
 @msg	choose a source folder	請選擇來源資料夾
 @msg	open a document with data sets	請開啟含有資料集的文件
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	資料集 {name} 未套用任何內容：沒有物件綁定到該資料集中有值的變數
+@msg	no bound object reports a value (locked objects and embedded images report none)	沒有綁定的物件回報值 (鎖定的物件和內嵌的影像不回報值)
 @msg	the action has no steps	動作沒有步驟
 @msg	cancelled; nothing was changed	已取消；未做任何變更
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	「儲存」會寫入 {_1}，而非 {_2}：若要寫入該格式，請使用 file.saveAsTemplate

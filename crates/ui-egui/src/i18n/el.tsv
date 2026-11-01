@@ -5402,6 +5402,7 @@ effect	Points	Σημεία
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
 @msg	open a document with data sets	ανοίξτε ένα έγγραφο με σύνολα δεδομένων
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	δεν εφαρμόστηκε τίποτα από το σύνολο δεδομένων {name}: κανένα αντικείμενο δεν είναι συνδεδεμένο με μεταβλητή για την οποία έχει τιμή
+@msg	no bound object reports a value (locked objects and embedded images report none)	κανένα συνδεδεμένο αντικείμενο δεν αναφέρει τιμή (τα κλειδωμένα αντικείμενα και οι ενσωματωμένες εικόνες δεν αναφέρουν καμία)
 @msg	select an Intertwine group	επιλέξτε μια ομάδα διαπλοκής
 @msg	select an Objects on Path group	επιλέξτε μια ομάδα αντικειμένων σε διαδρομή
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	μια διαδρομή μέσα σε σύνθετη διαδρομή, ανάμειξη, περίβλημα, επανάληψη ή ομάδα διαπλοκής δεν μπορεί να δεχτεί αντικείμενα

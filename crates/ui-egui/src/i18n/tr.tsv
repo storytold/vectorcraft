@@ -5357,6 +5357,7 @@ theme	Appearance	Görünüm
 @msg	it decompresses to more than {_1} MB	açıldığında {_1} MB'tan fazla alan kaplıyor
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	dosyanın değişkenleri ve veri kümeleri okunmadı (değişkenler: {variables}, veri kümeleri: {data_sets}): Değişkenler paneli bunları listelemiyor
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
+@msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin
 @msg	the Simplify slider is not open	Basitleştirme kaydırıcısı açık değil
 @msg	the Smooth slider is not open	Düzgünleştirme kaydırıcısı açık değil

@@ -5468,6 +5468,7 @@ theme	Appearance	Apparence
 @msg	choose a source folder	choisissez un dossier source
 @msg	open a document with data sets	ouvrez un document avec des jeux de données
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	rien du jeu de données {name} n’a été appliqué, car aucun objet n’est lié à une variable pour laquelle il a une valeur
+@msg	no bound object reports a value (locked objects and embedded images report none)	aucun objet lié ne fournit de valeur (les objets verrouillés et les images incorporées n’en fournissent aucune)
 @msg	the action has no steps	l'action n'a aucune étape
 
 # User Interface › Accent Color

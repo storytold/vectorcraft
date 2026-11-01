@@ -4530,6 +4530,7 @@ imageTrace	Outline	轮廓
 @msg	choose a source folder	请选择源文件夹
 @msg	open a document with data sets	请打开包含数据集的文档
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	数据集 {name} 未应用任何内容：没有对象绑定到该数据集中有值的变量
+@msg	no bound object reports a value (locked objects and embedded images report none)	没有绑定的对象报告值 (锁定的对象和嵌入的图像不报告值)
 @msg	the action has no steps	该动作没有步骤
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
 	Import Shortcut Set	导入快捷键组

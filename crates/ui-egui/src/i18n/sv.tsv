@@ -5406,6 +5406,7 @@ theme	Appearance	Utseende
 @msg	choose a source folder	välj en källmapp
 @msg	open a document with data sets	öppna ett dokument med datauppsättningar
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	inget i datauppsättningen {name} användes: inget objekt är bundet till en variabel som den har ett värde för
+@msg	no bound object reports a value (locked objects and embedded images report none)	inget bundet objekt rapporterar ett värde (låsta objekt och inbäddade bilder rapporterar inget)
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
 @msg	select an Objects on Path group	markera en grupp med objekt på bana
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en bana inuti en sammansatt bana, en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte ta emot objekt
