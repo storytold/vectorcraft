@@ -265,7 +265,9 @@ fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64
     }
     let width = span as f32 * per + RULER_LEFT * 2.0;
     let height = crate::panel_docking::layout_of(&app.ui).floating.iter().find(|w| w.contains(&"tabs".to_string())).map_or(240.0, |w| w.rect[3]);
-    let pos = egui::pos2(on_screen.left() - RULER_LEFT, on_screen.top() - height - 6.0);
+    // Text near the top of the window: the panel's bar stays inside the window, where it can be
+    // grabbed, not above the screen.
+    let pos = egui::pos2(on_screen.left() - RULER_LEFT, (on_screen.top() - height - 6.0).max(0.0));
     let origin = ctx.input(|i| i.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)).map(|r| r.min);
     crate::panel_docking::place_floating(app, "tabs", pos, width, origin).ok()?;
     Some(())
