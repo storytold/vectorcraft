@@ -718,34 +718,259 @@ fn artboards() {
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 600.0, 400.0));
 }
 
-/// A variable library in the document data isn't read: a note gives how many variables and data
-/// sets it has, counting the elements of the library alone (a data set's element for a variable named
-/// `variable` isn't a variable).
-#[test]
-fn a_variable_library_is_noted_with_its_counts() {
-    use vectorcraft_testkit::ai::variable_library;
+/// The document data `library` (a `variableSets` element) read with a layer holding a square: the
+/// variables read and the notes about the library.
+fn read_library(library: &str) -> (vectorcraft_doc::Variables, Vec<String>) {
     let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
-    let notes = |library: &str| read_ok(&format!("{library}{square}")).warnings.into_iter().filter(|w| w.contains("variables")).collect::<Vec<_>>();
+    let r = read_ok(&format!("{}{square}", vectorcraft_testkit::ai::variable_library_data(library)));
+    let notes = r.warnings.into_iter().filter(|w| w.contains("variable library")).collect();
+    ((*r.doc.variables).clone(), notes)
+}
+
+/// The note of a library read but for `n` entries.
+fn partly_read(n: usize) -> String {
+    format!("the file's variable library was partly read (entries skipped: {n}): the Variables panel lists the rest")
+}
+
+/// A variable library in the document data comes in with its variables in order, each of the kind
+/// its trait gives (a variable without one is of unknown kind), and without bindings. A library
+/// read whole gives no note.
+#[test]
+fn ai_variable_library_definitions() {
+    use vectorcraft_doc::VariableKind;
+    let (vars, notes) = read_library(&vectorcraft_testkit::ai::sample_variable_sets("none", &[]));
+    let kinds: Vec<(&str, VariableKind)> = vars.variables.iter().map(|v| (v.name.as_str(), v.kind)).collect();
     assert_eq!(
-        notes(&variable_library(&["variable", "Team"], &["Home", "Away", "Third"])),
-        ["the file's variables and data sets weren't read (variables: 2, data sets: 3): the Variables panel doesn't list them"]
+        kinds,
+        [
+            ("v_text", VariableKind::Text),
+            ("v_visible", VariableKind::Visibility),
+            ("v_file", VariableKind::Image),
+            ("v_graph", VariableKind::Graph),
+            ("v_unbound", VariableKind::Unknown)
+        ]
     );
+    assert!(vars.bindings.is_empty());
+    assert!(notes.is_empty(), "{notes:?}");
+    // The library of the testkit's text variables, and an empty one.
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&format!("{}{square}", vectorcraft_testkit::ai::variable_library(&["variable", "Team"], &["Home", "Away"])));
+    let names: Vec<&str> = r.doc.variables.variables.iter().map(|v| v.name.as_str()).collect();
+    assert_eq!(names, ["variable", "Team"], "{:?}", r.warnings);
+    assert_eq!(r.doc.variables.dataset("Away").and_then(|d| d.values.get("Team")), Some(&vectorcraft_doc::DataValue::Text("Away Team".into())));
+    let r = read_ok(&format!("{}{square}", vectorcraft_testkit::ai::variable_library(&[], &[])));
+    assert_eq!(*r.doc.variables, vectorcraft_doc::Variables::default());
+    assert!(!r.warnings.iter().any(|w| w.contains("variable")), "{:?}", r.warnings);
+}
+
+/// The data sets come in in order with their values: text of one paragraph per `p` element (`&`,
+/// `<` and accented letters as they are), whether the objects show, and a linked file's path from
+/// its URL, kept when it names no file. A variable of unknown kind has no value.
+#[test]
+fn ai_variable_library_dataset_values() {
+    use vectorcraft_doc::DataValue;
+    use vectorcraft_testkit::ai::{SAMPLE_MISSING_FILE, sample_variable_sets};
+    let (vars, notes) = read_library(&sample_variable_sets("none", &[]));
+    assert!(notes.is_empty(), "{notes:?}");
+    let names: Vec<&str> = vars.datasets.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["ds_one", "ds_two", "ds_three"]);
+    let two = &vars.datasets[1].values;
+    assert_eq!(two.get("v_text"), Some(&DataValue::Text("line one\nline two & < é".into())));
+    assert_eq!(two.get("v_visible"), Some(&DataValue::Visible(false)));
+    assert_eq!(two.get("v_file"), Some(&DataValue::Image(SAMPLE_MISSING_FILE.into())));
+    assert!(!std::path::Path::new(SAMPLE_MISSING_FILE).exists());
+    assert_eq!(two.len(), 3, "{two:?}");
+    let one = &vars.datasets[0].values;
+    assert_eq!(one.get("v_text"), Some(&DataValue::Text("one".into())));
+    assert_eq!(one.get("v_visible"), Some(&DataValue::Visible(true)));
+    assert_eq!(one.get("v_file"), Some(&DataValue::Image("/Users/test/Art (one)/tile-a.eps".into())));
+}
+
+/// The data set shown comes in as the active one, and the lock as it was set.
+#[test]
+fn ai_variable_library_state() {
+    use vectorcraft_testkit::ai::sample_variable_sets;
+    let (vars, notes) = read_library(&sample_variable_sets("variableAndTypes", &[]));
+    assert_eq!(vars.active_dataset.as_deref(), Some("ds_two"));
+    assert!(vars.locked, "{notes:?}");
+    assert!(notes.is_empty(), "{notes:?}");
+    let (vars, _) = read_library(&sample_variable_sets("none", &[]));
+    assert!(!vars.locked);
+    assert_eq!(vars.active_dataset.as_deref(), Some("ds_two"));
+    // A lock VectorCraft doesn't know reads as unlocked, with a note.
+    let (vars, notes) = read_library(&sample_variable_sets("everything", &[]));
+    assert!(!vars.locked);
+    assert_eq!(notes, [partly_read(1)]);
+    // A data set shown that isn't one of the library's leaves none active.
+    let library = sample_variable_sets("none", &[]).replace("%_(ds_two) /UnicodeString (xmlnode-nodevalue) ,\n%_2 /Int (xmlnode-nodetype) ,\n%_/Array :\n%_; (xmlnode-children) ,\n%_/Dictionary :\n%_; (xmlnode-attributes) ,\n%_; (i:activeDataSet)", "%_(ds_nine) /UnicodeString (xmlnode-nodevalue) ,\n%_2 /Int (xmlnode-nodetype) ,\n%_/Array :\n%_; (xmlnode-children) ,\n%_/Dictionary :\n%_; (xmlnode-attributes) ,\n%_; (i:activeDataSet)");
+    assert!(library.contains("ds_nine"));
+    let (vars, notes) = read_library(&library);
+    assert_eq!(vars.active_dataset, None);
+    assert_eq!(vars.datasets.len(), 3, "{notes:?}");
+}
+
+/// A value that can't be read is left out with a note, and the values and data sets after it still
+/// come in.
+#[test]
+fn ai_variable_library_bad_sibling() {
+    use vectorcraft_doc::DataValue;
+    use vectorcraft_testkit::ai::{XmlValue, sample_variable_sets, xml_element, xml_text};
+    // A value for a variable the library doesn't declare, and a second value for `v_visible`.
+    let more = [xml_element("v_nope", &[], &[xml_text(XmlValue::Str("x"))]), xml_element("v_visible", &[], &[xml_text(XmlValue::Bool(true))])];
+    let (vars, notes) = read_library(&sample_variable_sets("none", &more));
+    assert_eq!(notes, [partly_read(2)]);
+    assert_eq!(vars.datasets[1].values.get("v_visible"), Some(&DataValue::Visible(false)));
+    assert_eq!(vars.datasets[2].values.get("v_text"), Some(&DataValue::Text("three".into())));
+    assert_eq!(vars.active_dataset.as_deref(), Some("ds_two"));
+}
+
+/// A graph variable comes in, but its values aren't read: each is left out with a note.
+#[test]
+fn ai_variable_library_graph_partial() {
+    use vectorcraft_doc::VariableKind;
+    use vectorcraft_testkit::ai::{XmlValue, sample_variable_sets, xml_element, xml_text};
+    let graph = xml_element("v_graph", &[], &[xml_text(XmlValue::Str("a,b\n1,2"))]);
+    let (vars, notes) = read_library(&sample_variable_sets("none", &[graph]));
+    assert_eq!(notes, [partly_read(1)]);
+    assert_eq!(vars.variable("v_graph").map(|v| v.kind), Some(VariableKind::Graph));
+    assert!(vars.datasets.iter().all(|d| !d.values.contains_key("v_graph")));
+    assert_eq!(vars.datasets[1].values.len(), 3);
+}
+
+/// Declarations, data sets and values that are malformed, repeated or past the caps are left out
+/// and counted; a value is never read as one of another kind. A library nothing can be read from
+/// says so.
+#[test]
+fn ai_variable_library_edge_cases() {
+    use vectorcraft_doc::{DataValue, VariableKind};
+    use vectorcraft_testkit::ai::{XmlValue, xml_element, xml_node, xml_text};
+    let set = |locked: &str, declared: Vec<String>, rows: Vec<String>| {
+        let sets = xml_element("v:sampleDataSets", &[], &rows);
+        xml_element("variableSets", &[], &[xml_element("variableSet", &[("locked", locked)], &[xml_element("variables", &[], &declared), sets])])
+    };
+    let var = |name: &str, t: &str| xml_element("variable", &[("varName", name), ("trait", t)], &[]);
+    let declared = vec![
+        var("A", "textcontent"),
+        // The same name again, no name, an empty one, one that is too long, and an attribute node
+        // whose name isn't text.
+        var("A", "visibility"),
+        xml_element("variable", &[("trait", "textcontent")], &[]),
+        var("  ", "textcontent"),
+        var(&"n".repeat(256), "textcontent"),
+        xml_node(1, "variable", XmlValue::Str(""), &[("varName", XmlValue::Bool(true))], &[]),
+        // A trait VectorCraft doesn't know: unknown kind.
+        var("Fancy", "sparkle"),
+        var("Shown", "visibility"),
+        var("File", "fileref"),
+        // Something that isn't a variable.
+        xml_element("note", &[], &[]),
+    ];
+    let rows = vec![
+        xml_element(
+            "v:sampleDataSet",
+            &[("dataSetName", "One")],
+            &[
+                xml_element("A", &[], &[xml_element("p", &[], &[xml_text(XmlValue::Unicode(" spaced "))]), xml_element("p", &[], &[])]),
+                // A value for the unknown kind, a visibility that is text, a file that is a relative
+                // path.
+                xml_element("Fancy", &[], &[xml_text(XmlValue::Str("x"))]),
+                xml_element("Shown", &[], &[xml_text(XmlValue::Str("true"))]),
+                xml_element("File", &[], &[xml_text(XmlValue::Str("art/tile.eps"))]),
+            ],
+        ),
+        // The same data set again, and one without a name.
+        xml_element("v:sampleDataSet", &[("dataSetName", "One")], &[]),
+        xml_element("v:sampleDataSet", &[], &[]),
+        xml_element(
+            "v:sampleDataSet",
+            &[("dataSetName", "Two")],
+            &[
+                // Text whose paragraph holds an element, a file on a drive, a visibility of two texts.
+                xml_element("A", &[], &[xml_element("p", &[], &[xml_element("b", &[], &[])])]),
+                xml_element("File", &[], &[xml_text(XmlValue::Str("file:///C:/My%20Art/50%off.eps"))]),
+                xml_element("Shown", &[], &[xml_text(XmlValue::Bool(true)), xml_text(XmlValue::Bool(false))]),
+            ],
+        ),
+    ];
+    let (vars, notes) = read_library(&set("none", declared, rows));
+    let kinds: Vec<(&str, VariableKind)> = vars.variables.iter().map(|v| (v.name.as_str(), v.kind)).collect();
     assert_eq!(
-        notes(&variable_library(&["Team"], &["Home"])),
-        ["the file's variables and data sets weren't read (variables: 1, data sets: 1): the Variables panel doesn't list them"]
+        kinds,
+        [("A", VariableKind::Text), ("Fancy", VariableKind::Unknown), ("Shown", VariableKind::Visibility), ("File", VariableKind::Image)]
     );
-    assert!(notes(&variable_library(&[], &[])).is_empty(), "an empty library gives no warning");
-    assert!(notes("").is_empty());
-    // When the reader can't read the layers, `variables` still counts the library, for the warning
-    // of the file read from its PDF part.
-    let unread = stream(&format!("{}{}", variable_library(&["Team"], &["Home", "Away"]), layer("1 Zz\n")));
+    let names: Vec<&str> = vars.datasets.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["One", "Two"]);
+    let one = &vars.datasets[0].values;
+    assert_eq!(one.get("A"), Some(&DataValue::Text(" spaced \n".into())));
+    assert_eq!(one.len(), 1, "{one:?}");
+    let two = &vars.datasets[1].values;
+    assert_eq!(two.get("File"), Some(&DataValue::Image("C:/My Art/50%off.eps".into())));
+    assert_eq!(two.len(), 1, "{two:?}");
+    // 6 declarations, 2 data sets and 5 values.
+    assert_eq!(notes, [partly_read(13)]);
+
+    // Children that aren't an array: nothing can be read.
+    let broken = xml_element("variableSets", &[], &[xml_element("variableSet", &[], &[])]).replace(
+        "%_/Array :\n%_; (xmlnode-children) ,\n%_/Dictionary :\n%_; (xmlnode-attributes) ,\n%_; ,",
+        "%_/Dictionary :\n%_; (xmlnode-children) ,\n%_/Dictionary :\n%_; (xmlnode-attributes) ,\n%_; ,",
+    );
+    assert!(broken.contains("%_/Dictionary :\n%_; (xmlnode-children)"));
+    let (vars, notes) = read_library(&broken);
+    assert_eq!(vars, vectorcraft_doc::Variables::default());
+    assert_eq!(notes, ["the file's variable library couldn't be read: the Variables panel doesn't list it"]);
+
+    // Past the caps: 256 variables and 1,000 data sets are kept.
+    let declared: Vec<String> = (0..257).map(|i| var(&format!("v{i}"), "textcontent")).collect();
+    let rows: Vec<String> = (0..1001).map(|i| xml_element("v:sampleDataSet", &[("dataSetName", &format!("d{i}"))], &[])).collect();
+    let (vars, notes) = read_library(&set("none", declared, rows));
+    assert_eq!((vars.variables.len(), vars.datasets.len()), (256, 1000));
+    assert_eq!(notes, [partly_read(2)]);
+    // A text longer than the library's 8 MiB is left out, and so is text past what is left of them.
+    let long = |name: &str, len: usize| {
+        let text = xml_element("p", &[], &[xml_text(XmlValue::Str(&"x".repeat(len)))]);
+        xml_element("v:sampleDataSet", &[("dataSetName", name)], &[xml_element("A", &[], &[text])])
+    };
+    let rows = vec![long("Big", (8 << 20) + 1), long("Half", 5 << 20), long("More", 4 << 20)];
+    let (vars, notes) = read_library(&set("none", vec![var("A", "textcontent")], rows));
+    let held: Vec<(&str, usize)> = vars.datasets.iter().map(|d| (d.name.as_str(), d.values.len())).collect();
+    assert_eq!(held, [("Big", 0), ("Half", 1), ("More", 0)]);
+    assert_eq!(notes, [partly_read(2)]);
+    // Linked files on a network share, and on `localhost`.
+    let file = |name: &str, url: &str| {
+        xml_element("v:sampleDataSet", &[("dataSetName", name)], &[xml_element("File", &[], &[xml_text(XmlValue::Str(url))])])
+    };
+    let rows = vec![file("Share", "file://server/My%20Share/a.eps"), file("Local", "file://localhost/Users/test/a.eps")];
+    let (vars, notes) = read_library(&set("none", vec![var("File", "fileref")], rows));
+    let paths: Vec<Option<&DataValue>> = vars.datasets.iter().map(|d| d.values.get("File")).collect();
+    assert_eq!(paths, [Some(&DataValue::Image("//server/My Share/a.eps".into())), Some(&DataValue::Image("/Users/test/a.eps".into()))]);
+    assert!(notes.is_empty(), "{notes:?}");
+    // A library whose only node isn't a variable set.
+    let (_, notes) = read_library(&xml_element("variableSets", &[], &[xml_element("note", &[], &[])]));
+    assert_eq!(notes, ["the file's variable library couldn't be read: the Variables panel doesn't list it"]);
+    // A second variable set is left out.
+    let two_sets = xml_element("variableSets", &[], &[xml_element("variableSet", &[], &[]), xml_element("variableSet", &[], &[])]);
+    let (_, notes) = read_library(&two_sets);
+    assert_eq!(notes, ["the file's variable library couldn't be read: the Variables panel doesn't list it"]);
+}
+
+/// When the layers can't be read, or reading stops before the library, [`variables`] still reads
+/// it, for the file read from its PDF part.
+#[test]
+fn ai_variable_library_without_the_layers() {
+    use vectorcraft_testkit::ai::{sample_variable_sets, variable_library_data};
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let library = variable_library_data(&sample_variable_sets("variableAndTypes", &[]));
+    let unread = stream(&format!("{library}{}", layer("1 Zz\n")));
     assert!(read(unread.as_bytes()).is_err());
-    assert_eq!(variables(unread.as_bytes()), read::VariableLibrary { variables: 1, data_sets: 2 });
-    // The same when the reading stops before it reaches the library (at an `LB` without its layer).
-    let early = stream(&format!("LB\n{}{square}", variable_library(&["Team"], &["Home", "Away"])));
+    let found = variables(unread.as_bytes());
+    assert!(found.present && found.variables.locked && found.skipped == 0);
+    assert_eq!((found.variables.variables.len(), found.variables.datasets.len()), (5, 3));
+    assert_eq!(found.variables.active_dataset.as_deref(), Some("ds_two"));
+    // The reading stops before it reaches the library (at an `LB` without its layer).
+    let early = stream(&format!("LB\n{library}{square}"));
     assert!(read(early.as_bytes()).is_err());
-    assert_eq!(variables(early.as_bytes()), read::VariableLibrary { variables: 1, data_sets: 2 });
-    assert_eq!(variables(stream(&square).as_bytes()), read::VariableLibrary::default());
+    assert_eq!(variables(early.as_bytes()), found);
+    assert_eq!(variables(stream(&square).as_bytes()), read::VariableRead::default());
 }
 
 #[test]

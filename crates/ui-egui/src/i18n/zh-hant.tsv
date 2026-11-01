@@ -2019,7 +2019,9 @@ file-filter	Templates	範本
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	其上的圖稿與頁面的圖稿有 {_1}% 不同：仍從其編輯資料匯入
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	未讀取檔案的圖層 ({_1})：檔案以其頁面匯入，位於單一圖層中
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	未從檔案的編輯資料讀取圖層 ({_1})：圖層來自其 PDF 部分
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	未讀取檔案的變數與資料集 (變數：{variables}，資料集：{data_sets})：「變數」面板不會列出它們
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	只讀取了檔案的部分變數資料庫 (略過的項目：{_1})：「變數」面板會列出其餘部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	無法讀取檔案的變數資料庫：「變數」面板不會列出它
+@msg	a variable of unknown kind can't be bound to objects	種類不明的變數無法繫結至物件
 @msg	its Windows metafile preview was opened instead, which may simplify the art	已改為開啟其 Windows 中繼檔預覽，圖稿可能因此簡化
 @msg	its preview was placed instead, at screen resolution	已改為以螢幕解析度置入其預覽
 @msg	shadings of more than 4096 patches or triangles were left out	已略過超過 4096 個面片或三角形的著色

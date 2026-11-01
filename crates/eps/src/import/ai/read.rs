@@ -16,8 +16,9 @@
 //! - Artboards: the `ArtboardArray` of the `/Document` dictionary, else `%AI3_Cropmarks`, else
 //!   the art size around the template box's centre, else (a file in the legacy format another
 //!   app wrote) the bounding box.
-//! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
-//!   gives how many variables and data sets it has ([`VariableLibrary`]).
+//! - Variables: the variable library, XML nodes of the `/Document` dictionary: its variables, data
+//!   sets, active data set and lock, without bindings; a note gives how many entries were left out
+//!   ([`VariableRead`]).
 //! - Objects on Path: a group whose objects' dictionaries carry ids, and a record of the
 //!   `/Document` dictionary naming them, read by [`on_path`].
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
@@ -81,7 +82,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
+pub use document::{PaletteSwatches, VariableRead, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, Raster};
@@ -152,8 +153,8 @@ struct Reader<'a> {
     to_doc: Option<Affine>,
     cropmarks: Option<Rect>,
     artboards: Vec<(String, Rect)>,
-    /// The variables and data sets of the `/Document` dictionary's variable library.
-    variables: VariableLibrary,
+    /// The `/Document` dictionary's variable library.
+    variables: VariableRead,
     /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
     on_path: on_path::OnPath,
     gradients: HashMap<String, Gradient>,
@@ -298,7 +299,7 @@ impl<'a> Reader<'a> {
             to_doc: None,
             cropmarks: None,
             artboards: Vec::new(),
-            variables: VariableLibrary::default(),
+            variables: VariableRead::default(),
             on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),
             gradient_def: None,

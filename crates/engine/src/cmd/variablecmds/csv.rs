@@ -175,6 +175,7 @@ fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, cmd: &
         VariableKind::Graph if t.len() <= MAX_GRAPH_CSV => DataValue::Graph(t.to_string()),
         VariableKind::Graph => return Err(bad(cmd, format!("value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
         VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, cmd)?),
+        VariableKind::Unknown => return Err(bad(cmd, format!("value for `{var}` must match its variable kind"))),
     }))
 }
 

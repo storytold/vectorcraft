@@ -5155,7 +5155,9 @@ lighting	Light	광원
 	Effect Gallery	효과 갤러리
 	Filters	필터
 	Select artwork to apply effects	효과를 적용할 그래픽을 선택하세요
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	파일의 변수와 데이터 세트를 읽지 않았습니다(변수: {variables}, 데이터 세트: {data_sets}). 변수 패널에 표시되지 않습니다
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	파일의 변수 라이브러리를 일부만 읽었습니다(건너뛴 항목: {_1}). 나머지는 변수 패널에 표시됩니다
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	파일의 변수 라이브러리를 읽을 수 없습니다. 변수 패널에 표시되지 않습니다
+@msg	a variable of unknown kind can't be bound to objects	종류를 알 수 없는 변수는 개체에 바인딩할 수 없습니다
 # Select by Color (select.color)
 	Select by Color	색상별 선택
 	Move Anchor Point	앵커 포인트 이동

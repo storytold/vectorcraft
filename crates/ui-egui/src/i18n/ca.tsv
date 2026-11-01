@@ -5464,7 +5464,9 @@ digits	Malayalam	Malaiàlam
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	no s’han llegit les capes del fitxer ({_1}): arriba com la seva pàgina, en una sola capa
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	no s’han llegit les capes del fitxer a partir de les seves dades d’edició ({_1}): provenen de la seva part PDF
 @msg	the file's preview header points outside the file	la capçalera de previsualització del fitxer apunta fora del fitxer
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no s’han llegit les variables ni els conjunts de dades del fitxer (variables: {variables}, conjunts de dades: {data_sets}): el panell Variables no els llista
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del fitxer s’ha llegit només en part (entrades omeses: {_1}): el panell Variables llista la resta
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no s’ha pogut llegir la biblioteca de variables del fitxer: el panell Variables no la llista
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipus desconegut no es pot vincular a objectes
 @msg	the files come to more than 1 GB: add fewer at a time	els fitxers sumen més d’1 GB: afegeix-ne menys alhora
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	El processador gràfic provat primer no ha pogut mostrar la finestra, així que VectorCraft s’ha iniciat de nou amb {summary}
 @msg	The graphics were lost and couldn't be restarted.	Els gràfics s’han perdut i no s’han pogut reiniciar.

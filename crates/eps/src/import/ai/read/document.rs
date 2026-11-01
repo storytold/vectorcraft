@@ -1,11 +1,11 @@
-use super::art::{element_name, elements, join_and, sane};
+use super::art::{element_name, join_and, sane};
 use super::containers::drop_commented_copies;
 use super::types::{FLIP, Kind, MAX_DEPTH};
 use super::{
     Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure,
     Swatch, Unit, V, obj,
 };
-use vectorcraft_doc::{Guide, ImageBlob, PatternDef};
+use vectorcraft_doc::{DataSet, DataValue, Guide, ImageBlob, PatternDef, Variable, VariableKind, Variables};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -128,42 +128,46 @@ fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
     r.artboards
 }
 
-/// How many variables and data sets the variable library of the editing data has: XML nodes
-/// (`/XMLNode`) of the `/Document` dictionary, a `variableSets` element holding `variableSet`s, each
-/// with its `variables` (`variable` elements) and `sampleDataSets` (`sampleDataSet` elements).
-/// VectorCraft doesn't read them.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct VariableLibrary {
-    pub variables: usize,
-    pub data_sets: usize,
+/// The variable library of the editing data, as [`variable_library`] reads it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VariableRead {
+    /// Its variables, data sets, active data set and lock, without bindings.
+    pub variables: Variables,
+    /// How many of its declarations, data sets, values and settings were left out.
+    pub skipped: usize,
+    /// Whether the editing data has a variable library (a `variableSets` element).
+    pub present: bool,
 }
 
-impl VariableLibrary {
-    /// The import's note that the library wasn't read, when it has a variable or a data set.
-    pub fn note(self) -> Option<String> {
-        let Self { variables, data_sets } = self;
-        // Counts after a colon need no plural, so every language can translate the note whole.
-        (variables + data_sets > 0).then(|| {
-            format!("the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them")
-        })
+impl VariableRead {
+    /// The import's note about what of the library wasn't read: nothing when all of it was.
+    pub fn note(&self) -> Option<String> {
+        if !self.present || self.skipped == 0 {
+            return None;
+        }
+        if self.variables.variables.is_empty() && self.variables.datasets.is_empty() {
+            return Some("the file's variable library couldn't be read: the Variables panel doesn't list it".into());
+        }
+        // A count after a colon needs no plural, so every language can translate the note whole.
+        Some(format!("the file's variable library was partly read (entries skipped: {}): the Variables panel lists the rest", self.skipped))
     }
 }
 
-/// The variable library of the editing data `data` ([`VariableLibrary`]), for a file whose layers
+/// The variable library of the editing data `data` ([`VariableRead`]), for a file whose layers
 /// [`read`] can't read. Data without a `variableSets` element isn't read.
-pub fn variables(data: &[u8]) -> VariableLibrary {
+pub fn variables(data: &[u8]) -> VariableRead {
     if crate::import::ai::find(data, b"variableSets").is_none() {
-        return VariableLibrary::default();
+        return VariableRead::default();
     }
     let mut r = Reader::new(data);
     let _ = r.run();
+    if r.variables.present {
+        return r.variables;
+    }
     // A `/Document` still open when reading stopped.
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
-    for o in open.iter().filter(|o| o.ty == "Document") {
-        variable_library(o, 0, &mut r.variables);
-    }
-    if r.variables != VariableLibrary::default() {
-        return r.variables;
+    if let Some(found) = open.iter().filter(|o| o.ty == "Document").map(variable_library).find(|v| v.present) {
+        return found;
     }
     // Reading can stop before the library: read its node on its own.
     variable_sets_node(data).map_or(r.variables, |node| {
@@ -279,10 +283,12 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// The `/Document` dictionary: the artboards, how many variables and data sets its variable
-    /// library has, and its Objects on Path records.
+    /// The `/Document` dictionary: the artboards, its variable library (the first one read), and its
+    /// Objects on Path records.
     pub(super) fn document(&mut self, o: &Obj) {
-        variable_library(o, 0, &mut self.variables);
+        if !self.variables.present {
+            self.variables = variable_library(o);
+        }
         self.constraint_data(o);
         let Some(list) = find_entry(o, "ArtboardArray", 0) else { return };
         for (i, ab) in list.items().enumerate().take(1000) {
@@ -489,7 +495,11 @@ impl<'a> Reader<'a> {
                 self.drawn_looks
             ));
         }
-        warnings.extend(self.variables.note());
+        let variables = std::mem::take(&mut self.variables);
+        warnings.extend(variables.note());
+        if variables.present {
+            doc.variables = variables.variables.into();
+        }
         Ok(Structure {
             doc,
             to_doc,
@@ -571,20 +581,368 @@ pub(super) fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o 
     o.obj(key).or_else(|| o.entries.iter().flat_map(|(_, v)| v.iter()).filter_map(V::obj).find_map(|c| find_entry(c, key, depth + 1)))
 }
 
-/// Add the variables and data sets of the variable libraries in `o` or the dictionaries it holds
-/// (see [`VariableLibrary`]) to `found`.
-fn variable_library(o: &Obj, depth: usize, found: &mut VariableLibrary) {
+// ---- the variable library -----------------------------------------------------------------
+
+/// Caps on the variable library of the editing data, as Load Variable Library has them: the XML
+/// nodes read, the variables and data sets kept, the characters of a name, and the bytes of the
+/// names and values kept.
+const MAX_LIBRARY_NODES: usize = 2_000_000;
+const MAX_LIBRARY_VARIABLES: usize = 256;
+const MAX_LIBRARY_DATASETS: usize = 1_000;
+const MAX_LIBRARY_NAME: usize = 255;
+const MAX_LIBRARY_BYTES: usize = 8 << 20;
+
+/// The variable library in `o` or the dictionaries it holds: XML nodes (`/XMLNode`), each with its
+/// name (`xmlnode-nodename`), value (`xmlnode-nodevalue`), type (`xmlnode-nodetype`: 1 an element, 2
+/// an attribute, 3 text), children (`xmlnode-children`, an array in order) and attributes
+/// (`xmlnode-attributes`, a dictionary of attribute nodes). The library is a `variableSets` element
+/// holding a `variableSet` (its `locked` attribute `none`, or `variableAndTypes` when the variables
+/// are locked), with a `variables` element of `variable` elements (`varName`, and `trait`:
+/// `textcontent`, `visibility`, `fileref` or `graphdata`; another trait or none is a variable of
+/// unknown kind), and a `sampleDataSets` element (`activeDataSet`, the data set shown) of
+/// `sampleDataSet` elements (`dataSetName`). In a data set, the element named after a variable holds
+/// its value: `p` elements of text, one paragraph each; a `/Bool` text, whether its objects show; a
+/// linked file's URL (`file://`) or path. Graph values aren't read. What is malformed, repeated or
+/// past the caps (a declaration, a data set, a value, a setting, a second `variableSet`) is left out
+/// and counted; a library past [`MAX_LIBRARY_NODES`] isn't read. Bindings aren't read.
+fn variable_library(o: &Obj) -> VariableRead {
+    find_variable_sets(o, 0).map_or_else(VariableRead::default, read_variable_sets)
+}
+
+/// The `variableSets` XML node in `o` or the dictionaries it holds.
+fn find_variable_sets(o: &Obj, depth: usize) -> Option<&Obj> {
     if depth > MAX_DEPTH {
-        return;
+        return None;
     }
     if o.ty == "XMLNode" && element_name(o).as_deref() == Some("variableSets") {
-        for set in elements(o, "variableSet") {
-            found.variables += elements(set, "variables").flat_map(|v| elements(v, "variable")).count();
-            found.data_sets += elements(set, "sampleDataSets").flat_map(|d| elements(d, "sampleDataSet")).count();
+        return Some(o);
+    }
+    o.items().find_map(|c| find_variable_sets(c, depth + 1))
+}
+
+/// A value of an XML node's entry, by the type the editing data gives it.
+#[derive(Clone, Debug, PartialEq)]
+enum XmlValue {
+    /// A `/String` or `/UnicodeString`: its strings joined (a long one is written across lines).
+    Text(String),
+    /// A `/Bool`.
+    Bool(bool),
+}
+
+/// The value of entry `key` of the XML node `o`; `None` without it, when it is of another type, or
+/// when its text is longer than [`MAX_LIBRARY_BYTES`].
+fn xml_value(o: &Obj, key: &str) -> Option<XmlValue> {
+    let (V::Name(ty), rest) = o.get(key)?.split_last()? else { return None };
+    match ty.as_str() {
+        "String" | "UnicodeString" => {
+            let len = rest.iter().map(|v| if let V::Str(s) = v { s.len() } else { 0 }).fold(0usize, usize::saturating_add);
+            if len > MAX_LIBRARY_BYTES {
+                return None;
+            }
+            let mut bytes = Vec::with_capacity(len);
+            for v in rest {
+                let V::Str(s) = v else { return None };
+                bytes.extend_from_slice(s);
+            }
+            Some(XmlValue::Text(obj::text(&bytes)))
         }
-        return;
+        "Bool" => match rest {
+            [V::Num(n)] if *n == 0.0 => Some(XmlValue::Bool(false)),
+            [V::Num(n)] if *n == 1.0 => Some(XmlValue::Bool(true)),
+            _ => None,
+        },
+        _ => None,
     }
-    for c in o.items() {
-        variable_library(c, depth + 1, found);
+}
+
+/// Whether `o` is an XML node of type `ty` (1 an element, 2 an attribute, 3 text).
+fn is_node(o: &Obj, ty: f64) -> bool {
+    o.ty == "XMLNode" && o.nums("xmlnode-nodetype") == [ty]
+}
+
+/// The name of the XML node `o` as the file writes it, prefix and all.
+fn node_name(o: &Obj) -> Option<String> {
+    match xml_value(o, "xmlnode-nodename")? {
+        XmlValue::Text(name) => Some(name),
+        XmlValue::Bool(_) => None,
     }
+}
+
+/// Whether `o` is an element whose name without its prefix is `name`.
+fn is_element(o: &Obj, name: &str) -> bool {
+    is_node(o, 1.0) && node_name(o).is_some_and(|n| n.rsplit(':').next() == Some(name))
+}
+
+/// The text of the attribute `name` (without its prefix) of the element `o`.
+fn xml_attribute(o: &Obj, name: &str) -> Option<String> {
+    let attributes = o.obj("xmlnode-attributes").filter(|a| a.ty == "Dictionary")?;
+    let node = attributes.items().find(|a| is_node(a, 2.0) && node_name(a).is_some_and(|n| n.rsplit(':').next() == Some(name)))?;
+    match xml_value(node, "xmlnode-nodevalue")? {
+        XmlValue::Text(text) => Some(text),
+        XmlValue::Bool(_) => None,
+    }
+}
+
+/// A name of the library (a variable's or a data set's): trimmed, not empty and at most
+/// [`MAX_LIBRARY_NAME`] characters.
+fn library_name(name: Option<String>) -> Option<String> {
+    let name = name?.trim().to_string();
+    (!name.is_empty() && name.chars().count() <= MAX_LIBRARY_NAME).then_some(name)
+}
+
+/// The file path of a linked file's value: a `file://` URL (`file:////Users/…`) as its path, its
+/// `%XX` escapes decoded (a URL that names a host other than `localhost` as a network path,
+/// `//host/…`), or an absolute path as it is. White space around it isn't part of it.
+fn linked_path(text: &str) -> Option<String> {
+    let text = text.trim_matches([' ', '\t', '\n', '\r']);
+    let drive = |p: &str| matches!(p.as_bytes(), [l, b':', ..] if l.is_ascii_alphabetic());
+    let path = match text.strip_prefix("file://") {
+        Some(rest) => {
+            let rest = rest.strip_prefix("localhost").filter(|r| r.starts_with('/')).unwrap_or(rest);
+            if rest.starts_with('/') {
+                let p = percent_decoded(rest.trim_start_matches('/'));
+                if drive(&p) { p } else { format!("/{p}") }
+            } else {
+                // A host: the share it names.
+                format!("//{}", percent_decoded(rest))
+            }
+        }
+        None => text.to_string(),
+    };
+    (path.len() > 1 && (path.starts_with('/') || path.starts_with("\\\\") || drive(&path))).then_some(path)
+}
+
+/// `s` with `%XX` escapes decoded (a file URL's path); as it is when the decoded bytes aren't UTF-8.
+fn percent_decoded(s: &str) -> String {
+    if !s.contains('%') {
+        return s.to_string();
+    }
+    let mut out = Vec::with_capacity(s.len());
+    let mut rest = s.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let hex = tail
+            .get(..2)
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match hex {
+            Some(v) if b == b'%' => {
+                out.push(v);
+                rest = tail.get(2..).unwrap_or_default();
+            }
+            _ => {
+                out.push(b);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// The walk through a variable library: the nodes read, the bytes kept, and what was left out.
+#[derive(Default)]
+struct LibraryWalk {
+    nodes: usize,
+    bytes: usize,
+    skipped: usize,
+}
+
+impl LibraryWalk {
+    /// The child nodes of the XML node `o`, in order. `None` when they aren't an array, or when the
+    /// library has more nodes than [`MAX_LIBRARY_NODES`].
+    fn children<'o>(&mut self, o: &'o Obj) -> Option<Vec<&'o Obj>> {
+        let list = o.obj("xmlnode-children").filter(|c| c.ty == "Array")?;
+        let children: Vec<&Obj> = list.items().collect();
+        self.nodes = self.nodes.saturating_add(children.len());
+        (self.nodes <= MAX_LIBRARY_NODES).then_some(children)
+    }
+
+    /// Whether `len` more bytes of names and values fit in [`MAX_LIBRARY_BYTES`] (they are then counted).
+    fn keep(&mut self, len: usize) -> bool {
+        let fits = self.bytes.saturating_add(len) <= MAX_LIBRARY_BYTES;
+        if fits {
+            self.bytes += len;
+        }
+        fits
+    }
+
+    /// Whether a value of `len` bytes would still fit in [`MAX_LIBRARY_BYTES`] (nothing is counted).
+    fn room(&self, len: usize) -> bool {
+        self.bytes.saturating_add(len) <= MAX_LIBRARY_BYTES
+    }
+
+    /// The `variableSet` `set`, into `vars`.
+    fn variable_set(&mut self, set: &Obj, vars: &mut Variables) {
+        vars.locked = match xml_attribute(set, "locked").as_deref() {
+            None | Some("none") => false,
+            Some("variableAndTypes") => true,
+            Some(_) => {
+                self.skipped += 1;
+                false
+            }
+        };
+        let Some(children) = self.children(set) else {
+            self.skipped += 1;
+            return;
+        };
+        for list in children.iter().filter(|c| is_element(c, "variables")) {
+            self.declarations(list, vars);
+        }
+        for list in children.iter().filter(|c| is_element(c, "sampleDataSets")) {
+            self.data_sets(list, vars);
+        }
+    }
+
+    /// The `variable` elements of the `variables` element `list`, into `vars`.
+    fn declarations(&mut self, list: &Obj, vars: &mut Variables) {
+        let Some(children) = self.children(list) else {
+            self.skipped += 1;
+            return;
+        };
+        for v in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+            let name = is_element(v, "variable").then(|| library_name(xml_attribute(v, "varName"))).flatten();
+            let Some(name) = name.filter(|n| vars.variable(n).is_none() && vars.variables.len() < MAX_LIBRARY_VARIABLES && self.keep(n.len())) else {
+                self.skipped += 1;
+                continue;
+            };
+            let kind = match xml_attribute(v, "trait").as_deref() {
+                Some("textcontent") => VariableKind::Text,
+                Some("visibility") => VariableKind::Visibility,
+                Some("fileref") => VariableKind::Image,
+                Some("graphdata") => VariableKind::Graph,
+                _ => VariableKind::Unknown,
+            };
+            vars.variables.push(Variable { name, kind });
+        }
+    }
+
+    /// The `sampleDataSet` elements of the `sampleDataSets` element `list`, into `vars`, and the
+    /// data set it shows.
+    fn data_sets(&mut self, list: &Obj, vars: &mut Variables) {
+        let Some(children) = self.children(list) else {
+            self.skipped += 1;
+            return;
+        };
+        for row in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+            let name = is_element(row, "sampleDataSet").then(|| library_name(xml_attribute(row, "dataSetName"))).flatten();
+            let Some(name) = name.filter(|n| vars.dataset(n).is_none() && vars.datasets.len() < MAX_LIBRARY_DATASETS && self.keep(n.len())) else {
+                self.skipped += 1;
+                continue;
+            };
+            let values = self.values(row, vars);
+            vars.datasets.push(DataSet { name, values });
+        }
+        if let Some(active) = xml_attribute(list, "activeDataSet").and_then(|a| library_name(Some(a))) {
+            vars.active_dataset = vars.dataset(&active).map(|_| active);
+        }
+    }
+
+    /// The values of the `sampleDataSet` element `row`, for the variables of `vars`.
+    fn values(&mut self, row: &Obj, vars: &Variables) -> std::collections::BTreeMap<String, DataValue> {
+        let mut values = std::collections::BTreeMap::new();
+        let Some(children) = self.children(row) else {
+            self.skipped += 1;
+            return values;
+        };
+        for el in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+            let variable = is_node(el, 1.0).then(|| node_name(el)).flatten().and_then(|n| vars.variable(&n));
+            let Some(variable) = variable.filter(|v| !values.contains_key(&v.name)) else {
+                self.skipped += 1;
+                continue;
+            };
+            match self.value(el, variable.kind) {
+                Ok(Some(value)) => {
+                    values.insert(variable.name.clone(), value);
+                }
+                Ok(None) => {}
+                Err(()) => self.skipped += 1,
+            }
+        }
+        values
+    }
+
+    /// The value of a variable of `kind` that the element `el` holds: `Ok(None)` when it holds none,
+    /// `Err` when it can't be read (graph values aren't read).
+    fn value(&mut self, el: &Obj, kind: VariableKind) -> Result<Option<DataValue>, ()> {
+        let children = self.children(el).ok_or(())?;
+        if children.is_empty() {
+            return Ok(None);
+        }
+        let value = match kind {
+            VariableKind::Text => {
+                let (mut paragraphs, mut total) = (Vec::new(), 0usize);
+                // Text between the paragraphs is white space the XML had.
+                for p in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+                    if !is_element(p, "p") {
+                        return Err(());
+                    }
+                    let mut paragraph = String::new();
+                    for t in self.children(p).ok_or(())? {
+                        match (is_node(t, 3.0), xml_value(t, "xmlnode-nodevalue")) {
+                            (true, Some(XmlValue::Text(text))) if self.room(total.saturating_add(text.len())) => {
+                                total += text.len();
+                                paragraph.push_str(&text);
+                            }
+                            _ => return Err(()),
+                        }
+                    }
+                    // The line break that joins it to the next one.
+                    total = total.saturating_add(1);
+                    paragraphs.push(paragraph);
+                }
+                if paragraphs.is_empty() {
+                    return Ok(None);
+                }
+                DataValue::Text(paragraphs.join("\n"))
+            }
+            VariableKind::Visibility => match children.as_slice() {
+                [t] if is_node(t, 3.0) => match xml_value(t, "xmlnode-nodevalue") {
+                    Some(XmlValue::Bool(show)) => DataValue::Visible(show),
+                    _ => return Err(()),
+                },
+                _ => return Err(()),
+            },
+            VariableKind::Image => {
+                let mut text = String::new();
+                for t in children {
+                    match (is_node(t, 3.0), xml_value(t, "xmlnode-nodevalue")) {
+                        (true, Some(XmlValue::Text(s))) if self.room(text.len().saturating_add(s.len())) => text.push_str(&s),
+                        _ => return Err(()),
+                    }
+                }
+                if text.trim_matches([' ', '\t', '\n', '\r']).is_empty() {
+                    return Ok(None);
+                }
+                DataValue::Image(linked_path(&text).ok_or(())?)
+            }
+            VariableKind::Graph | VariableKind::Unknown => return Err(()),
+        };
+        let len = match &value {
+            DataValue::Text(s) | DataValue::Image(s) | DataValue::Graph(s) => s.len(),
+            DataValue::Visible(_) => 1,
+        };
+        if self.keep(len) { Ok(Some(value)) } else { Err(()) }
+    }
+}
+
+/// The library of the `variableSets` element `sets` (see [`variable_library`]).
+fn read_variable_sets(sets: &Obj) -> VariableRead {
+    let mut walk = LibraryWalk::default();
+    let mut vars = Variables::default();
+    match walk.children(sets) {
+        Some(children) => {
+            let (sets, other): (Vec<&Obj>, Vec<&Obj>) = children.into_iter().filter(|c| !is_node(c, 3.0)).partition(|c| is_element(c, "variableSet"));
+            // A node that isn't a variable set, and a second set (VectorCraft keeps one set of
+            // variables), are left out.
+            walk.skipped += other.len() + sets.len().saturating_sub(1);
+            if let Some(first) = sets.first() {
+                walk.variable_set(first, &mut vars);
+            }
+        }
+        None => walk.skipped += 1,
+    }
+    if walk.nodes > MAX_LIBRARY_NODES {
+        return VariableRead { variables: Variables::default(), skipped: 1, present: true };
+    }
+    VariableRead { variables: vars, skipped: walk.skipped, present: true }
 }

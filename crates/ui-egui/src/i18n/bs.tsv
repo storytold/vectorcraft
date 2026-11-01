@@ -5508,7 +5508,9 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	varijable i skupovi podataka datoteke nisu pročitani (varijable: {variables}, skupovi podataka: {data_sets}): panel Varijable ih ne navodi
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
+@msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
 	Select by Color	Odaberi po boji
 	Move Anchor Point	Pomjeri sidrenu tačku
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zadržava 1 od {n} radnih ploča dokumenta: datoteka se ponovo otvara s jednom. Uključite Očuvaj mogućnosti uređivanja da ih zadržite sve.

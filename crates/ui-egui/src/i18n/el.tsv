@@ -5529,7 +5529,9 @@ effect	Points	Σημεία
 	Effect Gallery	Συλλογή εφέ
 	Filters	Φίλτρα
 	Select artwork to apply effects	Επιλέξτε γραφικά για να εφαρμόσετε εφέ
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	η βιβλιοθήκη μεταβλητών του αρχείου διαβάστηκε μόνο εν μέρει (καταχωρίσεις που παραλείφθηκαν: {_1}): ο πίνακας Μεταβλητές εμφανίζει τις υπόλοιπες
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	δεν ήταν δυνατή η ανάγνωση της βιβλιοθήκης μεταβλητών του αρχείου: ο πίνακας Μεταβλητές δεν την εμφανίζει
+@msg	a variable of unknown kind can't be bound to objects	μια μεταβλητή άγνωστου είδους δεν μπορεί να συνδεθεί με αντικείμενα
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
 	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης

@@ -5175,7 +5175,9 @@ theme	Appearance	Giao diện
 	Effect Gallery	Thư viện hiệu ứng
 	Filters	Bộ lọc
 	Select artwork to apply effects	Chọn đồ họa để áp dụng hiệu ứng
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	thư viện biến số của tệp chỉ được đọc một phần (mục đã bỏ qua: {_1}): bảng Biến liệt kê phần còn lại
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	không thể đọc thư viện biến số của tệp: bảng Biến không liệt kê nó
+@msg	a variable of unknown kind can't be bound to objects	không thể liên kết biến thuộc loại không xác định với đối tượng
 # Select by Color (select.color)
 	Select by Color	Chọn theo màu
 	Move Anchor Point	Di chuyển điểm neo

@@ -5187,7 +5187,9 @@ lighting	Light	Свет
 	Effect Gallery	Галерея эффектов
 	Filters	Фильтры
 	Select artwork to apply effects	Выберите графику, чтобы применить эффекты
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	переменные и наборы данных файла не прочитаны (переменных: {variables}, наборов данных: {data_sets}): панель «Переменные» их не показывает
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотека переменных файла прочитана только частично (пропущено записей: {_1}): панель «Переменные» показывает остальные
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не удалось прочитать библиотеку переменных файла: панель «Переменные» её не показывает
+@msg	a variable of unknown kind can't be bound to objects	переменную неизвестного вида нельзя связать с объектами
 # Select by Color (select.color)
 	Select by Color	Выделить по цвету
 	Move Anchor Point	Переместить опорную точку

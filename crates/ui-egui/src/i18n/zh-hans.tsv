@@ -5417,7 +5417,9 @@ lighting	Light	光源
 	Effect Gallery	效果库
 	Filters	滤镜
 	Select artwork to apply effects	选择要应用效果的图稿
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	文件的变量和数据集未被读取（变量：{variables}，数据集：{data_sets}）：“变量”面板不会列出它们
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	文件的变量库只读取了一部分（跳过的条目：{_1}）：“变量”面板列出其余部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	无法读取文件的变量库：“变量”面板不会列出它
+@msg	a variable of unknown kind can't be bound to objects	类型未知的变量不能绑定到对象
 # Select by Color (select.color)
 	Select by Color	按颜色选择
 	Move Anchor Point	移动锚点

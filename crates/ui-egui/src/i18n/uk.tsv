@@ -5172,7 +5172,9 @@ lighting	Light	Світло
 	Effect Gallery	Галерея ефектів
 	Filters	Фільтри
 	Select artwork to apply effects	Виберіть графіку, щоб застосувати ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	змінні та набори даних файлу не прочитано (змінних: {variables}, наборів даних: {data_sets}): панель «Змінні» їх не показує
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	бібліотеку змінних файлу прочитано лише частково (пропущено записів: {_1}): панель «Змінні» показує решту
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не вдалося прочитати бібліотеку змінних файлу: панель «Змінні» її не показує
+@msg	a variable of unknown kind can't be bound to objects	змінну невідомого виду не можна прив’язати до об’єктів
 # Select by Color (select.color)
 	Select by Color	Виділити за кольором
 	Move Anchor Point	Перемістити опорну точку

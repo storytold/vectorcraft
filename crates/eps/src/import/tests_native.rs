@@ -1077,6 +1077,46 @@ fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
     assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
 }
 
+/// A `.ai` that comes in as its PDF part, whose layers can't be used or that has none, gets the
+/// variables, data sets, active data set and lock of its editing data's variable library, and so
+/// does an EPS that comes in as its page.
+#[test]
+fn ai_variable_library_pdf_fallback() {
+    use vectorcraft_testkit::ai::{XmlValue, sample_variable_sets, variable_library_data, xml_element, xml_text};
+    let check = |d: &Document, warnings: &[String]| {
+        let vars = &d.variables;
+        assert_eq!((vars.variables.len(), vars.datasets.len()), (5, 3), "{warnings:?}");
+        assert!(vars.locked);
+        assert_eq!(vars.active_dataset.as_deref(), Some("ds_two"));
+    };
+    let library = variable_library_data(&sample_variable_sets("variableAndTypes", &[]));
+    // Layers that can't be used (an operator the reader doesn't know).
+    let art = native(&format!("{library}{}", layer("Art", true, "1 Zz")));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    check(&d, &warnings);
+    assert!(!warnings.iter().any(|w| w.contains("variable library")), "{warnings:?}");
+    // No layers at all.
+    let (d, warnings, read) = crate::layered_ai(&private(&native(&library)), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    check(&d, &warnings);
+    // An EPS that comes in as its page.
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    check(&r.document, &r.warnings);
+    // What can't be read is noted on each path.
+    let graph = xml_element("v_graph", &[], &[xml_text(XmlValue::Str("a,b"))]);
+    let partly = variable_library_data(&sample_variable_sets("variableAndTypes", &[graph]));
+    let note = "the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest".to_string();
+    let art = native(&format!("{partly}{}", layer("Art", true, "1 Zz")));
+    let (_, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(warnings.contains(&note), "{warnings:?}");
+    let (_, warnings, _) = crate::layered_ai(&private(&native(&partly)), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(warnings.contains(&note), "{warnings:?}");
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert!(r.warnings.contains(&note), "{:?}", r.warnings);
+}
+
 /// An EPS whose editing data can't be used, a palette with no layers among others, comes in as its
 /// page with the swatches and color groups of that palette in place of the defaults.
 #[test]
