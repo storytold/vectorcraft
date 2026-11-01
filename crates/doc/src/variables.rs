@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::{Document, NodeId, NodeKind};
+use super::{Document, NodeId, NodeKind, TextKind};
 
 /// What a variable drives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,7 +117,8 @@ pub struct Variables {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_dataset: Option<String>,
     /// Lock Variables: while set, variables can't be defined, deleted or renamed. Objects can
-    /// still be bound to them and unbound, and datasets still change and apply.
+    /// still be bound to them and unbound, and datasets still change and apply, except that an
+    /// import whose header would define a variable is refused.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub locked: bool,
 }
@@ -202,17 +203,46 @@ impl Document {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked)))
     }
 
-    /// What the object `id` holds for the variable of `kind`: its characters, whether it shows,
-    /// or a linked image's path. `None` when the object is gone, is not of that kind, has no
-    /// link path yet (an embedded image), or is locked or in a locked layer or group (the
-    /// document's value is whatever it was left at).
+    /// The type objects of the story that the type object `id` belongs to, in thread order: the
+    /// frames of its threaded text (area type and type on a path), else `id` alone.
+    pub fn story_of(&self, id: NodeId) -> Vec<NodeId> {
+        let frame = |f: &NodeId| matches!(self.node(*f).map(|n| &n.kind), Some(NodeKind::Text(t)) if !matches!(t.kind, TextKind::Point));
+        match self.text_threads.iter().find(|thread| thread.contains(&id)) {
+            Some(thread) if frame(&id) => thread.iter().filter(|f| frame(f)).copied().collect(),
+            _ => vec![id],
+        }
+    }
+
+    /// The characters of the story that the type object `id` belongs to ([`Document::story_of`]):
+    /// every frame's text joined in thread order.
+    pub fn story_text(&self, id: NodeId) -> String {
+        self.story_of(id)
+            .into_iter()
+            .filter_map(|f| match self.node(f).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => Some(t.plain_text()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Whether a data set reads and rewrites the text of the type object `id`: every frame of its
+    /// story ([`Document::story_of`]) is a [`Document::dataset_target`].
+    pub fn story_target(&self, id: NodeId) -> bool {
+        self.story_of(id).into_iter().all(|f| self.dataset_target(f))
+    }
+
+    /// What the object `id` holds for the variable of `kind`: its characters (the whole story
+    /// for a frame of threaded text), whether it shows, or a linked image's path. `None` when the
+    /// object is gone, is not of that kind, has no link path yet (an embedded image), or is locked
+    /// or in a locked layer or group, or for text when a frame of its story is (the document's
+    /// value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
         if !self.dataset_target(id) {
             return None;
         }
         let node = self.node(id)?;
         match (kind, &node.kind) {
-            (VariableKind::Text, NodeKind::Text(t)) => Some(DataValue::Text(t.plain_text())),
+            (VariableKind::Text, NodeKind::Text(_)) if self.story_target(id) => Some(DataValue::Text(self.story_text(id))),
             (VariableKind::Visibility, _) => Some(DataValue::Visible(node.visible)),
             (VariableKind::Image, NodeKind::Image(im)) => im.link.as_ref().map(|l| DataValue::Image(l.path.clone())),
             (VariableKind::Graph, _) => node.extras().graph.as_ref().map(|g| DataValue::Graph(g.to_csv())),
