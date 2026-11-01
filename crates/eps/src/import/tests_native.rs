@@ -2689,6 +2689,29 @@ fn unread_group_holding_single_frame_uses_page_art() {
     assert!(doc.text_threads.is_empty());
 }
 
+/// The page's type inside an unread object's box comes in once, with the page's art that replaces
+/// the object, whether every text object's type is made from the text document or not.
+#[test]
+fn page_type_inside_an_unread_object_comes_in_with_its_page_art() {
+    let unread = os1_group("0 0 1 0 k\n20 10 m\n50 10 L\n50 30 L\n20 30 L\nf\nZZ");
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show \
+                1 0 0 0 setcmykcolor 20 10 moveto 50 10 lineto 50 30 lineto 20 30 lineto closepath fill \
+                0 0 0 1 setcmykcolor /Helvetica findfont 8 scalefont setfont 22 14 moveto (Ex) show";
+    let made = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let unmade =
+        last_frame_unread(&text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Note\r", 0, (8200.0, 8120.0), (0.0, 0.0), 0.0)]));
+    for (doc, objects) in [(made, text_object(0)), (unmade, text_object(0) + &text_object(1))] {
+        let art = native_with_text(&(layer("Words", true, &objects) + &layer("Mixed", true, &unread)), &doc);
+        let r = import(&eps(page, &art)).unwrap();
+        assert_eq!(names(&r.document), ["Words", "Mixed"], "{:?}", r.warnings);
+        let mut texts = all_texts(&r.document);
+        texts.retain(|t| !t.is_empty());
+        assert_eq!(texts, ["Hi there", "Ex"], "{:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.starts_with("some of the page's type")), "{:?}", r.warnings);
+        assert!(r.warnings.iter().any(|w| w.contains("`ZZ` (1)")), "{:?}", r.warnings);
+    }
+}
+
 #[test]
 fn shown_type_the_page_draws_in_pieces_comes_whole_from_the_text_document() {
     // Type on a path the page draws letter by letter: the letters lie on the path, and only the

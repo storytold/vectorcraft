@@ -204,6 +204,9 @@ pub(super) fn build_from(
     if outlined && infos.iter().any(|i| i.shown) {
         return Err("its type is to come in as outlines, which only its page has".into());
     }
+    // The page's type inside an unread object's box comes in with the page's art that replaces the
+    // object (see [`replace_unread`]), not in a text object.
+    let unread_type = take_unread_type(&doc, frame.as_ref(), &unread, &unread_elsewhere, &mut shown);
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
@@ -243,7 +246,14 @@ pub(super) fn build_from(
         made.chunk_by(|a, b| a.0 == b.0).filter(|thread| thread.len() > 1).flatten().map(|(_, _, id)| *id).collect();
     if !unread.is_empty() {
         let Some(frame) = frame.as_ref() else { return Err(unread_error(&unread)) };
-        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &threaded_frames)?;
+        let mut copied = BTreeSet::new();
+        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &threaded_frames, &mut copied)?;
+        // With the text objects filled, the page art chosen can differ from the first try's: the
+        // page's type set aside for it, and no other, must be in it.
+        let all_copied = |o: &Vec<Arc<Node>>| !o.is_empty() && o.iter().all(|n| copied.contains(&n.id));
+        if !unread_type.iter().all(all_copied) || shown.iter().any(all_copied) {
+            return Err("the page's type in an unread object's box isn't in its page art".into());
+        }
         notes.push(format!("{}: they came in as the page's art", kinds.join(", ")));
     }
     // A story in several frames is threaded type: its frames in order (the first holds the story).
@@ -527,16 +537,44 @@ fn unread_error(unread: &[(NodeId, Vec<String>)]) -> String {
     format!("it has {}, which VectorCraft doesn't read from it yet", ai::join_and(&list))
 }
 
+/// The page's text objects in `shown` that the page objects replacing `doc`'s unread objects hold
+/// (see [`replace_unread`], tried on a copy of `doc` before its text objects are filled), taken out
+/// of `shown`.
+fn take_unread_type(
+    doc: &Document,
+    frame: Option<&Frame<'_>>,
+    unread: &[(NodeId, Vec<String>)],
+    elsewhere: &[(NodeId, Rect)],
+    shown: &mut Vec<Vec<Arc<Node>>>,
+) -> Vec<Vec<Arc<Node>>> {
+    let Some(frame) = frame.filter(|_| !unread.is_empty() && !shown.is_empty()) else { return vec![] };
+    let mut copied = BTreeSet::new();
+    if replace_unread(&mut doc.clone(), frame, unread, elsewhere, &BTreeSet::new(), &mut copied).is_err() {
+        return vec![];
+    }
+    let (taken, kept) = std::mem::take(shown).into_iter().partition(|o| !o.is_empty() && o.iter().all(|n| copied.contains(&n.id)));
+    *shown = kept;
+    taken
+}
+
 /// Replace each unread top-level object with painted page objects inside its readable bounds.
+/// `copied` gets the ids of the page's nodes copied.
 fn replace_unread(
     doc: &mut Document,
     frame: &Frame<'_>,
     unread: &[(NodeId, Vec<String>)],
     elsewhere: &[(NodeId, Rect)],
     threaded_frames: &BTreeSet<NodeId>,
+    copied: &mut BTreeSet<NodeId>,
 ) -> Result<Vec<String>, String> {
     fn holds_threaded_frame(node: &Node, frames: &BTreeSet<NodeId>) -> bool {
         frames.contains(&node.id) || node.children().is_some_and(|children| children.iter().any(|child| holds_threaded_frame(child, frames)))
+    }
+    fn subtree(node: &Node, ids: &mut BTreeSet<NodeId>) {
+        ids.insert(node.id);
+        for child in node.children().into_iter().flatten() {
+            subtree(child, ids);
+        }
     }
 
     let unread_ids: BTreeSet<NodeId> = unread.iter().map(|(id, _)| *id).collect();
@@ -645,6 +683,7 @@ fn replace_unread(
             }
             found.push(Arc::new(reid_page_art(doc, &copy)));
             claimed.insert(i, art[i].end);
+            subtree(&art[i].node, copied);
         }
         let mut replacement = Node::group(*id, found);
         replacement.name = name;
@@ -1048,6 +1087,7 @@ mod candidate_tests {
             &[(placeholder_id, vec!["placed files".into()])],
             &[(placeholder_id, Rect::new(50.0, 50.0, 54.0, 54.0))],
             &BTreeSet::new(),
+            &mut BTreeSet::new(),
         )
         .unwrap();
         assert_eq!(kinds, ["placed files (1)"]);
@@ -1084,7 +1124,7 @@ mod candidate_tests {
         let (first, second) = (Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 200.0, 100.0));
         let frame =
             Frame { page: &page, page_rect: first, rect: first, whole: false, pages: vec![(first, Affine::IDENTITY), (second, Affine::IDENTITY)] };
-        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new());
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object lies on more than one artboard");
     }
 
@@ -1109,13 +1149,13 @@ mod candidate_tests {
         page.insert(Some(page.layers[0].id), 0, art).unwrap();
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
         let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
-        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new());
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object lies on an artboard that has no page");
 
         // Half a point onto it is still on it.
         let narrow = Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(90.0, 10.0, 100.5, 20.0)), Default::default());
         *doc.node_mut(id).unwrap() = narrow;
-        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new());
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object lies on an artboard that has no page");
     }
 
@@ -1146,6 +1186,7 @@ mod candidate_tests {
             &[(group_id, vec!["placed files".into()])],
             &[(placeholder_id, Rect::new(80.0, 80.0, 90.0, 90.0))],
             &BTreeSet::new(),
+            &mut BTreeSet::new(),
         );
         assert_eq!(result.unwrap_err(), "an unread object's page art wasn't found in its bounds");
         let group = doc.node(group_id).unwrap();
@@ -1177,9 +1218,15 @@ mod candidate_tests {
         }
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
         let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
-        let kinds =
-            replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[(id, Rect::new(50.0, 50.0, 60.0, 60.0))], &BTreeSet::new())
-                .unwrap();
+        let kinds = replace_unread(
+            &mut doc,
+            &frame,
+            &[(id, vec!["placed files".into()])],
+            &[(id, Rect::new(50.0, 50.0, 60.0, 60.0))],
+            &BTreeSet::new(),
+            &mut BTreeSet::new(),
+        )
+        .unwrap();
         assert_eq!(kinds, ["placed files (1)"]);
         let replacement = doc.node(id).unwrap();
         let [art] = replacement.children().unwrap().as_slice() else { panic!("{replacement:?}") };
@@ -1212,7 +1259,7 @@ mod candidate_tests {
         }
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
         let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
-        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new());
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object's appearance is not identifiable in the page art");
     }
 
@@ -1244,15 +1291,55 @@ mod candidate_tests {
         let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
         let unread = [(first, vec!["placed files".into()]), (second, vec!["placed files".into()])];
         let mut one_box_doc = doc.clone();
-        let kinds = replace_unread(&mut doc, &frame, &unread, &[(second, Rect::new(50.0, 50.0, 60.0, 60.0))], &BTreeSet::new()).unwrap();
+        let kinds = replace_unread(&mut doc, &frame, &unread, &[(second, Rect::new(50.0, 50.0, 60.0, 60.0))], &BTreeSet::new(), &mut BTreeSet::new())
+            .unwrap();
         assert_eq!(kinds, ["placed files (2)"]);
         let first_art = doc.node(first).unwrap().children().unwrap()[0].geometric_bounds();
         let second_art = doc.node(second).unwrap().children().unwrap()[0].geometric_bounds();
         assert_eq!(first_art, Some(Rect::new(14.0, 14.0, 16.0, 16.0)));
         assert_eq!(second_art, Some(Rect::new(51.0, 51.0, 59.0, 59.0)));
         assert_eq!(
-            replace_unread(&mut one_box_doc, &frame, &unread, &[], &BTreeSet::new()).unwrap_err(),
+            replace_unread(&mut one_box_doc, &frame, &unread, &[], &BTreeSet::new(), &mut BTreeSet::new()).unwrap_err(),
             "one page object matches more than one unread object"
         );
+    }
+
+    /// Only the page's type in the page art that replaces an unread object is taken out of the
+    /// page's type for the text objects: type in the object's other box, which isn't used, stays.
+    #[test]
+    fn only_page_type_in_the_chosen_box_is_taken_for_an_unread_object() {
+        let mut doc = Document::new(100.0, 100.0);
+        let id = doc.alloc_id();
+        doc.insert(
+            Some(doc.layers[0].id),
+            0,
+            Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), Default::default()),
+        )
+        .unwrap();
+        let mut page = Document::new(100.0, 100.0);
+        let mut nodes = vec![];
+        for bounds in [Rect::new(12.0, 12.0, 18.0, 18.0), Rect::new(52.0, 52.0, 58.0, 58.0)] {
+            let art = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(bounds),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            nodes.push(Arc::new(art.clone()));
+            page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
+        }
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let unread = [(id, vec!["placed files".into()])];
+        let mut shown: Vec<Vec<Arc<Node>>> = nodes.iter().map(|n| vec![Arc::clone(n)]).collect();
+        let taken = take_unread_type(&doc, Some(&frame), &unread, &[(id, Rect::new(50.0, 50.0, 60.0, 60.0))], &mut shown);
+        assert_eq!(taken.iter().flatten().map(|n| n.id).collect::<Vec<_>>(), [nodes[0].id]);
+        assert_eq!(shown.iter().flatten().map(|n| n.id).collect::<Vec<_>>(), [nodes[1].id]);
+        let mut copied = BTreeSet::new();
+        replace_unread(&mut doc, &frame, &unread, &[], &BTreeSet::new(), &mut copied).unwrap();
+        assert!(copied.contains(&nodes[0].id) && !copied.contains(&nodes[1].id));
     }
 }
