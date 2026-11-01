@@ -5317,6 +5317,11 @@ effect	Points	Σημεία
 	Editable	Επεξεργάσιμο
 	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
 	Load Variable Library…	Φόρτωση βιβλιοθήκης μεταβλητών…
+	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
+@msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	το σύνολο δεδομένων `{name}` περιέχει χαρακτήρα ελέγχου, τον οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	το σύνολο δεδομένων `{name}` ξεκινά ή τελειώνει με κενό διάστημα, το οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 	Filter	Φίλτρο
 	Filter Layers Panel Rows	Φιλτράρισμα γραμμών πίνακα επιπέδων
 	Flatten	Ισοπέδωση
