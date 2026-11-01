@@ -366,13 +366,17 @@ fn params(d: &Dialog) -> Map<String, Value> {
     {
         p.insert("listLevel".into(), json!(l));
     }
+    // For paragraphs in a list and paragraphs in none, an indent left as it was is not sent:
+    // `text.setFormat` then gives each paragraph that joins the list its hanging indent.
+    let mixed = initial.is_some_and(|m| !m.contains_key("list"));
     for key in ["leftIndent", "firstLineIndent"] {
         if !d.fields.contains_key(key) {
             continue;
         }
         // A length typed with its unit ("6 mm") is sent in points.
         let v = d.f64(key, 0.0);
-        if listing || initial.and_then(|m| m.get(key)).and_then(Value::as_f64) != Some(v) {
+        let changed = initial.and_then(|m| m.get(key)).and_then(Value::as_f64) != Some(v);
+        if changed || (listing && !mixed) {
             p.insert(key.into(), json!(v));
         }
     }
@@ -566,6 +570,26 @@ mod tests {
         let (one, two) = paras(&app, id);
         assert_eq!((one.list, one.left_indent), (Some(ParaList::bulleted(Bullet::Circle).aligned(ListAlign::Right)), 30.0));
         assert_eq!((two.list, two.left_indent), (None, 0.0), "the paragraph in no list stays out of one");
+    }
+
+    /// A preset picked for a list paragraph and a paragraph in no list, both without indents, gives
+    /// the paragraph that joins the list the hanging indent, and the list paragraph keeps its indents.
+    #[test]
+    fn a_preset_for_listed_and_unlisted_paragraphs_indents_the_one_joining_the_list() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"ids": [id], "bullet": "circle", "leftIndent": 0, "firstLineIndent": 0, "start": 0, "end": 0})).unwrap();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert!(!d.fields.contains_key("list"), "the list kinds differ");
+        assert_eq!((d.f64("leftIndent", 1.0), d.f64("firstLineIndent", 1.0)), (0.0, 0.0));
+        pick_preset(&mut app, "bullet", Some("dot"));
+        frame(&mut app);
+        assert_eq!(paras(&app, id).1.left_indent, 18.0, "previewed with the hanging indent");
+        super::super::confirm(&mut app).unwrap();
+        let (one, two) = paras(&app, id);
+        let dot = Some(ParaList::bulleted(Bullet::Dot));
+        assert_eq!((one.list, one.left_indent, one.first_line_indent), (dot, 0.0, 0.0));
+        assert_eq!((two.list, two.left_indent, two.first_line_indent), (dot, 18.0, -18.0));
     }
 
     /// Alignment changed for paragraphs that stay in no list sends nothing: there is no preview,
