@@ -239,6 +239,47 @@ fn the_methods_reshape_a_character_strokes_inner_edge() {
     }
 }
 
+/// Type with more groups of paints than the renderer draws one at a time is drawn as one group,
+/// and each method still reshapes its outer edges. Nine runs, each with an opaque solid fill and a
+/// stroke, make ten groups: each run's stroke starts a group that the next run's fill joins. Crisp
+/// and Strong give each pixel the share `edge_coverage` gives the share Sharp draws, and None
+/// paints whole pixels.
+#[test]
+fn type_with_more_paint_groups_than_the_limit_takes_the_method() {
+    let opts = RenderOptions::default();
+    let draw = |m: TypeAntiAlias| {
+        let mut d = Document::new(f64::from(W), f64::from(H));
+        let style = CharStyle {
+            size: 32.0,
+            fill: Paint::solid(Color::rgb(0.0, 0.0, 1.0)),
+            stroke: Paint::solid(Color::rgb(1.0, 0.0, 0.0)),
+            stroke_width: 1.0,
+            ..Default::default()
+        };
+        let mut t = TextObject::point(Point::new(10.3, 60.4), "H", style.clone());
+        for c in "amburger".chars() {
+            t.runs.push(TextRun::new(c.to_string(), style.clone()));
+        }
+        assert_eq!(t.runs.len(), 9, "nine runs");
+        t.anti_alias = m;
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        alphas(&d, &opts)
+    };
+    let sharp = draw(TypeAntiAlias::Sharp);
+    assert!(partial(&sharp) > 200, "Sharp draws smooth edges: {} partial pixels", partial(&sharp));
+    for m in [TypeAntiAlias::Crisp, TypeAntiAlias::Strong] {
+        let drawn = draw(m);
+        assert_ne!(drawn, sharp, "{m:?} changes the edges");
+        let wrong = off_the_share(m, &sharp, &drawn);
+        assert!(wrong.is_empty(), "{m:?}: (pixel, Sharp, drawn) {wrong:?}");
+    }
+    let none = draw(TypeAntiAlias::None);
+    assert_ne!(none, sharp, "None changes the edges");
+    assert_eq!(partial(&none), 0, "None paints whole pixels");
+}
+
 /// Crisp and Strong type with several faint fills of the object draws the pixels inside the
 /// characters as Sharp draws them: the fills are composited there before their colors are rounded.
 #[test]
