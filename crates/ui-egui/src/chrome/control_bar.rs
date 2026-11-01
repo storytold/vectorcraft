@@ -104,17 +104,22 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Control bar's isolation button. In isolation mode it is Exit Isolation Mode, except while a
-/// pattern is edited (the isolation bar's Done and Cancel end that). Otherwise, with one object
-/// selected that [`vectorcraft_tools::select::isolates`], it is Isolate Selected Object, which
-/// also isolates a path inside a group that Direct Selection selected. An envelope's contents
-/// get no button: the envelope's Edit Envelope and Edit Contents buttons show instead.
+/// pattern is edited (the isolation bar's Done and Cancel end that), and Exit Symbol Editing Mode
+/// while a symbol's art is the isolated layer. Otherwise, with one object selected that
+/// [`vectorcraft_tools::select::isolates`], it is Isolate Selected Object, which also isolates a
+/// path inside a group that Direct Selection selected. An envelope's contents get no button: the
+/// envelope's Edit Envelope and Edit Contents buttons show instead.
 fn isolation_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let (icon, tip, id) = if st.isolation.is_some() {
         if st.doc.pattern_edit.is_some() {
             return;
         }
-        ("chevron-left", tl!("Exit Isolation Mode"), "object.exitIsolation")
+        if st.doc.symbol_edit.as_ref().is_some_and(|e| st.isolation == Some(e.layer)) {
+            ("chevron-left", tl!("Exit Symbol Editing Mode"), "symbol.exitEditing")
+        } else {
+            ("chevron-left", tl!("Exit Isolation Mode"), "object.exitIsolation")
+        }
     } else if let [one] = st.selection.objects[..]
         && st.doc.node(one).is_some_and(|n| vectorcraft_tools::select::isolates(&n.kind))
         && vectorcraft_doc::live::envelope_of(&st.doc, one).is_none()

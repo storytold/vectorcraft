@@ -106,8 +106,11 @@ pub fn decorations(layout: &TextLayout, db: &FontDb, t: &TextObject) -> Vec<(usi
 const SHRINK_PASSES: usize = 11;
 
 /// Lay out a text object with explicit options (area type rows/columns, inset, first baseline,
-/// fit, composer, OpenType features).
+/// fit, composer, OpenType features). Each run is set at the em size its font height reference
+/// gives it ([`FontDb::font_heights_resolved`]).
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    let resolved = db.font_heights_resolved(t);
+    let t = &*resolved;
     let first = layout_once(db, t, opts);
     match (opts.fit.min_scale(), &t.kind) {
         (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, opts, min).unwrap_or(first),
