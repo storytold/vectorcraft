@@ -107,7 +107,7 @@ fn chips_stay_linked_and_labels_stay_on_their_chips() {
     let chip = kids.iter().find(|n| matches!(n.kind, NodeKind::Path { .. })).unwrap();
     assert_eq!(chip.appearance.fill_paint().color().map(|c| c.to_hex()), Some("#a02050".into()), "the edit reached the chip");
     let label = kids.iter().find(|n| matches!(n.kind, NodeKind::Text(_))).unwrap();
-    let NodeKind::Text(t) = &label.kind else { unreachable!() };
+    let NodeKind::Text(t) = &label.kind else { panic!("not type") };
     assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) && matches!(t.area.fit, vectorcraft_doc::AreaFit::ShrinkText { .. }));
     let (c, l) = (chip.geometric_bounds().unwrap(), label.geometric_bounds().unwrap());
     assert!(l.x0 >= c.x0 - 1e-6 && l.y0 >= c.y0 - 1e-6 && l.x1 <= c.x1 + 1e-6 && l.y1 <= c.y1 + 1e-6, "label {l:?} inside chip {c:?}");
