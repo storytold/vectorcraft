@@ -15,7 +15,7 @@ use vectorcraft_pathops::BoolOp;
 use super::draw2::{components, erase_outline, ids_json, replace_with_pieces};
 use super::edit::selected_roots;
 use super::pathops::{Beside, node_path};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, finite_numbers, has_selection, point_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -130,7 +130,8 @@ fn cut_targets(s: &Session) -> Result<Vec<NodeId>> {
         }
     }
     out.dedup();
-    out.retain(|id| doc.is_editable(*id));
+    let editable = doc.editable();
+    out.retain(|id| editable(*id));
     Ok(out)
 }
 
@@ -208,8 +209,8 @@ fn split_by_line(pd: &PathData, rule: FillRule, axis: &Axis) -> Option<Vec<PathD
         return Some(components(&a).into_iter().chain(components(&b)).collect());
     }
     // Open paths: the parts on each side (each pass removes the other side).
-    let a = erase_outline(pd, &|q| axis.side(q) < 0.0)?;
-    let b = erase_outline(pd, &|q| axis.side(q) >= 0.0)?;
+    let a = erase_outline(pd, f64::INFINITY, &|q| axis.side(q) < 0.0)?;
+    let b = erase_outline(pd, f64::INFINITY, &|q| axis.side(q) >= 0.0)?;
     Some(if pd.subpaths.len() == 1 {
         a.into_iter().chain(b).collect()
     } else {
@@ -248,7 +249,9 @@ fn crop(pd: &PathData, rule: FillRule, rect: Rect) -> Option<Vec<PathData>> {
         return Some(if r.is_empty() { vec![] } else { vec![r] });
     }
     let inside = rect.inflate(1e-9, 1e-9);
-    let pieces = erase_outline(pd, &|q| !(q.x >= inside.x0 && q.x <= inside.x1 && q.y >= inside.y0 && q.y <= inside.y1))?;
+    // Sampled at least every half of the rectangle's shorter side, so a line through it is found.
+    let step = rect.width().min(rect.height()) / 2.0;
+    let pieces = erase_outline(pd, step, &|q| !(q.x >= inside.x0 && q.x <= inside.x1 && q.y >= inside.y0 && q.y <= inside.y1))?;
     Some(if pd.subpaths.len() == 1 || pieces.is_empty() {
         pieces
     } else {
@@ -316,7 +319,7 @@ fn mirror(pd: &PathData, rule: FillRule, axis: &Axis, sign: f64) -> Vec<PathData
         let joined = po::boolean(&kept, FillRule::NonZero, &kept.transformed(m), FillRule::NonZero, BoolOp::Union);
         return if joined.is_empty() { vec![] } else { vec![joined] };
     }
-    let kept = match erase_outline(pd, &|q| axis.side(q) * sign < 0.0) {
+    let kept = match erase_outline(pd, f64::INFINITY, &|q| axis.side(q) * sign < 0.0) {
         Some(pieces) => pieces.into_iter().flat_map(|p| p.subpaths).collect(),
         None => pd.subpaths.clone(),
     };

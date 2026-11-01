@@ -19,7 +19,10 @@ use vectorcraft_geom::Rect;
 
 use super::edit::{outermost, selected_roots};
 use super::pathops::Beside;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_doc, has_selection, ids_param, matrix_param, ok, point_param,
+    str_param, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -29,8 +32,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Pattern"],
             None,
-            "{ids?, name?, tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode → {name}",
-            has_selection,
+            "{ids?, name? (trimmed; blank: New Pattern N), tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode; refused while an opacity mask is edited → {name}",
+            can_make_pattern,
             pattern_make
         ),
         cmd!(
@@ -38,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Pattern",
             ["Object", "Pattern"],
             Some("Cmd+Shift+F8"),
-            "{name?} edit a pattern (default: the selected object's fill pattern) in pattern editing mode",
+            "{name?} edit a pattern (default: the selected object's fill pattern) in pattern editing mode; refused while an opacity mask is edited",
             can_edit_pattern,
             pattern_edit
         ),
@@ -57,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save a Copy",
             [],
             None,
-            "{name?} while editing, save the current tile as a new pattern swatch → {name}",
+            "{name? (trimmed; blank: <pattern> copy)} while editing, save the current tile as a new pattern swatch → {name}",
             in_pattern_edit,
             pattern_save_copy
         ),
@@ -66,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pattern Options",
             ["Window", "Pattern Options"],
             None,
-            "{name? (default: the pattern being edited), newName?, tileType?, brickOffset?, width?, height?, hSpacing?, vSpacing?, sizeTileToArt?: bool, overlap?: {h: left|right, v: top|bottom}, copies?: 3|5|7|9, dimCopies?: %, showTileEdge?: bool, showSwatchBounds?: bool (outline the part of the tiling the swatch repeats, dashed)}",
+            "{name? (default: the pattern being edited), newName? (trimmed; blank: the name is kept), tileType?, brickOffset?, width?, height?, hSpacing?, vSpacing?, sizeTileToArt?: bool, overlap?: {h: left|right, v: top|bottom}, copies?: 3|5|7|9, dimCopies?: %, showTileEdge?: bool, showSwatchBounds?: bool (outline the part of the tiling the swatch repeats, dashed)}",
             has_doc,
             pattern_options
         ),
@@ -158,11 +161,27 @@ fn in_pattern_edit(s: &Session) -> std::result::Result<(), String> {
     editing(s).map(|_| ()).ok_or_else(|| "not in pattern editing mode".into())
 }
 
+/// Make: a selection, and no opacity mask or symbol is being edited
+/// ([`super::maskedit::outside_mask_editing`], [`outside_symbol_editing`]), since the tile layer
+/// would replace that mode's editing layer as the isolated layer.
+fn can_make_pattern(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)
+}
+
+/// No symbol is being edited (symbol editing mode shows the symbol in isolation mode).
+fn outside_symbol_editing(s: &Session) -> std::result::Result<(), String> {
+    if s.active().is_some_and(|st| st.doc.symbol_edit.is_some()) { Err("exit isolation mode first".into()) } else { Ok(()) }
+}
+
 fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
     if editing(s).is_some() {
         return Err("already editing a pattern".into());
     }
+    super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)?;
     if s.active().is_some_and(|st| st.doc.patterns.is_empty()) { Err("the document has no patterns".into()) } else { Ok(()) }
 }
 
@@ -210,14 +229,14 @@ fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
 }
 
 fn unique_pattern_name(d: &Document, base: &str) -> String {
-    if d.pattern(base).is_none() && d.swatch(base).is_none() {
+    if d.pattern(base).is_none() && !d.swatch_name_taken(base) {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap_or_else(|| base.to_string())
+    (2..).map(|i| format!("{base} {i}")).find(|n| d.pattern(n).is_none() && !d.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
 }
 
 fn next_pattern_name(d: &Document) -> String {
-    (1..).map(|i| format!("New Pattern {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap_or_else(|| "New Pattern".to_string())
+    (1..).map(|i| format!("New Pattern {i}")).find(|n| d.pattern(n).is_none() && !d.swatch_name_taken(n)).unwrap_or_else(|| "New Pattern".to_string())
 }
 
 /// Add pattern `def` and its swatch.
@@ -294,7 +313,7 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "width/height must be > 0"));
     }
     let edit = bool_or(p, "edit", true);
-    let wanted = str_param(p, "name").map(str::to_string);
+    let wanted = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     let name = s.edit("Make Pattern", |d, sel| {
         let name = match &wanted {
             Some(n) => unique_pattern_name(d, n),
@@ -352,7 +371,12 @@ fn pattern_name(p: &Paint) -> Option<String> {
     }
 }
 
-fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
+/// Save the edited tile art into the pattern and leave pattern editing mode (`object.pattern.done`).
+/// `object.exitIsolation` runs it too while a pattern is edited.
+pub(crate) fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
+    if editing(s).is_some() {
+        s.end_text_edit();
+    }
     let name = s.edit("Done Editing Pattern", |d, sel| {
         let (pe, art) = leave_edit(d, sel)?;
         if let Some(def) = d.pattern_mut(&pe.pattern) {
@@ -388,12 +412,12 @@ fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
-    let wanted = str_param(p, "name").map(str::to_string);
+    let wanted = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     let name = s.edit("Save a Copy", |d, _| {
         let pe = d.pattern_edit.clone().ok_or_else(|| EngineError::Other("not in pattern editing mode".into()))?;
         let mut def = d.pattern(&pe.pattern).cloned().ok_or_else(|| EngineError::Other("pattern missing".into()))?;
         let art: Vec<Arc<Node>> = d.node(pe.layer).and_then(|l| l.children().cloned()).unwrap_or_default();
-        let name = unique_pattern_name(d, wanted.as_deref().unwrap_or(&format!("{} copy", pe.pattern)));
+        let name = unique_pattern_name(d, wanted.as_deref().unwrap_or(&format!("{} copy", pe.pattern.trim())));
         def.name = name.clone();
         def.art = copies(d, &art).into_iter().map(Arc::new).collect();
         if def.size_tile_to_art {
@@ -419,11 +443,15 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("{k} must be > 0")));
         }
     }
-    let new_name = str_param(p, "newName").map(str::to_string).filter(|n| !n.is_empty() && *n != name);
-    if let Some(n) = &new_name
-        && s.doc()?.doc.pattern(n).is_some()
-    {
-        return Err(bad(C, format!("a pattern named `{n}` exists")));
+    let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
+    if let Some(n) = &new_name {
+        let d = &s.doc()?.doc;
+        if d.pattern(n).is_some() {
+            return Err(bad(C, format!("a pattern named `{n}` exists")));
+        }
+        if swatch_name_clash(d, &name, n) {
+            return Err(bad(C, format!("a swatch or color group named `{n}` exists")));
+        }
     }
     let overlap = match p.get("overlap") {
         Some(o) => Overlap {
@@ -479,7 +507,19 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": out_name }))
 }
 
-/// Rename a pattern in swatches, paints and the edit record.
+/// Is `new` taken for pattern `old` by a swatch or a color group (they share one namespace,
+/// [`Document::swatch_name_taken`])? It is free when the swatches named `new` are one or more
+/// swatches of the pattern and none of the pattern's swatches is named `old` (those take the new
+/// name in [`rename_pattern_uses`]).
+fn swatch_name_clash(d: &Document, old: &str, new: &str) -> bool {
+    let own = |w: &vectorcraft_color::Swatch| pattern_name(&w.paint).is_some_and(|p| p == old);
+    let mut holders = d.swatches_iter().filter(|w| w.name == new).peekable();
+    let only_own = holders.peek().is_some() && holders.all(own);
+    d.swatch_name_taken(new) && (!only_own || d.swatches_iter().any(|w| w.name == old && own(w)))
+}
+
+/// Rename a pattern in swatches, paints and the edit record. Of the swatches named `old`, only the
+/// pattern's own take the new name.
 fn rename_pattern_uses(d: &mut Document, old: &str, new: &str) {
     let fix = |p: &mut Paint| {
         if let Paint::Pattern { pattern, .. } = p
@@ -489,7 +529,7 @@ fn rename_pattern_uses(d: &mut Document, old: &str, new: &str) {
         }
     };
     for sw in d.swatches.iter_mut().chain(d.swatch_groups.iter_mut().flat_map(|g| g.swatches.iter_mut())) {
-        if sw.name == old {
+        if sw.name == old && pattern_name(&sw.paint).is_some_and(|p| p == old) {
             sw.name = new.to_string();
         }
         fix(&mut sw.paint);
@@ -721,7 +761,8 @@ fn repeat_expand(s: &mut Session, _: &Value) -> Result<Value> {
 /// instance node gets a fresh id.
 fn expand_repeat(d: &mut Document, r: NodeId) -> Result<()> {
     let Some(n) = d.node(r).cloned() else { return Ok(()) };
-    let mut g = vectorcraft_doc::live::expanded_group(&n, None);
+    let hooks = vectorcraft_doc::live::Hooks { symbols: Some(d), ..Default::default() };
+    let mut g = vectorcraft_doc::live::expanded_group_hooks(&n, hooks);
     if let Some(ch) = g.children_mut() {
         for c in ch.iter_mut() {
             fix_ids(d, Arc::make_mut(c));

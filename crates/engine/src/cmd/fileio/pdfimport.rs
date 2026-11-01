@@ -1,13 +1,13 @@
 //! Opening and placing PDF (and PDF-compatible `.ai`/`.ait`) files: the options `document.open`
 //! and `file.place` read ([`LoadOptions`]), the pages they import and `document.pdfInfo` (pages,
-//! boxes, a thumbnail) for the Import PDF dialog.
+//! boxes, a thumbnail; one page for a PostScript file) for the Import PDF dialog.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{ColorMode, Document};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 
 use super::super::colormgmt::Grays;
-use super::super::*;
+use super::super::{Result, Session, bad, f64_or, parse_range, str_param};
 use super::{err, source};
 
 /// The `document.open` options besides the file. The PDF ones (pages, box, password, text,
@@ -143,13 +143,13 @@ pub(super) fn import(bytes: &[u8], o: &LoadOptions, editor_document: bool) -> Re
 }
 
 /// Page `page` (0-based) of a PDF as a document of one artboard (its `o.crop` box) and one
-/// layer of what it shows (text as outlines: it looks as printed), and the import notes.
+/// layer of what it shows, with the same text choice as Open, and the import notes.
 pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
     let opts = ImportOptions {
         pages: Some(vec![page]),
         crop: o.crop,
         password: o.password.clone(),
-        text_as: TextAs::Outlines,
+        text_as: o.text_as,
         layers: false,
         ..Default::default()
     };
@@ -162,6 +162,10 @@ const INFO: &str = "document.pdfInfo";
 pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
     let bytes = source(p, INFO)?.bytes;
     let o = LoadOptions::from_params(INFO, p)?;
+    // Programs whose header is only `%!` are PostScript too, as `clipboard.importEps` reads them.
+    if bytes.starts_with(b"%!") || vectorcraft_pdf::is_postscript(&bytes) {
+        return postscript_info(&bytes, p);
+    }
     let info = match vectorcraft_pdf::info(&bytes, o.password.as_deref()) {
         Ok(i) => i,
         Err(e @ (PdfError::NeedsPassword | PdfError::WrongPassword)) => {
@@ -179,14 +183,42 @@ pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     let mut out = json!({"pages": pages.len(), "needsPassword": false, "pageInfo": pages});
-    if let Some(n) = p.get("thumbnail").and_then(Value::as_u64) {
-        let page = usize::try_from(n).ok().and_then(|n| n.checked_sub(1)).filter(|i| *i < info.pages.len());
-        let page = page.ok_or_else(|| bad(INFO, format!("thumbnail: no page {n} (the PDF has {})", info.pages.len())))?;
+    if let Some(page) = thumbnail_page(p, info.pages.len(), "PDF")? {
         let (doc, _) = page_document(&bytes, page, &o)?;
-        let size = f64_or(p, "thumbnailSize", 160.0).clamp(16.0, 1024.0);
-        let r = doc.artboards.first().map(|a| a.rect).ok_or_else(|| err("the page has no area"))?;
-        let png = super::encode(&doc, "png", &json!({"scale": size / r.width().max(r.height()).max(1.0)}))?;
-        out["thumbnail"] = json!(vectorcraft_format::base64_encode(&png));
+        out["thumbnail"] = json!(thumbnail(&doc, p)?);
     }
     Ok(out)
+}
+
+/// The page (0-based) `document.pdfInfo`'s `thumbnail` names, from 1 to `count`; `None` when it is
+/// absent or null. Any other value (0, a negative or fractional number, a string) is an error that
+/// names the pages the `what` has.
+fn thumbnail_page(p: &Value, count: usize, what: &str) -> Result<Option<usize>> {
+    let Some(v) = p.get("thumbnail").filter(|v| !v.is_null()) else { return Ok(None) };
+    let page = v.as_u64().and_then(|n| usize::try_from(n).ok()).and_then(|n| n.checked_sub(1)).filter(|i| *i < count);
+    page.map(Some).ok_or_else(|| bad(INFO, format!("thumbnail: no page {v} (the {what} has {count})")))
+}
+
+/// `document.pdfInfo` of a PostScript file (an EPS, a `.ps` file, a `.ai` in PostScript form): one
+/// page, the page [`vectorcraft_eps::page`] reads, with no PDF boxes. Its thumbnail is the file as
+/// the EPS reader reads it without any editing data it carries: what the page prints, or the
+/// file's preview when its PostScript can't be read.
+fn postscript_info(bytes: &[u8], p: &Value) -> Result<Value> {
+    let page = vectorcraft_eps::page(bytes).map_err(err)?;
+    let info = json!({"width": page.width(), "height": page.height(), "rotation": 0, "boxes": {}});
+    let mut out = json!({"pages": 1, "needsPassword": false, "pageInfo": [info]});
+    if thumbnail_page(p, 1, "file")?.is_some() {
+        let doc = vectorcraft_eps::import_with(bytes, false).map_err(err)?.document;
+        out["thumbnail"] = json!(thumbnail(&doc, p)?);
+    }
+    Ok(out)
+}
+
+/// A PNG of `doc`'s first artboard, `thumbnailSize` px (default 160, from 16 to 1024) on its longer
+/// side, base64.
+fn thumbnail(doc: &Document, p: &Value) -> Result<String> {
+    let size = f64_or(p, "thumbnailSize", 160.0).clamp(16.0, 1024.0);
+    let r = doc.artboards.first().map(|a| a.rect).ok_or_else(|| err("the page has no area"))?;
+    let png = super::encode(doc, "png", &json!({"scale": size / r.width().max(r.height()).max(1.0)}))?;
+    Ok(vectorcraft_format::base64_encode(&png))
 }

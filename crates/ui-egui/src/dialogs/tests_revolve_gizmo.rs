@@ -2,6 +2,7 @@
 use super::*;
 use crate::{dialogs, theme};
 use egui::{Event, Modifiers, PointerButton};
+use vectorcraft_effects::revolve_options;
 use vectorcraft_engine::Session;
 
 struct Harness {
@@ -247,4 +248,35 @@ fn light_height_is_bounded_and_shading_off_disables_the_light_gizmo() {
     h.frame(vec![Event::PointerMoved(from + vec2(40.0, 0.0))], Modifiers::NONE);
     h.release(from + vec2(40.0, 0.0), Modifiers::NONE);
     assert_eq!(super::super::form::params(h.app.ui.dialog.as_ref().unwrap()), before);
+}
+
+#[test]
+fn selected_light_gizmo_edits_only_that_light_and_escape_restores_the_list() {
+    let mut h = Harness::new();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("__gizmo".into(), json!("light"));
+    d.fields.insert("__light".into(), json!(1));
+    d.fields.insert(
+        "lights".into(),
+        json!([
+            {"color":"#ff0000","rotation":30,"height":45,"intensity":60},
+            {"color":"#0000ff","rotation":-45,"height":30,"intensity":50}
+        ]),
+    );
+    h.settle();
+    let before = h.app.ui.dialog.as_ref().unwrap().fields["lights"].clone();
+    let g = h.geometry();
+    let p = g.light_labels()[0].center();
+    h.start(p, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(p + vec2(60.0, 0.0))], Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(p + vec2(80.0, 0.0))], Modifiers::NONE);
+    let d = h.app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["lights"][0], before[0]);
+    assert_ne!(d.fields["lights"][1]["rotation"], before[1]["rotation"]);
+    h.frame(
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }],
+        Modifiers::NONE,
+    );
+    h.release(p + vec2(80.0, 0.0), Modifiers::NONE);
+    assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["lights"], before);
 }

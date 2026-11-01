@@ -94,26 +94,27 @@ impl Node {
     }
 }
 
-/// Draw the overprinting fills and strokes of `a`'s subtree with Multiply (those with a blend
+/// Draw the overprinting fills and strokes of `a`'s subtree with Darken (those with a blend
 /// mode of their own keep it), copying only the nodes on the way to them: on screen and on a
-/// printed plate this approximates their inks printing over the inks below. With `discard_white`
+/// printed plate this approximates their inks printing over the inks below. Darken keeps the
+/// stronger ink of each plate (and each additive channel), so a colour overprinting itself stays
+/// that colour, where Multiply would darken it. With `discard_white`
 /// (Document Setup → Discard White Overprint) white fills and strokes knock out instead.
-pub fn multiply_overprints(a: &mut Arc<Node>, discard_white: bool) {
+pub fn darken_overprints(a: &mut Arc<Node>, discard_white: bool) {
     if !a.has_overprint() {
         return;
     }
     let n = Arc::make_mut(a);
-    let multiplies =
-        |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint));
+    let darkens = |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint));
     for it in &mut n.appearance.items {
         match it {
-            crate::AppearanceItem::Fill(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
-            crate::AppearanceItem::Stroke(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
+            crate::AppearanceItem::Fill(l) if darkens(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Darken,
+            crate::AppearanceItem::Stroke(l) if darkens(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Darken,
             _ => {}
         }
     }
     for c in n.children_mut().into_iter().flatten() {
-        multiply_overprints(c, discard_white);
+        darken_overprints(c, discard_white);
     }
 }
 
@@ -141,8 +142,10 @@ impl Document {
         let ids: Vec<NodeId> = list.as_array().into_iter().flatten().filter_map(|v| v.as_u64()).map(NodeId).collect();
         // The old list marked spot-linked blacks too (so the spot names don't matter).
         let op = OverprintBlack { spot: true, ..Default::default() };
-        for id in ids {
-            if let Some(n) = self.node_mut(id) {
+        // One walk of the tree finds them all (a missing id costs a walk each, and a list can repeat it).
+        let paths = self.index_paths(ids);
+        for path in paths.values() {
+            if let Some(n) = self.node_mut_at(path) {
                 op.apply(n, &[]);
             }
         }

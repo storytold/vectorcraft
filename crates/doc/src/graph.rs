@@ -127,7 +127,7 @@ impl crate::Document {
                 break;
             }
             let Some(name) = GraphDesign::clean_name(&d.name) else { continue };
-            if kept.iter().any(|k| k.name == name) || d.art.count() > GraphDesign::MAX_NODES {
+            if kept.iter().any(|k| k.name == name) || d.art.count_with_masks() > GraphDesign::MAX_NODES {
                 continue;
             }
             kept.push(GraphDesign { name, art: std::sync::Arc::new(GraphDesign::plain_art(&d.art)) });
@@ -195,6 +195,57 @@ macro_rules! ids {
 }
 ids!(PiePosition { Even => "even", Ratio => "ratio", Stacked => "stacked" });
 ids!(PieSort { None => "none", All => "all", First => "first" });
+
+/// Object › Graph › Column › Column Type: how a column design fills a column or bar. Vertically Scaled stretches it
+/// along the value axis to the column's length at the column's width; Uniformly Scaled scales it both ways to that
+/// length, centered on the column; Repeating stacks copies that each stand for [`ColumnDesign::each`]; Sliding scales the
+/// part above its guide line (in a bar, right of it) in proportion to the column's width and stretches the rest.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ColumnType {
+    #[default]
+    Vertical,
+    Uniform,
+    Repeating,
+    Sliding,
+}
+
+/// Object › Graph › Column › For Fractions: a repeating design's last copy, for the part of a value less than one
+/// design, is cut off (Chop) or scaled down along the value axis (Scale).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Fractions {
+    #[default]
+    Chop,
+    Scale,
+}
+
+ids!(ColumnType { Vertical => "vertical", Uniform => "uniform", Repeating => "repeating", Sliding => "sliding" });
+ids!(Fractions { Chop => "chop", Scale => "scale" });
+
+/// Object › Graph › Column: the graph design a series' columns or bars are drawn with, and how it fills them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ColumnDesign {
+    pub design: String,
+    #[serde(skip_serializing_if = "ColumnType::is_default")]
+    pub column_type: ColumnType,
+    /// Repeating: the value one copy of the design stands for (Each Design Represents).
+    pub each: f64,
+    #[serde(skip_serializing_if = "Fractions::is_default")]
+    pub fractions: Fractions,
+}
+
+impl ColumnDesign {
+    /// Each Design Represents for a new column design.
+    pub const EACH: f64 = 10.0;
+}
+
+impl Default for ColumnDesign {
+    fn default() -> Self {
+        Self { design: String::new(), column_type: ColumnType::Vertical, each: Self::EACH, fractions: Fractions::Chop }
+    }
+}
 
 /// Graph Type › Value Axis: which side of the plot the value axis is drawn on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -345,6 +396,11 @@ pub struct GraphSpec {
     /// series index, for line, scatter and radar series; `None` and missing entries draw the default square.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub series_markers: Vec<Option<String>>,
+    /// Object › Graph › Column: the graph design each series' columns or bars (and legend swatch) are drawn with, by
+    /// series index, for column, stacked column, bar and stacked bar series; `None` and missing entries draw plain
+    /// columns.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub series_columns: Vec<Option<ColumnDesign>>,
     /// Graph Type › Tick Marks for the value axis (the left one, or the bottom one of bar graphs) and the right one:
     /// length, and tick marks per division (0 and 1 = one, at the labels).
     #[serde(skip_serializing_if = "TickLength::is_short")]
@@ -430,17 +486,22 @@ impl GraphSpec {
         let cells = self.cells();
         let width = cells.iter().map(Vec::len).max().unwrap_or(0).max(self.series.len());
         let mut out = String::from(",");
-        out.push_str(&(0..width).map(|s| self.series.get(s).cloned().unwrap_or_default()).collect::<Vec<_>>().join(","));
+        // Quote a label holding a separator, quote or line break (inner quotes doubled), or one with
+        // surrounding spaces; `always` also quotes blank and numeric labels so they stay labels.
+        let field = |c: &str, always: bool| {
+            let special = c.contains([',', '\t', '"', '\n', '\r']) || c != c.trim();
+            if special || (always && (c.trim().is_empty() || c.trim().parse::<f64>().is_ok())) {
+                format!("\"{}\"", c.replace('"', "\"\""))
+            } else {
+                c.to_string()
+            }
+        };
+        out.push_str(&(0..width).map(|s| field(self.series.get(s).map(String::as_str).unwrap_or_default(), false)).collect::<Vec<_>>().join(","));
         out.push('\n');
         let labelled = !self.categories.is_empty();
         for (i, r) in cells.iter().enumerate() {
             if labelled {
-                let c = self.categories.get(i).map(String::as_str).unwrap_or_default();
-                if c.trim().is_empty() || c.trim().parse::<f64>().is_ok() || c != c.trim() {
-                    out.push_str(&format!("\"{c}\""));
-                } else {
-                    out.push_str(c);
-                }
+                out.push_str(&field(self.categories.get(i).map(String::as_str).unwrap_or_default(), true));
                 out.push(',');
             }
             out.push_str(&r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(","));
@@ -474,6 +535,7 @@ impl Default for GraphSpec {
             right_axis_min: None,
             right_axis_max: None,
             series_markers: vec![],
+            series_columns: vec![],
             label_styles: LabelStyles::default(),
             first_row_in_front: false,
             first_column_in_front: false,

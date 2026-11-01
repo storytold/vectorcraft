@@ -92,7 +92,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__params").cloned().unwrap_or_else(|| json!({}));
     params["text"] = options(d);
     app.ui.dialog = None;
-    crate::place::run(app, &params)
+    crate::place::run_for_user(app, &params)
 }
 
 #[cfg(test)]

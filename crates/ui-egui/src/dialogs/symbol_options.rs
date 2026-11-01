@@ -1,12 +1,15 @@
-//! Symbol Options: name, Export Type (Graphic or Movie Clip) and Registration for a new symbol
+//! Symbol Options: name, Export Type (Graphic or Movie Clip), Symbol Type (Dynamic or Static) and
+//! Registration for a new symbol
 //! from the selection (`symbol.new`), or for the current symbol in the Symbols panel
 //! (`symbol.options`).
 //!
-//! Fields: `name`, `exportType` (`movieClip` | `graphic`), `registration` (0..8, the 9-point grid;
+//! Fields: `name`, `nineSlice` (bool) with `sliceLeft` / `sliceTop` / `sliceRight` / `sliceBottom`
+//! (percent of the symbol's size), `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
+//! `static`; a new symbol is dynamic), `registration` (0..8, the 9-point grid;
 //! 4 = centre), `__edit` (true when editing an existing symbol). Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use super::swatch_options::{grid, label};
 use super::{DialogSpec, form};
@@ -17,7 +20,27 @@ use crate::widgets;
 /// The dialog kind of Symbol Options.
 pub const KIND: &str = "symbolOptions";
 
-/// Export Type choices: (value, label). Illustrator's default is Movie Clip.
+/// The 9-slice guide fields, in `[left, top, right, bottom]` order.
+const SLICE_KEYS: [&str; 4] = ["sliceLeft", "sliceTop", "sliceRight", "sliceBottom"];
+
+/// The 9-slice dialog fields for `guides` (percent of the symbol's size; a third each when off).
+fn slice_fields(guides: Option<vectorcraft_doc::SymbolNineSlice>) -> Map<String, Value> {
+    let g = guides.unwrap_or_default();
+    let mut m = Map::new();
+    m.insert("nineSlice".into(), json!(guides.is_some()));
+    for (key, v) in SLICE_KEYS.iter().zip([g.left, g.top, g.right, g.bottom]) {
+        m.insert((*key).to_string(), json!((v * 100.0).round()));
+    }
+    m
+}
+
+/// The guides the dialog's fields describe, as the `nineSlice` / `nineSliceGuides` params.
+fn slice_params(d: &Dialog) -> Value {
+    let [l, t, r, b] = SLICE_KEYS.map(|key| d.f64(key, 100.0 / 3.0) / 100.0);
+    if d.bool("nineSlice") { json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] }) } else { json!({ "nineSlice": false }) }
+}
+
+/// Export Type choices: (value, label). The reference app's default is Movie Clip.
 const EXPORT_TYPES: [(&str, &str); 2] = [("movieClip", "Movie Clip"), ("graphic", "Graphic")];
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Symbol Options").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
@@ -29,7 +52,11 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         return Err("nothing selected".into());
     }
     let name = st.doc.unique_symbol_name("New Symbol");
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "name": name, "exportType": "movieClip", "registration": 4, "__edit": false })));
+    let mut fields = json!({ "name": name, "exportType": "movieClip", "type": "dynamic", "registration": 4, "__edit": false });
+    if let Some(o) = fields.as_object_mut() {
+        o.extend(slice_fields(None));
+    }
+    app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
 
@@ -51,16 +78,19 @@ pub fn open_edit(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, 
     };
     let export = st.doc.symbol_export_type(&name).id();
     let registration = st.doc.symbol_registration(&name).0;
-    app.ui.dialog = Some(Dialog::new(
-        KIND,
-        json!({
-            "name": name,
-            "exportType": export,
-            "registration": registration,
-            "__edit": true,
-            "__from": name,
-        }),
-    ));
+    let kind = if st.doc.symbols.iter().any(|s| s.name == name && s.dynamic) { "dynamic" } else { "static" };
+    let mut fields = json!({
+        "name": name,
+        "exportType": export,
+        "type": kind,
+        "registration": registration,
+        "__edit": true,
+        "__from": name,
+    });
+    if let Some(o) = fields.as_object_mut() {
+        o.extend(slice_fields(st.doc.symbol_nine_slice(&name)));
+    }
+    app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
 
@@ -77,12 +107,36 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             d.fields.insert("exportType".into(), json!(value));
         }
         ui.end_row();
+        label(ui, tl!("Symbol Type:"));
+        // A dynamic symbol's instances may change the appearance of parts of its art and stay linked.
+        ui.horizontal(|ui| {
+            let cur = d.str("type");
+            for (value, text) in [("dynamic", tl!("Dynamic Symbol")), ("static", tl!("Static Symbol"))] {
+                if widgets::radio(ui, text, cur == value, true) {
+                    d.fields.insert("type".into(), json!(value));
+                }
+            }
+        });
+        ui.end_row();
         label(ui, tl!("Registration:"));
         let cur = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4) as usize;
         if let Some(i) = widgets::reference_point(ui, cur) {
             d.fields.insert("registration".into(), json!(i));
         }
         ui.end_row();
+        label(ui, "");
+        form::check(ui, d, "nineSlice", tl!("Enable Guides for 9-Slice Scaling"));
+        ui.end_row();
+        if d.bool("nineSlice") {
+            for (key, text) in SLICE_KEYS.into_iter().zip([tl!("Left:"), tl!("Top:"), tl!("Right:"), tl!("Bottom:")]) {
+                label(ui, text);
+                let v = d.f64(key, 100.0 / 3.0);
+                if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, 0.0..=100.0, "%", 0, 64.0) {
+                    d.fields.insert(key.into(), json!(n));
+                }
+                ui.end_row();
+            }
+        }
     });
     false
 }
@@ -95,20 +149,31 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         return Err("name is empty".into());
     }
     let export = d.str("exportType");
+    let kind = d.str("type");
     let registration = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4);
     let edit = d.fields.get("__edit").and_then(Value::as_bool).unwrap_or(false);
     let r = if edit {
         let from = d.fields.get("__from").and_then(Value::as_str).unwrap_or(name);
-        let mut params = json!({ "name": from, "exportType": export, "registration": registration });
+        let mut params = json!({ "name": from, "exportType": export, "type": kind, "registration": registration });
+        merge(&mut params, slice_params(d));
         if from != name {
             params["newName"] = json!(name);
         }
         app.run("symbol.options", params)
     } else {
-        app.run("symbol.new", json!({ "name": name, "exportType": export, "registration": registration }))
+        let mut params = json!({ "name": name, "exportType": export, "type": kind, "registration": registration });
+        merge(&mut params, slice_params(d));
+        app.run("symbol.new", params)
     };
     if r.is_ok() {
         app.ui.dialog = None;
     }
     r
+}
+
+/// Copy the keys of the object `extra` into the object `into`.
+fn merge(into: &mut Value, extra: Value) {
+    if let (Some(a), Value::Object(b)) = (into.as_object_mut(), extra) {
+        a.extend(b);
+    }
 }

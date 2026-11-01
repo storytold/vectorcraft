@@ -364,8 +364,8 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// document change.
 fn preview_of(app: &mut VectorcraftApp, ctx: &egui::Context, settings: &Value) -> Arc<Result<Value, String>> {
     let doc = app.session.active().map_or((0, 0), |s| (s.uid, s.revision));
-    let stamp = egui::Id::new((settings.to_string(), doc));
-    let key = egui::Id::new("print-preview");
+    let stamp = egui::Id::unique((settings.to_string(), doc));
+    let key = egui::Id::unique("print-preview");
     if let Some((s, v)) = ctx.data(|m| m.get_temp::<(egui::Id, Arc<Result<Value, String>>)>(key))
         && s == stamp
     {
@@ -419,7 +419,7 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     painter.rect_filled(page, 0.0, egui::Color32::WHITE);
     // Dragging moves the art (and its trim box) on the paper; the placement changes on release.
     let tiling = choice::<PrintScaling>(d, "scaling").is_some_and(PrintScaling::tiles);
-    let drag_id = egui::Id::new("print-preview-drag");
+    let drag_id = egui::Id::unique("print-preview-drag");
     let mut offset = ui.ctx().data(|m| m.get_temp::<egui::Vec2>(drag_id)).unwrap_or_default();
     if !tiling && resp.dragged() {
         offset += resp.drag_delta();
@@ -538,14 +538,15 @@ fn round2(v: f64) -> f64 {
 fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayers, area: DRect, px: f64) -> Option<egui::TextureHandle> {
     let st = app.session.active()?;
     let bits = [area.x0, area.y0, area.x1, area.y1].map(f64::to_bits);
-    let stamp = egui::Id::new((st.uid, st.revision, layers, bits, px.round() as u32));
-    let key = egui::Id::new("print-preview-art");
+    let stamp = egui::Id::unique((st.uid, st.revision, layers, bits, px.round() as u32));
+    let key = egui::Id::unique("print-preview-art");
     if let Some((s, tex)) = ctx.data(|m| m.get_temp::<(egui::Id, egui::TextureHandle)>(key))
         && s == stamp
     {
         return Some(tex);
     }
-    let mut doc = (*st.doc).clone();
+    // The artboards' background colors print behind the art.
+    let mut doc = st.doc.with_artboard_fills(0..st.doc.artboards.len()).unwrap_or_else(|| (*st.doc).clone());
     vectorcraft_pdf::keep_layers(&mut doc.layers, layers);
     let tex = widgets::region_texture(ctx, &mut app.canvas.renderer, "print-preview-art", &doc, area, px);
     ctx.data_mut(|m| m.insert_temp(key, (stamp, tex.clone())));
@@ -558,8 +559,8 @@ fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayer
 fn whole(ui: &mut egui::Ui, d: &mut Dialog, path: &str, range: std::ops::RangeInclusive<f64>, enabled: bool) {
     let v = get(d, path).as_f64().unwrap_or(*range.start());
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(x) = widgets::plain_field(ui, path, v, "", 0, 56.0) {
-            set(d, path, json!(x.round().clamp(*range.start(), *range.end()) as u64));
+        if let Some(x) = widgets::range_field(ui, path, v, range, "", 0, 56.0) {
+            set(d, path, json!(x as u64));
         }
     });
 }
@@ -582,7 +583,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         }
         let mut range = get(d, "range").as_str().unwrap_or_default().to_string();
-        let edit = egui::TextEdit::singleline(&mut range).desired_width(140.0).hint_text("1-3, 5");
+        let edit = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5");
         if ui.add_enabled(artboards == PrintArtboards::Range, edit).changed() {
             set(d, "range", json!(range));
         }
@@ -688,14 +689,16 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
         for ink in inks {
             let name = ink["name"].as_str().unwrap_or_default();
             let on = ink["print"].as_bool().unwrap_or(true);
-            if widgets::check(ui, "", on, true) {
+            if widgets::check_box(ui, name, on, true) {
                 set_ink(d, name, "print", json!(!on));
             }
             let spot = if ink["spot"] == true { format!(" ({})", tl!("spot")) } else { String::new() };
             ui.label(egui::RichText::new(format!("{name}{spot}")).color(t.text));
             for (k, suffix) in [("frequency", " lpi"), ("angle", "°")] {
                 let v = ink[k].as_f64().unwrap_or(0.0);
-                if let Some(x) = widgets::plain_field(ui, ("print-ink", name, k), v, suffix, 2, 72.0) {
+                let heading = if k == "frequency" { tl!("Frequency") } else { tl!("Angle") };
+                let field_name = format!("{heading} {name}");
+                if let Some(x) = widgets::plain_field_named(ui, ("print-ink", name, k), Some(&field_name), v, suffix, 2, 72.0) {
                     set_ink(d, name, k, json!(x));
                 }
             }

@@ -127,9 +127,15 @@ pub fn replace_range_styled(runs: &mut Vec<TextRun>, start: usize, end: usize, i
     if a > b {
         std::mem::swap(&mut a, &mut b);
     }
+    // Taken before the splice: deleting all of the text leaves no run for `normalize` to take the
+    // style from, and the next typed text would get the default one (#2119).
+    let keep = insertion_style(runs, a, b);
     let i = split_at(runs, a);
     let j = split_at(runs, b);
     runs.splice(i..j, insert.iter().cloned());
+    if runs.is_empty() {
+        runs.push(TextRun { text: String::new(), style: keep, inline: None });
+    }
     normalize(runs);
     a + insert.iter().map(|r| r.text.len()).sum::<usize>()
 }

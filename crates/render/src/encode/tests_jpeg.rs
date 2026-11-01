@@ -48,6 +48,44 @@ fn noise(w: u32, h: u32, channels: usize) -> Vec<u8> {
         .collect()
 }
 
+/// JFIF describes one- and three-component images, so its APP0 segment must not head a CMYK
+/// frame: the file would say two different things about its colours and a strict reader rejects
+/// it. A CMYK JPEG carries the Adobe APP14 marker instead, as Adobe's own do (#3084).
+#[test]
+fn a_cmyk_jpeg_is_not_labelled_jfif() {
+    let px = noise(16, 16, 4);
+    let o = JpegOptions { color_model: ColorModel::Cmyk, ..Default::default() };
+    let file = jpeg::encode(&px, 16, 16, 90, Some(300.0), &o).unwrap();
+    let markers: Vec<u8> = segments(&file).into_iter().map(|(m, _)| m).collect();
+    assert_eq!(frame(&file).1, 4, "four components");
+    assert!(!markers.contains(&0xE0), "no APP0/JFIF: {markers:02x?}");
+    assert!(markers.contains(&0xEE), "the Adobe APP14 marker names the colours: {markers:02x?}");
+    assert!(icc(&file).is_some(), "the CMYK profile is still embedded");
+    assert_eq!(&file[..2], &[0xFF, 0xD8], "the file still starts at SOI");
+    // The resolution JFIF carried moves to EXIF, where a reader looks when there is no JFIF.
+    let exif = segments(&file).into_iter().find(|(m, _)| *m == 0xE1).expect("APP1/EXIF").1;
+    assert!(exif.starts_with(b"Exif\0\0"), "{:02x?}", &exif[..8.min(exif.len())]);
+    // Big-endian TIFF with XResolution (282), YResolution (283) and ResolutionUnit (296).
+    assert_eq!(&exif[6..10], b"MM\0*");
+    // "Exif\0\0" then the TIFF header (8 bytes) and the entry count (2), so entries start at 16.
+    let tags: Vec<u16> = (0..3).map(|i| u16::from_be_bytes([exif[16 + i * 12], exif[17 + i * 12]])).collect();
+    assert_eq!(tags, [282, 283, 296], "{tags:?}");
+    // No resolution asked for: nothing stands in for the dropped segment.
+    let plain = jpeg::encode(&px, 16, 16, 90, None, &o).unwrap();
+    let markers: Vec<u8> = segments(&plain).into_iter().map(|(m, _)| m).collect();
+    assert!(!markers.contains(&0xE0) && !markers.contains(&0xE1), "{markers:02x?}");
+
+    // Three- and one-component files keep JFIF, which is what it is for, and their resolution.
+    for (model, channels) in [(ColorModel::Rgb, 3), (ColorModel::Gray, 1)] {
+        let px = noise(16, 16, channels);
+        let o = JpegOptions { color_model: model, ..Default::default() };
+        let file = jpeg::encode(&px, 16, 16, 90, Some(300.0), &o).unwrap();
+        let markers: Vec<u8> = segments(&file).into_iter().map(|(m, _)| m).collect();
+        assert!(markers.contains(&0xE0), "{model:?} keeps JFIF: {markers:02x?}");
+        assert_eq!(frame(&file).1, channels as u8);
+    }
+}
+
 #[test]
 fn size_falls_with_quality() {
     let px = noise(64, 48, 3);
@@ -85,9 +123,18 @@ fn colour_models_write_their_components_and_profiles() {
         assert_eq!(frame(&file).1, comps, "{model:?}");
         let p = IccProfile::from_bytes(None, &icc(&file).expect("APP2 ICC")).unwrap();
         assert_eq!(p.kind, kind, "{model:?}");
-        let app0 = segments(&file).into_iter().find(|(m, _)| *m == 0xE0).unwrap().1;
-        assert_eq!(&app0[..5], b"JFIF\0");
-        assert_eq!(app0[7..12], [1, 0, 150, 0, 150], "dots per inch");
+        // JFIF describes one- and three-component images, so a CMYK file says its resolution in
+        // EXIF instead (see `a_cmyk_jpeg_is_not_labelled_jfif`).
+        if model == ColorModel::Cmyk {
+            let exif = segments(&file).into_iter().find(|(m, _)| *m == 0xE1).expect("APP1/EXIF").1;
+            assert!(exif.starts_with(b"Exif\0\0"));
+            // "Exif\0\0" (6) + TIFF header (8) + count (2) + three entries (36) + next IFD (4).
+            assert_eq!(&exif[56..64], &[0, 0, 0, 150, 0, 0, 0, 1], "150 dots per inch, as a rational");
+        } else {
+            let app0 = segments(&file).into_iter().find(|(m, _)| *m == 0xE0).unwrap().1;
+            assert_eq!(&app0[..5], b"JFIF\0");
+            assert_eq!(app0[7..12], [1, 0, 150, 0, 150], "dots per inch");
+        }
         let none = jpeg::encode(&noise(16, 8, model.channels()), 16, 8, 90, None, &JpegOptions { embed_icc: false, ..o }).unwrap();
         assert!(icc(&none).is_none());
     }

@@ -12,6 +12,24 @@ use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
 pub const REVOLVE: &str = "threeD.revolve";
 
+/// Most bytes the copies of the object's paint in the faces may take together. Each face and the
+/// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
+/// thousands of faces took gigabytes; past this the source path is drawn.
+const MAX_PAINT_COPIES: usize = 256 << 20;
+
+/// About the bytes one copy of `paint` takes.
+fn paint_bytes(paint: &Paint) -> usize {
+    use std::mem::size_of;
+    use vectorcraft_doc::color::{FreeformPoint, GradientStop};
+    let own = size_of::<Paint>();
+    let Paint::Gradient(g) = paint else { return own };
+    let freeform = g
+        .freeform
+        .as_ref()
+        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+}
+
 fn visible(fx: &[Effect]) -> bool {
     fx.iter().any(|e| e.visible && e.id == REVOLVE)
 }
@@ -34,6 +52,8 @@ pub fn revolve_options(p: &Value) -> Revolve {
         light_rotation: num(p, "lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0),
         light_height: num(p, "lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1),
         light_behind: flag(p, "lightBehind", false),
+        light_color: crate::lighting::light_color(p),
+        lights: crate::lighting::lights(p),
         light_intensity: num(p, "lightIntensity", 80.0) / 100.0,
         light_softness: num(p, "lightSoftness", 0.0) / 100.0,
         ambient: num(p, "ambient", 25.0) / 100.0,
@@ -46,6 +66,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
 /// Validate before a command mutates the document. Loading external files is still bounded
 /// by the evaluator; unsupported source kinds remain unchanged when rendered.
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
+    crate::lighting::validate(p)?;
     let path = profile(n).ok_or("Revolve currently requires a path or compound path. Select a profile drawn with the Pen tool.")?;
     let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
     if !path.subpaths.iter().any(|sp| sp.anchors.len() >= 2) {
@@ -87,7 +108,13 @@ fn surface(
     let b = path.bounds()?;
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
-    let faces = vectorcraft_three_d::revolve(path, b, revolve_options(&merged_params(REVOLVE, &fx.params))).ok()?;
+    let options = revolve_options(&merged_params(REVOLVE, &fx.params));
+    let colored = options.light_color != [1.0; 3] || options.lights.is_some();
+    let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
+    // A face's fill, its shadow and their seam strokes: up to four copies of the paint.
+    if faces.len().saturating_mul(4).saturating_mul(paint_bytes(&paint)) > MAX_PAINT_COPIES {
+        return None;
+    }
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
     // failure also retains the complete surface rather than losing any of the user's art.
@@ -102,19 +129,42 @@ fn surface(
     let faces = visible.unwrap_or_else(|| {
         faces
             .into_iter()
-            .map(|f| vectorcraft_three_d::VisibleFace { path: f.path(), brightness: f.brightness, depth: f.depth, gradient: f.gradient })
+            .map(|f| vectorcraft_three_d::VisibleFace {
+                path: f.path(),
+                brightness: f.brightness,
+                depth: f.depth,
+                gradient: f.gradient,
+                illumination: f.illumination,
+                light_gradient: f.light_gradient,
+                rgb_gradient: f.rgb_gradient,
+            })
             .collect()
     });
     let children = faces
         .into_iter()
         .map(|face| {
+            if let Some(g) = face.rgb_gradient
+                && (paint.color().is_some() || matches!(paint, Paint::Gradient(_)))
+            {
+                return Arc::new(crate::lighting::rgb_gradient_art(n.id, &face.path, &paint, g));
+            }
+            if let (true, Paint::Gradient(_), Some(g)) = (colored, &paint, face.light_gradient) {
+                return Arc::new(crate::lighting::gradient_art(n.id, &face.path, &paint, g));
+            }
             let mut fill = FillLayer::new(paint.clone());
             let mut items = vec![];
             if let Some(c) = paint.color() {
                 let [r, g, b] = c.to_rgb();
                 let color = |s: f64| Color::rgb(r * s as f32, g * s as f32, b * s as f32);
-                fill.paint = face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0));
+                fill.paint = if colored {
+                    face.light_gradient
+                        .map_or_else(|| Paint::solid(crate::lighting::shade(c, face.illumination)), |g| crate::lighting::smooth_paint(g, c))
+                } else {
+                    face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0))
+                };
                 items.push(AppearanceItem::Fill(fill));
+            } else if colored && matches!(paint, Paint::Gradient(_)) {
+                items = crate::lighting::fills(&paint, face.illumination, face.brightness, true);
             } else {
                 items.push(AppearanceItem::Fill(fill));
                 let mut shadow = FillLayer::new(Paint::solid(Color::BLACK));
@@ -153,7 +203,7 @@ fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> C
     use vectorcraft_doc::color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
     let stops =
         g.brightness.into_iter().enumerate().map(|(i, s)| GradientStop { opacity: opacity(s), ..GradientStop::new(i as f32, color(s)) }).collect();
-    let mut paint = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let mut paint = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     paint.geom = Some(GradientGeom { start: g.start, end: g.end, aspect: 1.0, focal: None });
     Paint::Gradient(Box::new(paint))
 }

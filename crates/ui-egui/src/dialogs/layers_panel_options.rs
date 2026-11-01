@@ -1,8 +1,9 @@
-//! Layers panel › Panel Options…: Show Layers Only, the row size and which rows show thumbnails.
+//! Layers panel › Panel Options…: Show Layers Only, Locate Selected Objects, the row size and
+//! which rows show thumbnails.
 //!
-//! Fields: `layersOnly`, `rowSize` (`small`, `medium`, `large` or `other`), `otherSize` (points,
-//! 12–100, for `other`), `thumbLayers`, `thumbGroups` and `thumbObjects`. OK applies them to the
-//! panel (kept with the UI state).
+//! Fields: `layersOnly`, `locateSelected`, `rowSize` (`small`, `medium`, `large` or `other`),
+//! `otherSize` (points, 12–100, for `other`), `thumbLayers`, `thumbGroups` and `thumbObjects`. OK
+//! applies them to the panel (kept with the UI state).
 
 use serde_json::{Value, json};
 
@@ -25,7 +26,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let o = &app.ui.layers_panel;
     let size = SIZES.iter().find(|s| (s.2 - o.row()).abs() < 0.01).map_or("other", |s| s.0);
     let fields = json!({
-        "layersOnly": o.layers_only, "rowSize": size, "otherSize": o.row(),
+        "layersOnly": o.layers_only, "locateSelected": o.locate_selected, "rowSize": size, "otherSize": o.row(),
         "thumbLayers": o.thumb_layers, "thumbGroups": o.thumb_groups, "thumbObjects": o.thumb_objects,
     });
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -41,6 +42,7 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, text: &str) {
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     check(ui, d, "layersOnly", tl!("Show Layers Only"));
+    check(ui, d, "locateSelected", tl!("Locate Selected Objects"));
     ui.add_space(8.0);
     grid(ui, |ui| {
         label(ui, tl!("Row Size:"));
@@ -73,6 +75,7 @@ pub(crate) fn options(d: &Dialog) -> PanelOptions {
     let row_size = SIZES.iter().find(|s| s.0 == size).map_or_else(|| (d.f64("otherSize", f64::from(ROW_MEDIUM)) as f32).clamp(12.0, 100.0), |s| s.2);
     PanelOptions {
         layers_only: d.bool("layersOnly"),
+        locate_selected: d.bool("locateSelected"),
         row_size: if row_size.is_finite() { row_size } else { ROW_MEDIUM },
         thumb_layers: d.bool("thumbLayers"),
         thumb_groups: d.bool("thumbGroups"),
@@ -114,5 +117,24 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("rowSize".into(), json!("large"));
         super::super::confirm(&mut app).unwrap();
         assert_eq!(app.ui.layers_panel.row(), ROW_LARGE);
+    }
+
+    /// Locate Selected Objects is off by default and in options saved without it; OK turns it on
+    /// and keeps it with the UI state, and the dialog opens on it again.
+    #[test]
+    fn locate_selected_objects_is_off_by_default_and_kept_with_the_ui_state() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.layersPanelOptions", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.fields.get("locateSelected"), Some(&json!(false)));
+        d.fields.insert("locateSelected".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert!(back.layers_panel.locate_selected, "kept with the UI state");
+        app.run("ui.layersPanelOptions", json!({})).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().bool("locateSelected"));
+        let old: crate::UiState = serde_json::from_value(json!({"layers_panel": {"layersOnly": true}})).unwrap();
+        assert!(old.layers_panel.layers_only && !old.layers_panel.locate_selected, "options saved without it");
     }
 }

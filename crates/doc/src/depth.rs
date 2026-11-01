@@ -25,6 +25,12 @@ use crate::{Document, Node, NodeKind};
 /// can be made can be saved and opened again.
 pub const MAX_DEPTH: usize = 32;
 
+/// Most objects the symbol instances drawn in one frame or written in one export may hold
+/// together. Instances of symbols that hold instances of others draw every level for each instance
+/// above it, so a few levels of a few instances each multiply past what [`MAX_DEPTH`] stops; past
+/// it, further instances aren't drawn.
+pub const MAX_SYMBOL_NODES: u64 = 16_000_000;
+
 /// The deepest an object may be drawn: as [`MAX_DEPTH`], the art of a symbol counted under its
 /// instance and a pattern's tile under the object it paints (and what those use, under them).
 /// Symbols a few objects deep nest in one another dozens deep within it.
@@ -479,7 +485,7 @@ mod tests {
     #[test]
     fn symbols_and_patterns_are_limited_too() {
         let mut d = Document::new(10.0, 10.0);
-        d.symbols.push(crate::Symbol { name: "s".into(), art: nested(MAX_DEPTH + 3) });
+        d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: nested(MAX_DEPTH + 3) });
         assert!(d.too_deep(None));
         assert!(d.limit_depth());
         assert!(!d.too_deep(None));
@@ -498,7 +504,7 @@ mod tests {
             for _ in 0..levels {
                 art = Arc::new(Node::group(NodeId(3), vec![art]));
             }
-            d.symbols.push(crate::Symbol { name: format!("s{i}"), art });
+            d.symbols.push(crate::Symbol { dynamic: false, name: format!("s{i}"), art });
         }
         d
     }
@@ -567,7 +573,7 @@ mod tests {
         };
         let through_a_symbol = |d: &mut Document| {
             d.patterns.push(crate::PatternDef::new("p", vec![instance(2, "s")]));
-            d.symbols.push(crate::Symbol { name: "s".into(), art: painted(3, "p") });
+            d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: painted(3, "p") });
         };
         for make in [&itself as &dyn Fn(&mut Document), &each_other, &through_a_symbol] {
             let mut d = doc(painted(1, "p"));

@@ -61,7 +61,13 @@ fn copy(list_path: &Path, dir: &Path, site: &Path) -> Result<(usize, Vec<String>
         std::fs::create_dir_all(folder).map_err(|err| format!("{}: {err}", folder.display()))?;
         std::fs::write(&dest, &bytes).map_err(|err| format!("{}: {err}", dest.display()))?;
         let licence_name = Path::new(licence).file_name().ok_or_else(|| format!("{licence}: not a file"))?;
-        std::fs::copy(dir.join(licence), folder.join(licence_name)).map_err(|err| format!("{licence}: {err}"))?;
+        // The manifest is supplier data: the licence must be a file inside the checkout.
+        let root = std::fs::canonicalize(dir).map_err(|err| format!("{}: {err}", dir.display()))?;
+        let src = std::fs::canonicalize(dir.join(licence)).map_err(|err| format!("{licence}: {err}"))?;
+        if !src.starts_with(&root) || !src.is_file() {
+            return Err(format!("{licence}: not a file inside the font checkout"));
+        }
+        std::fs::copy(&src, folder.join(licence_name)).map_err(|err| format!("{licence}: {err}"))?;
         copied += 1;
     }
     Ok((copied, skipped))
@@ -108,6 +114,17 @@ mod tests {
         let (list, dir, site, _) = fixture("mismatch", Some(&"0".repeat(64)));
         let e = copy(&list, &dir, &site).unwrap_err();
         assert!(e.contains("A-Regular.ttf") && e.contains("sha256"), "{e}");
+    }
+
+    #[test]
+    fn a_licence_path_that_leaves_the_checkout_is_refused() {
+        let (list, dir, site, _) = fixture("escape", None);
+        std::fs::write(dir.parent().unwrap().join("secret.txt"), b"secret").unwrap();
+        let m = dir.join("fonts/manifest.txt");
+        let text = std::fs::read_to_string(&m).unwrap().replace("fonts/a/OFL.txt", "../secret.txt");
+        std::fs::write(&m, text).unwrap();
+        let e = copy(&list, &dir, &site).unwrap_err();
+        assert!(e.contains("inside the font checkout"), "{e}");
     }
 
     #[test]

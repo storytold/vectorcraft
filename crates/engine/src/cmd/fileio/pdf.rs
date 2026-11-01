@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
-use super::super::*;
+use super::super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 use super::{ArtboardPick, FormatOption, write_or_return};
 use crate::EngineError;
 
@@ -169,6 +169,7 @@ pub(crate) fn merge(base: &mut Value, over: &Value) {
 pub(crate) fn pdf_error(cmd: &str, e: PdfError) -> EngineError {
     match e {
         PdfError::BadSetting(_) | PdfError::Unsupported(_) => bad(cmd, e.to_string()),
+        PdfError::Cancelled => EngineError::Cancelled,
         e => EngineError::Other(e.to_string()),
     }
 }
@@ -234,11 +235,22 @@ pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a,
     super::eps::with_flattener(s, cmd, expanded)
 }
 
-/// The full export options for `doc`: settings plus the artboards `p` picks (default all).
+/// The full export options for `doc`: settings plus the artboards `p` picks (default all), created
+/// at `doc`'s File Info creation date (the time of writing when it has none) and modified at the
+/// time of writing. On the web, which has no clock, the creation date is the modification date too,
+/// and a document without one gets neither.
 pub fn options(cmd: &str, doc: &Document, p: &Value) -> Result<PdfOptions> {
     let pick = if p.is_object() { ArtboardPick::deserialize(p).map_err(|e| bad(cmd, format!("PDF options: {e}")))? } else { ArtboardPick::default() };
     let artboards = pick.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;
-    Ok(PdfOptions { settings: settings(cmd, p)?, artboards, ..Default::default() })
+    let now = vectorcraft_doc::metadata::output_time();
+    Ok(PdfOptions {
+        settings: settings(cmd, p)?,
+        artboards,
+        display_doc_title: bool_or(p, "_displayDocTitle", super::has_own_title(doc)),
+        created: doc.metadata.created.or(now),
+        modified: now,
+        ..Default::default()
+    })
 }
 
 /// Why a PDF of some artboards carries no editing data.
@@ -253,13 +265,29 @@ pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<Stri
     let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
     let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)))?;
     warnings.extend(drawn_warnings);
+    warnings.extend(overflow_warning(cmd, &full, p)?);
     Ok((bytes, warnings))
+}
+
+/// The warning about the type that the pages of a PDF of `doc` with the options in `p` draw and
+/// whose text doesn't fit (see [`crate::cmd::fonts::export_overflow_warning`]): on the pages
+/// chosen, leaving out the layers that don't print unless the PDF writes them.
+fn overflow_warning(cmd: &str, doc: &Document, p: &Value) -> Result<Option<String>> {
+    let opts = options(cmd, doc, p)?;
+    let areas = vectorcraft_pdf::page_areas(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
+    let set = &opts.settings;
+    let printed = if set.include_non_printing || set.create_layers { None } else { without_non_printing(&doc.layers) };
+    Ok(crate::cmd::fonts::export_overflow_warning(doc, printed.as_deref().unwrap_or(&doc.layers), Some(&areas)))
 }
 
 /// [`encode`] the pages of `doc`, carrying `native()` as the editing data (a `.ai` file: the
 /// native document with its save options, whose pages may be left blank).
 pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl FnOnce() -> Result<Vec<u8>>) -> Result<(Vec<u8>, Vec<String>)> {
     let mut opts = options(cmd, doc, p)?;
+    // The pages' background colors, behind the art (the editing data keeps them as colors).
+    let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
+    let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
+    let doc = &*filled;
     if opts.settings.thumbnails {
         opts.thumbnails = thumbnails(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     }
@@ -273,7 +301,11 @@ pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl
         }
     }
     let set = &opts.settings;
+    if set.pdf13() {
+        vectorcraft_doc::cancel::progress(0, 0, "Flattening transparency");
+    }
     let flat = flatten_for(cmd, doc, set, p)?;
+    vectorcraft_doc::cancel::check()?;
     if flat.is_some() {
         let kind = if set.standard.flattens() { set.standard.label() } else { set.compatibility.label() };
         warnings.push(format!("transparency is flattened into opaque art and images ({kind} files have none): see the flattener preset"));
@@ -289,9 +321,9 @@ pub const DEFAULT_FLATTENER: &str = "High Resolution";
 
 /// `doc` with its transparency flattened for a PDF 1.3 file (asked for, or PDF/X-1a and PDF/X-3,
 /// whose files have none), with `flattenerPreset` (default High Resolution) and `p`'s `flattener`
-/// options over it; images with see-through pixels count as transparency, rasterized areas are
-/// clipped to their regions, and discarded overprints are dropped. `None` when nothing changes (or
-/// the file keeps transparency).
+/// options over it; images with see-through pixels and colorized images, including those in
+/// pattern tiles, count as transparency. Rasterized areas are clipped to their regions, and
+/// discarded overprints are dropped. `None` when nothing changes (or the file keeps transparency).
 fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<Option<Document>> {
     if !set.pdf13() {
         return Ok(None);
@@ -366,8 +398,15 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let expanded = expand_preset(s, C, p)?;
     let p = &*expanded;
     let st = s.doc()?;
+    let display_doc_title = super::has_own_title(&st.doc);
     let titled = super::titled_for_export(&st.doc, st.path.as_deref(), "pdf");
-    let (bytes, warnings) = encode(C, titled.as_ref().unwrap_or(&st.doc), p)?;
+    let mut q = p.clone();
+    if let Some(o) = q.as_object_mut() {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    } else {
+        q = json!({ "_displayDocTitle": display_doc_title });
+    }
+    let (bytes, warnings) = encode(C, titled.as_ref().unwrap_or(&st.doc), &q)?;
     write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": warnings }))
 }
 

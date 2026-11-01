@@ -212,7 +212,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         VariableKind::Graph => {
                             text_area(ui, d, &key, 220.0);
                         }
-                        VariableKind::Visibility => checkbox(ui, d, &key),
+                        VariableKind::Visibility => checkbox(ui, d, &key, &v.name),
                     }
                     ui.end_row();
                 }
@@ -225,17 +225,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// A text field for `key`, written back as it is typed.
 fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Response {
     let mut s = d.str(key);
-    let r = ui.add(egui::TextEdit::singleline(&mut s).desired_width(width));
+    let r = ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(width));
     if r.changed() {
         d.fields.insert(key.into(), json!(s));
     }
     r
 }
 
-/// A checkbox for `key`, written back as it is toggled.
-fn checkbox(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
+/// A checkbox for `key`, written back as it is toggled, which screen readers call `name`.
+fn checkbox(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str) {
     let b = d.bool(key);
-    if widgets::check(ui, "", b, true) {
+    if widgets::check_box(ui, name, b, true) {
         d.fields.insert(key.into(), json!(!b));
     }
 }

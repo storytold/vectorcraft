@@ -34,11 +34,11 @@ pub fn encode(rgba: &[u8], width: u32, height: u32, o: &TgaOptions) -> Result<Ve
         return Err(format!("{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution"));
     };
     let (w, h) = (usize::from(w16), usize::from(h16));
-    if w == 0 || h == 0 || w * h * 4 != rgba.len() {
+    if w == 0 || h == 0 || (w * h).checked_mul(4) != Some(rgba.len()) {
         return Err("Targa encoding failed: the pixel buffer doesn't match the image size".into());
     }
     let px = rgba.as_chunks::<4>().0;
-    let mut out = Vec::with_capacity(18 + w * h * usize::from(o.depth / 8) + 26);
+    let mut out = Vec::with_capacity((w * h).saturating_mul(usize::from(o.depth / 8)).saturating_add(18 + 26));
     // No image id or colour map, uncompressed true colour, origin (0, 0).
     out.extend([0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     out.extend(w16.to_le_bytes());

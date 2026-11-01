@@ -39,7 +39,11 @@ impl Side {
 
     /// The side's length.
     fn length(&self) -> f64 {
-        if self.straight() { self.curve.p0.distance(self.curve.p3) } else { self.curve.arclen(ARCLEN_ACCURACY) }
+        if self.straight() {
+            self.curve.p0.distance(self.curve.p3)
+        } else {
+            crate::path::measured_arclen(&kurbo::PathSeg::Cubic(self.curve), ARCLEN_ACCURACY)
+        }
     }
 
     /// The parameter `s` along the side from the corner, the point there and the direction the
@@ -76,6 +80,10 @@ pub struct Corner {
     /// The sides themselves, leaving the corner, in the same order.
     pub side_u: Side,
     pub side_v: Side,
+    /// The anchor indices (in the path) of the anchors at the other ends of the sides, in the
+    /// same order.
+    pub before: usize,
+    pub after: usize,
 }
 
 impl Corner {
@@ -84,8 +92,10 @@ impl Corner {
     /// sides leave it straight on.
     fn of(sp: &SubPath, i: usize, index: usize) -> Option<Self> {
         let n = sp.anchors.len();
-        let (prev, next) = if sp.closed { ((i + n).checked_sub(1)? % n, (i + 1) % n) } else { (i.checked_sub(1)?, i + 1) };
-        let (a, prev, next) = (sp.anchors.get(i)?, sp.anchors.get(prev)?, sp.anchors.get(next)?);
+        let (prev_i, next_i) = if sp.closed { ((i + n).checked_sub(1)? % n, (i + 1) % n) } else { (i.checked_sub(1)?, i + 1) };
+        let (a, prev, next) = (sp.anchors.get(i)?, sp.anchors.get(prev_i)?, sp.anchors.get(next_i)?);
+        let first = index.checked_sub(i)?;
+        let (before, after) = (first + prev_i, first + next_i);
         if a.kind == AnchorKind::Smooth {
             return None;
         }
@@ -96,7 +106,7 @@ impl Corner {
         if !(lu > EPS && lv > EPS && lu.is_finite() && lv.is_finite()) {
             return None;
         }
-        let c = Self { index, at: a.p, u, v, lu, lv, side_u, side_v };
+        let c = Self { index, at: a.p, u, v, lu, lv, side_u, side_v, before, after };
         (c.sin() > MIN_SINE).then_some(c)
     }
 
@@ -120,17 +130,43 @@ impl Corner {
         r * (1.0 + self.cos()) / self.sin()
     }
 
-    /// The largest radius the corner draws: its cut then reaches halfway along the shorter side,
-    /// so neighbouring corners at their largest meet without overlapping (half the shorter side
-    /// at a rectangle's corners).
-    pub fn max_radius(&self) -> f64 {
-        self.lu.min(self.lv) / 2.0 * self.sin() / (1.0 + self.cos())
+    /// The radius of a round cut that meets each side `s` from the corner (the inverse of
+    /// [`Corner::setback`]).
+    pub fn radius_at_setback(&self, s: f64) -> f64 {
+        s * self.sin() / (1.0 + self.cos())
     }
 
-    /// The radius the corner is drawn with: `radius`, no larger than [`Corner::max_radius`], 0 when
-    /// negative or not a number.
-    pub fn fitted(&self, radius: f64) -> f64 {
-        radius.max(0.0).min(self.max_radius())
+    /// The largest radius the corner draws whatever its neighbours do: its cut then reaches
+    /// halfway along the shorter side, so neighbouring corners at their largest meet without
+    /// overlapping (half the shorter side at a rectangle's corners).
+    pub fn max_radius(&self) -> f64 {
+        self.radius_at_setback(self.lu.min(self.lv) / 2.0)
+    }
+
+    /// The largest radius the corner draws when the cuts of the corners at the other ends of its
+    /// sides reach `before` along side u and `after` along side v: its cut reaches halfway along
+    /// a side, or further, up to where the other end's cut begins, so all of a side whose other
+    /// end isn't cut (#2332).
+    pub fn max_radius_beside(&self, before: f64, after: f64) -> f64 {
+        let room = |len: f64, other: f64| (len - other.max(0.0)).max(len / 2.0);
+        self.radius_at_setback(room(self.lu, before).min(room(self.lv, after)))
+    }
+
+    /// The largest radius the corner draws when it and the corners for which `edited` holds are
+    /// set to one radius together, the other corners of `corners` keeping their `radii` (by
+    /// anchor index). A side shared with an edited corner takes both cuts as far as they fit
+    /// side by side, or halfway each; on a side to any other corner the cut reaches up to where
+    /// that corner's cut begins ([`Corner::max_radius_beside`]).
+    pub fn max_shared_radius(&self, corners: &[Corner], radii: &[f64], edited: impl Fn(usize) -> bool) -> f64 {
+        let side = |len: f64, other: usize| match find(corners, other) {
+            Some(c) if other == self.index || edited(other) => {
+                let both = self.setback(1.0) + c.setback(1.0);
+                let apart = if both > EPS { len / both } else { f64::INFINITY };
+                apart.max(self.radius_at_setback(len / 2.0))
+            }
+            _ => self.radius_at_setback((len - requested_setback(corners, radii, other)).max(len / 2.0)),
+        };
+        side(self.lu, self.before).min(side(self.lv, self.after))
     }
 
     /// The point `k` along the bisector, measured in (u + v): the centre of a round cut of radius
@@ -237,15 +273,43 @@ pub fn path_corners(path: &PathData) -> Vec<Corner> {
     out
 }
 
+/// The corner at anchor `index` among `corners` (in anchor order).
+fn find(corners: &[Corner], index: usize) -> Option<&Corner> {
+    corners.binary_search_by_key(&index, |c| c.index).ok().and_then(|i| corners.get(i))
+}
+
+/// How far along each side the cut of the corner at anchor `index` asks to reach, with the radius
+/// in `radii` there (0 for an anchor that is no corner, or a radius that is negative or not a
+/// number).
+fn requested_setback(corners: &[Corner], radii: &[f64], index: usize) -> f64 {
+    find(corners, index).map_or(0.0, |c| c.setback(radii.get(index).copied().unwrap_or(0.0).max(0.0)))
+}
+
+/// The radius each of `corners` (in anchor order) is drawn with, given the radii by anchor index:
+/// its own, no larger than leaves room for the cuts of its neighbours ([`Corner::max_radius_beside`]
+/// with the setbacks their radii ask for), so a corner whose neighbours are square rounds until
+/// its cut reaches them (#2332) and two neighbours never cut past each other.
+pub fn fitted_radii(corners: &[Corner], radii: &[f64]) -> Vec<f64> {
+    corners
+        .iter()
+        .map(|c| {
+            let own = radii.get(c.index).copied().unwrap_or(0.0).max(0.0);
+            let max = c.max_radius_beside(requested_setback(corners, radii, c.before), requested_setback(corners, radii, c.after));
+            own.min(max)
+        })
+        .collect()
+}
+
 /// `path` with each of its corners ([`path_corners`]) cut by the radius in `radii` and the kind in
 /// `kinds` at its anchor index (missing: 0 and round), each radius no larger than fits
-/// ([`Corner::fitted`]). A cut corner becomes two anchors, and a curved side between corners is
+/// ([`fitted_radii`]). A cut corner becomes two anchors, and a curved side between corners is
 /// trimmed to what is left of it; a closed subpath whose first corner is cut starts where that
 /// cut ends, so the cut closes it. Also returns, per subpath, the anchor index in `path` each
 /// anchor comes from.
 pub fn cut_corners(path: &PathData, radii: &[f64], kinds: &[CornerKind]) -> (PathData, Vec<Vec<usize>>) {
     let corners = path_corners(path);
-    let mut corners = corners.iter().peekable();
+    let fitted = fitted_radii(&corners, radii);
+    let mut corners = corners.iter().zip(fitted).peekable();
     let (mut subpaths, mut sources) = (Vec::with_capacity(path.subpaths.len()), Vec::with_capacity(path.subpaths.len()));
     let mut first = 0;
     for sp in &path.subpaths {
@@ -254,8 +318,7 @@ pub fn cut_corners(path: &PathData, radii: &[f64], kinds: &[CornerKind]) -> (Pat
         let cuts: Vec<Option<Cut>> = (0..n)
             .map(|i| {
                 let index = first + i;
-                let c = corners.next_if(|c| c.index == index)?;
-                let radius = c.fitted(radii.get(index).copied().unwrap_or(0.0));
+                let (c, radius) = corners.next_if(|(c, _)| c.index == index)?;
                 (radius > EPS).then(|| c.cut(radius, kinds.get(index).copied().unwrap_or_default()))
             })
             .collect();
@@ -357,9 +420,6 @@ mod tests {
         for c in &corners {
             let max = c.max_radius();
             assert!((c.setback(max) - c.lu.min(c.lv) / 2.0).abs() < 1e-9);
-            assert_eq!(c.fitted(1e6), max);
-            assert_eq!(c.fitted(-3.0), 0.0);
-            assert_eq!(c.fitted(f64::NAN), 0.0);
         }
         // The right angle at (0, 0) takes up to 20, half its shorter side.
         assert!((corners[0].max_radius() - 20.0).abs() < 1e-9);
@@ -469,5 +529,29 @@ mod tests {
             use kurbo::ParamCurve;
             assert!((bez.eval(t).distance(c.at) - r).abs() < r * 1e-3);
         }
+    }
+
+    /// #2332: a corner rounds until its cut reaches its neighbours' (all of a side whose other
+    /// end is square); neighbours that both ask for more than half a side meet halfway.
+    #[test]
+    fn a_corner_rounds_up_to_its_neighbours_cuts() {
+        let square = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+        let corners = path_corners(&square);
+        let drawn = |radii: [f64; 4]| fitted_radii(&corners, &radii);
+        assert_eq!(drawn([0.0, 500.0, 0.0, 0.0]), [0.0, 100.0, 0.0, 0.0]);
+        assert_eq!(drawn([30.0, 500.0, 0.0, 0.0]), [30.0, 70.0, 0.0, 0.0]);
+        assert_eq!(drawn([80.0, 500.0, 0.0, 0.0]), [50.0, 50.0, 0.0, 0.0]);
+        assert_eq!(drawn([500.0; 4]), [50.0; 4]);
+        assert_eq!(drawn([f64::NAN, 120.0, -1.0, 0.0]), [0.0, 100.0, 0.0, 0.0]);
+        // The lone cut is a quarter circle from one neighbour to the other.
+        let (cut, _) = cut_corners(&square, &[0.0, 500.0, 0.0, 0.0], &[]);
+        let ends: Vec<Point> = cut.anchors().map(|(_, _, a)| a.p).collect();
+        assert_eq!(ends, [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(100.0, 100.0), Point::new(100.0, 100.0), Point::new(0.0, 100.0)]);
+        // Dragged together with its neighbour, a corner meets it halfway; beside a square one,
+        // it goes all the way.
+        let tr = corners[1];
+        assert!((tr.max_shared_radius(&corners, &[0.0; 4], |k| k == 0) - 50.0).abs() < 1e-9);
+        assert!((tr.max_shared_radius(&corners, &[0.0; 4], |_| false) - 100.0).abs() < 1e-9);
+        assert!((tr.max_shared_radius(&corners, &[0.0, 0.0, 40.0, 0.0], |_| false) - 60.0).abs() < 1e-9);
     }
 }

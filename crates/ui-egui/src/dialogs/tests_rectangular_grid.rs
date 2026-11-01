@@ -160,6 +160,31 @@ fn key_frame(app: &mut VectorcraftApp, key: egui::Key) {
 }
 
 #[test]
+fn rectangular_grid_reference_locator_reanchors_to_the_click() {
+    let mut app = app();
+    click(&mut app, Point::new(100.0, 100.0));
+    set(&mut app, "reference", json!(4));
+    super::shapes::grid_pin_to_anchor(app.ui.dialog.as_mut().unwrap());
+    assert_eq!((field(&app, "x"), field(&app, "y")), (json!(50.0), json!(50.0)));
+    let id = confirm(&mut app);
+    assert_grid(&app, id, Rect::new(50.0, 50.0, 150.0, 150.0), 5, 5);
+}
+
+/// #1377: OK uses the bounding box after a reference-point resize (`artboard_rect` keeps the
+/// center pinned when width doubles).
+#[test]
+fn rectangular_grid_reference_point_pins_center_when_width_changes() {
+    let mut app = app();
+    click(&mut app, Point::new(100.0, 100.0));
+    assert_eq!(field(&app, "reference"), json!(0));
+    for (key, value) in [("reference", json!(4)), ("x", json!(50.0)), ("y", json!(50.0)), ("width", json!(200)), ("height", json!(100))] {
+        set(&mut app, key, value);
+    }
+    let id = confirm(&mut app);
+    assert_grid(&app, id, Rect::new(50.0, 50.0, 250.0, 150.0), 5, 5);
+}
+
+#[test]
 fn rectangular_grid_canvas_click_opens_registered_dialog_with_saved_counts_and_point_defaults() {
     let mut app = app();
     saved_counts(&mut app, 7, 3);
@@ -197,7 +222,7 @@ fn rectangular_grid_creates_exact_dividers_as_one_undo_redo_step() {
     assert_eq!(app.session.doc().unwrap().doc, before.doc);
     assert_eq!(app.session.doc().unwrap().selection.objects, before.selected);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), before.undo);
-    let saved = json!({"rows": 2, "columns": 3, "rowSkew": 0.0, "columnSkew": 0.0, "frame": true, "fill": false});
+    let saved = json!({"rows": 2, "columns": 3, "rowSkew": 0.0, "columnSkew": 0.0, "frame": true, "fill": false, "width": 120.0, "height": 60.0, "reference": 0});
     assert_eq!(app.session.tool_options_of(KIND), saved, "undo does not undo the saved tool settings");
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, created);
@@ -355,7 +380,7 @@ fn rectangular_grid_dialog_edits_skews_frame_and_fill() {
     }
     let x = paths[7].subpaths[0].anchors[0].p.x;
     assert!(x > 10.0 && x < 30.0, "toward the left: {x}");
-    let saved = json!({"rows": 3, "columns": 1, "rowSkew": 100.0, "columnSkew": -250.0, "frame": false, "fill": true});
+    let saved = json!({"rows": 3, "columns": 1, "rowSkew": 100.0, "columnSkew": -250.0, "frame": false, "fill": true, "width": 100.0, "height": 100.0, "reference": 0});
     assert_eq!(app.session.tool_options_of(KIND), saved);
     // A drag draws with the same options.
     pointer(&mut app, PointerKind::Down, Point::new(300.0, 300.0));

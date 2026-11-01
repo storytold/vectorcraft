@@ -52,15 +52,23 @@ pub fn max_corner_radius(w: f64, h: f64) -> f64 {
     w.abs().min(h.abs()) / 2.0
 }
 
-/// The radius a corner of a `w` × `h` rectangle is drawn with: `radius`, no larger than
-/// [`max_corner_radius`] (the same limit for every corner, so opposite corners match), 0 when
-/// negative or not a number.
-pub fn fitted_corner_radius(w: f64, h: f64, radius: f64) -> f64 {
-    radius.max(0.0).min(max_corner_radius(w, h))
+/// The radii the corners of a `w` × `h` rectangle (top-left, top-right, bottom-right,
+/// bottom-left) are drawn with: each its own, no larger than leaves room for its neighbours'
+/// cuts ([`crate::corners::fitted_radii`]): half the shorter side when they are all as large, up
+/// to a whole side when its neighbours are square (#2332); 0 when negative or not a number.
+pub fn fitted_corner_radii(w: f64, h: f64, radii: [f64; 4]) -> [f64; 4] {
+    let corners = crate::corners::path_corners(&rectangle(Rect::new(0.0, 0.0, w, h)));
+    let mut out = [0.0; 4];
+    for (c, r) in corners.iter().zip(crate::corners::fitted_radii(&corners, &radii)) {
+        if let Some(o) = out.get_mut(c.index) {
+            *o = r;
+        }
+    }
+    out
 }
 
 /// Rectangle whose corners (top-left, top-right, bottom-right, bottom-left, y down) each have
-/// their own radius and kind, every radius clamped to half the shorter side. A corner without a
+/// their own radius and kind, every radius no larger than [`fitted_corner_radii`] leaves. A corner without a
 /// radius is one anchor, the others two (where the cut meets each side). Clockwise from the
 /// top-left corner, its anchor on the top side first. Cut as any path's corners are
 /// ([`crate::corners::cut_corners`]).
@@ -168,18 +176,36 @@ pub fn line(a: Point, b: Point) -> PathData {
     PathData::single(SubPath::polyline(&[a, b], false))
 }
 
-/// Quarter-ellipse arc from `a` to `b` (Arc tool default: concave, open, x-axis base).
-pub fn arc(a: Point, b: Point, slope: f64, closed: bool) -> PathData {
-    // Corner of the arc's bounding box is at (a.x, b.y): the arc bows away from it.
-    let k = KAPPA * (1.0 + slope.clamp(-1.0, 1.0) * 0.0);
-    let corner = Point::new(b.x, a.y);
-    let h1 = a + (corner - a) * k;
-    let h2 = b + (corner - b) * k;
+/// Bounding box of an arc segment when reference point `reference` (0…8) is placed on `anchor`.
+pub fn arc_bbox(anchor: Point, reference: usize, length_x: f64, length_y: f64) -> Rect {
+    let w = length_x.abs().max(1e-9);
+    let h = length_y.abs().max(1e-9);
+    let rp = crate::reference_point(Rect::new(0.0, 0.0, w, h), reference.min(8));
+    Rect::new(anchor.x - rp.x, anchor.y - rp.y, anchor.x - rp.x + w, anchor.y - rp.y + h)
+}
+
+/// Arc segment from the Arc tool dialog: lengths, reference point, base axis, slope and open/closed.
+pub fn arc_segment(anchor: Point, reference: usize, length_x: f64, length_y: f64, base_along_x: bool, slope: f64, closed: bool) -> PathData {
+    let r = arc_bbox(anchor, reference, length_x, length_y).abs();
+    let (a, b) = if base_along_x { (Point::new(r.x0, r.y0), Point::new(r.x1, r.y1)) } else { (Point::new(r.x0, r.y1), Point::new(r.x1, r.y0)) };
+    arc(a, b, slope, closed, base_along_x)
+}
+
+/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open). `slope` is −100…100
+/// (concave…convex); 0 is a straight chord. A convex arc bulges toward the corner `(b.x, a.y)`,
+/// and a closed arc closes through the corner `(a.x, b.y)`, so a closed arc at slope 100 is the
+/// quarter-ellipse sector. The shape does not depend on `_base_along_x`: for a Y-base arc,
+/// [`arc_segment`] passes ends on the box mirrored top to bottom.
+pub fn arc(a: Point, b: Point, slope: f64, closed: bool, _base_along_x: bool) -> PathData {
+    let t = slope.clamp(-100.0, 100.0) / 100.0;
+    let corner = if t >= 0.0 { Point::new(b.x, a.y) } else { Point::new(a.x, b.y) };
+    let k = KAPPA * t.abs();
+    let h1 = if k == 0.0 { a } else { a + (corner - a) * k };
+    let h2 = if k == 0.0 { b } else { b + (corner - b) * k };
     let mut anchors =
         vec![Anchor { p: a, h_in: a, h_out: h1, kind: AnchorKind::Corner }, Anchor { p: b, h_in: h2, h_out: b, kind: AnchorKind::Corner }];
     if closed {
-        let o = Point::new(a.x, b.y);
-        anchors.push(Anchor::corner(o));
+        anchors.push(Anchor::corner(Point::new(a.x, b.y)));
     }
     PathData::single(SubPath::new(anchors, closed))
 }
@@ -379,9 +405,11 @@ mod tests {
         let chamfer = rectangle_with_corners(r, radii, [CornerKind::Chamfer; 4]);
         assert!((chamfer.subpaths[0].area() - (6000.0 - 50.0)).abs() < 1e-9);
         assert!(chamfer.subpaths[0].anchors.iter().all(|a| !a.has_in() && !a.has_out()), "straight");
-        // Radii clamp to half the shorter side; negative and NaN radii are none.
+        // Radii clamp to what their neighbours leave, the whole shorter side when they are
+        // square (#2332): the cut reaches the bottom-left corner. Negative and NaN radii are none.
         let p = rectangle_with_corners(r, [500.0, -5.0, f64::NAN, 0.0], [CornerKind::Round; 4]);
-        assert_eq!(p.subpaths[0].anchors[0].p, Point::new(30.0, 0.0));
+        assert_eq!(p.subpaths[0].anchors[0].p, Point::new(60.0, 0.0));
+        assert_eq!(p.subpaths[0].anchors.last().map(|a| a.p), Some(Point::new(0.0, 60.0)));
         assert_eq!(p.anchor_count(), 5);
         assert_eq!(CornerKind::ALL.map(CornerKind::next), [CornerKind::InvertedRound, CornerKind::Chamfer, CornerKind::Round]);
     }
@@ -392,7 +420,6 @@ mod tests {
     fn corners_of_a_non_square_rectangle_are_alike() {
         let r = Rect::new(0.0, 0.0, 200.0, 80.0);
         assert_eq!(max_corner_radius(-200.0, 80.0), 40.0);
-        assert_eq!([30.0, 60.0, -1.0, f64::NAN].map(|x| fitted_corner_radius(200.0, 80.0, x)), [30.0, 40.0, 0.0, 0.0]);
         for (radius, drawn) in [(30.0, 30.0), (60.0, 40.0)] {
             for kinds in [[CornerKind::Round; 4], [CornerKind::Chamfer, CornerKind::InvertedRound, CornerKind::Round, CornerKind::Chamfer]] {
                 let a: Vec<Point> = rectangle_with_corners(r, [radius; 4], kinds).subpaths[0].anchors.iter().map(|a| a.p).collect();
@@ -520,9 +547,42 @@ mod tests {
         }
     }
 
+    /// An arc with Base Along Y, open or closed, convex or concave, is the arc with Base Along X in
+    /// the same box mirrored top to bottom, anchor for anchor and handle for handle.
+    #[test]
+    fn a_y_base_arc_is_the_x_base_arc_mirrored_top_to_bottom() {
+        let mirror = |p: Point| Point::new(p.x, 20.0 + 70.0 - p.y);
+        for closed in [false, true] {
+            for slope in [100.0, 50.0, -50.0, -100.0] {
+                let x = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, true, slope, closed);
+                let y = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, false, slope, closed);
+                let (xs, ys) = (&x.subpaths[0], &y.subpaths[0]);
+                assert_eq!(ys.closed, closed);
+                assert_eq!(xs.anchors.len(), ys.anchors.len(), "slope {slope}, closed {closed}");
+                for (i, (p, q)) in xs.anchors.iter().zip(&ys.anchors).enumerate() {
+                    for (u, v) in [(p.p, q.p), (p.h_in, q.h_in), (p.h_out, q.h_out)] {
+                        assert!(mirror(u).distance(v) < 1e-9, "slope {slope}, closed {closed}, anchor {i}: {u:?} mirrored is not {v:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// A closed convex arc is the quarter-ellipse sector of its box with either base: its area is
+    /// a quarter of the ellipse's, π/4 of the box's.
+    #[test]
+    fn a_closed_convex_arc_is_a_quarter_ellipse_sector_with_either_base() {
+        for base_along_x in [true, false] {
+            let a = arc_segment(Point::ZERO, 0, 100.0, 50.0, base_along_x, 100.0, true).subpaths[0].signed_area().abs();
+            assert!((a / (100.0 * 50.0) - PI / 4.0).abs() < 0.01, "base along x {base_along_x}: area {a}");
+        }
+    }
+
     #[test]
     fn arc_open_and_closed() {
-        assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false).anchor_count(), 2);
-        assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true).subpaths[0].closed);
+        assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false, true).anchor_count(), 2);
+        assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true, true).subpaths[0].closed);
+        let seg = arc_segment(Point::ZERO, 0, 100.0, 50.0, true, 50.0, false);
+        assert_eq!(seg.anchor_count(), 2);
     }
 }

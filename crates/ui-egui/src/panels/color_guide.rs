@@ -1,8 +1,11 @@
 //! Color Guide panel: the base colour, the harmony-rule dropdown with the harmony strip, and the
 //! variation grid: a row per harmony colour with the colour itself in the centre column,
 //! shades/cool/muted to the left and tints/warm/vivid to the right (steps and reach from Color
-//! Guide Options). The base colour stays put until "Set base color" takes the current colour. A
-//! click on a cell applies it to the active proxy and selects it; Shift- or Cmd/Ctrl-click adds
+//! Guide Options). The base color is the color last chosen in the Color panel, the Swatches panel
+//! or the Color Picker ([`choose_base`]); selecting artwork leaves it as it is, and the base chip
+//! ("Set base color to the current color") takes the current color, such as a cell applied from
+//! the guide or the selected artwork's color. A click on a cell applies it to the active proxy,
+//! without changing the base, and selects it; Shift- or Cmd/Ctrl-click adds
 //! cells to the selection that Save Colors as Swatches saves. Limit to Library (the library button,
 //! `ui.colorGuideLimit`) snaps every colour to a swatch library or the document's swatches; Edit or
 //! Apply Colors opens Recolor Artwork with the harmony colours, limited the same way.
@@ -21,14 +24,16 @@ use crate::widgets::{self, menu_item};
 /// The base colour before one is set: an orange.
 const DEFAULT_BASE: Color = Color::Rgb { r: 230.0 / 255.0, g: 120.0 / 255.0, b: 40.0 / 255.0 };
 
-/// The guide's base colour: fixed once set; the current colour when the panel first shows.
-pub(crate) fn base_color(app: &VectorcraftApp, ctx: &egui::Context) -> Color {
-    if let Some(c) = pstate::<Option<Color>>(ctx, "cg-base") {
-        return c;
-    }
-    let c = active_paint(app).color().unwrap_or(DEFAULT_BASE);
-    set_pstate(ctx, "cg-base", Some(c));
-    c
+/// The guide's base color: the one last chosen or set with the base chip; before that, the current
+/// color.
+pub(crate) fn base_color(app: &VectorcraftApp) -> Color {
+    app.ui.color_guide_base.unwrap_or_else(|| active_paint(app).color().unwrap_or(DEFAULT_BASE))
+}
+
+/// Make `c` the guide's base color: a color chosen in the Color panel, the Swatches panel or the
+/// Color Picker. A color applied from the guide itself leaves the base as it is.
+pub(crate) fn choose_base(app: &mut VectorcraftApp, c: Color) {
+    app.ui.color_guide_base = Some(c);
 }
 
 fn rule(ctx: &egui::Context) -> Harmony {
@@ -59,7 +64,7 @@ struct GuideKey {
 
 /// The guide the panel shows, limited to the Limit to Library colours.
 fn guide(app: &VectorcraftApp, ctx: &egui::Context) -> Guide {
-    let (base, rule, opts) = (base_color(app, ctx), rule(ctx), app.ui.color_guide);
+    let (base, rule, opts) = (base_color(app), rule(ctx), app.ui.color_guide);
     let limit = &app.ui.color_guide_limit;
     if limit.is_empty() {
         return Guide::new(base, rule, &opts);
@@ -103,7 +108,7 @@ fn limit_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.separator();
-    chosen = library_panel::library_items(ui, &colour_libraries(app), Some(&cur)).or(chosen);
+    chosen = library_panel::library_items(ui, &colour_libraries(app), &|id| id == cur).or(chosen);
     if let Some(key) = chosen {
         set_limit(app, &json!({ "library": key })).ok();
         clear_selection(ui.ctx());
@@ -120,18 +125,27 @@ fn edit_or_apply(app: &mut VectorcraftApp, g: &Guide) {
     app.run("ui.recolorDialog", p).ok();
 }
 
-/// Save the selected cells' colours as swatches (one undo step).
+/// Save the selected cells' colors as swatches (one undo step), each in its own model.
 fn save_selected(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let g = guide(app, ctx);
     let colors: Vec<Value> = selected(ctx).into_iter().filter_map(|(r, c)| g.grid.get(r)?.get(c)).map(color_json).collect();
     if !colors.is_empty() {
-        app.run("swatch.new", json!({ "colors": colors })).ok();
+        app.run("swatch.new", json!({ "colors": colors, "keepModel": true })).ok();
     }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let ctx = ui.ctx().clone();
+    // The current color becomes the base when the panel first shows; selecting artwork later
+    // leaves it as it is.
+    let first = base_color(app);
+    let set = *app.ui.color_guide_base.get_or_insert(first);
+    // Selected cells belong to the guide they were picked from: a new base clears them.
+    if pstate::<Option<Color>>(&ctx, "cg-sel-base") != Some(set) {
+        set_pstate(&ctx, "cg-sel-base", Some(set));
+        clear_selection(&ctx);
+    }
     let h = rule(&ctx);
     let g = guide(app, &ctx);
     let base = g.colors[0];
@@ -142,7 +156,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if resp.on_hover_text(tl!("Set base color to the current color")).clicked()
             && let Some(c) = active_paint(app).color()
         {
-            set_pstate(&ctx, "cg-base", Some(c));
+            app.ui.color_guide_base = Some(c);
             clear_selection(&ctx);
         }
         let labels: Vec<&str> = Harmony::ALL.iter().map(|h| h.label()).collect();
@@ -156,7 +170,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let w = strip.width() / g.colors.len() as f32;
     for (i, c) in g.colors.iter().enumerate() {
         let r = Rect::from_min_size(strip.min + vec2(i as f32 * w, 0.0), vec2(w, strip.height()));
-        let resp = ui.interact(r, ui.id().with(("cg-h", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("cg-h", i)), Sense::click());
         ui.painter().rect_filled(r, 0.0, c32(c));
         if resp.on_hover_text(c.to_hex()).clicked() {
             chosen = Some(*c);
@@ -176,7 +190,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
         for (ci, v) in row.iter().enumerate() {
             let r = Rect::from_min_size(rr.min + vec2(x(ci), 0.0), vec2(x(ci + 1) - x(ci) - gap, 17.0));
-            let resp = ui.interact(r, ui.id().with(("cg-v", ri, ci)), Sense::click());
+            let resp = ui.interact(r, ui.scope_id().with(("cg-v", ri, ci)), Sense::click());
             ui.painter().rect_filled(r, 0.0, c32(v));
             if sel.contains(&(ri, ci)) {
                 ui.painter().rect_stroke(r.shrink(1.0), 0.0, egui::Stroke::new(1.0, egui::Color32::WHITE), egui::StrokeKind::Inside);
@@ -216,7 +230,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => tl!("Limit colors to swatch library").into(),
         };
         // The tip is translated around the library's name, not looked up whole.
-        let lr = widgets::icon_button(ui, "library", "", limit.is_some(), 24.0).on_hover_text(tip);
+        let lr = widgets::icon_button(ui, "library", "", limit.is_some(), 24.0);
+        lr.widget_info(|| widgets::icon_button_info(ui.is_enabled(), limit.is_some(), &tip));
+        let lr = lr.on_hover_text(tip);
         egui::Popup::menu(&lr).show(|ui| limit_menu(app, ui));
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         // Recolor Artwork with the harmony colours as the new colours: the selected art's, or
@@ -230,7 +246,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         if widgets::icon_button(ui, "dc-folder", tl!("Save color group to Swatch panel"), false, 24.0).clicked() {
             let cs: Vec<_> = g.colors.iter().map(color_json).collect();
-            app.run("swatch.newGroup", json!({"name": h.label(), "colors": cs})).ok();
+            app.run("swatch.newGroup", json!({"name": h.label(), "colors": cs, "keepModel": true})).ok();
         }
     });
     if let Some(c) = chosen {
@@ -278,22 +294,97 @@ mod tests {
         out.textures_delta.clear();
     }
 
+    /// Screen readers name the library button by its tool tip, pressed while a library limits the
+    /// colors.
     #[test]
-    fn base_stays_until_set_and_the_grid_follows_the_options() {
+    fn screen_readers_name_the_limit_button() {
+        use crate::widgets::accessibility_tests::{role_and_state, tree};
+        use egui::accesskit::{Role, Toggled};
         let mut app = app();
+        let shown = tree(|ui| show(&mut app, ui));
+        assert_eq!(role_and_state(&shown, "Limit colors to swatch library"), (Role::Button, None));
+        app.run("ui.colorGuideLimit", json!({"library": "Earth Tones"})).unwrap();
+        let shown = tree(|ui| show(&mut app, ui));
+        assert_eq!(role_and_state(&shown, "Limit colors to swatch library: Earth Tones"), (Role::Button, Some(Toggled::True)));
+    }
+
+    /// The first show takes the current color; a color chosen in the Color panel, Swatches or the
+    /// Color Picker becomes the base; selecting artwork with another color leaves it.
+    #[test]
+    fn a_chosen_color_becomes_the_base_and_selecting_art_keeps_it() {
+        let mut app = app();
+        let red = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        let blue = app.run("shape.rectangle", json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         app.run("paint.setFill", json!({"color": "#3366cc"})).unwrap();
         let ctx = egui::Context::default();
         frame(&mut app, &ctx);
-        assert_eq!(base_color(&app, &ctx).to_hex(), "#3366cc", "the first show takes the current colour");
-        // Another current colour leaves the base alone.
-        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        assert_eq!(base_color(&app).to_hex(), "#3366cc", "the first show takes the current color");
+        app.run("select.set", json!({"ids": [red]})).unwrap();
         frame(&mut app, &ctx);
-        assert_eq!(base_color(&app, &ctx).to_hex(), "#3366cc");
+        assert_eq!(base_color(&app).to_hex(), "#3366cc", "selecting art keeps the base");
+        choose_base(&mut app, Color::from_hex("#20a060").unwrap());
+        frame(&mut app, &ctx);
         app.ui.color_guide.steps = 6;
         frame(&mut app, &ctx);
         let g = guide(&app, &ctx);
         assert_eq!(g.grid[0].len(), 13);
-        assert_eq!(g.grid[0][6].to_hex(), "#3366cc", "the base sits in the centre of the first row");
+        assert_eq!(g.grid[0][6].to_hex(), "#20a060", "the chosen base sits in the centre of the first row");
+        app.run("select.set", json!({"ids": [blue]})).unwrap();
+        frame(&mut app, &ctx);
+        assert_eq!(base_color(&app).to_hex(), "#20a060");
+    }
+
+    /// The rect of the panel widget `id` after one frame.
+    fn rect_of(app: &mut VectorcraftApp, ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug) -> Rect {
+        let mut r = None;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            show(app, ui);
+            r = ctx.read_response(ui.scope_id().with(&id)).map(|r| r.rect);
+        });
+        out.textures_delta.clear();
+        r.expect("the widget is drawn")
+    }
+
+    fn click(app: &mut VectorcraftApp, ctx: &egui::Context, at: egui::Pos2) {
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        for events in [vec![egui::Event::PointerMoved(at), button(true)], vec![button(false)]] {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+        }
+    }
+
+    /// A harmony color or a variation clicked in the guide paints the art without changing the
+    /// base; the base chip then makes the current color the base.
+    #[test]
+    fn a_guide_color_applies_without_moving_the_base_until_set_as_base() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("paint.setFill", json!({"color": "#3366cc"})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        let fill = |app: &VectorcraftApp| crate::panels::current_paints(app).0.color().map(|c| c.to_hex());
+        let at = rect_of(&mut app, &ctx, ("cg-h", 1)).center();
+        click(&mut app, &ctx, at);
+        assert_eq!(fill(&app), Some(g.colors[1].to_hex()), "the harmony color paints the art");
+        assert_eq!(base_color(&app).to_hex(), "#3366cc", "and leaves the base");
+        let at = rect_of(&mut app, &ctx, ("cg-v", 0usize, 2usize)).center();
+        click(&mut app, &ctx, at);
+        let variation = g.grid[0][2].to_hex();
+        assert_eq!(fill(&app), Some(variation.clone()), "a variation paints the art");
+        assert_eq!(base_color(&app).to_hex(), "#3366cc");
+        assert_eq!(guide(&app, &ctx).grid, g.grid, "the guide stays as it was");
+        // Set base color to the current color: the applied variation becomes the base.
+        let mut chip = None;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            show(&mut app, ui);
+            chip = Some(ui.min_rect().left_top() + egui::vec2(8.0, 8.0));
+        });
+        out.textures_delta.clear();
+        click(&mut app, &ctx, chip.expect("the panel is drawn"));
+        assert_eq!(base_color(&app).to_hex(), variation, "the base chip adopts the current color");
     }
 
     #[test]
@@ -310,6 +401,23 @@ mod tests {
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
         let g = guide(&app, &ctx);
         assert_eq!(st.doc.swatches.last().unwrap().paint.color().map(|c| c.to_hex()), Some(g.grid[0][8].to_hex()));
+    }
+
+    /// In a CMYK document the cells of an RGB guide are saved in RGB, their own model.
+    #[test]
+    fn saved_cells_keep_their_model_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("paint.setFill", json!({"color": "#3366cc", "keepModel": true})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        set_pstate(&ctx, "cg-sel", vec![(0usize, 0usize), (0, 6)]);
+        save_selected(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        assert!(matches!(g.grid[0][6], Color::Rgb { .. }), "{:?}", g.grid[0][6]);
+        let sw = &app.session.doc().unwrap().doc.swatches;
+        let saved: Vec<Color> = sw[sw.len() - 2..].iter().filter_map(|w| w.paint.color()).collect();
+        assert_eq!(saved, [g.grid[0][0], g.grid[0][6]]);
     }
 
     /// Every colour of the panel's guide.

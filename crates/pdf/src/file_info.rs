@@ -11,12 +11,14 @@ use crate::import_scan::text_string;
 
 /// The longest XMP packet read, in bytes once decoded; a longer one is left out.
 const MAX_XMP: usize = 8 << 20;
+/// The deepest the elements of an XMP packet may nest; a packet nested deeper is left out.
+const MAX_NESTING: usize = 256;
 
 const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const XML: &str = "http://www.w3.org/XML/1998/namespace";
-const DC: &str = "http://purl.org/dc/elements/1.1/";
+pub(crate) const DC: &str = "http://purl.org/dc/elements/1.1/";
 const XMP: &str = "http://ns.adobe.com/xap/1.0/"; // brand-ok: the XMP namespace the files use
-const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
+pub(crate) const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/"; // brand-ok: the XMP namespace the files use
 
 /// The File Info fields a PDF gives, each `None` when the file gives none (or only blank text).
@@ -50,40 +52,13 @@ pub fn file_info(bytes: &[u8], password: Option<&str>) -> Option<FileInfo> {
 pub(crate) fn file_info_in(pdf: &Pdf) -> FileInfo {
     let mut f = packet(pdf).and_then(|p| xmp(&p)).unwrap_or_default();
     let info = pdf.metadata();
-    let text = |b: &Option<Vec<u8>>| b.as_deref().map(info_string).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let text = |b: &Option<Vec<u8>>| b.as_deref().map(text_string).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     f.author = f.author.or_else(|| text(&info.author));
     f.description = f.description.or_else(|| text(&info.subject));
     f.keywords = f.keywords.or_else(|| text(&info.keywords).map(|k| split(&k)).filter(|k| !k.is_empty()));
     f.created = f.created.or_else(|| info.creation_date.and_then(pdf_date));
     f.modified = f.modified.or_else(|| info.modification_date.and_then(pdf_date));
     f
-}
-
-/// An information dictionary string: UTF-16 or UTF-8 with its byte order mark, as [`text_string`]
-/// reads it, else PDFDocEncoding (ISO 32000-1 Annex D, Table D.2).
-fn info_string(b: &[u8]) -> String {
-    if b.starts_with(&[0xFE, 0xFF]) || b.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        return text_string(b);
-    }
-    b.iter().map(|&c| pdf_doc_char(c)).collect()
-}
-
-/// Byte `c` of a PDFDocEncoding string. It matches Latin-1 except at 0x18 to 0x1F (accents) and
-/// 0x80 to 0xA0 (punctuation, ligatures, letters and the euro sign); 0x9F has no character and
-/// stays as it is.
-fn pdf_doc_char(c: u8) -> char {
-    const ACCENTS: [char; 8] = ['\u{2D8}', '\u{2C7}', '\u{2C6}', '\u{2D9}', '\u{2DD}', '\u{2DB}', '\u{2DA}', '\u{2DC}'];
-    const HIGH: [char; 33] = [
-        '\u{2022}', '\u{2020}', '\u{2021}', '\u{2026}', '\u{2014}', '\u{2013}', '\u{192}', '\u{2044}', '\u{2039}', '\u{203A}', '\u{2212}',
-        '\u{2030}', '\u{201E}', '\u{201C}', '\u{201D}', '\u{2018}', '\u{2019}', '\u{201A}', '\u{2122}', '\u{FB01}', '\u{FB02}', '\u{141}', '\u{152}',
-        '\u{160}', '\u{178}', '\u{17D}', '\u{131}', '\u{142}', '\u{153}', '\u{161}', '\u{17E}', '\u{9F}', '\u{20AC}',
-    ];
-    let mapped = match c {
-        0x18..=0x1F => ACCENTS.get(usize::from(c - 0x18)),
-        0x80..=0xA0 => HIGH.get(usize::from(c - 0x80)),
-        _ => None,
-    };
-    mapped.copied().unwrap_or(char::from(c))
 }
 
 /// The catalog's metadata stream, decoded; `None` past [`MAX_XMP`] bytes.
@@ -94,9 +69,14 @@ fn packet(pdf: &Pdf) -> Option<Vec<u8>> {
     (data.len() <= MAX_XMP).then(|| data.into_owned())
 }
 
-/// The File Info fields of an XMP packet; `None` when it isn't XML in UTF-8 or UTF-16.
+/// The File Info fields of an XMP packet; `None` when it isn't XML in UTF-8 or UTF-16, or when its
+/// elements nest more than [`MAX_NESTING`] deep.
 fn xmp(packet: &[u8]) -> Option<FileInfo> {
     let text = xml_text(packet)?;
+    // roxmltree parses nested elements recursively.
+    if nesting(&text) > MAX_NESTING {
+        return None;
+    }
     let xml = roxmltree::Document::parse(&text).ok()?;
     // The resource's own descriptions: those right under `rdf:RDF`, not the ones inside a value.
     let descriptions: Vec<Node<'_, '_>> = xml
@@ -137,6 +117,50 @@ fn xml_text(b: &[u8]) -> Option<String> {
         [0xFF, 0xFE, ..] | [b'<', 0, ..] => utf16(false),
         _ => std::str::from_utf8(b.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(b)).ok().map(str::to_string),
     }
+}
+
+/// How deep the elements of `xml` nest: start tags less end tags, at most, outside comments,
+/// CDATA sections, processing instructions, declarations and quoted attribute values.
+fn nesting(xml: &str) -> usize {
+    let b = xml.as_bytes();
+    let (mut depth, mut most, mut i) = (0usize, 0usize, 0usize);
+    // The index just past the first `end` at or after `from` (the end of the text if none).
+    let past = |from: usize, end: &[u8]| {
+        b.get(from..).and_then(|rest| rest.windows(end.len()).position(|w| w == end)).map_or(b.len(), |at| from + at + end.len())
+    };
+    while let Some(at) = b.get(i..).and_then(|rest| rest.iter().position(|&c| c == b'<')) {
+        let start = i + at;
+        let rest = b.get(start..).unwrap_or_default();
+        if rest.starts_with(b"<!--") {
+            i = past(start + 4, b"-->");
+        } else if rest.starts_with(b"<![CDATA[") {
+            i = past(start + 9, b"]]>");
+        } else if rest.starts_with(b"<?") {
+            i = past(start + 2, b"?>");
+        } else if rest.starts_with(b"<!") || rest.starts_with(b"</") {
+            depth = depth.saturating_sub(usize::from(rest.starts_with(b"</")));
+            i = past(start + 2, b">");
+        } else {
+            // A start tag: up to its `>` outside quotes; `/>` closes it at once.
+            let mut j = start + 1;
+            let mut quote = None;
+            while let Some(&c) = b.get(j) {
+                match (quote, c) {
+                    (None, b'"' | b'\'') => quote = Some(c),
+                    (Some(q), _) if c == q => quote = None,
+                    (None, b'>') => break,
+                    _ => {}
+                }
+                j += 1;
+            }
+            if b.get(j.saturating_sub(1)) != Some(&b'/') {
+                depth += 1;
+                most = most.max(depth);
+            }
+            i = j + 1;
+        }
+    }
+    most
 }
 
 /// The values of property `ns` `name` on the first of `descriptions` that gives it: an attribute
@@ -210,14 +234,8 @@ fn pdf_date(d: DateTime) -> Option<i64> {
 
 /// Whether `day` is a day of `month` (1 to 12) in `year` (proleptic Gregorian).
 fn in_month(year: i64, month: i64, day: i64) -> bool {
-    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let last = match month {
-        2 if leap => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    };
-    (1..=last).contains(&day)
+    let ymd = i32::try_from(year).ok().zip(u32::try_from(month).ok()).zip(u32::try_from(day).ok());
+    ymd.is_some_and(|((y, m), d)| chrono::NaiveDate::from_ymd_opt(y, m, d).is_some())
 }
 
 /// An XMP date (ISO 16684-1: `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, then optionally `Thh:mm`, `:ss` with
@@ -258,13 +276,16 @@ fn xmp_date(s: &str) -> Option<i64> {
 }
 
 /// `[year, month, day, hour, minute, second]` at a UTC offset of `offset` minutes → Unix seconds
-/// (days-from-civil, proleptic Gregorian: the inverse of [`vectorcraft_doc::metadata::civil`]).
+/// (the inverse of [`vectorcraft_doc::metadata::civil`]). The date has already passed [`in_month`],
+/// so it is a real day; an impossible one reads as the epoch rather than panicking.
 fn unix([year, month, day, hour, minute, second]: [i64; 6], offset: i64) -> i64 {
-    let y = if month <= 2 { year - 1 } else { year };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let doy = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
+    let days = i32::try_from(year)
+        .ok()
+        .zip(u32::try_from(month).ok())
+        .zip(u32::try_from(day).ok())
+        .and_then(|((y, m), d)| chrono::NaiveDate::from_ymd_opt(y, m, d))
+        .zip(chrono::NaiveDate::from_ymd_opt(1970, 1, 1))
+        .map(|(date, epoch)| (date - epoch).num_days())
+        .unwrap_or(0);
     days * 86_400 + hour * 3600 + minute * 60 + second - offset * 60
 }

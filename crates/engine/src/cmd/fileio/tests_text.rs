@@ -85,3 +85,19 @@ fn save_for_office_writes_a_png_at_the_resolution() {
     let spec = crate::cmd::find_command("document.exportForOffice").unwrap();
     assert_eq!((spec.label, spec.menu), ("Save for Office Documents…", &["File"][..]));
 }
+
+#[test]
+fn save_for_office_says_when_an_image_or_a_font_is_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    assert_eq!(s.execute("document.exportForOffice", &json!({"ppi": 72})).unwrap()["warnings"], json!([]));
+    // The renderer can't decode the placed image, and the type's family isn't installed.
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    s.execute("text.create", &json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let r = s.execute("document.exportForOffice", &json!({"ppi": 72})).unwrap();
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings.contains(&"an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert!(warnings.iter().any(|w| w.contains("fallback font") && w.contains("Nonexistent Sans Probe")), "{warnings:?}");
+    assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(200), Some(100)), "the PNG is still written");
+}

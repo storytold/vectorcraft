@@ -29,6 +29,12 @@ fn unit(v: Vec2) -> Vec2 {
     if l < 1e-12 { Vec2::new(1.0, 0.0) } else { v / l }
 }
 
+/// Whether two unit vectors point the same way, to within the slack a unit vector carries after
+/// a few multiplications (a bend of even a thousandth of a degree fails this).
+fn aligned(a: Vec2, b: Vec2) -> bool {
+    a.dot(b) > 1.0 - 1e-12
+}
+
 /// Left-hand normal in y-down document space (for a path running +x it points +y).
 pub fn normal(t: Vec2) -> Vec2 {
     Vec2::new(-t.y, t.x)
@@ -154,7 +160,63 @@ impl Track {
         let (p, t) = self.frame(s);
         p + normal(t) * d
     }
+
+    /// Whether [`Self::frame`] holds one constant tangent over arc lengths `s0..s1`, so mapping
+    /// through it is an affine of the art and nothing more.
+    ///
+    /// Read off the track, not sampled. A bend in the span is two segments with different
+    /// directions, however short the bent part is, so this cannot miss one; a sampled check can,
+    /// because a wiggle narrower than the sample spacing passes between the samples (#3926).
+    ///
+    /// Fails closed: a span that needs reasoning this does not do (a closed track's seam, a
+    /// non-finite bound, a track with no segments) is reported as not straight, and the caller
+    /// bends it the long way.
+    pub fn is_straight(&self, s0: f64, s1: f64) -> bool {
+        // Checked before the min/max, which quietly drop a NaN rather than propagate it.
+        let n = self.segments();
+        if !(s0.is_finite() && s1.is_finite()) || n == 0 {
+            return false;
+        }
+        let (lo, hi) = (s0.min(s1), s0.max(s1));
+        let l = self.len();
+        // A closed track wraps, so a span reaching past either end covers segments twice.
+        if self.closed && (lo < -1e-9 || hi > l + 1e-9) {
+            return false;
+        }
+        // Past an open track's ends `frame` extrapolates along the end segment's direction, so
+        // those segments are part of the span too.
+        let ends = [(!self.closed && lo < 0.0).then_some(0), (!self.closed && hi > l).then(|| n - 1)];
+        let touched = (0..n).filter(|&i| {
+            let (a, b) = (self.cum.get(i), self.cum.get(i + 1));
+            matches!((a, b), (Some(a), Some(b)) if *a < hi + 1e-9 && *b > lo - 1e-9)
+        });
+        let mut dir: Option<Vec2> = None;
+        let mut any = false;
+        for i in touched.chain(ends.into_iter().flatten()) {
+            let (Some(&d), Some(&t0), Some(&t1), Some(&c0), Some(&c1)) =
+                (self.dirs.get(i), self.tangents.get(i), self.tangents.get(i + 1), self.corner.get(i), self.corner.get(i + 1))
+            else {
+                return false;
+            };
+            if dir.is_some_and(|first: Vec2| !aligned(first, d)) {
+                return false;
+            }
+            dir = Some(d);
+            any = true;
+            // `frame` blends the two vertex tangents across the segment unless the vertex is a
+            // corner, where it uses the segment's own direction. So a neighbour outside the span
+            // can still bend the tangent inside it, and checking the directions alone would miss
+            // that: segments d, d, e leave vertex 2's tangent at unit(d + e).
+            if !(c0 || aligned(t0, d)) || !(c1 || aligned(t1, d)) {
+                return false;
+            }
+        }
+        any
+    }
 }
+
+/// The most flattened elements of a path kept.
+const MAX_FLATTENED: usize = 4_000_000;
 
 /// Flatten `bp` into tracks (one per subpath) with `tol` accuracy.
 pub fn tracks(bp: &BezPath, tol: f64) -> Vec<Track> {
@@ -165,8 +227,20 @@ pub fn tracks(bp: &BezPath, tol: f64) -> Vec<Track> {
             out.push(t);
         }
     };
+    // Far outside any drawing a curve flattens to millions of points; past a few million, the
+    // rest are not kept.
+    let b = bp.control_box();
+    let extent = b.x0.abs().max(b.x1.abs()).max(b.y0.abs()).max(b.y1.abs());
+    // NaN coordinates must be rejected too, so keep the negation of the `<=` check.
+    if extent.is_nan() || extent > 1e9 {
+        return out;
+    }
     let mut els = vec![];
-    kurbo::flatten(bp.iter(), tol.max(1e-4), |el| els.push(el));
+    kurbo::flatten(bp.iter(), tol.max(1e-4), |el| {
+        if els.len() < MAX_FLATTENED {
+            els.push(el);
+        }
+    });
     for el in els {
         match el {
             PathEl::MoveTo(p) => {
@@ -238,6 +312,47 @@ pub fn seed_of(bp: &BezPath, salt: &str) -> u64 {
 mod tests {
     use super::*;
 
+    /// A straight run is straight; a bend in the span is not, however short it is. This is the
+    /// property a sampled check cannot offer, so it is worth pinning on its own (#3926 review).
+    #[test]
+    fn straightness_is_read_off_the_track_not_sampled() {
+        let line = |pts: &[(f64, f64)], closed: bool| {
+            let mut bp = BezPath::new();
+            bp.move_to(pts[0]);
+            for p in &pts[1..] {
+                bp.line_to(*p);
+            }
+            if closed {
+                bp.close_path();
+            }
+            tracks(&bp, 0.1).remove(0)
+        };
+
+        let straight = line(&[(0.0, 0.0), (100.0, 0.0), (200.0, 0.0)], false);
+        assert!(straight.is_straight(0.0, 200.0), "two collinear segments are one straight run");
+        // Open tracks extrapolate along the end directions, which is still the same line.
+        assert!(straight.is_straight(-50.0, 250.0), "and so is the extrapolation past both ends");
+
+        // A detour of a fifth of a point, 0.1% of the run: far below any sampling grid this code
+        // would choose, and still a bend.
+        let wiggle = line(&[(0.0, 0.0), (99.9, 0.0), (100.0, 0.2), (100.1, 0.0), (200.0, 0.0)], false);
+        assert!(!wiggle.is_straight(0.0, 200.0), "a 0.2 pt detour is a bend");
+        assert!(!wiggle.is_straight(99.0, 101.0), "and is caught when the span is only around it");
+        assert!(wiggle.is_straight(0.0, 50.0), "while a span before it is straight");
+
+        // `frame` blends vertex tangents, so the segment before a bend is not straight all the way
+        // to the vertex: the tangent there is already turning. Pinning this because checking the
+        // segment directions alone would call that span straight and be wrong.
+        let kink = line(&[(0.0, 0.0), (100.0, 0.0), (160.0, 60.0)], false);
+        assert!(!kink.is_straight(0.0, 100.0), "the last segment's tangent is already turning at its far vertex");
+        assert!(kink.is_straight(0.0, 50.0), "a span clear of the turning vertex is straight");
+
+        // Fails closed where it does not reason: a closed track's seam, and nonsense bounds.
+        let ring = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], true);
+        assert!(!ring.is_straight(-10.0, 10.0), "a span across a closed track's seam is refused");
+        assert!(ring.is_straight(10.0, 90.0), "a span inside one of its sides is straight");
+        assert!(!straight.is_straight(f64::NAN, 10.0), "a non-finite bound is refused");
+    }
     #[test]
     fn straight_track_frames() {
         let mut bp = BezPath::new();

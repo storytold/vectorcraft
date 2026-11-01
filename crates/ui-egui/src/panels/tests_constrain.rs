@@ -216,6 +216,30 @@ fn ctrl_cmd_enter_scales_the_artboard_proportionally() {
     assert_eq!(board(End::Enter(Modifiers::COMMAND)), (400.0, 300.0));
 }
 
+/// A percentage typed alone in W or H (`25%`) is a share of the size the field shows, as in
+/// Illustrator: with the link off only that side changes, with it on the other side follows, and
+/// Ctrl/Cmd+Enter keeps the proportions as with a length.
+#[test]
+fn a_percentage_in_a_size_field_scales_the_size_it_shows() {
+    let surfaces: [(&str, Draw); 3] =
+        [("Transform panel", transform::show), ("Properties", properties::transform_section), ("Control bar", crate::chrome::control_bar)];
+    for (name, draw) in surfaces {
+        let mut app = rect_app();
+        set_field(&mut app, draw, "100 pt", "25%", End::Enter(Modifiers::NONE));
+        assert_eq!(size(&app), (25.0, 50.0), "{name}, W");
+        let mut app = rect_app();
+        set_field(&mut app, draw, "50 pt", "150 %", End::Enter(Modifiers::NONE));
+        assert_eq!(size(&app), (100.0, 75.0), "{name}, H");
+        let mut app = rect_app();
+        set_field(&mut app, draw, "100 pt", "200%", End::Enter(Modifiers::COMMAND));
+        assert_eq!(size(&app), (200.0, 100.0), "{name}, Ctrl/Cmd+Enter");
+        let mut app = rect_app();
+        run(&mut app, "prefs.set", json!({"key": "constrainProportions", "value": true}));
+        set_field(&mut app, draw, "50 pt", "300%", End::Enter(Modifiers::NONE));
+        assert_eq!(size(&app), (300.0, 150.0), "{name}, linked");
+    }
+}
+
 /// A length field of the New Document dialog keeps the focus on Ctrl/Cmd+Enter, and the dialog
 /// creates no document.
 #[test]

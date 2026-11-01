@@ -25,8 +25,15 @@ kurbo = { workspace = true }
 image = { workspace = true }
 flate2 = { workspace = true }
 ruzstd = { workspace = true }
+# Images read through `CCITTFaxDecode`.
+hayro-ccitt = { workspace = true }
 # Live effects' params, as the art styles that name them give them.
 serde_json = { workspace = true }
+# Substring search for PostScript `search`.
+memchr = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
+vectorcraft-text = { workspace = true, features = ["test-fonts"] }
+# Tests: a Group 4 encoder and the T.4 run codes, to write CCITT test images.
+fax = "0.2"

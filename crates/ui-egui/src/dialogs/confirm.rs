@@ -41,6 +41,28 @@ pub const MESSAGE: &str = "message";
 
 pub(super) const MESSAGE_SPEC: DialogSpec = DialogSpec { ok: None, ..SPEC };
 
+/// The dialog kind of the question whether to replace a file that a save panel's name names once
+/// the app gave it an extension ([`ask_replace`]). Fields: `message`, `detail`, `path` (the file).
+pub const REPLACE: &str = "replaceFile";
+
+pub(super) const REPLACE_SPEC: DialogSpec = DialogSpec { confirm: |app, d| crate::picks::replace(app, &d.str("path")), ..SPEC };
+
+/// Ask whether to replace the file at `path`, which the name `typed` in a save panel became when
+/// the app gave it an extension, over the dialog open now (Cancel shows it again). OK runs
+/// [`crate::picks::replace`]; the Enter that closed the save panel does not press it.
+pub(crate) fn ask_replace(app: &mut VectorcraftApp, path: &str, typed: &str) {
+    let name = vectorcraft_engine::cmd::fileio::file_name(path);
+    let typed = vectorcraft_engine::cmd::fileio::file_name(typed);
+    let message = crate::i18n::fmt(tl!("“{name}” already exists. Replace it?"), &[("name", &name)]);
+    let detail = crate::i18n::fmt(
+        tl!("The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents."),
+        &[("typed", &typed)],
+    );
+    let under = app.ui.dialog.take().and_then(|d| serde_json::to_value(d).ok());
+    let fields = json!({"message": message, "detail": detail, "path": path, super::PARENT: under, super::AFTER_PANEL: true});
+    app.ui.dialog = Some(Dialog::new(REPLACE, fields));
+}
+
 /// Most messages kept for later while a dialog is open ([`tell`]).
 const MAX_WAITING: usize = 16;
 

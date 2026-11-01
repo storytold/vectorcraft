@@ -112,7 +112,7 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::flat_button(ui, tl!("Load Profile…"), 110.0).clicked() {
             // Its file dialog, shown off the UI thread, loads the profile when it answers.
             crate::picks::button(app, |app| {
-                let pick = crate::FilePick { filters: vec![("ICC Profiles", &["icc", "icm"])], ..Default::default() };
+                let pick = crate::FilePick { filters: vec![crate::FilePick::filter("ICC Profiles", &["icc", "icm"])], ..Default::default() };
                 if let Some(path) = crate::picks::open(app, &pick) {
                     run(app, "color.loadProfile", json!({ "path": path }));
                 }

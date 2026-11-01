@@ -1,3 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- This package declares the types shared-mime-info lacks for the formats in the desktop entry's
+     MimeType line. The desktop entry lists these types with the shared ones; a test in
+     apps/vectorcraft/src/main.rs checks both files. -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-vectorcraft">
+    <comment>VectorCraft document</comment>
+    <icon name="ai.storyteller.vectorcraft"/>
+    <glob pattern="*.vectorcraft"/>
+    <glob pattern="*.drawcraft"/>
+  </mime-type>
+  <mime-type type="application/x-vectorcraft-template">
+    <comment>VectorCraft template</comment>
+    <sub-class-of type="application/x-vectorcraft"/>
+    <glob pattern="*.vctemplate"/>
+  </mime-type>
+  <mime-type type="application/x-ai-template">
+    <comment>PDF-compatible .ait template</comment>
+    <sub-class-of type="application/pdf"/>
+    <glob pattern="*.ait"/>
+  </mime-type>
+  <!-- An .af file gets this type only when it starts with the Affinity container signature and
+       the document kind. -->
+  <mime-type type="application/x-affinity">
+    <comment>Affinity document</comment>
+    <glob pattern="*.afdesign"/>
+    <glob pattern="*.afpub"/>
+    <magic>
+      <match type="string" offset="0" value="\x00\xff\x4b\x41">
+        <match type="string" offset="8" value="nsrP"/>
+      </match>
+    </magic>
+  </mime-type>
 </mime-info>

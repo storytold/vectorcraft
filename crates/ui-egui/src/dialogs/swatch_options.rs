@@ -76,7 +76,7 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
             Ok(Value::Null)
         }
         Paint::Gradient(g) => {
-            let fields = json!({"__swatch": name, "name": name, "__gradient": g.gradient, "preview": true});
+            let fields = json!({"__swatch": name, "name": name, "__gradient": g, "preview": true});
             app.ui.dialog = Some(Dialog::new(KIND, fields));
             Ok(Value::Null)
         }
@@ -105,7 +105,7 @@ fn edit_params(d: &Dialog) -> Value {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let changed = match d.fields.get("__gradient").and_then(|g| serde_json::from_value::<vectorcraft_color::Gradient>(g.clone()).ok()) {
+    let changed = match d.fields.get("__gradient").and_then(|g| serde_json::from_value::<vectorcraft_color::GradientPaint>(g.clone()).ok()) {
         Some(g) => {
             let changed = grid(ui, |ui| name_row(ui, d));
             ui.add_space(6.0);
@@ -214,12 +214,14 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new(*lbl).size(12.5).color(t.text)));
                     let v = comps.get(i).copied().unwrap_or(0.0);
                     let track = |x: f32| crate::panels::c32(&track_color(mode, &comps, i, x));
-                    if let (Some(nv), _) = widgets::color_slider(ui, ("swatch-slider", i), mode.unit(i, v), 200.0, &track) {
+                    let shown = widgets::SliderValue::field(v as f64, mode.min(i) as f64..=mode.max(i) as f64, mode.suffix(i), 0);
+                    if let (Some(nv), _) = widgets::color_slider_valued(ui, ("swatch-slider", i), lbl, Some(shown), mode.unit(i, v), 200.0, &track) {
                         let mut c2 = comps.clone();
                         c2[i] = mode.value_at(i, nv);
                         new = Some((from_components(mode, &c2), c2));
                     }
-                    if let Some(fv) = widgets::plain_field(ui, ("swatch-field", i), v as f64, mode.suffix(i), 0, 52.0) {
+                    let bounds = f64::from(mode.min(i))..=f64::from(mode.max(i));
+                    if let Some(fv) = widgets::range_field(ui, ("swatch-field", i), f64::from(v), bounds, mode.suffix(i), 0, 52.0) {
                         let mut c2 = comps.clone();
                         c2[i] = (fv as f32).clamp(mode.min(i), mode.max(i));
                         new = Some((from_components(mode, &c2), c2));
@@ -250,7 +252,7 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// A hex field showing `hex`; returns the colour typed into it once committed.
 fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
-    let id = ui.id().with("swatch-hex");
+    let id = ui.scope_id().with("swatch-hex");
     let editing = ui.memory(|m| m.has_focus(id));
     // As in `widgets::hex_field`: until the user types into it, the field shows `hex` as it is now
     // (#1692).
@@ -264,7 +266,14 @@ fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
         .inner_margin(egui::Margin::symmetric(6, 4))
         .show(ui, |ui| {
             crate::theme::strong_selected_text(ui);
-            ui.add(egui::TextEdit::singleline(&mut buf).id(id).frame(egui::Frame::NONE).desired_width(70.0).char_limit(7))
+            ui.add(
+                egui::TextEdit::singleline(&mut buf)
+                    .id(id)
+                    .frame(egui::Frame::NONE)
+                    .align(egui::Align2::LEFT_CENTER)
+                    .desired_width(70.0)
+                    .char_limit(7),
+            )
         })
         .inner;
     let focused = ui.memory(|m| m.has_focus(id));

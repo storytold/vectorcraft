@@ -13,13 +13,14 @@ use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
+use vectorcraft_ui_egui::stylus::StylusFeed;
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
 use crate::locks::WebLocks;
 use crate::pencil::SharedPointers;
 
-type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+pub(crate) type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
 /// Where the pointer was over the canvas during the last file drag (CSS px from its top-left) and
 /// whether Shift was held: where dropped files land.
@@ -81,6 +82,7 @@ pub fn start() {
             restarts: 0,
         };
         track_paste(&host.pasted);
+        crate::keys::keep_app_keys();
         run(host, canvas, None).await;
     });
 }
@@ -106,6 +108,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
             canvas,
             web_options(),
             Box::new(move |cc| {
+                VectorcraftApp::install_ime_reset_hooks(&cc.egui_ctx);
                 let ctx = &cc.egui_ctx;
                 crate::fonts::spawn_background_fonts(ctx.clone());
                 let loss = GraphicsLoss::default();
@@ -116,15 +119,25 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
                 host.pasted.borrow_mut().ctx = Some(ctx.clone());
-                let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone());
+                let stylus = host.pointers.borrow().stylus();
+                let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone(), stylus);
                 let app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
                         app.services = services;
                         app.status("The graphics were lost and have been restarted");
+                        crate::api::connect(None, host.inbox.clone(), ctx.clone());
                         app
                     }
-                    None => VectorcraftApp::new(Session::new(), services),
+                    None => {
+                        // `window.vectorcraft`: the page's control channel (crate::api).
+                        let (control_tx, control_rx) = std::sync::mpsc::channel();
+                        crate::api::connect(Some(control_tx), host.inbox.clone(), ctx.clone());
+                        if let Err(e) = crate::api::install() {
+                            log::error!("vectorcraft-web: couldn't install window.vectorcraft: {}", js_err(e));
+                        }
+                        VectorcraftApp::new(Session::new(), services).with_control(control_rx)
+                    }
                 };
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
@@ -356,53 +369,63 @@ impl eframe::App for WebShell {
             self.restart(&why);
         }
         let Some(app) = &mut self.app else { return };
-        let pasted = self.host.pasted.borrow_mut().flavour.take();
-        if let Some((f, held)) = pasted {
-            app.paste_from_host(ctx, f, held);
-        }
-        let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
-        if !dropped.is_empty() {
-            let at = self.host.drag.take();
-            let z = ctx.zoom_factor();
-            let (pos, shift) = (at.map(|(x, y, _)| egui::pos2(x / z, y / z)), at.is_some_and(|a| a.2));
-            for f in dropped {
-                let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
-                let target = app.drop_target(&name, pos, shift);
-                let (inbox, place_inbox, ctx) = (self.host.inbox.clone(), self.host.place_inbox.clone(), ctx.clone());
-                wasm_bindgen_futures::spawn_local(async move {
-                    match f.bytes_async().await {
-                        Ok(bytes) => {
-                            match target {
-                                DropTarget::Place(d) => {
-                                    place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some(d) })
-                                }
-                                DropTarget::Open => inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes)),
-                            }
-                            ctx.request_repaint();
-                        }
-                        Err(e) => log::error!("couldn't read dropped file {name}: {e}"),
-                    }
-                });
-            }
-        }
-        app.logic(ctx);
+        app.tick(ctx);
+        crate::api::poll_replies();
+        app.finish_ime_logic(ctx);
     }
 
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+    /// Forward host-gathered pointer events into this frame's raw input, then let the app apply its
+    /// shared input hook before egui runs.
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.extend(self.host.pointers.borrow_mut().take());
         if let Some(app) = &mut self.app {
-            app.raw_input_hook(raw);
+            app.raw_input_hook(ctx, raw);
         }
     }
 
+    /// Read host paste and drop input once in the UI phase, hand files to the app's drop targets, run
+    /// the app UI, then poll control replies.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         if let Some(app) = &mut self.app {
+            // DOM paste and drop are host input: read them in the UI phase, once per pass, not in
+            // `logic` where a hidden tab replays the last shown frame's input.
+            let pasted = self.host.pasted.borrow_mut().flavour.take();
+            if let Some((f, held)) = pasted {
+                app.paste_from_host(&ctx, f, held);
+            }
+            let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
+            if !dropped.is_empty() {
+                let at = self.host.drag.take();
+                let z = ctx.zoom_factor();
+                let (pos, shift) = (at.map(|(x, y, _)| egui::pos2(x / z, y / z)), at.is_some_and(|a| a.2));
+                for f in dropped {
+                    let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
+                    let target = app.drop_target(&name, pos, shift);
+                    let (inbox, place_inbox, repaint) = (self.host.inbox.clone(), self.host.place_inbox.clone(), ctx.clone());
+                    wasm_bindgen_futures::spawn_local(async move {
+                        match f.bytes_async().await {
+                            Ok(bytes) => {
+                                match target {
+                                    DropTarget::Place(d) => {
+                                        place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some(d) })
+                                    }
+                                    DropTarget::Open => inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes)),
+                                }
+                                repaint.request_repaint();
+                            }
+                            Err(e) => log::error!("couldn't read dropped file {name}: {e}"),
+                        }
+                    });
+                }
+            }
             app.ui(ui);
         }
+        crate::api::poll_replies();
     }
 }
 
-fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Option<WebLocks>) -> Services {
+fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Option<WebLocks>, stylus: StylusFeed) -> Services {
     let open_inbox = inbox.clone();
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
@@ -452,6 +475,8 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
         recovery_store: Some(Arc::new(BrowserStore { locks })),
         // File → Print: the browser's print dialog.
         print: Some(Box::new(BrowserPrint)),
+        // The pen's end, from the page's Pointer Events (`crate::pencil`).
+        stylus: Some(stylus),
         ..Default::default()
     }
 }
@@ -544,6 +569,9 @@ impl RecoveryStore for BrowserStore {
 
 /// Trigger a browser download of `bytes` named after the last component of `path`.
 fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
+    if crate::api::capture(path, bytes) {
+        return Ok(());
+    }
     let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "vectorcraft".into());
     let window = web_sys::window().ok_or("no window")?;

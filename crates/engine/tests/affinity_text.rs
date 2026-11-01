@@ -89,17 +89,60 @@ fn frame_type_keeps_dimensions_alignment_and_unit_conversion() {
 }
 
 #[test]
+fn objects_nested_in_text_are_clipped_by_the_type() {
+    let ellipse = F::Obj(
+        tag(b"ShpN"),
+        vec![
+            (tag(b"Desc"), F::Str("Inside".into())),
+            (tag(b"Shpe"), F::Obj(tag(b"ShpE"), vec![])),
+            (tag(b"ShpB"), F::F64s(vec![10.0, 20.0, 110.0, 70.0])),
+            (tag(b"BFFl"), F::Shared(vec![F::Obj(tag(b"FDsc"), vec![(tag(b"FDeF"), solid(1.0))])])),
+        ],
+    );
+    // A 4 × 4 RGBA pixel layer of one flat colour (tile state 2: every sample 255).
+    let mut bitmap = vec![(tag(b"Frmt"), F::Enum(0, 0)), (tag(b"BmpW"), F::I32(4)), (tag(b"BmpH"), F::I32(4))];
+    for c in 1..=4 {
+        bitmap.push((tag(&[b'T', b'W', b'i', b'0' + c]), F::I32(1)));
+        bitmap.push((tag(&[b'T', b'H', b'i', b'0' + c]), F::I32(1)));
+        bitmap.push((tag(&[b'S', b't', b'a', b'0' + c]), F::U8s(vec![2])));
+    }
+    let pixels = F::Obj(tag(b"Rstr"), vec![(tag(b"Bitm"), F::Obj(tag(b"DyBm"), bitmap)), (tag(b"Desc"), F::Str("Photo".into()))]);
+    let bytes = document_with_children(
+        vec![block(utf8("TEXT"), vec![run(4, Some(attrs("Clip", "", 400, false, 40.0)))], &[])],
+        false,
+        72.0,
+        IDENTITY,
+        vec![ellipse, pixels],
+    );
+    let loaded = fileio::load("nested.af", &bytes).unwrap();
+    let NodeKind::Layer { children, .. } = &loaded.doc.layers[0].kind else { panic!("{:?}", loaded.doc.layers[0].kind) };
+    let NodeKind::Group { children: clipped, clip: true } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    let [text, inside, photo] = clipped.as_slice() else { panic!("{clipped:?}") };
+    let NodeKind::Text(t) = &text.kind else { panic!("{:?}", text.kind) };
+    assert_eq!(t.runs[0].text, "TEXT");
+    assert_eq!(inside.name.as_deref(), Some("Inside"));
+    assert!(matches!(inside.kind, NodeKind::Path { clipping: false, .. }), "{:?}", inside.kind);
+    assert_eq!(photo.name.as_deref(), Some("Photo"));
+    let NodeKind::Image(image) = &photo.kind else { panic!("{:?}", photo.kind) };
+    assert_eq!((image.width, image.height), (4, 4));
+}
+
+#[test]
 fn a_frame_too_short_for_its_first_line_is_made_taller_with_a_warning() {
     // #1423: a title taller than its frame (60 pt type in a 50 pt frame) drew nothing.
     let lines = |t: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines.len();
     let title = |size: f64| import(vec![block(utf8("T"), vec![run(1, Some(attrs("Frame", "", 400, false, size)))], &[3])], true, 144.0, IDENTITY);
-    let short = title(120.0);
-    let t = texts(&short.doc)[0];
-    let TextKind::Area { frame } = &t.kind else { panic!("expected area type") };
-    let b = frame.bounds().unwrap();
-    assert!((b.x0, b.y0, b.width()) == (0.0, 0.0, 100.0) && b.height() > 50.0 && b.height() < 100.0, "taller from its top: {b:?}");
-    assert_eq!(lines(t), 1, "the line shows");
-    assert!(short.warnings.iter().any(|w| w.contains("too short for their first line")), "{:?}", short.warnings);
+    // Its baseline (at cap height) is inside the frame, its descenders hang out of it; and an
+    // 80 pt title whose capitals don't fit either.
+    for (size, warning, max) in [(120.0, "made taller so the lines show", 100.0), (160.0, "too short for their first line", 150.0)] {
+        let short = title(size);
+        let t = texts(&short.doc)[0];
+        let TextKind::Area { frame } = &t.kind else { panic!("expected area type") };
+        let b = frame.bounds().unwrap();
+        assert!((b.x0, b.y0, b.width()) == (0.0, 0.0, 100.0) && b.height() > 50.0 && b.height() < max, "{size}: taller from its top: {b:?}");
+        assert_eq!(lines(t), 1, "the line shows");
+        assert!(short.warnings.iter().any(|w| w.contains(warning)), "{size}: {:?}", short.warnings);
+    }
     // A frame that holds its line keeps its height, and nothing is said.
     let fits = title(20.0);
     let t = texts(&fits.doc)[0];

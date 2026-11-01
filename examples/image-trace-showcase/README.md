@@ -2,6 +2,9 @@
 
 Made with **VectorCraft 0.12.0** (main at `8bc65329`), release build, through VectorCraft's own
 command API and renderer. Every image here is a downscaled VectorCraft render.
+These are historical results, not a benchmark of current main. In this version the photo presets
+used Limited palettes; their Colors captions describe a colour count, not the later Full Tone
+colour-detail proposal. The JPEGs have not been regenerated for that proposal.
 
 ## Hiroshige exhibition poster
 
@@ -63,6 +66,11 @@ include those of every subpath. [svg/](svg/) holds the 6 Colors trace of each lo
 of the exported vectors.
 
 ## Inputs and rights
+
+[SOURCES.md](SOURCES.md) identifies all five exact scan files, their source-page rights statements,
+SHA-256 hashes, and crops (including the four trace posters). [SHA256SUMS](SHA256SUMS) identifies
+the shipped JPEG/SVG/CSV bytes. The original layouts are MIT OR Apache-2.0; their licence does
+not relicense the underlying public-domain scans.
 
 | Input | Source | Licence | Preparation |
 |---|---|---|---|

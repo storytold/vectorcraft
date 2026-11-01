@@ -259,6 +259,10 @@ pub(crate) fn start_in(
     }
     // The walkers follow no links, so a folder automation may read holds all they read.
     crate::file_access::check_read(&folder.to_string_lossy())?;
+    // The check above reads a lossy string: under roots, a path it would alter names another folder.
+    if folder.to_str().is_none() && crate::file_access::current().is_some() {
+        return Err("automation path rejected: the folder's name isn't valid text".into());
+    }
     let seconds = if limits.seconds.is_finite() { limits.seconds.clamp(0.0, 3600.0) } else { 60.0 };
     let n = pool.reserve(threads.clamp(1, MAX_THREADS));
     if n == 0 {
@@ -279,6 +283,7 @@ pub(crate) fn start_in(
         walk: Mutex::new(Walk { root: Some(folder), alive: n, found: vec![0; items], ..Walk::default() }),
         wake: Condvar::new(),
         pool,
+        scope: crate::file_access::ScopeHandle::capture(),
     });
     let mut spawned = 0;
     for _ in 0..n {
@@ -325,6 +330,8 @@ struct Shared {
     /// Woken when folders are queued, a walker finishes a folder, or the search ends.
     wake: Condvar,
     pool: &'static Pool,
+    /// The automation roots in force when the search started, for the folders the walkers add.
+    scope: crate::file_access::ScopeHandle,
 }
 
 /// The state walkers change under the lock.
@@ -490,7 +497,10 @@ impl Shared {
             }
             queue.push((path, depth + 1));
         }
-        let home = rules.home_below(&listed);
+        // The home folder is added by a rule, not picked: it needs the picked folder's authority.
+        let home = rules
+            .home_below(&listed)
+            .filter(|h| !rules.is_refused(h) && self.scope.clone().run(|| crate::file_access::check_read(&h.to_string_lossy())).is_ok());
         {
             let mut w = self.lock();
             w.files += files;

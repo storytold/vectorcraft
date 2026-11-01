@@ -155,7 +155,66 @@ pub fn encode(px: &[u8], width: u32, height: u32, quality: u8, ppi: Option<f64>,
         ColorModel::Gray => ColorType::Luma,
     };
     enc.encode(px, w, h, ty).map_err(fail)?;
+    // JFIF describes one- and three-component images (greyscale and YCbCr), so its APP0 segment
+    // must not head a four-component CMYK frame: the file then says two different things about
+    // its colours, and a strict reader rejects it rather than guessing. Adobe's own CMYK JPEGs
+    // carry the APP14 marker the encoder already writes, and no JFIF (#3084).
+    if o.color_model == ColorModel::Cmyk {
+        unlabel_jfif(&mut buf, ppi);
+    }
     Ok(buf)
+}
+
+/// Replace the leading APP0/JFIF segment, which the encoder always writes, with an EXIF segment
+/// carrying the same resolution (TIFF `XResolution`, `YResolution` and `ResolutionUnit`, which is
+/// where a reader looks when there is no JFIF). Without a resolution the segment is simply
+/// dropped.
+fn unlabel_jfif(buf: &mut Vec<u8>, ppi: Option<f64>) {
+    // SOI, then APP0 with its two length bytes and the tag it is identified by.
+    let Some(head) = buf.get(..13) else { return };
+    if head[..4] != [0xFF, 0xD8, 0xFF, 0xE0] || &head[6..11] != b"JFIF\0" {
+        return;
+    }
+    let len = usize::from(u16::from_be_bytes([head[4], head[5]]));
+    if 4 + len > buf.len() {
+        return;
+    }
+    let exif = ppi.filter(|p| p.is_finite() && *p >= 1.0).map(|p| exif_resolution(p.round() as u32)).unwrap_or_default();
+    buf.splice(2..4 + len, exif);
+}
+
+/// An APP1 EXIF segment holding `dpi` as IFD0's resolution: big-endian TIFF, three entries, each
+/// rational pointing past the directory.
+fn exif_resolution(dpi: u32) -> Vec<u8> {
+    let mut tiff = Vec::new();
+    tiff.extend_from_slice(b"MM\0*"); // big-endian, TIFF magic
+    tiff.extend_from_slice(&8u32.to_be_bytes()); // IFD0 right after the header
+    tiff.extend_from_slice(&3u16.to_be_bytes()); // three entries
+    // Entry: tag, type (5 = rational, 3 = short), count, then the value or its offset.
+    let entry = |tag: u16, ty: u16, value: [u8; 4]| {
+        let mut e = Vec::with_capacity(12);
+        e.extend_from_slice(&tag.to_be_bytes());
+        e.extend_from_slice(&ty.to_be_bytes());
+        e.extend_from_slice(&1u32.to_be_bytes());
+        e.extend_from_slice(&value);
+        e
+    };
+    // The two rationals sit after the directory: header 8 + count 2 + 3 entries + next-IFD 4.
+    let after = 8 + 2 + 3 * 12 + 4;
+    tiff.extend(entry(282, 5, (after as u32).to_be_bytes())); // XResolution
+    tiff.extend(entry(283, 5, (after as u32 + 8).to_be_bytes())); // YResolution
+    tiff.extend(entry(296, 3, [0, 2, 0, 0])); // ResolutionUnit: inches
+    tiff.extend_from_slice(&0u32.to_be_bytes()); // no next IFD
+    for _ in 0..2 {
+        tiff.extend_from_slice(&dpi.to_be_bytes());
+        tiff.extend_from_slice(&1u32.to_be_bytes());
+    }
+    let mut seg = vec![0xFF, 0xE1];
+    let body_len = 6 + tiff.len() + 2;
+    seg.extend_from_slice(&u16::try_from(body_len).unwrap_or(u16::MAX).to_be_bytes());
+    seg.extend_from_slice(b"Exif\0\0");
+    seg.extend_from_slice(&tiff);
+    seg
 }
 
 /// `img` flattened on white as RGB, or as grey with each colour's lightness.

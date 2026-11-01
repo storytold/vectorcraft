@@ -116,6 +116,10 @@ pub struct Variables {
     pub bindings: BTreeMap<NodeId, BTreeSet<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_dataset: Option<String>,
+    /// Lock Variables: while set, variables can't be defined, deleted or renamed. Objects can
+    /// still be bound to them and unbound, and datasets still change and apply.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
 }
 
 impl Variables {
@@ -184,20 +188,26 @@ impl Document {
         self.variables.bindings = bindings;
     }
 
-    /// Whether a variable may read and rewrite the object `id`: it is in the document, neither
-    /// it nor anything above it is locked, and nothing above it is hidden. Its own visibility
-    /// doesn't count, as that is what a visibility variable drives: a row that hid it must be
-    /// able to show it again, and a capture must record it hidden.
+    /// Whether a variable may be bound to the object `id`: it is in the document, neither it nor
+    /// anything above it is locked, and nothing above it is hidden. Its own visibility doesn't
+    /// count, as that is what a visibility variable drives.
     pub fn variable_target(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked && (n.visible || *i == id))))
     }
 
+    /// Whether a data set reads and rewrites the bound object `id`: it is in the document and
+    /// neither it nor anything above it is locked. Hidden objects count, and so do objects in a
+    /// hidden layer or group.
+    pub fn dataset_target(&self, id: NodeId) -> bool {
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked)))
+    }
+
     /// What the object `id` holds for the variable of `kind`: its characters, whether it shows,
     /// or a linked image's path. `None` when the object is gone, is not of that kind, has no
-    /// link path yet (an embedded image), or is locked or on a hidden or locked layer (the
+    /// link path yet (an embedded image), or is locked or in a locked layer or group (the
     /// document's value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
-        if !self.variable_target(id) {
+        if !self.dataset_target(id) {
             return None;
         }
         let node = self.node(id)?;

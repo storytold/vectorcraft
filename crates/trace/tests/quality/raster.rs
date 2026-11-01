@@ -140,7 +140,7 @@ fn from_rgb(w: usize, h: usize, buf: &[[f32; 3]]) -> Raster {
         rgba.extend(p.map(|v| v.round().clamp(0.0, 255.0) as u8));
         rgba.push(255);
     }
-    Raster::new(w as u32, h as u32, rgba)
+    Raster::new(w as u32, h as u32, rgba).unwrap()
 }
 
 /// A deterministic hash of a pixel position and a salt, as a value in `-1.0..1.0`.

@@ -157,32 +157,95 @@ fn a_postscript_ai_file_says_it_cannot_be_opened_yet() {
         let e = s.execute("document.open", &json!({"name": name, "dataBase64": b64(ps)})).unwrap_err().to_string();
         assert!(e.contains(name) && e.contains("PostScript") && e.contains("save it as PDF"), "{name}: {e}");
     }
-    // An EPS with a binary header too, and the PDF info of either.
+    // An EPS with a binary header too, and the PDF info of each. The plain program's PDF info gives
+    // its page, and its thumbnail gives the reader's error; the binary file's header points at no
+    // PostScript, so its PDF info is an error.
     let mut binary = vec![0xC5, 0xD0, 0xD3, 0xC6];
     binary.extend_from_slice(&[0; 28]);
     binary.extend_from_slice(ps);
     assert!(s.execute("document.open", &json!({"name": "x.eps", "dataBase64": b64(&binary)})).unwrap_err().to_string().contains("PostScript"));
-    assert!(s.execute("document.pdfInfo", &json!({"dataBase64": b64(ps)})).unwrap_err().to_string().contains("PostScript"));
+    assert!(s.execute("document.pdfInfo", &json!({"dataBase64": b64(&binary)})).unwrap_err().to_string().contains("PostScript"));
+    let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(ps)})).unwrap();
+    assert_eq!((v["pages"].as_u64(), v["pageInfo"][0]["width"].as_f64()), (Some(1), Some(100.0)), "{v}");
+    let e = s.execute("document.pdfInfo", &json!({"dataBase64": b64(ps), "thumbnail": 1})).unwrap_err().to_string();
+    assert!(e.contains("PostScript") && e.contains("frobnicate"), "{e}");
     assert!(s.active().is_none());
 }
 
-/// PostScript given where a PDF is read (`document.pdfInfo`, `clipboard.importPdf`) is refused
-/// with an error that names File › Open and File › Place, and both of those read the file.
+/// PostScript given where a PDF is read (`clipboard.importPdf`) is refused with an error that
+/// names File › Open and File › Place, and both of those read the file.
 #[test]
 fn postscript_read_as_a_pdf_names_open_and_place() {
     let ps = b"%!PS-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n1 0 0 setrgbcolor 10 10 50 50 rectfill\nshowpage\n%%EOF\n";
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
-    for cmd in ["document.pdfInfo", "clipboard.importPdf"] {
-        let e = s.execute(cmd, &json!({"dataBase64": b64(ps)})).unwrap_err().to_string();
-        assert!(e.contains("PostScript") && e.contains("not a PDF: File › Open and File › Place read it as EPS"), "{cmd}: {e}");
-        assert!(!e.contains("can't be opened"), "{cmd}: {e}");
-    }
+    let e = s.execute("clipboard.importPdf", &json!({"dataBase64": b64(ps)})).unwrap_err().to_string();
+    assert!(e.contains("PostScript") && e.contains("not a PDF: File › Open and File › Place read it as EPS"), "{e}");
+    assert!(!e.contains("can't be opened"), "{e}");
     for name in ["legacy.ai", "art.eps"] {
         let r = s.execute("document.open", &json!({"name": name, "dataBase64": b64(ps)})).unwrap();
         assert_eq!(r["warnings"], json!([]), "{name}: {r}");
         let r = s.execute("file.place", &json!({"name": name, "dataBase64": b64(ps)})).unwrap();
         assert_eq!(r["ids"].as_array().map(Vec::len), Some(1), "{name}: {r}");
+    }
+}
+
+/// `document.pdfInfo` reads PostScript (an EPS, a `.ai` in PostScript form, a `.ps` file) as one
+/// page, its bounding box or a letter page without one, and its thumbnail shows that page. Each
+/// file here opens on that page with `editingData: false`.
+#[test]
+fn pdf_info_reads_postscript_as_one_page() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let data = |r: Value| vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let eps = data(s.execute("document.exportEps", &json!({"useArtboards": true})).unwrap());
+    let ai = data(s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap());
+    assert!(eps.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6]) && ai.starts_with(b"%!PS"));
+    let hires = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 101 41\n%%HiResBoundingBox: 0 0 100.5 40.25\n%%EndComments\n0 0 1 setrgbcolor 0 0 50 20 rectfill\n";
+    let letter = b"%!PS\n1 0 0 setrgbcolor 72 72 144 72 rectfill\nshowpage\n";
+    let bare = b"%!\n0 0 1 setrgbcolor 100 100 50 50 rectfill\nshowpage\n";
+    for (name, bytes, size) in [
+        ("art.eps", &eps[..], (300.0, 200.0)),
+        ("legacy.ai", &ai, (101.0, 51.0)),
+        ("hires.eps", hires, (100.5, 40.25)),
+        ("page.ps", letter, (612.0, 792.0)),
+        ("bare.ps", bare, (612.0, 792.0)),
+    ] {
+        let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 100})).unwrap();
+        let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
+        let img = image::load_from_memory(&png).unwrap();
+        assert_eq!(img.width().max(img.height()), 100, "{name}");
+        let mut v = v;
+        v["thumbnail"] = json!("png");
+        let page = json!({"width": size.0, "height": size.1, "rotation": 0, "boxes": {}});
+        assert_eq!(v, json!({"pages": 1, "needsPassword": false, "pageInfo": [page], "thumbnail": "png"}), "{name}");
+        s.execute("document.open", &json!({"name": name, "dataBase64": b64(bytes), "editingData": false})).unwrap();
+        let board = s.doc().unwrap().doc.artboards[0].rect;
+        assert_eq!((board.width(), board.height()), size, "{name}: the page document.open reads");
+    }
+    let e = s.execute("document.pdfInfo", &json!({"dataBase64": b64(&eps), "thumbnail": 2})).unwrap_err().to_string();
+    assert!(e.contains("no page 2"), "{e}");
+}
+
+/// `document.pdfInfo`'s `thumbnail` is a page number from 1, for a PDF and for PostScript alike:
+/// any other value is an error that names the pages, and an absent or null one gives no thumbnail.
+#[test]
+fn pdf_info_refuses_a_thumbnail_that_is_not_a_page_number() {
+    let ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n0 0 1 setrgbcolor 0 0 50 20 rectfill\n";
+    let mut s = Session::new();
+    for (bytes, pages) in [(&three_pages()[..], "(the PDF has 3)"), (ps, "(the file has 1)")] {
+        for n in [json!(-1), json!(0), json!(1.5), json!("1"), json!(true)] {
+            let e = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": n})).unwrap_err().to_string();
+            assert!(e.contains(&format!("thumbnail: no page {n} {pages}")), "{n}: {e}");
+        }
+        for none in [json!({"dataBase64": b64(bytes)}), json!({"dataBase64": b64(bytes), "thumbnail": null})] {
+            assert!(s.execute("document.pdfInfo", &none).unwrap().get("thumbnail").is_none(), "{pages}");
+        }
+        let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 64})).unwrap();
+        let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
+        let img = image::load_from_memory(&png).unwrap();
+        assert_eq!(img.width().max(img.height()), 64, "{pages}");
     }
 }
 

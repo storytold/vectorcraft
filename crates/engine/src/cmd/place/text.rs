@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use super::*;
+use super::{Point, Rect, Result, bad, bool_or, fileio, shapes, str_param};
 
 /// Text files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {
@@ -17,8 +17,9 @@ pub(super) const FORMAT: fileio::Format = fileio::Format {
     options: &[],
 };
 
-/// The most bytes a text file placed as type may have.
-const MAX_TEXT: usize = 4 << 20;
+/// The most bytes a text or RTF file placed as type may have, and the most bytes of text a Word
+/// document may give.
+pub(super) const MAX_TEXT: usize = 4 << 20;
 
 /// Text Import Options (`file.place`'s `text` param).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -95,7 +96,7 @@ fn decode(bytes: &[u8], o: TextOptions) -> String {
 }
 
 /// Byte `b` of Windows-1252.
-fn windows_1252(b: u8) -> char {
+pub(super) fn windows_1252(b: u8) -> char {
     const HIGH: [char; 32] = [
         '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8D}', 'Ž', '\u{8F}', //
         '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9D}', 'ž', 'Ÿ',
@@ -107,7 +108,7 @@ fn windows_1252(b: u8) -> char {
 }
 
 /// Byte `b` of Mac Roman.
-fn mac_roman(b: u8) -> char {
+pub(super) fn mac_roman(b: u8) -> char {
     const HIGH: [char; 128] = [
         'Ä', 'Å', 'Ç', 'É', 'Ñ', 'Ö', 'Ü', 'á', 'à', 'â', 'ä', 'ã', 'å', 'ç', 'é', 'è', //
         'ê', 'ë', 'í', 'ì', 'î', 'ï', 'ñ', 'ó', 'ò', 'ô', 'ö', 'õ', 'ú', 'ù', 'û', 'ü', //
@@ -190,13 +191,44 @@ fn tabs_for_spaces(s: &str, n: usize) -> String {
     out
 }
 
-/// The area type of `text` filling `frame` (at the origin; placing moves it).
-pub(super) fn area_text(text: String, frame: Rect) -> vectorcraft_doc::TextObject {
+/// The text placed type gets from a text file, an RTF file or a Word document.
+pub(super) struct Story {
+    /// The text in runs of one character formatting; paragraphs are separated by `\n`.
+    pub(super) runs: Vec<vectorcraft_doc::TextRun>,
+    /// Each paragraph's attributes; empty: the defaults.
+    pub(super) paras: Vec<vectorcraft_doc::ParaStyle>,
+}
+
+impl Story {
+    /// `text` in the default character and paragraph attributes.
+    pub(super) fn plain(text: String) -> Self {
+        Self { runs: vec![vectorcraft_doc::TextRun::new(text, vectorcraft_doc::CharStyle::default())], paras: vec![] }
+    }
+
+    /// The text without its formatting.
+    pub(super) fn plain_text(&self) -> String {
+        self.runs.iter().map(|r| r.text.as_str()).collect()
+    }
+}
+
+/// The area type of `story` filling `frame` (at the origin; placing moves it), its superscripts,
+/// subscripts and small caps in the proportions of `setup` (Document Setup).
+pub(super) fn area_text(story: Story, frame: Rect, setup: &vectorcraft_doc::DocSetup) -> vectorcraft_doc::TextObject {
     let mut t = vectorcraft_doc::TextObject::point(Point::ORIGIN, "", vectorcraft_doc::CharStyle::default());
-    if let Some(run) = t.runs.first_mut() {
-        run.text = text;
+    if !story.runs.is_empty() {
+        t.runs = story.runs;
+    }
+    for run in &mut t.runs {
+        run.style.position = crate::cmd::docsetup::position_in(setup, run.style.position);
+        if run.style.small_caps.is_some() {
+            run.style.small_caps = Some(setup.small_caps_size);
+        }
+    }
+    if !story.paras.is_empty() {
+        t.set_paragraph_styles(story.paras);
     }
     t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::from_origin_size(Point::ORIGIN, frame.size())) };
+    t.system_layout = setup.system_layout;
     crate::cmd::typecmd::refresh_bounds(&mut t);
     t
 }

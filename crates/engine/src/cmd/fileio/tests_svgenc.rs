@@ -61,7 +61,7 @@ fn a_chosen_artboard_s_svg_holds_only_its_own_art() {
     s.execute("shape.rectangle", &json!({"x": first + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
     s.execute("shape.ellipse", &json!({"x": third + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
     // A rectangle has straight sides only; the ellipse is curves.
-    let shapes = |svg: &str| (svg.matches("<path").count() + svg.matches("<rect").count(), svg.contains(" C") || svg.contains("<ellipse"));
+    let shapes = |svg: &str| (vectorcraft_testkit::svg_shapes(svg), svg.contains(" C") || svg.contains("<ellipse") || svg.contains("<circle"));
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
     assert_eq!(shapes(&third_only), (1, true), "{third_only}");
@@ -88,8 +88,8 @@ fn a_chosen_artboard_s_svg_leaves_out_its_neighbours_art_in_a_shared_group() {
     s.execute("object.group", &json!({})).unwrap();
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
-    assert_eq!(third_only.matches("<path").count() + third_only.matches("<rect").count(), 1, "{third_only}");
-    assert!(third_only.contains(" C") || third_only.contains("<ellipse"), "{third_only}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&third_only), 1, "{third_only}");
+    assert!(third_only.contains(" C") || third_only.contains("<ellipse") || third_only.contains("<circle"), "{third_only}");
 }
 
 /// An object off a chosen artboard whose drop shadow reaches onto it is in that artboard's SVG.
@@ -102,9 +102,45 @@ fn a_chosen_artboard_s_svg_keeps_an_object_whose_shadow_reaches_it() {
     let paths = |s: &mut Session| {
         let svg = s.execute("document.serialize", &json!({"format": "svg", "artboard": 0})).unwrap();
         let text = svg["text"].as_str().unwrap().to_string();
-        text.matches("<path").count() + text.matches("<rect").count()
+        vectorcraft_testkit::svg_shapes(&text)
     };
     assert_eq!(paths(&mut s), 0, "the plain rectangle is off the artboard");
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 20, "y": 0, "blur": 0}})).unwrap();
     assert_eq!(paths(&mut s), 1, "its shadow reaches 10 pt onto the artboard");
+}
+
+/// #3544: an SVG of one artboard on its own (an `artboard` or `range`, Export for Screens, an asset)
+/// has the artboard's (or asset's) name as `<title>`; Save's SVG and Export for Screens' Full
+/// Document keep the document's.
+#[test]
+fn an_svg_of_one_artboard_is_titled_after_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"name": "Icons", "width": 24, "height": 24, "artboards": 2})).unwrap();
+    for (index, name) in [(0, "arrow-left"), (1, "arrow-right")] {
+        s.execute("artboard.setProps", &json!({"index": index, "name": name})).unwrap();
+    }
+    let square = s.execute("shape.rectangle", &json!({"x": 4, "y": 4, "width": 16, "height": 16})).unwrap()["id"].clone();
+    let title = |svg: &str| svg.lines().find_map(|l| l.trim().strip_prefix("<title>")?.strip_suffix("</title>")).map(str::to_string);
+    let serialize = |s: &mut Session, p: serde_json::Value| s.execute("document.serialize", &p).unwrap()["text"].as_str().unwrap().to_string();
+    assert_eq!(title(&serialize(&mut s, json!({"format": "svg", "artboard": 1}))).as_deref(), Some("arrow-right"));
+    assert_eq!(title(&serialize(&mut s, json!({"format": "svg", "artboard": 0}))).as_deref(), Some("arrow-left"));
+    assert_eq!(title(&serialize(&mut s, json!({"format": "svg"}))).as_deref(), Some("Icons"), "Save's SVG");
+    let all = s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "all"})).unwrap();
+    let titles: Vec<_> = all["files"].as_array().unwrap().iter().map(|f| title(f["text"].as_str().unwrap())).collect();
+    assert_eq!(titles, [Some("arrow-left".into()), Some("arrow-right".into())]);
+    // Export for Screens: each artboard, an asset, and the Full Document.
+    let screens = |s: &mut Session, p: serde_json::Value| -> Vec<Option<String>> {
+        let r = s.execute("document.exportForScreens", &p).unwrap();
+        r["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| title(&String::from_utf8(vectorcraft_format::base64_decode(f["dataBase64"].as_str().unwrap()).unwrap()).unwrap()))
+            .collect()
+    };
+    let svg = json!([{"format": "svg"}]);
+    assert_eq!(screens(&mut s, json!({"formats": svg})), [Some("arrow-left".into()), Some("arrow-right".into())]);
+    let asset = s.execute("assets.add", &json!({"ids": [square], "name": "Square"})).unwrap()["assets"][0].clone();
+    assert_eq!(screens(&mut s, json!({"assets": [asset], "formats": svg})), [Some("Square".into())]);
+    assert_eq!(screens(&mut s, json!({"fullDocument": true, "formats": svg})), [Some("Icons".into())]);
 }
