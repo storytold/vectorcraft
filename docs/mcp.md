@@ -1684,6 +1684,13 @@ already walks Image Trace. Short agent entry points:
   Its journal entry records the saved preset's settings as `savedPreset`, so a replay traces with them after the preset
   is changed, renamed or deleted. In the app,
   `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
+  `imageTrace.batchFolder {folder, destinationFolder, preset?, expand?, format?, includeSubdirs?}` (Object › Image
+  Trace › Batch Trace Folder) opens each image in `folder` (PNG, JPEG, TIFF, BMP, GIF, WebP, PSD), traces it with
+  `preset` (Default by default; with `expand`, as Make and Expand), saves it into `destinationFolder` as
+  `<name>.<ext>` in `format` (`vectorcraft` by default; `svg`, `pdf`, `ai`, `eps`), with `-2`, `-3`… added when the
+  name is taken so no file is replaced, and closes it again whether it traced or not; the active document stays
+  active. Up to 500 images and 8 folder levels; not on the web. The app asks for both folders (#4921).
+  → `{traced: [{path, output}], failed: [{path, error}], format}`
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). With `detect: true`, paint stops at the gaps that run

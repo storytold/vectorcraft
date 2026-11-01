@@ -394,6 +394,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Object › Image Trace › Batch Trace Folder asks for a source and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); scores and estimates unchanged |

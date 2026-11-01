@@ -263,3 +263,52 @@ mod tests {
         assert!(written.borrow().is_empty(), "no file and no save dialog");
     }
 }
+
+/// Object › Image Trace › Batch Trace Folder (#4921) with params `p`: the source folder and then
+/// the destination folder are asked for when not given; the status bar says how many images were
+/// traced and how many weren't.
+pub(crate) fn batch_trace(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let mut p = if p.is_object() { p.clone() } else { json!({}) };
+    for key in ["folder", "destinationFolder"] {
+        if p.get(key).is_none() {
+            p[key] = json!(crate::picks::folder(app).ok_or("cancelled")?);
+        }
+    }
+    let r = app.session.execute("imageTrace.batchFolder", &p).map_err(|e| e.to_string())?;
+    let traced = r["traced"].as_array().map_or(0, Vec::len) as u64;
+    let failed = r["failed"].as_array().map_or(0, Vec::len) as u64;
+    let mut status = crate::i18n::msg_n(traced, "Traced {n} image", "Traced {n} images", &[]);
+    if failed > 0 {
+        status = format!("{status}; {}", crate::i18n::msg_n(failed, "{n} image couldn't be traced", "{n} images couldn't be traced", &[]));
+    }
+    app.status(status);
+    Ok(r)
+}
+
+#[cfg(test)]
+mod batch_trace_tests {
+    use serde_json::json;
+
+    use crate::VectorcraftApp;
+
+    /// #4921: Batch Trace Folder from the menu asks for the source folder, then the destination,
+    /// traces each image there and reports the count; cancelling either does nothing.
+    #[test]
+    fn batch_trace_folder_asks_for_both_folders() {
+        let dir = std::env::temp_dir().join(format!("vc-ui-batch-trace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (src, out) = (dir.join("in"), dir.join("out"));
+        std::fs::create_dir_all(&src).unwrap();
+        image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 0, 0, 255])).save(src.join("a.png")).unwrap();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut picks = vec![out.to_string_lossy().into_owned(), src.to_string_lossy().into_owned()];
+        app.services.pick_folder = Some(Box::new(move || picks.pop()));
+        crate::menus::invoke(&mut app, "imageTrace.batchFolder", json!({}));
+        assert!(out.join("a.vectorcraft").exists(), "{}", app.ui.status);
+        assert!(app.ui.status.starts_with("Traced 1 image"), "{}", app.ui.status);
+        assert!(app.session.documents().is_empty(), "the image's document is closed");
+        app.services.pick_folder = Some(Box::new(|| None));
+        assert_eq!(app.run("imageTrace.batchFolder", json!({})).unwrap_err(), "cancelled");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

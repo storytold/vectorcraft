@@ -1452,10 +1452,15 @@ Symbols area (#4938), from the public symbol documentation ([create and place sy
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Document Tools › Export All Open Documents as PDF (or as SVG) asks for a folder and writes a copy of every open document there, each named after its document with `-2`, `-3`… added when a name is taken, so no file is replaced (`addon.document.exportAllOpen {folder, format?}`, #4920). Each copy is written as Save a Copy writes it: the documents keep their paths, titles and modified state, and the active one stays active. A document that can't be written is named in the status bar and the others are still written. Tests: `addons::document::tests::export_all_open_documents_writes_each_to_the_folder_picked` (ui-egui), `cmd::addons::document::tests::export_all_open_documents_writes_each_and_reports_failures` (engine).
 
+## Batch Trace Folder (2026-11-01)
+
+A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Image Trace › Batch Trace Folder (`imageTrace.batchFolder`) asks for a folder of images and a destination folder, traces each image with a preset (optionally expanded) and saves it there under its own name as `.vectorcraft`, `.svg`, `.pdf`, `.ai` or `.eps`, without replacing files, closing each image's document again and reporting the images it couldn't trace (#4921). Tests: `cmd::fileio::trace_batch::tests::batch_trace_folder_traces_and_saves_each_image` (engine), `io::batch_trace_tests::batch_trace_folder_asks_for_both_folders` (ui-egui).
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Batch Trace Folder (`imageTrace.batchFolder`, #4921); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Type core: the Glyphs panel highlights the character selected with the Type tool and scrolls it into view (#4908); evidence added; scores unchanged. |

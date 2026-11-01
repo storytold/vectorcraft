@@ -95,6 +95,15 @@ pub fn specs() -> Vec<CommandSpec> {
             batch::batch
         ),
         cmd!(
+            "imageTrace.batchFolder",
+            "Batch Trace Folder",
+            ["Object", "Image Trace"],
+            None,
+            "{folder, destinationFolder, preset?: name (imageTrace.presets; default: Default), expand?: false (true: trace and expand, as Make and Expand), format?: vectorcraft (default)|svg|pdf|ai|eps, includeSubdirs?: false} open each image in folder (png, jpg, tif, bmp, gif, webp, psd), select it, trace it with the preset, save it into destinationFolder as <name>.<ext> (-2, -3… added when that name is taken, so no file is replaced) and close it again, whether it traced or not; the document that was active stays active. Caps: 500 images, 8 folder levels. Not on the web (no file system) → {traced: [{path, output}], failed: [{path, error}], format} (#4921)",
+            always,
+            super::trace_batch::batch_folder
+        ),
+        cmd!(
             "action.batch",
             "Batch…",
             [],
