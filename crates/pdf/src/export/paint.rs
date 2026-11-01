@@ -69,7 +69,6 @@ impl Exporter<'_> {
     /// gets [`Self::device_n_stops`]. `None` for gradients without a spot ink.
     fn spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         let ink = g.stops.iter().find_map(|s| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot)))?;
-        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
         let tints: Option<Vec<f32>> = g
             .stops
             .iter()
@@ -106,7 +105,6 @@ impl Exporter<'_> {
     /// the gradient is then written in the colors of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         use krilla::color::device_n::{Color as DnColor, Colorant, DeviceNSpace, Process};
-        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
         let doc = self.doc;
         fn spot_of<'s>(doc: &vectorcraft_doc::Document, s: &'s vectorcraft_color::GradientStop) -> Option<&'s str> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot))
@@ -354,8 +352,7 @@ impl Exporter<'_> {
     fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
         let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
         let ink = g.stops.iter().find_map(spot)?;
-        let paper = |s: &vectorcraft_color::GradientStop| s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3];
-        g.stops.iter().all(|s| spot(s) == Some(ink) || paper(s)).then_some(ink)
+        g.stops.iter().all(|s| spot(s) == Some(ink) || (s.swatch.is_none() && paper(&s.color))).then_some(ink)
     }
 
     /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop
@@ -366,7 +363,7 @@ impl Exporter<'_> {
         let cmyk_doc = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
         let spot = |s: &vectorcraft_color::GradientStop| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot));
         let inks = |s: &vectorcraft_color::GradientStop| {
-            (s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3])
+            (s.swatch.is_none() && paper(&s.color))
                 || matches!(self.out.color(&s.color, self.intent, cmyk_doc, self.convert), Color::Cmyk { .. } | Color::Gray { .. })
         };
         g.stops.iter().any(spot) && g.stops.iter().all(|s| spot(s) || inks(s))
@@ -399,7 +396,9 @@ impl Exporter<'_> {
         let doc = self.doc;
         let full = doc.linked_color(doc.swatch(ink)?.paint.color()?, true);
         let space = self.separation(ink)?;
-        Some(g.ink_tints(&full)?.into_iter().map(|(o, t, a)| (o, SepColor::new_f32(t, space.clone()).into(), a)).collect())
+        // The stops keep their own tints; paper white is 0% of the ink.
+        let own: Vec<f32> = g.stops.iter().map(|s| if s.swatch.as_deref() == Some(ink) { s.tint } else { 0.0 }).collect();
+        Some(g.ink_tints(&full, &own)?.into_iter().map(|(o, t, a)| (o, SepColor::new_f32(t, space.clone()).into(), a)).collect())
     }
 
     /// Warn when gradient `g`, drawn as an image, has stops linked to a spot swatch: the image is
@@ -453,5 +452,14 @@ impl Exporter<'_> {
         s.push_transform(&xf(Affine::translate(area.origin().to_vec2())));
         s.draw_image(img, size);
         s.pop();
+    }
+}
+
+/// Is `c` paper white: no ink in CMYK or gray, white in RGB or Lab?
+fn paper(c: &Color) -> bool {
+    match *c {
+        Color::Cmyk { c, m, y, k } => c <= 0.0 && m <= 0.0 && y <= 0.0 && k <= 0.0,
+        Color::Gray { k } => k <= 0.0,
+        _ => c.to_rgba8(1.0)[..3] == [255; 3],
     }
 }

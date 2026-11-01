@@ -8,7 +8,7 @@ use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, DEVICE_CMYK, GENERIC_CMYK, SRGB};
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
@@ -159,6 +159,59 @@ fn spot_alternates_and_device_n_gradient_inks_are_written_as_the_document_holds_
     assert!(spaces > 0 && text.matches(exact).count() == spaces, "K10 is 0.1, not 26/255, in every Gold space: {text}");
     assert!(text.contains("[/DeviceN[/Cyan/Black/Gold]"), "{text}");
     assert!(text.contains("/C0[0 0 0.75]/C1[0.75 0.04 0]"), "the stops' C75, K4 and 75% Gold are written as they are");
+}
+
+/// The uncompressed PDF of a CMYK document whose rectangle is filled with gradient `stops`
+/// (Perceptual when `perceptual`), with spot swatch "Gold" (C0 M20 Y80 K10).
+fn gold_gradient_pdf(stops: Vec<GradientStop>, perceptual: bool) -> String {
+    let mut d = doc(ColorMode::Cmyk, &[]);
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+    let mut g = Gradient::new(GradientKind::Linear, stops);
+    if perceptual {
+        g.method = GradientMethod::Perceptual;
+    }
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+    let l = d.layers[0].id;
+    let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 30.0)), Appearance::basic(paint, Paint::None, 0.0));
+    d.insert(Some(l), 0, n).unwrap();
+    String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned()
+}
+
+/// A gradient stop at `offset` linked to "Gold" at `tint`.
+fn gold_stop(offset: f32, tint: f32) -> GradientStop {
+    let mut s = GradientStop::new(offset, Color::cmyk(0.0, 0.2, 0.8, 0.1).tinted(tint));
+    s.swatch = Some("Gold".into());
+    s.tint = tint;
+    s
+}
+
+#[test]
+fn perceptual_spot_gradient_stops_keep_their_own_tints() {
+    let paper = GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let text = gold_gradient_pdf(vec![gold_stop(0.0, 0.8), gold_stop(0.5, 0.4), paper], true);
+    assert!(text.contains("/FunctionType 3"), "tints on the curve: {text}");
+    // The one-tint ends of the stitched functions, in order along the gradient.
+    let ends = |key: &str| -> Vec<String> {
+        text.match_indices(key)
+            .filter_map(|(i, _)| text.get(i + key.len()..)?.split(']').next())
+            .filter(|v| !v.contains(' '))
+            .map(str::to_string)
+            .collect()
+    };
+    let (c0, c1) = (ends("/C0["), ends("/C1["));
+    assert_eq!(c0.first().map(String::as_str), Some("0.8"), "the first stop's 80%: {c0:?}");
+    assert_eq!(c1.last().map(String::as_str), Some("0"), "paper white adds no ink: {c1:?}");
+    assert!(c1.iter().any(|v| v == "0.4") && c0.iter().any(|v| v == "0.4"), "the middle stop's 40%: {c0:?} {c1:?}");
+}
+
+#[test]
+fn spot_gradients_keep_a_trace_of_process_ink_at_a_light_stop() {
+    for light in [Color::cmyk(0.0, 0.0, 0.0, 0.001), Color::Gray { k: 0.001 }] {
+        for perceptual in [false, true] {
+            let text = gold_gradient_pdf(vec![gold_stop(0.0, 1.0), GradientStop::new(1.0, light)], perceptual);
+            assert!(text.contains("[/DeviceN[/Black/Gold]"), "{light:?}, perceptual {perceptual}: K 0.1% is ink, not paper");
+        }
+    }
 }
 
 #[test]
