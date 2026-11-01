@@ -26,94 +26,236 @@ fn dashes_aligned_to_corners_keep_the_drawn_look() {
     assert!(!art_styles(data)["Stitches"].plain);
 }
 
-#[test]
-fn a_drop_shadow_offset_down_points_down() {
-    // GUARDS: the document has y down; flipping `vert` like an art-space y would turn the dialog's
-    // default shadow (7 pt right, 7 pt down) upwards.
-    let data = b"/KnownStyle :\n(Shade) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n7 /Real (horz) ,\n7 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(data);
-    let [shadow] = styles["Shade"].effects.as_slice() else { panic!("{:?}", styles["Shade"]) };
-    assert_eq!((shadow.params["x"].as_f64(), shadow.params["y"].as_f64()), (Some(7.0), Some(7.0)));
-}
-
 /// The style `Shade`: a Drop Shadow whose dictionary holds `keys`.
 fn shadow_style(keys: &str) -> ArtStyle {
+    effect_style("Adobe Drop Shadow", keys)
+}
+
+/// The style `Fx`: an effect `name` on the whole object, its dictionary holding `keys`.
+fn effect_style(name: &str, keys: &str) -> ArtStyle {
     let data = format!(
-        "/KnownStyle :\n(Shade) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{keys}; /Dict ;\n /Part ,\n;\n"
+        "/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+            /BasicFilter :\n({name}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{keys}; /Dict ;\n /Part ,\n;\n"
     );
-    art_styles(data.as_bytes()).remove("Shade").unwrap_or_default()
+    art_styles(data.as_bytes()).remove("Fx").unwrap_or_default()
+}
+
+/// A colour entry `key`: a fill style in RGB `r g b`.
+fn color_entry(key: &str, rgb: &str) -> String {
+    format!("/FillStyle : 0 O\n0 0 0 0 {rgb} Xa\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Def ;\n ({key}) ,\n")
+}
+
+/// A Drop Shadow's dictionary: every setting, with Color or Darkness set by `shade`.
+fn shadow_keys(shade: &str) -> String {
+    format!(
+        "2 /Int (blnd) ,\n0.43 /Real (opac) ,\n37 /Real (dark) ,\n-13 /Real (vert) ,\n11 /Real (horz) ,\n17 /Real (blur) ,\n{}{shade}",
+        color_entry("sclr", "0 1 0")
+    )
+}
+
+/// `style`'s one effect on the whole object.
+fn only_effect(style: &ArtStyle) -> &Effect {
+    assert!(style.plain, "{style:?}");
+    let [e] = style.effects.as_slice() else { panic!("{style:?}") };
+    e
+}
+
+/// `params[key]`, a number within rounding of `want`.
+fn near(params: &serde_json::Value, key: &str, want: f64) {
+    let got = params[key].as_f64();
+    assert!(got.is_some_and(|v| (v - want).abs() < 1e-9), "{key}: {got:?}, not {want}: {params}");
+}
+
+#[test]
+fn a_drop_shadow_reads_its_settings() {
+    // GUARDS: `vert` read as an art-space y would flip a shadow offset down to up.
+    let style = shadow_style(&shadow_keys("0 /Int (csrc) ,\n"));
+    let shadow = only_effect(&style);
+    let p = &shadow.params;
+    assert_eq!(
+        (shadow.id.as_str(), &p["mode"], &p["color"]),
+        ("stylize.dropShadow", &json!("Screen"), &json!(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0)))
+    );
+    for (key, want) in [("x", 11.0), ("y", -13.0), ("blur", 34.0), ("opacity", 43.0)] {
+        near(p, key, want);
+    }
+    assert_eq!((p.get("shade"), p.get("darkness")), (None, None));
 }
 
 #[test]
 fn a_drop_shadow_with_darkness_reads_its_darkness() {
-    // GUARDS: a `csrc` other than 0 made the style not plain, and the object came in as its drawn look.
-    let style = shadow_style("1 /Int (blnd) ,\n0.75 /Real (opac) ,\n5 /Real (blur) ,\n1 /Int (csrc) ,\n50 /Real (dark) ,\n");
-    assert!(style.plain, "{style:?}");
-    let [shadow] = style.effects.as_slice() else { panic!("{style:?}") };
-    let p = &shadow.params;
+    let shadow = only_effect(&shadow_style(&shadow_keys("1 /Int (csrc) ,\n"))).clone();
+    assert_eq!((&shadow.params["shade"], &shadow.params["darkness"]), (&json!("darkness"), &json!(37.0)));
+}
+
+#[test]
+fn a_drop_shadow_with_settings_not_read_keeps_the_drawn_look() {
+    // GUARDS: an unknown `csrc` was read as Darkness, `blnd` was cast to a mode, a missing setting
+    // took a default and an unknown key was skipped: each became an editable shadow the file doesn't draw.
+    let full = shadow_keys("0 /Int (csrc) ,\n");
+    let cases = [
+        full.replace("0 /Int (csrc)", "99 /Int (csrc)"),
+        full.replace("2 /Int (blnd)", "99 /Int (blnd)"),
+        full.replace("2 /Int (blnd)", "2.5 /Int (blnd)"),
+        full.replace("0 /Int (csrc)", "0.5 /Int (csrc)"),
+        full.replace("11 /Real (horz)", "11 /Int (horz)"),
+        full.replace("37 /Real (dark)", "37 /Int (dark)"),
+        full.replace("2 /Int (blnd)", "2 /Real (blnd)"),
+        full.replace("0.43 /Real (opac)", "1.5 /Real (opac)"),
+        full.replace("11 /Real (horz) ,\n", ""),
+        full.replace(&color_entry("sclr", "0 1 0"), ""),
+        full.replace("0 1 0 0 0 Xy", "2 0.5 0 0 0 Xy"),
+        format!("{full}1 /Real (spread) ,\n"),
+        format!("{full}0 /Bool (pair) ,\n"),
+        format!("{full}(x) /String (note) ,\n"),
+        format!("{full}3 4 /RealPointRelToROrigin (spot) ,\n"),
+        shadow_keys("1 /Int (csrc) ,\n").replace("37 /Real (dark)", "250 /Real (dark)"),
+        shadow_keys("1 /Int (csrc) ,\n").replace("37 /Real (dark)", "(fifty) /Real (dark)"),
+    ];
+    for keys in cases {
+        assert!(!shadow_style(&keys).plain, "{keys}");
+    }
+    let observed = format!("{full}1 /Bool (pair) ,\n1 /Bool (usePSLBlur) ,\n16 /Int (Adobe Effect Expand Before Version) ,\n");
+    assert!(shadow_style(&observed).plain);
+}
+
+#[test]
+fn an_inner_glow_reads_its_settings() {
+    let keys =
+        |gtyp: &str| format!("10 /Int (blnd) ,\n0.41 /Real (opac) ,\n13 /Real (blur) ,\n{}{gtyp} /Int (gtyp) ,\n", color_entry("gclr", "1 0 0"));
+    let style = effect_style("Adobe Inner Glow", &keys("0"));
+    let glow = only_effect(&style);
+    let p = &glow.params;
     assert_eq!(
-        (shadow.id.as_str(), &p["shade"], &p["darkness"], &p["opacity"], &p["blur"]),
-        ("stylize.dropShadow", &json!("darkness"), &json!(50.0), &json!(75.0), &json!(10.0))
+        (glow.id.as_str(), &p["mode"], &p["source"], &p["color"]),
+        ("stylize.innerGlow", &json!("Difference"), &json!("center"), &json!(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))
     );
+    near(p, "opacity", 41.0);
+    near(p, "blur", 13.0);
+    assert!(style.simple);
+    assert_eq!(only_effect(&effect_style("Adobe Inner Glow", &keys("1"))).params["source"], json!("edge"));
+    assert!(!effect_style("Adobe Inner Glow", &keys("2")).plain);
 }
 
 #[test]
-fn a_drop_shadow_darkness_is_100_percent_when_missing_and_kept_within_0_to_100() {
-    for (dark, want) in [("", 100.0), ("(fifty) /Real (dark) ,\n", 100.0), ("250 /Real (dark) ,\n", 100.0), ("-5 /Real (dark) ,\n", 0.0)] {
-        let style = shadow_style(&format!("1 /Int (csrc) ,\n{dark}"));
-        assert!(style.plain, "{dark:?}: {style:?}");
-        let [shadow] = style.effects.as_slice() else { panic!("{dark:?}: {style:?}") };
-        assert_eq!((&shadow.params["shade"], &shadow.params["darkness"]), (&json!("darkness"), &json!(want)), "{dark:?}");
+fn an_outer_glow_reads_its_settings_and_keeps_the_drawn_look_for_others() {
+    let keys = format!(
+        "16 /Int (Adobe Effect Expand Before Version) ,\n10 /Int (blnd) ,\n0.42 /Real (opac) ,\n19 /Real (blur) ,\n{}1 /Bool (usePSLBlur) ,\n",
+        color_entry("sclr", "0 0 1")
+    );
+    let glow = only_effect(&effect_style("Adobe Outer Glow", &keys)).clone();
+    assert_eq!((glow.id.as_str(), &glow.params["mode"]), ("stylize.outerGlow", &json!("Difference")));
+    near(&glow.params, "opacity", 42.0);
+    near(&glow.params, "blur", 38.0);
+    for other in [
+        format!("{keys}1 /Real (spread) ,\n"),
+        keys.replace("19 /Real (blur)", "19 /Int (blur)"),
+        keys.replace("1 /Bool (usePSLBlur)", "0 /Bool (usePSLBlur)"),
+    ] {
+        assert!(!effect_style("Adobe Outer Glow", &other).plain, "{other}");
     }
 }
 
 #[test]
-fn a_drop_shadow_with_color_keeps_its_params() {
-    // GUARDS: a `csrc` of 0, or none, is Color; its shadow has neither `shade` nor `darkness`.
-    for csrc in ["", "0 /Int (csrc) ,\n50 /Real (dark) ,\n"] {
-        let style = shadow_style(&format!("2 /Int (blnd) ,\n0.5 /Real (opac) ,\n{csrc}"));
-        assert!(style.plain, "{csrc:?}: {style:?}");
-        let [shadow] = style.effects.as_slice() else { panic!("{csrc:?}: {style:?}") };
-        let want = json!({"mode": "Screen", "opacity": 50.0, "blur": 10.0, "x": 7.0, "y": 7.0, "color": vectorcraft_color::Color::BLACK});
-        assert_eq!(shadow.params, want, "{csrc:?}");
+fn a_feather_reads_its_radius() {
+    // GUARDS: Feather was looked for under another name and key, so the files' Feather kept the drawn look.
+    let style = effect_style("Adobe Fuzzy Mask", "14 /Real (Radius) ,\n");
+    let feather = only_effect(&style);
+    assert_eq!((feather.id.as_str(), feather.params["radius"].as_f64()), ("stylize.feather", Some(14.0)));
+    assert!(style.simple);
+    for other in ["14 /Real (radius) ,\n", "", "-1 /Real (Radius) ,\n"] {
+        assert!(!effect_style("Adobe Fuzzy Mask", other).plain, "{other}");
     }
 }
 
 #[test]
-fn a_feather_reads_its_radius_from_rad() {
-    let data = b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n12 /Real (rad) ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(data);
-    let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
-    assert_eq!((feather.id.as_str(), feather.params["radius"].as_f64()), ("stylize.feather", Some(12.0)));
+fn round_corners_read_their_radius() {
+    let style = effect_style("Adobe Round Corners", "21 /Real (radius) ,\n");
+    let round = only_effect(&style);
+    assert_eq!((round.id.as_str(), round.params["radius"].as_f64()), ("stylize.roundCorners", Some(21.0)));
+    assert!(style.simple);
+    for other in ["21 /Real (Radius) ,\n", "21 /Int (radius) ,\n", "-1 /Real (radius) ,\n"] {
+        assert!(!effect_style("Adobe Round Corners", other).plain, "{other}");
+    }
+}
+
+/// A Scribble's dictionary with every setting.
+const SCRIBBLE_KEYS: &str = "0.8 /Real (SpacingVariation) ,\n0.23 /Real (ScribbleVariation) ,\n4 /Real (EdgeOverlapVariation) ,\n67 /Real (Angle) ,\n\
+    2.3 /Real (StrokeWidth) ,\n-7 /Real (EdgeOverlap) ,\n0.17 /Real (Scribbliness) ,\n13 /Real (Spacing) ,\n";
+
+#[test]
+fn a_scribble_reads_its_settings() {
+    let style = effect_style("Adobe Scribble Fill", SCRIBBLE_KEYS);
+    let scribble = only_effect(&style);
+    assert_eq!(scribble.id, "stylize.scribble");
+    let want = [
+        ("angle", 67.0),
+        ("overlap", -7.0),
+        ("overlapVariation", 4.0),
+        ("strokeWidth", 2.3),
+        ("curviness", 17.0),
+        ("curvinessVariation", 23.0),
+        ("spacing", 13.0),
+        ("spacingVariation", 0.8),
+    ];
+    for (key, v) in want {
+        near(&scribble.params, key, v);
+    }
+    assert!(style.simple);
 }
 
 #[test]
-fn a_feather_falls_back_to_radius_and_defaults_to_five_points() {
-    let with_name = b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n3 /Real (radius) ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(with_name);
-    let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
-    assert_eq!(feather.params["radius"].as_f64(), Some(3.0));
+fn a_scribble_with_a_colour_or_settings_not_read_keeps_the_drawn_look() {
+    let cases = [
+        format!("{SCRIBBLE_KEYS}{}", color_entry("sclr", "0 1 0")),
+        format!("{SCRIBBLE_KEYS}0.5 /Real (MinDensity) ,\n"),
+        SCRIBBLE_KEYS.replace("13 /Real (Spacing) ,\n", ""),
+        SCRIBBLE_KEYS.replace("0.17 /Real (Scribbliness)", "17 /Real (Scribbliness)"),
+    ];
+    for keys in cases {
+        assert!(!effect_style("Adobe Scribble Fill", &keys).plain, "{keys}");
+    }
+}
 
-    let bare = b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(bare);
-    let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
-    assert_eq!(feather.params["radius"].as_f64(), Some(5.0));
+#[test]
+fn effects_on_the_object_keep_their_order() {
+    let data = format!(
+        "/KnownStyle :\n(Two) /Name ,\n/ActiveStyle :\n{}",
+        compound(
+            "Chain Style Filter",
+            &[basic("Adobe Round Corners", "10 /Real (radius) ,\n"), basic("Adobe Drop Shadow", &shadow_keys("0 /Int (csrc) ,\n"))]
+        )
+    );
+    let st = &art_styles(data.as_bytes())["Two"];
+    assert!(st.plain && st.simple, "{st:?}");
+    assert_eq!(st.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.roundCorners", "stylize.dropShadow"]);
+}
+
+#[test]
+fn a_glow_on_one_fill_stays_on_that_fill() {
+    // An ordinary object keeps the drawn look (`simple` is false); type takes the fill's glow.
+    let glow = basic(
+        "Adobe Inner Glow",
+        &format!("2 /Int (blnd) ,\n0.75 /Real (opac) ,\n5 /Real (blur) ,\n{}1 /Int (gtyp) ,\n", color_entry("gclr", "1 1 1")),
+    );
+    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), glow]);
+    let data =
+        format!("/KnownStyle :\n(Lit) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+    let st = &art_styles(data.as_bytes())["Lit"];
+    assert!(st.plain && !st.simple, "{st:?}");
+    assert!(st.effects.is_empty());
+    assert_eq!(st.looks[0].effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.innerGlow"]);
 }
 
 #[test]
 fn art_styles_clear_operands_beyond_the_cap() {
     let mut data = Vec::from(
-        b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n",
+        b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Adobe Fuzzy Mask) 1 0 /Filter ,\n1 /Visible ,\n",
     );
     for _ in 0..80 {
         data.extend_from_slice(b"1 ");
     }
-    data.extend_from_slice(b"/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n;\n");
+    data.extend_from_slice(b"/Dictionary : /NotRecorded ,\n5 /Real (Radius) ,\n; /Dict ;\n /Part ,\n;\n");
     let styles = art_styles(&data);
     let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
     assert_eq!(feather.params["radius"].as_f64(), Some(5.0));
@@ -121,7 +263,8 @@ fn art_styles_clear_operands_beyond_the_cap() {
 
 #[test]
 fn art_styles_ignore_filters_beyond_the_cap() {
-    const UNIT: &[u8] = b"/BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n";
+    const UNIT: &[u8] =
+        b"/BasicFilter :\n(Adobe Fuzzy Mask) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n1 /Real (Radius) ,\n; /Dict ;\n /Part ,\n";
     let mut data =
         Vec::from(b"/KnownStyle :\n(Capped) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n");
     for _ in 0..MAX_FILTERS + 16 {
@@ -309,7 +452,7 @@ fn contents_above_some_items_count_them() {
 
 #[test]
 fn an_effect_not_read_here_keeps_the_drawn_look() {
-    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Adobe Scribble Fill", "")]);
+    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Adobe Zig Zag", "")]);
     let data =
         format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
