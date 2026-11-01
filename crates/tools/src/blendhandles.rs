@@ -47,13 +47,16 @@ pub struct BlendHandles {
     /// and its length (the box's height). The box's own frame, so the handle keeps its place on
     /// the box when it rotates.
     edge_base: Point,
-    edge_up: Vec2,
+    /// The direction up the edge, in document space (the chevrons follow it).
+    pub edge_up: Vec2,
     edge_out: Vec2,
     edge_gap: f64,
     edge_h: f64,
     /// The spine the steps run along, with each key's arc length on it.
     spine: Spine,
     stops: Vec<f64>,
+    /// The box's own angle, counter-clockwise degrees, for the step knob's cursor.
+    frame_angle: f64,
     /// The easing the knob's drag starts from (a symmetric Type is left as it is).
     ease: BlendEase,
     easing: Option<EasingHandles>,
@@ -84,6 +87,7 @@ impl BlendHandles {
             None => OrientedBox::aligned(n.geometric_bounds_with(&doc.symbol_boxes())?),
         };
         let (rect, h) = (frame.rect, frame.rect.height());
+        let frame_angle = if frame.angle.is_finite() { frame.angle } else { 0.0 };
         let to_doc = frame.to_doc();
         // The handles sit where the steps go: on the spine when it is followed, else on the
         // straight lines between the key centres. A replaced spine hidden by Spine Never must not
@@ -144,7 +148,7 @@ impl BlendHandles {
             let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
             EasingHandles { ease, color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom) }
         });
-        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h, spine, stops, ease: spec.ease, easing })
+        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h, spine, stops, ease: spec.ease, frame_angle, easing })
     }
 
     /// The handles of a single blend selected whole (`frame` is the bounding box shown).
@@ -158,7 +162,7 @@ impl BlendHandles {
 
     /// Every selected blend with handles, or the blend a selected key belongs to (the Blend tool's).
     pub fn of_selection(doc: &Document, selection: &Selection, zoom: f64) -> Vec<Self> {
-        blends_of_selection(doc, selection).iter().filter_map(|id| Self::for_blend(doc, *id, None, zoom)).collect()
+        blends_of_selection(doc, selection).iter().filter_map(|id| Self::for_blend(doc, *id, doc.oriented_bounds(&[*id], false), zoom)).collect()
     }
 
     /// Where the easing handles sit: the easing moves the steps between the first two keys in
@@ -402,7 +406,7 @@ impl BlendDrag {
 
     pub fn cursor(&self, cx: &ToolContext) -> Cursor {
         match self.part {
-            BlendPart::Steps => crate::select::handle_cursor(crate::bbox::Handle::Bottom, -cx.view_angle()),
+            BlendPart::Steps => crate::select::handle_cursor(crate::bbox::Handle::Bottom, self.handles.frame_angle - cx.view_angle()),
             BlendPart::Ease | BlendPart::Color => Cursor::Move,
         }
     }
@@ -492,7 +496,7 @@ mod tests {
     use crate::testutil::{cx, paint};
     use std::sync::Arc;
     use vectorcraft_doc::{Appearance, Node, live::BlendSpacing, live::BlendSpineMode};
-    use vectorcraft_geom::{PathData, Rect, SubPath, shapes};
+    use vectorcraft_geom::{Affine, PathData, Rect, SubPath, shapes};
 
     /// Two 20 pt squares blended (boxes 0..20 and 100..120 on x): the blend's box spans
     /// (0, 0)..(120, 20), its spine (10, 10)..(110, 10).
@@ -574,6 +578,25 @@ mod tests {
             assert!(drag.drag(at).is_empty(), "{kind:?} changed");
             assert_eq!(drag.finish(), vec![]);
         }
+    }
+
+    #[test]
+    fn a_rotated_blend_keeps_its_knob_on_its_own_edge() {
+        let (mut d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(4));
+        let turn = Affine::translate((60.0, 10.0)) * Affine::rotate(-30.0_f64.to_radians()) * Affine::translate((-60.0, -10.0));
+        d.node_mut(b).unwrap().transform(turn, false);
+        let frame = d.oriented_bounds(&[b], false).unwrap();
+        assert!((frame.angle - 30.0).abs() < 1e-9, "{frame:?}");
+        let mut s = Selection::default();
+        s.set([b]);
+        let handles = BlendHandles::of_selection(&d, &s, 1.0);
+        let h = handles.first().expect("the blend has handles");
+        let expected_up = frame.to_doc() * Point::new(0.0, -1.0) - frame.to_doc() * Point::ZERO;
+        assert!((h.edge_up - expected_up).hypot() < 1e-9, "{:?} vs {expected_up:?}", h.edge_up);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let drag = BlendDrag::new(h.clone(), BlendPart::Steps, h.steps_at);
+        assert_eq!(drag.cursor(&c), crate::select::handle_cursor(crate::bbox::Handle::Bottom, 30.0));
     }
 
     #[test]
