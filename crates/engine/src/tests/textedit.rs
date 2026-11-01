@@ -652,6 +652,15 @@ fn typed_lists_off_leaves_typed_markers_as_text() {
         let t = obj(&s, id);
         assert_eq!((t.plain_text(), t.para_at(0).list), (format!("{typed} a"), None), "{typed}");
         assert!(!undo_labels(&s).iter().any(|l| l == "Bullets and Numbering"), "{typed}");
+        // Turned back on, the same typing in a new paragraph starts a list.
+        s.execute("prefs.set", &json!({"key": "typedLists", "value": true})).unwrap();
+        key(&mut s, ToolKey::Enter, Mods::default());
+        for c in typed.chars().chain(" ".chars()) {
+            s.tool_text(&c.to_string(), v).unwrap();
+        }
+        let t = obj(&s, id);
+        assert_eq!((t.plain_text(), t.para_at(0).list, t.para_at(1).list.is_some()), (format!("{typed} a\n"), None, true), "on: {typed}");
+        assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Bullets and Numbering"), "on: {typed}");
     }
     let mut s = session();
     s.execute("prefs.set", &json!({"key": "typedLists", "value": false})).unwrap();
