@@ -493,7 +493,9 @@ pub fn cursor_any(cx: &ToolContext, p: Point) -> Option<Cursor> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::select::SelectionTool;
     use crate::testutil::{cx, paint};
+    use crate::{PointerEvent, PointerKind, Tool};
     use std::sync::Arc;
     use vectorcraft_doc::{Appearance, Node, live::BlendSpacing, live::BlendSpineMode};
     use vectorcraft_geom::{Affine, PathData, Rect, SubPath, shapes};
@@ -597,6 +599,22 @@ mod tests {
         let c = cx(&d, &s, &p);
         let drag = BlendDrag::new(h.clone(), BlendPart::Steps, h.steps_at);
         assert_eq!(drag.cursor(&c), crate::select::handle_cursor(crate::bbox::Handle::Bottom, 30.0));
+    }
+
+    #[test]
+    fn a_blend_handle_drag_is_not_a_transform() {
+        let (d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(4));
+        let mut s = Selection::default();
+        s.set([b]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        let mut t = SelectionTool::default();
+        assert!(!t.transforming());
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, h.steps_at.x, h.steps_at.y));
+        assert!(!t.transforming());
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, h.steps_at.x, h.steps_at.y - 5.0));
+        assert!(!t.transforming(), "a blend-handle drag keeps the selection box");
     }
 
     #[test]

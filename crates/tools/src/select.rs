@@ -623,7 +623,7 @@ impl Tool for SelectionTool {
             State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
-            State::BlendControls(d) => d.adjusting(),
+            State::BlendControls(_) => false,
             _ => false,
         }
     }
