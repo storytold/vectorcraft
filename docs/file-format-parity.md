@@ -78,6 +78,10 @@ private editing data. VectorCraft:
   (gradients filled with their first stop's colour, type left to the apps that read the format). VectorCraft
   opens a file with that prolog from its program, as the format.
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
+  14; #868: round trip with Illustrator 2018 loses layers and groups), some files 4× slower to open since the
+  editing data is read whole (#758), live effects, brushes and symbols come in as their drawn look (#637;
+  pattern fills are read since #1025); legacy `.ai` without the prolog opens since #1027, its legacy type
+  (`To` … `TO`) since #868; guides open as ruler guides and guide paths since #5057 (#779).
   14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects
   that are not read or have settings that are not read, brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
