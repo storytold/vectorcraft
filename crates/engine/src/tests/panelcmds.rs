@@ -227,6 +227,38 @@ fn duplicate_artboard_copies_its_art() {
     assert_eq!(ids(&s.execute("artboard.duplicate", &json!({"index": 0, "art": true})).unwrap()["ids"]).len(), 1);
 }
 
+#[test]
+fn duplicate_artboard_and_alt_drag_copy_artwork_larger_than_artboard() {
+    let mut s = session();
+    // Default artboard is 800x600 at (0, 0).
+    // An oversized background (900x700 centered at (400, 300), hanging 50pt off all 4 edges, #4479).
+    let bg = s.execute("shape.rectangle", &json!({"x": -50, "y": -50, "width": 900, "height": 700})).unwrap();
+    let bg_id = bg["id"].as_u64().unwrap();
+    // An oversized banner across the artboard with overhang (900x100 at x: -50, y: 100).
+    let banner = s.execute("shape.rectangle", &json!({"x": -50, "y": 100, "width": 900, "height": 100})).unwrap();
+    let banner_id = banner["id"].as_u64().unwrap();
+
+    // 1. Menu duplication (artboard.duplicate with art: true).
+    let dup = s.execute("artboard.duplicate", &json!({"index": 0, "art": true})).unwrap();
+    let dup_copies = ids(&dup["ids"]);
+    assert_eq!(dup_copies.len(), 2, "copies both oversized background and banner artwork: {dup_copies:?}");
+    assert!(!dup_copies.contains(&bg_id) && !dup_copies.contains(&banner_id));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 2. Alt-drag with Artboard tool (artboard.move with copy: true and moveArt: true).
+    let alt_drag = s.execute("artboard.move", &json!({"index": 0, "dx": 1000, "dy": 0, "copy": true, "moveArt": true})).unwrap();
+    let alt_copies = ids(&alt_drag["moved"]);
+    assert_eq!(alt_copies.len(), 2, "Alt-drag copies both oversized background and banner artwork: {alt_copies:?}");
+    assert!(!alt_copies.contains(&bg_id) && !alt_copies.contains(&banner_id));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // 3. Move artboard with Artboard tool / command (artboard.move with moveArt: true).
+    let moved = s.execute("artboard.move", &json!({"index": 0, "dx": 200, "dy": 100, "moveArt": true})).unwrap();
+    let moved_ids = ids(&moved["moved"]);
+    assert_eq!(moved_ids.len(), 2, "move takes both oversized background and banner artwork: {moved_ids:?}");
+    assert!(moved_ids.contains(&bg_id) && moved_ids.contains(&banner_id));
+}
+
 /// New Artboard and Artboard Options trim the name they are given, as the Artboards panel's rename
 /// does, and a blank name gives the artboard its default name, Artboard N for the Nth artboard.
 #[test]
