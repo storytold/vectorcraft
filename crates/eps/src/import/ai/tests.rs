@@ -1870,6 +1870,51 @@ fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
 }
 
 #[test]
+fn an_object_with_bas_relief_comes_in_with_its_settings() {
+    // GUARDS: Bas Relief's settings block wasn't read, so the object came in as its drawn look.
+    let settings: Vec<u8> = [
+        &[0, 0, 0, 1][..],
+        b"Dtl ",
+        &[0; 4],
+        b"long",
+        &5i32.to_be_bytes(),
+        b"Smth",
+        &[0; 4],
+        b"long",
+        &9i32.to_be_bytes(),
+        b"LghD",
+        &0x2000u32.to_be_bytes(),
+        b"LghD",
+        b"LDTR",
+    ]
+    .concat();
+    let lines: String = crate::ps::ascii85(&settings).lines().map(|l| format!("%{l}\n")).collect();
+    let style = format!(
+        "%AI9_BeginArtStyles\n\
+        /KnownStyle :\n(Carved) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+        /BasicFilter :\n(PSAdapter_plugin_BsRl) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n\
+        {} /Int (dataSize) ,\n; /Dict ;\n /Part ,\n;\n\
+        %AI9_EndArtStyles\n",
+        settings.len()
+    );
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 0 0 1 k\n%_{hidden_rect}f\n1 (Carved) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{style}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    let [relief] = a[0].appearance.effects.as_slice() else { panic!("{:#?}", a[0].appearance) };
+    assert_eq!(
+        (relief.id.as_str(), &relief.params),
+        ("sketch.basRelief", &serde_json::json!({"detail": 5.0, "smoothness": 9.0, "lightDirection": "topRight"}))
+    );
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
     let r = read_ok(&format!("%%BeginProlog\n%\n%%EndProlog\n{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)))));
