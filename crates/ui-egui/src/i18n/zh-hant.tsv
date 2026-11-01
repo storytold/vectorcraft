@@ -1963,6 +1963,10 @@ file-filter	Templates	範本
 @msg	`{what}` closes something it didn't open	`{what}` 結束了並非由它開始的內容
 @msg	a path has too many points	有一條路徑的點過多
 @msg	it ends inside a layer	它在圖層內部結束
+@msg	it ends inside a multi-layer mask	它在跨圖層遮色片內部結束
+@msg	a multi-layer mask's operators are out of order	跨圖層遮色片的運算子順序錯誤
+@msg	a multi-layer mask needs one clipping path	跨圖層遮色片需要一條剪裁路徑
+@msg	a group crosses a multi-layer mask	群組跨越了跨圖層遮色片
 @msg	it has art outside its layers	它有位於圖層之外的圖稿
 @msg	it has more than {MAX_NODES} objects	它有超過 {MAX_NODES} 個物件
 @msg	it has no layers	它沒有圖層

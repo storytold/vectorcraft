@@ -5055,6 +5055,10 @@ digits	Malayalam	Malaiàlam
 @msg	is not an image VectorCraft reads	no és una imatge que VectorCraft pugui llegir
 @msg	it decompresses to more than {_1} MB	es descomprimeix fins a més de {_1} MB
 @msg	it ends inside a layer	acaba dins d’una capa
+@msg	it ends inside a multi-layer mask	acaba dins d’una màscara multicapa
+@msg	a multi-layer mask's operators are out of order	els operadors d’una màscara multicapa estan desordenats
+@msg	a multi-layer mask needs one clipping path	una màscara multicapa necessita un traçat de retall
+@msg	a group crosses a multi-layer mask	un grup travessa una màscara multicapa
 @msg	it has art outside its layers	té art fora de les seves capes
 @msg	it has more than one artboard	té més d’un tauler
 @msg	it has more than {MAX_NODES} objects	té més de {MAX_NODES} objectes

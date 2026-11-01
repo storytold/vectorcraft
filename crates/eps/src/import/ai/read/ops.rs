@@ -130,13 +130,14 @@ impl<'a> Reader<'a> {
                 self.open(Kind::Clip, hidden)?
             }
             "U" | "*U" | "Q" => self.end_container(w, hidden)?,
+            "Mb" | "Mv" | "Md" | "ME" | "MB" | "Mi" => self.multi_mask_op(w)?,
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {
                     a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
                 }
             }
-            "LB" => self.end_layer()?,
+            "LB" => self.end_layer_in_mask()?,
             // Paths.
             "m" | "l" | "L" | "c" | "C" | "v" | "V" | "y" | "Y" => self.path_op(w, &vals)?,
             "h" => close(&mut self.path),

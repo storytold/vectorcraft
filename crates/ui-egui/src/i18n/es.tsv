@@ -4572,6 +4572,10 @@ axis	Both	Ambos
 @msg	`{what}` closes something it didn't open	`{what}` cierra algo que no abrió
 @msg	a path has too many points	un trazado tiene demasiados puntos
 @msg	it ends inside a layer	terminan dentro de una capa
+@msg	it ends inside a multi-layer mask	terminan dentro de una máscara de varias capas
+@msg	a multi-layer mask's operators are out of order	los operadores de una máscara de varias capas están desordenados
+@msg	a multi-layer mask needs one clipping path	una máscara de varias capas necesita un trazado de recorte
+@msg	a group crosses a multi-layer mask	un grupo atraviesa una máscara de varias capas
 @msg	it has art outside its layers	tienen ilustraciones fuera de sus capas
 @msg	it has more than {MAX_NODES} objects	tienen más de {MAX_NODES} objetos
 @msg	it has no layers	no tienen capas

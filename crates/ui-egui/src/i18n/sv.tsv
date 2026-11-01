@@ -4471,6 +4471,10 @@ axis	Both	Båda
 @msg	`{what}` closes something it didn't open	`{what}` stänger något som den inte öppnade
 @msg	a path has too many points	en bana har för många punkter
 @msg	it ends inside a layer	den slutar inuti ett lager
+@msg	it ends inside a multi-layer mask	den slutar inuti en flerlagersmask
+@msg	a multi-layer mask's operators are out of order	operatorerna för en flerlagersmask står i fel ordning
+@msg	a multi-layer mask needs one clipping path	en flerlagersmask behöver en klippbana
+@msg	a group crosses a multi-layer mask	en grupp korsar en flerlagersmask
 @msg	it has art outside its layers	den har grafik utanför sina lager
 @msg	it has more than {MAX_NODES} objects	den har fler än {MAX_NODES} objekt
 @msg	it has no layers	den har inga lager

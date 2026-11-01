@@ -74,6 +74,7 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn end_container(&mut self, what: &str, hidden: bool) -> Result<(), String> {
+        self.multi_mask_container_ends()?;
         let f = match what {
             "U" => self.close(what, |k| matches!(k, Kind::Group))?,
             "*U" => self.close(what, |k| matches!(k, Kind::Compound))?,

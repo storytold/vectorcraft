@@ -4428,6 +4428,10 @@ theme	Appearance	Giao diện
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
 @msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
 @msg	it ends inside a layer	nó kết thúc bên trong một lớp
+@msg	it ends inside a multi-layer mask	nó kết thúc bên trong một mặt nạ nhiều lớp
+@msg	a multi-layer mask's operators are out of order	các toán tử của mặt nạ nhiều lớp không đúng thứ tự
+@msg	a multi-layer mask needs one clipping path	mặt nạ nhiều lớp cần một đường dẫn cắt
+@msg	a group crosses a multi-layer mask	một nhóm vắt ngang mặt nạ nhiều lớp
 @msg	it has art outside its layers	nó có tác phẩm ngoài các lớp
 @msg	it has more than one artboard	nó có nhiều hơn một bảng vẽ
 @msg	it has more than {MAX_NODES} objects	nó có hơn {MAX_NODES} đối tượng

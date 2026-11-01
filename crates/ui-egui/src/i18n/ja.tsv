@@ -4315,6 +4315,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
 @msg	a path has too many points	ポイントが多すぎるパスがあります
 @msg	it ends inside a layer	レイヤーの途中で終わっています
+@msg	it ends inside a multi-layer mask	複数レイヤーにまたがるマスクの途中で終わっています
+@msg	a multi-layer mask's operators are out of order	複数レイヤーにまたがるマスクの演算子の順序が正しくありません
+@msg	a multi-layer mask needs one clipping path	複数レイヤーにまたがるマスクにはクリッピングパスが 1 つ必要です
+@msg	a group crosses a multi-layer mask	グループが複数レイヤーにまたがるマスクと交差しています
 @msg	it has art outside its layers	レイヤーの外にアートがあります
 @msg	it has more than {MAX_NODES} objects	オブジェクトが {MAX_NODES} 個を超えています
 @msg	it has no layers	レイヤーがありません

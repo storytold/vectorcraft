@@ -4778,6 +4778,10 @@ imageTrace	Outline	Körvonal
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
 @msg	is not an image VectorCraft reads	nem olyan kép, amelyet a VectorCraft olvas
 @msg	it ends inside a layer	egy rétegen belül ér véget
+@msg	it ends inside a multi-layer mask	egy többrétegű maszkon belül ér véget
+@msg	a multi-layer mask's operators are out of order	egy többrétegű maszk operátorai rossz sorrendben vannak
+@msg	a multi-layer mask needs one clipping path	egy többrétegű maszkhoz egy vágóútvonal kell
+@msg	a group crosses a multi-layer mask	egy csoport átnyúlik egy többrétegű maszkon
 @msg	it has art outside its layers	a rétegein kívül is van grafikája
 @msg	it has more than one artboard	egynél több rajztáblája van
 @msg	it has more than {MAX_NODES} objects	túl sok objektumot tartalmaz (legfeljebb {MAX_NODES})

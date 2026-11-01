@@ -4878,6 +4878,10 @@ imageTrace	Outline	Obrys
 @msg	`{what}` closes something it didn't open	`{what}` uzavírá něco, co neotevřel
 @msg	a path has too many points	cesta má příliš mnoho bodů
 @msg	it ends inside a layer	končí uvnitř vrstvy
+@msg	it ends inside a multi-layer mask	končí uvnitř masky přes více vrstev
+@msg	a multi-layer mask's operators are out of order	operátory masky přes více vrstev jsou ve špatném pořadí
+@msg	a multi-layer mask needs one clipping path	maska přes více vrstev potřebuje jednu ořezovou cestu
+@msg	a group crosses a multi-layer mask	skupina přesahuje masku přes více vrstev
 @msg	it has art outside its layers	má kresbu mimo své vrstvy
 @msg	it has more than {MAX_NODES} objects	má více než {MAX_NODES} objektů
 @msg	it has no layers	nemá žádné vrstvy

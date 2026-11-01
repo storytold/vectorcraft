@@ -100,7 +100,10 @@ impl<'a> Reader<'a> {
             _ => {}
         }
         if line.starts_with("AI5_BeginLayer") {
-            return self.open(Kind::Layer(Box::default()), false);
+            self.multi_mask_layer_starts()?;
+            self.open(Kind::Layer(Box::default()), false)?;
+            self.multi_mask_go_on();
+            return Ok(());
         }
         if line.starts_with("AI5_BeginRaster") {
             self.raster = Some(Raster::default());

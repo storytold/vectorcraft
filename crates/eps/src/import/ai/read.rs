@@ -9,6 +9,8 @@
 //!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end.
+//! - Multi-layer masks `Mb` <path> `W n` `Md` … `MB`, whose objects can go on past `LB` into the
+//!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Paths: `m`, `l`/`L`, `c`/`C`, `v`/`V`, `y`/`Y`, painted by `N n F f S s B b` (lower case
 //!   closes), `(op) *` for a guide. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
@@ -75,6 +77,7 @@ mod art;
 mod containers;
 mod directives;
 mod document;
+mod masks;
 mod on_path;
 mod ops;
 mod types;
@@ -272,6 +275,8 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
+    multi_mask: Option<masks::MultiMask>,
 }
 
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
@@ -364,6 +369,7 @@ impl<'a> Reader<'a> {
             pattern_tiles: HashMap::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            multi_mask: None,
         }
     }
 
@@ -393,6 +399,9 @@ impl<'a> Reader<'a> {
         }
         if self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_))) {
             return Err("it ends inside a layer".into());
+        }
+        if self.multi_mask.is_some() {
+            return Err("it ends inside a multi-layer mask".into());
         }
         Ok(())
     }
