@@ -602,6 +602,59 @@ fn reset_panel_resets_the_mojikumi_set_and_tab_stops_in_one_step() {
     assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Batch".to_string())));
 }
 
+/// Reset Panel gives paragraphs that start with different Mojikumi Sets and tab stops the same
+/// Mojikumi Set and no tab stops, as one undo step, and one Undo gives each paragraph its own
+/// values back: while the Type tool edits, the paragraphs the selection touches, and then the
+/// paragraphs of every selected type object.
+#[test]
+fn reset_panel_resets_paragraphs_with_different_values_in_one_step() {
+    let (mut app, id) = editing_text("First\nSecond\nThird");
+    app.run("text.setFormat", json!({"id": id, "start": 0, "end": 1, "mojikumi": "none"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 6, "end": 7, "mojikumi": "lineEndHalf"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 13, "end": 14, "mojikumi": "none"})).unwrap();
+    app.run("text.tabs.set", json!({"id": id, "start": 0, "end": 1, "stops": [{"position": 36}, {"position": 90, "align": "right"}]})).unwrap();
+    app.run("text.tabs.set", json!({"id": id, "start": 6, "end": 7, "stops": [{"position": 120, "align": "decimal", "leader": "."}]})).unwrap();
+    let paras = |app: &VectorcraftApp, id: &Value| {
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        text.paragraph_styles().into_iter().map(|p| (p.mojikumi, p.tabs.iter().map(|t| t.position).collect::<Vec<_>>())).collect::<Vec<_>>()
+    };
+    let first = (Mojikumi::None, vec![36.0, 90.0]);
+    let second = (Mojikumi::LineEndHalf, vec![120.0]);
+    let third = (Mojikumi::None, vec![]);
+    let reset = (Mojikumi::LineEndHalf, vec![]);
+    assert_eq!(paras(&app, &id), [first.clone(), second.clone(), third.clone()]);
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let last_step = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().map(|e| e.label.clone());
+    // A selection from the first paragraph into the second.
+    select_range(&mut app, 2, 8);
+    let doc = app.session.active().unwrap().doc.clone();
+    let before = steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(paras(&app, &id), [reset.clone(), reset.clone(), third.clone()], "only the paragraphs the selection touches");
+    assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Reset Panel".to_string())));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, doc, "one Undo takes the whole reset back");
+    assert_eq!(paras(&app, &id), [first.clone(), second.clone(), third.clone()]);
+    // Two selected type objects.
+    app.session.set_tool_option("stopEditing", &json!(true));
+    let other = app.run("text.create", json!({"x": 40, "y": 120, "text": "Other"})).unwrap()["id"].clone();
+    app.run("text.setFormat", json!({"id": other, "mojikumi": "none"})).unwrap();
+    app.run("text.tabs.set", json!({"id": other, "stops": [{"position": 48, "align": "center"}]})).unwrap();
+    let other_values = (Mojikumi::None, vec![48.0]);
+    app.run("select.set", json!({"ids": [id, other]})).unwrap();
+    let doc = app.session.active().unwrap().doc.clone();
+    let before = steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(paras(&app, &id), [reset.clone(), reset.clone(), reset.clone()]);
+    assert_eq!(paras(&app, &other), [reset]);
+    assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Reset Panel".to_string())));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, doc, "one Undo takes the whole reset back");
+    assert_eq!(paras(&app, &id), [first, second, third]);
+    assert_eq!(paras(&app, &other), [other_values]);
+}
+
 /// Reset Panel closes only the undo group it opens: an undo group open in another document
 /// stays open, and that document's later edits stay part of its step.
 #[test]
