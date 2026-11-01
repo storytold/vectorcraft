@@ -938,6 +938,52 @@ fn saving_an_applied_preset_keeps_the_keys_the_dialog_does_not_show() {
     assert_eq!(field(&app, "exportPreset"), "Repeat");
 }
 
+/// Save Preset… on an applied preset saves the dialog's Include Bleed and Include Artboard Fill.
+#[test]
+fn saving_an_applied_preset_keeps_its_bleed_and_fill() {
+    use export_for_screens::PresetPick;
+    let (mut app, _) = app(2, false);
+    let settings = json!({"formats": [{"format": "png"}], "includeBleed": true, "includeArtboardFill": false});
+    app.run("document.exportPresets.save", json!({"name": "Bleed", "settings": settings})).unwrap();
+    open(&mut app);
+    let preset = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Bleed").cloned().unwrap();
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &preset);
+    let mut d = app.ui.dialog.take().unwrap();
+    export_for_screens::preset_pick(&mut app, &mut d, PresetPick::Save("Bleed".into()));
+    app.ui.dialog = Some(d);
+
+    let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Bleed").unwrap_or_else(|| panic!("{}", app.ui.status));
+    let s = &saved.settings;
+    assert_eq!((s.get("includeBleed"), s.get("includeArtboardFill")), (Some(&json!(true)), Some(&json!(false))));
+}
+
+/// A preset that puts each item in its own folder (`item` or `itemFormat`, which the dialog has no
+/// control for) keeps that folder mode when it is exported or saved again from the dialog, until
+/// the sub-folder controls change.
+#[test]
+fn an_applied_preset_keeps_its_item_folders() {
+    use export_for_screens::PresetPick;
+    for mode in ["item", "itemFormat"] {
+        let (mut app, _) = app(2, false);
+        app.run("document.exportPresets.save", json!({"name": "Items", "settings": {"formats": [{"format": "png"}], "folders": mode}})).unwrap();
+        open(&mut app);
+        let preset = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Items").cloned().unwrap();
+        export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &preset);
+        set(&mut app, "folder", json!("out"));
+        let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        assert_eq!(p["folders"], json!(mode), "exported");
+        let mut d = app.ui.dialog.take().unwrap();
+        export_for_screens::preset_pick(&mut app, &mut d, PresetPick::Save("Items".into()));
+        app.ui.dialog = Some(d);
+        let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Items").unwrap_or_else(|| panic!("{}", app.ui.status));
+        assert_eq!(saved.settings.get("folders"), Some(&json!(mode)), "saved");
+
+        set(&mut app, "subfolders", json!(false));
+        let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        assert_eq!(p["folders"], json!("none"), "unchecked");
+    }
+}
+
 /// A preset whose `folders` is empty uses its `subfolders`, as the export command does, and
 /// without either it keeps the dialog's sub-folders.
 #[test]

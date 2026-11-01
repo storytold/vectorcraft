@@ -170,6 +170,7 @@ pub fn open(app: &mut VectorcraftApp) {
         "openLocation": flag("openLocation", true),
         "subfolders": subfolders,
         "subfolderBy": if folders == Some("format") { "format" } else { "scale" },
+        "__itemFolders": folders.filter(|f| matches!(*f, "item" | "itemFormat")).unwrap_or_default(),
         "pdfs": if get("pdfs").and_then(Value::as_str) == Some("single") { "single" } else { "multiple" },
         "prefix": get("prefix").and_then(Value::as_str).unwrap_or_default(),
         "preset": preset.unwrap_or_default(),
@@ -262,7 +263,7 @@ pub(super) fn export_presets(app: &mut VectorcraftApp) -> Value {
 
 /// The `document.exportForScreens` params the dialog describes (the web: no folder, one ZIP for
 /// several files).
-fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+pub(super) fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (mut p, files) = settings_params(app, d)?;
     if io::is_web(app) {
         p.insert("zip".into(), json!(files > 1));
@@ -327,11 +328,7 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
     let files = if single { (rows.len() - pdf_rows) * pieces + pdf_rows } else { rows.len() * pieces };
     p.insert("includeBleed".into(), json!(d.bool("includeBleed")));
     p.insert("includeArtboardFill".into(), json!(d.bool("includeArtboardFill")));
-    let folders = match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
-        (false, _) => "none",
-        (true, "format") => "format",
-        (true, _) => "rows",
-    };
+    let folders = folders(d);
     // Create Sub-folders, as the Asset Export panel (which shares these settings) names it.
     p.insert("subfolders".into(), json!(folders == "rows"));
     p.insert("folders".into(), json!(folders));
@@ -340,6 +337,21 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
     p.insert("formats".into(), Value::Array(rows));
     p.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
     Ok((p, files, pieces))
+}
+
+/// The `folders` the dialog's sub-folder controls give: `none`, `format`, or a folder per scale
+/// (`rows`), or the `item` or `itemFormat` of an applied preset (`__itemFolders`) while the
+/// controls have not changed.
+fn folders(d: &Dialog) -> &'static str {
+    match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
+        (false, _) => "none",
+        (true, "format") => "format",
+        (true, _) => match d.str("__itemFolders").as_str() {
+            "item" => "item",
+            "itemFormat" => "itemFormat",
+            _ => "rows",
+        },
+    }
 }
 
 /// Export; the dialog stays open when the export fails.
@@ -627,6 +639,7 @@ fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         });
         form::check(ui, d, "openLocation", tl!("Open Location after Export"));
     }
+    let before = (d.bool("subfolders"), d.str("subfolderBy"));
     form::check(ui, d, "subfolders", tl!("Create Sub-folders"));
     ui.horizontal(|ui| {
         ui.add_space(22.0);
@@ -639,6 +652,10 @@ fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("subfolderBy".into(), json!("format"));
         }
     });
+    // A change to the sub-folder controls replaces an applied preset's item folders.
+    if (d.bool("subfolders"), d.str("subfolderBy")) != before {
+        d.fields.remove("__itemFolders");
+    }
 }
 
 /// Export PDFs As: one file of every chosen artboard, or a file each; only for artboards (not
@@ -822,17 +839,13 @@ pub(super) fn preset_pick(app: &mut VectorcraftApp, d: &mut Dialog, pick: Preset
             for key in ["formats", "preset", "settings", "prefix", "folders", "subfolders", "includeBleed", "includeArtboardFill"] {
                 settings.remove(key);
             }
-            let folders = if !d.bool("subfolders") {
-                "none"
-            } else if d.str("subfolderBy") == "format" {
-                "format"
-            } else {
-                "rows"
-            };
             settings.insert("formats".into(), d.fields.get("formats").cloned().unwrap_or(json!([])));
             settings.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
             settings.insert("prefix".into(), json!(d.str("prefix")));
-            settings.insert("folders".into(), json!(folders));
+            settings.insert("folders".into(), json!(folders(d)));
+            for key in ["includeBleed", "includeArtboardFill"] {
+                settings.insert(key.into(), json!(d.bool(key)));
+            }
             app.run("document.exportPresets.save", json!({"name": name, "settings": settings})).map(|r| {
                 d.fields.remove("__savePreset");
                 d.fields.insert("exportPreset".into(), r["name"].clone());
@@ -878,6 +891,7 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
     if let Some(f) = folders {
         d.fields.insert("subfolders".into(), json!(f != "none"));
         d.fields.insert("subfolderBy".into(), json!(if f == "format" { "format" } else { "scale" }));
+        d.fields.insert("__itemFolders".into(), json!(if matches!(f, "item" | "itemFormat") { f } else { "" }));
     }
     if let Some(prefix) = st["prefix"].as_str() {
         d.fields.insert("prefix".into(), json!(prefix));
@@ -928,6 +942,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog, mut menu: Option<Format
                     rows = preset_rows;
                     d.fields.insert("subfolders".into(), json!(true));
                     d.fields.insert("subfolderBy".into(), json!("scale"));
+                    d.fields.remove("__itemFolders");
                     d.fields.insert("formats".into(), json!(rows));
                     d.fields.insert("preset".into(), json!(id));
                 }
