@@ -591,6 +591,31 @@ fn frames_and_wrap_shapes_beyond_a_billion_points_are_left_out() {
     assert_eq!(line_places(&wrapped(Rect::new(150.0, 0.0, 300.0, f64::NAN).to_path(0.1))), line_places(&unwrapped));
 }
 
+/// Area type whose frame a wrap object covers sets no line and overflows. Area type wrapped around
+/// a shape of 10,000 anchors sets its lines beside the shape.
+#[test]
+fn a_frame_a_wrap_object_covers_overflows_and_a_complex_wrap_shape_is_laid_out() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    let mut wrapped = |path: BezPath| {
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&path), wrap: Default::default() }];
+        layout_soon(&t)
+    };
+    let covered = wrapped(Rect::new(-10.0, -10.0, 310.0, 210.0).to_path(0.1));
+    assert!(covered.lines.is_empty() && covered.overflow, "{:?}", line_places(&covered));
+    // A zigzag between x = 150 and 160 down the frame, closed along its right half.
+    let mut zigzag = BezPath::new();
+    zigzag.move_to((150.0, 0.0));
+    for i in 1..10_000 {
+        zigzag.line_to((if i % 2 == 0 { 150.0 } else { 160.0 }, 200.0 * i as f64 / 10_000.0));
+    }
+    zigzag.line_to((300.0, 200.0));
+    zigzag.line_to((300.0, 0.0));
+    zigzag.close_path();
+    let beside = wrapped(zigzag);
+    assert!(!beside.lines.is_empty(), "no line was set");
+    assert!(beside.lines.iter().all(|li| li.x1 <= 160.0), "{:?}", line_places(&beside));
+}
+
 /// Layout steps a line down a frame (or a row or column of one) at most 100,000 times to find room
 /// for it: in a frame taller than 100,000 leads, a step is a 100,000th of the frame's height.
 #[test]
