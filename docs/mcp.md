@@ -639,7 +639,10 @@ their content). `version: 2` or `1` writes a file older VectorCraft versions ope
 compressed), and `preview: true` embeds a PNG of the first artboard, at most 256 px on its longer side.
 `precision: 4` (0 to 9) rounds the anchors and handles of paths to that many decimal places (in the layers, symbols,
 graph designs, patterns, opacity masks and brushes); colors, transforms, opacity and type are written exactly.
-The embedded preview and the PDF that `pdfCompatible: true` adds show the rounded paths. Without `precision` a save writes the coordinates exactly, and Save does not remember it. A `.ai` file ignores
+Each coordinate goes to the nearest step of its stored binary value, and a value exactly halfway rounds away from
+zero (`0.125` at 2 places is `0.13`); `1.005` is stored as slightly less than that and is written as `1.0`. Each anchor is rounded on
+its own, so a closed path stays closed and a shape smaller than one step keeps its anchors on one point. Opening the
+file and saving it again does not bring back the dropped digits. The embedded preview and the PDF that `pdfCompatible: true` adds show the rounded paths. Without `precision` a save writes the coordinates exactly, and Save does not remember it. A `.ai` file ignores
 `precision`. A save writes
 a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
 document uses are written, and document keys written by a newer version are kept.

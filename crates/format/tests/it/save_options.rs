@@ -7,7 +7,9 @@ use std::sync::Arc;
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::links::LinkInfo;
-use vectorcraft_doc::{Appearance, BlendSpec, Document, EnvelopeKind, ImageBlob, ImageObject, LiveShape, Node, NodeKind, OpacityMask, Symbol};
+use vectorcraft_doc::{
+    Appearance, BlendSpec, Document, EnvelopeKind, ImageBlob, ImageObject, LiveShape, MAX_COORD, Node, NodeKind, OpacityMask, Symbol,
+};
 use vectorcraft_format::{
     ICC_MIME, MAX_PRECISION, PRETTY_MAX_BYTES, PRETTY_MAX_OBJECTS, SaveOptions, load, load_file, pdf_content, save_file, save_with,
 };
@@ -323,4 +325,90 @@ fn without_precision_coordinates_are_written_exactly() {
     let at = |p| save_with(&d, &SaveOptions { precision: Some(p), ..SaveOptions::default() }).unwrap();
     assert_eq!(at(200), at(MAX_PRECISION));
     assert!(at(0).len() < at(MAX_PRECISION).len());
+}
+
+/// A document holding one path through `points`.
+fn doc_with_path(points: &[Point], closed: bool) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let path = PathData::single(SubPath::polyline(points, closed));
+    d.insert(Some(layer), 0, Node::path(id, path, Appearance::basic(Paint::None, Paint::None, 0.0))).unwrap();
+    d
+}
+
+/// The first subpath of the first object of `d` saved at `precision` and opened again.
+fn saved_subpath(d: &Document, precision: Option<u8>) -> SubPath {
+    let back = load(&save_with(d, &SaveOptions { precision, ..SaveOptions::default() }).unwrap()).unwrap();
+    let NodeKind::Path { path, .. } = &back.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+    path.subpaths[0].clone()
+}
+
+#[test]
+fn without_precision_every_coordinate_reopens_bit_for_bit() {
+    // 500 anchors at coordinates of every size and sign (a fixed pseudo-random sequence).
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = || {
+        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        let unit = (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+        unit * 10f64.powi((seed % 13) as i32 - 6)
+    };
+    let mut points: Vec<Point> = (0..500).map(|_| Point::new(next(), next())).collect();
+    points.extend([Point::new(MAX_COORD, -1e-300), Point::new(f64::MIN_POSITIVE, -3_999_999.123_456_789)]);
+    let d = doc_with_path(&points, false);
+    let bytes = save_with(&d, &SaveOptions::default()).unwrap();
+    let got: Vec<Point> = saved_subpath(&d, None).anchors.iter().map(|a| a.p).collect();
+    let bits = |ps: &[Point]| ps.iter().map(|p| (p.x.to_bits(), p.y.to_bits())).collect::<Vec<_>>();
+    assert_eq!(bits(&got), bits(&points));
+    // Saving the reopened file writes the same bytes.
+    assert_eq!(save_with(&load(&bytes).unwrap(), &SaveOptions::default()).unwrap(), bytes);
+}
+
+#[test]
+fn precision_rounds_halves_away_from_zero() {
+    // These halves are exact in binary, so the scaled value is exactly .5.
+    let d = doc_with_path(&[Point::new(0.125, -0.125), Point::new(0.375, -0.375), Point::new(1.5, -2.5)], false);
+    let at = |p| saved_subpath(&d, Some(p)).anchors.iter().map(|a| a.p).collect::<Vec<_>>();
+    assert_eq!(at(2), [Point::new(0.13, -0.13), Point::new(0.38, -0.38), Point::new(1.5, -2.5)]);
+    assert_eq!(at(0), [Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(2.0, -3.0)]);
+    // `1.005` is stored as slightly less than the decimal, so it goes down.
+    let d = doc_with_path(&[Point::new(1.005, -1.005)], false);
+    assert_eq!(saved_subpath(&d, Some(2)).anchors[0].p, Point::new(1.0, -1.0));
+}
+
+#[test]
+fn a_rounded_closed_path_stays_closed_on_its_first_anchor() {
+    let first = Point::new(10.123456, 20.987654);
+    let d = doc_with_path(&[first, Point::new(50.55555, 20.4444), Point::new(30.01, 60.996), first], true);
+    let sp = saved_subpath(&d, Some(2));
+    assert!(sp.closed);
+    assert_eq!(sp.anchors.len(), 4);
+    assert_eq!(sp.anchors[0].p, Point::new(10.12, 20.99));
+    assert_eq!(sp.anchors[3].p, sp.anchors[0].p);
+}
+
+#[test]
+fn a_shape_smaller_than_the_precision_keeps_its_anchors_on_one_point() {
+    let d = doc_with_path(&[Point::new(5.0001, 5.0001), Point::new(5.0004, 5.0001), Point::new(5.0002, 5.0004)], true);
+    let sp = saved_subpath(&d, Some(3));
+    assert!(sp.closed);
+    assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [Point::new(5.0, 5.0); 3]);
+}
+
+#[test]
+fn precision_rounds_coordinates_at_the_edge_of_the_canvas() {
+    let points = [Point::new(3_999_999.123_456_789, -3_999_999.987_654_321), Point::new(MAX_COORD, -MAX_COORD)];
+    let d = doc_with_path(&points, false);
+    let at = |p| saved_subpath(&d, Some(p)).anchors.iter().map(|a| a.p).collect::<Vec<_>>();
+    assert_eq!(at(3), [Point::new(3_999_999.123, -3_999_999.988), points[1]]);
+    for (got, want) in at(MAX_PRECISION).iter().zip(&points) {
+        assert!((got.x - want.x).abs() <= 1e-9 && (got.y - want.y).abs() <= 1e-9, "{got:?} vs {want:?}");
+    }
+}
+
+#[test]
+fn saving_a_rounded_file_at_the_same_precision_again_writes_the_same_bytes() {
+    let o = SaveOptions { precision: Some(2), ..SaveOptions::default() };
+    let once = save_with(&precise_doc(), &o).unwrap();
+    assert_eq!(save_with(&load(&once).unwrap(), &o).unwrap(), once);
 }
