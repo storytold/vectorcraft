@@ -1068,6 +1068,72 @@ fn bulleted_and_numbered_lists_are_warned_as_left_out() {
     }
 }
 
+/// A closed path whose anchors' kinds differ from what their handles suggest: a corner with
+/// handles in line, a smooth point with handles that aren't, a smooth point without handles and a
+/// corner.
+fn mixed_kinds() -> vectorcraft_geom::SubPath {
+    use vectorcraft_geom::{Anchor, Point, SubPath};
+    let at = |p: (f64, f64), h_in: (f64, f64), h_out: (f64, f64), kind| Anchor {
+        p: Point::from(p),
+        h_in: Point::from(h_in),
+        h_out: Point::from(h_out),
+        kind,
+    };
+    SubPath::new(
+        vec![
+            at((10.0, 10.0), (0.0, 10.0), (20.0, 10.0), AnchorKind::Corner),
+            at((40.0, 40.0), (40.0, 30.0), (50.0, 50.0), AnchorKind::Smooth),
+            at((70.0, 10.0), (70.0, 10.0), (70.0, 10.0), AnchorKind::Smooth),
+            at((90.0, 10.0), (90.0, 10.0), (90.0, 10.0), AnchorKind::Corner),
+        ],
+        true,
+    )
+}
+
+/// The case of each segment operator written reads back as the kind of the anchor it ends on,
+/// the first anchor's from the segment back to it.
+#[test]
+fn anchor_kinds_read_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let n = shape(&mut doc, PathData::new(vec![mixed_kinds()]), red(), Paint::None);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let read = crate::import(&write(&doc).bytes).unwrap().document;
+    let path = children(&read.layers[0])[0].path_data().unwrap();
+    let want: Vec<_> = mixed_kinds().anchors.iter().map(|a| a.kind).collect();
+    assert_eq!(path.subpaths[0].anchors.iter().map(|a| a.kind).collect::<Vec<_>>(), want, "{path:?}");
+    let points: Vec<_> = path.subpaths[0].anchors.iter().map(|a| (a.p, a.h_in, a.h_out)).collect();
+    let wrote: Vec<_> = mixed_kinds().anchors.iter().map(|a| (a.p, a.h_in, a.h_out)).collect();
+    assert_eq!(points, wrote);
+}
+
+/// An area's frame and the path type runs along keep their anchors' kinds too.
+#[test]
+fn text_paths_keep_their_anchor_kinds() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "Area", style(10.0, Paint::solid(Color::BLACK)));
+    area.kind = TextKind::Area { frame: PathData::new(vec![mixed_kinds()]) };
+    let mut along = mixed_kinds();
+    along.closed = false;
+    let mut on_path = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(10.0, Paint::solid(Color::BLACK)));
+    on_path.kind = TextKind::OnPath { path: PathData::new(vec![along.clone()]), start: 0.0, end: None };
+    for t in [area, on_path] {
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let imported = crate::import(&write(&doc).bytes).unwrap();
+    let found = texts(&imported.document);
+    assert_eq!(found.len(), 2, "{:?}", imported.warnings);
+    let kinds = |p: &PathData| p.subpaths[0].anchors.iter().map(|a| a.kind).collect::<Vec<_>>();
+    let TextKind::Area { frame } = &found[0].1.kind else { panic!("{:?}", found[0].1.kind) };
+    // The frame's anchors after its first, which its handles decide.
+    assert_eq!(kinds(frame).get(1..4), kinds(&PathData::new(vec![mixed_kinds()])).get(1..4), "{frame:?}");
+    let TextKind::OnPath { path, .. } = &found[1].1.kind else { panic!("{:?}", found[1].1.kind) };
+    assert_eq!(kinds(path).get(1..), kinds(&PathData::new(vec![along])).get(1..), "{path:?}");
+}
+
 #[test]
 fn type_reads_back_as_text() {
     use vectorcraft_doc::{Justify, TextKind};

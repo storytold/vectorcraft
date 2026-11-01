@@ -9,9 +9,10 @@
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{CharStyle, Justify, NodeKind, ParaStyle, TextKind, TextObject, TextRun};
-use vectorcraft_geom::PathData;
+use vectorcraft_geom::AnchorKind;
 
 use super::super::obj::V;
+use super::art::path_data;
 use super::{FLIP, GState, Reader};
 use crate::latin;
 
@@ -31,8 +32,8 @@ pub(super) struct LegacyText {
     start: f64,
     /// Between `Tp` and `TP`: the path read is the text path.
     in_path: bool,
-    /// The frame or path, in art space.
-    path: Option<BezPath>,
+    /// The frame or path, in art space, and the kind of the anchor each of its segments ends on.
+    path: Option<(BezPath, Vec<AnchorKind>)>,
     runs: Vec<TextRun>,
     /// Each paragraph's attributes, as they were at its first character.
     paras: Vec<ParaStyle>,
@@ -133,12 +134,13 @@ impl Reader<'_> {
     /// The path painted (or `TP`, ending the text path): the text object's frame or path.
     pub(super) fn text_path(&mut self) {
         let path = std::mem::take(&mut self.path);
+        let kinds = std::mem::take(&mut self.path_kinds);
         self.end_path_quietly();
         if let Some(t) = self.text.as_mut()
             && t.path.is_none()
             && !path.elements().is_empty()
         {
-            t.path = Some(path);
+            t.path = Some((path, kinds));
         }
     }
 
@@ -274,8 +276,10 @@ impl Reader<'_> {
         // Art space → text space (y down).
         let to_text = FLIP * m.inverse();
         let kind = match (t.kind, &t.path) {
-            (1, Some(p)) => TextKind::Area { frame: PathData::from_bezpath(&(to_text * p.clone())) },
-            (2, Some(p)) => TextKind::OnPath { path: PathData::from_bezpath(&(to_text * p.clone())), start: start_fraction(p, t.start), end: None },
+            (1, Some((p, kinds))) => TextKind::Area { frame: path_data(&(to_text * p.clone()), kinds) },
+            (2, Some((p, kinds))) => {
+                TextKind::OnPath { path: path_data(&(to_text * p.clone()), kinds), start: start_fraction(p, t.start), end: None }
+            }
             _ => TextKind::Point,
         };
         let mut obj = TextObject::point(kurbo::Point::ZERO, "", CharStyle::default());

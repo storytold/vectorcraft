@@ -158,6 +158,95 @@ fn paths_colours_and_strokes() {
     assert!(a[4].appearance.fill().is_none() && a[4].appearance.stroke().is_some());
 }
 
+/// Each subpath's anchor kinds, in order.
+fn anchor_kinds(n: &Node) -> Vec<Vec<vectorcraft_geom::AnchorKind>> {
+    let Some(path) = n.path_data() else { panic!("{:?}", n.kind) };
+    path.subpaths.iter().map(|s| s.anchors.iter().map(|a| a.kind).collect()).collect()
+}
+
+/// A path's anchors at (x, y) in document space, and their handles.
+fn anchor_points(n: &Node) -> Vec<[(f64, f64); 3]> {
+    let Some(path) = n.path_data() else { panic!("{:?}", n.kind) };
+    path.subpaths.iter().flat_map(|s| s.anchors.iter()).map(|a| [(a.p.x, a.p.y), (a.h_in.x, a.h_in.y), (a.h_out.x, a.h_out.y)]).collect()
+}
+
+/// A segment operator in lower case makes the anchor it ends on smooth, in upper case a corner
+/// (§5.3.2), whether the segment is straight or curved and whatever its handles: the points and
+/// handles stay where they are.
+#[test]
+fn a_segment_operators_case_sets_the_kind_of_the_anchor_it_ends_on() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let doc = read_ok(&layer("0 0 m\n10 10 20 0 30 0 c\n40 10 50 0 60 0 C\nh\nS\n")).doc;
+    let a = art(&doc);
+    assert_eq!(anchor_kinds(&a[0]), [vec![Corner, Smooth, Corner]], "handles that aren't in line stay a smooth point's");
+    assert_eq!(
+        anchor_points(&a[0]),
+        [[(0.0, 100.0), (0.0, 100.0), (10.0, 90.0)], [(30.0, 100.0), (20.0, 100.0), (40.0, 90.0)], [(60.0, 100.0), (50.0, 100.0), (60.0, 100.0)]]
+    );
+    // `l`, `L`, `v`, `y`, `C` with handles in line (a corner all the same) and `c`, on an open path.
+    let doc = read_ok(&layer("0 0 m\n10 0 l\n20 0 L\n30 10 40 10 v\n50 10 60 10 y\n70 10 80 10 90 10 C\n100 10 110 0 110 0 c\nS\n")).doc;
+    let a = art(&doc);
+    assert_eq!(anchor_kinds(&a[0]), [vec![Corner, Smooth, Corner, Smooth, Smooth, Corner, Smooth]]);
+    assert_eq!(anchor_points(&a[0])[5], [(90.0, 90.0), (80.0, 90.0), (100.0, 90.0)]);
+}
+
+/// A closed path's first anchor takes the kind of the segment back to it; a path closed without
+/// one keeps its first anchor's kind from its handles.
+#[test]
+fn a_closed_paths_start_takes_the_case_of_the_segment_back_to_it() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let start = |close: &str| {
+        let doc = read_ok(&layer(&format!("{close}s\n"))).doc;
+        anchor_kinds(&art(&doc)[0])
+    };
+    assert_eq!(start("0 0 m\n40 0 L\n40 40 L\n0 0 l\n"), [vec![Smooth, Corner, Corner]]);
+    assert_eq!(start("0 0 m\n40 0 l\n40 40 l\n0 0 L\n"), [vec![Corner, Smooth, Smooth]]);
+    // The start's handles are in line, so it would be smooth by them alone.
+    assert_eq!(start("0 0 m\n10 0 40 30 40 40 c\n40 50 -10 0 0 0 C\n"), [vec![Corner, Smooth]]);
+    assert_eq!(start("0 0 m\n10 0 40 30 40 40 C\n40 50 -10 0 0 0 c\n"), [vec![Smooth, Corner]]);
+    assert_eq!(start("0 0 m\n40 0 L\n40 40 l\nh\n"), [vec![Corner, Corner, Smooth]], "no segment back to the start");
+    assert_eq!(start("0 0 m\n40 0 L\n40 40 l\n"), [vec![Corner, Corner, Smooth]], "`s` closes it the same way");
+}
+
+/// Every `m` starts a subpath of its own, in a compound path's members and within one path.
+#[test]
+fn each_subpath_takes_the_case_of_its_own_segments() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let body = "*u\n0 0 m\n10 0 l\n10 10 L\nh\nf\n20 0 m\n30 0 L\n30 10 l\n20 0 l\nf\n*U\n\
+                0 50 m\n10 50 L\n10 60 l\nh\n20 50 m\n30 50 l\n30 60 L\n20 50 l\nf\n";
+    let a = art(&read_ok(&layer(body)).doc);
+    let NodeKind::Compound { children, .. } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(anchor_kinds(&children[0]), [vec![Corner, Smooth, Corner]]);
+    assert_eq!(anchor_kinds(&children[1]), [vec![Smooth, Corner, Smooth]]);
+    assert_eq!(anchor_kinds(&a[1]), [vec![Corner, Corner, Smooth], vec![Smooth, Smooth, Corner]]);
+}
+
+/// Guide paths and clipping paths keep the case of their segments too.
+#[test]
+fn guide_and_clipping_paths_take_the_case_of_their_segments() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let a = art(&read_ok(&layer("(N) *\n10 10 m\n50 10 l\n90 10 L\n(N) *\n")).doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { guide: true, .. }));
+    assert_eq!(anchor_kinds(&a[0]), [vec![Corner, Smooth, Corner]]);
+    let clipped = format!("0 Ae\nq\n{}f\n0 0 m\n30 0 l\n30 30 L\n0 0 l\nh\nW\nn\nQ\n", rect_path(0.0, 0.0, 40.0, 40.0));
+    let a = art(&read_ok(&layer(&clipped)).doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!(anchor_kinds(&children[0]), [vec![Smooth, Smooth, Corner]]);
+}
+
+/// Operands that don't make a segment leave no kind behind, so the kinds after them stay with
+/// their own anchors.
+#[test]
+fn a_segment_that_isnt_read_leaves_the_kinds_in_step() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let a = art(&read_ok(&layer("10 c\n0 0 m\n5 l\n10 0 L\n(x) 20 y\n20 0 l\n30 0 L\nS\n")).doc);
+    assert_eq!(anchor_kinds(&a[0]), [vec![Corner, Corner, Smooth, Corner]]);
+    // A subpath of a lone `m` is a point of its own.
+    let a = art(&read_ok(&layer("5 5 m\n0 0 m\n10 0 l\n20 0 L\nS\n")).doc);
+    assert_eq!(anchor_kinds(&a[0]), [vec![Corner], vec![Corner, Smooth, Corner]]);
+}
+
 /// `Xk` and `XK` are global process colours: a name, a tint and whether the colour is RGB, as
 /// `Xx` has them (#1025). They come in as global swatches that aren't inks, linked at their tint.
 #[test]

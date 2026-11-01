@@ -5,8 +5,8 @@ use super::types::{
     NON_NATIVE_ART_UNREAD, Place,
 };
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node, NodeId,
-    NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
+    Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
+    NodeId, NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
 
 impl<'a> Reader<'a> {
@@ -111,32 +111,45 @@ impl<'a> Reader<'a> {
             return Err("a path has too many points".into());
         }
         let current = self.path.elements().last().and_then(|e| e.end_point());
-        match w {
+        let kind = if w.starts_with(|c: char| c.is_ascii_lowercase()) { AnchorKind::Smooth } else { AnchorKind::Corner };
+        let added = match w {
             "m" => {
                 let Some(a) = p(2) else { return Ok(()) };
                 self.path.move_to(a);
+                return Ok(());
             }
-            _ if current.is_none() => {}
-            "l" | "L" => {
-                if let Some(a) = p(2) {
+            _ if current.is_none() => false,
+            "l" | "L" => match p(2) {
+                Some(a) => {
                     self.path.line_to(a);
+                    true
                 }
-            }
-            "c" | "C" => {
-                if let (Some(a), Some(b), Some(c)) = (p(6), p(4), p(2)) {
+                None => false,
+            },
+            "c" | "C" => match (p(6), p(4), p(2)) {
+                (Some(a), Some(b), Some(c)) => {
                     self.path.curve_to(a, b, c);
+                    true
                 }
-            }
-            "v" | "V" => {
-                if let (Some(cur), Some(b), Some(c)) = (current, p(4), p(2)) {
+                _ => false,
+            },
+            "v" | "V" => match (current, p(4), p(2)) {
+                (Some(cur), Some(b), Some(c)) => {
                     self.path.curve_to(cur, b, c);
+                    true
                 }
-            }
-            _ => {
-                if let (Some(a), Some(c)) = (p(4), p(2)) {
+                _ => false,
+            },
+            _ => match (p(4), p(2)) {
+                (Some(a), Some(c)) => {
                     self.path.curve_to(a, c, c);
+                    true
                 }
-            }
+                _ => false,
+            },
+        };
+        if added {
+            self.path_kinds.push(kind);
         }
         Ok(())
     }
@@ -144,6 +157,7 @@ impl<'a> Reader<'a> {
     /// A path left unpainted before a container opens.
     pub(crate) fn end_path_quietly(&mut self) {
         self.path = BezPath::new();
+        self.path_kinds.clear();
         self.points = 0;
         self.clip_next = false;
     }
@@ -151,6 +165,7 @@ impl<'a> Reader<'a> {
     /// Paint the current path (`op`), as a guide when `guide`.
     pub(super) fn paint(&mut self, op: &str, hidden: bool, guide: bool) -> Result<(), String> {
         let mut bp = std::mem::take(&mut self.path);
+        let kinds = std::mem::take(&mut self.path_kinds);
         self.points = 0;
         let clip = std::mem::take(&mut self.clip_next);
         if let Some(i) = self.instance.take() {
@@ -168,7 +183,7 @@ impl<'a> Reader<'a> {
             _ => None,
         };
         let to_doc = self.space();
-        let path = PathData::from_bezpath(&(to_doc * bp));
+        let path = path_data(&(to_doc * bp), &kinds);
         let gs = self.gs.clone();
         let (fill, stroke) = match op.to_ascii_lowercase().as_str() {
             "f" => (true, false),
@@ -576,6 +591,60 @@ impl<'a> Reader<'a> {
             self.warnings.push(w.to_string());
         }
     }
+}
+
+/// `bp` as a path whose anchors take the kinds in `kinds`, one for each segment of `bp` in order,
+/// for the anchor the segment ends on. A closed subpath's last segment ends on its first anchor
+/// when it returns to the start point, and that anchor takes its kind. Anchors no segment ends on
+/// (a subpath's start) keep the kind [`PathData::from_bezpath`] gives them, and so does a subpath
+/// whose anchors don't match its segments.
+pub(super) fn path_data(bp: &BezPath, kinds: &[AnchorKind]) -> PathData {
+    let mut path = PathData::from_bezpath(bp);
+    // Each subpath's anchors as `from_bezpath` starts them: one for its start, one for each segment.
+    let mut subpaths: Vec<Vec<Option<AnchorKind>>> = Vec::new();
+    let mut kinds = kinds.iter().copied();
+    let mut open = false;
+    for el in bp.elements() {
+        match el {
+            PathEl::MoveTo(_) => {
+                subpaths.push(vec![None]);
+                open = true;
+            }
+            PathEl::ClosePath => open = false,
+            _ => {
+                let kind = kinds.next();
+                match subpaths.last_mut() {
+                    Some(s) if open => s.push(kind),
+                    _ => {
+                        subpaths.push(vec![None, kind]);
+                        open = true;
+                    }
+                }
+            }
+        }
+    }
+    if subpaths.len() != path.subpaths.len() {
+        return path;
+    }
+    for (sp, mut set) in path.subpaths.iter_mut().zip(subpaths) {
+        // The closing anchor merged into the first: its kind goes to the first.
+        if sp.closed
+            && set.len() == sp.anchors.len() + 1
+            && let Some(last) = set.pop()
+            && let Some(first) = set.first_mut()
+        {
+            *first = last;
+        }
+        if set.len() != sp.anchors.len() {
+            continue;
+        }
+        for (a, kind) in sp.anchors.iter_mut().zip(set) {
+            if let Some(kind) = kind {
+                a.kind = kind;
+            }
+        }
+    }
+    path
 }
 
 /// The name of the XML node `o` (its `xmlnode-nodename`) without a namespace prefix (`v:`).

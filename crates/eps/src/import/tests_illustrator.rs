@@ -177,6 +177,22 @@ fn an_illustrator_3_file_without_layers_opens_its_paths_on_one_layer() {
     assert_eq!(art[1].geometric_bounds(), Some(Rect::new(20.0, 50.0, 60.0, 80.0)));
 }
 
+/// In an Illustrator 3 file the case of a segment's operator says whether the anchor it ends on is
+/// smooth (lower case) or a corner (upper case).
+#[test]
+fn an_illustrator_3_files_anchors_are_smooth_or_corners_by_their_operators_case() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let src = PATHS_ONLY.replace("10 10 m\n100 10 L\n50 80 60 90 10 10 C\nn\n", "0 0 m\n10 10 20 0 30 0 c\n40 10 50 0 60 0 C\nh\nS\n");
+    let r = import(src.as_bytes()).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    let path = art[0].path_data().unwrap();
+    let kinds: Vec<_> = path.subpaths[0].anchors.iter().map(|a| a.kind).collect();
+    assert_eq!(kinds, [Corner, Smooth, Corner]);
+    let middle = path.subpaths[0].anchors[1];
+    assert_eq!([(middle.h_in.x, middle.h_in.y), (middle.h_out.x, middle.h_out.y)], [(20.0, 100.0), (40.0, 90.0)]);
+}
+
 /// The same program in a file that doesn't say it is in Illustrator's format is PostScript whose
 /// operators the reader doesn't know: it is still refused.
 #[test]

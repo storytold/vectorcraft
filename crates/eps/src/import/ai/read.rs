@@ -10,7 +10,9 @@
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end.
 //! - Paths: `m`, `l`/`L`, `c`/`C`, `v`/`V`, `y`/`Y`, painted by `N n F f S s B b` (lower case
-//!   closes), `(op) *` for a guide. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
+//!   closes), `(op) *` for a guide. A segment's operator in lower case makes the anchor it ends on
+//!   smooth, in upper case a corner; a closed path's first anchor takes the kind of the segment
+//!   back to it. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
 //! - Names: an `/ArtDictionary` after an object, its `AI10_ArtUID` the name's XML id.
 //! - Artboards: the `ArtboardArray` of the `/Document` dictionary, else `%AI3_Cropmarks`, else
@@ -63,7 +65,7 @@ use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
     LinkInfo, Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer, Unit,
 };
-use vectorcraft_geom::{FillRule, PathData};
+use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
 use super::super::ate::CANVAS_CENTRE;
 use super::lex::{Lexer, Tok};
@@ -145,6 +147,9 @@ struct Reader<'a> {
     gs: GState,
     frames: Vec<Frame>,
     path: BezPath,
+    /// The kind of the anchor each segment of `path` ends on, in order: smooth for a lower-case
+    /// segment operator, corner for an upper-case one (version 7 specification §5.3.2).
+    path_kinds: Vec<AnchorKind>,
     points: usize,
     /// The path is a clipping path (`W`).
     clip_next: bool,
@@ -292,6 +297,7 @@ impl<'a> Reader<'a> {
             gs: GState::default(),
             frames: Vec::new(),
             path: BezPath::new(),
+            path_kinds: Vec::new(),
             points: 0,
             clip_next: false,
             doc,
