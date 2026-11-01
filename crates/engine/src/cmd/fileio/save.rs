@@ -574,6 +574,9 @@ fn blank_pages(doc: &Document) -> Document {
 
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
+/// The same, for a file that carries the editing copy of its art.
+const NOT_PDF_COMPATIBLE_EDITING: &str =
+    "saved without PDF content: VectorCraft and apps that read its editing data open it, other apps show empty pages";
 
 /// `e`, an error of the export encoders, under the save command `cmd` instead of
 /// `document.export`.
@@ -631,6 +634,7 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
     };
     let native = || super::native::ai_native(cmd, doc, &native_options);
     let other_apps: AiEditingData = super::encode::options(f, &params)?;
+    let carries_editing = std::cell::Cell::new(false);
     let private = || {
         if !other_apps.editing_data.unwrap_or(true) {
             return Ok(None);
@@ -651,12 +655,13 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
         let (data, lost) = vectorcraft_eps::ai_private_data(art, &o).map_err(|e| bad(cmd, e))?;
         // Placed files that weren't found are written as their previews here too.
         resolved_warnings.extend(lost);
+        carries_editing.set(true);
         Ok(Some((data, resolved_warnings)))
     };
     let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, &params, native, private)?;
     warnings.extend(placed_warnings);
     if !pdf_compatible {
-        warnings.push(NOT_PDF_COMPATIBLE.to_string());
+        warnings.push(if carries_editing.get() { NOT_PDF_COMPATIBLE_EDITING } else { NOT_PDF_COMPATIBLE }.to_string());
     }
     Ok(Encoded { warnings, ..Encoded::one(bytes) })
 }
