@@ -3,70 +3,83 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    craft-fonts = {
+      url = "github:storytold/craft-fonts";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
+  outputs = { self, nixpkgs, rust-overlay, craft-fonts }:
+    let
+      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+
+      version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
+
+      commonDeps = with pkgs; [
+        # pkg-config
+        libxkbcommon
+        libx11
+        libxcursor
+        libxrandr
+        libxi
+        libxcb
+        libgcc
+        libGL
+        vulkan-loader
+        wayland
+        fontconfig
+        freetype
+        alsa-lib
+        zlib
+      ];
+      
+      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
+        inherit system;
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-
-        rust = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [ "rustfmt" "clippy" "rust-src" ];
+      });
+    in
+    {
+      devShells = forAllSystems ({ pkgs, ... }: {
+        let
+          rust = pkgs.rust-bin.stable.latest.default.override {
+            extensions = [ "rustfmt" "clippy" "rust-src" ];
+          };
+        in
+        {
+          default = pkgs.mkShell {
+            nativeBuildInputs = with pkgs; [
+              rust
+              libclang
+            ];
+            buildInputs = commonDeps;
+  
+            shellHook = ''
+              export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+            '';
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
+              # Graphic APIs
+              libGL
+              vulkan-loader
+              # Wayland support
+              wayland
+              libxkbcommon
+              # X11 support
+              libx11
+              libxcursor
+              libxrandr
+              libxi
+              libxcb
+            ]);
+          };
         };
+      });
 
-        version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
-
-        commonDeps = with pkgs; [
-          pkg-config
-          libxkbcommon
-          libx11
-          libxcursor
-          libxrandr
-          libxi
-          libxcb
-          libgcc
-          libGL
-          vulkan-loader
-          wayland
-          fontconfig
-          freetype
-          alsa-lib
-          zlib
-        ];
-      in
-      {
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            rust
-            libclang
-          ];
-          buildInputs = commonDeps;
-
-          shellHook = ''
-            export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
-          '';
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
-            # Graphic APIs
-            libGL
-            vulkan-loader
-            # Wayland support
-            wayland
-            libxkbcommon
-            # X11 support
-            libx11
-            libxcursor
-            libxrandr
-            libxi
-            libxcb
-          ]);
-        };
-
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+      packages = forAllSystems ({ pkgs, ... }: {
+        default = pkgs.rustPlatform.buildRustPackage {
           pname = "vectorcraft";
           version = version;
           src = ./.;
@@ -83,7 +96,7 @@
             autoPatchelfHook
           ];
           buildInputs = commonDeps;
-
+  
           runtimeDependencies = with pkgs; [
             # Graphic APIs
             libGL
@@ -98,13 +111,25 @@
             libxi
             libxcb
           ];
-
+          env = pkgs.lib.optionalAttrs (craft-fonts != null) {
+            CRAFT_FONTS_DIR = "${craft-fonts}";
+          };
           doCheck = false;
+          meta = {
+            license = with pkgs.lib.licenses; [ mit asl20 ofl ];
+            maintainers = [ { name = "SaB131X"; email = "sea1024wm@gmail.com"; } ];
+            description = "Vector illustration; an open-source, modern vector art application, built in pure Rust.";
+            homepage = "https://github.com/storytold/vectorcraft";
+            platforms = systems;
+          };
         };
+      });
 
-        apps.default = {
+      apps = forAllSystems ({ pkgs, system, ... }: {
+        default = {
           type = "app";
           program = "${self.packages.${system}.default}/bin/vectorcraft";
         };
       });
+    };
 }
