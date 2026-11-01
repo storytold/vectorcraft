@@ -64,6 +64,16 @@ fn guides_paste_in_place_onto_another_artboard_and_cut_removes_them() {
     let mut at: Vec<f64> = guides(&s).iter().map(|g| g.1).collect();
     at.sort_by(f64::total_cmp);
     assert_eq!(at, [a.x0 + 30.0, b.x0 + 30.0, b.x0 + 30.0]);
+    // Cut with an object and a guide selected takes both away, in one undo step.
+    let rect = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    let before = guides(&s).len();
+    run(&mut s, "select.set", json!({"ids": [rect]}));
+    run(&mut s, "guide.select", json!({"indexes": [0], "toggle": true}));
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "edit.cut", json!({}));
+    assert!(s.doc().unwrap().doc.node(NodeId(rect)).is_none());
+    assert_eq!(guides(&s).len(), before - 1, "the selected guide goes too");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     // Nothing selected: Copy is off.
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("edit.copy", &json!({})).is_err());

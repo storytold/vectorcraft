@@ -193,7 +193,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
             has_selection_or_guides,
             clear
         ),
@@ -698,7 +698,8 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let ids = selected_roots(s)?;
     copy(s, p)?;
-    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids })) } else { clear(s, &json!({})) }
+    // The selected ruler guides it copied go with the objects, in the same undo step (#3226).
+    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids, "guides": true })) } else { clear(s, &json!({})) }
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -712,8 +713,9 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return super::docmenu::guide_remove(s, &json!({}));
     }
     let st = s.doc()?;
-    // Guides selected with the art go with it (not when ids are given).
-    let with_guides = explicit.is_none();
+    // Guides selected with the art go with it (not when ids are given, unless `guides` says so:
+    // Cut, which names the objects it copied).
+    let with_guides = explicit.is_none() || bool_or(p, "guides", false);
     let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
     // Keep the selected ids themselves, without promoting compound members. Delete a selected
     // ancestor just once; its selected descendants leave with it. Layers themselves are kept.
