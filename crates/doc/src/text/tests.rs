@@ -194,13 +194,13 @@ fn number_styles_write_their_numbers_and_roll_over() {
     assert_eq!(ParaList::numbered(NumberStyle::UpperRoman).marker(4), "IV.");
     assert_eq!(ParaList::bulleted(Bullet::Square).marker(4), "\u{25AA}");
     let (num, dot) = (Some(ParaList::numbered(NumberStyle::Arabic)), Some(ParaList::bulleted(Bullet::Dot)));
-    let mut count = 0;
+    let mut count = ListCounts::default();
     let markers: Vec<Option<String>> = [(num, false), (num, true), (dot, false), (num, false), (None, false), (num, false)]
         .iter()
         .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut count))
         .collect();
     assert_eq!(markers, [Some("1.".into()), None, Some("\u{2022}".into()), Some("2.".into()), None, Some("1.".into())]);
-    assert_eq!(count, 1);
+    assert_eq!(count.parts(), (1, vec![]));
     let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
     assert_eq!(read(serde_json::json!({"bullet": "dash"})), ParaList::bulleted(Bullet::Dash));
     assert_eq!(read(serde_json::json!({"number": "threeDigits"})), ParaList::numbered(NumberStyle::ThreeDigits));
@@ -209,6 +209,20 @@ fn number_styles_write_their_numbers_and_roll_over() {
         serde_json::to_value(ParaList::numbered(NumberStyle::LowerRoman)).unwrap(),
         serde_json::json!({"bullet": "dot", "number": "lowerRoman"})
     );
+}
+
+/// A list's marker alignment: Left by default and not saved, Right saved as `"align": "right"`;
+/// a list saved without it reads as Left.
+#[test]
+fn a_list_saves_its_marker_alignment_only_when_it_is_right() {
+    let right = ParaList::numbered(NumberStyle::Arabic).aligned(ListAlign::Right);
+    assert_eq!(ParaList::bulleted(Bullet::Dot).align, ListAlign::Left);
+    assert_eq!(serde_json::to_value(right).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "align": "right"}));
+    assert_eq!(serde_json::to_value(ParaList::bulleted(Bullet::Dash)).unwrap(), serde_json::json!({"bullet": "dash"}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
+    assert_eq!(read(serde_json::json!({"bullet": "dot", "number": "arabic", "align": "right"})), right);
+    assert_eq!(read(serde_json::json!({"bullet": "square"})).align, ListAlign::Left);
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"align": "center"})).is_err());
 }
 
 /// Typed list detection: "1.", "1)", "A." and "A)" and a space at the start of a paragraph
@@ -237,6 +251,70 @@ fn typed_list_starts_are_found_at_a_paragraphs_start() {
     t.set_paragraph_styles(styles);
     assert_eq!(t.typed_list_at(9), None, "a list paragraph stays as it is");
     assert_eq!(t.typed_list_at(19), Some((16, letters)));
+}
+
+/// List levels: each level counts its own numbers, a deeper paragraph starts its count at 1,
+/// a paragraph back at a shallower level goes on with that level's count, and a paragraph in
+/// no list starts every level again. A level past the first sets the paragraph 18 pt further
+/// in; the file saves the level only when it is not 1, and a level outside 1 to 9 reads as the
+/// nearest one. A type object's counts save level 1 and the deeper levels apart.
+#[test]
+fn list_levels_count_their_own_numbers_and_save_only_past_the_first() {
+    let num = |level| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level));
+    let dot = |level| Some(ParaList::bulleted(Bullet::Dot).at_level(level));
+    let mut counts = ListCounts::default();
+    let markers: Vec<Option<String>> = [
+        (num(1), false),
+        (num(2), false),
+        (num(2), false),
+        (num(3), false),
+        (num(2), true),
+        (num(2), false),
+        (num(1), false),
+        (num(2), false),
+        (dot(1), false),
+        (num(2), false),
+        (num(1), false),
+        (None, false),
+        (num(2), false),
+    ]
+    .iter()
+    .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut counts))
+    .collect();
+    let want = ["1.", "1.", "2.", "1.", "", "3.", "2.", "1.", "\u{2022}", "1.", "3.", "", "1."];
+    assert_eq!(markers.iter().map(|m| m.as_deref().unwrap_or("")).collect::<Vec<_>>(), want);
+    assert_eq!(counts, ListCounts([0, 1, 0, 0, 0, 0, 0, 0, 0]));
+    assert_eq!((ParaList::default().level, ParaList::bulleted(Bullet::Dot).depth()), (1, 1));
+    assert_eq!([0, 1, 4, 9, 12].map(|l| ParaList::bulleted(Bullet::Dot).at_level(l).depth()), [1, 1, 4, 9, 9]);
+    assert_eq!([1, 2, 9].map(|l| ParaList::bulleted(Bullet::Dot).at_level(l).level_indent()), [0.0, 18.0, 144.0]);
+    let para = ParaStyle { left_indent: 18.0, list: dot(3), ..Default::default() };
+    assert_eq!((para.laid_out_left_indent(), ParaStyle { list: None, ..para.clone() }.laid_out_left_indent()), (54.0, 18.0));
+    assert_eq!(serde_json::to_value(dot(1)).unwrap(), serde_json::json!({"bullet": "dot"}));
+    assert_eq!(serde_json::to_value(num(4)).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "level": 4}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
+    assert_eq!((read(serde_json::json!({"bullet": "dash"})).level, read(serde_json::json!({"level": 4}))), (1, dot(4).unwrap()));
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"level": "two"})).is_err());
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"level": 2.5})).is_err());
+    let levels = [serde_json::json!(0), serde_json::json!(-1), serde_json::json!(12), serde_json::json!(300), serde_json::json!(u64::MAX)];
+    assert_eq!(
+        levels.map(|l| read(serde_json::json!({ "level": l })).level),
+        [1, 1, 9, 9, 9],
+        "a saved level outside 1 to 9 reads as the nearest one"
+    );
+    let deep = ListCounts([5, 0, 2, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(deep.parts(), (5, vec![0, 2]));
+    assert_eq!((ListCounts::from_parts(5, &[0, 2]), ListCounts::default().parts()), (deep, (0, vec![])));
+    let mut t = TextObject::point(Point::ZERO, "Text", CharStyle::default());
+    t.set_list_counts(deep);
+    assert_eq!((t.list_count, t.list_level_counts.as_slice(), t.list_counts()), (5, &[0, 2][..], deep));
+    let saved = serde_json::to_value(&t).unwrap();
+    assert_eq!((&saved["listCount"], &saved["listLevelCounts"]), (&serde_json::json!(5), &serde_json::json!([0, 2])));
+    t.set_list_counts(ListCounts::default());
+    assert!(serde_json::to_value(&t).unwrap().get("listLevelCounts").is_none(), "no counts past level 1 are saved without them");
+    let mut saved = serde_json::to_value(&t).unwrap();
+    saved["listLevelCounts"] = serde_json::json!((1..=20).collect::<Vec<u32>>());
+    let opened = serde_json::from_value::<TextObject>(saved).unwrap();
+    assert_eq!(opened.list_level_counts, (1..=8).collect::<Vec<u32>>(), "a file keeps only the counts of levels 2 to 9");
 }
 
 #[test]

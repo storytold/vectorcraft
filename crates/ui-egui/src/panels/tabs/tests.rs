@@ -406,9 +406,32 @@ fn lower_marker_keeps_each_first_line_position_in_one_undo_step() {
 
 #[test]
 fn lower_marker_bounds_cover_each_touched_first_line() {
-    let targets = [IndentTarget { id: 1, start: 0, left: 24.0, first_line: -20.0 }, IndentTarget { id: 1, start: 4, left: 24.0, first_line: 280.0 }];
+    let targets = [
+        IndentTarget { id: 1, start: 0, left: 24.0, first_line: -20.0, level: 0.0 },
+        IndentTarget { id: 1, start: 4, left: 24.0, first_line: 280.0, level: 0.0 },
+    ];
     assert_eq!(bounded_marker_position(IndentMarker::Lower, 40.0, 300.0, &targets, true), Some(20.0));
     assert_eq!(bounded_marker_position(IndentMarker::Lower, 1200.0, 300.0, &targets, false), Some(300.0));
+    // A paragraph at list level 2 is laid out 18 pt further in: its own left indent stays at 0 or more.
+    let listed = [IndentTarget { id: 1, start: 0, left: 18.0, first_line: 0.0, level: 18.0 }];
+    assert_eq!(bounded_marker_position(IndentMarker::Lower, 5.0, 300.0, &listed, true), Some(18.0));
+}
+
+/// A list paragraph at level 2 is laid out 18 pt further in than its left indent: the ruler shows
+/// its markers there, and a marker moved on the ruler sets the paragraph's own left indent.
+#[test]
+fn indent_markers_show_and_set_a_list_paragraphs_laid_out_indent() {
+    let mut app = indent_app(10.0, 6.0);
+    app.run("text.setFormat", json!({"list": "bullet", "listLevel": 2})).unwrap();
+    let para = current_para(&app).unwrap().1;
+    assert_eq!((marker_position(IndentMarker::Lower, &para), marker_position(IndentMarker::Upper, &para)), (28.0, 34.0));
+    let ctx = egui::Context::default();
+    marker_event(&ctx, &mut app, 28.0, 40.0, false, true, false);
+    assert_eq!(indent_values(&app, 0), (22.0, 6.0), "the ruler's 40 pt is the paragraph's 22 pt and the level's 18");
+    marker_event(&ctx, &mut app, 46.0, 70.0, true, false, false);
+    assert_eq!(indent_values(&app, 0), (22.0, 30.0));
+    marker_event(&ctx, &mut app, 40.0, 20.0, false, false, false);
+    assert_eq!(indent_values(&app, 0), (2.0, 50.0), "the first line stays at 70 pt");
 }
 
 #[test]
@@ -932,7 +955,8 @@ fn panel_menu_does_not_change_stops_while_an_indent_marker_is_selected() {
 }
 
 /// Repeat Tab on the first stop spaces the copies by the stop's distance from the paragraph's
-/// left indent, from the paragraph the caret is in while the Type tool edits text.
+/// left indent (18 pt further in for each list level past the first), from the paragraph the
+/// caret is in while the Type tool edits text.
 #[test]
 fn repeat_tab_measures_the_first_stop_from_the_left_indent() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -951,6 +975,11 @@ fn repeat_tab_measures_the_first_stop_from_the_left_indent() {
     app.session.execute("text.tabs.set", &json!({"stops": [{"position": 5}]})).unwrap();
     choose(&ctx, &mut app, "Repeat Tab");
     assert_eq!(positions(&app)[..4], [5.0, 20.0, 35.0, 50.0]);
+    // A list paragraph at level 2 is set 18 pt further in, at 38: copies every 12 pt.
+    app.session.execute("text.setFormat", &json!({"list": "bullet", "listLevel": 2})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}]})).unwrap();
+    choose(&ctx, &mut app, "Repeat Tab");
+    assert_eq!(positions(&app)[..3], [50.0, 62.0, 74.0]);
     // The Type tool's caret in the second paragraph, indented 40 pt: its stop at 50 repeats
     // every 10 pt, and the first paragraph keeps its stop.
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

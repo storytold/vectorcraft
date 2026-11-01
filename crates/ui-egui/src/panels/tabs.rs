@@ -54,8 +54,11 @@ enum IndentMarker {
 struct IndentTarget {
     id: u64,
     start: usize,
+    /// The left indent as laid out: the paragraph's own plus its list level's ([`Self::level`]).
     left: f64,
     first_line: f64,
+    /// How much further in the paragraph's list level sets it than its own left indent.
+    level: f64,
 }
 
 fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &mut Vec<IndentTarget>) {
@@ -65,7 +68,8 @@ fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &m
     starts.extend(plain.bytes().enumerate().filter_map(|(i, c)| (c == b'\n').then_some(i + 1)));
     targets.extend(range.filter_map(|i| {
         let para = text.para_at(i);
-        Some(IndentTarget { id: node.id.0, start: *starts.get(i)?, left: para.left_indent, first_line: para.first_line_indent })
+        let left = para.laid_out_left_indent();
+        Some(IndentTarget { id: node.id.0, start: *starts.get(i)?, left, first_line: para.first_line_indent, level: left - para.left_indent })
     }));
 }
 
@@ -103,13 +107,14 @@ fn bounded_marker_position(marker: IndentMarker, target: f64, span: f64, targets
         IndentMarker::Upper => {
             (targets.iter().map(|p| p.left - 1296.0).fold(0.0_f64, f64::max), targets.iter().map(|p| p.left + 1296.0).fold(span, f64::min))
         }
+        // A paragraph's own left indent stays within 0 to 1296 pt, its list level's indent added.
         IndentMarker::Lower if both => (
-            targets.iter().map(|p| -p.first_line).fold(0.0_f64, f64::max),
-            targets.iter().map(|p| span - p.first_line).fold(span.min(1296.0), f64::min),
+            targets.iter().map(|p| p.level.max(-p.first_line)).fold(0.0_f64, f64::max),
+            targets.iter().map(|p| (span - p.first_line).min(p.level + 1296.0)).fold(span, f64::min),
         ),
         IndentMarker::Lower => (
-            targets.iter().map(|p| p.left + p.first_line - 1296.0).fold(0.0_f64, f64::max),
-            targets.iter().map(|p| p.left + p.first_line + 1296.0).fold(span.min(1296.0), f64::min),
+            targets.iter().map(|p| p.level.max(p.left + p.first_line - 1296.0)).fold(0.0_f64, f64::max),
+            targets.iter().map(|p| (p.left + p.first_line + 1296.0).min(p.level + 1296.0)).fold(span, f64::min),
         ),
     };
     (low <= high).then(|| target.clamp(low, high))
@@ -196,27 +201,33 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
                 app.status(e);
             }
         }
-    } else if both {
-        if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", json!({"leftIndent": target})) {
-            app.status(e);
-        }
-    } else if targets.iter().all(|p| p.left + p.first_line == marker_position(IndentMarker::Upper, para)) {
-        if let Err(e) = super::paragraph::run_on_paragraphs(
-            app,
-            "text.setFormat",
-            json!({"leftIndent": target, "firstLineIndent": marker_position(IndentMarker::Upper, para) - target}),
-        ) {
-            app.status(e);
-        }
     } else {
+        // The ruler shows each paragraph's left indent with its list level's added; the paragraph
+        // keeps its own.
+        let upper = marker_position(IndentMarker::Upper, para);
+        let level = targets.first().map(|p| p.level).filter(|l| targets.iter().all(|p| p.level == *l));
+        let params = match level {
+            Some(level) if both => Some(json!({"leftIndent": target - level})),
+            Some(level) if targets.iter().all(|p| p.left + p.first_line == upper) => {
+                Some(json!({"leftIndent": target - level, "firstLineIndent": upper - target}))
+            }
+            _ => None,
+        };
+        if let Some(params) = params {
+            if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", params) {
+                app.status(e);
+            }
+            return;
+        }
         super::character::end_typing(app);
         let commands: Vec<Value> = targets
             .iter()
             .map(|p| {
-                json!({"command": "text.setFormat", "params": {
-                    "ids": [p.id], "start": p.start, "end": p.start,
-                    "leftIndent": target, "firstLineIndent": p.left + p.first_line - target
-                }})
+                let mut params = json!({"ids": [p.id], "start": p.start, "end": p.start, "leftIndent": target - p.level});
+                if !both {
+                    params["firstLineIndent"] = json!(p.left + p.first_line - target);
+                }
+                json!({"command": "text.setFormat", "params": params})
             })
             .collect();
         if let Err(e) = app.run("command.batch", json!({"label": tl!("Left Indent"), "commands": commands})) {
@@ -231,7 +242,9 @@ fn current(app: &VectorcraftApp) -> Option<(Node, Vec<TabStop>, f64)> {
     current_para(app).map(|(n, para, span)| (n, para.tabs, span))
 }
 
-/// As [`current`], with all the attributes of the paragraph whose stops the panel shows.
+/// As [`current`], with all the attributes of the paragraph whose stops the panel shows, its left
+/// indent as laid out ([`ParaStyle::laid_out_left_indent`]: its list level's indent added), where
+/// the ruler shows it.
 fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     let editing = super::character::text_editing(app);
     let n = match editing {
@@ -244,7 +257,8 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
         TextKind::Area { frame } => frame.bounds().map_or(360.0, |b| b.width()),
         _ => 360.0,
     };
-    let para = t.para_at(para).clone();
+    let para = t.para_at(para);
+    let para = ParaStyle { left_indent: para.laid_out_left_indent(), ..para.clone() };
     Some((n, para, span.max(72.0)))
 }
 
@@ -569,6 +583,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         snap_to_unit_item(ui);
         return;
     };
+    // `current_para` gives the left indent with the list level's indent added.
+    let left_indent = para.left_indent;
     let mut stops = para.tabs;
     let selected_marker: Option<IndentMarker> = pstate(ui.ctx(), "tabs-marker-sel");
     // Clamp the selection to the last stop, as `show` does for the ruler.
@@ -586,10 +602,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         apply(app, &stops);
     }
     // Repeat Tab: copies of the selected stop across the ruler, spaced by its distance from the
-    // previous stop, or from the paragraph's left indent when it is the first stop.
+    // previous stop, or from the paragraph's left indent plus its list level's indent when it is
+    // the first stop.
     if menu_item(ui, tl!("Repeat Tab"), sel < stops.len() && selected_marker.is_none(), false) {
         let step = match sel {
-            0 => (stops[0].position - para.left_indent).abs(),
+            0 => (stops[0].position - left_indent).abs(),
             _ => stops[sel].position - stops[sel - 1].position,
         }
         .max(1.0);

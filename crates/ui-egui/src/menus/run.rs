@@ -250,6 +250,7 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "type.applyBullets" => crate::panels::paragraph::apply_bullets(app, p),
         "type.applyNumbers" => crate::panels::paragraph::apply_numbers(app, p),
+        "ui.bulletsAndNumbering" => crate::dialogs::bullets_numbering::open(app, p),
         _ => return None,
     };
     Some(r)

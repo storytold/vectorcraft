@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use kurbo::{Affine, BezPath, ParamCurve, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
-use vectorcraft_doc::text::Kashida;
+use vectorcraft_doc::text::{Kashida, ListAlign};
 use vectorcraft_doc::{
     Burasagari, CharStyle, HyphenationOptions, InlineArt, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect,
     RubyAlign, RubyPosition, SingleWordJustify, TextKind, TextObject,
@@ -149,12 +149,16 @@ impl Ctx<'_> {
     /// before its glyphs `sg` and return how many glyphs went in (none for a paragraph without a
     /// marker). The marker's characters are set in
     /// [`vectorcraft_doc::text::ParaList::marker_style`], and a tab after them takes the text to
-    /// the next tab stop past them on the first line, the left indent counting as a stop when no
-    /// explicit stop comes before it. In a horizontal right-to-left paragraph, whose indents are
-    /// mirrored ([`line_indents`]), these are measured from the right, and a number reads left to
-    /// right with its period at its left. The tab keeps that width however the line is aligned or
-    /// justified. Each of these glyphs stands for no character of the text: length 0, at the
-    /// paragraph's first byte, in its first character's run, at the paragraph's embedding level.
+    /// the next tab stop past them on the first line, the left indent plus its list level's indent
+    /// ([`ParaStyle::laid_out_left_indent`]) counting as a stop when no explicit stop comes before
+    /// it. With the list's [`ListAlign::Right`] that tab goes before them instead, with the same
+    /// width: the marker ends where the text starts, and the text starts where it does with
+    /// [`ListAlign::Left`]. In a horizontal right-to-left paragraph,
+    /// whose indents are mirrored ([`line_indents`]), these are measured from the right, and a
+    /// number reads left to right with its period at its left. The tab keeps that width however
+    /// the line is aligned or justified. Each of these glyphs stands for no character of the
+    /// text: length 0, at the paragraph's first byte, in its first character's run, at the
+    /// paragraph's embedding level.
     fn prepend_marker(&self, pr: &Range<usize>, para: &ParaStyle, text: Option<&str>, rtl: bool, sg: &mut Vec<SGlyph>) -> usize {
         let Some(text) = text.filter(|_| para.list.is_some() && !pr.is_empty()) else { return 0 };
         let st = vectorcraft_doc::text::ParaList::marker_style(self.style_at(pr.start));
@@ -183,11 +187,16 @@ impl Ctx<'_> {
         tab.dy = 0.0;
         tab.tcy = None;
         tab.vpal = None;
-        let pen = para.left_indent + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
-        let to_indent = para.left_indent - pen;
-        let stop_before_indent = para.tabs.iter().any(|t| t.position > pen + EPS && t.position < para.left_indent - EPS);
+        let left = para.laid_out_left_indent();
+        let pen = left + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
+        let to_indent = left - pen;
+        let stop_before_indent = para.tabs.iter().any(|t| t.position > pen + EPS && t.position < left - EPS);
         tab.adv = if to_indent > EPS && !stop_before_indent { to_indent } else { tab_advance(&para.tabs, 0.0, pen, sg).0 };
-        marker.push(tab);
+        if para.list.is_some_and(|l| l.align == ListAlign::Right) {
+            marker.insert(0, tab);
+        } else {
+            marker.push(tab);
+        }
         let n = marker.len();
         sg.splice(0..0, marker);
         n

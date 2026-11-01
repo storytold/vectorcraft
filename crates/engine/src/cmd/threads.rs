@@ -168,6 +168,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     || next.paras != t.paras
                     || optical != t.optical_margin
                     || part.list_count != t.list_count
+                    || part.list_level_counts != t.list_level_counts
                     || continues != t.first_para_continues
                 {
                     t.runs = next.runs;
@@ -175,6 +176,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     t.paras = next.paras;
                     t.optical_margin = optical;
                     t.list_count = part.list_count;
+                    t.list_level_counts = part.list_level_counts;
                     t.first_para_continues = continues;
                     refresh_bounds(t);
                 }
@@ -188,14 +190,15 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
 }
 
 /// Type that is not a frame of a thread is a story of its own: its numbered list paragraphs count
-/// from 1. Each such type object with another [`TextObject::list_count`] (a copy of a frame, a
-/// frame taken out of its thread, a frame converted to point type, which [`reflow`] takes out of
-/// its thread) gets 0 and is laid out again.
+/// from 1. Each such type object with another [`TextObject::list_count`] or
+/// [`TextObject::list_level_counts`] (a copy of a frame, a frame taken out of its thread, a frame
+/// converted to point type, which [`reflow`] takes out of its thread) gets 0 at every level and is
+/// laid out again.
 pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
     let mut stale = vec![];
     doc.walk(|n| {
         if let NodeKind::Text(t) = &n.kind
-            && t.list_count != 0
+            && (t.list_count != 0 || !t.list_level_counts.is_empty())
         {
             stale.push(n.id);
         }
@@ -212,6 +215,7 @@ pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
     for id in stale {
         if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
             t.list_count = 0;
+            t.list_level_counts.clear();
             refresh_bounds(t);
         }
     }
@@ -363,13 +367,13 @@ fn cut_to_shown(n: &mut Node, ids: &[NodeId]) {
     {
         // Split as `take_overflow` splits it: the first part is what the frame shows.
         let from: &TextObject = t;
-        let parts = vectorcraft_text::thread::distribute_continuing(
+        let parts = vectorcraft_text::thread::distribute_continuing_levels(
             vectorcraft_text::FontDb::global(),
             &[from, from],
             &from.runs,
             &from.paragraph_styles(),
             from.first_para_continues,
-            from.list_count,
+            from.list_counts(),
         );
         if let (Some(head), Some(_)) = (parts.first(), parts.get(1).filter(|p| p.runs.iter().any(|r| !r.text.is_empty()))) {
             t.runs = head.runs.clone();
@@ -404,13 +408,13 @@ fn take_overflow(d: &mut Document, to: NodeId, from: &TextObject) {
     // `from`'s text split as if it flowed on into a second frame: the second part is what `from`
     // has no room for. Its share is measured as it is laid out, continuing a paragraph or not and
     // with its numbered list paragraphs counted on from the frames before it.
-    let parts = vectorcraft_text::thread::distribute_continuing(
+    let parts = vectorcraft_text::thread::distribute_continuing_levels(
         db,
         &[from, from],
         &from.runs,
         &from.paragraph_styles(),
         from.first_para_continues,
-        from.list_count,
+        from.list_counts(),
     );
     let Some(rest) = parts.get(1).filter(|p| p.runs.iter().any(|r| !r.text.is_empty())) else { return };
     let mut tail = from.clone();

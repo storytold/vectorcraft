@@ -434,6 +434,36 @@ fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_
     assert_eq!(lists(&app), (None, None));
 }
 
+/// More Options at the end of the Bullets presets opens Bullets and Numbering on its Bullets
+/// tab, and at the end of the Numbered List presets on its Numbers tab.
+#[test]
+fn more_options_opens_bullets_and_numbering_on_its_tab() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, _) = editing_text("One\nTwo");
+    select_range(&mut app, 0, 0);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let numbers = std::cell::Cell::new(false);
+    let row = std::cell::Cell::new(egui::Rect::NOTHING);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
+        let r = ui.horizontal(|ui| if numbers.get() { numbers_button(app, ui, 28.0) } else { bullets_button(app, ui, 28.0) });
+        row.set(r.response.rect);
+    };
+    for (on_numbers, tab) in [(false, "bullets"), (true, "numbers")] {
+        numbers.set(on_numbers);
+        super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
+        let arrow = row.get().min + vec2(28.0 + 7.0, 14.0);
+        super::super::tests_appearance::click(&ctx, &mut app, arrow, &mut draw);
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
+        let at = super::super::tests_appearance::text_rect(&texts, "More Options").center();
+        super::super::tests_appearance::click(&ctx, &mut app, at, &mut draw);
+        let d = app.ui.dialog.take().unwrap_or_else(|| panic!("More Options opens the dialog from the {tab} presets"));
+        assert_eq!((d.kind.as_str(), d.str("tab")), ("bulletsAndNumbering", tab.to_string()));
+    }
+    app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("bulletsAndNumbering"));
+}
+
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`) acts on the
 /// paragraphs the Type tool's selection touches: their numbers become characters of the text
 /// and their list goes, while the other paragraphs stay in the list, and the Type tool's caret

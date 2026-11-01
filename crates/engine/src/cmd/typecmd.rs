@@ -1170,7 +1170,7 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let cell = lay.frames.first()?;
     let line = lay.lines.first()?;
     let para = t.para_at(0);
-    let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
+    let avail = cell.width() - 2.0 * t.area.inset - para.laid_out_left_indent() - para.right_indent;
     Some((line.x1 - line.x0, avail, line.end))
 }
 

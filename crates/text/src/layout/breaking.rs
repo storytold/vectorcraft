@@ -191,7 +191,7 @@ pub(super) fn tab_advance<'t>(tabs: &'t [vectorcraft_doc::TabStop], origin: f64,
 
 /// The width of glyphs `from..to` of `sg` set on a line whose content starts `x_start` from the
 /// tab origin: tabs of the text take what [`tab_advance`] gives them, not the width of their
-/// glyph. The tab after a list marker (length 0) keeps its own width.
+/// glyph. The tab of a list marker (length 0) keeps its own width.
 pub(super) fn set_width(sg: &[SGlyph], from: usize, to: usize, tabs: &[vectorcraft_doc::TabStop], x_start: f64) -> f64 {
     let mut x = x_start;
     for (j, g) in sg.iter().enumerate().take(to).skip(from) {
@@ -312,7 +312,8 @@ pub(super) fn break_line(
                 }
             }
         }
-        let cluster_width: f64 = if gl.ch == '\t' {
+        // A list marker's glyphs, its tab included, keep their own widths.
+        let cluster_width: f64 = if gl.ch == '\t' && gl.len > 0 {
             tab_advance(tabs, 0.0, x_start + x, g.get(cluster_end..).unwrap_or_default()).0
         } else {
             g[j..cluster_end].iter().map(|glyph| glyph.adv).sum()
@@ -347,14 +348,14 @@ pub(super) fn break_line(
     if j >= g.len() {
         return (g.len(), false);
     }
-    // Hyphenate the word that overflows.
-    let word_start = last_break.map_or(i, |b| b.0);
+    // Hyphenate the word that overflows. A list marker starting the line is not part of a word.
+    let word_start = last_break.map_or(first, |b| b.0);
     let in_zone = |zone: f64| {
         let mut te = word_start;
-        while te > i && g[te - 1].is_space() {
+        while te > first && g[te - 1].is_space() {
             te -= 1;
         }
-        te > i && zone > 0.0 && width - g[i..te].iter().map(|g| g.adv).sum::<f64>() <= zone + EPS
+        te > first && zone > 0.0 && width - g[i..te].iter().map(|g| g.adv).sum::<f64>() <= zone + EPS
     };
     if let Some((opts, zone)) = hyphenate
         && g[j].is_letter()
@@ -553,7 +554,9 @@ pub(super) fn candidates(text: &str, g: &[SGlyph], hyphenate: Option<&Hyphenatio
     let mut v = vec![];
     let mut ws = 0;
     for (j, gl) in g.iter().enumerate() {
-        let end_of_word = gl.is_space() || gl.break_after();
+        // A list marker (the glyphs of length 0 here) ends before the first word.
+        let marker_end = gl.len == 0 && g.get(j + 1).is_some_and(|n| n.len > 0);
+        let end_of_word = gl.is_space() || gl.break_after() || marker_end;
         if end_of_word {
             if let Some(opts) = hyphenate
                 && j > ws

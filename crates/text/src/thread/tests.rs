@@ -326,6 +326,40 @@ fn a_list_paragraph_continued_onto_a_path_has_no_bullet_there() {
     assert_eq!(layout(db, &alone).markers.len(), 1);
 }
 
+/// List levels: each level's count runs on through the frames, a deeper level in the next
+/// frame going on with the count its paragraphs reached in the frame before.
+#[test]
+fn list_levels_count_on_through_the_frames() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let db = FontDb::global();
+    let (a, mut b) = (frame(0.0), frame(200.0));
+    b.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(200.0, 0.0, 320.0, 400.0)) };
+    let at = |level| ParaStyle {
+        list: Some(ParaList::numbered(NumberStyle::Arabic).at_level(level)),
+        left_indent: 18.0,
+        first_line_indent: -18.0,
+        ..Default::default()
+    };
+    let numbers = |f: &TextObject, s: &Slice| {
+        let mut t = f.clone();
+        t.runs = s.runs.clone();
+        t.set_paragraph_styles(s.paras.clone());
+        t.set_list_counts(s.list_counts());
+        layout(db, &t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    // One item at level 1 and eleven at level 2: 1. then 1. to 11. through both frames.
+    let paras: Vec<ParaStyle> = (0..12).map(|i| at(if i == 0 { 1 } else { 2 })).collect();
+    let text = (1..=12).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let story = vec![TextRun { text, style: CharStyle::default(), inline: None }];
+    let parts = distribute(db, &[&a, &b], &story, &paras);
+    let first = numbers(&a, &parts[0]);
+    assert!((2..12).contains(&first.len()), "both frames hold items: {first:?}");
+    let both: Vec<String> = [first.clone(), numbers(&b, &parts[1])].concat();
+    let expected: Vec<String> = std::iter::once("1.".to_string()).chain((1..=11).map(|n| format!("{n}."))).collect();
+    assert_eq!(both, expected);
+    assert_eq!((parts[1].list_count, parts[1].list_level_counts.clone()), (1, vec![first.len() as u32 - 1]));
+}
+
 #[test]
 fn short_story_leaves_later_frames_empty_with_a_style() {
     let db = FontDb::global();

@@ -543,8 +543,10 @@
 	Built-in presets don't change: New… starts an editable copy.	Els preajustos integrats no canvien: Nou… inicia una còpia editable.
 	Bulge…	Abombament…
 	Bullet	Punt de llista
+	Bullet Character:	Caràcter del punt de llista:
 	Bullets	Punts de llista
 	Bullets and Numbering	Punts i numeració
+	Bullets and Numbering…	Punts i numeració…
 	Burasagari	Burasagari
 	Burlap	Arpillera
 	Business Card 3.5 × 2 in	Targeta de visita 3,5 × 2 in
@@ -1570,6 +1572,7 @@ digits	Malayalam	Malaiàlam
 	First Artboard	Primer tauler
 	First Baseline	Primera línia de base
 	First commit	Primera confirmació
+	First Line Indent:	Sagnia de primera línia:
 	First Page	Primera pàgina
 	First-line Left Indent	Sagnia esquerra de primera línia
 	Fisheye…	Ull de peix…
@@ -2125,6 +2128,7 @@ digits	Malayalam	Malaiàlam
 	Left Grid:	Quadrícula esquerra:
 	Left in Front	Esquerra al davant
 	Left Indent	Sagnia esquerra
+	Left Indent:	Sagnia esquerra:
 	Left Plane	Pla esquerre
 	Left to Right	D’esquerra a dreta
 	Left-Justified Tab	Tabulació alineada a l’esquerra
@@ -2634,8 +2638,10 @@ digits	Malayalam	Malaiàlam
 	Number of Decimals:	Nombre de decimals:
 	Number of Recent Files to Display	Nombre de fitxers recents que es mostraran
 	Number of Recent Fonts	Nombre de tipus de lletra recents
+	Number Style:	Estil de número:
 	Number:	Número:
 	Numbered List	Llista numerada
+	Numbers	Números
 	Numbers Without Units Are Points	Els nombres sense unitats són punts
 	Object	Objecte
 	Object Highlighting	Ressaltat d’objectes
