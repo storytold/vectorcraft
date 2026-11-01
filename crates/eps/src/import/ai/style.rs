@@ -52,6 +52,9 @@ const FEATHER: &str = "Adobe Feather"; // brand-ok: the filter's name in the fil
 const SHADOW: &str = "Adobe Drop Shadow"; // brand-ok: the filter's name in the files
 const DEFORM: &str = "Adobe Deform"; // brand-ok: the filter's name in the files
 const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the files
+/// Effect › Path › Outline Object.
+const OUTLINE_TYPE: &str = "Adobe Outline Type"; // brand-ok: the filter's name in the files
+const OUTLINE_STROKE: &str = "Adobe Outline Stroke"; // brand-ok: the filter's name in the files
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
@@ -94,9 +97,10 @@ pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
-    /// no transparency or effects of their own, and only Outer Glow, Feather and Drop Shadow on the
-    /// object: what any object is read with. Type takes the other plain styles too (its drawn look
-    /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
+    /// no transparency or effects of their own, and only Outer Glow, Feather, Drop Shadow and the
+    /// Path effects (Offset Path, Outline Object, Outline Stroke) on the object: what any object is
+    /// read with. Type takes the other plain styles too (its drawn look can't be retyped); other
+    /// objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
@@ -148,6 +152,16 @@ impl Default for ItemLook {
     }
 }
 
+/// How a filter's dictionary writes an entry: `value /Int (key) ,`, `/Real`, `/Bool`, or another
+/// type (`(text) /UnicodeString (key) ,`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
+    Int,
+    Real,
+    Bool,
+    Other,
+}
+
 #[derive(Debug)]
 struct Filter {
     name: String,
@@ -156,6 +170,8 @@ struct Filter {
     parent: Option<usize>,
     compound: bool,
     params: HashMap<String, f64>,
+    /// How each key of its dictionary is written.
+    kinds: HashMap<String, Kind>,
     /// Its dictionary's arrays (`/Array : v /Real , … ; (key) ,`), by key.
     arrays: HashMap<String, Vec<f64>>,
     fill: Option<Paint>,
@@ -184,6 +200,7 @@ impl Default for Filter {
             parent: None,
             compound: false,
             params: HashMap::new(),
+            kinds: HashMap::new(),
             arrays: HashMap::new(),
             fill: None,
             stroke: None,
@@ -223,6 +240,8 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     };
     let mut array: Option<Vec<V>> = None;
     let mut dict_array: Option<Vec<f64>> = None;
+    // A name in a basic filter that may be an entry's type, with the string that follows it.
+    let mut other_entry: Option<Option<String>> = None;
     let mut lex = Lexer::new(data);
     while let Some(t) = lex.next_token() {
         if let (Some(a), Tok::Num(v)) = (array.as_mut(), &t.tok) {
@@ -231,13 +250,18 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
         }
         match t.tok {
             Tok::Num(v) => operands.push(V::Num(v)),
-            Tok::Str(s) | Tok::Hex(s) => operands.push(V::Str(s)),
+            Tok::Str(s) | Tok::Hex(s) => {
+                if let Some(key @ None) = other_entry.as_mut() {
+                    *key = Some(String::from_utf8_lossy(&s).into_owned());
+                }
+                operands.push(V::Str(s));
+            }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
                     finish(name.take(), &mut filters);
                     operands.clear();
                     open.clear();
-                    (pending, in_basic) = (None, false);
+                    (pending, in_basic, other_entry) = (None, false, None);
                 }
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
                 b"CompoundFilter" => pending = Some(true),
@@ -271,18 +295,37 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                         a.extend(value);
                         continue;
                     }
+                    let kind = match n {
+                        b"Int" => Kind::Int,
+                        b"Real" => Kind::Real,
+                        _ => Kind::Bool,
+                    };
                     // The key follows: `value /Real (key) ,`.
-                    if let (Some(value), Some(Tok::Str(key))) = (value, lex.next_token().map(|t| t.tok))
+                    if let Some(Tok::Str(key)) = lex.next_token().map(|t| t.tok)
                         && let Some(f) = filters.last_mut()
                     {
-                        f.params.insert(String::from_utf8_lossy(&key).into_owned(), value);
+                        let key = String::from_utf8_lossy(&key).into_owned();
+                        match value {
+                            Some(value) => f.params.insert(key.clone(), value),
+                            None => f.params.remove(&key),
+                        };
+                        f.kinds.insert(key, kind);
                     }
                     continue;
                 }
+                // Perhaps an entry of another type (`(text) /UnicodeString (key) ,`): its key, if
+                // any, is the string before the `,`.
+                _ if in_basic => other_entry = Some(None),
                 _ => {}
             },
             Tok::Word(w) => {
+                let entry = other_entry.take().flatten();
                 let op = std::str::from_utf8(w).unwrap_or_default();
+                if op == ","
+                    && let (Some(key), Some(f)) = (entry, filters.last_mut())
+                {
+                    f.kinds.insert(key, Kind::Other);
+                }
                 if op == "[" {
                     array = Some(vec![]);
                     continue;
@@ -428,6 +471,45 @@ fn width_profile(arrays: &HashMap<String, Vec<f64>>) -> Option<WidthProfile> {
     (!uniform).then_some(WidthProfile { points })
 }
 
+/// The largest offset Offset Path reads, in points (the effect's own limit).
+const MAX_OFFSET: f64 = 1e5;
+
+/// Effect › Path: Offset Path with its Offset, Joins and Miter Limit
+/// (https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/offset-duplicate-objects.html),
+/// Outline Object and Outline Stroke, which have no settings. Offset Path's keys are LiveEffect
+/// XML's: `ofst` in points, `jntp` 0 round, 1 bevel or 2 miter, and `mlim`
+/// (https://community.adobe.com/questions-652/illustrator-javascript-count-area-with-offset-782386).
+/// `None`: a missing, unknown or out-of-range setting, or one of another kind, which keeps the
+/// drawn look; there is no default to stand in for a missing one.
+fn path_effect(f: &Filter) -> Option<Effect> {
+    if !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
+        return None;
+    }
+    let (id, params) = match f.name.as_str() {
+        OFFSET => {
+            const KEYS: [(&str, Kind); 3] = [("ofst", Kind::Real), ("jntp", Kind::Int), ("mlim", Kind::Real)];
+            if f.kinds.len() != KEYS.len() || KEYS.iter().any(|(key, kind)| f.kinds.get(*key) != Some(kind)) {
+                return None;
+            }
+            let value = |key: &str| f.params.get(key).copied().filter(|v| v.is_finite());
+            let offset = value("ofst").filter(|v| v.abs() <= MAX_OFFSET)?;
+            let miter = value("mlim").filter(|v| (1.0..=500.0).contains(v))?;
+            let joins = match value("jntp")? {
+                0.0 => "round",
+                1.0 => "bevel",
+                2.0 => "miter",
+                _ => return None,
+            };
+            ("path.offsetPath", json!({"offset": offset, "joins": joins, "miterLimit": miter}))
+        }
+        // Outline Stroke without a `width`: the stroke it is on, or the object's, gives it.
+        OUTLINE_STROKE if f.kinds.is_empty() => ("path.outlineStroke", json!({})),
+        OUTLINE_TYPE if f.kinds.is_empty() => ("path.outlineObject", json!({})),
+        _ => return None,
+    };
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
 /// The live effect filter `f` is, when it is one read here.
 fn effect(f: &Filter) -> Option<Effect> {
     let param = |k: &str| f.params.get(k).copied().filter(|v| v.is_finite());
@@ -477,15 +559,7 @@ fn effect(f: &Filter) -> Option<Effect> {
                 }),
             )
         }
-        // `jntp`: 0 round, 1 bevel, 2 miter (the joins LiveEffect XML writes in public scripts).
-        OFFSET => (
-            "path.offsetPath",
-            json!({
-                "offset": param("ofst").unwrap_or(10.0).clamp(-1e5, 1e5),
-                "joins": match param("jntp").map(|v| v as i64) { Some(0) => "round", Some(1) => "bevel", _ => "miter" },
-                "miterLimit": param("mlim").unwrap_or(4.0).clamp(1.0, 500.0),
-            }),
-        ),
+        OFFSET | OUTLINE_TYPE | OUTLINE_STROKE => return path_effect(f),
         // Art space has y up: a move up is a negative `moveV` in the document.
         TRANSFORM => (
             "distort.transform",
@@ -657,7 +731,12 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(|e| matches!(e.id.as_str(), "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow"));
+        && st.effects.iter().all(|e| {
+            matches!(
+                e.id.as_str(),
+                "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow" | "path.offsetPath" | "path.outlineObject" | "path.outlineStroke"
+            )
+        });
     st
 }
 

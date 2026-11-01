@@ -2906,14 +2906,18 @@ fn comic_style() -> String {
     let rim = compound(
         "Chain Style Filter",
         &[
-            basic("Adobe Offset Path", "3 /Real (ofst) ,\n0 /Int (jntp) ,\n"),
+            basic("Adobe Offset Path", "3 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n"),
             fill("0 0 0 0 1 1 1 Xa"),
             basic("Adobe Transform", "6 /Int (numCopies) ,\n1 /Real (moveH_Pts) ,\n"),
         ],
     );
     let red = compound(
         "Chain Style Filter",
-        &[fill("0 1 1 0 1 0 0 Xa"), basic("Blend Style Filter", "/BlendStyle : 1 0.5 0 0 0 Xy\n/Def ;\n (BlendStyle) ,\n")],
+        &[
+            basic("Adobe Outline Type", ""),
+            fill("0 1 1 0 1 0 0 Xa"),
+            basic("Blend Style Filter", "/BlendStyle : 1 0.5 0 0 0 Xy\n/Def ;\n (BlendStyle) ,\n"),
+        ],
     );
     let stack = compound("Stack Style Filter", &[red, rim, basic("Conduit Filter", "")]);
     format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Comic) /Name ,\n/ActiveStyle :\n{}%AI9_EndArtStyles\n", compound("Chain Style Filter", &[stack]))
@@ -2944,6 +2948,7 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
         let [AppearanceItem::Fill(rim), AppearanceItem::Fill(red)] = a.items.as_slice() else { panic!("{a:?}") };
         assert_eq!(rim.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["path.offsetPath", "distort.transform"]);
         assert_eq!((red.blend, red.opacity), (BlendMode::Multiply, 0.5));
+        assert_eq!(red.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["path.outlineObject"]);
         assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
     };
     let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
