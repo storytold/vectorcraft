@@ -665,6 +665,10 @@ impl Tool for SelectionTool {
         self.alt_hover
     }
 
+    fn resizing(&self) -> bool {
+        matches!(self.state, State::Scaling { .. })
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
