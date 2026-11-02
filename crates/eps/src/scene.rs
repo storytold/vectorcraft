@@ -142,8 +142,9 @@ pub(crate) struct Scene<'a> {
     cms: Arc<vectorcraft_color::cms::Cms>,
     body: String,
     setup: String,
-    /// Spot colour spaces defined in the setup (`VCsp<i>`): swatch name and CMYK equivalent.
-    spots: Vec<(String, [f32; 4])>,
+    /// Spot colour spaces defined in the setup (`VCsp<i>`): swatch name, colorant name
+    /// ([`Scene::colorant_name`]) and CMYK equivalent.
+    spots: Vec<(String, String, [f32; 4])>,
     /// DeviceN color spaces defined in the setup (`VCdn<i>`), as their definitions.
     device_n: Vec<String>,
     warnings: Vec<String>,
@@ -191,7 +192,12 @@ impl<'a> Scene<'a> {
     }
 
     fn page(self) -> Page {
-        let custom = self.spots.iter().filter(|(n, _)| n != vectorcraft_color::swatch::REGISTRATION).cloned().collect();
+        let custom = self
+            .spots
+            .iter()
+            .filter(|(n, ..)| n != vectorcraft_color::swatch::REGISTRATION)
+            .map(|(_, colorant, cmyk)| (colorant.clone(), *cmyk))
+            .collect();
         Page { setup: self.setup, body: self.body, custom, warnings: self.warnings }
     }
 
@@ -235,7 +241,7 @@ impl<'a> Scene<'a> {
     /// The index of the Separation colour space of spot swatch (or Registration) `name`, defined
     /// in the setup the first time; `None` when `name` is neither.
     fn spot_space(&mut self, name: &str) -> Option<usize> {
-        if let Some(i) = self.spots.iter().position(|(n, _)| n == name) {
+        if let Some(i) = self.spots.iter().position(|(n, ..)| n == name) {
             return Some(i);
         }
         let registration = name == vectorcraft_color::swatch::REGISTRATION;
@@ -249,15 +255,35 @@ impl<'a> Scene<'a> {
         };
         let i = self.spots.len();
         let _ = write!(self.setup, "/VCsp{i} [/Separation ");
-        if registration {
+        let colorant = if registration {
             self.setup.push_str("/All /DeviceCMYK {dup dup dup}");
+            "All".to_string()
         } else {
+            let colorant = self.colorant_name(name);
             let [c, m, y, k] = cmyk.map(|v| ps::num(f64::from(v)));
-            let _ = write!(self.setup, "{} cvn /DeviceCMYK {{dup {c} mul exch dup {m} mul exch dup {y} mul exch {k} mul}}", ps::string(name));
-        }
+            let _ = write!(self.setup, "{} cvn /DeviceCMYK {{dup {c} mul exch dup {m} mul exch dup {y} mul exch {k} mul}}", ps::string(&colorant));
+            colorant
+        };
         self.setup.push_str("] def\n");
-        self.spots.push((name.to_string(), cmyk));
+        self.spots.push((name.to_string(), colorant, cmyk));
         Some(i)
+    }
+
+    /// The colorant name spot swatch `name` is written under: its own name, except that `All`
+    /// (every plate in PostScript) and `None` (no plate) become `All Spot` and `None Spot`,
+    /// numbered `All Spot 2`, `All Spot 3`, … past the names of the document's spot swatches.
+    fn colorant_name(&self, name: &str) -> String {
+        if name != "All" && name != "None" {
+            return name.to_string();
+        }
+        let taken = |c: &str| self.doc.swatches_iter().any(|s| s.spot && s.name == c);
+        let mut colorant = format!("{name} Spot");
+        let mut n = 2;
+        while taken(&colorant) {
+            colorant = format!("{name} Spot {n}");
+            n += 1;
+        }
+        colorant
     }
 
     fn set_ink(&mut self, ink: Ink) {
@@ -819,26 +845,28 @@ impl<'a> Scene<'a> {
     }
 
     /// A DeviceN color space of process inks `process` (indices into CMYK) and spot inks `names`,
-    /// defined in the setup the first time, each spot ink with the CMYK equivalent its Separation
-    /// space has. `None` when a spot ink has no Separation space, two colorants share a name, a
-    /// spot ink has the name of a process ink, `All` or `None`, or there are more than
-    /// [`MAX_DEVICE_N`] colorants.
+    /// defined in the setup the first time, each spot ink under the colorant name and with the
+    /// CMYK equivalent its Separation space has. `None` when a spot ink has no Separation space,
+    /// two colorants share a name, a spot ink's colorant has the name of a process ink, `All` or
+    /// `None`, or there are more than [`MAX_DEVICE_N`] colorants.
     fn device_n_space(&mut self, process: &[usize], names: &[String]) -> Option<GradientSpace> {
         const PROCESS: [&str; 4] = ["Cyan", "Magenta", "Yellow", "Black"];
         if process.len() + names.len() > MAX_DEVICE_N {
             return None;
         }
-        let mut colorants: Vec<&str> = process.iter().map(|&i| PROCESS[i]).collect();
+        let mut colorants: Vec<String> = process.iter().map(|&i| PROCESS[i].to_string()).collect();
         let mut weights: Vec<[f32; 4]> = process.iter().map(|&i| [0, 1, 2, 3].map(|j| if i == j { 1.0 } else { 0.0 })).collect();
-        for (i, name) in names.iter().enumerate() {
-            if PROCESS.contains(&name.as_str()) || name == "All" || name == "None" || names[..i].contains(name) {
+        let spots: Vec<String> = names.iter().map(|n| self.colorant_name(n)).collect();
+        for (i, name) in spots.iter().enumerate() {
+            if PROCESS.contains(&name.as_str()) || name == "All" || name == "None" || spots[..i].contains(name) {
                 return None;
             }
         }
         for name in names {
-            colorants.push(name);
             let i = self.spot_space(name)?;
-            weights.push(self.spots.get(i)?.1);
+            let (_, colorant, cmyk) = self.spots.get(i)?;
+            colorants.push(colorant.clone());
+            weights.push(*cmyk);
         }
         let mut def = String::from("[/DeviceN [");
         for (i, c) in colorants.iter().enumerate() {

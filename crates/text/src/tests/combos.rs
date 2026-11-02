@@ -53,7 +53,7 @@ fn area(runs: Vec<TextRun>, frame: Rect) -> TextObject {
 }
 
 /// `t` as Shrink Text to Fit lays it out at factor `f`, without fitting: sizes, explicit leading
-/// and baseline shifts scaled (inline art's own shift too), paragraph spacing kept.
+/// and baseline shifts scaled (inline art's own shift and tate-chu-yoko offsets too), paragraph spacing kept.
 fn scaled_by(t: &TextObject, f: f64) -> TextObject {
     let mut s = t.clone();
     s.area.fit = AreaFit::None;
@@ -61,6 +61,8 @@ fn scaled_by(t: &TextObject, f: f64) -> TextObject {
         r.style.size *= f;
         r.style.leading = r.style.leading.map(|l| l * f);
         r.style.baseline_shift *= f;
+        r.style.tcy_up_down *= f;
+        r.style.tcy_left_right *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }

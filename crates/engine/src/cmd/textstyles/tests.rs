@@ -206,6 +206,58 @@ fn character_style_options_edit_applies_to_users_and_is_one_saved_undo_step() {
 }
 
 #[test]
+fn character_style_options_edit_sets_the_advanced_character_formats() {
+    let (mut s, id) = session_with_text("First second");
+    s.execute("charStyle.new", &json!({"name":"Body", "attrs":{"h_scale":100.0,"rotation":0.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name":"Body", "id":id})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id":id,"start":6,"end":12,"rotation":30.0})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let attrs = json!({"h_scale":80.0,"v_scale":120.0,"baseline_shift":-2.0,"rotation":15.0,"language":"German"});
+    s.execute("charStyle.edit", &json!({"name":"Body","to":"Body","attrs":attrs})).unwrap();
+    let changed = s.doc().unwrap().doc.clone();
+    let def = changed.char_styles.iter().find(|d| d.name == "Body").unwrap();
+    assert_eq!(def.attrs["language"], json!("de"));
+    assert_eq!(
+        runs(&s, id)
+            .iter()
+            .map(|r| (r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone()))
+            .collect::<Vec<_>>(),
+        [(80.0, 120.0, -2.0, 15.0, Some("de".to_string())), (80.0, 120.0, -2.0, 30.0, Some("de".to_string()))]
+    );
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&changed, false)).unwrap();
+    assert_eq!(saved.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs, def.attrs);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, changed);
+}
+
+#[test]
+fn character_style_options_edit_keeps_a_language_tag_from_a_file() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name":"Body", "attrs":{}})).unwrap();
+    if let Some(def) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.iter_mut().find(|d| d.name == "Body") {
+        def.attrs.insert("language".into(), json!("x-file"));
+    }
+    s.execute("charStyle.edit", &json!({"name":"Body","to":"Body","attrs":{"size":18.0,"language":"x-file"}})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs["language"], json!("x-file"));
+    let error = s.execute("charStyle.edit", &json!({"name":"Body","to":"Body","attrs":{"language":"x-other"}})).unwrap_err().to_string();
+    assert!(error.contains("unknown language"), "{error}");
+}
+
+#[test]
+fn new_character_style_keeps_a_language_tag_from_the_text() {
+    let (mut s, id) = session_with_text("Text");
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        t.runs[0].style.language = Some("x-file".into());
+    }
+    s.execute("charStyle.new", &json!({"name":"Body","id":id,"attrs":{"size":18.0,"language":"x-file"}})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs["language"], json!("x-file"));
+    let error = s.execute("charStyle.new", &json!({"name":"Other","id":id,"attrs":{"language":"x-other"}})).unwrap_err().to_string();
+    assert!(error.contains("unknown language"), "{error}");
+}
+
+#[test]
 fn editing_character_style_clears_removed_size_without_losing_local_override() {
     let (mut s, id) = session_with_text("One two");
     s.execute("charStyle.setAttrs", &json!({"name": NORMAL_CHAR, "attrs": {"size": 15.0}})).unwrap();

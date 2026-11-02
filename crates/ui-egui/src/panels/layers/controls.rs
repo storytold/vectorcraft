@@ -1,7 +1,7 @@
 use super::model::{ObjectKind, RowState, names, parse_names, toggled};
 use super::{
-    Document, HashSet, LayersDrag, Node, NodeId, NodeKind, PanelDrag, Sense, Stroke, StrokeKind, Ui, Value, VectorcraftApp, View, json,
-    last_selected, see_selection, vec2, widgets,
+    Document, HashSet, LayersDrag, Node, NodeId, NodeKind, PanelDrag, Sense, Stroke, Ui, Value, VectorcraftApp, View, json, last_selected,
+    see_selection, vec2, widgets,
 };
 
 /// The Filter button, lit while a filter is on, and its popup: Clear All, the object kinds under
@@ -90,7 +90,7 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
         let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
             || (cmd == "layer.delete" && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
         if over {
-            child.painter().rect_stroke(button.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            widgets::drop_target_outline(&child, button.rect);
         }
     }
     // Create New Sublayer: Alt asks for its options first, and Ctrl/Cmd+Alt puts it under the

@@ -4,11 +4,8 @@
 //! resolves, for each area text object, the outlines of the wrap objects above it into
 //! `TextObject::wrap` (text space); the layout engine subtracts them from each line's span.
 
-use std::sync::Arc;
-
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind, TextKind, TextWrap, WrapShape};
-use vectorcraft_geom::{PathData, shapes};
+use vectorcraft_doc::{Document, NodeId, NodeKind, TextWrap};
 
 use super::typecmd::refresh_bounds;
 use super::{CommandSpec, EngineError, Result, Session, bool_or, checked_ids_or_selection, cmd, f64_or, has_selection};
@@ -102,93 +99,10 @@ fn options(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "offset": w.offset, "invert": w.invert }))
 }
 
-/// Outline of a wrap object in document coordinates: its paths, or its bounds for other art.
-fn outline(n: &Node, out: &mut PathData) {
-    match &n.kind {
-        NodeKind::Path { path, guide: false, .. } => {
-            out.subpaths.extend(path.subpaths.iter().filter(|sp| sp.closed || sp.anchors.len() > 2).cloned())
-        }
-        NodeKind::Compound { children, .. } | NodeKind::Group { children, clip: false } => {
-            for c in children.iter().filter(|c| c.visible) {
-                outline(c, out);
-            }
-        }
-        // A clip group wraps by its clipping path.
-        NodeKind::Group { children, clip: true } => {
-            if let Some(c) = children.first() {
-                outline(c, out);
-            }
-        }
-        _ => {
-            if let Some(b) = n.geometric_bounds() {
-                out.subpaths.extend(shapes::rectangle(b).subpaths);
-            }
-        }
-    }
-}
-
-enum Item<'a> {
-    Wrap(&'a Node),
-    Text(NodeId),
-}
-
-fn collect<'a>(n: &'a Node, out: &mut Vec<Item<'a>>) {
-    if !n.visible {
-        return;
-    }
-    if n.extras().wrap.is_some() && !matches!(n.kind, NodeKind::Layer { .. }) {
-        out.push(Item::Wrap(n));
-        return;
-    }
-    match &n.kind {
-        NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => out.push(Item::Text(n.id)),
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
-            for c in children {
-                collect(c, out);
-            }
-        }
-        _ => {}
-    }
-}
-
 /// Re-resolve the wrap shapes of every area text object (called after each edit).
 pub(crate) fn refresh(before: &Document, doc: &mut Document) {
-    let mut updates: Vec<(NodeId, Vec<WrapShape>)> = vec![];
-    for (idx, layer) in doc.layers.iter().enumerate() {
-        if before.layers.get(idx).is_some_and(|b| Arc::ptr_eq(b, layer)) || before.layers.iter().any(|b| b.id == layer.id && Arc::ptr_eq(b, layer)) {
-            continue;
-        }
-        let mut items = vec![];
-        collect(layer, &mut items);
-        if items.is_empty() {
-            continue;
-        }
-        for (i, it) in items.iter().enumerate() {
-            let Item::Text(id) = it else { continue };
-            let Some(NodeKind::Text(t)) = doc.node(*id).map(|n| &n.kind) else { continue };
-            let inv = t.xf.inverse();
-            let shapes: Vec<WrapShape> = items[i + 1..]
-                .iter()
-                .filter_map(|w| match w {
-                    Item::Wrap(n) => {
-                        let mut pd = PathData::default();
-                        outline(n, &mut pd);
-                        (!pd.is_empty()).then(|| {
-                            pd.transform(inv);
-                            WrapShape { path: pd, wrap: n.extras().wrap.unwrap_or_default() }
-                        })
-                    }
-                    Item::Text(_) => None,
-                })
-                .collect();
-            if shapes != t.wrap {
-                updates.push((*id, shapes));
-            }
-        }
-    }
-    for (id, shapes) in updates {
+    for id in vectorcraft_doc::text::resolve_wrap(Some(before), doc) {
         if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
-            t.wrap = shapes;
             refresh_bounds(t);
         }
     }

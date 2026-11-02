@@ -98,7 +98,7 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     app.run("ui.savePdfDialog", json!({"path": "/tmp/w.pdf"})).unwrap();
     set_field(&mut app, "security.printing", json!("low"));
     super::super::confirm(&mut app).unwrap();
-    assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("permissions"), "{}", app.ui.status);
+    assert!(app.ui.status.contains("1 note:") && app.ui.status.contains("permissions"), "{}", app.ui.status);
     assert!(opened.borrow().is_empty(), "not opened unless asked");
     app.run("ui.savePdfDialog", json!({"path": "/tmp/bad.pdf"})).unwrap();
     set_field(&mut app, "__allArtboards", json!(false));
@@ -140,7 +140,7 @@ fn an_image_that_couldnt_be_decoded_is_named_in_the_status() {
     vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [60, 50]}));
     app.run("ui.savePdfDialog", json!({"path": "/tmp/cut.pdf"})).unwrap();
     super::super::confirm(&mut app).unwrap();
-    assert_eq!(app.ui.status, "Saved /tmp/cut.pdf with 1 note(s): an image couldn't be decoded and is missing from the picture");
+    assert_eq!(app.ui.status, "Saved /tmp/cut.pdf with 1 note: an image couldn't be decoded and is missing from the picture");
     assert_eq!(written.borrow().len(), 1);
 }
 
