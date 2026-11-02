@@ -366,6 +366,42 @@ fn ibeam(p: &mut Ink, o: Pos2) {
     line(p, o + vec2(-2.0, 3.0), o + vec2(2.0, 3.0));
 }
 
+/// A type tool over a path: the Text I-beam (turned a quarter turn for vertical type) with a badge
+/// below right of it, as the Pen and the Blend tool mark what a click does: a small frame with
+/// lines of type in it for area type inside a closed path, a smooth curve with a point on it for
+/// type along a path.
+fn type_in_path(p: &mut Ink, o: Pos2, vertical: bool, on_path: bool) {
+    let at = |x: f32, y: f32| if vertical { o + vec2(-y, x) } else { o + vec2(x, y) };
+    line(p, at(0.0, -8.0), at(0.0, 8.0));
+    line(p, at(-3.0, -8.0), at(3.0, -8.0));
+    line(p, at(-3.0, 8.0), at(3.0, 8.0));
+    line(p, at(-2.0, 3.0), at(2.0, 3.0));
+    let b = o + if vertical { vec2(2.0, 6.0) } else { vec2(6.0, 2.0) };
+    if on_path {
+        // A quarter-wave rising to the right, smooth at this size.
+        let curve: Vec<Pos2> = (0..=16)
+            .map(|i| {
+                let t = i as f32 / 16.0;
+                b + vec2(10.0 * t, 8.0 - 8.0 * (t * std::f32::consts::FRAC_PI_2).sin().powf(1.6))
+            })
+            .collect();
+        strokes(p, &[curve]);
+        let dot = b + vec2(4.0, 8.0 - 8.0 * (0.4 * std::f32::consts::FRAC_PI_2).sin().powf(1.6));
+        p.circle_filled(dot, 2.4, HALO);
+        p.circle_filled(dot, 1.5, INK);
+    } else {
+        poly(p, vec![b, b + vec2(9.0, 0.0), b + vec2(9.0, 9.0), b + vec2(0.0, 9.0)], HALO, INK);
+        let rows: Vec<Vec<Pos2>> = if vertical {
+            [6.5, 4.5, 2.5].iter().map(|&x| vec![b + vec2(x, 2.5), b + vec2(x, 6.5)]).collect()
+        } else {
+            [2.5, 4.5, 6.5].iter().map(|&y| vec![b + vec2(2.5, y), b + vec2(6.5, y)]).collect()
+        };
+        for r in rows {
+            p.add(Shape::line(r, Stroke::new(1.0, INK)));
+        }
+    }
+}
+
 /// The Blend tool: a crosshair with a square below right of the hotspot, hollow away from art,
 /// filled over an object; over an anchor point a ringed dot (the blend starts there).
 fn blend(p: &mut Ink, o: Pos2, badge: Cursor) {
@@ -440,7 +476,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 89] = [
+const GLYPHS: [Cursor; 93] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -519,6 +555,10 @@ const GLYPHS: [Cursor; 89] = [
     Cursor::SymbolScreener,
     Cursor::SymbolStyler,
     Cursor::TypeVertical,
+    Cursor::TypeArea,
+    Cursor::TypeAreaVertical,
+    Cursor::TypeOnPath,
+    Cursor::TypeOnPathVertical,
     Cursor::Scissors,
     Cursor::MeshAdd,
     Cursor::PuppetPin,
@@ -605,6 +645,10 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PenJoin => pen(ink, p, "j"),
         Cursor::PenConvert => pen(ink, p, "^"),
         Cursor::Text => ibeam(ink, p),
+        Cursor::TypeArea => type_in_path(ink, p, false, false),
+        Cursor::TypeAreaVertical => type_in_path(ink, p, true, false),
+        Cursor::TypeOnPath => type_in_path(ink, p, false, true),
+        Cursor::TypeOnPathVertical => type_in_path(ink, p, true, true),
         Cursor::AddStop => stop_badge(ink, p, true),
         Cursor::RemoveStop => stop_badge(ink, p, false),
         Cursor::Slice => slice(ink, p),

@@ -294,7 +294,7 @@ fn texturizer_textures(loaded: bool) -> form::Choices {
 /// it and picked in the Texture menu.
 fn load_texture(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     use vectorcraft_engine::cmd::fileio;
-    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, f.extensions)));
+    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, fileio::read_extensions(f))));
     let path = crate::picks::open(app, &crate::FilePick { filters, ..Default::default() }).ok_or("cancelled")?;
     // The button is off where files can't be read.
     let Some(read) = app.services.read.as_ref() else { return Ok(()) };

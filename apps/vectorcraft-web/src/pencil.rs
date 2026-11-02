@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui::{Event, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
-use vectorcraft_ui_egui::stylus::{PenSample, StylusFeed};
+use vectorcraft_ui_egui::stylus::{PenPose, PenSample, StylusFeed};
 use vectorcraft_ui_egui::touch::{self, Source};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast as _;
@@ -95,7 +95,7 @@ impl Pointers {
 
     /// A pen moved or pressed with `pressure`, with the end it last pressed with.
     fn pen_sample(&self, pressure: f32) {
-        self.stylus.set_sample(Some(PenSample { pressure, eraser: self.eraser }));
+        self.stylus.set_sample(Some(PenSample { pressure, eraser: self.eraser, pose: PenPose::default() }));
     }
 
     fn touch(&mut self, device: TouchDeviceId, id: i32, phase: TouchPhase, pos: Pos2, force: Option<f32>) {
