@@ -1740,6 +1740,9 @@
 	No document open	Nenhum documento aberto
 	No document open.	Nenhum documento aberto.
 	No filter plug-ins installed	Nenhum filtro plug-in instalado
+	No panel plug-ins installed	Nenhum painel plug-in instalado
+	This plug-in is no longer installed.	Este plug-in não está mais instalado.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	O arquivo tem mais de 4 MiB, o máximo que um painel de plug-in recebe.
 	No fonts are available.	Nenhuma fonte disponível.
 	No gradient swatches	Sem amostras de gradiente
 	No graphic styles	Sem estilos gráficos
@@ -1989,6 +1992,8 @@
 	Save Actions…	Salvar Ações…
 	Load Actions…	Carregar Ações…
 	Plug-in Info	Informações do Plug-in
+	Plug-in Panel	Painel do Plug-in
+	Plug-in Panel Event	Evento do Painel do Plug-in
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
 	Point Text Objects	Objetos de Texto de Ponto

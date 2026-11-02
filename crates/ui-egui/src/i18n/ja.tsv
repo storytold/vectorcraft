@@ -2505,6 +2505,8 @@ diagnostics	ui	UI
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
 	Plug-in Info	プラグイン情報
+	Plug-in Panel	プラグインパネル
+	Plug-in Panel Event	プラグインパネルのイベント
 	Plug-in…	プラグイン…
 	Points	ポイント
 	Points: clicks add free points	ポイント: クリックで自由なポイントを追加
@@ -3089,7 +3091,6 @@ mark-style	Japanese	日本式
 	Swatch Conflicts	スウォッチの競合
 	Swatch exchange files keep solid colors only.	スウォッチ交換ファイルにはベタ塗りのカラーのみが保存されます。
 	Swatch Library	スウォッチライブラリ
-	Plug-in Panel	プラグインパネル
 	Swatch Name:	スウォッチ名:
 	Swatch Options	スウォッチオプション
 	Swatch Options…	スウォッチオプション…

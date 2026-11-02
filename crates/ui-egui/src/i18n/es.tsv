@@ -2118,6 +2118,9 @@ font-technology	Variable	Variables
 	No document open	No hay ningún documento abierto
 	No document open.	No hay ningún documento abierto.
 	No filter plug-ins installed	No hay plugins de filtro instalados
+	No panel plug-ins installed	No hay plugins de panel instalados
+	This plug-in is no longer installed.	Este plugin ya no está instalado.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	El archivo supera los 4 MiB, lo máximo que recibe un panel de plugin.
 	No fonts are available.	No hay fuentes disponibles.
 	No gradient swatches	No hay muestras de degradado
 	No graphic styles	No hay estilos gráficos
@@ -2398,6 +2401,8 @@ font-technology	Variable	Variables
 	Save Actions…	Guardar acciones…
 	Load Actions…	Cargar acciones…
 	Plug-in Info	Información del plugin
+	Plug-in Panel	Panel de plugin
+	Plug-in Panel Event	Evento de panel de plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
 	Point Sample	Muestra de punto

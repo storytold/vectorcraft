@@ -2057,6 +2057,9 @@ font-technology	Variable	Variabla
 	No document open	Inget dokument är öppet
 	No document open.	Inget dokument är öppet.
 	No filter plug-ins installed	Inga filterplugins är installerade
+	No panel plug-ins installed	Inga panelplugins är installerade
+	This plug-in is no longer installed.	Det här pluginet är inte längre installerat.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Filen är större än 4 MiB, det mesta en pluginpanel får.
 	No fonts are available.	Inga typsnitt är tillgängliga.
 	No gradient swatches	Inga gradientfärgrutor
 	No graphic styles	Inga grafikstilar
@@ -2335,6 +2338,8 @@ font-technology	Variable	Variabla
 	Save Actions…	Spara åtgärder…
 	Load Actions…	Läs in åtgärder…
 	Plug-in Info	Information om plugin
+	Plug-in Panel	Pluginpanel
+	Plug-in Panel Event	Händelse i pluginpanel
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
 	Point Sample	Punktsampling

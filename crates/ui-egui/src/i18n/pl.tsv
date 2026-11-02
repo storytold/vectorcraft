@@ -280,6 +280,9 @@
 	As Multiple Assets	Jako wiele zasobów
 	Plug-ins	Wtyczki
 	No filter plug-ins installed	Brak zainstalowanych wtyczek filtrów
+	No panel plug-ins installed	Brak zainstalowanych wtyczek paneli
+	This plug-in is no longer installed.	Ta wtyczka nie jest już zainstalowana.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Plik jest większy niż 4 MiB, czyli więcej, niż może otrzymać panel wtyczki.
 	Install Plug-in…	Zainstaluj wtyczkę…
 	Open this setting's help page	Otwórz stronę pomocy dla tego ustawienia
 	Reload Plug-ins	Wczytaj ponownie wtyczki
@@ -3371,6 +3374,8 @@ theme	Appearance	Wygląd
 	Install Plug-in	Zainstaluj wtyczkę
 	List Plug-ins	Wyświetl wtyczki
 	Plug-in Info	Informacje o wtyczce
+	Plug-in Panel	Panel wtyczki
+	Plug-in Panel Event	Zdarzenie panelu wtyczki
 	Remove Plug-in	Usuń wtyczkę
 	Run Plug-in	Uruchom wtyczkę
 	Smooth	Gładki

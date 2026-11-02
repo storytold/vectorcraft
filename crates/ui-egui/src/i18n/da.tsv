@@ -278,6 +278,9 @@
 	As Multiple Assets	Som flere aktiver
 	Plug-ins	Plug-ins
 	No filter plug-ins installed	Ingen filter-plug-ins installeret
+	No panel plug-ins installed	Ingen panel-plug-ins installeret
+	This plug-in is no longer installed.	Dette plug-in er ikke længere installeret.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Filen er større end 4 MiB, som er det meste, et plug-in-panel kan få.
 	Install Plug-in…	Installér plug-in…
 	Open this setting's help page	Åbn hjælpesiden for denne indstilling
 	Reload Plug-ins	Genindlæs plug-ins
@@ -3235,6 +3238,8 @@ theme	Appearance	Udseende
 	Install Plug-in	Installér plug-in
 	List Plug-ins	Oplist plug-ins
 	Plug-in Info	Plug-in-info
+	Plug-in Panel	Plug-in-panel
+	Plug-in Panel Event	Plug-in-panelhændelse
 	Remove Plug-in	Fjern plug-in
 	Run Plug-in	Kør plug-in
 	Smooth	Udglat

@@ -2585,6 +2585,9 @@ digits	Malayalam	Malaiàlam
 	No downsampling	Sense reducció de mostra
 	No equivalent	Sense equivalent
 	No filter plug-ins installed	No hi ha complements de filtre instal·lats
+	No panel plug-ins installed	No hi ha complements de panell instal·lats
+	This plug-in is no longer installed.	Aquest complement ja no està instal·lat.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	El fitxer supera els 4 MiB, el màxim que rep un panell de complement.
 	No fonts are available.	No hi ha cap tipus de lletra disponible.
 	No gradient swatches	No hi ha mostres de degradat
 	No graphic styles	No hi ha estils gràfics
@@ -2990,6 +2993,8 @@ digits	Malayalam	Malaiàlam
 	Load Actions…	Carrega accions…
 	Play:	Reprodueix:
 	Plug-in Info	Informació del complement
+	Plug-in Panel	Panell del complement
+	Plug-in Panel Event	Esdeveniment del panell del complement
 	Plug-ins	Complements
 	Plug-ins & Scratch Disks	Complements i discs d’intercanvi
 	Plug-in…	Complement…

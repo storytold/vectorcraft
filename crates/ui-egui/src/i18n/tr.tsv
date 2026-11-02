@@ -1930,6 +1930,9 @@ font-technology	Variable	Değişken
 	No document open	Hiçbir belge açık değil
 	No document open.	Hiçbir belge açık değil.
 	No filter plug-ins installed	Filtre eklentisi yüklü değil
+	No panel plug-ins installed	Panel eklentisi yüklü değil
+	This plug-in is no longer installed.	Bu eklenti artık yüklü değil.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Dosya 4 MiB'den büyük; bir eklenti paneline en fazla bu kadar verilir.
 	No fonts are available.	Hiçbir yazı tipi mevcut değil.
 	No gradient swatches	Degrade renk örneği yok
 	No graphic styles	Grafik stili yok
@@ -2210,6 +2213,8 @@ shape	Open	Açık
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
 	Plug-in Info	Eklenti Bilgisi
+	Plug-in Panel	Eklenti Paneli
+	Plug-in Panel Event	Eklenti Paneli Etkinliği
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
 	Point Sample	Nokta Örneği

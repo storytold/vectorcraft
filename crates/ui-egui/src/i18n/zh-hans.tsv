@@ -2018,6 +2018,9 @@ file-filter	Templates	模板
 	No document open	未打开文档
 	No document open.	未打开文档。
 	No filter plug-ins installed	未安装滤镜增效工具
+	No panel plug-ins installed	未安装面板增效工具
+	This plug-in is no longer installed.	此增效工具已不再安装。
+	The file is larger than 4 MiB, the most a plug-in panel is given.	文件大于 4 MiB，这是增效工具面板可接收的上限。
 	No fonts are available.	没有可用的字体。
 	No gradient swatches	没有渐变色板
 	No graphic styles	没有图形样式
@@ -2300,6 +2303,8 @@ diagnostics	ui	界面
 	Save Actions…	存储动作…
 	Load Actions…	载入动作…
 	Plug-in Info	插件信息
+	Plug-in Panel	增效工具面板
+	Plug-in Panel Event	增效工具面板事件
 	Plug-ins	增效工具
 	Plug-in…	增效工具…
 	Point Sample	点取样

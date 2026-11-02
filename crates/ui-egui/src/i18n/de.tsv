@@ -2071,6 +2071,9 @@ file-filter	Templates	Vorlagen
 	No document open	Kein Dokument geöffnet
 	No document open.	Kein Dokument geöffnet.
 	No filter plug-ins installed	Keine Filter-Plug-ins installiert
+	No panel plug-ins installed	Keine Bedienfeld-Plug-ins installiert
+	This plug-in is no longer installed.	Dieses Plug-in ist nicht mehr installiert.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Die Datei ist größer als 4 MiB; mehr erhält ein Plug-in-Bedienfeld nicht.
 	No fonts are available.	Es sind keine Schriften verfügbar.
 	No gradient swatches	Keine Verlaufsfelder
 	No graphic styles	Keine Grafikstile
@@ -2353,6 +2356,8 @@ diagnostics	ui	Oberfläche
 	Save Actions…	Aktionen speichern…
 	Load Actions…	Aktionen laden…
 	Plug-in Info	Plug-in-Informationen
+	Plug-in Panel	Plug-in-Bedienfeld
+	Plug-in Panel Event	Plug-in-Bedienfeld-Ereignis
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
 	Point Sample	Einzelner Punkt

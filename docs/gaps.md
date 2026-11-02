@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (G17: panel plug-ins, a panel of their own in Window › Plug-ins; G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -625,9 +625,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 ## G17 Ecosystem: third-party plug-ins
 
 - **Missing:** Illustrator's ecosystem is a C++ plug-in SDK and a large commercial plug-in market. VectorCraft
-  has sandboxed WebAssembly plug-ins for object filters, live effects and file formats it writes
-  ([plugins.md](plugins.md)) and MCP; missing are tool plug-ins, panel plug-ins, importers, a plug-in directory and
-  any third-party plug-ins (#710).
+  has sandboxed WebAssembly plug-ins for object filters, live effects, file formats it writes and panels
+  ([plugins.md](plugins.md)) and MCP; missing are tool plug-ins, importers, a plug-in directory and any third-party
+  plug-ins (#710).
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a
@@ -653,6 +653,14 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   packing or simulation. Installing it asks the user first (`allowHeavy`; folders skip it), and the app runs it on a
   thread of its own with a progress window and Cancel, applying its result as one undo step unless the document
   changed meanwhile. ABI, engine and headless UI regressions.
+- **Done:** panel plug-ins (`"kind": "panel"`). A plug-in has a panel of its own, `plugin:<id>`, that Window ›
+  Plug-ins shows and hides as the Window menu does the other panels; it floats, docks and tabs, and is open again at
+  the next start. The plug-in declares what the panel shows (headings, text, buttons, text, number and file fields,
+  checkboxes, dropdowns, rows, and groups that fold) and answers each event (it opened, a button was clicked, a field
+  was set, a file was picked and, when it asks, the selection changed) with what it shows now, what the host keeps for
+  it until the next event and host commands to run (`plugin.panel.event`): one `command.batch`, one undo step, of
+  commands that make and edit art, type, variables and data sets in the active document, with no file access. A file
+  field hands it the file picked, never its path. Engine, unit, fuzz and headless UI regressions.
 - **Estimate:** 20–45 h for the APIs; the ecosystem itself isn't agent work.
 
 ## G18 Generative AI features
@@ -703,6 +711,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | G17: panel plug-ins (`"kind": "panel"`), a panel of their own in Window › Plug-ins, which the plug-in fills and whose events it answers with host commands run as one undo step with no file access (`plugin.panel.event`); engine, unit, fuzz and headless UI regressions. No entry closed, estimates unchanged. |
 | 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
 | 2026-11-01 | minor | G5: dynamic symbols (#4938): Symbol Options › Symbol Type, per-instance fill, stroke, opacity and blend for objects of a dynamic symbol's art that stay linked (redefining keeps them, Break Link bakes them, Reset and Static drop them; `symbol.instance.setAppearance`, `symbol.instance.reset`; `crates/engine/src/tests/dynamic_symbols.rs`); on-canvas Direct Selection of the parts and `.ai` round trip remain. Estimate 15–26 → 14–24 h. |
 | 2026-11-01 | minor | G13: Artboard background colors in output (#4937): raster exports (a transparent background too), PDF, SVG and EPS pages, `.ai` files' PDF pages, Export for Screens and print (and its preview) draw each artboard's color behind its art, inside the artboard and in the color's own model; Export for Screens has Include Artboard Fill beside Include Bleed (on by default, remembered; `includeArtboardFill`, also on `document.export` and `file.print`); editing data keeps the color as the artboard's, and Export for Screens' document rows keep it too; estimate unchanged. |
