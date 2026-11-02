@@ -1978,6 +1978,21 @@ fn select_same_link_block_series_selects_the_frames_of_a_thread() {
     // With no type selected the command is not available.
     sel(&mut s, &[r]);
     assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
+    // A selected group counts the type inside it, but not hidden or locked type.
+    let box_ = rect(&mut s, 400.0, 400.0, 10.0, 10.0);
+    sel(&mut s, &[d, box_]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[g]);
+    assert!(find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 2);
+    assert_eq!(selected(&s), vec![d, e]);
+    for props in [json!({"id": d.0, "visible": false}), json!({"id": d.0, "visible": true, "locked": true})] {
+        s.execute("layer.setProps", &props).unwrap();
+        sel(&mut s, &[g]);
+        assert!(!find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled, "{props}");
+        assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err(), "{props}");
+        assert_eq!(selected(&s), vec![g], "{props}");
+    }
 }
 
 /// #1737: Select > Same reads type's fill and stroke from its characters (the first run), so type

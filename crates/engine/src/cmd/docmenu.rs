@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Link Block Series",
             ["Select", "Same"],
             None,
-            "{} select every frame of the threads of the selected type objects (and of the type inside selected groups); type in no thread selects itself; frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer are left out → {count}",
+            "{} select every frame of the threads of the selected type objects (and of the visible, unlocked type inside selected groups); type in no thread selects itself; frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer are left out → {count}",
             has_text_selection,
             same_link_block_series
         ),
@@ -322,16 +322,24 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
     finish_same(s, cmd, ids)
 }
 
-/// The type objects among the selected objects and inside them, in selection order.
+/// The type objects among the selected objects and inside them, in selection order, leaving out
+/// every hidden or locked object with what it holds.
 fn selected_text(s: &Session) -> Vec<NodeId> {
+    fn inside(n: &Node, out: &mut Vec<NodeId>) {
+        if !n.visible || n.locked {
+            return;
+        }
+        if matches!(n.kind, NodeKind::Text(_)) && !out.contains(&n.id) {
+            out.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            inside(c, out);
+        }
+    }
     let Some(st) = s.active() else { return vec![] };
     let mut out = vec![];
     for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        n.walk(&mut |c| {
-            if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
-                out.push(c.id);
-            }
-        });
+        inside(n, &mut out);
     }
     out
 }

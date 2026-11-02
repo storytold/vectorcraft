@@ -4886,7 +4886,8 @@ doesn't exist, a `port` other than `in` or `out`, and a side where no frame of a
 `select.same.linkBlockSeries` (Select › Same › Link Block Series) selects every frame of the threads that the selected
 type objects, and the type inside selected groups, are in, in thread order, and returns `{count}`. Type in no thread
 selects itself, and other selected objects are left out. With frames of several threads selected, it selects the frames
-of all of them. It is off while no type is selected, and records no undo step.
+of all of them. Hidden or locked type inside a selected group does not count as selected, and hidden or locked frames of
+a thread are left out. It is off while no type is selected, and records no undo step.
 
 In every thread, a paragraph that continues from one frame into the next has its first line, first-line indent and
 bullet or number in the frame where it starts. In the next frame its first line starts where its wrapped lines start,
