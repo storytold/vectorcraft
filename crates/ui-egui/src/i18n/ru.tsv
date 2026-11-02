@@ -6205,6 +6205,9 @@ breakText	Glyphs	Глифы
 	Small to Large	От меньшего к большему
 	Large to Small	От большего к меньшему
 	Distribute Evenly	Распределить равномерно
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
 	Create Swatch Legend	Создать легенду образцов
 	Create Swatch Legend…	Создать легенду образцов…
 	HEX	HEX
