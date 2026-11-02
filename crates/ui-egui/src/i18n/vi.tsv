@@ -76,6 +76,8 @@
 	1 Color Job	1 màu in
 	1 Color Job…	In 1 màu…
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} trên bảng vẽ tương đương {real} {unit} trong cảnh.
+	11 or 12 digits	11 hoặc 12 chữ số
+	12 or 13 digits	12 hoặc 13 chữ số
 	2 Color Job	2 màu in
 	2 Color Job…	In 2 màu…
 	3 Color Job	3 màu in
@@ -86,7 +88,9 @@
 	3D Ribbon	Dải 3D
 	45° Angles	Góc 45°
 	5 x 5 Average	Trung bình 5 x 5
+	6 or 8 digits	6 hoặc 8 chữ số
 	60° Angles	Góc 60°
+	7 or 8 digits	7 hoặc 8 chữ số
 	90° & 45° & 30° Angles	Góc 90° & 45° & 30°
 	90° & 45° Angles	Góc 90° & 45°
 	90° Angles	Góc 90°
@@ -194,6 +198,7 @@
 	Alter Paths for Appearance	Sửa đường dẫn cho diện mạo
 	Amount	Mức độ
 	Amount:	Mức độ:
+	an even number of digits	số chữ số chẵn
 	Anchor Point	Điểm neo
 	Anchor Point Tool	Công cụ Điểm neo
 	Anchor Points	Các điểm neo
@@ -214,6 +219,7 @@
 	Anti-aliased Artwork	Tác phẩm khử răng cưa
 	Anti-aliasing:	Khử răng cưa:
 	Any Kind	Bất kỳ loại
+	any text	văn bản bất kỳ
 	Font Technology	Công nghệ phông chữ
 font-technology	Variable	Biến thiên
 	Appearance	Diện mạo
@@ -275,6 +281,7 @@ font-technology	Variable	Biến thiên
 	As Multiple Assets	Thành nhiều asset
 	As Single Asset	Thành một asset
 	Ascender	Nét chân chữ trên
+	ASCII	ASCII
 	Ask When Modified	Hỏi khi đã sửa đổi
 	Aspect Ratio	Tỷ lệ khung hình
 	Asset Export	Xuất asset
@@ -315,6 +322,7 @@ font-technology	Variable	Biến thiên
 	Backspace	Backspace
 	Balance	Cân bằng
 	Bar Graph Tool	Công cụ Biểu đồ thanh
+	Barcodes	Mã vạch
 	Baseline	Đường cơ sở
 	Baseline Shift	Dịch chuyển đường cơ sở
 	Basic Latin	Latin cơ bản
@@ -471,11 +479,29 @@ font-technology	Variable	Biến thiên
 	Character Style Options	Tùy chọn kiểu ký tự
 	Character Styles	Các kiểu ký tự
 	Character:	Ký tự:
+	Check	Kiểm tra
+	Check Barcode	Kiểm tra mã vạch
 	Check Links	Kiểm tra liên kết
 # Check Script (File › Scripts) and the report it shows on a script written for the reference app.
 	Check Script	Kiểm tra script
 	Check Script…	Kiểm tra script…
+	Codes:	Mã:
+	Content	Nội dung
 	Copy Report	Sao chép báo cáo
+	Create Batch	Tạo hàng loạt
+	digits, A–Z and - . $ / + % and space	chữ số, A–Z và - . $ / + % và dấu cách
+	digits, with or without the (01) application identifier	chữ số, có hoặc không có mã nhận dạng ứng dụng (01)
+	Drawn:	Đã tạo:
+	Gap:	Khoảng cách:
+	Max per Row:	Tối đa mỗi hàng:
+	No fonts are installed.	Chưa cài đặt phông chữ nào.
+	No line in the box is a code this type can carry.	Không dòng nào trong ô là mã mà kiểu này có thể mang.
+	One code a line, each a whole value of the type above.	Mỗi dòng một mã, mỗi mã là giá trị đầy đủ của kiểu ở trên.
+	Outline the digits	Chuyển số thành đường viền
+	printable ASCII	ký tự ASCII in được
+	printable ASCII, upper case and control characters	ký tự ASCII in được, chữ in hoa và ký tự điều khiển
+	QR Code	Mã QR
+	Valid:	Hợp lệ:
 	VectorCraft read this script without running it.	VectorCraft đã đọc script này mà không chạy nó.
 	Needs nothing beyond plain JavaScript	Chỉ cần JavaScript thông thường
 	Needs the script language's own objects or directives	Cần các đối tượng hoặc chỉ thị riêng của ngôn ngữ script
@@ -485,6 +511,7 @@ font-technology	Variable	Biến thiên
 	Needs dialogs	Cần hộp thoại
 	Needs features only the reference app has	Cần tính năng mà chỉ ứng dụng tham chiếu có
 	Outside the document	Bên ngoài tài liệu
+	White background box	Khung nền trắng
 	Writes, moves or deletes files	Ghi, di chuyển hoặc xóa tệp
 	Opens files in other apps	Mở tệp trong ứng dụng khác
 	Opens network connections	Mở kết nối mạng
@@ -5067,6 +5094,19 @@ theme	Appearance	Giao diện
 @msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	không có gì trong tập dữ liệu {name} được áp dụng: không có đối tượng nào được gắn với biến số mà tập dữ liệu có giá trị
 @msg	the action has no steps	hành động không có bước nào
+	Barcode	Mã vạch
+	Barcode Options	Tùy chọn mã vạch
+	Data:	Dữ liệu:
+	Document Default	Mặc định của tài liệu
+	Error Correction:	Sửa lỗi:
+	Human Readable Line	Dòng chữ đọc được
+	Install OCR-B for the standard digits.	Cài đặt OCR-B để có chữ số chuẩn.
+	Magnification:	Độ phóng đại:
+	Mask:	Mặt nạ:
+	Module:	Mô-đun:
+	Quiet Zone:	Vùng trống:
+	Update	Cập nhật
+	Width Ratio:	Tỷ lệ chiều rộng:
 
 # User Interface › Accent Color
 	Accent Color	Màu nhấn
@@ -5180,6 +5220,12 @@ theme	Appearance	Giao diện
 	Select by Color	Chọn theo màu
 	Move Anchor Point	Di chuyển điểm neo
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} chỉ giữ 1 trong {n} bảng vẽ của tài liệu: tệp sẽ mở lại với một bảng vẽ. Bật Bảo lưu khả năng chỉnh sửa để giữ tất cả.
+@msg	a QR Code version is 1 to 40, not {other}	phiên bản QR Code từ 1 đến 40, không phải {other}
+@msg	no codes to draw	không có mã nào để vẽ
+@msg	no line in the data is a code this symbology can carry	không dòng nào trong dữ liệu là mã mà kiểu mã này có thể mang
+@msg	select a barcode	hãy chọn một mã vạch
+@msg	unknown barcode type `{name}`	kiểu mã vạch không xác định `{name}`
+@msg	unknown error correction level `{other}`	mức sửa lỗi không xác định `{other}`
 	Chalk & Charcoal…	Phấn và than…
 	Chalk & Charcoal	Phấn và than
 	Graphic Pen…	Bút đồ họa…

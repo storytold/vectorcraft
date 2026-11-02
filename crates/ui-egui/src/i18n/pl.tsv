@@ -22,9 +22,34 @@
 # tests): the product name, language names, OpenType, the built-in workspace names and the
 # bracketed perspective grid preset names. Keep placeholders, ellipses and the leading/trailing
 # spaces of fragments when editing.
+	11 or 12 digits	11 lub 12 cyfr
+	12 or 13 digits	12 lub 13 cyfr
+	6 or 8 digits	6 lub 8 cyfr
+	7 or 8 digits	7 lub 8 cyfr
+	an even number of digits	parzysta liczba cyfr
+	any text	dowolny tekst
+	ASCII	ASCII
+	Barcodes	Kody kreskowe
+	Check	Sprawdź
+	Check Barcode	Sprawdź kod kreskowy
+	Codes:	Kody:
+	Content	Treść
+	Create Batch	Utwórz partię
+	digits, A–Z and - . $ / + % and space	cyfry, A–Z oraz - . $ / + % i spacja
+	digits, with or without the (01) application identifier	cyfry, z identyfikatorem zastosowania (01) lub bez
+	Drawn:	Narysowano:
+	Gap:	Odstęp:
+	Max per Row:	Maks. w wierszu:
 	New Design	Nowy projekt
 	Delete Design	Usuń projekt
+	No fonts are installed.	Brak zainstalowanych czcionek.
+	No line in the box is a code this type can carry.	Żaden wiersz w polu nie jest kodem, który ten typ może przenieść.
+	One code a line, each a whole value of the type above.	Jeden kod w wierszu, każdy pełną wartością wybranego typu.
+	Outline the digits	Zamień cyfry na kontury
 	Paste Design	Wklej projekt
+	printable ASCII	drukowalne ASCII
+	printable ASCII, upper case and control characters	drukowalne ASCII, wielkie litery i znaki sterujące
+	QR Code	Kod QR
 	Select Unused	Zaznacz nieużywane
 	Glowing Edges…	Świecące krawędzie…
 	About VectorCraft	O programie VectorCraft
@@ -144,6 +169,7 @@
 	Horizontal Align Left	Wyrównaj poziomo do lewej
 	Horizontal Align Center	Wyrównaj poziomo do środka
 	Horizontal Align Right	Wyrównaj poziomo do prawej
+	Valid:	Poprawny:
 	Vertical Align Top	Wyrównaj pionowo do góry
 	Vertical Align Center	Wyrównaj pionowo do środka
 	Horizontal & Vertical Align Center	Wyrównaj do środka w poziomie i pionie
@@ -436,6 +462,7 @@
 	Transform…	Przekształć…
 	Tweak…	Poprawianie…
 	Twist…	Skręcenie…
+	White background box	Białe tło
 	Zig Zag…	Zygzak…
 	Pathfinder	Odnajdywanie ścieżek
 	Add	Dodaj
@@ -5324,6 +5351,19 @@ mark-style	Japanese	Japońskie
 @msg	open a document with data sets	otwórz dokument z zestawami danych
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	z zestawu danych {name} nic nie zastosowano: żaden obiekt nie jest powiązany ze zmienną, dla której ma on wartość
 @msg	the action has no steps	operacja nie ma kroków
+	Barcode	Kod kreskowy
+	Barcode Options	Opcje kodu kreskowego
+	Data:	Dane:
+	Document Default	Domyślna w dokumencie
+	Error Correction:	Korekcja błędów:
+	Human Readable Line	Wiersz czytelny
+	Install OCR-B for the standard digits.	Zainstaluj OCR-B, aby uzyskać standardowe cyfry.
+	Magnification:	Powiększenie:
+	Mask:	Maska:
+	Module:	Moduł:
+	Quiet Zone:	Strefa ciszy:
+	Update	Aktualizuj
+	Width Ratio:	Proporcja szerokości:
 
 # User Interface › Accent Color
 	Accent Color	Kolor akcentu
@@ -5436,6 +5476,12 @@ mark-style	Japanese	Japońskie
 	Select by Color	Zaznacz według koloru
 	Move Anchor Point	Przesuń punkt kontrolny
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zachowuje 1 z {n} obszarów kompozycji dokumentu: plik otworzy się ponownie z jednym. Włącz Zachowaj możliwości edycji, aby zachować wszystkie.
+@msg	a QR Code version is 1 to 40, not {other}	wersja kodu QR to od 1 do 40, nie {other}
+@msg	no codes to draw	brak kodów do narysowania
+@msg	no line in the data is a code this symbology can carry	żaden wiersz danych nie jest kodem, który ta symbologia może przenieść
+@msg	select a barcode	wybierz kod kreskowy
+@msg	unknown barcode type `{name}`	nieznany typ kodu kreskowego `{name}`
+@msg	unknown error correction level `{other}`	nieznany poziom korekcji błędów `{other}`
 	Chalk & Charcoal…	Kreda i węgiel…
 	Chalk & Charcoal	Kreda i węgiel
 	Graphic Pen…	Pióro graficzne…

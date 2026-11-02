@@ -4,6 +4,7 @@ mod addons;
 pub(crate) mod appearance;
 mod assets;
 mod attributes;
+pub(crate) mod barcode;
 pub mod brushlib;
 mod brushsym;
 mod buildcmds;
@@ -239,6 +240,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(recolor::specs());
         v.extend(fileio::specs());
         v.extend(create::specs());
+        v.extend(barcode::specs());
         v.extend(dimension::specs());
         v.extend(object::specs());
         v.extend(path::specs());

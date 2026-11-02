@@ -17,10 +17,35 @@
 # commands is kept. Full-width punctuation (，。：) inside sentences; half-width parentheses and
 # the " · " separators as in the English. Terms shared with PhotoCraft use the same words as its
 # zh-hant catalog (圖層, 選取, 偏好設定, 混合模式 ...), so the two apps read alike.
+	11 or 12 digits	11 位或 12 位數字
+	12 or 13 digits	12 位或 13 位數字
+	6 or 8 digits	6 位或 8 位數字
+	7 or 8 digits	7 位或 8 位數字
+	an even number of digits	偶數位數字
+	any text	任意文字
+	ASCII	ASCII
+	Barcodes	條碼
+	Check	檢查
+	Check Barcode	檢查條碼
+	Codes:	條碼數:
+	Content	內容
+	Create Batch	批次產生
+	digits, A–Z and - . $ / + % and space	數字、A–Z 以及 - . $ / + % 與空格
+	digits, with or without the (01) application identifier	數字，可帶或不帶 (01) 應用識別碼
+	Drawn:	已產生:
+	Gap:	間距:
 	Glowing Edges…	發光邊緣…
 	Glowing Edges	發光邊緣
 	Edge Width	邊緣寬度
 	Edge Brightness	邊緣亮度
+	Max per Row:	每行最多:
+	No fonts are installed.	未安裝任何字型。
+	No line in the box is a code this type can carry.	框裡沒有任何一行是該類型能編碼的條碼。
+	One code a line, each a whole value of the type above.	一行一個條碼，每行是該類型的完整值。
+	Outline the digits	數字轉外框
+	printable ASCII	可列印 ASCII 字元
+	printable ASCII, upper case and control characters	可列印 ASCII 字元、大寫字母與控制字元
+	QR Code	二維條碼
 	Smoothness	平滑度
 
 	  — missing	  — 遺失
@@ -365,6 +390,7 @@ font-technology	Variable	可變
 	Check Script	檢查指令碼
 	Check Script…	檢查指令碼…
 	Copy Report	複製報告
+	Valid:	校驗通過:
 	VectorCraft read this script without running it.	VectorCraft 已讀取此指令碼，但沒有執行。
 	Needs nothing beyond plain JavaScript	只需要一般的 JavaScript
 	Needs the script language's own objects or directives	需要指令碼語言本身的物件或指示詞
@@ -374,6 +400,7 @@ font-technology	Variable	可變
 	Needs dialogs	需要對話框
 	Needs features only the reference app has	需要只有參考應用程式才有的功能
 	Outside the document	文件以外
+	White background box	白色底框
 	Writes, moves or deletes files	寫入、移動或刪除檔案
 	Opens files in other apps	在其他應用程式中開啟檔案
 	Opens network connections	開啟網路連線
@@ -5119,6 +5146,19 @@ lighting	Light	光源
 	Destination Folder:	目的地資料夾：
 	Overrides	覆寫
 	Uses every data set of the open document.	使用開啟文件的每個資料集。
+	Barcode	條碼
+	Barcode Options	條碼選項
+	Data:	資料:
+	Document Default	文件預設
+	Error Correction:	錯誤修正:
+	Human Readable Line	可讀文字
+	Install OCR-B for the standard digits.	請安裝 OCR-B 以使用標準數字。
+	Magnification:	放大倍率:
+	Mask:	遮罩:
+	Module:	模組:
+	Quiet Zone:	靜區:
+	Update	更新
+	Width Ratio:	寬度比:
 @msg	check a layer to export	請勾選要轉存的圖層
 @msg	select the art to export first	請先選取要轉存的圖稿
 
@@ -5217,6 +5257,12 @@ lighting	Light	光源
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是圖層，不是物件；請使用 layer.move 移動圖層
 	Move Anchor Point	移動錨點
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文件 {n} 個工作區域中的 1 個：檔案重新開啟時只有一個。開啟「保留編輯功能」可全部保留。
+@msg	a QR Code version is 1 to 40, not {other}	QR 碼版本為 1 到 40，不是 {other}
+@msg	no codes to draw	沒有可繪製的編碼
+@msg	no line in the data is a code this symbology can carry	資料中沒有任何一行是此碼制能承載的編碼
+@msg	select a barcode	請選擇一個條碼
+@msg	unknown barcode type `{name}`	未知的條碼類型 `{name}`
+@msg	unknown error correction level `{other}`	未知的糾錯等級 `{other}`
 	Chalk & Charcoal…	粉筆和炭筆…
 	Chalk & Charcoal	粉筆和炭筆
 	Graphic Pen…	繪圖筆…

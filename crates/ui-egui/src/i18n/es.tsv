@@ -12,10 +12,35 @@
 # `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	11 or 12 digits	11 o 12 dígitos
+	12 or 13 digits	12 o 13 dígitos
+	6 or 8 digits	6 u 8 dígitos
+	7 or 8 digits	7 u 8 dígitos
+	an even number of digits	un número par de dígitos
+	any text	cualquier texto
+	ASCII	ASCII
+	Barcodes	Códigos de barras
+	Check	Comprobar
+	Check Barcode	Comprobar código de barras
+	Codes:	Códigos:
+	Content	Contenido
+	Create Batch	Crear lote
+	digits, A–Z and - . $ / + % and space	dígitos, A–Z y - . $ / + % y espacio
+	digits, with or without the (01) application identifier	dígitos, con o sin el identificador de aplicación (01)
+	Drawn:	Dibujados:
+	Gap:	Separación:
 	Glowing Edges…	Bordes resplandecientes…
 	Glowing Edges	Bordes resplandecientes
 	Edge Width	Ancho del borde
 	Edge Brightness	Brillo del borde
+	Max per Row:	Máx. por fila:
+	No fonts are installed.	No hay fuentes instaladas.
+	No line in the box is a code this type can carry.	Ninguna línea del cuadro es un código que este tipo pueda llevar.
+	One code a line, each a whole value of the type above.	Un código por línea, cada uno un valor completo del tipo de arriba.
+	Outline the digits	Convertir los dígitos en contornos
+	printable ASCII	ASCII imprimible
+	printable ASCII, upper case and control characters	ASCII imprimible, mayúsculas y caracteres de control
+	QR Code	Código QR
 	Smoothness	Suavizado
 	Radial Blur…	Desenfoque radial…
 	Smart Blur…	Desenfoque inteligente…
@@ -403,6 +428,7 @@ font-technology	Variable	Variables
 	Check Script	Comprobar script
 	Check Script…	Comprobar script…
 	Copy Report	Copiar informe
+	Valid:	Válido:
 	VectorCraft read this script without running it.	VectorCraft leyó este script sin ejecutarlo.
 	Needs nothing beyond plain JavaScript	Solo necesita JavaScript simple
 	Needs the script language's own objects or directives	Necesita objetos o directivas propios del lenguaje del script
@@ -412,6 +438,7 @@ font-technology	Variable	Variables
 	Needs dialogs	Necesita cuadros de diálogo
 	Needs features only the reference app has	Necesita funciones que solo tiene la aplicación de referencia
 	Outside the document	Fuera del documento
+	White background box	Recuadro blanco de fondo
 	Writes, moves or deletes files	Escribe, mueve o elimina archivos
 	Opens files in other apps	Abre archivos en otras aplicaciones
 	Opens network connections	Abre conexiones de red
@@ -5413,6 +5440,19 @@ mark-style	Japanese	Japonesas
 @msg	open a document with data sets	abra un documento con conjuntos de datos
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no se aplicó nada del conjunto de datos {name}: ningún objeto está vinculado a una variable para la que tenga un valor
 @msg	the action has no steps	la acción no tiene pasos
+	Barcode	Código de barras
+	Barcode Options	Opciones de código de barras
+	Data:	Datos:
+	Document Default	Predeterminada del documento
+	Error Correction:	Corrección de errores:
+	Human Readable Line	Línea legible
+	Install OCR-B for the standard digits.	Instale OCR-B para los dígitos normalizados.
+	Magnification:	Ampliación:
+	Mask:	Máscara:
+	Module:	Módulo:
+	Quiet Zone:	Zona tranquila:
+	Update	Actualizar
+	Width Ratio:	Proporción de anchura:
 
 # User Interface › Accent Color
 	Accent Color	Color de acento
@@ -5524,6 +5564,12 @@ mark-style	Japanese	Japonesas
 	Select by Color	Seleccionar por color
 	Move Anchor Point	Mover punto de ancla
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserva 1 de las {n} mesas de trabajo del documento: el archivo se vuelve a abrir con una. Active Conservar capacidades de edición para conservarlas todas.
+@msg	a QR Code version is 1 to 40, not {other}	la versión de un código QR va de 1 a 40, no {other}
+@msg	no codes to draw	no hay códigos que dibujar
+@msg	no line in the data is a code this symbology can carry	ninguna línea de los datos es un código que esta simbología pueda representar
+@msg	select a barcode	seleccione un código de barras
+@msg	unknown barcode type `{name}`	tipo de código de barras desconocido `{name}`
+@msg	unknown error correction level `{other}`	nivel de corrección de errores desconocido `{other}`
 	Chalk & Charcoal…	Tiza y carboncillo…
 	Chalk & Charcoal	Tiza y carboncillo
 	Graphic Pen…	Pluma gráfica…

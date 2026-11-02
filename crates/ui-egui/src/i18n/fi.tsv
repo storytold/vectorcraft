@@ -16,9 +16,34 @@
 # OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Every `fi-*` locale resolves here. Keep the placeholders ({name}), the trailing "…" and the
 # leading/trailing spaces of fragments exactly as they are.
+	11 or 12 digits	11 tai 12 numeroa
+	12 or 13 digits	12 tai 13 numeroa
+	6 or 8 digits	6 tai 8 numeroa
+	7 or 8 digits	7 tai 8 numeroa
+	an even number of digits	parillinen määrä numeroita
+	any text	mikä tahansa teksti
+	ASCII	ASCII
+	Barcodes	Viivakoodit
+	Check	Tarkista
+	Check Barcode	Tarkista viivakoodi
+	Codes:	Koodit:
+	Content	Sisältö
+	Create Batch	Luo erä
+	digits, A–Z and - . $ / + % and space	numeroita, A–Z sekä - . $ / + % ja välilyönti
+	digits, with or without the (01) application identifier	numeroita, sovellustunnisteella (01) tai ilman
+	Drawn:	Piirretty:
+	Gap:	Väli:
+	Max per Row:	Enintään riville:
 	New Design	Uusi malli
 	Delete Design	Poista malli
+	No fonts are installed.	Kirjasimia ei ole asennettu.
+	No line in the box is a code this type can carry.	Mikään laatikon rivi ei ole koodi, jonka tämä tyyppi voi sisältää.
+	One code a line, each a whole value of the type above.	Yksi koodi riville, kukin yllä olevan tyypin täysi arvo.
+	Outline the digits	Muunna numerot ääriviivoiksi
 	Paste Design	Liitä malli
+	printable ASCII	tulostettavat ASCII-merkit
+	printable ASCII, upper case and control characters	tulostettavat ASCII-merkit, isot kirjaimet ja ohjausmerkit
+	QR Code	QR-koodi
 	Select Unused	Valitse käyttämättömät
 	Graph Column	Kaavion pylväs
 	Column Type:	Pylvään tyyppi:
@@ -152,6 +177,8 @@
 	Start from VectorCraft Defaults	Aloita VectorCraftin oletuksista
 	Add to the Current Shortcuts	Lisää nykyisiin pikanäppäimiin
 	Remember My Choices	Muista valintani
+	Valid:	Kelvollinen:
+	White background box	Valkoinen taustalaatikko
 	{ready} of {total} ready	{ready}/{total} valmiina
 	The file is too large to read in full, so only its first part is listed.	Tiedosto on liian suuri luettavaksi kokonaan, joten vain sen alkuosa näytetään.
 	Report copied	Raportti kopioitu
@@ -5435,6 +5462,19 @@ mark-style	Japanese	Japanilainen
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	tämä on PostScript-tiedosto (vanhemmassa muodossa tai ilman PDF-yhteensopivuutta tallennettu .ai tai EPS-tiedosto), ei PDF: Tiedosto › Avaa ja Tiedosto › Sijoita lukevat sen EPS-muodossa
 @msg	this system has no screen color sampler	tässä järjestelmässä ei ole värin poimintaa näytöltä
 @msg	the image can't be read as a texture	kuvaa ei voi lukea tekstuurina
+	Barcode	Viivakoodi
+	Barcode Options	Viivakoodin asetukset
+	Data:	Tiedot:
+	Document Default	Asiakirjan oletus
+	Error Correction:	Virheenkorjaus:
+	Human Readable Line	Luettava rivi
+	Install OCR-B for the standard digits.	Asenna OCR-B standardinmukaisia numeroita varten.
+	Magnification:	Suurennus:
+	Mask:	Peitemalli:
+	Module:	Moduuli:
+	Quiet Zone:	Hiljainen vyöhyke:
+	Update	Päivitä
+	Width Ratio:	Leveyssuhde:
 
 # User Interface › Accent Color
 	Accent Color	Korostusväri
@@ -5613,6 +5653,12 @@ swatch	Bright Violet	Kirkas violetti
 	Play:	Toista:
 	Move Anchor Point	Siirrä ankkuripistettä
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} säilyttää asiakirjan {n} piirtoalustasta 1: tiedosto avautuu uudelleen yhdellä. Ota Säilytä muokkausominaisuudet käyttöön, jotta kaikki säilyvät.
+@msg	a QR Code version is 1 to 40, not {other}	QR-koodin versio on 1–40, ei {other}
+@msg	no codes to draw	ei piirrettäviä koodeja
+@msg	no line in the data is a code this symbology can carry	mikään datan rivi ei ole koodi, jonka tämä symboliikka voi sisältää
+@msg	select a barcode	valitse viivakoodi
+@msg	unknown barcode type `{name}`	tuntematon viivakoodityyppi `{name}`
+@msg	unknown error correction level `{other}`	tuntematon virheenkorjaustaso `{other}`
 	Chalk & Charcoal…	Liitu ja hiili…
 	Chalk & Charcoal	Liitu ja hiili
 	Graphic Pen…	Grafiikkakynä…

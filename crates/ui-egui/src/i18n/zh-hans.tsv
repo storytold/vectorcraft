@@ -9,10 +9,35 @@
 # proprietary localisation resource, string table or product UI may be copied. Product and
 # technology names stay in Latin letters. Full-width punctuation (，。：“”) in sentences, half-width
 # parentheses.
+	11 or 12 digits	11 位或 12 位数字
+	12 or 13 digits	12 位或 13 位数字
+	6 or 8 digits	6 位或 8 位数字
+	7 or 8 digits	7 位或 8 位数字
+	an even number of digits	偶数位数字
+	any text	任意文本
+	ASCII	ASCII
+	Barcodes	条形码
+	Check	检查
+	Check Barcode	检查条形码
+	Codes:	条码数:
+	Content	内容
+	Create Batch	批量生成
+	digits, A–Z and - . $ / + % and space	数字、A–Z 以及 - . $ / + % 和空格
+	digits, with or without the (01) application identifier	数字，可带或不带 (01) 应用标识符
+	Drawn:	已生成:
+	Gap:	间距:
 	Glowing Edges…	发光边缘…
 	Glowing Edges	发光边缘
 	Edge Width	边缘宽度
 	Edge Brightness	边缘亮度
+	Max per Row:	每行最多:
+	No fonts are installed.	未安装任何字体。
+	No line in the box is a code this type can carry.	框里没有任何一行是该类型能编码的条码。
+	One code a line, each a whole value of the type above.	一行一个条码，每行是该类型的完整值。
+	Outline the digits	数字转曲
+	printable ASCII	可打印 ASCII 字符
+	printable ASCII, upper case and control characters	可打印 ASCII 字符、大写字母和控制字符
+	QR Code	二维码
 	Smoothness	平滑度
 
 	  — missing	  — 缺失
@@ -351,6 +376,7 @@
 	Check Script	检查脚本
 	Check Script…	检查脚本…
 	Copy Report	复制报告
+	Valid:	校验通过:
 	VectorCraft read this script without running it.	VectorCraft 读取了此脚本，但没有运行它。
 	Needs nothing beyond plain JavaScript	只需要普通的 JavaScript
 	Needs the script language's own objects or directives	需要脚本语言自身的对象或指令
@@ -360,6 +386,7 @@
 	Needs dialogs	需要对话框
 	Needs features only the reference app has	需要只有参考应用才有的功能
 	Outside the document	文档之外
+	White background box	白色底框
 	Writes, moves or deletes files	写入、移动或删除文件
 	Opens files in other apps	在其他应用中打开文件
 	Opens network connections	打开网络连接
@@ -5305,6 +5332,19 @@ lighting	Light	光源
 	Destination Folder:	目标文件夹：
 	Overrides	覆盖
 	Uses every data set of the open document.	使用打开文档的每个数据集。
+	Barcode	条码
+	Barcode Options	条码选项
+	Data:	数据:
+	Document Default	文档默认
+	Error Correction:	错误纠正:
+	Human Readable Line	可读文本
+	Install OCR-B for the standard digits.	请安装 OCR-B 以使用标准数字。
+	Magnification:	放大倍率:
+	Mask:	掩码:
+	Module:	模块:
+	Quiet Zone:	空白区:
+	Update	更新
+	Width Ratio:	宽度比:
 @msg	check a layer to export	请勾选要导出的图层
 @msg	select the art to export first	请先选择要导出的图稿
 
@@ -5422,6 +5462,12 @@ lighting	Light	光源
 	Select by Color	按颜色选择
 	Move Anchor Point	移动锚点
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文档 {n} 个画板中的 1 个：文件重新打开时只有一个。打开“保留编辑功能”可全部保留。
+@msg	a QR Code version is 1 to 40, not {other}	QR 码版本为 1 到 40，不是 {other}
+@msg	no codes to draw	没有可绘制的编码
+@msg	no line in the data is a code this symbology can carry	数据中没有任何一行是此码制能承载的编码
+@msg	select a barcode	请选择一个条形码
+@msg	unknown barcode type `{name}`	未知的条形码类型 `{name}`
+@msg	unknown error correction level `{other}`	未知的纠错级别 `{other}`
 	Chalk & Charcoal…	粉笔和炭笔…
 	Chalk & Charcoal	粉笔和炭笔
 	Graphic Pen…	绘图笔…

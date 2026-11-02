@@ -5,10 +5,35 @@
 # vocabulary; no other application's Korean localisation was copied. AI-drafted; native review welcome.
 # Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language names,
 # OpenType, the built-in workspace names and the bracketed perspective grid preset names.
+	11 or 12 digits	11자리 또는 12자리
+	12 or 13 digits	12자리 또는 13자리
+	6 or 8 digits	6자리 또는 8자리
+	7 or 8 digits	7자리 또는 8자리
+	an even number of digits	짝수 자리 숫자
+	any text	임의의 텍스트
+	ASCII	ASCII
+	Barcodes	바코드
+	Check	검사
+	Check Barcode	바코드 검사
+	Codes:	코드:
+	Content	내용
+	Create Batch	일괄 생성
+	digits, A–Z and - . $ / + % and space	숫자, A–Z, - . $ / + % 및 공백
+	digits, with or without the (01) application identifier	숫자 ((01) 응용 식별자 포함 또는 생략)
+	Drawn:	그린 개수:
+	Gap:	간격:
 	Glowing Edges…	네온 가장자리…
 	Glowing Edges	네온 가장자리
 	Edge Width	가장자리 너비
 	Edge Brightness	가장자리 밝기
+	Max per Row:	줄당 최대:
+	No fonts are installed.	설치된 글꼴이 없습니다.
+	No line in the box is a code this type can carry.	입력란의 어느 줄도 이 유형이 담을 수 있는 코드가 아닙니다.
+	One code a line, each a whole value of the type above.	한 줄에 코드 하나, 각각 위 유형의 완전한 값.
+	Outline the digits	숫자 외곽선화
+	printable ASCII	인쇄 가능한 ASCII
+	printable ASCII, upper case and control characters	인쇄 가능한 ASCII, 대문자 및 제어 문자
+	QR Code	QR 코드
 	Smoothness	부드러움
 	About VectorCraft	VectorCraft 정보
 	All Scripts	모든 스크립트
@@ -196,6 +221,7 @@ digits	Malayalam	말라얄람어
 	Horizontal Align Left	가로 왼쪽 정렬
 	Horizontal Align Center	가로 가운데 정렬
 	Horizontal Align Right	가로 오른쪽 정렬
+	Valid:	유효:
 	Vertical Align Top	세로 위쪽 정렬
 	Vertical Align Center	세로 가운데 정렬
 	Horizontal & Vertical Align Center	가로·세로 가운데 정렬
@@ -499,6 +525,7 @@ digits	Malayalam	말라얄람어
 	Transform…	변형…
 	Tweak…	비틀기…
 	Twist…	뒤틀기…
+	White background box	흰색 배경 상자
 	Zig Zag…	지그재그…
 	Pathfinder	패스파인더
 	Add	더하기
@@ -5047,6 +5074,19 @@ lighting	Light	광원
 @msg	open a document with data sets	데이터 세트가 있는 문서를 여세요
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	데이터 세트 {name}에서 적용된 항목이 없습니다: 값이 있는 변수에 연결된 개체가 없습니다
 @msg	the action has no steps	액션에 단계가 없습니다
+	Barcode	바코드
+	Barcode Options	바코드 옵션
+	Data:	데이터:
+	Document Default	문서 기본값
+	Error Correction:	오류 정정:
+	Human Readable Line	판독용 텍스트
+	Install OCR-B for the standard digits.	표준 숫자를 표시하려면 OCR-B를 설치하십시오.
+	Magnification:	배율:
+	Mask:	마스크:
+	Module:	모듈:
+	Quiet Zone:	여백:
+	Update	업데이트
+	Width Ratio:	너비 비율:
 
 # User Interface › Accent Color
 	Accent Color	강조 색상
@@ -5160,6 +5200,12 @@ lighting	Light	광원
 	Select by Color	색상별 선택
 	Move Anchor Point	앵커 포인트 이동
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label}은(는) 문서의 아트보드 {n}개 중 1개만 유지하며 파일은 아트보드 하나로 다시 열립니다. 모두 유지하려면 편집 기능 보존을 켜십시오.
+@msg	a QR Code version is 1 to 40, not {other}	QR 코드 버전은 1에서 40까지입니다({other} 아님)
+@msg	no codes to draw	그릴 코드가 없습니다
+@msg	no line in the data is a code this symbology can carry	이 심볼로지가 담을 수 있는 코드가 데이터의 어느 줄에도 없습니다
+@msg	select a barcode	바코드를 선택하십시오
+@msg	unknown barcode type `{name}`	알 수 없는 바코드 종류 `{name}`
+@msg	unknown error correction level `{other}`	알 수 없는 오류 정정 수준 `{other}`
 	Chalk & Charcoal…	분필과 목탄…
 	Chalk & Charcoal	분필과 목탄
 	Graphic Pen…	그래픽 펜…

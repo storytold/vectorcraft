@@ -10,10 +10,35 @@
 # Coverage: every menu string, tl! literal, plural, status and error message (`untranslated_report` lists gaps).
 # Product, language, built-in workspace and perspective preset names follow MENU_KEEP_AS_IS.
 # Keep placeholders, ellipses and leading/trailing spaces of fragments when editing.
+	11 or 12 digits	11 або 12 цифр
+	12 or 13 digits	12 або 13 цифр
+	6 or 8 digits	6 або 8 цифр
+	7 or 8 digits	7 або 8 цифр
+	an even number of digits	парна кількість цифр
+	any text	будь-який текст
+	ASCII	ASCII
+	Barcodes	Штрихкоди
+	Check	Перевірити
+	Check Barcode	Перевірити штрихкод
+	Codes:	Коди:
+	Content	Вміст
+	Create Batch	Створити партію
+	digits, A–Z and - . $ / + % and space	цифри, A–Z та - . $ / + % і пробіл
+	digits, with or without the (01) application identifier	цифри, з ідентифікатором застосування (01) або без нього
+	Drawn:	Намальовано:
+	Gap:	Проміжок:
 	Glowing Edges…	Сяйливі краї…
 	Glowing Edges	Сяйливі краї
 	Edge Width	Ширина краю
 	Edge Brightness	Яскравість краю
+	Max per Row:	Макс. у рядку:
+	No fonts are installed.	Шрифти не встановлено.
+	No line in the box is a code this type can carry.	Жоден рядок у полі не є кодом, який може нести цей тип.
+	One code a line, each a whole value of the type above.	Один код у рядку, кожен — повне значення обраного вище типу.
+	Outline the digits	Перетворити цифри на контури
+	printable ASCII	друковані символи ASCII
+	printable ASCII, upper case and control characters	друковані символи ASCII, великі літери та керівні символи
+	QR Code	QR-код
 	Smoothness	Згладжування
 
 	Radial Blur…	Радіальне розмиття…
@@ -397,6 +422,7 @@ font-technology	Variable	Варіативні
 	Check Script	Перевірити сценарій
 	Check Script…	Перевірити сценарій…
 	Copy Report	Копіювати звіт
+	Valid:	Дійсний:
 	VectorCraft read this script without running it.	VectorCraft прочитав цей сценарій, не запускаючи його.
 	Needs nothing beyond plain JavaScript	Потрібен лише звичайний JavaScript
 	Needs the script language's own objects or directives	Потрібні власні об’єкти або директиви мови сценаріїв
@@ -406,6 +432,7 @@ font-technology	Variable	Варіативні
 	Needs dialogs	Потрібні діалогові вікна
 	Needs features only the reference app has	Потрібні функції, які має лише еталонна програма
 	Outside the document	Поза документом
+	White background box	Біла підкладка
 	Writes, moves or deletes files	Записує, переміщує або видаляє файли
 	Opens files in other apps	Відкриває файли в інших програмах
 	Opens network connections	Відкриває мережеві з’єднання
@@ -5064,6 +5091,19 @@ lighting	Light	Світло
 @msg	open a document with data sets	відкрийте документ із наборами даних
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	з набору даних {name} нічого не застосовано: жоден об’єкт не прив’язано до змінної, для якої в ньому є значення
 @msg	the action has no steps	у дії немає кроків
+	Barcode	Штрихкод
+	Barcode Options	Параметри штрихкоду
+	Data:	Дані:
+	Document Default	Типова в документі
+	Error Correction:	Виправлення помилок:
+	Human Readable Line	Читабельний рядок
+	Install OCR-B for the standard digits.	Інсталюйте OCR-B для стандартних цифр.
+	Magnification:	Масштаб:
+	Mask:	Маска:
+	Module:	Модуль:
+	Quiet Zone:	Вільна зона:
+	Update	Оновити
+	Width Ratio:	Співвідношення ширини:
 
 # User Interface › Accent Color
 	Accent Color	Колір акценту
@@ -5177,6 +5217,12 @@ lighting	Light	Світло
 	Select by Color	Виділити за кольором
 	Move Anchor Point	Перемістити опорну точку
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} зберігає 1 з {n} монтажних областей документа: файл відкриється знову з однією. Увімкніть «Зберігати можливості редагування», щоб зберегти всі.
+@msg	a QR Code version is 1 to 40, not {other}	версія QR-коду — від 1 до 40, а не {other}
+@msg	no codes to draw	немає кодів для малювання
+@msg	no line in the data is a code this symbology can carry	жоден рядок даних не є кодом, який підтримує ця символіка
+@msg	select a barcode	виберіть штрихкод
+@msg	unknown barcode type `{name}`	невідомий тип штрихкоду `{name}`
+@msg	unknown error correction level `{other}`	невідомий рівень виправлення помилок `{other}`
 	Chalk & Charcoal…	Крейда і вугілля…
 	Chalk & Charcoal	Крейда і вугілля
 	Graphic Pen…	Графічне перо…

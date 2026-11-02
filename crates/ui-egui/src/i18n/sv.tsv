@@ -9,10 +9,35 @@
 # and no proprietary localisation was translated from or copied. Labels use sentence case, commands
 # are imperatives; product, format and key-cap names keep their spelling.
 
+	11 or 12 digits	11 eller 12 siffror
+	12 or 13 digits	12 eller 13 siffror
+	6 or 8 digits	6 eller 8 siffror
+	7 or 8 digits	7 eller 8 siffror
+	an even number of digits	ett jämnt antal siffror
+	any text	valfri text
+	ASCII	ASCII
+	Barcodes	Streckkoder
+	Check	Kontrollera
+	Check Barcode	Kontrollera streckkod
+	Codes:	Koder:
+	Content	Innehåll
+	Create Batch	Skapa sats
+	digits, A–Z and - . $ / + % and space	siffror, A–Z samt - . $ / + % och mellanslag
+	digits, with or without the (01) application identifier	siffror, med eller utan applikationsidentifieraren (01)
+	Drawn:	Ritade:
+	Gap:	Avstånd:
 	Glowing Edges…	Glödande kanter…
 	Glowing Edges	Glödande kanter
 	Edge Width	Kantbredd
 	Edge Brightness	Kantljusstyrka
+	Max per Row:	Max per rad:
+	No fonts are installed.	Inga teckensnitt är installerade.
+	No line in the box is a code this type can carry.	Ingen rad i rutan är en kod som den här typen kan bära.
+	One code a line, each a whole value of the type above.	En kod per rad, var och en ett fullständigt värde av typen ovan.
+	Outline the digits	Gör siffrorna till konturer
+	printable ASCII	utskrivbara ASCII-tecken
+	printable ASCII, upper case and control characters	utskrivbara ASCII-tecken, versaler och styrtecken
+	QR Code	QR-kod
 	Smoothness	Mjukhet
 	Radial Blur…	Radiell oskärpa…
 	Smart Blur…	Smart oskärpa…
@@ -391,6 +416,7 @@ font-technology	Variable	Variabla
 	Check Script	Kontrollera skript
 	Check Script…	Kontrollera skript…
 	Copy Report	Kopiera rapport
+	Valid:	Giltig:
 	VectorCraft read this script without running it.	VectorCraft läste skriptet utan att köra det.
 	Needs nothing beyond plain JavaScript	Kräver inget utöver vanlig JavaScript
 	Needs the script language's own objects or directives	Kräver skriptspråkets egna objekt eller direktiv
@@ -400,6 +426,7 @@ font-technology	Variable	Variabla
 	Needs dialogs	Kräver dialogrutor
 	Needs features only the reference app has	Kräver funktioner som bara referensappen har
 	Outside the document	Utanför dokumentet
+	White background box	Vit bakgrundsruta
 	Writes, moves or deletes files	Skriver, flyttar eller raderar filer
 	Opens files in other apps	Öppnar filer i andra appar
 	Opens network connections	Öppnar nätverksanslutningar
@@ -5427,6 +5454,19 @@ theme	Appearance	Utseende
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	det här är en PostScript-fil (en .ai sparad i ett äldre format eller utan PDF-kompatibilitet, eller en EPS-fil), inte en PDF: Fil › Öppna och Fil › Placera läser den som EPS
 @msg	this system has no screen color sampler	det här systemet saknar färghämtning från skärmen
 @msg	the image can't be read as a texture	bilden kan inte läsas som en textur
+	Barcode	Streckkod
+	Barcode Options	Streckkodsalternativ
+	Data:	Data:
+	Document Default	Dokumentets standard
+	Error Correction:	Felrättning:
+	Human Readable Line	Läsbar rad
+	Install OCR-B for the standard digits.	Installera OCR-B för de standardenliga siffrorna.
+	Magnification:	Förstoring:
+	Mask:	Mask:
+	Module:	Modul:
+	Quiet Zone:	Tyst zon:
+	Update	Uppdatera
+	Width Ratio:	Breddförhållande:
 
 # User Interface › Accent Color
 	Accent Color	Accentfärg
@@ -5605,6 +5645,12 @@ swatch	Yellow Green	Gulgrön
 	Select by Color	Markera efter färg
 	Move Anchor Point	Flytta ankarpunkt
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behåller 1 av dokumentets {n} ritytor: filen öppnas igen med en. Slå på Bevara redigeringsmöjligheter för att behålla alla.
+@msg	a QR Code version is 1 to 40, not {other}	en QR-kods version är 1 till 40, inte {other}
+@msg	no codes to draw	inga koder att rita
+@msg	no line in the data is a code this symbology can carry	ingen rad i data är en kod som denna symbologi kan bära
+@msg	select a barcode	välj en streckkod
+@msg	unknown barcode type `{name}`	okänd streckkodstyp `{name}`
+@msg	unknown error correction level `{other}`	okänd felkorrigeringsnivå `{other}`
 	Chalk & Charcoal…	Krita och kol…
 	Chalk & Charcoal	Krita och kol
 	Graphic Pen…	Grafisk penna…

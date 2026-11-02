@@ -7,10 +7,35 @@
 # дръжка…); no Illustrator (or any other application's) Bulgarian UI, string table or localisation
 # resource was consulted or copied. Drafted with AI assistance (Gemini) from the English meaning;
 # not yet reviewed by a native speaker.
+	11 or 12 digits	11 или 12 цифри
+	12 or 13 digits	12 или 13 цифри
+	6 or 8 digits	6 или 8 цифри
+	7 or 8 digits	7 или 8 цифри
+	an even number of digits	четен брой цифри
+	any text	произволен текст
+	ASCII	ASCII
+	Barcodes	Баркодове
+	Check	Проверка
+	Check Barcode	Проверка на баркод
+	Codes:	Кодове:
+	Content	Съдържание
+	Create Batch	Създаване на партида
+	digits, A–Z and - . $ / + % and space	цифри, A–Z и - . $ / + % и интервал
+	digits, with or without the (01) application identifier	цифри, със или без идентификатора на приложението (01)
+	Drawn:	Начертани:
+	Gap:	Отстояние:
 	Glowing Edges…	Сияйни ръбове…
 	Glowing Edges	Сияйни ръбове
 	Edge Width	Ширина на ръба
 	Edge Brightness	Яркост на ръба
+	Max per Row:	Максимум на ред:
+	No fonts are installed.	Няма инсталирани шрифтове.
+	No line in the box is a code this type can carry.	Нито един ред в полето не е код, който този тип може да носи.
+	One code a line, each a whole value of the type above.	Един код на ред, всеки пълна стойност за типа отгоре.
+	Outline the digits	Очертаване на цифрите
+	printable ASCII	печатащи се ASCII знаци
+	printable ASCII, upper case and control characters	печатащи се ASCII знаци, главни букви и управляващи знаци
+	QR Code	QR код
 	Smoothness	Гладкост
 	Radial Blur…	Лъчезарно размазване…
 	Smart Blur…	Интелигентно размазване…
@@ -389,6 +414,7 @@ font-technology	Variable	Променливи
 	Check Script	Проверка на скрипт
 	Check Script…	Проверка на скрипт…
 	Copy Report	Копиране на отчет
+	Valid:	Валиден:
 	VectorCraft read this script without running it.	VectorCraft прочете този скрипт, без да го изпълнява.
 	Needs nothing beyond plain JavaScript	Не изисква нищо извън обикновения JavaScript
 	Needs the script language's own objects or directives	Изисква собствени обекти или директиви на езика за скриптове
@@ -398,6 +424,7 @@ font-technology	Variable	Променливи
 	Needs dialogs	Изисква диалогови прозорци
 	Needs features only the reference app has	Изисква функции, които притежава само референтната програма
 	Outside the document	Извън документа
+	White background box	Бяла рамка на фона
 	Writes, moves or deletes files	Записва, премества или изтрива файлове
 	Opens files in other apps	Отваря файлове в други приложения
 	Opens network connections	Отваря мрежови връзки
@@ -5400,6 +5427,19 @@ theme	Appearance	Външен вид
 # View › Hide Template / Show Template
 	Hide Template	Скриване на шаблона
 	Show Template	Показване на шаблона
+	Barcode	Баркод
+	Barcode Options	Опции за баркод
+	Data:	Данни:
+	Document Default	По подразбиране в документа
+	Error Correction:	Корекция на грешки:
+	Human Readable Line	Четив текст
+	Install OCR-B for the standard digits.	Инсталирайте OCR-B за стандартните цифри.
+	Magnification:	Увеличение:
+	Mask:	Маска:
+	Module:	Модул:
+	Quiet Zone:	Тиха зона:
+	Update	Обновяване
+	Width Ratio:	Съотношение на ширината:
 
 # User Interface › Accent Color
 	Accent Color	Цвят на акцента

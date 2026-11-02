@@ -358,6 +358,21 @@ impl FontDb {
         self.is_loaded(&family) || self.read_catalog().contains_key(&family.to_ascii_lowercase())
     }
 
+    /// The machine's OCR-B family, if it has one: the face GS1 §5.2.4 names for a barcode's human
+    /// readable line.
+    ///
+    /// It ships under as many names as there are founders — `OCR-B`, `OCR-B 10 Pitch BT`, `OCRBStd`,
+    /// `OCR B Std`, `OCRB10N` — so the names are matched on what they have in common (letters and
+    /// digits, case aside) rather than on one spelling. GS1 sets the line in OCR-B at 10 characters
+    /// per inch, so a face that says so is preferred over the others; the list is sorted, so the
+    /// plainest spelling wins within each. `None` when no OCR-B is installed, which a caller draws
+    /// in the document's own font.
+    pub fn ocr_b(&self) -> Option<String> {
+        let list = self.family_list();
+        let key = |f: &str| norm_chars(f).collect::<String>();
+        list.iter().find(|f| key(f).starts_with("ocrb10")).or_else(|| list.iter().find(|f| key(f).starts_with("ocrb"))).cloned()
+    }
+
     pub(crate) fn is_loaded(&self, family: &str) -> bool {
         self.read_faces().iter().any(|f| f.family.eq_ignore_ascii_case(family))
     }

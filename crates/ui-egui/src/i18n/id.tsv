@@ -4,9 +4,45 @@
 # Clean-room: written from the meaning of VectorCraft's English labels in neutral, international
 # Indonesian, using the feature names Indonesian speakers of vector illustration software know. No other
 # localisation was copied. Labels use sentence case (only the first word capitalised).
+	11 or 12 digits	11 atau 12 digit
+	12 or 13 digits	12 atau 13 digit
+	6 or 8 digits	6 atau 8 digit
+	7 or 8 digits	7 atau 8 digit
+	an even number of digits	jumlah digit genap
+	any text	teks apa pun
+	ASCII	ASCII
+	Barcode	Kode batang
+	Barcode Options	Opsi kode batang
+	Barcodes	Kode batang
+	Check	Periksa
+	Check Barcode	Periksa kode batang
+	Codes:	Kode:
+	Content	Isi
+	Create Batch	Buat batch
+	Data:	Data:
+	digits, A–Z and - . $ / + % and space	digit, A–Z dan - . $ / + % serta spasi
+	digits, with or without the (01) application identifier	digit, dengan atau tanpa pengenal aplikasi (01)
+	Document Default	Bawaan dokumen
+	Drawn:	Digambar:
+	Error Correction:	Koreksi galat:
+	Gap:	Jarak:
+	Human Readable Line	Baris terbaca
+	Install OCR-B for the standard digits.	Pasang OCR-B untuk angka standar.
+	Magnification:	Pembesaran:
+	Mask:	Masker:
+	Max per Row:	Maks. per baris:
+	Module:	Modul:
 	New Design	Desain baru
 	Delete Design	Hapus desain
+	No fonts are installed.	Tidak ada font yang terpasang.
+	No line in the box is a code this type can carry.	Tidak ada baris di kotak yang merupakan kode yang dapat dibawa jenis ini.
+	One code a line, each a whole value of the type above.	Satu kode per baris, masing-masing nilai utuh dari jenis di atas.
+	Outline the digits	Gariskan angka
 	Paste Design	Tempel desain
+	printable ASCII	ASCII yang dapat dicetak
+	printable ASCII, upper case and control characters	ASCII yang dapat dicetak, huruf besar dan karakter kontrol
+	QR Code	Kode QR
+	Quiet Zone:	Zona sunyi:
 	Select Unused	Seleksi yang tidak digunakan
 	Glowing Edges…	Tepi berpendar…
 	About VectorCraft	Tentang VectorCraft
@@ -130,6 +166,10 @@
 	Start from VectorCraft Defaults	Mulai dari default VectorCraft
 	Add to the Current Shortcuts	Tambahkan ke pintasan saat ini
 	Remember My Choices	Ingat pilihan saya
+	Update	Perbarui
+	Valid:	Valid:
+	White background box	Kotak latar putih
+	Width Ratio:	Rasio lebar:
 	{ready} of {total} ready	{ready} dari {total} siap
 	The file is too large to read in full, so only its first part is listed.	Berkas terlalu besar untuk dibaca sepenuhnya, sehingga hanya bagian pertamanya yang tercantum.
 	Report copied	Laporan disalin

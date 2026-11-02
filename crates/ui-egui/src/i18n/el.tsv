@@ -4,10 +4,35 @@
 # Preserved the 2,183 source entries and added manually drafted Greek interface strings.
 # Product names and technical format identifiers are intentionally left as-is.
 # Requires live native review and Rust i18n test run before a PR.
+	11 or 12 digits	11 ή 12 ψηφία
+	12 or 13 digits	12 ή 13 ψηφία
+	6 or 8 digits	6 ή 8 ψηφία
+	7 or 8 digits	7 ή 8 ψηφία
+	an even number of digits	άρτιος αριθμός ψηφίων
+	any text	οποιοδήποτε κείμενο
+	ASCII	ASCII
+	Barcodes	Γραμμωτοί κώδικες
+	Check	Έλεγχος
+	Check Barcode	Έλεγχος γραμμωτού κώδικα
+	Codes:	Κωδικοί:
+	Content	Περιεχόμενο
+	Create Batch	Δημιουργία παρτίδας
+	digits, A–Z and - . $ / + % and space	ψηφία, A–Z και - . $ / + % και κενό
+	digits, with or without the (01) application identifier	ψηφία, με ή χωρίς το αναγνωριστικό εφαρμογής (01)
+	Drawn:	Σχεδιασμένα:
+	Gap:	Απόσταση:
 	Glowing Edges…	Φωτεινά περιγράμματα…
 	Glowing Edges	Φωτεινά περιγράμματα
 	Edge Width	Πλάτος ακμών
 	Edge Brightness	Φωτεινότητα ακμών
+	Max per Row:	Μέγιστο ανά σειρά:
+	No fonts are installed.	Δεν υπάρχουν εγκατεστημένες γραμματοσειρές.
+	No line in the box is a code this type can carry.	Καμία γραμμή στο πλαίσιο δεν είναι κωδικός που μπορεί να φέρει αυτός ο τύπος.
+	One code a line, each a whole value of the type above.	Ένας κωδικός ανά γραμμή, ο καθένας πλήρης τιμή του τύπου παραπάνω.
+	Outline the digits	Μετατροπή ψηφίων σε περιγράμματα
+	printable ASCII	εκτυπώσιμοι χαρακτήρες ASCII
+	printable ASCII, upper case and control characters	εκτυπώσιμοι χαρακτήρες ASCII, κεφαλαία και χαρακτήρες ελέγχου
+	QR Code	Κώδικας QR
 	Smoothness	Ομαλότητα
 	Radial Blur…	Ακτινική θόλωση…
 	Smart Blur…	Έξυπνη θόλωση…
@@ -375,6 +400,7 @@ font-technology	Variable	Μεταβλητές
 	Check Script	Έλεγχος σεναρίου
 	Check Script…	Έλεγχος σεναρίου…
 	Copy Report	Αντιγραφή αναφοράς
+	Valid:	Έγκυρο:
 	VectorCraft read this script without running it.	Το VectorCraft διάβασε αυτό το σενάριο χωρίς να το εκτελέσει.
 	Needs nothing beyond plain JavaScript	Απαιτεί μόνο απλή JavaScript
 	Needs the document model	Απαιτεί το μοντέλο εγγράφου
@@ -383,6 +409,7 @@ font-technology	Variable	Μεταβλητές
 	Needs dialogs	Απαιτεί παράθυρα διαλόγου
 	Needs features only the reference app has	Απαιτεί λειτουργίες που διαθέτει μόνο η εφαρμογή αναφοράς
 	Outside the document	Εκτός εγγράφου
+	White background box	Λευκό πλαίσιο υποβάθρου
 	Writes, moves or deletes files	Εγγράφει, μετακινεί ή διαγράφει αρχεία
 	Opens files in other apps	Ανοίγει αρχεία σε άλλες εφαρμογές
 	Opens network connections	Ανοίγει συνδέσεις δικτύου
@@ -5423,6 +5450,19 @@ effect	Points	Σημεία
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	αυτό είναι αρχείο PostScript (ένα .ai αποθηκευμένο σε παλαιότερη μορφή ή χωρίς συμβατότητα PDF, ή αρχείο EPS), όχι PDF: οι εντολές Αρχείο › Άνοιγμα και Αρχείο › Τοποθέτηση το διαβάζουν ως EPS
 @msg	this system has no screen color sampler	αυτό το σύστημα δεν έχει δειγματοληψία χρώματος από την οθόνη
 @msg	the image can't be read as a texture	η εικόνα δεν μπορεί να διαβαστεί ως υφή
+	Barcode	Γραμμωτός κώδικας
+	Barcode Options	Επιλογές γραμμωτού κώδικα
+	Data:	Δεδομένα:
+	Document Default	Προεπιλογή εγγράφου
+	Error Correction:	Διόρθωση σφαλμάτων:
+	Human Readable Line	Αναγνώσιμη γραμμή
+	Install OCR-B for the standard digits.	Εγκαταστήστε τη γραμματοσειρά OCR-B για τα τυπικά ψηφία.
+	Magnification:	Μεγέθυνση:
+	Mask:	Μάσκα:
+	Module:	Μονάδα:
+	Quiet Zone:	Περιθώριο ησυχίας:
+	Update	Ενημέρωση
+	Width Ratio:	Αναλογία πλάτους:
 
 # User Interface › Accent Color
 	Accent Color	Χρώμα έμφασης
@@ -5534,6 +5574,12 @@ effect	Points	Σημεία
 	Select by Color	Επιλογή βάσει χρώματος
 	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	Το {label} διατηρεί 1 από τους {n} πίνακες σχεδίασης του εγγράφου: το αρχείο ανοίγει ξανά με μία. Ενεργοποιήστε τη Διατήρηση δυνατοτήτων επεξεργασίας για να τους κρατήσετε όλους.
+@msg	a QR Code version is 1 to 40, not {other}	η έκδοση ενός QR Code είναι 1 έως 40, όχι {other}
+@msg	no codes to draw	δεν υπάρχουν κωδικοί για σχεδίαση
+@msg	no line in the data is a code this symbology can carry	καμία γραμμή στα δεδομένα δεν είναι κωδικός που μπορεί να φέρει αυτή η συμβολολογία
+@msg	select a barcode	επιλέξτε γραμμωτό κώδικα
+@msg	unknown barcode type `{name}`	άγνωστος τύπος γραμμωτού κώδικα `{name}`
+@msg	unknown error correction level `{other}`	άγνωστο επίπεδο διόρθωσης σφαλμάτων `{other}`
 	Chalk & Charcoal…	Κιμωλία και κάρβουνο…
 	Chalk & Charcoal	Κιμωλία και κάρβουνο
 	Graphic Pen…	Γραφική πένα…

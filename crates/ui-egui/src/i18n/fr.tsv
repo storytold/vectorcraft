@@ -13,10 +13,35 @@
 # `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	11 or 12 digits	11 ou 12 chiffres
+	12 or 13 digits	12 ou 13 chiffres
+	6 or 8 digits	6 ou 8 chiffres
+	7 or 8 digits	7 ou 8 chiffres
+	an even number of digits	un nombre pair de chiffres
+	any text	n'importe quel texte
+	ASCII	ASCII
+	Barcodes	Codes-barres
+	Check	Vérifier
+	Check Barcode	Vérifier le code-barres
+	Codes:	Codes :
+	Content	Contenu
+	Create Batch	Créer un lot
+	digits, A–Z and - . $ / + % and space	chiffres, A–Z et - . $ / + % et espace
+	digits, with or without the (01) application identifier	chiffres, avec ou sans l'identifiant d'application (01)
+	Drawn:	Dessinés :
+	Gap:	Espacement :
 	Glowing Edges…	Contour lumineux…
 	Glowing Edges	Contour lumineux
 	Edge Width	Largeur du bord
 	Edge Brightness	Luminosité du bord
+	Max per Row:	Max. par ligne :
+	No fonts are installed.	Aucune police n'est installée.
+	No line in the box is a code this type can carry.	Aucune ligne du champ n'est un code que ce type peut porter.
+	One code a line, each a whole value of the type above.	Un code par ligne, chacun une valeur complète du type ci-dessus.
+	Outline the digits	Convertir les chiffres en contours
+	printable ASCII	ASCII imprimable
+	printable ASCII, upper case and control characters	ASCII imprimable, majuscules et caractères de contrôle
+	QR Code	Code QR
 	Smoothness	Lissage
 	Radial Blur…	Flou radial…
 	Smart Blur…	Flou optimisé…
@@ -404,6 +429,7 @@ font-technology	Variable	Variables
 	Check Script	Vérifier le script
 	Check Script…	Vérifier le script…
 	Copy Report	Copier le rapport
+	Valid:	Valide :
 	VectorCraft read this script without running it.	VectorCraft a lu ce script sans l’exécuter.
 	Needs nothing beyond plain JavaScript	Ne demande que du JavaScript simple
 	Needs the script language's own objects or directives	Demande les objets ou directives propres au langage du script
@@ -413,6 +439,7 @@ font-technology	Variable	Variables
 	Needs dialogs	Demande des boîtes de dialogue
 	Needs features only the reference app has	Demande des fonctions que seule l’application de référence possède
 	Outside the document	Hors du document
+	White background box	Cadre blanc en fond
 	Writes, moves or deletes files	Écrit, déplace ou supprime des fichiers
 	Opens files in other apps	Ouvre des fichiers dans d’autres applications
 	Opens network connections	Ouvre des connexions réseau
@@ -5469,6 +5496,19 @@ theme	Appearance	Apparence
 @msg	open a document with data sets	ouvrez un document avec des jeux de données
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	rien du jeu de données {name} n’a été appliqué, car aucun objet n’est lié à une variable pour laquelle il a une valeur
 @msg	the action has no steps	l'action n'a aucune étape
+	Barcode	Code-barres
+	Barcode Options	Options du code-barres
+	Data:	Données :
+	Document Default	Par défaut du document
+	Error Correction:	Correction d'erreur :
+	Human Readable Line	Ligne lisible
+	Install OCR-B for the standard digits.	Installez OCR-B pour les chiffres normalisés.
+	Magnification:	Agrandissement :
+	Mask:	Masque :
+	Module:	Module :
+	Quiet Zone:	Zone de silence :
+	Update	Mettre à jour
+	Width Ratio:	Rapport de largeur :
 
 # User Interface › Accent Color
 	Accent Color	Couleur d’accent
@@ -5580,6 +5620,12 @@ theme	Appearance	Apparence
 	Select by Color	Sélectionner par couleur
 	Move Anchor Point	Déplacer le point d’ancrage
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} conserve 1 des {n} plans de travail du document : le fichier se rouvre avec un seul. Activez Conserver les fonctions d’édition pour les conserver tous.
+@msg	a QR Code version is 1 to 40, not {other}	une version de QR Code va de 1 à 40, pas {other}
+@msg	no codes to draw	aucun code à dessiner
+@msg	no line in the data is a code this symbology can carry	aucune ligne des données n'est un code que cette symbologie peut porter
+@msg	select a barcode	sélectionnez un code-barres
+@msg	unknown barcode type `{name}`	type de code-barres inconnu `{name}`
+@msg	unknown error correction level `{other}`	niveau de correction d'erreur inconnu `{other}`
 	Chalk & Charcoal…	Craie et fusain…
 	Chalk & Charcoal	Craie et fusain
 	Graphic Pen…	Plume graphique…

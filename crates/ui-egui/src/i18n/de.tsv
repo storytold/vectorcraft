@@ -19,10 +19,35 @@
 # tests): the product name, language names, OpenType, the built-in workspace names and the bracketed
 # perspective grid preset names; `de-DE`, `de-AT`, `de-CH` and every other `de-*` locale resolve here.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	11 or 12 digits	11 oder 12 Ziffern
+	12 or 13 digits	12 oder 13 Ziffern
+	6 or 8 digits	6 oder 8 Ziffern
+	7 or 8 digits	7 oder 8 Ziffern
+	an even number of digits	eine gerade Anzahl Ziffern
+	any text	beliebiger Text
+	ASCII	ASCII
+	Barcodes	Barcodes
+	Check	Prüfen
+	Check Barcode	Barcode prüfen
+	Codes:	Codes:
+	Content	Inhalt
+	Create Batch	Charge erstellen
+	digits, A–Z and - . $ / + % and space	Ziffern, A–Z und - . $ / + % und Leerzeichen
+	digits, with or without the (01) application identifier	Ziffern, mit oder ohne die Anwendungskennung (01)
+	Drawn:	Gezeichnet:
+	Gap:	Abstand:
 	Glowing Edges…	Leuchtende Konturen…
 	Glowing Edges	Leuchtende Konturen
 	Edge Width	Kantenbreite
 	Edge Brightness	Kantenhelligkeit
+	Max per Row:	Max. pro Zeile:
+	No fonts are installed.	Es sind keine Schriften installiert.
+	No line in the box is a code this type can carry.	Keine Zeile im Feld ist ein Code, den dieser Typ tragen kann.
+	One code a line, each a whole value of the type above.	Ein Code pro Zeile, jeder ein vollständiger Wert des Typs oben.
+	Outline the digits	Ziffern in Pfade wandeln
+	printable ASCII	druckbare ASCII-Zeichen
+	printable ASCII, upper case and control characters	druckbare ASCII-Zeichen, Großbuchstaben und Steuerzeichen
+	QR Code	QR-Code
 	Smoothness	Glättung
 	Radial Blur…	Radialer Weichzeichner…
 	Smart Blur…	Selektiver Weichzeichner…
@@ -378,6 +403,7 @@ font-technology	Variable	Variabel
 	Check Script	Skript prüfen
 	Check Script…	Skript prüfen…
 	Copy Report	Bericht kopieren
+	Valid:	Gültig:
 	VectorCraft read this script without running it.	VectorCraft hat dieses Skript gelesen, ohne es auszuführen.
 	Needs nothing beyond plain JavaScript	Braucht nur einfaches JavaScript
 	Needs the script language's own objects or directives	Braucht eigene Objekte oder Direktiven der Skriptsprache
@@ -387,6 +413,7 @@ font-technology	Variable	Variabel
 	Needs dialogs	Braucht Dialogfelder
 	Needs features only the reference app has	Braucht Funktionen, die nur die Referenzanwendung hat
 	Outside the document	Außerhalb des Dokuments
+	White background box	Weißer Hintergrundkasten
 	Writes, moves or deletes files	Schreibt, verschiebt oder löscht Dateien
 	Opens files in other apps	Öffnet Dateien in anderen Apps
 	Opens network connections	Öffnet Netzwerkverbindungen
@@ -5049,6 +5076,19 @@ effect	Soft	Weich
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
 @msg	the action has no steps	die Aktion hat keine Schritte
+	Barcode	Barcode
+	Barcode Options	Barcode-Optionen
+	Data:	Daten:
+	Document Default	Dokumentstandard
+	Error Correction:	Fehlerkorrektur:
+	Human Readable Line	Klarschriftzeile
+	Install OCR-B for the standard digits.	Installieren Sie OCR-B für die genormten Ziffern.
+	Magnification:	Vergrößerung:
+	Mask:	Maske:
+	Module:	Modul:
+	Quiet Zone:	Ruhezone:
+	Update	Aktualisieren
+	Width Ratio:	Breitenverhältnis:
 
 # User Interface › Accent Color
 	Accent Color	Akzentfarbe
@@ -5163,6 +5203,12 @@ effect	Soft	Weich
 	Select by Color	Nach Farbe auswählen
 	Move Anchor Point	Ankerpunkt verschieben
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behält 1 der {n} Zeichenflächen des Dokuments: Die Datei wird mit einer wieder geöffnet. Aktivieren Sie „Bearbeitungsfunktionen beibehalten“, um alle zu behalten.
+@msg	a QR Code version is 1 to 40, not {other}	eine QR-Code-Version ist 1 bis 40, nicht {other}
+@msg	no codes to draw	keine Codes zum Zeichnen
+@msg	no line in the data is a code this symbology can carry	keine Zeile in den Daten ist ein Code, den diese Symbologie darstellen kann
+@msg	select a barcode	wählen Sie einen Barcode
+@msg	unknown barcode type `{name}`	unbekannter Barcode-Typ `{name}`
+@msg	unknown error correction level `{other}`	unbekannte Fehlerkorrekturstufe `{other}`
 	Chalk & Charcoal…	Kreide & Kohle…
 	Chalk & Charcoal	Kreide & Kohle
 	Graphic Pen…	Grafikstift…

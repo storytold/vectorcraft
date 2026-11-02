@@ -92,6 +92,8 @@
 	1 Color Job…	1 színes munka…
 	1 Layer	1 réteg
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	A rajztáblán 1 {unit} a jelenetben {real} {unit} távolságnak felel meg.
+	11 or 12 digits	11 vagy 12 számjegy
+	12 or 13 digits	12 vagy 13 számjegy
 	16 bit	16 bit
 	16 bits/pixel	16 bit/pixel
 	16 Colors	16 szín
@@ -120,7 +122,9 @@
 	4up	4 nézet
 	5 x 5 Average	5 x 5 átlag
 	6 Colors	6 szín
+	6 or 8 digits	6 vagy 8 számjegy
 	60° Angles	60°-os szögek
+	7 or 8 digits	7 vagy 8 számjegy
 	8 bit	8 bit
 	8 Colors	8 szín
 	8K UHD	8K UHD
@@ -255,6 +259,7 @@
 	Alter Paths for Appearance	Útvonalak módosítása a megjelenés szerint
 	Amount	Mérték
 	Amount:	Mérték:
+	an even number of digits	páros számú számjegy
 	Analogous	Analóg
 	Analogous 2	Analóg 2
 	Anchor Point	Horgonypont
@@ -279,6 +284,7 @@
 	Anti-aliasing:	Élsimítás:
 	Any except extracting pages	Bármi, kivéve az oldalak kinyerését
 	Any Kind	Bármilyen típus
+	any text	bármilyen szöveg
 	Font Technology	Betűtípus-technológia
 font-technology	Variable	Változó
 	Appearance	Megjelenés
@@ -346,6 +352,7 @@ font-technology	Variable	Változó
 	As Single Asset	Egy elemként
 	Ascender	Felnyúló szár
 	Ascent	Felnyúlás
+	ASCII	ASCII
 	Ask When Modified	Kérdés módosításkor
 	Aspect Ratio	Méretarány
 	Asset Export	Elemexportálás
@@ -390,6 +397,7 @@ font-technology	Variable	Változó
 	Bar	Vonal
 	Bar Graph Tool	Sávdiagram
 	Barbed	Szakállas
+	Barcodes	Vonalkódok
 	Baseline	Alapvonal
 	Baseline (Standard)	Alapvonali (szabványos)
 	Baseline Optimized	Alapvonali, optimalizált
@@ -557,11 +565,29 @@ font-technology	Variable	Változó
 	Character Style Options	Karakterstílus beállításai
 	Character Styles	Karakterstílusok
 	Character:	Karakter:
+	Check	Ellenőrzés
+	Check Barcode	Vonalkód ellenőrzése
 	Check Links	Csatolások ellenőrzése
 # Check Script (File › Scripts) and the report it shows on a script written for the reference app.
 	Check Script	Szkript ellenőrzése
 	Check Script…	Szkript ellenőrzése…
+	Codes:	Kódok:
+	Content	Tartalom
 	Copy Report	Jelentés másolása
+	Create Batch	Köteg létrehozása
+	digits, A–Z and - . $ / + % and space	számjegyek, A–Z és - . $ / + % és szóköz
+	digits, with or without the (01) application identifier	számjegyek, a (01) alkalmazásazonosítóval vagy anélkül
+	Drawn:	Megrajzolva:
+	Gap:	Távolság:
+	Max per Row:	Max. soronként:
+	No fonts are installed.	Nincsenek telepített betűkészletek.
+	No line in the box is a code this type can carry.	Egyetlen sor sem olyan kód a mezőben, amelyet ez a típus hordozhat.
+	One code a line, each a whole value of the type above.	Soronként egy kód, mindegyik a fenti típus teljes értéke.
+	Outline the digits	Számjegyek körvonalazása
+	printable ASCII	nyomtatható ASCII
+	printable ASCII, upper case and control characters	nyomtatható ASCII, nagybetűk és vezérlőkarakterek
+	QR Code	QR-kód
+	Valid:	Érvényes:
 	VectorCraft read this script without running it.	A VectorCraft futtatás nélkül olvasta be ezt a szkriptet.
 	Needs nothing beyond plain JavaScript	Csak egyszerű JavaScript kell hozzá
 	Needs the script language's own objects or directives	A szkriptnyelv saját objektumai vagy direktívái kellenek hozzá
@@ -571,6 +597,7 @@ font-technology	Variable	Változó
 	Needs dialogs	Párbeszédablakok kellenek hozzá
 	Needs features only the reference app has	Olyan funkciók kellenek hozzá, amelyek csak a referenciaalkalmazásban vannak
 	Outside the document	A dokumentumon kívül
+	White background box	Fehér háttérkeret
 	Writes, moves or deletes files	Fájlokat ír, áthelyez vagy töröl
 	Opens files in other apps	Fájlokat nyit meg más alkalmazásokban
 	Opens network connections	Hálózati kapcsolatokat nyit
@@ -5457,6 +5484,19 @@ imageTrace	Outline	Körvonal
 @msg	open a document with data sets	nyisson meg egy adatkészleteket tartalmazó dokumentumot
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ebből az adatkészletből semmi sem lett alkalmazva: {name}; egyetlen objektum sincs olyan változóhoz kötve, amelynek értéke van benne
 @msg	the action has no steps	a műveletnek nincsenek lépései
+	Barcode	Vonalkód
+	Barcode Options	Vonalkód beállításai
+	Data:	Adatok:
+	Document Default	Dokumentum alapértelmezése
+	Error Correction:	Hibajavítás:
+	Human Readable Line	Olvasható sor
+	Install OCR-B for the standard digits.	Telepítse az OCR-B betűtípust a szabványos számjegyekhez.
+	Magnification:	Nagyítás:
+	Mask:	Maszk:
+	Module:	Modul:
+	Quiet Zone:	Csendes zóna:
+	Update	Frissítés
+	Width Ratio:	Szélességarány:
 
 # User Interface › Accent Color
 	Accent Color	Kiemelőszín
@@ -5568,6 +5608,12 @@ imageTrace	Outline	Körvonal
 	Select by Color	Kijelölés szín szerint
 	Move Anchor Point	Horgonypont áthelyezése
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	A(z) {label} a dokumentum {n} rajztáblájából 1-et tart meg: a fájl eggyel nyílik meg újra. Kapcsolja be a Szerkeszthetőség megtartása beállítást, hogy mind megmaradjon.
+@msg	a QR Code version is 1 to 40, not {other}	a QR-kód verziója 1 és 40 közötti, nem {other}
+@msg	no codes to draw	nincs megrajzolható kód
+@msg	no line in the data is a code this symbology can carry	az adatok egyetlen sora sem olyan kód, amelyet ez a szimbólumrendszer hordozhat
+@msg	select a barcode	válasszon vonalkódot
+@msg	unknown barcode type `{name}`	ismeretlen vonalkódtípus: `{name}`
+@msg	unknown error correction level `{other}`	ismeretlen hibajavítási szint: `{other}`
 	Chalk & Charcoal…	Kréta és szén…
 	Chalk & Charcoal	Kréta és szén
 	Graphic Pen…	Grafikus toll…

@@ -17,6 +17,8 @@ pub struct NodeExtras {
     pub wrap: Option<crate::text::TextWrap>,
     /// Graph object: the group's children are generated from this spec (Object → Graph).
     pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Barcode object: the group's children are generated from this spec (the Barcode panel).
+    pub barcode: Option<Box<vectorcraft_barcode::BarcodeSpec>>,
     /// Index of the graph series this generated group belongs to. Axes, the legend and other
     /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
     pub series_index: Option<u32>,
@@ -74,6 +76,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     trace: None,
     wrap: None,
     graph: None,
+    barcode: None,
     series_index: None,
     type_outlines: false,
     pixelated: false,

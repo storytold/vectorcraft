@@ -163,6 +163,8 @@ pub struct Tokens {
     pub error: Color32,
     /// Warning marks (a modified linked file).
     pub warning: Color32,
+    /// A check that passed: the value an encoder accepted, a barcode a batch drew.
+    pub success: Color32,
     /// Rotation gizmo axes, also labelled X, Y and Z.
     pub axis_x: Color32,
     pub axis_y: Color32,
@@ -215,6 +217,7 @@ impl Tokens {
             artboard_mark: hex(0x808080),
             error: hex(0xe34850),
             warning: hex(0xf0a330),
+            success: hex(0x45af63),
             axis_x: hex(0xef6058),
             axis_y: hex(0x45af63),
             axis_z: hex(0x378ef0),
@@ -388,6 +391,7 @@ impl Tokens {
                 ruler_tick: hex(0x4a4a4a),
                 measure_bg: Color32::from_rgba_unmultiplied(184, 184, 184, 235),
                 button: hex(0xcacaca),
+                success: hex(0x1e7d3c),
                 button_border: hex(0x7a7a7a),
                 flyout_active: hex(0x1473e6),
                 ..base
@@ -415,6 +419,7 @@ impl Tokens {
                 ruler_tick: hex(0x5a5a5a),
                 measure_bg: Color32::from_rgba_unmultiplied(240, 240, 240, 235),
                 button: hex(0xe0e0e0),
+                success: hex(0x1e7d3c),
                 button_border: hex(0x9a9a9a),
                 flyout_active: hex(0x1473e6),
                 ..base

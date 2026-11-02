@@ -18,9 +18,34 @@
 # tests): the product name, language names, OpenType, the built-in workspace names and the
 # bracketed perspective grid preset names. Keep placeholders, ellipses and the leading/trailing
 # spaces of fragments when editing.
+	11 or 12 digits	11 nebo 12 číslic
+	12 or 13 digits	12 nebo 13 číslic
+	6 or 8 digits	6 nebo 8 číslic
+	7 or 8 digits	7 nebo 8 číslic
+	an even number of digits	sudý počet číslic
+	any text	libovolný text
+	ASCII	ASCII
+	Barcodes	Čárové kódy
+	Check	Zkontrolovat
+	Check Barcode	Zkontrolovat čárový kód
+	Codes:	Kódy:
+	Content	Obsah
+	Create Batch	Vytvořit dávku
+	digits, A–Z and - . $ / + % and space	číslice, A–Z a - . $ / + % a mezera
+	digits, with or without the (01) application identifier	číslice, s identifikátorem použití (01) nebo bez něj
+	Drawn:	Vytvořeno:
+	Gap:	Mezera:
+	Max per Row:	Max. na řádek:
 	New Design	Nový návrh
 	Delete Design	Odstranit návrh
+	No fonts are installed.	Nejsou nainstalovány žádné fonty.
+	No line in the box is a code this type can carry.	Žádný řádek v poli není kód, který tento typ unese.
+	One code a line, each a whole value of the type above.	Jeden kód na řádek, každý celá hodnota výše zvoleného typu.
+	Outline the digits	Obrysovat číslice
 	Paste Design	Vložit návrh
+	printable ASCII	tisknutelné ASCII
+	printable ASCII, upper case and control characters	tisknutelné ASCII, velká písmena a řídicí znaky
+	QR Code	QR kód
 	Select Unused	Vybrat nepoužité
 	Glowing Edges…	Zářící okraje…
 	About VectorCraft	O aplikaci VectorCraft
@@ -145,6 +170,8 @@
 	Start from VectorCraft Defaults	Vycházet z výchozích zkratek VectorCraftu
 	Add to the Current Shortcuts	Přidat k aktuálním zkratkám
 	Remember My Choices	Zapamatovat si moje volby
+	Valid:	Platné:
+	White background box	Bílé pozadí
 	{ready} of {total} ready	Připraveno {ready} z {total}
 	The file is too large to read in full, so only its first part is listed.	Soubor je příliš velký na úplné přečtení, proto je uvedena jen jeho první část.
 	Report copied	Zpráva zkopírována
@@ -5472,6 +5499,19 @@ mark-style	Japanese	Japonské
 @msg	open a document with data sets	otevřete dokument se sadami dat
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
 @msg	the action has no steps	akce nemá žádné kroky
+	Barcode	Čárový kód
+	Barcode Options	Možnosti čárového kódu
+	Data:	Data:
+	Document Default	Výchozí v dokumentu
+	Error Correction:	Oprava chyb:
+	Human Readable Line	Čitelný text
+	Install OCR-B for the standard digits.	Nainstalujte OCR-B pro standardní číslice.
+	Magnification:	Zvětšení:
+	Mask:	Maska:
+	Module:	Modul:
+	Quiet Zone:	Tichá zóna:
+	Update	Aktualizovat
+	Width Ratio:	Poměr šířek:
 
 # User Interface › Accent Color
 	Accent Color	Barva zvýraznění
@@ -5583,6 +5623,12 @@ mark-style	Japanese	Japonské
 	Select by Color	Vybrat podle barvy
 	Move Anchor Point	Přesunout kotevní bod
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zachová 1 z {n} pracovních ploch dokumentu: soubor se znovu otevře s jedním. Zapněte Zachovat možnosti úprav, aby zůstala všechna.
+@msg	a QR Code version is 1 to 40, not {other}	verze QR kódu je 1 až 40, ne {other}
+@msg	no codes to draw	žádné kódy k nakreslení
+@msg	no line in the data is a code this symbology can carry	žádný řádek v datech není kód, který tato symbiologie umí
+@msg	select a barcode	vyberte čárový kód
+@msg	unknown barcode type `{name}`	neznámý typ čárového kódu `{name}`
+@msg	unknown error correction level `{other}`	neznámá úroveň opravy chyb `{other}`
 	Chalk & Charcoal…	Křída a uhel…
 	Chalk & Charcoal	Křída a uhel
 	Graphic Pen…	Grafické pero…

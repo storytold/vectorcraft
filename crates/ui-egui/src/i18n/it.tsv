@@ -12,10 +12,35 @@
 # `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	11 or 12 digits	11 o 12 cifre
+	12 or 13 digits	12 o 13 cifre
+	6 or 8 digits	6 o 8 cifre
+	7 or 8 digits	7 o 8 cifre
+	an even number of digits	un numero pari di cifre
+	any text	qualsiasi testo
+	ASCII	ASCII
+	Barcodes	Codici a barre
+	Check	Verifica
+	Check Barcode	Verifica codice a barre
+	Codes:	Codici:
+	Content	Contenuto
+	Create Batch	Crea lotto
+	digits, A–Z and - . $ / + % and space	cifre, A–Z e - . $ / + % e spazio
+	digits, with or without the (01) application identifier	cifre, con o senza l'identificatore di applicazione (01)
+	Drawn:	Disegnati:
+	Gap:	Spaziatura:
 	Glowing Edges…	Bordi luminosi…
 	Glowing Edges	Bordi luminosi
 	Edge Width	Larghezza bordo
 	Edge Brightness	Luminosità bordo
+	Max per Row:	Max per riga:
+	No fonts are installed.	Nessun carattere installato.
+	No line in the box is a code this type can carry.	Nessuna riga del campo è un codice che questo tipo può portare.
+	One code a line, each a whole value of the type above.	Un codice per riga, ciascuno un valore completo del tipo sopra.
+	Outline the digits	Converti le cifre in contorni
+	printable ASCII	ASCII stampabile
+	printable ASCII, upper case and control characters	ASCII stampabile, maiuscole e caratteri di controllo
+	QR Code	Codice QR
 	Smoothness	Uniformità
 	Radial Blur…	Sfocatura radiale…
 	Smart Blur…	Sfocatura intelligente…
@@ -403,6 +428,7 @@ font-technology	Variable	Variabili
 	Check Script	Controlla script
 	Check Script…	Controlla script…
 	Copy Report	Copia rapporto
+	Valid:	Valido:
 	VectorCraft read this script without running it.	VectorCraft ha letto questo script senza eseguirlo.
 	Needs nothing beyond plain JavaScript	Richiede solo JavaScript semplice
 	Needs the script language's own objects or directives	Richiede oggetti o direttive propri del linguaggio dello script
@@ -412,6 +438,7 @@ font-technology	Variable	Variabili
 	Needs dialogs	Richiede finestre di dialogo
 	Needs features only the reference app has	Richiede funzioni che ha solo l'applicazione di riferimento
 	Outside the document	Fuori dal documento
+	White background box	Riquadro bianco di sfondo
 	Writes, moves or deletes files	Scrive, sposta o elimina file
 	Opens files in other apps	Apre file in altre app
 	Opens network connections	Apre connessioni di rete
@@ -5084,6 +5111,19 @@ lighting	Light	Luce
 @msg	open a document with data sets	apri un documento con set di dati
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	non è stato applicato nulla del set di dati {name}: nessun oggetto è associato a una variabile per cui ha un valore
 @msg	the action has no steps	l'azione non ha passaggi
+	Barcode	Codice a barre
+	Barcode Options	Opzioni codice a barre
+	Data:	Dati:
+	Document Default	Predefinito del documento
+	Error Correction:	Correzione errori:
+	Human Readable Line	Riga leggibile
+	Install OCR-B for the standard digits.	Installare OCR-B per le cifre standard.
+	Magnification:	Ingrandimento:
+	Mask:	Maschera:
+	Module:	Modulo:
+	Quiet Zone:	Zona quieta:
+	Update	Aggiorna
+	Width Ratio:	Rapporto larghezza:
 
 # User Interface › Accent Color
 	Accent Color	Colore di risalto
@@ -5197,6 +5237,12 @@ lighting	Light	Luce
 	Select by Color	Seleziona per colore
 	Move Anchor Point	Sposta punto di ancoraggio
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} mantiene 1 delle {n} tavole da disegno del documento: il file si riapre con una sola. Attiva Mantieni possibilità di modifica per mantenerle tutte.
+@msg	a QR Code version is 1 to 40, not {other}	la versione di un QR Code va da 1 a 40, non {other}
+@msg	no codes to draw	nessun codice da disegnare
+@msg	no line in the data is a code this symbology can carry	nessuna riga dei dati è un codice che questa simbologia può contenere
+@msg	select a barcode	seleziona un codice a barre
+@msg	unknown barcode type `{name}`	tipo di codice a barre sconosciuto `{name}`
+@msg	unknown error correction level `{other}`	livello di correzione degli errori sconosciuto `{other}`
 	Chalk & Charcoal…	Gesso e carboncino…
 	Chalk & Charcoal	Gesso e carboncino
 	Graphic Pen…	Penna grafica…

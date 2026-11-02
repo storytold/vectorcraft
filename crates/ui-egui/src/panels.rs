@@ -9,6 +9,7 @@ pub mod appearance;
 pub mod artboards;
 pub mod asset_export;
 pub mod attributes;
+pub mod barcode;
 pub mod blend;
 pub mod brushes;
 pub mod character;
@@ -173,6 +174,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "tabs" => tabs::show(app, ui),
         flattener_preview::ID => flattener_preview::show(app, ui),
         "attributes" => attributes::show(app, ui),
+        barcode::ID => barcode::show(app, ui),
         svg_interactivity::ID => svg_interactivity::show(app, ui),
         variables::ID => variables::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
@@ -624,6 +626,8 @@ mod tests {
 mod tests_appearance;
 #[cfg(test)]
 mod tests_asset_export;
+#[cfg(test)]
+mod tests_barcode;
 #[cfg(test)]
 mod tests_blend;
 #[cfg(test)]

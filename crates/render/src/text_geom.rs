@@ -127,7 +127,7 @@ pub(crate) struct AlternateCandidate {
 /// script needs: `ccmp`, `locl`, `rlig`, Arabic's `init`, `medi`, `fina` and `isol`, the Indic
 /// and other complex scripts' required sets. With `features` `-calt` alone, standard ligatures
 /// stay on (an older font's lam-alef).
-fn required_shaping(t: &TextObject, features: &[&str]) -> std::collections::HashMap<(usize, usize), Vec<(u32, u32)>> {
+pub(crate) fn required_shaping(t: &TextObject, features: &[&str]) -> std::collections::HashMap<(usize, usize), Vec<(u32, u32)>> {
     let mut plain = t.clone();
     for run in &mut plain.runs {
         run.style.features = features.iter().map(|f| (*f).into()).collect();

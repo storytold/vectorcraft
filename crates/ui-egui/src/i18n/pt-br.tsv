@@ -23,6 +23,23 @@
 # English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language names, OpenType,
 # the built-in workspace names and the bracketed perspective grid preset names.
 #
+	11 or 12 digits	11 ou 12 dígitos
+	12 or 13 digits	12 ou 13 dígitos
+	6 or 8 digits	6 ou 8 dígitos
+	7 or 8 digits	7 ou 8 dígitos
+	an even number of digits	um número par de dígitos
+	any text	qualquer texto
+	ASCII	ASCII
+	Barcodes	Códigos de barras
+	Check	Verificar
+	Check Barcode	Verificar código de barras
+	Codes:	Códigos:
+	Content	Conteúdo
+	Create Batch	Criar lote
+	digits, A–Z and - . $ / + % and space	dígitos, A–Z e - . $ / + % e espaço
+	digits, with or without the (01) application identifier	dígitos, com ou sem o identificador de aplicação (01)
+	Drawn:	Desenhados:
+	Gap:	Espaçamento:
 	Glowing Edges…	Bordas brilhantes…
 	  — missing	  — falha
 	  — substituted by {style}	  — substituído por {style}
@@ -256,6 +273,14 @@
 	Auto Size New Area Type	Dimensionar Automaticamente Novo Texto de Área
 	Auto Spell Check	Verificação Ortográfica Automática
 	Auto-Collapse Iconic Panels	Recolher Automaticamente Painéis Icônicos
+	Max per Row:	Máx. por linha:
+	No fonts are installed.	Nenhuma fonte instalada.
+	No line in the box is a code this type can carry.	Nenhuma linha da caixa é um código que este tipo possa carregar.
+	One code a line, each a whole value of the type above.	Um código por linha, cada um um valor completo do tipo acima.
+	Outline the digits	Converter os dígitos em contornos
+	printable ASCII	ASCII imprimível
+	printable ASCII, upper case and control characters	ASCII imprimível, maiúsculas e caracteres de controle
+	QR Code	Código QR
 	Show Tool Group Labels	Mostrar Rótulos dos Grupos de Ferramentas
 	Auto-Rotate (turn the paper to each artboard)	Girar Automaticamente (gire o papel para cada mesa de trabalho)
 	Automatic	Automático
@@ -370,6 +395,7 @@
 	Check Script	Verificar Script
 	Check Script…	Verificar Script…
 	Copy Report	Copiar Relatório
+	Valid:	Válido:
 	VectorCraft read this script without running it.	O VectorCraft leu este script sem executá-lo.
 	Needs nothing beyond plain JavaScript	Precisa apenas de JavaScript simples
 	Needs the script language's own objects or directives	Precisa de objetos ou diretivas próprios da linguagem do script
@@ -379,6 +405,7 @@
 	Needs dialogs	Precisa de caixas de diálogo
 	Needs features only the reference app has	Precisa de recursos que só o aplicativo de referência tem
 	Outside the document	Fora do documento
+	White background box	Caixa branca de fundo
 	Writes, moves or deletes files	Grava, move ou exclui arquivos
 	Opens files in other apps	Abre arquivos em outros aplicativos
 	Opens network connections	Abre conexões de rede
@@ -5390,6 +5417,19 @@ mark-style	Japanese	Japonesas
 	Color Panel Options	Opções do Painel Cor
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve ser grayscale, rgb, hsb, cmyk ou websafe
 @msg	the image can't be read as a texture	a imagem não pode ser lida como textura
+	Barcode	Código de barras
+	Barcode Options	Opções do código de barras
+	Data:	Dados:
+	Document Default	Padrão do documento
+	Error Correction:	Correção de erros:
+	Human Readable Line	Linha legível
+	Install OCR-B for the standard digits.	Instale a OCR-B para os dígitos padrão.
+	Magnification:	Ampliação:
+	Mask:	Máscara:
+	Module:	Módulo:
+	Quiet Zone:	Zona de silêncio:
+	Update	Atualizar
+	Width Ratio:	Proporção de largura:
 
 # User Interface › Accent Color
 	Accent Color	Cor de destaque
@@ -5499,6 +5539,12 @@ mark-style	Japanese	Japonesas
 	Select by Color	Selecionar por Cor
 	Move Anchor Point	Mover Ponto de Ancoragem
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} mantém 1 das {n} mesas de trabalho do documento: o arquivo reabre com uma. Ative Preservar Capacidades de Edição para manter todas.
+@msg	a QR Code version is 1 to 40, not {other}	a versão de um QR Code vai de 1 a 40, não {other}
+@msg	no codes to draw	nenhum código para desenhar
+@msg	no line in the data is a code this symbology can carry	nenhuma linha dos dados é um código que esta simbologia consiga carregar
+@msg	select a barcode	selecione um código de barras
+@msg	unknown barcode type `{name}`	tipo de código de barras desconhecido `{name}`
+@msg	unknown error correction level `{other}`	nível de correção de erros desconhecido `{other}`
 	Chalk & Charcoal…	Giz e carvão…
 	Chalk & Charcoal	Giz e carvão
 	Graphic Pen…	Caneta gráfica…

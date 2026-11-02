@@ -24,6 +24,7 @@ craft-ui = { workspace = true }
 craft-keymap = { workspace = true, features = ["egui"] }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
+vectorcraft-barcode = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-render = { workspace = true }

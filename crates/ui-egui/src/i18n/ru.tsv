@@ -10,10 +10,35 @@
 # `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 # Photoshop-style raster effects (Effect menu, their dialogs).
+	11 or 12 digits	11 или 12 цифр
+	12 or 13 digits	12 или 13 цифр
+	6 or 8 digits	6 или 8 цифр
+	7 or 8 digits	7 или 8 цифр
+	an even number of digits	чётное число цифр
+	any text	любой текст
+	ASCII	ASCII
+	Barcodes	Штрихкоды
+	Check	Проверить
+	Check Barcode	Проверить штрихкод
+	Codes:	Коды:
+	Content	Содержимое
+	Create Batch	Создать партию
+	digits, A–Z and - . $ / + % and space	цифры, A–Z и - . $ / + % и пробел
+	digits, with or without the (01) application identifier	цифры, с идентификатором применения (01) или без него
+	Drawn:	Нарисовано:
+	Gap:	Промежуток:
 	Glowing Edges…	Светящиеся края…
 	Glowing Edges	Светящиеся края
 	Edge Width	Ширина края
 	Edge Brightness	Яркость края
+	Max per Row:	Макс. в строке:
+	No fonts are installed.	Шрифты не установлены.
+	No line in the box is a code this type can carry.	Ни одна строка в поле не является кодом, который может нести этот тип.
+	One code a line, each a whole value of the type above.	Один код в строке, каждый — полное значение выбранного выше типа.
+	Outline the digits	Преобразовать цифры в контуры
+	printable ASCII	печатные символы ASCII
+	printable ASCII, upper case and control characters	печатные символы ASCII, заглавные буквы и управляющие символы
+	QR Code	QR-код
 	Smoothness	Сглаживание
 	Radial Blur…	Радиальное размытие…
 	Smart Blur…	Умное размытие…
@@ -401,6 +426,7 @@ font-technology	Variable	Вариативные
 	Check Script	Проверить сценарий
 	Check Script…	Проверить сценарий…
 	Copy Report	Копировать отчёт
+	Valid:	Допустимо:
 	VectorCraft read this script without running it.	VectorCraft прочитал этот сценарий, не запуская его.
 	Needs nothing beyond plain JavaScript	Нужен только обычный JavaScript
 	Needs the script language's own objects or directives	Нужны собственные объекты или директивы языка сценариев
@@ -410,6 +436,7 @@ font-technology	Variable	Вариативные
 	Needs dialogs	Нужны диалоговые окна
 	Needs features only the reference app has	Нужны функции, которые есть только в эталонном приложении
 	Outside the document	Вне документа
+	White background box	Белая подложка
 	Writes, moves or deletes files	Записывает, перемещает или удаляет файлы
 	Opens files in other apps	Открывает файлы в других приложениях
 	Opens network connections	Открывает сетевые подключения
@@ -5079,6 +5106,19 @@ lighting	Light	Свет
 @msg	open a document with data sets	откройте документ с наборами данных
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	из набора данных {name} ничего не применено: ни один объект не привязан к переменной, для которой в нём есть значение
 @msg	the action has no steps	в действии нет шагов
+	Barcode	Штрихкод
+	Barcode Options	Параметры штрихкода
+	Data:	Данные:
+	Document Default	По умолчанию в документе
+	Error Correction:	Исправление ошибок:
+	Human Readable Line	Читаемая строка
+	Install OCR-B for the standard digits.	Установите OCR-B для стандартных цифр.
+	Magnification:	Масштаб:
+	Mask:	Маска:
+	Module:	Модуль:
+	Quiet Zone:	Свободная зона:
+	Update	Обновить
+	Width Ratio:	Соотношение ширины:
 
 # User Interface › Accent Color
 	Accent Color	Цвет акцента
@@ -5192,6 +5232,12 @@ lighting	Light	Свет
 	Select by Color	Выделить по цвету
 	Move Anchor Point	Переместить опорную точку
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} сохраняет 1 из {n} монтажных областей документа: файл откроется снова с одной. Включите «Сохранять возможности редактирования», чтобы сохранить все.
+@msg	a QR Code version is 1 to 40, not {other}	версия QR-кода — от 1 до 40, а не {other}
+@msg	no codes to draw	нет кодов для рисования
+@msg	no line in the data is a code this symbology can carry	ни одна строка данных не является кодом, который поддерживает эта символика
+@msg	select a barcode	выберите штрихкод
+@msg	unknown barcode type `{name}`	неизвестный тип штрихкода `{name}`
+@msg	unknown error correction level `{other}`	неизвестный уровень коррекции ошибок `{other}`
 	Chalk & Charcoal…	Мел и уголь…
 	Chalk & Charcoal	Мел и уголь
 	Graphic Pen…	Графическое перо…

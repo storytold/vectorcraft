@@ -65,13 +65,17 @@
 	0.2 (quality) to 100 (speed)	0,2 (kalite) ila 100 (hız)
 	1 Color Job…	1 Renk İşi…
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	Çalışma yüzeyindeki 1 {unit}, sahnedeki {real} {unit} anlamına gelir.
+	11 or 12 digits	11 veya 12 rakam
+	12 or 13 digits	12 veya 13 rakam
 	2 Color Job…	2 Renkli İş…
 	3 Color Job…	3 Renkli İş…
 	30° Angles	30° Açılar
 	3D and Materials	3D ve Malzemeler
 	3D Ribbon	3D Şerit
 	45° Angles	45° Açılar
+	6 or 8 digits	6 veya 8 rakam
 	60° Angles	60° Açılar
+	7 or 8 digits	7 veya 8 rakam
 	90° & 45° & 30° Angles	90° & 45° & 30° Açılar
 	90° & 45° Angles	90° ve 45° Açılar
 	90° Angles	90° Açılar
@@ -163,6 +167,7 @@
 	Alter Paths for Appearance	Görünüm İçin Yolları Değiştirin
 	Amount	Tutar
 	Amount:	Tutar:
+	an even number of digits	çift sayıda rakam
 	Anchor Point	Bağlantı Noktası
 	Anchor Point Tool	Bağlantı Noktası Aracı
 	Anchor Points	Bağlantı Noktaları
@@ -181,6 +186,7 @@
 	Anti-aliased Artwork	Kenar Yumuşatılmış Sanat Çalışması
 	Anti-aliasing:	Kenar yumuşatma:
 	Any Kind	Her Türlü
+	any text	herhangi bir metin
 	Font Technology	Yazı Tipi Teknolojisi
 font-technology	Variable	Değişken
 	Appearance	Görünüm
@@ -233,6 +239,7 @@ font-technology	Variable	Değişken
 	As Multiple Assets	Çoklu Varlıklar Olarak
 	As Single Asset	Tek Varlık Olarak
 	Ascender	Yükselen
+	ASCII	ASCII
 	Ask When Modified	Değiştirildiğinde Sor
 	Aspect Ratio	En Boy Oranı
 	Asset Export	Varlık Dışa Aktarma
@@ -251,8 +258,35 @@ font-technology	Variable	Değişken
 	Auto Size New Area Type	Otomatik Boyutlandırma Yeni Alan Türü
 	Auto Spell Check	Otomatik Yazım Denetimi
 	Auto-Collapse Iconic Panels	İkonik Panelleri Otomatik Daralt
+	Barcode	Barkod
+	Barcode Options	Barkod Seçenekleri
+	Barcodes	Barkodlar
+	Check	Denetle
+	Check Barcode	Barkodu Denetle
+	Codes:	Kodlar:
+	Create Batch	Toplu Oluştur
+	Data:	Veri:
+	digits, A–Z and - . $ / + % and space	rakamlar, A–Z ve - . $ / + % ile boşluk
+	digits, with or without the (01) application identifier	rakamlar, (01) uygulama tanımlayıcısıyla veya onsuz
+	Document Default	Belge Varsayılanı
+	Drawn:	Çizilen:
 	Ellipse Properties:	Elips Özellikleri:
+	Error Correction:	Hata Düzeltme:
+	Gap:	Boşluk:
+	Human Readable Line	İnsan Tarafından Okunabilir Satır
+	Install OCR-B for the standard digits.	Standart rakamlar için OCR-B'yi kurun.
 	Invert Pie	Pastayı Ters Çevir
+	Magnification:	Büyütme:
+	Mask:	Maske:
+	Max per Row:	Satır Başına En Fazla:
+	Module:	Modül:
+	No fonts are installed.	Kurulu yazı tipi yok.
+	No line in the box is a code this type can carry.	Kutudaki hiçbir satır bu türün taşıyabildiği bir kod değil.
+	One code a line, each a whole value of the type above.	Her satıra bir kod; her biri yukarıdaki türün tam bir değeri.
+	Outline the digits	Rakamları dış hatta dönüştür
+	printable ASCII	yazdırılabilir ASCII
+	printable ASCII, upper case and control characters	yazdırılabilir ASCII, büyük harfler ve denetim karakterleri
+	Quiet Zone:	Sessiz Alan:
 	Side Length:	Yan Uzunluk:
 	Make Sides Equal	Tarafları Eşitleyin
 	Pie End Angle:	Pasta Sonu Açısı:
@@ -385,6 +419,8 @@ font-technology	Variable	Değişken
 	Check Script	Komut Dosyasını Kontrol Et
 	Check Script…	Komut Dosyasını Kontrol Et…
 	Copy Report	Raporu Kopyala
+	Update	Güncelle
+	Valid:	Geçerli:
 	VectorCraft read this script without running it.	VectorCraft bu betiği çalıştırmadan okudu.
 	Needs nothing beyond plain JavaScript	Sade JavaScript'in ötesinde hiçbir şeye ihtiyaç duymaz
 	Needs the script language's own objects or directives	Betik dilinin kendi nesnelerine veya direktiflerine ihtiyaç duyar
@@ -394,6 +430,8 @@ font-technology	Variable	Değişken
 	Needs dialogs	Diyaloglara ihtiyaç var
 	Needs features only the reference app has	Yalnızca referans uygulamanın sahip olduğu özelliklere ihtiyaç duyar
 	Outside the document	Belgenin dışında
+	White background box	Beyaz arka plan kutusu
+	Width Ratio:	Genişlik Oranı:
 	Writes, moves or deletes files	Dosyaları yazar, taşır veya siler
 	Opens files in other apps	Dosyaları diğer uygulamalarda açar
 	Opens network connections	Ağ bağlantılarını açar
@@ -3676,8 +3714,14 @@ axis	Both	Her İkisi
 	Drag to float the toolbar	Araç çubuğunu ayırmak için sürükleyin
 	Drag to the window's left edge to dock	Sabitlemek için pencerenin sol kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
+@msg	a QR Code version is 1 to 40, not {other}	bir QR Code sürümü 1 ile 40 arasındadır, {other} değil
+@msg	no codes to draw	çizilecek kod yok
 @msg	no library `{id}`	`{id}` kütüphanesi yok
+@msg	no line in the data is a code this symbology can carry	verideki hiçbir satır bu simgenin taşıyabildiği bir kod değil
+@msg	select a barcode	bir barkod seçin
 @msg	select some type first	önce bir tür seçin
+@msg	unknown barcode type `{name}`	bilinmeyen barkod türü `{name}`
+@msg	unknown error correction level `{other}`	bilinmeyen hata düzeltme düzeyi `{other}`
 @msg	kerning must be a number, "auto", or "optical"	Karakter aralığı sayı, “auto” veya “optical” olmalıdır
 @msg	the selection has no gradient fill	seçimin degrade dolgusu yok
 @msg	the selection has no gradient stroke	seçimin degrade konturu yok

@@ -4,9 +4,45 @@
 # Clean-room: written from the meaning of VectorCraft's English labels in neutral, international
 # Danish, using the feature names Danish speakers of vector illustration software know. No other
 # localisation was copied. Labels use sentence case (only the first word capitalised).
+	11 or 12 digits	11 eller 12 cifre
+	12 or 13 digits	12 eller 13 cifre
+	6 or 8 digits	6 eller 8 cifre
+	7 or 8 digits	7 eller 8 cifre
+	an even number of digits	et lige antal cifre
+	any text	enhver tekst
+	ASCII	ASCII
+	Barcode	Stregkode
+	Barcode Options	Indstillinger for stregkode
+	Barcodes	Stregkoder
+	Check	Kontrollér
+	Check Barcode	Kontrollér stregkode
+	Codes:	Koder:
+	Content	Indhold
+	Create Batch	Opret batch
+	Data:	Data:
+	digits, A–Z and - . $ / + % and space	cifre, A–Z og - . $ / + % og mellemrum
+	digits, with or without the (01) application identifier	cifre, med eller uden applikationsidentifikatoren (01)
+	Document Default	Dokumentstandard
+	Drawn:	Tegnet:
+	Error Correction:	Fejlkorrektion:
+	Gap:	Mellemrum:
+	Human Readable Line	Læsbar linje
+	Install OCR-B for the standard digits.	Installér OCR-B til standardtallene.
+	Magnification:	Forstørrelse:
+	Mask:	Maske:
+	Max per Row:	Maks. pr. række:
+	Module:	Modul:
 	New Design	Nyt design
 	Delete Design	Slet design
+	No fonts are installed.	Der er ikke installeret nogen skrifttyper.
+	No line in the box is a code this type can carry.	Ingen linje i feltet er en kode, som denne type kan indeholde.
+	One code a line, each a whole value of the type above.	Én kode pr. linje, hver en fuld værdi af typen ovenfor.
+	Outline the digits	Omrids af tallene
 	Paste Design	Indsæt design
+	printable ASCII	udskrivbare ASCII
+	printable ASCII, upper case and control characters	udskrivbare ASCII, store bogstaver og kontroltegn
+	QR Code	QR-kode
+	Quiet Zone:	Stille zone:
 	Select Unused	Markér ubrugte
 	Glowing Edges…	Glødende kanter…
 	About VectorCraft	Om VectorCraft
@@ -130,6 +166,10 @@
 	Start from VectorCraft Defaults	Start fra VectorCrafts standarder
 	Add to the Current Shortcuts	Føj til de aktuelle genveje
 	Remember My Choices	Husk mine valg
+	Update	Opdatér
+	Valid:	Gyldig:
+	White background box	Hvid baggrundsboks
+	Width Ratio:	Breddeforhold:
 	{ready} of {total} ready	{ready} af {total} klar
 	The file is too large to read in full, so only its first part is listed.	Filen er for stor til at blive læst i sin helhed, så kun dens første del vises.
 	Report copied	Rapporten er kopieret
