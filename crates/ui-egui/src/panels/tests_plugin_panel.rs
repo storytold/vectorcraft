@@ -1,6 +1,6 @@
-//! Plug-in panels in headless frames: Window › Plug-ins lists panel plug-ins and opens their
-//! panels, which draw the plug-in's answer, send their buttons' clicks and show why an event
-//! failed; a panel whose plug-in is removed closes.
+//! Plug-in panels in headless frames: Window › Plug-ins lists panel plug-ins and shows and hides
+//! their panels as it does the other panels, which draw the plug-in's answer, send their buttons'
+//! clicks and show why an event failed; a panel whose plug-in is removed closes.
 
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat as tpl;
@@ -38,7 +38,7 @@ fn window_plug_ins_opens_a_panel_that_draws_its_answer_and_sends_clicks() {
     install(&mut app, ID, &json!({"panel": {"items": items}, "commands": [square]}));
     let entries = crate::menus::menu_entries(&app);
     let entry = entries.iter().find(|e| e.path == ["Window", "Plug-ins"] && e.label == "Test test.ui.panel").expect("listed");
-    assert_eq!((entry.command.as_deref(), &entry.params), (Some("window.pluginPanel"), &json!({"id": ID})));
+    assert_eq!((entry.command.as_deref(), &entry.params), (Some("window.panel"), &json!({"panel": "plugin:test.ui.panel", "toggle": true})));
     // Its name is the plug-in's own, not interface text to translate.
     assert!(!crate::menus::menu_strings().contains("Test test.ui.panel"));
 
@@ -76,6 +76,48 @@ fn window_plug_ins_opens_a_panel_that_draws_its_answer_and_sends_clicks() {
     app.run("plugin.remove", json!({"id": ID})).unwrap();
     plugin_panel::tidy(&mut app);
     assert!(!crate::panel_docking::layout_of(&app.ui).contains(&"plugin:test.ui.panel".to_string()));
+}
+
+#[test]
+fn window_plug_ins_shows_and_hides_a_panel_as_the_window_menu_does_the_others() {
+    let mut app = app_with_rect();
+    let id = "test.ui.toggles";
+    install(&mut app, id, &json!({"panel": {"items": []}}));
+    let panel = plugin_panel::panel_id(id);
+    let item = json!({"panel": panel, "toggle": true});
+    let checked = |app: &VectorcraftApp| crate::menus::checked(app, "window.panel", &item) == Some(true);
+    let open = |app: &VectorcraftApp, panel: &str| crate::panel_docking::layout_of(&app.ui).contains(&panel.to_string());
+
+    // Chosen, it floats and is checked; chosen again, it hides.
+    assert!(!checked(&app));
+    app.run("window.panel", item.clone()).unwrap();
+    assert!(crate::panel_docking::floats(&app.ui, &panel));
+    assert!(checked(&app));
+    app.run("window.panel", item.clone()).unwrap();
+    assert!(!open(&app, &panel));
+    assert!(!checked(&app));
+
+    // Docked in a group that is hidden with it, it comes back with the group, in front, rather than
+    // floating on its own.
+    app.run("window.panel", item.clone()).unwrap();
+    app.run("window.panel.dock", json!({"panel": panel, "onto": "properties"})).unwrap();
+    assert!(checked(&app));
+    app.run("window.panel", json!({"panel": panel, "toggle": true, "toggleGroup": true})).unwrap();
+    assert!(!open(&app, &panel) && !open(&app, "properties"));
+    app.run("window.panel", item.clone()).unwrap();
+    assert!(!crate::panel_docking::floats(&app.ui, &panel));
+    assert!(open(&app, "properties"));
+    assert!(checked(&app));
+
+    // window.pluginPanel shows it and leaves it be when it shows; hidden with its group, it comes
+    // back with the group too.
+    app.run("window.pluginPanel", json!({"id": id})).unwrap();
+    assert!(checked(&app));
+    app.run("window.panel", json!({"panel": panel, "toggle": true, "toggleGroup": true})).unwrap();
+    app.run("window.pluginPanel", json!({"id": id})).unwrap();
+    assert!(!crate::panel_docking::floats(&app.ui, &panel));
+    assert!(open(&app, "properties"));
+    assert!(checked(&app));
 }
 
 #[test]

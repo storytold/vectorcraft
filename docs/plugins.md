@@ -62,8 +62,11 @@ set applied leaves the images of image variables as they were. A panel can't ope
 clipboard, or install or remove plug-ins. Commands can't refer to the results of the ones before them; those that make
 art select it, so the next one acts on it.
 
-In the app, **Window › Plug-ins** lists the installed panels (`window.pluginPanel {id}`). Each opens floating, as
-panel `plugin:<id>`, and docks, tabs and closes as any panel. Drawn for the first time since it opened, it sends its
+In the app, **Window › Plug-ins** lists the installed panels, as panel `plugin:<id>`, and its items work as the
+Window menu's other panel items do (`window.panel {"panel": "plugin:<id>", "toggle": true}`): checked while the panel
+shows, an item hides it, else shows it, floating the first time, then where it was, with its group when they were
+hidden together. It docks, tabs and closes as any panel. `window.pluginPanel {id}` shows a panel and leaves it be when
+it shows. Drawn for the first time since it opened, it sends its
 plug-in an `open` event; a button clicked, a checkbox or dropdown changed, a text or number field committed (Enter,
 or leaving it) and a file picked with a file field are events too, sent with the values of all its fields. It draws
 the plug-in's last answer: the `items` of `panel`, top to bottom, each one of

@@ -138,7 +138,7 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "window.pluginPanel")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom")
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
@@ -147,7 +147,8 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
 /// Effect › Plug-ins effect or a Window › Plug-ins panel), by the plug-in's own name? Told by the
 /// item itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    matches!(id, "plugin.dialog" | "window.pluginPanel")
+    id == "plugin.dialog"
+        || (id == "window.panel" && params.get("panel").and_then(Value::as_str).and_then(crate::panels::plugin_panel::parse).is_some())
         || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }
 

@@ -1,7 +1,9 @@
 //! Panel plug-ins' panels (`"kind": "panel"`, docs/plugins.md › Panels): each installed panel
 //! plug-in has a panel of its own, `plugin:<plug-in id>` ([`panel_id`]), that floats, tabs, docks
-//! and closes as any panel of the shared docking system. Window › Plug-ins lists them, and
-//! `window.pluginPanel {id}` opens one, or brings it forward when it is open.
+//! and closes as any panel of the shared docking system. Window › Plug-ins lists them as the Window
+//! menu lists the other panels: an item shows its panel, checked while it shows, or hides it
+//! (`window.panel {panel, toggle: true}`). `window.pluginPanel {id}` shows one and leaves it be when
+//! it shows.
 //!
 //! The panel draws what the plug-in answered last (`plugin.panel.event`): its `items`, top to
 //! bottom ([`item`]). An item of a type this host doesn't know is left out. Drawn for the first time
@@ -105,22 +107,18 @@ pub(crate) fn tab_label(panel: &str) -> Option<String> {
     Some(installed(id).map_or_else(|| id.to_string(), |p| name(&p).to_string()))
 }
 
-/// Window › Plug-ins: the installed panel plug-ins.
+/// Window › Plug-ins: the installed panel plug-ins, each an item that shows or hides its panel as
+/// the Window menu's other panel items do.
 pub fn window_menu() -> Vec<Item> {
     let mut items: Vec<Item> = registry::list()
         .iter()
         .filter(|p| p.manifest().kind == Kind::Panel)
-        .map(|p| Item::Cmd(registry::intern(name(p)), "window.pluginPanel", json!({ "id": p.id() })))
+        .map(|p| Item::Cmd(registry::intern(name(p)), "window.panel", json!({ "panel": panel_id(p.id()), "toggle": true })))
         .collect();
     if items.is_empty() {
         items.push(Item::Header(NO_PANELS));
     }
     items
-}
-
-/// Is panel `panel` open (in the dock or floating)?
-fn is_open(ui: &UiState, panel: &str) -> bool {
-    crate::panel_docking::layout_of(ui).contains(&panel.to_string())
 }
 
 /// The open plug-in panels.
@@ -134,8 +132,9 @@ fn open_panels(ui: &UiState) -> Vec<String> {
     out
 }
 
-/// `window.pluginPanel {id}`: open panel plug-in `id`'s panel, floating, or bring it forward when it
-/// is open. → `{open: id, panel}`
+/// `window.pluginPanel {id}`: show panel plug-in `id`'s panel as `window.panel` does (floating the
+/// first time, else where it was, with its group when they were hidden together), and leave it be
+/// when it shows. → `{open: id, panel}`
 pub(crate) fn open_command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("id").and_then(Value::as_str).ok_or("missing `id`: a panel plug-in (see plugin.list)")?;
     let plugin = registry::get(id).ok_or_else(|| format!("no plug-in `{id}` (see plugin.list)"))?;
@@ -144,11 +143,7 @@ pub(crate) fn open_command(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
     }
     let panel = panel_id(id);
     let registered = intern(&panel).ok_or("too many plug-in panels were opened in this session")?;
-    if is_open(&app.ui, &panel) {
-        app.run("window.panel.activate", json!({ "panel": panel }))?;
-    } else {
-        float(app, registered)?;
-    }
+    crate::panel_docking::reveal_panel(app, registered)?;
     Ok(json!({ "open": id, "panel": panel }))
 }
 
