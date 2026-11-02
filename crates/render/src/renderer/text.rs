@@ -66,6 +66,7 @@ impl Renderer {
         if let Some(e) = self.placed_arts.get(&key, self.stamp)
             && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
             && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+            && e.slice.is_none()
         {
             return match &e.placed {
                 Some(placed) => (placed.clone(), true),
@@ -73,14 +74,70 @@ impl Renderer {
             };
         }
         let placed = place(art, xf, scale_strokes, inst);
+        let inserted = self.keep_placed(key, art, &placed, None);
+        (placed, inserted)
+    }
+
+    /// Symbol art `art` placed for instance `inst` (placed by `xf`) through 9-slice map `map`
+    /// ([`vectorcraft_doc::NineSliceMap::place`], stained by the instance), and whether it is kept,
+    /// when the frame's symbol budget (`used`, see [`vectorcraft_doc::charge_symbol_art`]) has room
+    /// for it. The art is kept between frames as [`Self::placed_art`] keeps it, under the same key
+    /// and only with the same map. Kept art is charged by its own object count, the art of its
+    /// opacity masks included ([`Node::count_with_masks`]), and is not placed
+    /// again; other art is charged by [`vectorcraft_doc::NineSliceMap::most_placed`] before it is
+    /// placed.
+    pub(super) fn sliced_art(
+        &mut self,
+        doc: &vectorcraft_doc::Document,
+        art: &Arc<Node>,
+        map: &vectorcraft_doc::NineSliceMap,
+        xf: Affine,
+        inst: &Node,
+        used: &mut u64,
+    ) -> Option<(Arc<Node>, bool)> {
+        let kept_kind = matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || vectorcraft_doc::live::is_live(art);
+        let stain = stain_bits(vectorcraft_brush::stain(inst));
+        let key = (Arc::as_ptr(art) as usize, xf.as_coeffs().map(f64::to_bits), false, stain);
+        // As in `placed_art`, an instance with appearance changes of its own isn't kept.
+        let overridden = !inst.extras().symbol_overrides.is_empty();
+        let mut keeps = kept_kind && !overridden && !fx::has_object_fx(art);
+        if keeps
+            && let Some(e) = self.placed_arts.get(&key, self.stamp)
+            && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
+            && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+            && e.slice.as_ref() == Some(map)
+        {
+            match e.placed.clone() {
+                Some(placed) => {
+                    let count = placed.count_with_masks() as u64;
+                    return vectorcraft_doc::charge_symbol_art(used, count, || ((placed, true), count));
+                }
+                None => keeps = false,
+            }
+        }
+        let stained = crate::brush_fx::instance_art(art, inst);
+        let most = map.most_placed(&stained, doc);
+        let placed = vectorcraft_doc::charge_symbol_art(used, most, || {
+            let placed = Arc::new(map.place(&stained, doc));
+            let count = placed.count_with_masks() as u64;
+            (placed, count)
+        })?;
+        let kept = keeps && self.keep_placed(key, art, &placed, Some(*map));
+        Some((placed, kept))
+    }
+
+    /// Keep `placed`, symbol art `art` as placed under `key` (through 9-slice map `slice`, when it
+    /// has one), unless `art` depends on the document ([`depends_on_document`]): then the entry
+    /// records that it is placed again in every frame. Whether `placed` is kept.
+    fn keep_placed(&mut self, key: PlacedKey, art: &Arc<Node>, placed: &Arc<Node>, slice: Option<vectorcraft_doc::NineSliceMap>) -> bool {
         let kept = (!depends_on_document(art)).then(|| placed.clone());
         let keeps = kept.is_some();
         let fonts = (keeps && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
         // The bytes count the key and the entry, the art's allocation that the weak reference
         // keeps, and the kept art.
         let bytes = size_of::<(PlacedKey, PlacedEntry, Node)>() + kept.as_deref().map_or(0, lru::node_bytes);
-        let inserted = self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts }, bytes, self.stamp);
-        (placed, keeps && inserted)
+        let inserted = self.placed_arts.insert(key, PlacedEntry { art: Arc::downgrade(art), placed: kept, fonts, slice }, bytes, self.stamp);
+        keeps && inserted
     }
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).

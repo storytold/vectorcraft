@@ -47,7 +47,8 @@ fn export_type_param(p: &Value, cmd: &str) -> Result<Option<SymbolExportType>> {
 
 /// `nineSlice` (bool) and `nineSliceGuides` ([left, top, right, bottom] fractions of the natural
 /// size): `None` leaves the symbol alone, `Some(None)` turns 9-slice off, `Some(Some(g))` turns it
-/// on with guides `g` (the symbol's current ones, else the centre third, when none are given).
+/// on with guides `g` (the symbol's current ones, else a quarter in from each edge, when none are
+/// given).
 fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> Result<Option<Option<SymbolNineSlice>>> {
     let on = match p.get("nineSlice") {
         None | Some(Value::Null) => None,
@@ -346,7 +347,8 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The plain art of instance `inst` in document space (fresh ids), with the instance's own
-/// appearance changes to a dynamic symbol's art when `own`.
+/// appearance changes to a dynamic symbol's art when `own`, placed through its symbol's 9-slice
+/// guides when it has them.
 fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
@@ -356,7 +358,7 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     {
         brush::tint_node(&mut art, &c, f.opacity);
     }
-    art.transform(*xf, false);
+    let art = d.place_symbol_art(symbol, &art, *xf)?;
     let mut art = d.reid(&art);
     if inst.opacity < 1.0 || inst.blend != vectorcraft_color::BlendMode::Normal {
         if !matches!(art.kind, NodeKind::Group { .. }) {
@@ -369,9 +371,31 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     Some(art)
 }
 
+/// The most objects [`expanded_instance`] makes of instance `inst` in `d` (`own` as there): its
+/// symbol's object count with the art of its opacity masks, or
+/// [`vectorcraft_doc::NineSliceMap::most_placed`] when it is placed through 9-slice guides, plus
+/// the group that opacity or a blending mode adds. 0 for any other object.
+fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
+    let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return 0 };
+    let Some(sym) = d.symbols.iter().find(|s| &s.name == symbol) else { return 0 };
+    let dynamic = own && !inst.extras().symbol_overrides.is_empty();
+    let most = match d.symbol_slice_map(symbol, *xf) {
+        Some(m) if dynamic => m.most_placed(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst), d),
+        Some(m) => m.most_placed(&sym.art, d),
+        None if dynamic => vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst).count_with_masks() as u64,
+        None => sym.art.count_with_masks() as u64,
+    };
+    most.saturating_add(1)
+}
+
 /// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
-/// art's ids.
+/// art's ids. Fails before any edit when the instances together would make more than
+/// [`MAX_EXPAND_NODES`] objects.
 fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId>> {
+    let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, own)));
+    if total > MAX_EXPAND_NODES as u64 {
+        return Err(EngineError::Other("Too many pieces to make at once".into()));
+    }
     let mut out = vec![];
     for id in ids {
         let Some(inst) = d.node(*id).cloned() else { continue };
@@ -384,6 +408,50 @@ fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId
     }
     Ok(out)
 }
+
+/// Object › Expand: every symbol instance without effects in `roots` of `d` (at any depth)
+/// replaced by its plain art, as Break Link places it, keeping the instance's id and place.
+/// Instances with effects are left to Expand Appearance. The instances that expanded art holds
+/// are expanded in turn, up to [`MAX_EXPAND_NEST`] levels. The roots hold at most
+/// [`MAX_EXPAND_NODES`] objects: an instance whose art ([`expanded_bound`]) would take them past
+/// it stays an instance, as do the ones after it and deeper instances.
+pub(crate) fn expand_instances_under(d: &mut Document, roots: &[NodeId]) -> Result<()> {
+    for _ in 0..MAX_EXPAND_NEST {
+        let mut ids = vec![];
+        let mut count = 0u64;
+        for n in roots.iter().filter_map(|r| d.node(*r)) {
+            n.walk(&mut |c| {
+                count += 1;
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) && c.appearance.effects.is_empty() {
+                    ids.push(c.id);
+                }
+            });
+        }
+        if ids.is_empty() || count > MAX_EXPAND_NODES as u64 {
+            break;
+        }
+        for id in ids {
+            let Some(inst) = d.node(id).cloned() else { continue };
+            count = count.saturating_add(expanded_bound(d, &inst, true));
+            if count > MAX_EXPAND_NODES as u64 {
+                return Ok(());
+            }
+            let Some(mut art) = expanded_instance(d, &inst, true) else { continue };
+            let (par, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+            art.id = id;
+            d.remove(id)?;
+            d.insert(par, idx, art)?;
+        }
+    }
+    Ok(())
+}
+
+/// How many levels of nested symbol instances [`expand_instances_under`] expands.
+const MAX_EXPAND_NEST: usize = 32;
+
+/// How many objects the roots of [`expand_instances_under`] may hold before it stops expanding
+/// the instances nested in them.
+const MAX_EXPAND_NODES: usize = 1_000_000;
 
 pub(super) fn selected_instances(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;

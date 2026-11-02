@@ -213,13 +213,37 @@ impl Exporter<'_> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
                 // instances multiply.
-                let sym = self.doc.symbols.iter().find(|x| &x.name == symbol);
-                let total = sym.map_or(0, |sym| self.symbol_nodes.saturating_add(sym.art.count() as u64));
-                if let Some(sym) = sym.filter(|_| total <= vectorcraft_doc::MAX_SYMBOL_NODES) {
-                    self.symbol_nodes = total;
-                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-                    art.transform(*xf, false);
-                    self.node(s, &art, page, true);
+                // Placing through 9-slice guides needs room for the most objects it can make
+                // (`NineSliceMap::most_placed`), and the objects it makes count.
+                // A dynamic symbol's instance shows its own appearance changes.
+                let doc = self.doc;
+                if let Some(sym) = doc.symbols.iter().find(|x| &x.name == symbol) {
+                    let changed;
+                    let art: &Node = if n.extras().symbol_overrides.is_empty() {
+                        &sym.art
+                    } else {
+                        changed = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                        &changed
+                    };
+                    let count = art.count() as u64;
+                    let map = doc.symbol_slice_map(symbol, *xf);
+                    let most = map.map_or(count, |m| m.most_placed(art, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let art = match map {
+                            Some(m) => m.place(art, doc),
+                            None => {
+                                let mut a = art.clone();
+                                a.transform(*xf, false);
+                                a
+                            }
+                        };
+                        // As `most_placed`, placed art counts its opacity-mask art.
+                        let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
+                        (art, count)
+                    });
+                    if let Some(art) = placed {
+                        self.node(s, &art, page, true);
+                    }
                 }
             }
             // A gradient mesh is a smooth patch shading where it can be written as one.

@@ -29,7 +29,7 @@ mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
-pub use symbol_nine_slice::{SYMBOL_NINE_SLICE, SymbolNineSlice};
+pub use symbol_nine_slice::{MAX_SLICE_GROWTH, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice, charge_symbol_art};
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;

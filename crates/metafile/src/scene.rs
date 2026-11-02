@@ -216,9 +216,10 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
+                    && let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n)
+                    && let Some(art) =
+                        if self.clips { self.doc.place_symbol_art(symbol, &art, *xf) } else { self.doc.place_symbol_art_unclipped(symbol, &art, *xf) }
                 {
-                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-                    art.transform(*xf, false);
                     self.nest += 1;
                     self.node(&art, true);
                     self.nest -= 1;

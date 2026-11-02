@@ -1565,9 +1565,11 @@ already walks Image Trace. Short agent entry points:
   `static`|`dynamic`),
   `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, ids?}`,
   `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?}` (`nineSlice` bool turns
-  9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size; rows
-  of `symbol.list` carry `nineSlice`: the guides or `null`; `type` is Symbol Type, `static` by default for the command
-  and `dynamic` by default in the Symbol Options dialog),
+  9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size, a
+  quarter each when none are given; rows of `symbol.list` carry `nineSlice`: the guides or `null`; a scaled instance of
+  a symbol with guides keeps its corners at their size, and `symbol.breakLink` and `object.expand` give its art as it
+  draws; `type` is Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options
+  dialog),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`,
   `symbol.edit {id?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
@@ -2593,7 +2595,8 @@ an instance when the effects in the symbol's art, or the instance's own, paint o
 ## Expand
 
 `object.expand {object?, fill?, stroke?, gradient?, steps?}` (Object → Expand…) turns the selection into plain art in
-one undo step. `object` (on by default) outlines type, turns live shapes into paths and bakes effects; `stroke` (on)
+one undo step. `object` (on by default) turns symbol instances without effects, and the instances their art holds,
+into their art as `symbol.breakLink` places it, outlines type, turns live shapes into paths and bakes effects; `stroke` (on)
 outlines strokes into filled paths, the stroked paths that baking effects leaves included (a group's own stroke among
 them, #3089); `fill` (on) expands gradient fills: with `gradient: "objects"` (the default) into
 `steps` (1–1000, default 255) solid objects (rectangles across a linear gradient, each from its band to the far end so

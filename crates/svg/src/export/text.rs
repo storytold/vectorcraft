@@ -128,7 +128,9 @@ impl Writer<'_> {
                 NodeId(u64::MAX),
                 NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf: t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol) },
             );
+            let inline = std::mem::replace(&mut self.inline_graphic, true);
             self.node(&inst);
+            self.inline_graphic = inline;
         }
         glyphs(self, above);
         self.anonymous = anonymous;

@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (symbol instances without effects, and those their art holds → their art, as Break Link to Symbol places it, through the symbol's 9-slice guides, type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
             has_selection,
             expand
         ),
@@ -124,6 +124,8 @@ struct Expandable {
     repeats: bool,
     /// Intertwine groups (Object expands them into groups of what they draw).
     intertwines: bool,
+    /// Symbol instances (Object expands them into their art, as Break Link to Symbol does).
+    symbols: bool,
 }
 
 impl Expandable {
@@ -137,6 +139,8 @@ impl Expandable {
                 e.effects |= !c.appearance.effects.is_empty();
                 e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
                 e.blends |= matches!(c.kind, NodeKind::Blend { .. });
+                e.symbols |= matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if d.symbols.iter().any(|s| s.name == *symbol))
+                    && c.appearance.effects.is_empty();
                 e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
                 e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
                 e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
@@ -162,7 +166,7 @@ impl Expandable {
     }
 
     fn object(&self) -> bool {
-        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.repeats || self.intertwines
+        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.repeats || self.intertwines || self.symbols
     }
 }
 
@@ -205,10 +209,10 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let from = s.doc()?.history.undo.len();
     let rev0 = s.doc()?.revision;
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-    // Placed documents first: their art (type, strokes, gradients) expands below.
-    if object && e.placed {
-        let roots = selected_roots(s)?;
-        s.edit("Expand", |d, _| expand_placed_under(d, &roots))?;
+    // Placed documents and symbol instances first, through their symbols' 9-slice guides: what
+    // their art holds (type, strokes, gradients) expands below.
+    if object {
+        e = expand_placed_and_symbols(s, e)?;
     }
     // Intertwine groups before what they hold: their objects, and the copies of the parts drawn
     // over the others, expand below.
@@ -225,6 +229,13 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     if object && e.repeats {
         let roots = selected_roots(s)?;
         s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
+    }
+    // The instances and placed documents that blends, repeats and Intertwine groups held.
+    if object && (e.intertwines || e.blends || e.repeats) {
+        let after = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+        if after.symbols || after.placed {
+            e = expand_placed_and_symbols(s, after)?;
+        }
     }
     if object && e.effects {
         // Effects that Expand Appearance can't expand are left as they are. When it refuses to
@@ -273,6 +284,26 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Expands the placed documents and symbol instances under the selection, `e` saying which it
+/// holds, then those their art holds, up to 8 rounds. Returns what the selection holds then.
+fn expand_placed_and_symbols(s: &mut Session, mut e: Expandable) -> Result<Expandable> {
+    for _ in 0..8 {
+        if !e.placed && !e.symbols {
+            break;
+        }
+        if e.placed {
+            let roots = selected_roots(s)?;
+            s.edit("Expand", |d, _| expand_placed_under(d, &roots))?;
+        }
+        let roots = selected_roots(s)?;
+        if Expandable::of(&s.doc()?.doc, &roots).symbols {
+            s.edit("Expand", |d, _| super::brushsym::expand_instances_under(d, &roots))?;
+        }
+        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    }
+    Ok(e)
 }
 
 fn drop_live(n: &mut Node) {

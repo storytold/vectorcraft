@@ -474,6 +474,70 @@ fn symbol_instances_keep_their_placed_art_between_frames() {
     assert_eq!(Arc::strong_count(&d.symbols[0].art), 1, "only the document holds the symbol's art");
 }
 
+/// The art placed through 9-slice guides that `r` keeps and that its last frame used.
+fn sliced_copies(r: &Renderer) -> Vec<Arc<Node>> {
+    r.placed_arts.used_in(r.stamp).filter(|e| e.slice.is_some()).filter_map(|e| e.placed.clone()).collect()
+}
+
+/// A second frame of an unchanged document draws the art placed through a symbol's 9-slice guides
+/// for its scaled instance in the first, and the geometry kept for that art's paths is used again.
+/// Moving a guide places the art again.
+#[test]
+fn nine_slice_instances_keep_their_placed_art_between_frames() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("S", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let l = d.layers[0].id;
+    let xf = Affine::translate((100.0, 50.0)) * Affine::scale_non_uniform(4.0, 2.0);
+    let id = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "S".into(), xf })).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let kept = sliced_copies(&r);
+    assert_eq!(kept.len(), 1, "the instance's sliced art is kept");
+    let geometry = placed_copies(&r, &[&d]);
+    assert!(r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels == first);
+    let again = sliced_copies(&r);
+    assert!(again.len() == 1 && Arc::ptr_eq(&again[0], &kept[0]), "the second frame draws the art the first placed");
+    assert_eq!(placed_copies(&r, &[&d]), geometry, "and uses the geometry kept for it");
+    assert_eq!(Arc::strong_count(&d.symbols[0].art), 1, "only the document holds the symbol's art");
+    let mut moved = d.clone();
+    moved.set_symbol_nine_slice("S", Some(vectorcraft_doc::SymbolNineSlice { left: 0.1, top: 0.1, right: 0.1, bottom: 0.1 }));
+    let want = Renderer::new().render(&moved, 200, 100, Affine::IDENTITY, &opts).pixels;
+    assert!(want != first, "the moved guides draw the art differently");
+    assert!(r.render(&moved, 200, 100, Affine::IDENTITY, &opts).pixels == want, "the moved guides place the art again");
+    let placed = sliced_copies(&r);
+    assert!(placed.len() == 1 && !Arc::ptr_eq(&placed[0], &kept[0]), "under the moved guides");
+}
+
+/// A scaled 9-slice instance of a dynamic symbol with appearance changes of its own draws them
+/// after a frame without them: its sliced art is not taken from the art kept for the same symbol
+/// and transform.
+#[test]
+fn nine_slice_instances_with_their_own_changes_are_placed_again() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(200.0, 100.0);
+    let art = symbol_art(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "S".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("S", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let l = d.layers[0].id;
+    let xf = Affine::translate((100.0, 50.0)) * Affine::scale_non_uniform(4.0, 2.0);
+    let id = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "S".into(), xf })).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixels;
+    let mut changed = d.clone();
+    let red = vectorcraft_doc::SymbolOverride { path: vec![0], fill: Some(Paint::solid(Color::rgb(1.0, 0.0, 0.0))), ..Default::default() };
+    changed.node_mut(id).unwrap().extras_mut().symbol_overrides = vec![red];
+    let want = Renderer::new().render(&changed, 200, 100, Affine::IDENTITY, &opts).pixels;
+    assert!(want != first, "the change draws the art differently");
+    assert!(r.render(&changed, 200, 100, Affine::IDENTITY, &opts).pixels == want, "the change is drawn");
+}
+
 /// The stroke outlines and the gradient slices of strokes that `r` keeps and that its last frame made
 /// or used.
 fn stroke_outlines(r: &Renderer) -> (Vec<Arc<BezPath>>, Vec<Slices>) {

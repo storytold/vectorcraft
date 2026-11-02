@@ -232,14 +232,22 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// `n` as plain art that geometry effects can reshape, without its transparency and object
 /// effects: type outlined ([`outline_text`]), live objects evaluated (type inside them outlined),
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
-/// the instance's transform. `None` for other kinds (images, paths, containers). A Repeat counts
-/// the Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
+/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them).
+/// `None` for other kinds (images, paths, containers), and for an instance whose art placed
+/// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
+/// `doc`'s symbols that its instances show toward its instance budget.
 pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     let mut art = match &n.kind {
         NodeKind::Text(_) => outline_text(n)?,
-        NodeKind::SymbolInstance { xf, .. } => {
-            let mut a = symbol_art?.clone();
-            a.transform(*xf, false);
+        NodeKind::SymbolInstance { symbol, xf } => {
+            let a = match doc {
+                Some(d) => d.place_symbol_art(symbol, symbol_art?, *xf)?,
+                None => {
+                    let mut a = symbol_art?.clone();
+                    a.transform(*xf, false);
+                    a
+                }
+            };
             Node::group(n.id, vec![Arc::new(a)])
         }
         // The object as the one piece the copies of its Transform effect are made from.
