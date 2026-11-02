@@ -92,11 +92,20 @@ pub struct Clipboard {
     /// The artboards copied with the Artboard tool (`artboard.copy`); `nodes` are then their art.
     /// Pasting adds a copy of each with the art.
     pub artboards: Vec<vectorcraft_doc::Artboard>,
+    /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
+    /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
+    pub guides: Vec<vectorcraft_doc::Guide>,
 }
 
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty() && self.artboards.is_empty()
+        self.nodes.is_empty() && self.artboards.is_empty() && self.guides.is_empty()
+    }
+
+    /// Does it hold art (objects or artboards) for other apps? Ruler guides stay in VectorCraft:
+    /// guides alone put nothing on the system clipboard (#3226).
+    pub fn has_art(&self) -> bool {
+        !self.nodes.is_empty() || !self.artboards.is_empty()
     }
 
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
@@ -185,7 +194,7 @@ impl Clipboard {
 
     /// The objects as standalone SVG (`None` when there are none).
     pub fn svg(&self) -> Option<String> {
-        if self.is_empty() {
+        if !self.has_art() {
             return None;
         }
         let d = self.to_document();

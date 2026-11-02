@@ -282,7 +282,7 @@ impl Clipboard {
 
     /// The MIME types of [`Self::flavours`], without making them.
     pub fn flavour_types(&self, svg: bool, pdf: bool) -> Vec<&'static str> {
-        if self.is_empty() {
+        if !self.has_art() {
             return vec![];
         }
         let text = (svg && self.image_bytes() <= COPY_TEXT_IMAGE_BYTES) || self.nodes.iter().all(type_only);

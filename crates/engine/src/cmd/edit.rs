@@ -10,8 +10,8 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 use super::clipboard::SwatchChoices;
 use super::{
     CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, cmd, f64_or, f64_req,
-    finite_numbers, has_clipboard, has_doc, has_selection, has_selection_or_artboard_tool, has_selection_or_guides, id_param, index, ok, point_param,
-    str_param,
+    finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param, index, ok,
+    point_param, str_param,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -125,8 +125,24 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             undo_group_end
         ),
-        cmd!("edit.cut", "Cut", ["Edit"], Some("Cmd+X"), "{} (the Artboard tool chosen: artboard.cut)", has_selection_or_artboard_tool, cut),
-        cmd!("edit.copy", "Copy", ["Edit"], Some("Cmd+C"), "{} (the Artboard tool chosen: artboard.copy)", has_selection_or_artboard_tool, copy),
+        cmd!(
+            "edit.cut",
+            "Cut",
+            ["Edit"],
+            Some("Cmd+X"),
+            "{} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            has_selection_guides_or_artboard_tool,
+            cut
+        ),
+        cmd!(
+            "edit.copy",
+            "Copy",
+            ["Edit"],
+            Some("Cmd+C"),
+            "{} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            has_selection_guides_or_artboard_tool,
+            copy
+        ),
         cmd!(
             "edit.paste",
             "Paste",
@@ -177,7 +193,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
             has_selection_or_guides,
             clear
         ),
@@ -638,9 +654,35 @@ fn copy(s: &mut Session, _: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
         return super::panelcmds::artboard_copy(s, &json!({}), false);
     }
-    let roots = selected_roots(s)?;
-    s.clipboard = Clipboard::copy(s.doc()?, &roots);
-    Ok(json!({ "copied": s.clipboard.nodes.len() }))
+    let st = s.doc()?;
+    // Selected ruler guides come along (#3226), as canvas guides: their layer and artboard stay
+    // behind.
+    let guides: Vec<vectorcraft_doc::Guide> = st
+        .selection
+        .guides
+        .iter()
+        .filter_map(|i| st.doc.guides.get(*i))
+        .map(|g| vectorcraft_doc::Guide { layer: None, artboard: None, ..g.clone() })
+        .collect();
+    let roots = if st.selection.is_empty() && !guides.is_empty() { vec![] } else { selected_roots(s)? };
+    let st = s.doc()?;
+    let mut clip = Clipboard::copy(st, &roots);
+    // Guides alone: the artboard the first one belongs to, or crosses, is where in-place pastes
+    // measure from, as the objects' artboard is.
+    if clip.nodes.is_empty()
+        && let Some(g) = st.selection.guides.first().and_then(|i| st.doc.guides.get(*i))
+    {
+        let board = g.artboard.and_then(|id| st.doc.artboards.iter().find(|a| a.id == id)).or_else(|| {
+            st.doc
+                .artboards
+                .iter()
+                .find(|a| if g.vertical { (a.rect.x0..=a.rect.x1).contains(&g.pos) } else { (a.rect.y0..=a.rect.y1).contains(&g.pos) })
+        });
+        clip.source_artboard = board.map(|a| a.rect);
+    }
+    clip.guides = guides;
+    s.clipboard = clip;
+    Ok(json!({ "copied": s.clipboard.nodes.len(), "guides": s.clipboard.guides.len() }))
 }
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
@@ -649,9 +691,15 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Copy promotes a compound member to its compound. Cut must remove the same objects it
     // copied, while Clear on its own deletes exactly the selected members.
+    // Ruler guides selected on their own: Copy takes them, Clear removes them.
+    if s.doc()?.selection.is_empty() {
+        copy(s, p)?;
+        return clear(s, &json!({}));
+    }
     let ids = selected_roots(s)?;
     copy(s, p)?;
-    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids })) } else { clear(s, &json!({})) }
+    // The selected ruler guides it copied go with the objects, in the same undo step (#3226).
+    if s.doc()?.selection.anchors.is_empty() { clear(s, &json!({ "ids": ids, "guides": true })) } else { clear(s, &json!({ "guides": true })) }
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -665,8 +713,9 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return super::docmenu::guide_remove(s, &json!({}));
     }
     let st = s.doc()?;
-    // Guides selected with the art go with it (not when ids are given).
-    let with_guides = explicit.is_none();
+    // Guides selected with the art go with it (not when ids are given, unless `guides` says so:
+    // Cut, which names the objects it copied).
+    let with_guides = explicit.is_none() || bool_or(p, "guides", false);
     let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
     // Keep the selected ids themselves, without promoting compound members. Delete a selected
     // ancestor just once; its selected descendants leave with it. Layers themselves are kept.
@@ -836,6 +885,13 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         // In place, in front, in back: onto the active artboard when the UI names it.
         _ => vec![onto_artboard(&st.doc, p, clip)],
     };
+    // Guides alone don't follow a plain paste's offset or the view centre: they stay where they
+    // were. With objects they move as the objects do.
+    let guide_placements: Vec<Affine> = if !clip.nodes.is_empty() || !matches!(mode, PasteMode::Offset | PasteMode::Library | PasteMode::Drag) {
+        placements.clone()
+    } else {
+        vec![Affine::IDENTITY]
+    };
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
         let imported = clip.import_into(d, choices, same_doc);
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
@@ -883,6 +939,20 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             }
         }
         sel.set(new_ids.iter().copied());
+        // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
+        // paste of guides alone keeps them where they were, but onto another artboard or every
+        // artboard as the in-place pastes put art); they are selected with the objects.
+        let guide_layer = parent.and_then(|p| if d.node(p).is_some_and(Node::is_layer) { Some(p) } else { d.layer_containing(p) });
+        for xf in &guide_placements {
+            let dv = xf.translation();
+            for g in &clip.guides {
+                let pos = g.pos + if g.vertical { dv.x } else { dv.y };
+                if pos.is_finite() {
+                    sel.guides.push(d.guides.len());
+                    d.guides.push(vectorcraft_doc::Guide { pos, layer: guide_layer, ..g.clone() });
+                }
+            }
+        }
         // Pasted type arrives without the layout bounds cache: fill it so boxes and alignment are
         // right away (opening the file later would, but paste must not depend on a reopen).
         super::typecmd::refresh_bounds_of(d, &new_ids);
@@ -897,6 +967,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     }
     Ok(json!({
         "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(),
+        "guides": clip.guides.len() * guide_placements.len(),
         "artboard": artboards.first(),
         "artboards": artboards,
         "added": imported.added,

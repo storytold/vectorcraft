@@ -1165,7 +1165,9 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
+pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
+    let with_guides = p.get("guides").and_then(Value::as_bool).unwrap_or(false);
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
@@ -1173,6 +1175,10 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     // also catches part of another path must still delete those whole objects.
     let whole = st.selection.whole();
     s.edit("Clear", |d, selection| {
+        if with_guides {
+            let gone = selection.guides.clone();
+            d.retain_guides(selection, |i, _| !gone.contains(&i));
+        }
         let targets: BTreeSet<NodeId> = whole.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect();
         let whole_ids: Vec<NodeId> = targets
             .iter()
