@@ -70,8 +70,8 @@ pub use tool_overlays::HiddenChars;
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 use tool_overlays::{
-    grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, original_path_overlay, print_tiling_overlay,
-    rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
+    grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
+    print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
 pub use view::fit;
@@ -325,6 +325,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if app.ui.view.guides {
             guide_lines(app, &painter, &xf, rect, &t);
         }
+        nine_slice_overlay(app, &painter, &xf);
 
         if !app.session.slices_hidden() {
             slice_overlay(app, &painter, &xf);
