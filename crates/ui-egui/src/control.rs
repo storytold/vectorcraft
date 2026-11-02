@@ -191,6 +191,15 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
+        // each one's document index and rect. Canvas coordinates map to the current document's
+        // pane, inside its rulers and scroll bars (`canvasRect`).
+        "tiled": app.ui.tiled,
+        "panes": app.canvas.panes.last.iter().map(|(i, c)| json!({
+            "document": i,
+            "rect": [c.left(), c.top(), c.width(), c.height()],
+            "active": app.session.active_index() == Some(*i),
+        })).collect::<Vec<_>>(),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),

@@ -27,6 +27,7 @@ pub use hints::{hint_bar, hint_strings};
 pub use status_bar::status_bar;
 #[cfg(test)]
 use status_bar::{StatusReadoutWidths, status_readouts};
+pub(crate) use tabs::show_document;
 #[cfg(test)]
 use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_title};
 pub use tabs::{doc_tabs, isolation_bar, step_document};

@@ -607,7 +607,15 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         ("Window", {
             let mut window_items = vec![
                 c("New Window", "window.newWindow"),
-                sub("Arrange", vec![todo("Cascade"), todo("Tile"), todo("Float in Window"), todo("Consolidate All Windows")]),
+                sub(
+                    "Arrange",
+                    vec![
+                        todo("Cascade"),
+                        c("Tile", "window.arrange.tile"),
+                        todo("Float in Window"),
+                        c("Consolidate All Windows", "window.arrange.consolidateAllWindows"),
+                    ],
+                ),
                 sub("Workspace", crate::workspaces::menu_items()),
                 Sep,
                 c("Control", "window.control"),

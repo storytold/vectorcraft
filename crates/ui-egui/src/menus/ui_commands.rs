@@ -555,6 +555,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.list", "List Workspaces", "", "{}"),
     ("window.newWindow", "New Window", "", "{}"),
     (
+        "window.arrange.tile",
+        "Tile",
+        "",
+        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; returns {tiled: true, panes}",
+    ),
+    (
+        "window.arrange.consolidateAllWindows",
+        "Consolidate All Windows",
+        "",
+        "{} show one document at a time again, under its tab, after Tile; returns {tiled: false}",
+    ),
+    (
         "window.nextDocument",
         "Next Document",
         "Cmd+F6",
