@@ -295,8 +295,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done (#885):** the Transform effect dialog's checkboxes are visible, and it has Transform Objects, Transform
   Patterns and Scale Strokes & Effects: off, Transform Objects leaves the geometry in place; the other two scale
   stroke weights, dashes and the fills' and strokes' effect distances and move pattern tiles with the object, copy
-  `k` by the transformation `k` times. Canvas, export and Expand Appearance agree. Not yet: a Transform effect in
-  a fill's or stroke's own effect list ignores the two options, and object effects after it keep their distances.
+  `k` by the transformation `k` times. Canvas, export and Expand Appearance agree. A Transform effect in a fill's or
+  stroke's own effect list applies the two options to that fill or stroke and its later effects in the same way.
+  Not yet: object effects after it keep their distances.
 - **Done (#937, reproduced case):** Shape Builder regions on art of more than 4,096 segments (traced or type
   outlines): the planar map no longer gives up there, so lines cut such art instead of the tool offering whole
   shapes (the planar map's edge-source and face lookups were quadratic in the segments, now indexed, and the cap is 65,536; Divide with open paths shares it). The edge-source index files a long segment under the grid cells along it, so a diagonal hatch (every line's bounds hold most points) no longer costs a scan of the hatch per edge. The grid holds a budget of references (64 per item plus four rows' or columns' worth), the items past it scanned, so coincident segments can't make it quadratic in memory.
@@ -306,8 +307,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   such stubs into one vertex (within 4× the sweep's tolerance up and down its frame and 1/16 of the 0.01 pt precision
   along it, bounded by each cluster's extent so a run of tiny level segments keeps its length); regression tests
   in `crates/pathops/src/planar.rs`. Estimate unchanged.
-- **Missing:** SVG units reverting to points (#864); a Transform effect in a fill's or stroke's own effect list ignores
-  Transform Patterns and Scale Strokes & Effects (#885, above). Shape Builder regions (#937, closed), PDF text placement
+- **Missing:** SVG units reverting to points (#864). Shape Builder regions (#937, closed), PDF text placement
   (#722, above), the bezier drag preview (#834, #3065, #3729) and deleting an interior anchor of an open path (above)
   are done.
 - **Done (#722):** PDF text opens where the file draws it. Each line used to come in as point type laid out by the
