@@ -30,9 +30,12 @@ pub(crate) struct SGlyph {
     pub run: usize,
     /// Advance in points (tracking, manual kerning and horizontal scale applied).
     pub adv: f64,
-    /// Offset from the pen position, y down (right to left, manual kerning applied).
+    /// Offset from the pen position, y down.
     pub dx: f64,
     pub dy: f64,
+    /// Right to left: the run's manual kerning, which moves the glyph right along the baseline,
+    /// outside its Character Rotation. 0 otherwise.
+    pub kern_shift: f64,
     /// Outline scale (font units -> points).
     pub sx: f64,
     pub sy: f64,
@@ -169,6 +172,7 @@ pub(crate) fn hyphen_glyph(g: &SGlyph) -> SGlyph {
     h.adv = g.face.advance(gid) * g.sx;
     h.dx = 0.0;
     h.dy = 0.0;
+    h.kern_shift = 0.0;
     h.byte = g.byte + g.len;
     h.len = 0;
     h.ch = '-';
@@ -616,6 +620,9 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
         {
             continue;
         }
+        // Neither glyph is rotated, so a right-to-left manual kerning shift adds to the offset.
+        let left_x = left.dx + left.kern_shift;
+        let right_x = right.dx + right.kern_shift;
         let left_y = left.dy - left.bshift;
         let right_y = right.dy - right.bshift;
         let Some(left_style) = runs.get(left.run).map(|(_, s)| *s) else { continue };
@@ -631,11 +638,11 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             u64::from(right.gid),
             left.sx.to_bits(),
             left.sy.to_bits(),
-            left.dx.to_bits(),
+            left_x.to_bits(),
             left_y.to_bits(),
             right.sx.to_bits(),
             right.sy.to_bits(),
-            right.dx.to_bits(),
+            right_x.to_bits(),
             right_y.to_bits(),
             advance.to_bits(),
             em.to_bits(),
@@ -648,8 +655,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             profile_correction(
                 &a.0,
                 &b.0,
-                (left.sx, left.sy, left.dx, left_y),
-                (right.sx, right.sy, right.dx, right_y),
+                (left.sx, left.sy, left_x, left_y),
+                (right.sx, right.sy, right_x, right_y),
                 advance,
                 em,
                 left.face.upem,
@@ -812,6 +819,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         adv: if adv.is_finite() { adv } else { 0.0 },
         dx: 0.0,
         dy: 0.0,
+        kern_shift: 0.0,
         // Not used to draw (the art has its own transform), but they make the glyph's em box
         // its run's em: Character Alignment and Top-to-Top leading treat an inline graphic as a
         // character of its run's size, whatever its scale (see `layout::glyph_em`).
@@ -1111,16 +1119,16 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
-        let mut dx = xo as f64 * k * hs;
+        let mut kern_shift = 0.0;
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
         } else {
             let manual_kern = gst.kerning.map(|v| v / 1000.0 * size).unwrap_or(0.0);
             // Manual kerning spaces a character from the next one in reading order. Right to left,
-            // that one is drawn to its left: the cluster's glyphs move right by the value, so that
-            // the space its last glyph's advance gains is at the cluster's left.
+            // that one is drawn to its left: the cluster's glyphs move right along the baseline by
+            // the value, so that the space its last glyph's advance gains is at the cluster's left.
             if level.is_rtl() && !feats.vertical {
-                dx += manual_kern;
+                kern_shift = manual_kern;
             }
             if last_in_cluster {
                 let tracking = gst.tracking / 1000.0 * size;
@@ -1134,8 +1142,9 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             len: end.saturating_sub(cl).max(1),
             run,
             adv,
-            dx,
+            dx: xo as f64 * k * hs,
             dy: -(yo as f64) * k * vs,
+            kern_shift,
             sx: k * hs,
             sy: k * vs,
             bshift: gst.baseline_shift + pos_shift,
