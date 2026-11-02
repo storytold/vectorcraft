@@ -392,36 +392,85 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
     !needs_a_value(&e.key) || overrides.get(&crate::keymap::stored_key(&e.key)).is_some_and(|t| !t.is_empty())
 }
 
-/// Is `key` a command with a menu path and no default shortcut that a key press can't run: no
-/// item of the menu bar runs it without params, it opens no dialog when run without them (as the
-/// Variables panel's commands do), and its params doc names a field a call must give (File ›
-/// Document Setup › Units, `{units}`)?
-fn needs_a_value(key: &str) -> bool {
-    fn run_bare(items: &[menus::Item], out: &mut HashSet<&'static str>) {
+/// Commands whose params are all optional that do nothing, or fail, when a key press runs them
+/// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
+/// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
+/// and the library and data set loaders a file, which their panel menu items ask for.
+const NEEDS_A_PARAM: [&str; 16] = [
+    "transparency.set",
+    "transparency.setOpacityMask",
+    "stroke.set",
+    "layer.setProps",
+    "object.align",
+    "object.distribute",
+    "swatch.delete",
+    "swatch.move",
+    "swatch.spotOptions",
+    "edit.colors.adjustBalance",
+    "swatch.library.load",
+    "graphicStyle.loadLibrary",
+    "symbol.loadLibrary",
+    "brush.loadLibrary",
+    "dataset.import",
+    "variable.loadLibrary",
+];
+
+/// The (label, params) of each menu bar item, by command id.
+fn menu_bar_items() -> &'static HashMap<&'static str, Vec<(&'static str, Value)>> {
+    fn walk(items: &[menus::Item], out: &mut HashMap<&'static str, Vec<(&'static str, Value)>>) {
         for it in items {
             match it {
-                menus::Item::Cmd(_, id, p) if p.as_object().is_none_or(|o| o.is_empty()) => {
-                    out.insert(id);
-                }
-                menus::Item::Sub(_, children) => run_bare(children, out),
+                menus::Item::Cmd(label, id, p) => out.entry(*id).or_default().push((*label, p.clone())),
+                menus::Item::Sub(_, children) => walk(children, out),
                 _ => {}
             }
         }
     }
+    static ITEMS: OnceLock<HashMap<&'static str, Vec<(&'static str, Value)>>> = OnceLock::new();
+    ITEMS.get_or_init(|| {
+        let mut out = HashMap::new();
+        for (_, items) in menus::menu_tree() {
+            walk(&items, &mut out);
+        }
+        out
+    })
+}
+
+fn is_bare(p: &Value) -> bool {
+    p.as_object().is_none_or(|o| o.is_empty())
+}
+
+/// What a shortcut without params for command `id` runs when no menu bar item runs `id` without
+/// params and every item that runs it gives the same params: what a click on that item runs
+/// ([`menus::click_target`]), so Print Ink Fixes runs with its menu item's params and Clean Up…
+/// opens its dialog.
+pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
+    let items = menu_bar_items().get(id)?;
+    let (label, p) = items.first().filter(|(_, p)| !is_bare(p))?;
+    items.iter().all(|(_, q)| q == p).then(|| menus::click_target(label, id, p))
+}
+
+/// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
+/// bar runs it without params or with one set of params ([`menu_target`]), it opens no dialog when
+/// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
+/// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
+/// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
+fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        let mut bare = HashSet::new();
-        for (_, items) in menus::menu_tree() {
-            run_bare(&items, &mut bare);
-        }
+        // A menu item that runs the command itself with params of its own counts only when the
+        // params doc names no required field: Edit › Find Next gives `find` empty, which it rejects.
+        let runs = |c: &vectorcraft_engine::CommandSpec| {
+            menu_bar_items().get(c.id).is_some_and(|ps| ps.iter().any(|(_, p)| is_bare(p)))
+                || menu_target(c.id).is_some_and(|(id, _)| id != c.id || !names_a_required_field(c.params))
+        };
         vectorcraft_engine::command_specs()
             .iter()
             .filter(|c| {
-                !c.menu.is_empty()
-                    && c.shortcut.is_none()
-                    && !bare.contains(c.id)
+                c.shortcut.is_none()
+                    && !runs(c)
                     && !crate::dialogs::variables::opens(c.id)
-                    && names_a_required_field(c.params)
+                    && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || (!c.menu.is_empty() && names_a_required_field(c.params)))
             })
             .map(|c| c.id)
             .collect()
@@ -1463,6 +1512,77 @@ mod tests {
         ] {
             assert_eq!(names_a_required_field(doc), required, "{doc}");
         }
+    }
+
+    /// Commands whose params are all optional but that a key press can't run are not listed while
+    /// they have no shortcut: Transparency and Opacity Mask Options set nothing without a value,
+    /// Align needs a direction, Other Library… a file, and a query's answer (Select All Unused)
+    /// is dropped. A key saved for one before keeps it listed, where it can be cleared.
+    #[test]
+    fn commands_a_key_press_cannot_run_are_not_listed() {
+        let none = Overrides::new();
+        // Edit › Find Next's menu item gives an empty `find`, which it rejects.
+        let others = ["swatch.unused", "graphicStyle.unused", "document.info", "view.proofSetup", "magicWand.set", "edit.findNext"];
+        for id in NEEDS_A_PARAM.iter().chain(&others) {
+            let e = entry(id).unwrap_or_else(|| panic!("{id} has an entry"));
+            assert!(!listed(&none, e), "{id}");
+            assert_eq!(default_of(id), None, "{id}");
+        }
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "transparency.set", "Cmd+Alt+Shift+F10");
+        assert!(entry("transparency.set").is_some_and(|e| listed(&ov, e)));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        for id in ["transparency.set", "transparency.setOpacityMask"] {
+            let list = run_command(&mut app, "shortcuts.list", &json!({ "query": id })).unwrap().unwrap();
+            assert_eq!(list, json!([]), "{id}");
+        }
+        // Commands that work without params stay listed: panel menu commands that act on the
+        // selection, toggles, and a menu item that runs with params of its own (Clean Up…).
+        for id in [
+            "transparency.releaseOpacityMask",
+            "transparency.toggleNewMasksClipping",
+            "object.path.cleanUp",
+            "addon.color.printFixes",
+            "edit.findReplace",
+        ] {
+            assert!(entry(id).is_some_and(|e| listed(&none, e)), "{id}");
+        }
+        assert_eq!(menu_target("object.path.cleanUp").map(|(id, _)| id).as_deref(), Some("ui.paramDialog"));
+        assert_eq!(
+            menu_target("addon.color.printFixes").map(|(id, p)| (id, p["command"].clone(), p["params"]["inkLimit"].clone())),
+            Some(("ui.paramDialog".into(), json!("addon.color.printFixes"), json!(300)))
+        );
+        assert_eq!(menu_target("edit.findReplace").map(|(id, _)| id).as_deref(), Some("ui.paramDialog"));
+        assert_eq!(menu_target("object.align"), None, "seven items, each with its own params");
+        assert_eq!(menu_target("edit.undo"), None, "runs without params");
+    }
+
+    /// Every command the editor lists, run as a key press runs it on a document with one or with
+    /// several objects selected, reports no missing param.
+    #[test]
+    fn listed_commands_run_from_a_key_without_a_missing_param() {
+        use vectorcraft_testkit::fixtures::Fixture;
+        // These need a state the fixtures lack: text being edited, a pattern being edited, an
+        // object linked to a graphic style, a plug-ins folder.
+        let context = ["text.insertInline", "pattern.options", "graphicStyle.redefine", "plugin.reload"];
+        let none = Overrides::new();
+        let mut failures = vec![];
+        for e in entries().iter().filter(|e| !e.is_tool && !e.key.starts_with("panel:") && listed(&none, e)) {
+            if ["file.", "app.", "help."].iter().any(|p| e.key.starts_with(p)) || context.contains(&e.key.as_str()) {
+                continue;
+            }
+            for fx in [Fixture::Single, Fixture::Multi] {
+                let mut app = VectorcraftApp::new(fx.session(), Default::default());
+                app.ui.status.clear();
+                let (id, p) = menu_target(&e.key).unwrap_or_else(|| (e.key.clone(), json!({})));
+                menus::invoke(&mut app, &id, p);
+                let s = &app.ui.status;
+                if s.starts_with("invalid parameters for") && (s.contains(": give ") || s.contains(": missing ")) {
+                    failures.push(format!("{} [{fx:?}]: {s}", e.key));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 
     /// #2991: Enter Isolation Mode has no default key but runs on the selection, so it belongs in

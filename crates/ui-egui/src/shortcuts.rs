@@ -400,6 +400,7 @@ fn single_key_shortcuts(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let Some(hit) = hits.iter().find(|c| !c.id.starts_with("tool:")).or(hits.first()) else { continue };
         match hit.id.strip_prefix("tool:") {
             Some(tool) => app.select_tool(tool),
+            None if let Some((id, p)) = menu_target(hit) => crate::menus::invoke(app, &id, p),
             None if hit.params.is_null() => {
                 let _ = app.run(&hit.id, json!({}));
             }
@@ -778,6 +779,12 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
     })
 }
 
+/// What a shortcut without params runs when its command's menu bar item gives params
+/// ([`crate::shortcut_editor::menu_target`]): what a click on that item runs.
+fn menu_target(c: &CommandRef) -> Option<(String, serde_json::Value)> {
+    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target(&c.id)).flatten()
+}
+
 /// Params used when a shortcut invokes its command. The named panel function keys retain their
 /// toggle action when their bindings are reassigned.
 fn shortcut_params(c: &CommandRef) -> serde_json::Value {
@@ -818,7 +825,8 @@ fn run_hit(app: &mut VectorcraftApp, ctx: &egui::Context, c: &CommandRef) {
         // every artboard instead of the art.
         crate::panels::artboards::select_all(app);
     } else {
-        crate::menus::invoke(app, &c.id, shortcut_params(c));
+        let (id, p) = menu_target(c).unwrap_or_else(|| (c.id.clone(), shortcut_params(c)));
+        crate::menus::invoke(app, &id, p);
     }
 }
 
