@@ -293,8 +293,13 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // `repeats` and `repeat_rows` hold the `repeatObjects` entries and the rows of the Repeat objects that the walk visits, in walk order.
     let mut repeats: Vec<Value> = vec![];
     let mut repeat_rows: Vec<(String, String)> = vec![];
+    // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
+    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
     for r in roots {
         r.walk(&mut |n| {
+            if !seen.insert(n.id) {
+                return;
+            }
             let k = match &n.kind {
                 NodeKind::Layer { .. } => None,
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
@@ -337,13 +342,15 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
+            // The paint kinds this object's fills and strokes use, each once.
+            let mut kinds = BTreeSet::new();
             for item in &n.appearance.items {
                 let paint = match item {
                     vectorcraft_doc::AppearanceItem::Fill(f) => &f.paint,
                     vectorcraft_doc::AppearanceItem::Stroke(s) => &s.paint,
                 };
                 if let Some(k) = paint_kind(paint) {
-                    *counts.entry(k).or_default() += 1;
+                    kinds.insert(k);
                 }
                 if let Paint::Pattern { pattern, .. } = paint {
                     patterns.insert(pattern.clone());
@@ -353,6 +360,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 {
                     spot.insert(name.clone());
                 }
+            }
+            for k in kinds {
+                *counts.entry(k).or_default() += 1;
             }
             if n.extras().mask.is_some() {
                 *counts.entry("opacityMasks").or_default() += 1;
@@ -616,6 +626,41 @@ mod tests {
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "repeats"})).unwrap();
         assert_eq!((i["repeatObjects"][0]["id"].clone(), i["repeatObjects"][0]["instances"].clone()), (tiles, json!(125_000)));
         assert_eq!(i["sections"][0]["rows"][0], json!(["<Grid Repeat>", "Grid Repeat, 500 rows × 500 columns, 125000 instances"]));
+    }
+
+    /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
+    /// its stroke once, and with Selection Only a selection that holds a group and an object inside
+    /// it counts that object once.
+    #[test]
+    fn info_counts_each_object_once() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let tile = square(&mut s, 0.0);
+        s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+        let (g, p) = (square(&mut s, 100.0), square(&mut s, 200.0));
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"ids": [g], "gradient": gradient})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [g], "gradient": gradient})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!((i["objects"]["gradients"].as_u64(), i["objects"]["patterns"].as_u64()), (Some(1), Some(1)), "{}", i["objects"]);
+        // A group of the two squares, selected together with one of them.
+        s.execute("select.set", &json!({"ids": [g, p]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        for ids in [json!([group, p]), json!([p, group])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+            let o = &i["objects"];
+            assert_eq!(
+                (o["paths"].as_u64(), o["groups"].as_u64(), o["gradients"].as_u64(), o["patterns"].as_u64()),
+                (Some(2), Some(1), Some(1), Some(1)),
+                "{ids}: {o}"
+            );
+            assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{ids}: {}", i["pathLength"]);
+        }
     }
 
     #[test]
