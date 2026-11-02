@@ -943,6 +943,18 @@ fn round_corners_keeps_where_a_closed_path_starts() {
 }
 
 #[test]
+fn twist_turns_clockwise_for_positive_angles() {
+    // A positive angle turns clockwise, a negative one counterclockwise
+    // (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+    // The document's y runs down, so clockwise on the page takes a point right of the center down.
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
+    assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
+    assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());
