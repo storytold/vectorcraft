@@ -3434,7 +3434,7 @@ proptest! {
         let placed = "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `\n%%IncludeFile: a.eps\n~\n\
             [-1 0 0 1 100 0] 10 20 50 50 4 4 0 (b.eps) `\n%%BeginDocument: b.eps\n%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n\
             %%BeginDocument: c.eps\n~\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n0 0 1 setrgbcolor 10 20 40 30 rectfill\n%%EndDocument\n~\n";
-        let fixture = NAMED_PROLOG_AI.replacen("S\nu\n", &format!("S\n{placed}u\n"), 1);
+        let fixture = NAMED_PROLOG_AI.replacen("0 Ap\nu\n", &format!("0 Ap\n{placed}u\n"), 1);
         prop_assert!(fixture.contains("(b.eps)"));
         let text = mutate_text(&fixture, cut, &edits);
         survive("mutated PostScript-form .ai with placed files", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
