@@ -6728,10 +6728,10 @@ fn long_touch_drops_a_tool_press_without_committing_art() {
     assert!(app.session.active().unwrap().doc.art_bounds().is_none(), "releasing cannot commit the cancelled press");
 }
 
-/// A cancelled touch drops the tool's drag as Escape does: the options the drag changed (the
-/// Polygon tool's sides) are not stored, and nothing is drawn.
+/// A canceled touch drops the tool's drag: the options the drag changed (the Polygon tool's
+/// sides) are put back and not stored, and nothing is drawn.
 #[test]
-fn a_cancelled_touch_drops_the_drag_without_storing_its_options() {
+fn a_canceled_touch_drops_the_drag_without_keeping_its_options() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.prefs.touch_gestures = true;
     app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
@@ -6745,7 +6745,7 @@ fn a_cancelled_touch_drops_the_drag_without_storing_its_options() {
     assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)));
     assert!(app.session.active().unwrap().interaction.is_some(), "the drag previews the polygon");
     let view = app.view_info();
-    let before = app.session.tool_options()["sides"].clone();
+    assert_eq!(app.session.tool_options()["sides"], json!(6));
     app.session.tool_key(vectorcraft_tools::ToolKey::Up, Mods::default(), view).unwrap();
     assert_eq!(app.session.tool_options()["sides"], json!(7));
     frame(&mut app, &ctx, pen(egui::TouchPhase::Cancel, start + vec2(60.0, 40.0), 0.5));
@@ -6753,9 +6753,9 @@ fn a_cancelled_touch_drops_the_drag_without_storing_its_options() {
     let st = app.session.active().unwrap();
     assert!(st.interaction.is_none() && st.doc.art_bounds().is_none(), "nothing is drawn");
     assert!(app.ui.dialog.is_none());
-    // A tool whose Escape puts back the options the drag changed stores those; nothing else is stored.
+    assert_eq!(app.session.tool_options()["sides"], json!(6), "the tool has its sides from before the press");
     let stored = app.session.prefs.tool_settings.get("polygon").and_then(|o| o.get("sides"));
-    assert!(stored.is_none_or(|v| *v == before), "the dropped drag's sides are not stored: {stored:?}");
+    assert_eq!(stored, None, "the dropped drag's sides are not stored");
 }
 
 /// #2826: a second finger drops a move waiting over a panel, so its interaction doesn't

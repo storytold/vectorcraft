@@ -361,20 +361,44 @@ impl Session {
         self.pointer_event(ev, view, true)
     }
 
-    /// Drop the press in progress (a long touch, a cancelled touch, a second finger): nothing it
-    /// began is kept. Its interaction is undone, the tool takes Escape as it does during a drag,
-    /// and then a release that returns it to rest. The options the press changed are not stored,
-    /// and what the tool asks of the UI along the way (a size dialog for a click) is dropped.
+    /// Drop the press in progress (a long touch, a canceled touch, a second finger): nothing it
+    /// began is kept. Its interaction is undone, the tool drops the press ([`Tool::drop_press`]:
+    /// Escape, as during a drag, for most tools), and a release returns the tool to rest. Of what
+    /// the tool asks for along the way, only a cancel and a notify run, so a marquee selects
+    /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
+    /// when the press began, and none of the press's changes to them are stored.
     pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
-        // Nothing to roll back without a document; the tool still takes Escape and the release.
+        // Nothing to roll back without a document; the tool still drops the press and gets the release.
         let _ = self.cancel_interaction();
-        let esc = self.tool_key(ToolKey::Escape, Mods::default(), view);
+        let before = self.press_options.take();
+        let mut acts = self.with_tool_cx(view, |t, cx| t.drop_press(cx));
+        acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
+        let dropped = self.take_tool_panic().and_then(|()| self.apply_actions(acts));
         let up = PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None };
-        let up = self.pointer_event(&up, view, false);
-        esc.and(up).map(drop)
+        let r = dropped.and(self.pointer_event(&up, view, false));
+        if let Some((id, opts)) = before
+            && id == self.tool.id()
+        {
+            let now = self.tool.options();
+            for (k, v) in &opts {
+                if now.get(k) != Some(v) {
+                    self.tool.set_option(k, v);
+                }
+            }
+        }
+        r.map(drop)
     }
 
-    /// [`Self::pointer`]; a release stores the tool's options only with `keep`.
+    /// The options of `t` that [`Self::store_tool_settings`] stores.
+    fn persistent_options(t: &dyn Tool) -> Map<String, Value> {
+        let opts = t.options();
+        let radius = (t.id() == ROUNDED_RECTANGLE).then_some("cornerRadius");
+        let keys = settings::stores(t.id()).flat_map(|(_, keys)| keys.iter().copied()).chain(radius);
+        keys.filter_map(|k| opts.get(k).map(|v| (k.to_string(), v.clone()))).collect()
+    }
+
+    /// [`Self::pointer`]. Without `keep` (a dropped press's release), the tool's options are not
+    /// stored and only the tool's `Cancel` and `Notify` actions run.
     fn pointer_event(&mut self, ev: &PointerEvent, view: ViewInfo, keep: bool) -> Result<Vec<UiRequest>> {
         self.last_view = view;
         match ev.kind {
@@ -382,13 +406,21 @@ impl Session {
             PointerKind::Up | PointerKind::Move => self.pointer_held = false,
             PointerKind::DoubleClick => {}
         }
+        match ev.kind {
+            PointerKind::Down => self.press_options = Some((self.tool.id().to_string(), Self::persistent_options(self.tool.as_ref()))),
+            PointerKind::Up => self.press_options = None,
+            _ => {}
+        }
         // The Plane Switching Widget takes its clicks whatever the tool.
         if let Some(r) = self.plane_widget_pointer(ev, view) {
             return r;
         }
         self.leave_draw_inside(ev, view)?;
         let ev = &self.lend_selection_tool(ev);
-        let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
+        let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
+        if !keep {
+            acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
+        }
         let r = self.take_tool_panic().and_then(|()| {
             // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
             if keep && ev.kind == PointerKind::Up {
