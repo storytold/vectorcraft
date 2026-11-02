@@ -336,3 +336,26 @@ fn a_fill_below_a_strokes_own_transform_counts_toward_the_effect_budget() {
     assert_eq!(stroked_leaves(&art).len(), 2, "{cost:?}");
     assert!(Budget::EFFECTS.fits(cost), "{cost:?}");
 }
+
+/// A path of 600,000 anchors with a stroke whose own Transform effect makes two copies, below a
+/// fill: the stroke's copies leave room for the fill painted after them.
+#[test]
+fn a_strokes_own_transform_leaves_room_for_a_fill_above_it() {
+    use crate::geometry::Budget;
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let points: Vec<Point> = (0..600_000).map(|i| Point::new(f64::from(i) * 1.0e-4, f64::from(i % 2))).collect();
+    let gray = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    let mut n = Node::path(NodeId(13), PathData::single(SubPath::polyline(&points, false)), Appearance::basic(gray, Paint::solid(Color::BLACK), 1.0));
+    if let Some(s) = n.appearance.stroke_mut() {
+        s.effects.push(transform(json!({"moveH": 100, "copies": 2, "strokes": true})));
+    }
+    n.appearance.items.reverse();
+    assert!(matches!(n.appearance.items.first(), Some(AppearanceItem::Stroke(_))));
+    let art = reshape(None, &n, None).unwrap();
+    let cost = leaves(&art)
+        .iter()
+        .filter_map(|p| crate::reshape::leaf_geometry(p))
+        .fold(Budget { anchors: 0, lines: 0 }, |c, (g, _)| c.plus(Budget::of(&g)));
+    assert_eq!(stroked_leaves(&art).len(), 2, "{cost:?}");
+    assert!(Budget::EFFECTS.fits(cost), "{cost:?}");
+}

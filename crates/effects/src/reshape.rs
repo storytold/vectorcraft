@@ -642,7 +642,11 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
     *used = used.minus(cost);
     let mut pieces: Vec<Arc<Node>> = vec![];
     let mut plain: Vec<AppearanceItem> = vec![];
-    for item in &original.appearance.items {
+    // Which items become a transformed piece of their own; every other run of items is one plain piece.
+    let transformed: Vec<bool> = original.appearance.items.iter().map(|i| crate::paints(i) && i.effects().iter().any(reaches_appearance)).collect();
+    // The number of pieces after item `i` in paint order: each costs at least the leaf's geometry.
+    let later = |i: usize| (i + 1..transformed.len()).filter(|&j| transformed[j] || j == i + 1 || transformed[j - 1]).count();
+    for (i, item) in original.appearance.items.iter().enumerate() {
         let fx = item.effects();
         let Some(at) = fx.iter().position(reaches_appearance).filter(|_| crate::paints(item)) else {
             plain.push(item.clone());
@@ -653,9 +657,11 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
             *used = used.plus(cost);
         }
         let before = &fx[..at];
-        // What the art's other paths leave of the budget: the geometry before the Transform effect
-        // and its copies keep to it.
-        let room = max.minus(*used);
+        // What the art's other paths leave of the budget, less the leaf's geometry for each piece
+        // still to come: the geometry before the Transform effect and its copies keep to it.
+        let reserved = (0..later(i)).fold(Budget { anchors: 0, lines: 0 }, |r, _| r.plus(cost));
+        let limit = max.minus(reserved);
+        let room = limit.minus(*used);
         let g = if crate::has_geometry(before) && !path.is_empty() {
             crate::geometry::apply_geometry_within(before, &path, bounds, &ctx.item(item), room)
         } else {
@@ -673,7 +679,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
         set_geometry(&mut p, g.clone(), rule);
         let made = transform_leaf(&mut p, &g, map, copies, options, room);
         *used = used.plus(made);
-        for_each_leaf(&mut p, &mut |l| transform_item_leaf(l, max, used));
+        for_each_leaf(&mut p, &mut |l| transform_item_leaf(l, limit, used));
         pieces.push(Arc::new(p));
     }
     if !plain.is_empty() {
