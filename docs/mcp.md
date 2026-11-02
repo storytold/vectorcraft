@@ -844,7 +844,7 @@ of `range` (default all; `{name}-{artboard}.ai` when several, listed in the resu
 `transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity or a blending mode,
 `hiddenObjects: "layer"` (default: a hidden layer of each layer's hidden objects), `"omit"` or `"visible"`, and
 `outlineText: true` to write type as outlines instead of text objects. Type with rotated characters (Character
-Rotation) is always written as outlines, which keep the rotation, with the warning "type with rotated characters is
+Rotation) is always written as outlines, which keep the rotation; without `outlineText: true` this gives the warning "type with rotated characters is
 written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate
 characters)". An image that can't be decoded is left out of
 the file and does not show in art that is flattened or whose raster effects are expanded; `warnings` carries "an image
