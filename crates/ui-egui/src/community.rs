@@ -72,20 +72,21 @@ fn link(app: &mut VectorcraftApp, ui: &mut Ui, icon: &str, label: &str, cmd: &st
     }
 }
 
-/// The Discord button and the website / app page / GitHub links.
-pub fn links(app: &mut VectorcraftApp, ui: &mut Ui) {
-    links_in(app, ui, false);
+/// The Discord button (when `discord`) and the website / app page / GitHub links. About always
+/// shows the button.
+pub fn links(app: &mut VectorcraftApp, ui: &mut Ui, discord: bool) {
+    links_in(app, ui, false, discord);
 }
 
 /// [`links`] for a centred column (the Home screen's, as PhotoCraft's, #4684): the Discord button
-/// and the links, each in the middle.
-pub fn links_centered(app: &mut VectorcraftApp, ui: &mut Ui) {
-    links_in(app, ui, true);
+/// (when `discord`) and the links, each in the middle. Home passes Preferences ▸ General ▸ Show
+/// the Discord button.
+pub fn links_centered(app: &mut VectorcraftApp, ui: &mut Ui, discord: bool) {
+    links_in(app, ui, true, discord);
 }
 
-fn links_in(app: &mut VectorcraftApp, ui: &mut Ui, centered: bool) {
-    // Preferences ▸ General ▸ Show the Discord button (on by default; hidden only when turned off).
-    if app.ui.show_discord_button {
+fn links_in(app: &mut VectorcraftApp, ui: &mut Ui, centered: bool, discord: bool) {
+    if discord {
         discord_button(app, ui, true);
         ui.add_space(8.0);
     }
@@ -97,8 +98,26 @@ fn links_in(app: &mut VectorcraftApp, ui: &mut Ui, centered: bool) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// How many times `draw` draws the large Discord button ("Join our Discord").
+    pub(crate) fn discord_buttons(mut draw: impl FnMut(&mut Ui)) -> usize {
+        fn walk(s: &egui::Shape, n: &mut usize) {
+            match s {
+                egui::Shape::Text(t) if t.galley.text() == "Join our Discord" => *n += 1,
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, n)),
+                _ => {}
+            }
+        }
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(Default::default(), |ui| draw(ui));
+        out.textures_delta.clear();
+        let mut n = 0;
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut n));
+        n
+    }
 
     #[test]
     fn link_clicks_open_the_right_urls() {
@@ -125,7 +144,7 @@ mod tests {
         assert_eq!(opened.lock().unwrap().len(), 4);
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| links(&mut app, ui));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| links(&mut app, ui, true));
         out.textures_delta.clear();
     }
 }

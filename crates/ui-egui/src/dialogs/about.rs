@@ -60,7 +60,7 @@ fn about_tab(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         });
     });
     ui.add_space(12.0);
-    crate::community::links(app, ui);
+    crate::community::links(app, ui, true);
     ui.add_space(12.0);
     ui.label(
         egui::RichText::new(tl!(
@@ -72,5 +72,17 @@ fn about_tab(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if let Some(adapter) = &app.graphics_adapter {
         ui.add_space(6.0);
         ui.label(egui::RichText::new(crate::i18n::fmt(tl!("Graphics: {adapter}"), &[("adapter", adapter.as_str())])).size(11.0));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn about_keeps_its_discord_button_when_the_preference_is_off() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.ui.show_discord_button = false;
+        assert_eq!(crate::community::tests::discord_buttons(|ui| about_tab(&mut app, ui)), 1);
     }
 }

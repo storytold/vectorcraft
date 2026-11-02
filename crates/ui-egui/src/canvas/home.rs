@@ -64,7 +64,7 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.vertical_centered(|ui| {
         ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
         ui.add_space(10.0);
-        crate::community::links_centered(app, ui);
+        crate::community::links_centered(app, ui, app.ui.show_discord_button);
     });
 }
 
