@@ -1827,3 +1827,133 @@ fn graph_variable_applies_csv_and_captures() {
     let r = rect(&mut s);
     assert!(s.execute("variable.bind", &json!({"variable": name, "ids": [r.0]})).is_err());
 }
+
+/// A Variables command that leaves the document as it was (binding art to the variable it already
+/// has, unbinding art that has none, deleting a variable or data set that does not exist, writing a
+/// row's own values back, applying the active data set again) records no undo step: the step to
+/// redo stays, and the document stays unmodified.
+#[test]
+fn a_variables_command_that_changes_nothing_records_no_undo_step() {
+    let dir = Folder::new("vars-noop");
+    let red_path = dir.file("red.png");
+    write(&red_path, &png(8, 8, RED));
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    let img = place(&mut s, &red_path);
+    let other = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Photo", "ids": [img.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Bob", "Show": false, "Photo": red_path}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    let a = json!({"name": "A", "values": {"Name": "Bob", "Show": false, "Photo": red_path}});
+    let calls = [
+        ("variable.bind", json!({"variable": "Show", "ids": [r.0]})),
+        ("variable.unbind", json!({"ids": [other.0]})),
+        ("variable.unbind", json!({"variable": "Name", "ids": [r.0]})),
+        ("variable.delete", json!({"names": ["Nope"]})),
+        ("dataset.delete", json!({"names": ["Nope"]})),
+        ("dataset.set", a),
+        ("dataset.update", json!({})),
+        ("dataset.update", json!({"all": true})),
+        ("dataset.select", json!({"name": "A"})),
+        ("dataset.next", json!({})),
+        ("dataset.prev", json!({})),
+    ];
+    for (cmd, p) in calls {
+        super::select_with_a_step_to_redo(&mut s, &[other]);
+        let before = super::history(&s);
+        assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(super::history(&s), before, "{cmd} {p}");
+    }
+    assert_eq!(plain(&s, t), "Bob");
+    // Applying the row again still deselects the art it leaves hidden, without an undo step.
+    s.execute("select.set", &json!({"ids": [r.0, other.0]})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.contains(&r), "the hidden rectangle is selected");
+    let before = super::history(&s);
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!((super::history(&s), s.doc().unwrap().selection.objects.clone()), (before, vec![other]));
+    // A command that changes something is still one undo step, and it clears Redo.
+    super::select_with_a_step_to_redo(&mut s, &[other]);
+    let undo = super::history(&s).0;
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [other.0]})).unwrap();
+    assert_eq!(super::history(&s), (undo + 1, 0, true));
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Cy"}})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let undo = super::history(&s).0;
+    s.execute("dataset.next", &json!({})).unwrap();
+    assert_eq!((super::history(&s), plain(&s, t)), ((undo + 1, 0, true), "Cy".to_string()));
+}
+
+/// A Variables command that changes nothing, run while the Type tool is typing, still ends the
+/// typing session as one that changes something does: the typing is its own undo step, and the
+/// next keystroke starts a new one.
+#[test]
+fn a_variables_command_that_changes_nothing_ends_the_typing() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::default();
+    let t = text(&mut s, "Hello");
+    let r = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 50, "height": 40})).unwrap();
+    let r = NodeId(r["id"].as_u64().unwrap());
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Show": true}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    for (cmd, p) in [("variable.bind", json!({"variable": "Show", "ids": [r.0]})), ("dataset.select", json!({"name": "A"}))] {
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[t], false).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        s.tool_text("!", v).unwrap();
+        assert!(crate::cmd::typing_in_progress(&s), "{cmd}");
+        let steps = s.doc().unwrap().history.undo.len();
+        s.execute(cmd, &p).unwrap();
+        assert!(!crate::cmd::typing_in_progress(&s), "{cmd}");
+        let labels: Vec<String> = s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+        assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Typing")), "{cmd}");
+    }
+}
+
+/// Applying the active data set again to threaded type that already holds the row's story records
+/// no undo step.
+#[test]
+fn applying_a_story_row_again_records_no_undo_step() {
+    let (mut s, a, b, _) = threaded(200);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "Orig"})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Orig"})).unwrap();
+    assert!(!plain(&s, b).is_empty());
+    super::select_with_a_step_to_redo(&mut s, &[a]);
+    let before = super::history(&s);
+    s.execute("dataset.select", &json!({"name": "Orig"})).unwrap();
+    assert_eq!(super::history(&s), before);
+}
+
+/// Applying the active data set again to a graph whose data already matches the row records no
+/// undo step, and a row with other data still rebuilds the graph in one.
+#[test]
+fn applying_a_graph_row_again_records_no_undo_step() {
+    let mut s = session();
+    let graph = json!({"type": "column", "x": 10, "y": 10, "width": 120, "height": 80, "csv": ",Sales\nA,1\nB,2"});
+    let id = s.execute("graph.create", &graph).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("variable.makeGraphDynamic", &json!({})).unwrap();
+    let name = s.execute("variable.list", &json!({})).unwrap()["variables"][0]["name"].as_str().unwrap().to_string();
+    s.execute("dataset.new", &json!({"name": "A", "values": {name.clone(): ",Sales\nA,10\nB,20"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {name: ",Sales\nA,3\nB,4"}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    super::select_with_a_step_to_redo(&mut s, &[NodeId(id)]);
+    let before = super::history(&s);
+    let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), super::history(&s)), (Some(1), before));
+    s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!(super::history(&s), (before.0 + 1, 0, true));
+}

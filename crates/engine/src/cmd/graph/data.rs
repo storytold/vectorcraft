@@ -87,16 +87,20 @@ pub(super) fn to_csv(g: &GraphSpec) -> String {
 }
 
 /// Apply CSV graph data to the graph root `id` and rebuild its art (Variables data merge), as `graph.setData` with
-/// `csv` does.
+/// `csv` does. Data the graph already holds leaves the graph as it is.
 pub(crate) fn apply_csv(d: &mut Document, id: NodeId, csv: &str) -> Result<()> {
     let Some(node) = d.node(id) else {
         return Err(EngineError::NoNode(id));
     };
-    let Some(mut spec) = node.extras().graph.as_deref().cloned() else {
+    let Some(current) = node.extras().graph.as_deref() else {
         return Err(bad("graph.applyCsv", format!("node {} is not a graph", id.0)));
     };
+    let mut spec = current.clone();
     apply_data(&mut spec, &json!({ "csv": csv }));
     keep_right_series(&mut spec);
+    if spec == *current {
+        return Ok(());
+    }
     regenerate(d, id, spec)
 }
 

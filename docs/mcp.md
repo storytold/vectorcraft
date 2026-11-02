@@ -1738,6 +1738,11 @@ Brushes panel's New Brush button, its menu's New Brush… and art dropped on the
 Brush Options for the new brush; for a scatter, art or pattern brush they preview the art from `brush.selectionArt`.
 Their OK runs `brush.new {type, name, params, ids?}`, and Cancel adds no brush.
 
+`variable.bind`, `variable.unbind`, `variable.delete`, `dataset.set`, `dataset.update`, `dataset.delete`,
+`dataset.select`, `dataset.next` and `dataset.prev` add no undo step when they leave the document as it was, such as
+binding art to a variable it already has or applying the active data set again: the steps to redo stay, and a saved
+document stays unmodified.
+
 `dataset.select`, `dataset.next` and `dataset.prev` reply `{name, applied, skipped}`. They add `overflow: [id…]`
 when area type or type on a path whose text they rewrote doesn't fit, as `text.setText` does (see
 [Fitting area type](#fitting-area-type-auto-size-shrink-text-to-fit-overflow)). They skip an object that is
