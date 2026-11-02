@@ -3371,7 +3371,6 @@ gradient-kind	Radial	방사형
 	Align center	가운데 정렬
 	Align left	왼쪽 정렬
 	Align right	오른쪽 정렬
-	All colours are within the CMYK gamut	모든 색상이 CMYK 색상 범위 안에 있습니다
 	Alt	Alt
 	Amount	양
 	Area Type Options	영역 문자 옵션
@@ -4573,6 +4572,8 @@ theme	Appearance	외관
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	개체 {n}개의 CSS를 복사했습니다
 @msgplural	Downloaded {n} file|Downloaded {n} files	파일 {n}개를 다운로드했습니다
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	파일 {n}개를 {folder}에 내보냈습니다
+@msg	All colors are within the CMYK gamut	모든 색상이 CMYK 색상 범위 안에 있습니다
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	색상 {n}개가 CMYK 색상 범위를 벗어났습니다
 @msg	Unembedded to {_1}	{_1}에 포함 해제했습니다
 @msg	no swatch library `{l}` (see swatch.library.list)	견본 라이브러리 `{l}`이(가) 없습니다(swatch.library.list 참조)
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다

@@ -115,7 +115,6 @@
 	All Artwork Above	上方所有图稿
 	All Caps	全部大写
 	All Categories	所有类别
-	All colours are within the CMYK gamut	所有颜色皆在 CMYK 色域内
 	All on Active Artboard	当前画板上的所有对象
 	All on Same Layers	同层上的所有对象
 	All printer's marks	所有打印机标记
@@ -4363,6 +4362,8 @@ imageTrace	Outline	轮廓
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	已复制 {n} 个对象的 CSS
 @msgplural	Downloaded {n} file|Downloaded {n} files	已下载 {n} 个文件
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	已将 {n} 个文件导出到 {folder}
+@msg	All colors are within the CMYK gamut	所有颜色皆在 CMYK 色域内
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 个颜色超出 CMYK 色域
 @msg	Unembedded to {_1}	已取消嵌入到 {_1}
 @msg	no swatch library `{l}` (see swatch.library.list)	没有色板库 `{l}` (请参阅 swatch.library.list)
 @msg	no user library folder here	此处没有用户库文件夹

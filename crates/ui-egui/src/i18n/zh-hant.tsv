@@ -123,7 +123,6 @@
 	All Artwork Above	上方所有圖稿
 	All Caps	全部大寫
 	All Categories	所有類別
-	All colours are within the CMYK gamut	所有顏色皆在 CMYK 色域內
 	All on Active Artboard	作用中工作區域上的全部
 	All on Same Layers	相同圖層上的全部
 	All printer's marks	所有印表機標記
@@ -2286,6 +2285,8 @@ file-filter	Templates	範本
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	已複製 {n} 個物件的 CSS
 @msgplural	Downloaded {n} file|Downloaded {n} files	已下載 {n} 個檔案
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	已將 {n} 個檔案匯出至 {folder}
+@msg	All colors are within the CMYK gamut	所有顏色皆在 CMYK 色域內
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 個顏色超出 CMYK 色域
 @msg	Unembedded to {_1}	已取消內嵌至 {_1}
 @msg	no swatch library `{l}` (see swatch.library.list)	沒有色票資料庫 `{l}` (請參閱 swatch.library.list)
 @msg	no user library folder here	此處沒有使用者資料庫資料夾

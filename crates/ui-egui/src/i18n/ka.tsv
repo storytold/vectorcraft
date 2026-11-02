@@ -1629,7 +1629,6 @@ digits	Malayalam	მალაიალამური
 	Smart Guides (⌘U)	ჭკვიანი დამხმარე ხაზები (⌘U)
 	Snap Options	მიბმის პარამეტრები
 	Type:	ტიპი:
-	All colours are within the CMYK gamut	ყველა ფერი CMYK-ის გამის ფარგლებშია
 	Assign:	მინიჭება:
 	Color Settings	ფერის პარამეტრები
 	Gamut Check	გამის შემოწმება
@@ -4292,6 +4291,8 @@ font-technology	Variable	ცვლადი
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})
 @msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
+@msg	All colors are within the CMYK gamut	ყველა ფერი CMYK-ის გამის ფარგლებშია
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})
 @msg	Unembedded to {_1}	ჩაშენება მოხსნილია: {_1}
 @msg	Reset {_1}	ჩამოყრილია: {_1}
 @msg	Sent to {_1}	გაგზავნილია: {_1}

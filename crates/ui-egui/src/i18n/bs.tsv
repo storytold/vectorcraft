@@ -1895,7 +1895,6 @@ digits	Malayalam	Malajalam
 	Smart Guides (⌘U)	Pametne vodilice (⌘U)
 	Snap Options	Opcije hvatanja
 	Type:	Vrsta:
-	All colours are within the CMYK gamut	Sve boje su unutar CMYK gamuta
 	Assign:	Dodijeli:
 	Color Settings	Postavke boja
 	Gamut Check	Provjera gamuta
@@ -4811,6 +4810,8 @@ imageTrace	Outline	Obris
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopiran je CSS {n} objekta|Kopiran je CSS {n} objekta|Kopiran je CSS {n} objekata
 @msgplural	Downloaded {n} file|Downloaded {n} files	Preuzeta je {n} datoteka|Preuzete su {n} datoteke|Preuzeto je {n} datoteka
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Izvezena je {n} datoteka u {folder}|Izvezene su {n} datoteke u {folder}|Izvezeno je {n} datoteka u {folder}
+@msg	All colors are within the CMYK gamut	Sve boje su unutar CMYK gamuta
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} boja je izvan CMYK gamuta|{n} boje su izvan CMYK gamuta|{n} boja je izvan CMYK gamuta
 @msg	Unembedded to {_1}	Ugrađivanje poništeno u {_1}
 @msg	Reset {_1}	Vrati na početno: {_1}
 @msg	Sent to {_1}	Poslano na {_1}

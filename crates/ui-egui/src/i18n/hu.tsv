@@ -236,7 +236,6 @@
 	All Artwork Above	Az összes fölötte lévő grafika
 	All Caps	Csupa nagybetű
 	All Categories	Összes kategória
-	All colours are within the CMYK gamut	Minden szín a CMYK-színtartományon belül van
 	All Layers	Összes réteg
 	All on Active Artboard	Az összes az aktív rajztáblán
 	All on Same Layers	Az összes ugyanazokon a rétegeken
@@ -5037,6 +5036,8 @@ imageTrace	Outline	Körvonal
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS másolva, objektumok: {n}
 @msgplural	Downloaded {n} file|Downloaded {n} files	Letöltött fájlok: {n}
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportált fájlok: {n}, mappa: {folder}
+@msg	All colors are within the CMYK gamut	Minden szín a CMYK-színtartományon belül van
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} szín a CMYK-színtartományon kívül van
 @msg	Reload the page to go on (changes not saved yet may be lost).	A folytatáshoz töltsd újra az oldalt (a még nem mentett módosítások elveszhetnek).
 @msg	Replace Spine: select a blend and a path	Gerinc cseréje: jelölj ki egy összemosást és egy útvonalat
 @msg	Reset {_1}	Visszaállítva: {_1}

@@ -165,7 +165,6 @@
 	All Artwork Above	Toda la ilustración superior
 	All Caps	Shiftculas
 	All Categories	Todas las categorías
-	All colours are within the CMYK gamut	Todos los colores están dentro de la gama CMYK
 	All on Active Artboard	Todo en la mesa de trabajo activa
 	All on Same Layers	Todo en las mismas capas
 	All printer's marks	Todas las marcas de impresora
@@ -4545,6 +4544,8 @@ axis	Both	Ambos
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Se copió el CSS de {n} objeto|Se copió el CSS de {n} objetos
 @msgplural	Downloaded {n} file|Downloaded {n} files	Se descargó {n} archivo|Se descargaron {n} archivos
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Se exportó {n} archivo a {folder}|Se exportaron {n} archivos a {folder}
+@msg	All colors are within the CMYK gamut	Todos los colores están dentro de la gama CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} color está fuera de la gama CMYK|{n} colores están fuera de la gama CMYK
 @msg	Unembedded to {_1}	Se desincrustó en {_1}
 @msg	Reset {_1}	Se restableció {_1}
 @msg	Sent to {_1}	Se envió a {_1}

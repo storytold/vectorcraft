@@ -1726,7 +1726,6 @@ digits	Malayalam	Malayalam
 	Smart Guides (⌘U)	Smarte hjælpelinjer (⌘U)
 	Snap Options	Fastgørelsesindstillinger
 	Type:	Type:
-	All colours are within the CMYK gamut	Alle farver er inden for CMYK-farveomfanget
 	Assign:	Tildel:
 	Color Settings	Farveindstillinger
 	Gamut Check	Farveomfangskontrol
@@ -4505,6 +4504,8 @@ imageTrace	Outline	Kontur
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopierede CSS fra {n} objekt|Kopierede CSS fra {n} objekter
 @msgplural	Downloaded {n} file|Downloaded {n} files	Downloadede {n} fil|Downloadede {n} filer
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Eksporterede {n} fil til {folder}|Eksporterede {n} filer til {folder}
+@msg	All colors are within the CMYK gamut	Alle farver er inden for CMYK-farveomfanget
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} farve er uden for CMYK-farveomfanget|{n} farver er uden for CMYK-farveomfanget
 @msg	Unembedded to {_1}	Fjernede indlejring til {_1}
 @msg	Reset {_1}	Nulstillede {_1}
 @msg	Sent to {_1}	Sendte til {_1}

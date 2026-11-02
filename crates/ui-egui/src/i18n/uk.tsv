@@ -159,7 +159,6 @@
 	All Artwork Above	Весь малюнок вище
 	All Caps	Всі великі
 	All Categories	Усі категорії
-	All colours are within the CMYK gamut	Усі кольори входять у колірне охоплення CMYK
 	All on Active Artboard	Все на активній монтажній області
 	All on Same Layers	Все на тих же шарах
 	All printer's marks	Усі друкарські мітки
@@ -4570,6 +4569,8 @@ axis	Both	Обидві
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Скопійовано CSS {n} об’єкта|Скопійовано CSS {n} об’єктів|Скопійовано CSS {n} об’єктів
 @msgplural	Downloaded {n} file|Downloaded {n} files	Завантажено {n} файл|Завантажено {n} файли|Завантажено {n} файлів
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортовано {n} файл до {folder}|Експортовано {n} файли до {folder}|Експортовано {n} файлів до {folder}
+@msg	All colors are within the CMYK gamut	Усі кольори входять у колірне охоплення CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} колір виходить за межі колірного охоплення CMYK|{n} кольори виходять за межі колірного охоплення CMYK|{n} кольорів виходять за межі колірного охоплення CMYK
 @msg	Unembedded to {_1}	Вилучено у {_1}
 @msg	Reset {_1}	Скинуто: {_1}
 @msg	Sent to {_1}	Відправлено до {_1}

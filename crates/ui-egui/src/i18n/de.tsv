@@ -140,7 +140,6 @@
 	All Artwork Above	Gesamte Grafik darüber
 	All Caps	Großbuchstaben
 	All Categories	Alle Kategorien
-	All colours are within the CMYK gamut	Alle Farben liegen im CMYK-Farbumfang
 	All on Active Artboard	Alles auf der aktiven Zeichenfläche
 	All on Same Layers	Alles auf denselben Ebenen
 	All printer's marks	Alle Druckermarken
@@ -4460,6 +4459,8 @@ theme	Appearance	Erscheinungsbild
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS von {n} Objekt kopiert|CSS von {n} Objekten kopiert
 @msgplural	Downloaded {n} file|Downloaded {n} files	{n} Datei heruntergeladen|{n} Dateien heruntergeladen
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} Datei nach {folder} exportiert|{n} Dateien nach {folder} exportiert
+@msg	All colors are within the CMYK gamut	Alle Farben liegen im CMYK-Farbumfang
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} Farbe liegt außerhalb des CMYK-Farbumfangs|{n} Farben liegen außerhalb des CMYK-Farbumfangs
 @msg	Unembedded to {_1}	Einbettung aufgehoben, gespeichert unter {_1}
 @msg	Reset {_1}	{_1} zurückgesetzt
 @msg	Sent to {_1}	An {_1} gesendet

@@ -1726,7 +1726,6 @@ digits	Malayalam	Malayalam
 	Smart Guides (⌘U)	Panduan cerdas (⌘U)
 	Snap Options	Opsi snap
 	Type:	Jenis:
-	All colours are within the CMYK gamut	Semua warna berada dalam gamut CMYK
 	Assign:	Tetapkan:
 	Color Settings	Pengaturan warna
 	Gamut Check	Pemeriksaan gamut
@@ -4505,6 +4504,8 @@ imageTrace	Outline	Kontur
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Berhasil menyalin CSS dari {n} objek
 @msgplural	Downloaded {n} file|Downloaded {n} files	Berhasil mengunduh {n} file
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Berhasil mengekspor {n} file ke {folder}
+@msg	All colors are within the CMYK gamut	Semua warna berada dalam gamut CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} warna berada di luar gamut CMYK
 @msg	Unembedded to {_1}	Gambar tersemat dilepas ke {_1}
 @msg	Reset {_1}	{_1} diatur ulang
 @msg	Sent to {_1}	Dikirim ke {_1}

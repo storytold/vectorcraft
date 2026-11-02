@@ -4116,6 +4116,8 @@ axis	Both	Ambos
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS de {n} objeto copiado|CSS de {n} objetos copiado
 @msgplural	Downloaded {n} file|Downloaded {n} files	{n} arquivo baixado|{n} arquivos baixados
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} arquivo exportado para {folder}|{n} arquivos exportados para {folder}
+@msg	All colors are within the CMYK gamut	Todas as cores estão dentro do gamut CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} cor está fora do gamut CMYK|{n} cores estão fora do gamut CMYK
 @msg	Unembedded to {_1}	Desincorporado para {_1}
 @msg	Reset {_1}	Redefinir {_1}
 @msg	Sent to {_1}	Enviado para {_1}
@@ -4355,7 +4357,6 @@ axis	Both	Ambos
 	Align center	Alinhar ao Centro
 	Align left	Alinhar à Esquerda
 	Align right	Alinhar à Direita
-	All colours are within the CMYK gamut	Todas as cores estão dentro do gamut CMYK
 	Alt	Alt
 	Amount	Quantidade
 	Area Type Options	Opções de Texto de Área

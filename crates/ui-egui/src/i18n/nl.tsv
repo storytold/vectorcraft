@@ -1740,7 +1740,6 @@ digits	Malayalam	Malayalam
 	Smart Guides (⌘U)	Slimme hulplijnen (⌘U)
 	Snap Options	Snapopties
 	Type:	Type:
-	All colours are within the CMYK gamut	Alle kleuren vallen binnen het CMYK-gamut
 	Assign:	Toewijzen:
 	Color Settings	Kleurinstellingen
 	Gamut Check	Gamutcontrole
@@ -4517,6 +4516,8 @@ imageTrace	Outline	Contour
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS van {n} object gekopieerd|CSS van {n} objecten gekopieerd
 @msgplural	Downloaded {n} file|Downloaded {n} files	{n} bestand gedownload|{n} bestanden gedownload
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} bestand geëxporteerd naar {folder}|{n} bestanden geëxporteerd naar {folder}
+@msg	All colors are within the CMYK gamut	Alle kleuren vallen binnen het CMYK-gamut
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} kleur valt buiten het CMYK-gamut|{n} kleuren vallen buiten het CMYK-gamut
 @msg	Unembedded to {_1}	Extern gemaakt: {_1}
 @msg	Reset {_1}	{_1} opnieuw ingesteld
 @msg	Sent to {_1}	Verzonden naar {_1}
