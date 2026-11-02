@@ -59,11 +59,15 @@ fn issued(out: &egui::FullOutput) -> Option<egui::ScreenshotCallback> {
     })
 }
 
-/// Make an admitted capture due now: the settle policy measures wall-clock animation time, which
-/// a test must not race. The frame count in `issue_screenshots` still proves the settle passes.
+/// Make an admitted capture due now, with no deadline: the settle policy and the deadline both
+/// measure wall-clock time, which a test must not race. The frame count in `issue_screenshots`
+/// still proves the settle passes, and the timeout tests set the deadline in the past themselves.
 fn allow_due(app: &mut VectorcraftApp) {
     for queued in &mut app.queued_screenshots {
         queued.due_ms = f64::MIN;
+    }
+    for pending in &mut app.pending_screenshots {
+        pending.deadline_ms = f64::MAX;
     }
 }
 

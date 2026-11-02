@@ -1,7 +1,7 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::numeric::mixed_field_named;
 use super::panel_chrome::chevron_cell;
-use super::*;
+use super::{Rect, Response, Stroke, StrokeKind, Tokens, Ui, id_with, vec2};
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
 /// first enabled field drawn takes it ([`take_dialog_focus`]).
@@ -26,6 +26,43 @@ pub(crate) fn focus_field(ui: &Ui, id: egui::Id, text: &str) {
     ui.memory_mut(|m| m.request_focus(id));
 }
 
+/// The key under which [`arm_field_focus`] keeps the armed field's id salt.
+fn armed_field_flag() -> egui::Id {
+    egui::Id::unique("armed-field-focus")
+}
+
+/// Arm the field drawn with id salt `salt`: a numeric field's `id`, or a searchable menu's (the
+/// font family menu's). The next one drawn, enabled and outside a sizing pass, takes the keyboard
+/// focus ([`take_armed_focus`]) until [`disarm_field_focus`].
+pub(crate) fn arm_field_focus(ctx: &egui::Context, salt: impl std::hash::Hash) {
+    ctx.data_mut(|d| d.insert_temp(armed_field_flag(), id_with(egui::Id::NULL, salt)));
+}
+
+/// Disarm the field [`arm_field_focus`] armed. → Whether it was still armed: no field took it.
+pub(crate) fn disarm_field_focus(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| {
+        let armed = d.get_temp::<egui::Id>(armed_field_flag()).is_some();
+        d.remove::<egui::Id>(armed_field_flag());
+        armed
+    })
+}
+
+/// Whether the field drawn with id salt `salt` is the one armed and can take the keyboard focus
+/// now (it is enabled, and this is not a sizing pass). It is then disarmed.
+pub(crate) fn take_armed_focus(ui: &Ui, salt: impl std::hash::Hash) -> bool {
+    if ui.is_sizing_pass() || !ui.is_enabled() {
+        return false;
+    }
+    let salt = id_with(egui::Id::NULL, salt);
+    ui.data_mut(|d| {
+        let armed = d.get_temp::<egui::Id>(armed_field_flag()) == Some(salt);
+        if armed {
+            d.remove::<egui::Id>(armed_field_flag());
+        }
+        armed
+    })
+}
+
 /// The modifiers held with an Enter press among this frame's events, `None` without one, as when a
 /// field's editing ends with a click elsewhere.
 pub(crate) fn enter_modifiers(ui: &Ui) -> Option<egui::Modifiers> {
@@ -48,6 +85,16 @@ pub(super) fn select_all(ui: &Ui, id: egui::Id, text: &str) {
 /// The flag that tells the fields a dialog is open in this frame ([`set_dialog_open`]).
 fn dialog_open_flag() -> egui::Id {
     egui::Id::unique("dialog-open")
+}
+
+/// The flag that tells the dialog runner a field rejected an invalid commit on Enter in this frame.
+pub(crate) fn dialog_reject_commit_flag() -> egui::Id {
+    egui::Id::unique("dialog-reject-commit")
+}
+
+/// Suppress confirming an open dialog on Enter during this frame when an invalid value was committed.
+pub(crate) fn reject_dialog_commit(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(dialog_reject_commit_flag(), true));
 }
 
 /// The app sets this at the start of each frame: while a dialog is open, Shift+Enter in a field
@@ -200,13 +247,30 @@ pub(super) fn recessed_text(
         .allocate_ui_with_layout(vec2(width, height), layout, |ui| {
             ui.set_min_size(vec2(width, height));
             let rect = ui.max_rect();
-            ui.painter().rect(rect, 5.0, t.input, Stroke::new(1.0, if editing { t.accent } else { t.input_border }), StrokeKind::Inside);
+            let now = ui.input(|i| i.time);
+            let flash_end = ui.data(|d| d.get_temp::<f64>(id.with("invalid-flash")));
+            let invalid = flash_end.is_some_and(|end| now <= end);
+            if invalid {
+                ui.ctx().request_repaint();
+            }
+            let stroke = if invalid {
+                Stroke::new(1.5, t.accent_strong)
+            } else if editing {
+                Stroke::new(1.0, t.accent)
+            } else {
+                Stroke::new(1.0, t.input_border)
+            };
+            ui.painter().rect(rect, 5.0, t.input, stroke, StrokeKind::Inside);
             let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
                 .show(ui, |ui| {
                     crate::theme::strong_selected_text(ui);
-                    let edit = if rows > 1 { egui::TextEdit::multiline(&mut buf).desired_rows(rows) } else { egui::TextEdit::singleline(&mut buf) };
+                    let edit = if rows > 1 {
+                        egui::TextEdit::multiline(&mut buf).desired_rows(rows)
+                    } else {
+                        egui::TextEdit::singleline(&mut buf).align(egui::Align2::LEFT_CENTER)
+                    };
                     ui.add(
                         edit.id(id)
                             .frame(egui::Frame::NONE)
@@ -226,7 +290,9 @@ pub(super) fn recessed_text(
         d.insert_temp(id, buf.clone());
         d.insert_temp(focus_id, focused);
     });
-    let commit = resp.lost_focus() || kept;
+    // Plain Enter only: Ctrl/Cmd+Enter keeps editing a field that takes it (X and Y in Transform).
+    let enter_commit = rows == 1 && editing && ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none());
+    let commit = resp.lost_focus() || kept || enter_commit;
     (buf, commit, resp, rect)
 }
 
@@ -293,6 +359,7 @@ pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
                 egui::TextEdit::singleline(&mut query)
                     .id(id.with("edit"))
                     .frame(egui::Frame::NONE)
+                    .align(egui::Align2::LEFT_CENTER)
                     .hint_text(egui::RichText::new(tl!(hint)).italics())
                     .desired_width(ui.available_width()),
             );

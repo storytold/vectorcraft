@@ -321,7 +321,7 @@ pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, path: &str, unit: Unit, 
 
 pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) {
     let mut s = get(d, path).as_str().unwrap_or_default().to_string();
-    if ui.add_enabled(enabled, egui::TextEdit::singleline(&mut s).desired_width(240.0)).changed() {
+    if ui.add_enabled(enabled, egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(240.0)).changed() {
         set(d, path, json!(s));
     }
 }
@@ -493,7 +493,10 @@ fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
             d.fields.insert("__allArtboards".into(), json!(all));
         }
         let mut range = d.str("range");
-        if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).desired_width(140.0).hint_text("1-3, 5")).changed() {
+        if ui
+            .add_enabled(!all, egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5"))
+            .changed()
+        {
             d.fields.insert("range".into(), json!(range));
         }
     });
@@ -700,7 +703,7 @@ fn password_check(ui: &mut egui::Ui, d: &mut Dialog, path: &str, flag: &str, lab
 
 fn password_field(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) {
     let mut s = get(d, path).as_str().unwrap_or_default().to_string();
-    if ui.add_enabled(enabled, egui::TextEdit::singleline(&mut s).password(true).desired_width(200.0)).changed() {
+    if ui.add_enabled(enabled, egui::TextEdit::singleline(&mut s).password(true).align(egui::Align2::LEFT_CENTER).desired_width(200.0)).changed() {
         set(d, path, json!(s));
     }
 }

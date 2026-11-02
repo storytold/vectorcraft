@@ -4,7 +4,8 @@
 //! pixels cached per renderer, a 24-megapixel photo would take 96 MB in each. Here they are kept
 //! once, keyed by the image's content (not the document's key for it, which another document may
 //! use for other pixels) and by what was made of them: greyscale (outline mode), recoloured by a
-//! colour adjustment, separated into ink planes, or shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
+//! colour adjustment, separated into ink planes, shown through Separations Preview's plates, or
+//! shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
 //!
 //! The store holds at most [`ImageStore::budget`] bytes, dropping the least recently used entries
 //! beyond that, except ones still held elsewhere (a render context drawing them): dropping those
@@ -39,6 +40,15 @@ fn default_budget() -> usize {
 #[cfg(not(target_arch = "wasm32"))]
 fn budget_for(memory: u64) -> usize {
     usize::try_from(memory / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX)
+}
+
+/// Installed memory in bytes, `None` where it isn't known (the web, other systems). Other crates
+/// size their own budgets from it.
+pub fn installed_memory() -> Option<u64> {
+    #[cfg(target_arch = "wasm32")]
+    return None;
+    #[cfg(not(target_arch = "wasm32"))]
+    physical_memory()
 }
 
 /// Installed memory in bytes (`MemTotal` in `/proc/meminfo`).
@@ -85,11 +95,16 @@ pub(crate) struct ImageKey {
     pub adjust: Option<u64>,
     /// Greyscale (outline mode).
     pub grey: bool,
+    /// Colorized with this display color ([`colorized`]).
+    pub tint: Option<[u8; 3]>,
     /// The ink plane painted ([`Ink::Display`]: the colours themselves).
     pub ink: Ink,
     /// Generations of the colour tables the pixels were made with (0 = none): a CMYK image's
     /// display table, and the separation table of ink planes (see `ink`).
     pub luts: (u64, u64),
+    /// Generation of the Separations Preview table the pixels show the visible plates through
+    /// (`proof::PlateLut`; 0 = none).
+    pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
 }
@@ -117,6 +132,9 @@ pub(crate) struct ImageStore {
     budget: usize,
     /// Request counter: the least recently used entries go first.
     tick: u64,
+    /// How many entries and undecodable notes have been added: it changes whenever the store
+    /// holds pixels, or notes an image as undecodable, that it did not before.
+    added: u64,
     /// [`BlobId`]s per blob byte buffer, by address (the `Weak` keeps it from being reused).
     ids: HashMap<usize, (Weak<Vec<u8>>, BlobId)>,
     /// The content keys of images whose pixels can't be decoded ([`Undecoded::Unreadable`]), so
@@ -132,7 +150,12 @@ fn pixmap_bytes(pm: &Pixmap) -> usize {
 
 impl ImageStore {
     pub(crate) fn new(budget: usize) -> Self {
-        Self { entries: HashMap::new(), bytes: 0, budget, tick: 0, ids: HashMap::new(), undecodable: HashMap::new() }
+        Self { entries: HashMap::new(), bytes: 0, budget, tick: 0, added: 0, ids: HashMap::new(), undecodable: HashMap::new() }
+    }
+
+    /// How many entries and undecodable notes have been added to the store.
+    pub(crate) fn added(&self) -> u64 {
+        self.added
     }
 
     /// Whether the image with content key `content` is known not to decode.
@@ -146,7 +169,10 @@ impl ImageStore {
         if self.undecodable.len() >= 1024 {
             self.undecodable.clear();
         }
-        self.undecodable.entry(content).or_insert(false);
+        if !self.undecodable.contains_key(&content) {
+            self.added += 1;
+            self.undecodable.insert(content, false);
+        }
     }
 
     /// The pixels of `key`, marked as just used.
@@ -181,9 +207,22 @@ impl ImageStore {
             return e.pm.clone();
         }
         self.bytes += pixmap_bytes(&pm);
+        self.added += 1;
         self.entries.insert(key, Entry { pm: pm.clone(), used: tick });
         self.evict();
         pm
+    }
+
+    /// Keep `pm` as `key` as [`ImageStore::insert`] does, holding no reference to it afterwards,
+    /// then drop entries over budget → whether the store holds `key`'s pixels. Pixels larger than
+    /// the budget are not kept.
+    pub(crate) fn keep(&mut self, key: ImageKey, pm: Arc<Pixmap>) -> bool {
+        if pixmap_bytes(&pm) > self.budget {
+            return false;
+        }
+        drop(self.insert(key.clone(), pm));
+        self.evict();
+        self.entries.contains_key(&key)
     }
 
     /// Drop the least recently used entries no one else holds until within budget.
@@ -259,6 +298,42 @@ pub fn image_cache_bytes() -> usize {
     store().bytes()
 }
 
+/// Keep `img`, the decoded pixels of `blob`, in the store as a renderer keeps the pixels it
+/// decodes, so the first render that draws `blob` uses them instead of decoding it. Returns whether
+/// `img` was kept or the store already held `blob`'s pixels. It returns false, without looking at
+/// the store, for a CMYK image and for pixels a renderer would refuse to decode: more than the
+/// decode allowance as RGBA, or more than fits beside the pixels being drawn now. The store then
+/// drops the least recently used entries beyond its budget, as it does whenever a renderer adds
+/// pixels, and returns false when that leaves `img` out: pixels larger than the budget are never
+/// kept.
+pub fn keep_decoded_image(blob: &ImageBlob, img: image::DynamicImage) -> bool {
+    let (key, lut, _) = crate::blobs::blob_key(blob);
+    if lut.is_some() || !crate::paint::within_allowance(img.width(), img.height()) {
+        return false;
+    }
+    let kept = store().get(&key);
+    let size = match kept {
+        Some(pm) => (pm.width(), pm.height()),
+        None => {
+            let Some(pm) = crate::paint::decoded_pixmap(img) else { return false };
+            let size = (pm.width(), pm.height());
+            if !store().keep(key, Arc::new(pm)) {
+                return false;
+            }
+            size
+        }
+    };
+    remember_size(blob, size);
+    true
+}
+
+/// Whether the store holds the decoded pixels of `blob` at full size.
+pub fn image_cached(blob: &ImageBlob) -> bool {
+    // The key first: working it out takes the store's lock too.
+    let (key, _, _) = crate::blobs::blob_key(blob);
+    store().peek(&key).is_some()
+}
+
 /// `blob`'s content key and kind, hashed and sniffed once per blob allocation.
 pub(crate) fn blob_id(blob: &ImageBlob) -> BlobId {
     if let Some(id) = store().known_id(&blob.bytes) {
@@ -317,6 +392,21 @@ pub(crate) fn half(pm: &Pixmap) -> Pixmap {
     Pixmap::from_parts(data, ow as u16, oh as u16)
 }
 
+/// Pixels `pm` colorized with `rgb`: each pixel takes the color, as opaque as the pixel is dark
+/// (255 less its Rec. 709 luma) times its alpha, so white pixels are transparent.
+pub(crate) fn colorized(pm: &Pixmap, [r, g, b]: [u8; 3]) -> Pixmap {
+    let mut out = pm.clone();
+    for px in out.data_mut() {
+        // The luma of premultiplied components is the premultiplied luma: the alpha less it is
+        // the darkness times the alpha.
+        let luma = 0.2126 * px.r as f32 + 0.7152 * px.g as f32 + 0.0722 * px.b as f32;
+        let a = (px.a as f32 - luma).clamp(0.0, 255.0);
+        let mul = |c: u8| (c as f32 * a / 255.0).round() as u8;
+        *px = PremulRgba8 { r: mul(r), g: mul(g), b: mul(b), a: a.round() as u8 };
+    }
+    out
+}
+
 /// How many times to halve an image drawn with `m` (image pixels → device pixels): while a pixel
 /// of the halved image still covers at most one device pixel each way, at most down to one pixel.
 pub(crate) fn mip_level(m: vectorcraft_geom::Affine, w: u16, h: u16) -> u8 {
@@ -337,7 +427,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, ink: Ink::Display, luts: (0, 0), mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0 }
     }
 
     #[test]
@@ -356,6 +446,29 @@ mod tests {
         s.set_budget(400);
         assert!(s.peek(&key("b")).is_none() && s.peek(&key("c")).is_some(), "now b goes first");
         assert_eq!(s.bytes(), 400);
+    }
+
+    /// Pixels kept for a first frame are dropped at once when the budget has no room for them,
+    /// since nothing draws them yet.
+    #[test]
+    fn kept_pixels_larger_than_the_budget_are_not_kept() {
+        // 10×10 pixmaps: 400 bytes each.
+        let mut s = ImageStore::new(300);
+        assert!(!s.keep(key("big"), Arc::new(Pixmap::new(10, 10))));
+        assert_eq!(s.bytes(), 0);
+        assert!(s.peek(&key("big")).is_none());
+        // Room for one: the older one, held by no one, goes.
+        let mut s = ImageStore::new(400);
+        assert!(s.keep(key("a"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.keep(key("b"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.peek(&key("a")).is_none() && s.peek(&key("b")).is_some());
+        assert_eq!(s.bytes(), 400);
+        // The one kept is held while drawn: a new one that doesn't fit beside it is dropped.
+        let held = s.get(&key("b"));
+        assert!(!s.keep(key("c"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.peek(&key("c")).is_none());
+        assert_eq!(s.bytes(), 400);
+        drop(held);
     }
 
     #[test]

@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_cad::ImportOptions;
 use vectorcraft_doc::{Document, Unit};
 
-use super::super::*;
+use super::super::{CommandSpec, Result, Session, always, bad, cmd};
 use super::{err, source};
 
 pub fn specs() -> Vec<CommandSpec> {

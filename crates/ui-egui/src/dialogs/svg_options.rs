@@ -245,7 +245,7 @@ fn artboards(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.insert("allArtboards".into(), json!(false));
             }
             let mut range = d.str("range");
-            let edit = egui::TextEdit::singleline(&mut range).hint_text(format!("1-{count}")).desired_width(90.0);
+            let edit = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).hint_text(format!("1-{count}")).desired_width(90.0);
             if ui.add_enabled(!all, edit).changed() {
                 d.fields.insert("range".into(), json!(range));
             }
@@ -407,7 +407,7 @@ mod tests {
         app.run("file.save", Value::Null).unwrap();
         assert!(app.ui.dialog.is_none());
         assert_eq!(written.borrow()[1].0, "/tmp/doc.svg");
-        assert!(text(&written, 1).contains("style=\"fill:") && text(&written, 1).matches("<path").count() == 2);
+        assert!(text(&written, 1).contains("style=\"fill:") && vectorcraft_testkit::svg_shapes(&text(&written, 1)) == 2);
         // Save a Copy (options given) leaves the document's path alone.
         app.run("file.saveCopy", json!({"path": "/tmp/copy.svg", "svg": {"minify": true}})).unwrap();
         assert!(!text(&written, 2).trim_end().contains('\n') && !text(&written, 2).contains("<?xml"), "minified");

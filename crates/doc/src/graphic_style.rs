@@ -1,4 +1,4 @@
-use super::*;
+use super::{Appearance, Deserialize, Knockout, Node, Rect, Serialize, skip};
 
 /// A named graphic style (Graphic Styles panel): an appearance plus the object's transparency.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

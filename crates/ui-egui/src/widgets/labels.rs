@@ -1,4 +1,4 @@
-use super::*;
+use super::{Pos2, Rect, Response, Sense, Stroke, Tokens, Ui, icons, pos2, scrub, theme, vec2};
 
 /// Bold section header (Properties panel).
 pub fn section_header(ui: &mut Ui, text: &str) {

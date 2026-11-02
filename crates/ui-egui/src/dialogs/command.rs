@@ -3,11 +3,12 @@
 
 use std::sync::LazyLock;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::{DialogSpec, form};
-use crate::VectorcraftApp;
 use crate::state::Dialog;
+use crate::theme::Tokens;
+use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |d| tl!(&d.str("__label")).to_string(),
@@ -15,13 +16,54 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let command = d.str("__command");
         let (lengths, order) = (lengths(&command), order(&command));
         let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
+        // Area Type Options › Text Flow is a pair of radio buttons after the other options.
+        let flow = if command == "text.areaOptions" { d.fields.remove("flow") } else { None };
         form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &rank, app.session.general_unit());
+        if let Some(v) = flow {
+            let mut rows = v.as_str() == Some("rows");
+            ui.add_space(4.0);
+            egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                let row = ui.label(egui::RichText::new(format!("{}:", tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
+                ui.label_inputs_by(row.id, |ui| {
+                    ui.horizontal(|ui| {
+                        if widgets::radio(ui, tl!("By Rows"), rows, true) {
+                            rows = true;
+                        }
+                        if widgets::radio(ui, tl!("By Columns"), !rows, true) {
+                            rows = false;
+                        }
+                    });
+                });
+                ui.end_row();
+            });
+            d.fields.insert("flow".into(), json!(if rows { "rows" } else { "columns" }));
+        }
+        if previews(d) {
+            let (cmd, params) = call(d);
+            form::preview(app, ui, d, &d.str("__label"), &cmd, params);
+        }
         false
     },
     confirm,
-    passes: takes,
+    passes: |d, key| takes(d, key) || (key == "preview" && previews(d)),
     ..DialogSpec::FORM
 };
+
+/// Does this dialog show a Preview checkbox? Only Grid Repeat Options does: the public page for
+/// the grid options lists one, and the radial and mirror pages do not. (Cancel rolls a preview
+/// back whichever dialog started it.)
+fn previews(d: &Dialog) -> bool {
+    d.str("__command") == "object.repeat.options" && d.fields.contains_key("gridType")
+}
+
+/// The command the dialog runs and its parameters: the fields shown and the fixed ones.
+fn call(d: &Dialog) -> (String, Value) {
+    let mut params = form::params(d);
+    if let (Some(o), Some(Value::Object(fixed))) = (params.as_object_mut(), d.fields.get("__params")) {
+        o.extend(fixed.clone());
+    }
+    (d.str("__command"), params)
+}
 
 /// Does the dialog's command take parameter `key` (its params description names it)?
 fn takes(d: &Dialog, key: &str) -> bool {
@@ -49,6 +91,7 @@ fn order(command: &str) -> &'static [&'static str] {
     match command {
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
+        "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
         _ => &[],
     }
 }
@@ -99,12 +142,12 @@ const PIE_SORT: form::Choices = &[("All", "all"), ("First", "first"), ("None", "
 /// Graph Type › Tick Marks › Length.
 const GRAPH_TICK_LENGTH: form::Choices = &[("None", "none"), ("Short", "short"), ("Full Width", "full")];
 
-/// Closes before running, so a dialog the command opens stays open.
+/// Closes before running, so a dialog the command opens stays open. A previewed one keeps its
+/// preview as the one undo step.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let cmd = d.str("__command");
-    let mut params = form::params(d);
-    if let (Some(o), Some(Value::Object(fixed))) = (params.as_object_mut(), d.fields.get("__params")) {
-        o.extend(fixed.clone());
+    let (cmd, params) = call(d);
+    if previews(d) {
+        return form::commit_preview(app, &cmd, params);
     }
     app.ui.dialog = None;
     // A tool's click-to-size shape (Flare) goes on the active perspective plane while the grid shows.
@@ -156,6 +199,28 @@ mod tests {
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
     }
 
+    /// Area Type Options › Text Flow (#4978): two radio buttons, By Columns as new area type has
+    /// it, and OK fills the cells by rows when By Rows is picked.
+    #[test]
+    fn area_type_options_dialog_sets_the_text_flow() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("flow"), "columns", "drawing the radio buttons keeps the value");
+        app.ui.dialog.as_mut().unwrap().fields.insert("flow".into(), json!("rows"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!(t.area.flow, vectorcraft_doc::TextFlow::Rows);
+    }
+
     /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the
     /// value axis on the side picked.
     #[test]
@@ -190,5 +255,83 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.session.execute("graph.setType", &json!({})).unwrap()["type"], "stackedBar");
         assert_eq!(app.session.execute("graph.setData", &json!({})).unwrap(), data);
+    }
+
+    /// A document with a rectangle made a 2 x 2 Grid Repeat and selected, its Repeat Options
+    /// dialog open.
+    fn grid_options_app() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.repeat.grid", json!({"ids": [id], "rows": 2, "cols": 2})).unwrap();
+        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "command");
+        app
+    }
+
+    /// One headless frame of the open dialog.
+    fn frame(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+
+    fn cols(app: &VectorcraftApp) -> u64 {
+        crate::panels::pattern_options::repeat_fields(app).unwrap()["cols"].as_u64().unwrap()
+    }
+
+    /// #2651: the grid options' public page lists a Preview checkbox: with it on, the repeat on
+    /// the canvas follows the fields while the dialog is open; Cancel puts it back without a
+    /// step of history; OK keeps what was previewed as one step.
+    #[test]
+    fn grid_repeat_options_preview_on_the_canvas() {
+        let mut app = grid_options_app();
+        let steps = app.session.doc().unwrap().history.undo.len();
+        // Off: the fields change nothing until OK.
+        app.ui.dialog.as_mut().unwrap().fields.insert("cols".into(), json!(3));
+        frame(&mut app);
+        assert_eq!(cols(&app), 2, "no preview without the checkbox");
+        // On, the repeat follows the fields.
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+        frame(&mut app);
+        assert_eq!(cols(&app), 3, "the canvas shows 3 columns while the dialog is open");
+        app.ui.dialog.as_mut().unwrap().fields.insert("cols".into(), json!(4));
+        frame(&mut app);
+        assert_eq!(cols(&app), 4, "and follows the next edit");
+        // Cancel puts the original back and leaves no history.
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(cols(&app), 2, "Cancel restores the original repeat");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "and adds no undo step");
+        assert!(!app.session.in_interaction());
+        // OK keeps the previewed values as one undo step.
+        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("cols".into(), json!(5));
+        crate::dialogs::set_field(d, "preview".into(), json!(true));
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(cols(&app), 5);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(cols(&app), 2, "one Undo takes the whole change back");
+    }
+
+    /// Radial and Mirror Repeat Options have no Preview (their public pages list none): their
+    /// fields apply on OK only, and the dialog takes no `preview`.
+    #[test]
+    fn radial_repeat_options_have_no_preview() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.repeat.radial", json!({"ids": [id], "instances": 4})).unwrap();
+        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert!(!crate::dialogs::accepts_field(d, "preview"));
+        app.ui.dialog.as_mut().unwrap().fields.insert("instances".into(), json!(7));
+        frame(&mut app);
+        assert_eq!(crate::panels::pattern_options::repeat_fields(&app).unwrap()["instances"], 4);
+        assert!(!app.session.in_interaction());
     }
 }

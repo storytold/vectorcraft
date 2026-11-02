@@ -722,12 +722,9 @@ fn crop_image_shows_a_box_that_apply_crops_to() {
 #[test]
 fn crop_and_rasterize_say_in_the_status_bar_when_an_image_could_not_be_decoded() {
     const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
-    let mut cut = png(100, 50, 72.0);
-    let idat = cut.windows(4).position(|w| w == b"IDAT").unwrap();
-    cut.truncate(idat + 8);
+    // A PNG whose header reads but whose pixel data is cut short.
     let mut app = app();
-    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&cut)})).unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png(100, 50, 72.0), json!({}));
     let whole = selected_image(&app).geometric_bounds().unwrap();
     app.run("ui.cropImage", json!({})).unwrap();
     app.run("tool.setOption", json!({"key": "rect", "value": [whole.x0, whole.y0, whole.width() / 2.0, whole.height()]})).unwrap();

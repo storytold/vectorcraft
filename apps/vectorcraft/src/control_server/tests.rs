@@ -4,12 +4,18 @@ fn short_timeouts() -> ConnectionTimeouts {
     ConnectionTimeouts { idle: Duration::from_millis(150), line: Duration::from_millis(120), write: Duration::from_millis(150) }
 }
 
-/// The short line deadline, with idle and reply budgets longer than the tests' 3 s waits. On a
-/// busy machine either thread can pause for more than 150 ms between connecting and sending, or
-/// between starting a reply and writing it, and a short budget then closes the connection with no
-/// reply.
+/// How long a test waits for the server to reply or to close a connection. The wait only ends a
+/// test whose server never does either; the budgets under test are 120 and 150 ms, and 1 s in the
+/// persistent test. On a busy machine the server's thread can pause for seconds before or between
+/// its reads and writes, and a wait of a few seconds then fails a server that closes the
+/// connection on time.
+const WAIT: Duration = Duration::from_secs(20);
+
+/// The short line deadline, with idle and reply budgets longer than [`WAIT`]. On a busy machine
+/// either thread can pause for more than 150 ms between connecting and sending, or between
+/// starting a reply and writing it, and a short budget then closes the connection with no reply.
 fn line_timeouts() -> ConnectionTimeouts {
-    ConnectionTimeouts { idle: Duration::from_secs(10), write: Duration::from_secs(10), ..short_timeouts() }
+    ConnectionTimeouts { idle: Duration::from_secs(30), write: Duration::from_secs(30), ..short_timeouts() }
 }
 
 fn socket_fixture(
@@ -27,12 +33,12 @@ fn socket_fixture(
     });
     let client = TcpStream::connect(addr).unwrap();
     socket2::SockRef::from(&client).set_recv_buffer_size(4096).unwrap();
-    client.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    client.set_read_timeout(Some(WAIT)).unwrap();
     (client, done, worker)
 }
 
 fn expect_socket_deadline(client: TcpStream, done: Receiver<()>, worker: std::thread::JoinHandle<()>) {
-    let stopped = done.recv_timeout(Duration::from_secs(3)).is_ok();
+    let stopped = done.recv_timeout(WAIT).is_ok();
     // Always unblock the old implementation too, so a failed regression leaves no worker behind.
     let _ = client.shutdown(std::net::Shutdown::Both);
     drop(client);
@@ -93,7 +99,7 @@ fn trickled_control_line_has_an_absolute_deadline() {
             std::thread::sleep(Duration::from_millis(20));
         }
     });
-    let stopped = done.recv_timeout(Duration::from_secs(3)).is_ok();
+    let stopped = done.recv_timeout(WAIT).is_ok();
     stop.store(true, Ordering::SeqCst);
     // Both socket copies belong to this fixture; shutdown cleans up the baseline failure as well.
     let _ = client.shutdown(std::net::Shutdown::Both);
@@ -110,26 +116,31 @@ fn a_nonreading_control_peer_cannot_retain_the_writer() {
     expect_socket_deadline(client, done, worker);
 }
 
+/// Each request gets its own line and reply budgets. The handler takes longer than both budgets,
+/// so a deadline kept from the previous request runs out. The line and reply budgets are 1 s, and
+/// the idle budget is 30 s, longer than the client's [`WAIT`]: on a busy machine either thread can
+/// pause for more than the short budgets of [`short_timeouts`] between starting a budget and the
+/// read or write it covers.
 #[test]
 fn persistent_control_requests_get_fresh_transport_deadlines() {
-    let timeouts = ConnectionTimeouts { idle: Duration::from_secs(2), ..short_timeouts() };
+    let timeouts = ConnectionTimeouts { idle: Duration::from_secs(30), line: Duration::from_secs(1), write: Duration::from_secs(1) };
     let (mut client, done, worker) = socket_fixture(timeouts, |_, _| {
         // Application processing is not transport time; begin the reply budget afterwards.
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(1250));
         Some(json!({"ok": true}))
     });
     let mut reader = BufReader::new(client.try_clone().unwrap());
     for id in [1, 2] {
         // The client sends each line in one write. `writeln!` on the socket sends the JSON in many
-        // small writes, and when the machine is busy, a pause of more than the 120 ms line deadline
-        // between two of them closes the connection.
+        // small writes, and when the machine is busy, a pause of more than the line deadline between
+        // two of them closes the connection.
         client.write_all(format!("{}\n", json!({"id": id, "method": "inspect"})).as_bytes()).unwrap();
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
         assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"id": id, "ok": true}));
     }
     client.shutdown(std::net::Shutdown::Write).unwrap();
-    done.recv_timeout(Duration::from_secs(3)).unwrap();
+    done.recv_timeout(WAIT).unwrap();
     worker.join().unwrap();
 }
 
@@ -155,7 +166,7 @@ fn timed_out_worker_returns_its_connection_slot() {
     let (tx, _rx) = channel();
     let worker = spawn_connection(stream, tx, egui::Context::default(), slot, short_timeouts()).unwrap();
     let start = std::time::Instant::now();
-    while open.load(Ordering::SeqCst) == MAX_CONNECTIONS && start.elapsed() < Duration::from_secs(3) {
+    while open.load(Ordering::SeqCst) == MAX_CONNECTIONS && start.elapsed() < WAIT {
         std::thread::sleep(Duration::from_millis(10));
     }
     let released = open.load(Ordering::SeqCst) < MAX_CONNECTIONS;
@@ -322,7 +333,7 @@ fn tcp_connection_is_closed_after_junk() {
         serve_lines(read, s, |_, _| Some(json!({"ok": true})));
     });
     let mut c = TcpStream::connect(addr).unwrap();
-    c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    c.set_read_timeout(Some(WAIT)).unwrap();
     c.write_all(b"{\"id\":7,\"method\":\"x\"}\nhello\n{\"method\":\"y\"}\n").unwrap();
     let mut text = String::new();
     c.read_to_string(&mut text).unwrap(); // returns at EOF: the server closed the connection
@@ -373,7 +384,7 @@ fn extra_connections_are_refused() {
     // Idle connections are accepted in order and held open.
     let held: Vec<TcpStream> = (0..16).map(|_| TcpStream::connect(addr).unwrap()).collect();
     let mut extra = TcpStream::connect(addr).unwrap();
-    extra.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    extra.set_read_timeout(Some(WAIT)).unwrap();
     let mut line = String::new();
     BufReader::new(&mut extra).read_line(&mut line).unwrap();
     assert!(line.contains("too many control connections"), "{line}");

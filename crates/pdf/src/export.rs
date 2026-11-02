@@ -55,6 +55,8 @@ pub(crate) struct Exporter<'a> {
     symbols: SymbolBoxes<'a>,
     warnings: Vec<String>,
     images: HashMap<String, Option<Image>>,
+    /// `Some` while opacity mask art is written: whether an image in it was left out.
+    image_left_out: Option<bool>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Whether the group being written is a knockout group (what its neutral children inherit).

@@ -36,9 +36,12 @@ vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 image = { workspace = true }
+hayro-jpeg2000 = { version = "=0.3.5", default-features = false, features = ["std", "simd"] }
 flate2 = { workspace = true }
 # The XML parts of Word documents placed as type (place/docx.rs).
 roxmltree = "0.21"
+# The compound file that holds a Word 97-2003 document placed as type (place/doc.rs).
+cfb = "0.15"
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

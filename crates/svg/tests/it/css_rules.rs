@@ -148,6 +148,26 @@ fn ellipses_round_fully_and_options_change_units_and_names() {
     assert!(prop(&r, "width").is_none() && prop(&r, "height").is_none());
 }
 
+/// Type whose font size measures the cap height gives the em size it is drawn at: 14 pt measuring
+/// a 0.7 em cap height is `font-size: 20px`, and its Auto leading is not written.
+#[test]
+fn type_gives_the_font_size_it_is_drawn_at() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut d = doc();
+    let st = CharStyle {
+        font_family: HEIGHT_FAMILY.into(),
+        size: 14.0,
+        font_height_reference: vectorcraft_doc::FontHeightReference::CapHeight,
+        ..CharStyle::default()
+    };
+    let n = text(&mut d, "Hello", st);
+    let id = add(&mut d, n);
+    let r = one(&d, id, &CssOptions::default());
+    assert_eq!(prop(&r, "font-size"), Some("20px"));
+    assert!(prop(&r, "line-height").is_none());
+}
+
 #[test]
 fn type_gives_font_properties() {
     let mut d = doc();
@@ -228,8 +248,16 @@ fn shared_properties_read_as_svg_export_writes_them() {
         let decl = format!("{k}:{v}").replace('"', "&quot;").replace('\'', "&apos;");
         assert!(style.contains(&decl), "{decl} as in SVG export: {style}");
     }
-    // Lengths are the same numbers, with units on the web.
-    assert!(style.contains("font-size:18") && prop(&r, "font-size") == Some("18px"), "{style}");
+    // Lengths are the same, with units: CSS takes a bare number only for 0, and a browser drops
+    // `font-size:18`, leaving the type at its default size (#3209). Presentation attributes take
+    // bare numbers (`text_layout`).
+    let spacing = prop(&r, "letter-spacing").unwrap_or_default();
+    assert!(prop(&r, "font-size") == Some("18px") && spacing.ends_with("px"), "{r:?}");
+    for decl in ["font-size:18px".to_string(), format!("letter-spacing:{spacing}")] {
+        assert!(style.contains(&decl), "{decl} as in SVG export: {style}");
+    }
+    let inline = export(&d, &ExportOptions { styling: Styling::InlineStyle, ..ExportOptions::default() });
+    assert!(inline.contains("font-size:18px") && inline.contains(&format!("letter-spacing:{spacing}")), "{inline}");
 }
 
 #[test]

@@ -130,6 +130,8 @@
 	Anchor Point	锚点
 	Anchor Point Tool	锚点工具
 	Anchor Points	锚点
+	"In" Control Points	“入”控制点
+	"Out" Control Points	“出”控制点
 	Anchor Points, Handle, and Bounding Box Display	锚点、手柄和定界框显示
 	Anchor/Path Labels	锚点/路径标签
 	Anchors:	锚点：
@@ -160,7 +162,7 @@
 	Apply Paragraph Style	应用段落样式
 	Apply SVG Filter…	应用 SVG 滤镜…
 	Apply to All	应用到全部
-	Apply to All ({count} more missing)	全部应用 (另有 {count} 个缺失)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	全部应用 (另有 {n} 个缺失)
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
@@ -453,7 +455,7 @@
 	Collect in New Layer	收集到新图层
 	Collect Links in a Separate Folder	将链接收集到单独的文件夹
 	Color	颜色
-	Color (,)	颜色 (,)
+	Color (, or Shift+,)	颜色 (, 或 Shift+,)
 	Color Adjustments	色彩调整
 	Color bars	色彩条
 	Color blindness – Deuteranopia-type	色盲 – 绿色盲型
@@ -509,6 +511,7 @@
 	Complexity:	复杂度：
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	复合颜色会转换为此配置文件；其为 CMYK 配置文件时，分色也会使用它。
 	Compound Path	复合路径
+	Compound Shape	复合形状
 	Compress (RLE)	压缩 (RLE)
 	Compress text and line art	压缩文字与线条图
 	Compression	压缩
@@ -605,6 +608,13 @@
 	Create Report	创建报告
 	Create Slice	创建切片
 	Create Sub-folders	创建子文件夹
+	Clear Selection	清除选择
+	Export PDFs As:	PDF 导出为：
+	Single File	单个文件
+	Multiple Files	多个文件
+	Format Presets	格式预设
+	Grid View	网格视图
+	Selected: {n}, Total number of files to export: {m}	已选择：{n}，要导出的文件总数：{m}
 	Create Text	创建文字
 	Create Trim Marks	创建裁切标记
 	Created	创建时间
@@ -683,11 +693,22 @@
 	Delete Stop	删除色标
 	Delete Swatch	删除色板
 	Delete Symbol	删除符号
+	Delete the selected symbol?	要删除所选符号吗？
+	Delete the selected symbols?	要删除所选的多个符号吗？
+	No unused symbols	没有未使用的符号
+	Delete Symbols	删除符号
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	一个或多个符号正在使用中，在扩展或删除其实例之前无法删除。
+	Expand Instances	扩展实例
+	Delete Instances	删除实例
+	Yes	是
+	No	否
 	Delete Tab	删除制表位
 	Delete the graphic style “{name}”?	要删除图形样式“{name}”吗？
+	Delete Action Sets	删除动作组
+	Delete the action set “{name}” and its actions?	要删除动作组“{name}”及其中的动作吗？
+	Delete the selected action sets and their actions?	要删除所选动作组及其中的动作吗？
 	Delete Theme	删除主题
 	Delete theme	删除主题
-	Delete these {count} swatches and groups?	要删除这 {count} 个色板和编组吗？
 	Delete these {n} graphic styles?	要删除这 {n} 个图形样式吗？
 	Delete this saved preset	删除此已存储的预设
 	Delete this {n} graphic style?	要删除这 {n} 个图形样式吗？
@@ -844,9 +865,10 @@
 	Edit selected paths within:	在以下范围内编辑所选路径：
 	Edit Selection…	编辑所选对象…
 	Edit Symbol	编辑符号
+	Exit Symbol Editing Mode	退出符号编辑模式
 	Edit Text	编辑文字
 	Edit the applied effect, or add another one?	编辑已应用的效果，还是再添加一个？
-	Edit the selected point's colour in the Color panel	在颜色面板中编辑所选点的颜色
+	Edit the point	编辑点
 	Edit the stop	编辑色标
 	Edit Theme	编辑主题
 	Edit theme	编辑主题
@@ -868,6 +890,13 @@
 	Em Box Top/Right	全角字框上 / 右
 	ICF Top/Right	ICF 上 / 右
 	ICF Bottom/Left	ICF 下 / 左
+	Show Font Height Options	显示字体高度选项
+	Hide Font Height Options	隐藏字体高度选项
+	Set Font Height Reference	设置字体高度参考
+	Em Box	全角字框
+	Cap Height	大写字母高度
+	x-Height	x 字高
+	ICF Box	ICF 框
 	Em Dash	长破折号
 	Em Space	全角空格
 	Embed	嵌入
@@ -931,7 +960,6 @@
 	Exit Isolation Mode	退出隔离模式
 	Expand	扩展
 	Expand Appearance	扩展外观
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	扩展仅适用于复合形状 (Alt+单击形状模式)——已在路线图中
 	Expand Brush Strokes	扩展画笔描边
 	Expand Compound Shape	扩展复合形状
 	Expand Gradient Mesh	扩展渐变网格
@@ -1089,6 +1117,9 @@
 	Increase Font Size by Five Steps	按五个增量增大字体大小
 	Reset Tracking and Kerning	重置字距和字偶距
 	Reset Horizontal Scale	重置水平缩放
+	Highlight Font Name	突出显示字体名称
+	Highlight Kerning	突出显示字偶距
+	Highlight Tracking	突出显示字距
 	Spacing	间距
 	Step Type	按增量调整文字
 	Fit in View	适合视图
@@ -1192,6 +1223,9 @@ file-filter	Templates	模板
 	Hide Live Paint Gaps	隐藏实时上色间隙
 	Select Fills	选择填色
 	Select Strokes	选择描边
+	Paint Fills	为填色上色
+	Paint Strokes	为描边上色
+	Highlight	突出显示
 	Gaussian Blur…	高斯模糊…
 	General	常规
 	General › Placement › X	一般 › 位置 › X
@@ -1216,7 +1250,7 @@ file-filter	Templates	模板
 	GPL palettes keep solid colours only, as RGB.	GPL 调板仅保留为 RGB 的纯色。
 	GPU Performance	GPU 性能
 	Gradient	渐变
-	Gradient (.)	渐变 (.)
+	Gradient (. or Shift+.)	渐变 (. 或 Shift+.)
 	Gradient across stroke	横跨描边的渐变
 	Gradient along stroke	沿描边的渐变
 	Gradient and Mesh Resolution:	渐变和网格分辨率：
@@ -1357,6 +1391,7 @@ file-filter	Templates	模板
 	Delete Guides	删除参考线
 	Delete Slice	删除切片
 	Delete Style	删除样式
+	Delete Styles	删除样式
 	Delete Variables	删除变量
 	Delete View	删除视图
 	Done Editing Pattern	完成图案编辑
@@ -1393,6 +1428,8 @@ file-filter	Templates	模板
 	Objects on Path	路径上的对象
 	Attach	附加
 	Objects on Path Options	路径上的对象选项
+	Pivot:	枢轴：
+	Rotate:	旋转：
 	Objects on Path Tool	路径上的对象工具
 	Attach Objects on Path	附加路径上的对象
 	Expand Objects on Path	扩展路径上的对象
@@ -1475,6 +1512,12 @@ file-filter	Templates	模板
 	Image Trace	图像描摹
 	Image Tracing	图像描摹对象
 	Tracing Presets	描摹预设
+	Manage Presets	管理预设
+	Save as New Preset…	存储为新预设…
+	Rename…	重命名…
+	Rename Preset	重命名预设
+	Save Image Trace Preset	保存图像描摹预设
+	Delete Image Trace Preset	删除图像描摹预设
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：
@@ -1489,6 +1532,7 @@ file-filter	Templates	模板
 	In Tangent Handles	内侧切线控制手柄
 	In the selected objects	在所选对象中
 	Inches	英寸
+	Include Artboard Fill	包含画板填色
 	Include Blacks with CMY:	包含 CMY 的黑色：
 	Include Bleed	包含出血
 	Include Cmy Blacks	包含 CMY 黑色
@@ -1551,7 +1595,7 @@ file-filter	Templates	模板
 	Keep the pasted color as a new swatch with a numbered name.	将粘贴的颜色保留为新色板，并以编号命名。
 	Keep this row's colors (exclude)	保留此行的颜色 (排除)
 	Keep:	保留：
-	Kerning (0 = Auto)	字偶距 (0 = 自动)
+	Kerning	字偶距
 	Keyboard Increment	键盘增量
 	Keyboard Shortcut Conflicts	键盘快捷键冲突
 	Keyboard Shortcut Set	键盘快捷键组
@@ -1800,6 +1844,7 @@ file-filter	Templates	模板
 	Move in Perspective	在透视中移动
 	Move Locked and Hidden Artwork with Artboard	随画板移动锁定和隐藏图稿
 	Move Mesh Point	移动网格点
+	Move Mesh Points	移动网格点
 	Move Plane	移动平面
 	Move Plane to Match Object	移动平面以符合对象
 	Move Slices	移动切片
@@ -1865,6 +1910,10 @@ file-filter	Templates	模板
 	Outer Corner Tile	外角拼贴
 	Side Tile	边线拼贴
 	Inner Corner Tile	内角拼贴
+	Auto-Centered	自动居中
+	Auto-Between	自动居间
+	Auto-Sliced	自动切片
+	Auto-Overlap	自动重叠
 	Start Tile	起点拼贴
 	End Tile	终点拼贴
 	Fit	适合
@@ -1903,6 +1952,7 @@ file-filter	Templates	模板
 	Brush Art	画笔图稿
 	New Calligraphic Brush	新建书法画笔
 	New Character Style	新建字符样式
+	New Character Style…	新建字符样式…
 	New Color Group	新建颜色组
 	New Color Group…	新建颜色组…
 	New Document Presets	新建文档预设
@@ -1916,6 +1966,7 @@ file-filter	Templates	模板
 	New Opacity Masks Are Clipping	新建不透明度蒙版为剪切
 	New Opacity Masks Are Inverted	新建不透明度蒙版为反相
 	New Paragraph Style	新建段落样式
+	New Paragraph Style…	新建段落样式…
 	New Pattern Brush from Selection	从选区新建图案画笔
 	New PDF Preset	新建 PDF 预设
 	New Print Preset	新建打印预设
@@ -1929,6 +1980,8 @@ file-filter	Templates	模板
 	New View	新建视图
 	New View…	新建视图…
 	New Window	新建窗口
+	Next Document	下一个文档
+	Previous Document	上一个文档
 	New Without Dialog	无对话框新建
 	New Workspace	新建工作区
 	New Workspace…	新建工作区…
@@ -2080,6 +2133,7 @@ file-filter	Templates	模板
 	Opened with {} note(s): {}	已打开，附 {} 条附注：{}
 	OpenType	OpenType
 	Open…	打开…
+	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
@@ -2135,7 +2189,7 @@ file-filter	Templates	模板
 	Package	打包
 	Package collects a saved document with its linked files and fonts.	打包会将已存储的文件连同其链接文件与字体一并收集。
 	Package created	已创建打包
-	Packaged {n} file(s) in {folder} {note}	已将 {n} 个文件打包于 {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	已将 {n} 个文件打包于 {folder}{note}
 	Packaged {n} file(s){note}	已打包 {n} 个文件{note}
 	Package…	打包…
 	Page	页面
@@ -2324,8 +2378,19 @@ font-script	Japanese	汉字
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
-	Hindi	印地数字
+	Hindi	印地语
+digits	Hindi	印地数字
 	Farsi	波斯数字
+digits	Devanagari	天城数字
+digits	Bengali	孟加拉数字
+digits	Gurmukhi	古木基数字
+digits	Gujarati	古吉拉特数字
+digits	Odia	奥里亚数字
+digits	Tamil	泰米尔数字
+digits	Telugu	泰卢固数字
+digits	Kannada	卡纳达数字
+digits	Malayalam	马拉雅拉姆数字
+	Proportional Lining	比例齐线数字
 	Proportional Oldstyle	比例旧式数字
 	Pucker & Bloat…	缩拢与膨胀…
 	Pucker Tool	收缩工具
@@ -2460,9 +2525,11 @@ font-script	Japanese	汉字
 	Stop	停止
 	Searching…	正在搜索…
 	Not found	未找到
-	{folders} folder(s) and {files} file(s) searched	已搜索 {folders} 个文件夹、{files} 个文件
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	已跳过 {count} 个文件夹，例如其他应用程序和系统的文件夹，以及隐藏的文件夹
-	{count} folder(s) or file(s) couldn't be read	有 {count} 个文件夹或文件无法读取
+	{folders} and {files} searched	已搜索 {folders}、{files}
+@plural	{n} folder|{n} folders	{n} 个文件夹
+@plural	{n} file|{n} files	{n} 个文件
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	已跳过 {n} 个文件夹，例如其他应用程序和系统的文件夹，以及隐藏的文件夹
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	有 {n} 个文件夹或文件无法读取
 	The search stopped at its limit: search a smaller folder.	搜索已达上限而停止：请搜索较小的文件夹。
 	Copy only fonts you own or are licensed to install.	只复制您拥有或已获得安装许可的字体。
 	VectorCraft copies the fonts to {folder}.	VectorCraft 会将字体复制到 {folder}。
@@ -2521,6 +2588,7 @@ font-script	Japanese	汉字
 	Repeat Tab	重复制表位
 	Repeat {name}	重复 {name}
 	Replace	替换
+	Replace:	替换：
 	Replace Font	替换字体
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
 	Replace Spine	替换脊线
@@ -2822,8 +2890,10 @@ font-script	Japanese	汉字
 	Shape Builder Regions	形状生成器区域
 	Shape Builder Tool	形状生成器工具
 	Shape Effects	形状效果
+	Shape Mode	形状模式
 	Shape Modes:	形状模式：
 	Shape Properties:	形状属性：
+	Shape Properties	形状属性
 	Shaper Tool	Shaper 工具
 	Shapes	形状
 	Shear	倾斜
@@ -2878,6 +2948,7 @@ font-script	Japanese	汉字
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
+	Auto-Smooth	自动平滑
 	Color Panel Options	颜色面板选项
 	Show Package	显示打包
 	Show Panel	显示面板
@@ -2914,6 +2985,7 @@ font-script	Japanese	汉字
 	Simplify	简化
 	Simplify:	简化：
 	Simplify…	简化…
+	Smooth…	平滑…
 	Simulate Colored Paper	模拟有色纸张
 	Simulate Paper	模拟纸张
 	Double Column	双列
@@ -2921,6 +2993,7 @@ font-script	Japanese	汉字
 	Single Quotes:	单引号：
 	Single Right Quotation Mark	右单引号
 	Single-line Composer	单行排版器
+	Toggle Line Composer	切换行排版器
 	Sixth Space	六分之一空格
 	Size	大小
 	Size Tile to Art	使拼贴适合图稿
@@ -3034,6 +3107,11 @@ font-script	Japanese	汉字
 	Stroke	描边
 	Stroke (X), double-click for the Color Picker	描边 (X)，双击打开拾色器
 	Stroke Color	描边颜色
+	Fill Gradient	填色渐变
+	Stroke Gradient	描边渐变
+	Fill Pattern	填色图案
+	Stroke Pattern	描边图案
+	Patterns	图案
 	Stroke Options	描边选项
 	Character:	字符：
 	Character options	字符选项
@@ -3078,6 +3156,7 @@ font-script	Japanese	汉字
 	Swap Fill and Stroke (Shift+X)	切换填色和描边 (Shift+X)
 	Swap start and end arrowheads	对调起点与终点箭头
 	Swap the selected object for the file, keeping its place and transform	以文件替换选择的对象，并保留其位置与变形
+	Stylistic Alternates	风格替代字
 	Swash	花饰字
 	Swatch Conflict	色板冲突
 	Swatch Conflicts	色板冲突
@@ -3090,6 +3169,7 @@ font-script	Japanese	汉字
 	Swatch Options…	色板选项…
 	Swatch Tiles	色板拼贴
 	Swatches	色板
+	Switch Units	切换单位
 	Switch workspace	切换工作区
 	Add Content	添加内容
 	Click to apply to the selected type	单击以应用到所选文字
@@ -3146,6 +3226,7 @@ font-script	Japanese	汉字
 	Tabs	制表符
 	Tabular Lining	等宽齐线数字
 	Tabular Oldstyle	等宽旧式数字
+	Titling Alternates	标题替代字
 	Target	目标
 	Target Contents	目标内容
 	Target:	目标：
@@ -3325,13 +3406,13 @@ font-script	Japanese	汉字
 	Unlock Guides	解锁参考线
 	Unnamed Objects	未命名对象
 	Unprintable margin:	不可打印边界：
+	Unselected Artwork	未选择的图稿
 	Unshift	取消偏移
 	Untitled	未命名
 	Update Link	更新链接
 	Update Links	更新链接
 	Update Changed Links	更新已更改的链接
-	{count} linked image(s) changed on disk. Show the new versions?	有 {count} 个链接图像已在磁盘上更改。要显示新版本吗？
-@msg	Updated {_1} linked file(s) changed on disk	已更新 {_1} 个在磁盘上更改的链接文件
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示
 	Update Modified Links	更新已修改的链接
@@ -3504,12 +3585,12 @@ font-script	Japanese	汉字
 	Zoom Tool	缩放工具
 	Zoom with Mouse Wheel	使用鼠标滚轮缩放
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
-	{count} file(s) in {folder} {note}. Show the package folder?	{folder} 中有 {count} 个文件{note}。要显示打包文件夹吗？
-	{count} linked file(s) not found	找不到 {count} 个链接文件
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 个文件{note}。要显示打包文件夹吗？
+@plural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件
 	fonts not copied: {fonts}	未复制的字体：{fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	自存储此文档后，有 {count} 个链接图像已更改。要显示新版本吗？
-	{count} more rules: Export writes every one.	另有 {count} 条规则：导出时会全部写出。
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	已略过 {count} 个未命名对象：请为它们命名，或在面板菜单中开启“未命名对象”。
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	自存储此文档后，有 {n} 个链接图像已更改。要显示新版本吗？
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	另有 {n} 条规则：导出时会全部写出。
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	已略过 {n} 个未命名对象：请为它们命名，或在面板菜单中开启“未命名对象”。
 	{effect} is already applied	已应用 {effect}
 	{format} Options	{format} 选项
 	{kind} Gradient	{kind}渐变
@@ -3532,6 +3613,8 @@ imageTrace	Outline	轮廓
 @plural	{n} item|{n} items	{n} 个项目
 @plural	Color Table ({n} color)|Color Table ({n} colors)	颜色表 ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	要删除这 {n} 个图形样式吗？
+@plural	Delete this {n} brush?|Delete these {n} brushes?	要删除这 {n} 个画笔吗？
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	要删除这 {n} 个色板和编组吗？
 @plural	{n} Layer|{n} Layers	{n} 个图层
 @plural	{n} Object|{n} Objects	{n} 个对象
 @plural	{n} area highlighted|{n} areas highlighted	已标示 {n} 个区域
@@ -3638,12 +3721,14 @@ imageTrace	Outline	轮廓
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Simplified Chinese: no final 。 unless the English ends with a period; a space between Chinese text and
 # an adjacent Latin word, number or {placeholder}; 、 between the items of a list.
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` 表示已更改的设置：请以其他名称保存预设
 @msg	`{key}` must be an array of these names: {_1}	`{key}` 必须是由以下名称组成的数组：{_1}
 @msg	Reset {_1}	重置 {_1}
 @msg	Saving	正在保存
 @msg	Saving {_1}	正在保存 {_1}
 @msg	Sent to {_1}	已发送到 {_1}
 @msg	`to` must be "corner" or "smooth"	`to` 必须是 "corner" 或 "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` 必须是 "emBox"、"capHeight"、"xHeight" 或 "icfBox"
 @msg	a layer couldn't be read	无法读取某个图层
 @msg	it has more than one artboard	它有多个画板
 @msg	its editing data has no layers	其编辑数据中没有图层
@@ -3673,7 +3758,6 @@ imageTrace	Outline	轮廓
 @msg	the drawing is too large to open	图纸过大，无法打开
 @msg	scale must be a number from {_1} to {_2}, not {_3}	比例必须是 {_1} 到 {_2} 之间的数字，而不是 {_3}
 @msg	an image has no pixels and was left out	已略去没有像素的图像
-@msg	Embedded {n} image(s)	已嵌入 {n} 张图像
 @msg	object {0} cannot have children	对象 {0} 不能包含子对象
 @msg	range `{s}` is empty	范围 `{s}` 为空
 @msg	range `{s}`: `{part}` names no number	范围 `{s}`：`{part}` 未指定数字
@@ -3688,6 +3772,8 @@ imageTrace	Outline	轮廓
 @msg	brushes move only within their type	画笔只能在同一类型内移动
 @msg	no symbol instances selected	未选择符号实例
 @msg	select a symbol instance	请选择一个符号实例
+@msg	select instances of one symbol	请选择同一符号的实例
+@msg	a symbol can't hold an instance of itself	符号不能包含自身的实例
 @msg	the art has no bounds	图稿没有边界
 @msg	Image Trace: the traced image is missing	图像描摹：缺少所描摹的图像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	实时上色合并：请选择一个实时上色组以及要添加的路径
@@ -3789,7 +3875,9 @@ imageTrace	Outline	轮廓
 @msg	unknown freeform mode `{m}` (points, lines)	未知的任意形状模式 `{m}` (points、lines)
 @msg	`aspect` must be a number (%)	`aspect` 必须是数字 (%)
 @msg	`gradient` must be an object	`gradient` 必须是对象
+@msg	`groupColors` must be an array	`groupColors` 必须是数组
 @msg	`mode` applies to freeform gradients	`mode` 仅适用于任意形状渐变
+@msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
@@ -3811,6 +3899,9 @@ imageTrace	Outline	轮廓
 @msg	the layer or group is locked	该图层或编组已锁定
 @msg	the guide is on a hidden or locked layer	该参考线位于隐藏或锁定的图层上
 @msg	the target layer is locked or hidden	目标图层已锁定或隐藏
+@msg	the object is hidden or locked	该对象已隐藏或锁定
+@msg	the object is outside the isolated group	该对象在隔离的编组之外
+@msg	type objects can't be isolated	无法隔离文字对象
 @msg	the layer to flatten into is hidden	要拼合到的图层已隐藏
 @msg	there are no objects to release	没有可释放的对象
 @msg	no library `{id}`	没有库 `{id}`
@@ -3822,12 +3913,14 @@ imageTrace	Outline	轮廓
 @msg	select a blend	请选择一个混合对象
 @msg	select a gradient mesh	请选择一个渐变网格
 @msg	the object has no opacity mask	该对象没有不透明度蒙版
+@msg	stop editing the opacity mask first	请先停止编辑不透明度蒙版
 @msg	Convert to Artboards: selection has no area	转换为画板：所选对象没有面积
 @msg	Convert to Shape: no rectangles or ellipses selected	转换为形状：未选择矩形或椭圆
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
 @msg	select at least two objects	请至少选择两个对象
+@msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
 @msg	compound paths can only contain paths	复合路径只能包含路径
 @msg	no bounds	没有边界
@@ -3845,6 +3938,7 @@ imageTrace	Outline	轮廓
 @msg	the object already has an opacity mask	该对象已有不透明度蒙版
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` 是印刷色：色调仅适用于全局色和专色
 @msg	`{name}` isn't a colour swatch	`{name}` 不是颜色色板
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	印刷色无法为带透明度的灰度图像上色：请使用专色、黑色或白色
 @msg	a document needs at least one artboard	文档至少需要一个画板
 @msg	empty path	路径为空
 @msg	join needs open paths	连接需要开放路径
@@ -3867,6 +3961,7 @@ imageTrace	Outline	轮廓
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`
 @msg	not in pattern editing mode	不在图案编辑模式中
+@msg	finish editing the pattern first	请先完成图案编辑
 @msg	pattern missing	缺少图案
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
@@ -4088,6 +4183,7 @@ imageTrace	Outline	轮廓
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必须是 0.1 到 10 之间的数字
 @msg	the Color Picker is not open	拾色器未打开
 @msg	the Simplify slider is not open	简化滑块未打开
+@msg	the Smooth slider is not open	平滑滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
@@ -4104,6 +4200,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	没有可导出的内容：文档中没有可见的图稿 (或请打开“使用画板”)
 @msg	add a format to export	请添加要导出的格式
 @msg	check an asset to export	请勾选要导出的资源
+@msg	check an artboard to export	请勾选要导出的画板
 @msg	`{tool}` isn't a freehand tool	`{tool}` 不是手绘工具
 @msg	bad colour `{hex}` (#rrggbb)	颜色 `{hex}` 无效 (#rrggbb)
 @msg	no gradient stop or freeform point is selected	未选择渐变色标或任意形状点
@@ -4112,11 +4209,8 @@ imageTrace	Outline	轮廓
 @msg	the PDF is no longer loaded	该 PDF 已不再加载
 @msg	no such layer or object	没有此图层或对象
 @msg	`{tool}` isn't a Liquify tool	`{tool}` 不是液化工具
-@msg	{_1} linked file(s) can't be read here: their previews show	此处无法读取 {_1} 个链接文件：显示的是其预览
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	无法解码 {undecoded} 张图像：它们显示为打叉的方框
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	有 {_1} 个链接图像已在磁盘上更改：“更新链接”可显示新版本
 @msg	pick a colour, gradient or pattern to save as a swatch	请选取要保存为色板的颜色、渐变或图案
-@msg	Packaged {n} file(s) in {folder} {note}	已将 {n} 个文件打包到 {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	已将 {n} 个文件打包到 {folder}({note})
 @msg	Packaged {n} file(s){note}	已打包 {n} 个文件{note}
 @msg	choose a location for the package	请为打包选择位置
 @msg	missing `folder`	缺少 `folder`
@@ -4131,6 +4225,10 @@ imageTrace	Outline	轮廓
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是导出增效工具 (文件 › 导出 › 导出为…)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` 为 {size} 字节（上限 {MAX_DOCUMENT_DATA}）
 @msg	a preset named `{_1}` exists	名为 `{_1}` 的预设已存在
+@msg	`name` is empty	`name` 为空
+@msg	`newName` is empty	`newName` 为空
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` 是内置预设，无法更改：请以其他名称保存
+@msg	`{name}` is a built-in preset and stays	`{name}` 是内置预设，无法删除
 @msg	a swatch or color group named `{n}` exists	名为 `{n}` 的色板或颜色组已存在
 @msg	no print preset named `{base}`	没有名为 `{base}` 的打印预设
 @msg	no print preset named `{name}`	没有名为 `{name}` 的打印预设
@@ -4138,7 +4236,6 @@ imageTrace	Outline	轮廓
 @msg	print settings are not an object	打印设置不是对象
 @msg	no colour group `{g}`	没有颜色组 `{g}`
 @msg	select artwork (or a colour group) to recolor	请选择要重新着色的图稿 (或颜色组)
-@msg	Downloaded {_1} file(s)	已下载 {_1} 个文件
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	“在浏览器中预览”需要桌面应用 (网页版会改为下载文件)
 @msg	no file system here	此处没有文件系统
 @msg	nothing to preview	没有可预览的内容
@@ -4149,6 +4246,8 @@ imageTrace	Outline	轮廓
 @msg	PDF settings are not an object	PDF 设置不是对象
 @msg	PDF security settings are not an object	PDF 安全性设置不是对象
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	没有名为 `{name}` 的已保存 PDF 预设 (内置预设为只读：请以它们为基础新建一个)
+@msg	no saved preset named `{name}`	没有名为 `{name}` 的已保存预设
+@msg	no saved preset named `{name}` to rename	没有名为 `{name}` 的已保存预设可供重命名
 @msg	Saved to User Defined: {_1}	已保存到“用户定义”：{_1}
 @msg	choose a direction to divide in	请选择分割方向
 @msg	choice must be "merge" or "add", not `{choice}`	choice 必须是 "merge" 或 "add"，而不是 `{choice}`
@@ -4164,7 +4263,6 @@ imageTrace	Outline	轮廓
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
 @msg	x and y must both be numbers	x 和 y 都必须是数字
 @msg	Downloaded {what}	已下载 {what}
-@msg	Exported {count} file(s) to {folder}	已将 {count} 个文件导出到 {folder}
 @msg	Imported {what}: {_1}	已导入 {what}：{_1}
 @msg	Installed plug-in {_1}	已安装增效工具 {_1}
 @msg	Opened with {_1} note(s): {_2}	已打开，有 {_1} 条注释：{_2}
@@ -4178,7 +4276,6 @@ imageTrace	Outline	轮廓
 @msg	the document has never been saved	该文档从未保存过
 @msg	the export returned unreadable data	导出返回了无法读取的数据
 @msg	{status} ({e})	{status} ({e})
-@msg	Exported {what} with {_1} note(s): {first}	已导出 {what}，有 {_1} 条注释：{first}
 @msg	Saved {path} with {_1} note(s): {first}	已保存 {path}，有 {_1} 条注释：{first}
 @msg	Couldn't open {name}: {e}	无法打开 {name}：{e}
 @msg	Couldn't read {name}: {e}	无法读取 {name}：{e}
@@ -4188,6 +4285,7 @@ imageTrace	Outline	轮廓
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必须是其菜单项会打开对话框的命令 (请参阅 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必须是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
+@msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
 @msg	`select` must be true or false	`select` 必须是 true 或 false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必须是整数
 @msg	`{key}` must be a number not below 0	`{key}` 必须是不小于 0 的数字
@@ -4200,14 +4298,17 @@ imageTrace	Outline	轮廓
 @msg	lang must be one of {_1}	lang 必须是 {_1} 之一
 @msg	missing `name`	缺少 `name`
 @msg	missing `tool`	缺少 `tool`
+@msg	missing id	缺少 id
 @msg	missing index	缺少 index
 @msg	New Window isn't available yet: a document opens in one window	新建窗口尚不可用：文档在一个窗口中打开
 @msg	no PNG encoder	没有 PNG 编码器
 @msg	no document open	没有打开的文档
 @msg	no effect applied yet	尚未应用任何效果
+@msg	no Pathfinder operation applied yet	尚未应用任何路径查找器操作
 @msg	no such perspective grid preset	没有此透视网格预设
 @msg	no such recent file	没有此最近使用的文件
 @msg	no such recent font	没有此最近使用的字体
+@msg	some text is hidden or locked, so its font wasn't replaced	部分文字已隐藏或锁定，因此其字体未被替换
 @msg	no such saved selection	没有此已保存的选区
 @msg	no such user library	没有此用户库
 @msg	no such view	没有此视图
@@ -4220,26 +4321,49 @@ imageTrace	Outline	轮廓
 @msg	choose a folder to export to	请选择要导出到的文件夹
 @msg	the selection has no URL (or they differ)	所选对象没有 URL (或其 URL 各不相同)
 @msg	select some type first	请先选择一些文字
+@msg	kerning must be a number, "auto", or "optical"	字偶距必须是数字、“auto”或“optical”
+@msg	the selection has no gradient fill	所选对象没有渐变填色
+@msg	the selection has no gradient stroke	所选对象没有渐变描边
+@msg	the selection has no pattern fill	所选对象没有图案填色
+@msg	the selection has no pattern stroke	所选对象没有图案描边
+@msg	no gradient swatch `{name}`	没有渐变色板 `{name}`
+@msg	no pattern swatch `{name}`	没有图案色板 `{name}`
+@msg	the library item is damaged	库项目已损坏
 @msg	{_1} font families available	有 {_1} 个可用的字体系列
 @msg	{_1} has no {_2} style	{_1} 没有 {_2} 样式
-@msg	Copied the CSS of {rules} object(s)	已复制 {rules} 个对象的 CSS
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	未知的叠印方式 `{o}` (preserve、simulate 或 discard)
 @msg	unknown preset `{name}` (see flattener.presets.list)	未知预设 `{name}` (请参阅 flattener.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	未知预设 `{name}`：既不是内置预设，也不是已保存的预设 (请参阅 imageTrace.presets)
 @msg	Select text or click into text with the Type tool to insert glyphs	请选择文字，或用文字工具在文字中单击，以插入字形
 @msg	`library` is a library id or name (see {list})	`library` 是库 id 或名称 (请参阅 {list})
 @msg	no library `{key}` (see {list})	没有库 `{key}` (请参阅 {list})
 @msg	select a linked image: an embedded one has no file	请选择链接的图像：嵌入的图像没有文件
 @msg	{path} can't be found: relink it first	找不到 {path}：请先重新链接
-@msg	Embedded {n} image(s); {missing} missing: relink them first	已嵌入 {n} 张图像；缺少 {missing} 张：请先重新链接
-@msg	Relinked {_1} image(s)	已重新链接 {_1} 张图像
-@msg	Relinked {n} image(s)	已重新链接 {n} 张图像
-@msg	Relinked {n} image(s); not in that folder: {_1}	已重新链接 {n} 张图像；不在该文件夹中：{_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	已嵌入 {n} 张图像；缺少 {missing} 张：请先重新链接
+@msgplural	Embedded {n} image|Embedded {n} images	已嵌入 {n} 张图像
+@msgplural	Relinked {n} image|Relinked {n} images	已重新链接 {n} 张图像
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	已重新链接 {n} 张图像；不在该文件夹中：{names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	已重新链接 {n} 张图像；无法重新链接 {name}：{reason}
+@msgplural	Updated {n} image|Updated {n} images	已更新 {n} 张图像
+@msgplural	Replaced {n} image|Replaced {n} images	已替换 {n} 张图像
+@msgplural	Broke {n} link|Broke {n} links	已断开 {n} 个链接
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	已断开 {n} 个链接；有 {missing} 个无法读取：请先重新链接或更新
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	此处无法读取 {n} 个链接文件：显示的是其预览
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	无法解码 {n} 张图像：它们显示为打叉的方框
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 个链接图像已在磁盘上更改：“更新链接”可显示新版本
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 个在磁盘上更改的链接文件
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已导出 {what}，有 {n} 条注释：{first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 个字体文件现已位于 {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 个字体文件现已位于 {folder}；有 {failed} 个无法添加：{reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	此处没有 {n} 种字体：使用它们的文字以其他字体显示
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	已复制 {n} 个对象的 CSS
+@msgplural	Downloaded {n} file|Downloaded {n} files	已下载 {n} 个文件
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	已将 {n} 个文件导出到 {folder}
 @msg	Unembedded to {_1}	已取消嵌入到 {_1}
-@msg	Updated {_1} image(s)	已更新 {_1} 张图像
 @msg	no swatch library `{l}` (see swatch.library.list)	没有色板库 `{l}` (请参阅 swatch.library.list)
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭
@@ -4262,6 +4386,7 @@ imageTrace	Outline	轮廓
 @msg	can't parse shortcut `{c}`	无法解析快捷键 `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	无法解析 `{k}` 的快捷键 `{s}`
 @msg	no dialog open	没有打开的对话框
+@msg	the open dialog has no Reset	打开的对话框没有重置按钮
 @msg	no file reader	没有文件读取器
 @msg	no file writer	没有文件写入器
 @msg	not a VectorCraft shortcut set (missing `overrides`)	不是 VectorCraft 快捷键组 (缺少 `overrides`)
@@ -4275,6 +4400,7 @@ imageTrace	Outline	轮廓
 @msg	Couldn't copy to the system clipboard: {e}	无法复制到系统剪贴板：{e}
 @msg	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
 @msg	nothing selected	未选择任何对象
+@msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多个工具的工具栏组中
@@ -4294,9 +4420,6 @@ imageTrace	Outline	轮廓
 @msg	every search thread stopped on an internal error (please report this bug)	所有搜索线程均因内部错误而停止 (请报告此错误)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	此处未设置 VectorCraft 的字体文件夹：桌面应用和 vectorcraft-cli 会设置该文件夹
 @msg	choose the font files to add	请选择要添加的字体文件
-@msg	{n} font file(s) are now in {folder}	{n} 个字体文件现已位于 {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} 个字体文件现已位于 {folder}；有 {failed} 个无法添加：{reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	此处没有 {n} 种字体：使用它们的文字以其他字体显示
 @msg	not a file	不是文件
 @msg	not a font file	不是字体文件
 @msg	that document is no longer open	该文档已不再打开
@@ -4305,7 +4428,6 @@ imageTrace	Outline	轮廓
 @msg	every numbered name for it is taken in the Fonts folder	字体文件夹中所有带编号的名称均已被占用
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	已重新链接 {n} 张图像；无法重新链接 {name}：{reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` 必须是由锚点索引组成的数组，而不是 {v}
@@ -4332,6 +4454,11 @@ imageTrace	Outline	轮廓
 @msg	not a PSD file	不是 PSD 文件
 @msg	the PSD file has an unknown colour mode ({m})	PSD 文件的颜色模式未知 ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD 文件的图像数据使用了未知的压缩方式 ({m})
+@msg	the PCX file is cut short	PCX 文件不完整
+@msg	the PCX file's header is damaged	PCX 文件头已损坏
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	无法读取 {planes} 个平面中含 {bits} 位像素的 PCX 文件
+@msg	the JPEG 2000 file can't be read	无法读取 JPEG 2000 文件
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 文件包含不受支持的色彩空间或 JPX 内容
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
 @msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件
@@ -4813,6 +4940,10 @@ axis	Both	两者
 	The dialog was closed before its file dialog answered	文件对话框给出结果之前，对话框已关闭
 	Expand Shaper Group	扩展 Shaper 组
 	Release Shaper Group	释放 Shaper 组
+	Remove from Shaper Group	从 Shaper 组中移除
+@msg	source must be the id of a Shaper Group's original shape	source 必须是 Shaper 组中原始形状的 ID
+@msg	group must be the id of a Shaper Group	group 必须是 Shaper 组的 ID
+@msg	the shape is not an editable original shape of that Shaper Group	该形状不是该 Shaper 组中可编辑的原始形状
 	Select Shaper Face	选择 Shaper 区域
 	Constrain	约束
 	Perspective Distort	透视扭曲
@@ -5339,13 +5470,13 @@ lighting	Light	光源
 	Slope:	斜率:
 axis	X Axis	X 轴
 axis	Y Axis	Y 轴
-@msg	Packaged {n} file(s) in {folder}	已将 {n} 个文件打包到 {folder}
-@msg	Packaged {n} file(s) {note}	已打包 {n} 个文件 {note}
-@msg	Packaged {n} file(s)	已打包 {n} 个文件
-	Packaged {n} file(s)	已打包 {n} 个文件
-	Packaged {n} file(s) in {folder}	已将 {n} 个文件打包到 {folder}
-	Packaged {n} file(s) {note}	已打包 {n} 个文件 {note}
-	{count} file(s) in {folder}. Show the package folder?	{folder} 中有 {count} 个文件。要显示打包文件夹吗？
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	已将 {n} 个文件打包到 {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	已打包 {n} 个文件 {note}
+@msgplural	Packaged {n} file|Packaged {n} files	已打包 {n} 个文件
+@plural	Packaged {n} file|Packaged {n} files	已打包 {n} 个文件
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	已将 {n} 个文件打包到 {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	已打包 {n} 个文件 {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} 中有 {n} 个文件。要显示打包文件夹吗？
 	Clockwise	顺时针
 	Dither	仿色
 	Fine noise hides banding in the gradient fill	细微杂色可隐藏渐变填色中的色带
@@ -5379,7 +5510,7 @@ axis	Y Axis	Y 轴
 	Include Objects On Canvas	包括画布上的对象
 	Result(s): {count}	结果：{count}
 @msg	select one object	请选择一个对象
-@msg	Global Edit works on paths, compound paths and symbol instances	全局编辑适用于路径、复合路径和符号实例
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	全局编辑适用于路径、复合路径、符号实例及其编组
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（旋转或镜像的副本不会匹配）；请更改全局编辑选项后重试
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
@@ -5452,4 +5583,428 @@ axis	Y Axis	Y 轴
 	Scale Presets	缩放预设
 @msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} 截图的字节数溢出
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	窗口的{what}（{points} 点 × {scale} DPI）无法确定截图大小
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	请先扩展外观（对象 › 扩展外观）
 	Live preview	实时预览
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	点文字
+	Area Text	区域文字
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	显示靠齐字符选项
+	Hide Snap to Glyph Options	隐藏靠齐字符选项
+	Snap to Glyph Options	靠齐字符选项
+	x-height	x 高度
+	Glyph Bounds	字形边界
+	Proximity Guides	邻近参考线
+	Angular Guides	角度参考线
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	平均并连接…
+	Average & Join	平均并连接
+anchor	Points:	点：
+@msg	select two open path ends, or two open paths, to average and join	请选择两个开放路径的端点或两条开放路径以进行平均并连接
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	图稿清理
+	Simplify Anchors (Keep Shape)…	简化锚点（保持形状）…
+	Health Check	健康检查
+	Show Issue	显示问题
+	Fix All Issues	修复所有问题
+	Fix Issues	修复问题
+	Deep Ungroup…	取消所有层级编组…
+	Rejoin Path Pieces…	重新连接路径片段…
+	Document Health Check	文档健康检查
+	Check Selection	检查所选对象
+	Check Document	检查文档
+	No issues found.	未发现问题。
+	Changed since the last check.	自上次检查后已更改。
+	Fix Selected	修复所选
+	Fix All	全部修复
+	Issues fixed: {count}	已修复的问题：{count}
+	Open a document to check it for issues.	打开文档以检查其中的问题。
+	Empty Text	空文本
+	Unpainted Objects	无上色对象
+	Zero-Opacity Objects	不透明度为零的对象
+	Duplicate Objects	重复对象
+	Off-Artboard Art	画板外的图稿
+	Duplicate Anchors	重复锚点
+	Tiny Handles	极短手柄
+	Collinear Anchors	共线锚点
+	Nearly Coincident Anchors	几乎重合的锚点
+	Nearly Closed Paths	几乎闭合的路径
+	Filled Open Paths	填色的开放路径
+	Needless Clipping Groups	多余的剪切组
+	Needless Compound Paths	多余的复合路径
+	Needless Groups	多余的编组
+	Empty Artboards	空白画板
+	Protect Corners	保护尖角
+	Gap	间隙
+	Include Clip Groups	包括剪切组
+@msg	`tolerance` must be from 1 to 100	`tolerance` 必须介于 1 到 100 之间
+@msg	`gap` must be from 0 to 6 pt	`gap` 必须介于 0 到 6 pt 之间
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	简化锚点：路径的锚点太多，无法一次简化
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	重新连接路径片段：路径太多，无法一次连接
+@msg	None of these issues are left: check again	这些问题都已不存在：请重新检查
+@msg	`kinds` must be a list of issue kinds	`kinds` 必须是问题类型的列表
+@msg	missing `kind`	缺少 `kind`
+	Simplify Anchors (Keep Shape)	简化锚点（保持形状）
+	Deep Ungroup	取消所有层级编组
+	Rejoin Path Pieces	重新连接路径片段
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	颜色效果
+	Color Effects Panel	颜色效果面板
+	Exposure	曝光度
+	Exposure…	曝光度…
+	Desaturate	去色
+	Adjustment	调整
+	Add as Effect	添加为效果
+	Apply as Filter	作为滤镜应用
+	Select objects to adjust their colors.	选择对象以调整其颜色。
+	Brightness/Contrast	亮度/对比
+	Hue/Saturation	色相/饱和度
+	Temperature/Tint	色温/色调
+@msg	`{id}` is not a colour adjustment	`{id}` 不是颜色调整
+@msg	missing `effect`	缺少 `effect`
+@msg	`params` must be an object	`params` 必须是对象
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	路径精确工具
+	Anchor Eraser Brush	锚点橡皮擦画笔
+	Extend Path Tool	延长路径工具
+	Measure & Inspect Tool	测量与检查工具
+	Anchor Inspector	锚点检查器
+	Add Points at Crossings	在交叉处添加锚点
+	Split at Crossings	在交叉处分割
+	Extend Path	延长路径
+	Measure & Inspect	测量与检查
+	Set Anchor	设置锚点
+	Make Smooth	转为平滑
+	Make Corner	转为尖角
+	Equalize Handles	等长手柄
+	Remove Points, Keep Shape	删除锚点并保持形状
+	Add Points to Segments…	在线段中添加锚点…
+	Add Points to Segments	在线段中添加锚点
+	Open a document to edit its anchor points.	打开文档以编辑其锚点。
+	Anchors selected: {count}	已选锚点：{count}
+	Direct-select anchor points to edit them.	直接选择锚点以编辑它们。
+	Length	长度
+	In:	入：
+	Out:	出：
+	Add Points	添加锚点
+	Points per segment	每段锚点数
+	Close Path:	闭合路径：
+	Keep Handles	保留手柄
+	Straight	直线
+	Stretch Curve	拉伸曲线
+@msg	direct-select the anchor points to remove	请直接选择要删除的锚点
+@msg	select segments, or paths, to add points to	请选择要添加锚点的线段或路径
+@msg	select open paths to close	请选择要闭合的开放路径
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	路径太多或太复杂，无法找到交叉处（最多 10000 段）
+@msg	the paths have too many anchors to edit at once	路径的锚点太多，无法一次编辑
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	参数化形状工具
+	Parametric Shape	参数化形状
+	Edit Parametric Shape	编辑参数化形状
+	Convert to Parametric Shape	转换为参数化形状
+	Ring	圆环
+	Arrow	箭头
+	Cross	十字
+	Heart	心形
+	Gear	齿轮
+	Speech Bubble	对话气泡
+	Count:	数量：
+	Thickness:	粗细：
+	Inner Radius:	内半径：
+	Head:	箭头头部：
+	Shaft:	箭杆：
+	Point:	尖端：
+	Tooth Height:	齿高：
+	Tail:	尾巴：
+	Tip:	尖端：
+	Open a document to draw parametric shapes.	打开文档以绘制参数化形状。
+	Select a parametric shape to edit it. With none selected, these set the next shape.	选择一个参数化形状以编辑它。未选择时，这些值用于下一个形状。
+@msg	the object is not an editable parametric shape	该对象不是可编辑的参数化形状
+@msg	select plain rectangles, ellipses or regular polygons to convert	请选择要转换的普通矩形、椭圆或正多边形
+@msg	the shape's numbers are out of range	形状的数值超出范围
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` 必须是以下之一：rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` 必须是 3 到 1000 之间的整数
+@msg	`{key}` must be from {lo} to {hi}	`{key}` 必须在 {lo} 到 {hi} 之间
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	智能钢笔
+	Smart Pen Tool	智能钢笔工具
+	Smart Pen Panel	智能钢笔面板
+	Next Segment	下一线段
+	Curved	曲线
+	Retract Handles	收回手柄
+	Close or Join	闭合或连接
+	Open a document to draw with the Smart Pen.	打开文档以使用智能钢笔绘制。
+	Straight or Curved Segment	直线或曲线线段
+@msg	the path is locked or hidden	路径已锁定或隐藏
+@msg	`id` is not a path	`id` 不是路径
+@msg	the path has no open subpath	路径没有开放的子路径
+@msg	the subpath is closed	子路径已闭合
+@msg	the subpath is closed or too short to close	子路径已闭合或太短，无法闭合
+@msg	the path is too short to remove a point from	路径太短，无法删除锚点
+@msg	the segment can't be bent that far	线段无法弯曲到这个程度
+@msg	give `{a}` and `{b}`	请提供 `{a}` 和 `{b}`
+@msg	`t` must be from 0 to 1	`t` 必须在 0 到 1 之间
+@msg	`segment` must be "straight" or "curved"	`segment` 必须是 "straight" 或 "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` 必须是 "free"、"keepAngles" 或 "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` 必须是 [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	按颜色类型选择
+	Objects with Spot Colors	使用专色的对象
+	Objects with Color Effects	带颜色效果的对象
+	RGB Images	RGB 图像
+	CMYK Images	CMYK 图像
+	Grayscale Images	灰度图像
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` 必须是 spotColors、colorEffects、rgbImages、cmykImages 或 grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	网点颜色取自图稿
+	Basic Character Formats	基本字符格式
+	Case	大小写
+@msg	{label} must be a number	{label} 必须是数字
+@msg	{label} must be a number of at least 0.1	{label} 必须是至少 0.1 的数字
+@msg	no character style `{name}`	找不到字符样式 `{name}`
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	双色调…
+	Duotone	双色调
+	Print Ink Fixes…	印刷油墨修正…
+	Print Ink Fixes	印刷油墨修正
+	Inks	油墨
+	Tone 1	色调 1
+	Tone 2	色调 2
+	Tone 3	色调 3
+	Tone 4	色调 4
+	Curve	曲线
+	Reset to Linear	重置为线性
+	Reset to Inverse	重置为反相
+	Skip Objects with Spot Colors	跳过使用专色的对象
+	Ink Limit	油墨限制
+	Exclude Pure Black	排除纯黑
+	Remove White Overprint	移除白色叠印
+	Overprint Black	黑色叠印
+	Text Only	仅文字
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	请指定 `inkLimit`、`removeWhiteOverprint` 或 `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷油墨修正适用于 CMYK 文档：请先选择 文件 › 文档颜色模式 › CMYK 颜色
+@msg	`{key}` must be 0..{max}	`{key}` 必须为 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	查找最接近的色板…
+	Find Nearest Swatch	查找最接近的色板
+	Apply Nearest Swatch	应用最接近的色板
+	Select objects to find the swatches nearest their colors.	选择对象以查找与其颜色最接近的色板。
+@msg	select objects or give `color`	请选择对象或提供 `color`
+@msg	`color` is not a colour	`color` 不是颜色
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	转角工具
+	Slide Anchor Along Path	沿路径滑动锚点
+	Set Corners	设置转角
+	Remove Corners	移除转角
+	Corners selected: {count}	已选转角：{count}
+	Apply to Selected Anchors	应用到所选锚点
+@msg	`radius` must be from 0 to 1000000 pt	`radius` 必须为 0 到 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` 必须是 -0.98 到 0.98 之间的数字
+@msg	choose anchors where two sides meet at an angle: only those take a corner	请选择两条边成角相交的锚点：只有这些锚点才能设置转角
+@msg	give `anchor`, the index of the anchor to slide	请提供 `anchor`，即要滑动的锚点索引
+@msg	that anchor can't slide: an end of an open path has nowhere to go	该锚点无法滑动：开放路径的端点无处可去
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	共享边合并工具
+	Merge Shared Edge	合并共享边
+	Keep Shared Points Together	保持共享点在一起
+	Shared Edges	共享边
+	Coincidence:	重合容差：
+@msg	`a` and `b` must be two different paths	`a` 和 `b` 必须是两条不同的路径
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` 必须为 0.25 到 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` 必须为 0 到 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` 必须是 "average"、"a" 或 "b"
+@msg	the paths have nothing to merge there	这里没有可合并的路径部分
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	拆分文本
+	Combine Point Text	合并点文字
+	Join Point Text	连接点文字
+	Remove Breaks	删除换行
+	Split Text at Cursor	在光标处拆分文本
+	Set Alignment, Keep Position	设置对齐并保持位置
+	Reset Text Transform	重置文本变换
+	Replace Missing Fonts…	替换缺失的字体…
+	Replace Missing Fonts	替换缺失的字体
+	Remove Line Breaks	删除强制换行
+	Remove Paragraph Breaks	删除段落换行
+	Break Text into Lines	将文本拆分为行
+	Break Text into Paragraphs	将文本拆分为段落
+	Break Text into Words	将文本拆分为单词
+	Break Text into Glyphs	将文本拆分为字形
+	Reset Text Transform and Scale	重置文本变换和缩放
+	Set Alignment, Keep Position:	设置对齐并保持位置：
+	Break Text into:	将文本拆分为：
+	Split at Cursor	在光标处拆分
+	Reset Transform	重置变换
+	Shift-click: break into paragraphs	Shift+单击：拆分为段落
+	Alt-click: reset the horizontal scale too	Alt+点击：同时重置水平缩放
+breakText	Lines	行
+breakText	Words	单词
+breakText	Glyphs	字形
+@msg	Click in type with a Type tool to split it	请用文字工具在文字中单击以拆分
+@msg	Too many type objects to change at once	一次要更改的文字对象过多
+@msg	Too many pieces to make at once	一次要创建的部分过多
+@msg	Select horizontal point or area type whose text fits	请选择文本能完全容纳的横排点文字或区域文字
+@msg	Nothing to split at the cursor	光标处没有可拆分的内容
+@msg	Select two or more one-line point type objects on one baseline to combine	请选择同一基线上两个或更多单行点文字对象以合并
+@msg	Select two or more one-line point type objects to join	请选择两个或更多单行点文字对象以连接
+@msg	No line breaks to remove	没有要删除的强制换行
+@msg	No paragraph breaks to remove	没有要删除的段落换行
+@msg	Too many breaks to remove at once	一次要删除的换行过多
+@msg	Select point type	请选择点文字
+@msg	The point type is aligned that way already	点文字已经是这种对齐方式
+@msg	The point type has no transform to reset	点文字没有可重置的变换
+@msg	No fonts are missing	没有缺失的字体
+@msg	the replacement font is not available	替换字体不可用
+@msg	missing `align`	缺少 `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` 必须是 lines、paragraphs、words 或 glyphs，而不是 {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` 必须是 "line" 或 "paragraph"，而不是 {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` 必须是 "left"、"center" 或 "right"，而不是 {other}
+	File + Number	文件 + 编号
+	File + Data Set Name	文件 + 数据集名称
+	Data Set Name	数据集名称
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` 必须是 `fileNumber`、`fileDataSetName` 或 `dataSetName`
+@msg	no free data set file name in destination folder	目标文件夹中没有可用的数据集文件名
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	路径效果
+	Reverse Direction	反转方向
+	Align to Corners and Ends	对齐转角和端点
+	Count	数量
+	Max Count	最大数量
+	Start Length	起点长度
+	Start Percent	起点百分比
+	Start Shape	起点形状
+	End Length	终点长度
+	End Percent	终点百分比
+	End Shape	终点形状
+	By Count	按数量
+	By Distance	按距离
+	Both	两者
+	Shorter Than Length	短于长度
+	Dashes to Geometry	虚线转为几何图形
+	Dashes to Geometry…	虚线转为几何图形…
+	Add Anchors	添加锚点
+	Add Anchors…	添加锚点…
+	Smooth Anchors	平滑锚点
+	Smooth Anchors…	平滑锚点…
+	Simplify Anchors	简化锚点
+	Simplify Anchors…	简化锚点…
+	Split at Anchors	在锚点处分割
+	Split at Anchors…	在锚点处分割…
+	Extend Path…	延长路径…
+	Close Path…	闭合路径…
+	Retract Handles…	收回手柄…
+	Dash 1	虚线 1
+	Gap 1	间隔 1
+	Dash 2	虚线 2
+	Gap 2	间隔 2
+	Dash 3	虚线 3
+	Gap 3	间隔 3
+	Dash 4	虚线 4
+	Gap 4	间隔 4
+	Dash 5	虚线 5
+	Gap 5	间隔 5
+
+@msg	{_1}: they came in as the page's art	{_1}：已作为页面图稿导入
+
+@msg	You must choose a side pattern.	必须选择侧边图案。
+@msg	invalid pattern tile choice	图案拼块选项无效
+@msg	no pattern named `{choice}`	没有名为 `{choice}` 的图案
+	Delete the selected brushes?	删除选中的画笔吗？
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
+	Remove Strokes	移除描边
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	排列工具
+	Arrange in Grid…	按网格排列…
+	Arrange in Grid	按网格排列
+	Swap Objects	交换对象
+	Swap Objects and Sizes	交换对象和大小
+	Replace with Top Object…	替换为顶层对象…
+	Replace with Top Object	替换为顶层对象
+	Set Size of Each…	分别设置大小…
+	Set Size of Each	分别设置大小
+@msg	select exactly two objects	请恰好选择两个对象
+@msg	give `width` or `height`	请提供 `width` 或 `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	编组重叠对象
+@msg	too many objects selected (at most 20000)	选择的对象过多（最多 20000 个）
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	分割为短划线…
+	Divide into Dashes	分割为短划线
+	Dash:	短划线：
+	Gap:	间隙：
+	Fit to Corners and Ends	适合转角和端点
+	Remove Gaps	移除间隙
+@msg	that makes too many pieces (at most 100000): make the dashes longer	这会产生过多片段（最多 100000 个）：请加长短划线
+@msg	select paths, or segments, to divide	请选择要分割的路径或线段
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	将短划线扩展为路径
+@msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	文档工具
+	Save a Timestamped Copy	保存带时间戳的副本
+@msg	there is no clock here	此处没有时钟
+@msg	there is no clock here: give `time` (Unix seconds)	此处没有时钟：请提供 `time`（Unix 秒）
+@msg	the document has never been saved: give `folder`	文档从未保存过：请提供 `folder`
+@msg	every numbered name for the copy is taken	副本的所有编号名称均已被占用
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	从图层新建符号
+	Convert Layers to Symbols	将图层转换为符号
+@msg	{id} is no top-level layer	{id} 不是顶层图层
+	Marathi	马拉地语
+	Gujarati	古吉拉特语
+	Bengali	孟加拉语
+	Punjabi	旁遮普语
+	Tamil	泰米尔语
+	Telugu	泰卢固语
+	Kannada	卡纳达语
+	Malayalam	马拉雅拉姆语
+	Odia	奥里亚语
+	Urdu	乌尔都语
+	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更高版本 (版本 {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	将所有打开的文档导出为 PDF
+	Export All Open Documents as SVG	将所有打开的文档导出为 SVG
+@msgplural	Exported {n} document|Exported {n} documents	已导出 {n} 个文档
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已导出 {n} 个文档; 未写入 {title}：{error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	符号类型:
+	Dynamic Symbol	动态符号
+	Static Symbol	静态符号
+	Symbol Instance Appearance	符号实例外观
+	Reset Symbol Instance	重置符号实例
+@msg	type must be static or dynamic, not {v}	type 必须是 static 或 dynamic,而不是 {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是静态符号:请先将其符号类型设为动态
+@msg	path must be a list of child indices	path 必须是子项索引列表
+@msg	no object at path {shown} in the symbol's art	符号图稿中路径 {shown} 处没有对象
+@msg	give fill, stroke, opacity and/or blend	请提供 fill、stroke、opacity 和/或 blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	请提供 newName、registration、exportType、nineSlice 和/或 type
+	Text Flow	文本流向
+	By Rows	按行
+	By Columns	按列
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	随机不透明度…
+	Randomize Opacity	随机不透明度
+	Minimum:	最小值：
+	Maximum:	最大值：
+	Seed:	种子：
+@msg	`min` is greater than `max`	`min` 大于 `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	排序对象…
+	Sort Objects	排序对象
+	Sort By:	排序依据：
+	Apply To:	应用于：
+	Area	面积
+	X Position	X 位置
+	Y Position	Y 位置
+	Stacking Order	堆叠顺序
+	Small to Large	从小到大
+	Large to Small	从大到小
+	Distribute Evenly	均匀分布

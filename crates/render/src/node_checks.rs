@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, AppearanceItem, Arc, BezPath, Node, NodeKind, StrokeLayer, brush_fx, effects};
 
 /// Most pixels from the origin that a shape handed to the rasterizer may reach, or a stroke be
 /// wide. A document's art stays within 4 million points, 2.6 billion pixels at the closest zoom.
@@ -23,6 +23,23 @@ pub(crate) fn single_plain_fill(n: &Node) -> bool {
         AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
     });
     matches!((painted.next(), painted.next()), (Some(AppearanceItem::Fill(f)), None) if f.blend == vectorcraft_color::BlendMode::Normal && f.opacity >= 1.0 && !matches!(f.paint, vectorcraft_color::Paint::Pattern { .. }))
+}
+
+/// A knockout element whose opaque paint covers exactly its knockout shape. The caller limits
+/// source-over substitution to binary coverage, retaining analytical AA's intermediate rounding.
+pub(crate) fn opaque_knockout_fill(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.extras().mask.is_none()
+        && !crate::fx::has_fx(n)
+        && !crate::fx::has_object_fx(n)
+        && single_plain_fill(n)
+        && n.appearance
+            .items
+            .iter()
+            .any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && matches!(f.paint, vectorcraft_color::Paint::Solid { .. })))
 }
 
 /// Number of visible painted fill/stroke items (opacity folding is exact only for one). A dashed

@@ -10,7 +10,7 @@ use vectorcraft_geom::{Affine, Rect};
 
 use super::appearance::{edit_items, edits_stroke, index_param, item_target};
 use super::gradient::{StopOwner, item_paint_bounds, run_paint_mut};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, color_value, has_doc, index, number_or, point_indices, point_param, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

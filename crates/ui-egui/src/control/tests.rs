@@ -227,6 +227,37 @@ fn render_takes_the_artboard_asked_for() {
     assert!(request("ui.render", json!({"artboard": 2}))["error"].is_string());
 }
 
+#[test]
+fn synthetic_pointer_backquote_keeps_solid_object_in_place() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Dots", "width": 20, "height": 20})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "swatch": "Dots"})).unwrap();
+    let solid = app.run("shape.rectangle", json!({"x": 220, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [solid], "color": "#3366cc"})).unwrap();
+    app.run("select.set", json!({"ids": [id, solid]})).unwrap();
+    let before = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let before_solid = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(solid)).unwrap().clone();
+    let r = input_request(
+        &mut app,
+        "ui.pointer",
+        json!({"events": [
+        {"kind": "down", "x": 125, "y": 125},
+        {"kind": "drag", "x": 145, "y": 125},
+        {"kind": "up", "x": 145, "y": 125}
+    ], "backquote": true}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    let after = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+    assert_eq!(after.geometric_bounds(), before.geometric_bounds());
+    assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(solid)).unwrap(), &before_solid);
+    let vectorcraft_color::Paint::Pattern { xf, .. } = after.appearance.fill_paint() else { panic!("pattern fill expected") };
+    assert_eq!(xf.as_coeffs()[4], 20.0, "synthetic backquote drag changes pattern paint");
+}
+
 /// `ui.pointer` replies with the key object: a click on one of two selected objects makes it
 /// the key, and a click on the key again lets it go.
 #[test]

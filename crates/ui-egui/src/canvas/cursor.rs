@@ -1,4 +1,4 @@
-use super::*;
+use super::{CacheKey, Cursor, Mods, Point, VectorcraftApp};
 
 /// The active tool's cursor at the pointer, as `mods` make it. While the view moves (`still`
 /// false), the cursor the tool last gave for the same tool and keys stays: asking the tool again
@@ -66,7 +66,7 @@ pub(super) fn still_wait(still: &mut Option<(CacheKey, f64)>, shown: Option<&Cac
 
 /// Whether two cache keys differ only in the view (zoom, center, rotation, canvas size, pixel
 /// density and Pixel Preview's document pixels), with Pixel Preview on in both or off in both.
-fn only_view_differs(a: &CacheKey, b: &CacheKey) -> bool {
+pub(super) fn only_view_differs(a: &CacheKey, b: &CacheKey) -> bool {
     a.pixel.is_some() == b.pixel.is_some()
         && *a == CacheKey { zoom: a.zoom, cx: a.cx, cy: a.cy, w: a.w, h: a.h, ppp: a.ppp, rot: a.rot, pixel: a.pixel, ..b.clone() }
 }
@@ -120,13 +120,13 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
         Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
         Cursor::TypeVertical => C::VerticalText,
+        // The system has no tip outline to go round: its crosshair aims as well.
+        Cursor::BlobBrush | Cursor::Eraser => C::Crosshair,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
         | Cursor::MagicWand
         | Cursor::Pencil
         | Cursor::Paintbrush
-        | Cursor::BlobBrush
-        | Cursor::Eraser
         | Cursor::Smooth
         | Cursor::PathEraser
         | Cursor::Join
@@ -147,6 +147,14 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::Scissors
         | Cursor::ScissorsNotAllowed
         | Cursor::MeshAdd
-        | Cursor::PuppetPin => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
+        | Cursor::PuppetPin
+        | Cursor::AnchorEraser
+        | Cursor::ExtendPath
+        | Cursor::MeasureInspect
+        | Cursor::ParametricShape
+        | Cursor::CornerTool
+        | Cursor::SlideAnchor
+        | Cursor::SharedEdge
+        | Cursor::SmartPen => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
     }
 }

@@ -311,6 +311,39 @@ fn artboard_commands_refuse_a_boolean_or_number_given_as_text() {
     assert_eq!(node(&s, r).geometric_bounds().map(|b| b.x0), Some(20.0));
 }
 
+/// New Artboard refuses a position or size given as text or as another value that is not a number,
+/// such as "10", and New Artboard and Artboard Options refuse a name that is not text, such as 5.
+/// The artboards and the undo history stay as they were; a null reads as the key left out.
+#[test]
+fn artboard_commands_refuse_a_number_or_name_of_the_wrong_type() {
+    use crate::tests::{not_a_number, not_refused};
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let mut calls: Vec<_> = [
+        ("artboard.new", "x", json!({"x": "10"})),
+        ("artboard.new", "y", json!({"x": 2000, "y": [0]})),
+        ("artboard.new", "width", json!({"width": "200"})),
+        ("artboard.new", "height", json!({"height": true})),
+    ]
+    .into_iter()
+    .map(|(cmd, key, p)| not_a_number(cmd, p, key))
+    .collect();
+    let not_text = |cmd: &str, p: serde_json::Value| (cmd.to_string(), p, "`name` must be a string".to_string());
+    calls.extend([
+        not_text("artboard.new", json!({"name": 5})),
+        not_text("artboard.setProps", json!({"index": 0, "name": 5})),
+        not_text("artboard.setProps", json!({"index": 0, "x": 50, "name": true})),
+        not_text("artboard.setProps", json!({"artboards": [{"index": 0, "name": "Front"}, {"index": 1, "name": ["Back"]}]})),
+    ]);
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("artboard.new", &json!({"x": null, "y": null, "width": null, "height": null, "name": null})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "Front"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "name": null})).unwrap();
+    let names: Vec<String> = boards(&s).into_iter().map(|(_, n)| n).collect();
+    assert_eq!(names, ["Front", "Artboard 2", "Artboard 3"]);
+}
+
 /// Artboards 1 and 2, each with a square on it, and an artboard 3 below artboard 1 with a square on
 /// it, with the Artboard tool selecting artboards 1 and 2 → the squares' ids, artboard by artboard.
 fn two_selected_artboards(s: &mut Session) -> [u64; 3] {
@@ -656,23 +689,30 @@ fn new_art_on_a_locked_artboard_stays_editable_until_the_selection_leaves_it() {
     assert_eq!(selected(&s), pasted);
     s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
     assert_eq!(left(&s, pasted[0]), 1160.0);
+    batches_and_isolation_keep_new_art_protected(&mut s, pasted);
+}
+
+/// The batch, isolation and group cases of [`new_art_on_a_locked_artboard_stays_editable_until_the_selection_leaves_it`],
+/// with the pasted art `pasted` selected.
+fn batches_and_isolation_keep_new_art_protected(s: &mut Session, pasted: Vec<u64>) {
+    let selected = |s: &Session| s.doc().unwrap().selection.objects.iter().map(|id| id.0).collect::<Vec<_>>();
     let editable = |s: &Session| s.doc().unwrap().doc.is_editable(NodeId(pasted[0]));
     // A batch that deselects it and fails brings it back selected and editable, and so does
     // undoing a batch that deselects it and draws.
     let failed = json!({"commands": [{"command": "select.none"}, {"command": "no.such.command"}]});
     assert!(s.execute("command.batch", &failed).is_err());
-    assert_eq!((selected(&s), editable(&s)), (pasted.clone(), true), "after a failed batch");
+    assert_eq!((selected(s), editable(s)), (pasted.clone(), true), "after a failed batch");
     let drawn =
         json!({"commands": [{"command": "select.none"}, {"command": "shape.rectangle", "params": {"x": 300, "y": 300, "width": 20, "height": 20}}]});
     s.execute("command.batch", &drawn).unwrap();
-    assert!(!editable(&s), "deselected by the batch");
+    assert!(!editable(s), "deselected by the batch");
     // Undo inside a later batch gives the document the new art of the selection it brings back:
     // the unlocked artboard over that art then moves it along.
     let up = json!({"command": "artboard.move", "params": {"index": 2, "dx": 0, "dy": 1000, "moveArt": true}});
     let r = s.execute("command.batch", &json!({"commands": [{"command": "edit.undo"}, up.clone()]})).unwrap();
     assert!(ids(&r["results"][1]["moved"]).contains(&pasted[0]), "undone inside a batch: {r}");
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!((selected(&s), editable(&s)), (pasted.clone(), true), "the batch undone");
+    assert_eq!((selected(s), editable(s)), (pasted.clone(), true), "the batch undone");
     // Isolation mode inside a batch protects it before the next step.
     let isolated = json!({"commands": [{"command": "object.isolate", "params": {"id": pasted[0]}}, up]});
     let r = s.execute("command.batch", &isolated).unwrap();
@@ -681,21 +721,21 @@ fn new_art_on_a_locked_artboard_stays_editable_until_the_selection_leaves_it() {
     s.execute("object.exitIsolation", &json!({})).unwrap();
     // Isolation mode starts with nothing selected, so leaving it doesn't select the art again,
     // and the art, protected again, isn't isolated, as locked art isn't.
-    assert!(selected(&s).is_empty(), "after isolation mode");
-    assert!(!editable(&s), "after isolation mode");
+    assert!(selected(s).is_empty(), "after isolation mode");
+    assert!(!editable(s), "after isolation mode");
     assert!(s.execute("object.isolate", &json!({"id": pasted[0]})).is_err(), "isolating it again");
     // A member of a new group can be selected while the group is new art.
     let copy = ids(&s.execute("edit.paste", &json!({"center": [1200, 150]})).unwrap()["ids"]);
     s.execute("object.group", &json!({})).unwrap();
-    let group = selected(&s);
+    let group = selected(s);
     s.execute("select.set", &json!({"ids": copy})).unwrap();
-    assert_eq!(selected(&s), copy, "a member of a new group");
+    assert_eq!(selected(s), copy, "a member of a new group");
     s.execute("select.set", &json!({"ids": group})).unwrap();
-    assert_eq!(selected(&s), group, "from the member back to the group");
+    assert_eq!(selected(s), group, "from the member back to the group");
     s.execute("object.ungroup", &json!({})).unwrap();
-    assert_eq!(selected(&s), copy, "ungrouped");
+    assert_eq!(selected(s), copy, "ungrouped");
     s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
-    assert_eq!(selected(&s), copy, "the ungrouped art moves");
+    assert_eq!(selected(s), copy, "the ungrouped art moves");
 }
 
 /// When an artboard moves, scales or is cut with its art, the art inside it that is also on a
@@ -933,7 +973,9 @@ fn artboard_display_marks_stay_out_of_exports() {
     let on = doc(&s);
     assert_ne!(on.artboards, off.artboards);
     assert_eq!(vectorcraft_svg::export(&on, &Default::default()), vectorcraft_svg::export(&off, &Default::default()));
-    assert_eq!(crate::export_pdf(&on, &Default::default()).unwrap(), crate::export_pdf(&off, &Default::default()).unwrap());
+    // Fix the export date so metadata does not change between the two exports.
+    let options = vectorcraft_pdf::PdfOptions { created: Some(0), ..Default::default() };
+    assert_eq!(crate::export_pdf(&on, &options).unwrap(), crate::export_pdf(&off, &options).unwrap());
 }
 
 /// Artboard Options' video display options: `artboard.setProps {showVideoSafeAreas,

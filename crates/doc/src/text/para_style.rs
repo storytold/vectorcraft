@@ -1,6 +1,6 @@
 use super::char_style::CharStyle;
 use super::tabs_lists::{ParaList, TabStop};
-use super::*;
+use super::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Justify {

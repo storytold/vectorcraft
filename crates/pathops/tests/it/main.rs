@@ -5,6 +5,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod hostile_params;
 mod ops;
 mod pathfinder_pinned;
 mod prop_pathops;

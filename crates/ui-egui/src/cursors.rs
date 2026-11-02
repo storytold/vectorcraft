@@ -440,7 +440,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 81] = [
+const GLYPHS: [Cursor; 89] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -522,6 +522,14 @@ const GLYPHS: [Cursor; 81] = [
     Cursor::Scissors,
     Cursor::MeshAdd,
     Cursor::PuppetPin,
+    Cursor::AnchorEraser,
+    Cursor::ExtendPath,
+    Cursor::MeasureInspect,
+    Cursor::ParametricShape,
+    Cursor::CornerTool,
+    Cursor::SlideAnchor,
+    Cursor::SharedEdge,
+    Cursor::SmartPen,
 ];
 
 /// The shapes of cursor `c` with its hotspot at `p`; `None` for cursors that stay system cursors
@@ -546,6 +554,11 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             double_arrow(ink, p + vec2(15.0, 18.0), vec2(1.0, 0.0));
         }
         Cursor::Crosshair => crosshair(ink, p),
+        // Only the centre: the tool draws the tip's outline round it, at the zoom.
+        Cursor::BlobBrush | Cursor::Eraser => {
+            ink.circle_filled(p, 2.5, HALO);
+            ink.circle_filled(p, 1.25, INK);
+        }
         // The Pencil's crosshair with the Pen's star where the closing ring goes.
         Cursor::PencilNew => {
             crosshair(ink, p);

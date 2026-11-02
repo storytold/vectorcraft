@@ -97,6 +97,10 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
     let b: Brush = serde_json::from_value(def.clone()).map_err(|e| e.to_string())?;
     let mut f = fields(&b, def)?;
     f.insert("__brush".into(), json!(b.name));
+    if let Some(st) = app.session.active() {
+        f.insert("__patterns".into(), serde_json::to_value(&st.doc.patterns).unwrap_or_default());
+    }
+    brush_art_options::reconcile_pattern_choices(&mut f);
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
     Ok(Value::Null)
 }
@@ -149,6 +153,7 @@ fn target(app: &VectorcraftApp) -> Option<String> {
 /// opens.
 pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
+    let patterns = serde_json::to_value(&st.doc.patterns).unwrap_or_default();
     let title: String = ty.chars().take(1).flat_map(char::to_uppercase).chain(ty.chars().skip(1)).collect();
     let name = vectorcraft_brush::unique_name(&vectorcraft_brush::library(&st.doc), &format!("New {title} Brush"));
     let mut def = json!({ "name": name, "type": ty });
@@ -169,6 +174,8 @@ pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -
     b.sanitize();
     let def = serde_json::to_value(&b).map_err(|e| e.to_string())?;
     let mut f = fields(&b, def)?;
+    f.insert("__patterns".into(), patterns);
+    brush_art_options::reconcile_pattern_choices(&mut f);
     f.insert(CREATE.into(), json!(true));
     if let Some(ids) = ids {
         f.insert(IDS.into(), ids);
@@ -183,9 +190,38 @@ pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -
 /// dialog closes once the brush is made.
 fn create(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut brush_params = params(d);
+    if d.str("__type") == "pattern" {
+        if d.str("sideTile") == "none" {
+            return Err("You must choose a side pattern.".into());
+        }
+        let preview = brush_art_options::edited_def(d);
+        for key in [
+            "side",
+            "side_frame",
+            "side_swatch",
+            "outer_corner",
+            "outer_corner_frame",
+            "outer_corner_swatch",
+            "outer_source",
+            "inner_corner",
+            "inner_corner_frame",
+            "inner_corner_swatch",
+            "inner_source",
+            "start",
+            "start_frame",
+            "start_swatch",
+            "end",
+            "end_frame",
+            "end_swatch",
+        ] {
+            if let Some(value) = preview.get(key) {
+                brush_params[key] = value.clone();
+            }
+        }
+    }
     if let Some(def) = d.fields.get("__def") {
         for key in ["art", "side"] {
-            if let Some(art) = def.get(key).filter(|v| !v.is_null()) {
+            if let Some(art) = def.get(key).filter(|v| !v.is_null() && brush_params.get(key).is_none_or(Value::is_null)) {
                 brush_params[key] = art.clone();
             }
         }

@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    Color32, CornerRadius, NodeKind, Pos2, Rect, Sense, Stroke, StrokeKind, TextKind, Tokens, Ui, Vec2, VectorcraftApp, Xf, json, pos2, vec2, widgets,
+};
 
 /// The Contextual Task Bar's area.
 fn task_bar_id() -> egui::Id {
@@ -31,6 +33,7 @@ fn picked_artboards_bounds(app: &VectorcraftApp) -> Option<Rect> {
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
 /// With the Artboard tool it sits under the selected artboards and offers Resize (Artboard
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
+/// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
@@ -65,6 +68,17 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         && first.as_ref().is_some_and(|f| {
             f.name.as_deref() == Some("Image Trace") && f.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
         });
+    // A basic shape (a live rectangle, rounded rectangle, ellipse or polygon) selected whole with the
+    // Selection tool: its properties take the place of Lock, as in the reference app
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+    use vectorcraft_doc::LiveShape;
+    let shape = first.clone().filter(|f| {
+        n == 1
+            && st.selection.anchors.is_empty()
+            && app.session.tool_id() == "selection"
+            && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
+                if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
+    });
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
     if on_artboards {
@@ -91,6 +105,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
         // These run the same commands as the Control bar's anchor buttons.
         let anchors = !st.selection.anchors.is_empty();
+        // With the Direct Selection tool, a path selected whole offers its anchor points' actions
+        // too, as the reference app's bar does for any path that tool selects (same page), and Edit
+        // Path, which only switches to that tool, is left out (#4469).
+        let direct = app.session.tool_id() == "directSelection";
         if anchors {
             items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors", none()));
             items.push((tl!("Connect"), "dc-join", "path.join", none()));
@@ -115,9 +133,14 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Release Clipping Mask"), "ungroup", "object.clippingMask.release", none()));
         } else if is_group {
             items.push((tl!("Ungroup"), "ungroup", "object.ungroup", none()));
-            items.push((tl!("Isolate"), "square-dashed", "object.isolate", none()));
+            // Isolate is left out while Enter Isolation Mode is off, as it is while an opacity mask is edited.
+            if crate::menus::enabled(app, "object.isolate") {
+                items.push((tl!("Isolate"), "square-dashed", "object.isolate", none()));
+            }
         } else if is_compound {
-            items.push(edit_path());
+            if !direct {
+                items.push(edit_path());
+            }
             items.push((tl!("Release Compound Path"), "ungroup", "object.compoundPath.release", none()));
         } else if let Some(kind) = text {
             items.push((tl!("Create Outlines"), "type", "type.createOutlines", none()));
@@ -129,6 +152,15 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             }
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
+        } else if !anchors && direct {
+            // Corner and Smooth convert every anchor of a path selected whole; Remove and Cut
+            // need anchors picked out, so they wait for them.
+            if open_path {
+                items.push((tl!("Connect"), "dc-join", "path.join", none()));
+            }
+            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Simplify"), "spline", "object.path.simplify", none()));
         } else if !anchors {
             if open_path {
                 items.push((tl!("Join"), "dc-join", "path.join", none()));
@@ -139,14 +171,16 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         }
         items.push((tl!("Duplicate"), "copy", "edit.duplicate", none()));
     }
-    let fill = first.as_ref().map(|f| f.appearance.fill_paint()).unwrap_or_default();
+    // The paints the Fill and Stroke proxies show, "?" when the selected objects' paints differ.
+    let (fill, stroke) = crate::panels::current_paints(app);
+    let (fill_mixed, stroke_mixed) = crate::panels::mixed_paints(app, ui.ctx());
     let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
     // Under the selection's lowest corner on screen, centered on the selection (the view may be
     // rotated).
     let lowest = xf.quad(b).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
     let anchor = pos2(xf.to_screen(b.center()).x, lowest);
-    let est_w = 118.0 + items.iter().map(|(l, _, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
+    let est_w = 150.0 + items.iter().map(|(l, _, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
     // Its place under the selection, then where the handle moved it, kept on the canvas (with the
     // bar's size last frame, the estimate before it first shows).
     let under = pos2(anchor.x - est_w / 2.0, anchor.y + 28.0);
@@ -173,6 +207,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let pinned = place.pinned;
     let mut moved = Vec2::ZERO;
     let mut run: Option<(&str, serde_json::Value)> = None;
+    let mut show_swatches = false;
     egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ui.ctx(), |ui| {
         egui::Frame::NONE
             .fill(t.panel)
@@ -205,26 +240,46 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             run = Some((*cmd, params.clone()));
                         }
                     }
-                    // The selected objects' Fill, Recolor Artwork and Lock, left out with the Artboard tool.
+                    // The selected objects' Fill, Stroke, Recolor Artwork and Lock (a basic shape's
+                    // properties instead), left out with the Artboard tool.
                     if !on_artboards {
                         let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
-                        widgets::paint_chip(ui, egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0)), &fill);
-                        ui.painter().rect_stroke(
-                            egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0)),
-                            0.0,
-                            Stroke::new(1.0, t.button_border),
-                            StrokeKind::Outside,
-                        );
+                        let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
+                        widgets::proxy_chip(ui, chip, &fill, fill_mixed, None);
+                        ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.button_border), StrokeKind::Outside);
                         if resp.on_hover_text(tl!("Fill")).clicked() {
                             app.session.fill_active = true;
-                            app.ui.open_panel = Some("swatches".into());
+                            show_swatches = true;
+                        }
+                        // The Stroke chip, drawn as a ring as the Control bar's is.
+                        let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
+                        let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
+                        widgets::proxy_chip(ui, chip, &stroke, stroke_mixed, Some(4.0));
+                        ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.button_border), StrokeKind::Outside);
+                        if resp.on_hover_text(tl!("Stroke")).clicked() {
+                            app.session.fill_active = false;
+                            show_swatches = true;
                         }
                         // Recolor Artwork, when the selection has colours to recolour.
                         if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 30.0).clicked() {
                             run = Some(("ui.recolorDialog", json!({})));
                         }
-                        if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
-                            run = Some(("object.lock", json!({})));
+                        if let Some(shape) = &shape
+                            && let NodeKind::Path { live: Some(live), .. } = &shape.kind
+                        {
+                            // The shape's properties in a popover that stays open while its fields and
+                            // its Corner dropdown are used.
+                            let props = widgets::icon_button(ui, "shapes", tl!("Shape Properties"), false, 30.0);
+                            widgets::popover(&props, props.clicked(), |ui| {
+                                ui.set_min_width(250.0);
+                                crate::panels::transform::live_shape_rows(app, ui, shape, live, "task-bar-shape", true);
+                            });
+                        } else {
+                            // The Lock button is off in isolation mode, as Object › Lock › Selection is.
+                            let lockable = crate::menus::enabled(app, "object.lock");
+                            if widgets::icon_button_enabled(ui, "lock", tl!("Lock (⌘2)"), false, lockable, 30.0).clicked() {
+                                run = Some(("object.lock", json!({})));
+                            }
                         }
                     }
                     let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 30.0);
@@ -257,6 +312,14 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             place.offset = Some((doc, to - under));
         }
         ui.ctx().request_repaint();
+    }
+    // The Swatches panel shows where it is docked, floating or closed. A panel in an icon column
+    // toggles when activated, so an open flyout stays as it is.
+    if show_swatches
+        && app.ui.open_panel.as_deref() != Some("swatches")
+        && let Err(e) = app.run("window.panel.activate", json!({ "panel": "swatches" }))
+    {
+        app.ui.status = e;
     }
     match run {
         // Image Trace traces the image at once with the Default preset. As a quick trace from
