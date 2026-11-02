@@ -40,6 +40,9 @@ pub(crate) const FLIP: Affine = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
 /// Most patterns read (others can't fill art).
 pub(super) const MAX_PATTERNS: usize = 4096;
 
+/// Most characters of a path's note read (the version 7 specification allows 254, §5.3.1).
+pub(super) const MAX_NOTE: usize = 1024;
+
 #[derive(Clone, Debug)]
 pub(crate) struct GState {
     pub(crate) fill: Paint,
@@ -59,6 +62,11 @@ pub(crate) struct GState {
     pub(crate) overprint_stroke: bool,
     pub(super) locked: bool,
     pub(super) hidden: bool,
+    /// The note (`%AI3_Note:`) the paths that follow get, until another replaces it (`None`: no
+    /// note comment yet; empty: none).
+    pub(super) note: Option<String>,
+    /// Show Center (`1 Ap`) for the paths that follow (`None`: the path's default).
+    pub(super) show_center: Option<bool>,
 }
 
 impl Default for GState {
@@ -82,6 +90,8 @@ impl Default for GState {
             overprint_stroke: false,
             locked: false,
             hidden: false,
+            note: None,
+            show_center: None,
         }
     }
 }
@@ -222,7 +232,6 @@ pub(super) const LINKED_PREVIEWS: &str =
 pub(super) const IGNORED: &[&str] = &[
     "Ae",
     "AE",
-    "Ap",
     "As",
     "Xd",
     "Xr",

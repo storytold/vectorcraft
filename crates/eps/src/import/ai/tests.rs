@@ -118,6 +118,109 @@ fn groups_names_hidden_and_locked() {
     assert!(!hidden.visible);
 }
 
+/// A node's Attributes panel note (empty: none).
+fn note(n: &Node) -> String {
+    n.extras().attrs.as_deref().map(|a| a.note.clone()).unwrap_or_default()
+}
+
+/// The notes of the first layer's objects, in order.
+fn notes(doc: &Document) -> Vec<String> {
+    art(doc).iter().map(|n| note(n)).collect()
+}
+
+/// A note comment names the paths after it until another one replaces it, and an empty one clears
+/// it (§5.3.1: `%AI3_Note: <note>`).
+#[test]
+fn a_note_comment_is_the_note_of_the_paths_after_it() {
+    let [a, b, c, d] = [0.0, 20.0, 40.0, 60.0].map(|x| rect_path(x, 0.0, x + 10.0, 10.0));
+    let body = format!("%AI3_Note:hello\n{a}f\n{b}f\n%AI3_Note:\n{c}f\n%AI3_Note:world\n{d}f\n");
+    assert_eq!(notes(&read_ok(&layer(&body)).doc), ["hello", "hello", "", "world"]);
+    // `%%Note:` sets it too.
+    assert_eq!(notes(&read_ok(&layer(&format!("%%Note:old style\n{a}f\n"))).doc), ["old style"]);
+    // A path without a note has no attributes.
+    assert!(art(&read_ok(&layer(&format!("{a}f\n"))).doc)[0].extras().attrs.is_none());
+}
+
+/// `%AI5_NoteMore:` adds a line to the note; the text is kept as written, and its bytes are read as
+/// UTF-8, else Windows-1252.
+#[test]
+fn a_note_continues_on_more_lines_and_keeps_its_text() {
+    let a = rect_path(0.0, 0.0, 10.0, 10.0);
+    let body = format!("%AI3_Note:  two  (words) caf@ \n%AI5_NoteMore:more\n{a}f\n");
+    let data = stream(&layer(&body)).replace('@', "\u{1}").into_bytes();
+    let data: Vec<u8> = data.into_iter().map(|b| if b == 1 { 0xE9 } else { b }).collect();
+    assert_eq!(notes(&read(&data).unwrap().doc), ["  two  (words) café \nmore"]);
+    // A continuation of an empty note is its second line; one with no note before it is ignored.
+    assert_eq!(notes(&read_ok(&layer(&format!("%AI3_Note:\n%AI5_NoteMore:x\n{a}f\n"))).doc), ["\nx"]);
+    assert_eq!(notes(&read_ok(&layer(&format!("%AI5_NoteMore:x\n{a}f\n"))).doc), [""]);
+    // A note too long is cut at 1,024 characters, however many lines it has.
+    let long = format!("%AI3_Note:{}\n{}{a}f\n", "x".repeat(5000), "%AI5_NoteMore:yy\n".repeat(3000));
+    assert_eq!(notes(&read_ok(&layer(&long)).doc)[0].chars().count(), 1024);
+    let long = format!("%AI3_Note:x\n{}{a}f\n", "%AI5_NoteMore:yy\n".repeat(3000));
+    assert_eq!(notes(&read_ok(&layer(&long)).doc)[0].chars().count(), 1024);
+    // A long UTF-8 line stays UTF-8 where it is cut.
+    let long = format!("%AI3_Note:{}\n{a}f\n", "é".repeat(3000));
+    assert_eq!(notes(&read_ok(&layer(&long)).doc), ["é".repeat(1024)]);
+    // A note on a `%_` line is read too.
+    assert_eq!(notes(&read_ok(&layer(&format!("%_%AI3_Note:hidden\n{a}f\n"))).doc), ["hidden"]);
+}
+
+/// A note before a group or a compound path isn't theirs: their paths keep their own.
+#[test]
+fn a_note_before_a_group_or_compound_path_is_not_theirs() {
+    let [a, b] = [0.0, 20.0].map(|x| rect_path(x, 0.0, x + 10.0, 10.0));
+    for (open, close) in [("u", "U"), ("*u", "*U")] {
+        let body = format!("%AI3_Note:outer\n0 Ae\n{open}\n%AI3_Note:inner\n{a}f\n{b}f\n{close}\n");
+        let doc = read_ok(&layer(&body)).doc;
+        let top = &art(&doc)[0];
+        assert_eq!(note(top), "", "{open}");
+        let kids: Vec<String> = top.children().unwrap().iter().map(|k| note(k)).collect();
+        assert_eq!(kids, ["inner", "inner"], "{open}");
+    }
+}
+
+/// A clipping path's note is its own, not that of the copy that paints its fill.
+#[test]
+fn a_clipping_paths_note_is_not_copied_to_its_painted_fill() {
+    let body =
+        format!("0 Ae\nq\n{RED}%AI3_Note:clip\n{}W\nf\n%AI3_Note:\n{}f\nQ\n", rect_path(5.0, 5.0, 25.0, 25.0), rect_path(0.0, 0.0, 30.0, 30.0));
+    let doc = read_ok(&layer(&body)).doc;
+    fn walk(nodes: &[Arc<Node>], out: &mut Vec<(bool, String)>) {
+        for n in nodes {
+            out.push((matches!(n.kind, NodeKind::Path { clipping: true, .. }), note(n)));
+            walk(n.children().map(Vec::as_slice).unwrap_or_default(), out);
+        }
+    }
+    let mut all = Vec::new();
+    walk(&art(&doc), &mut all);
+    let noted: Vec<_> = all.iter().filter(|(_, n)| n == "clip").collect();
+    assert_eq!(noted, [&(true, "clip".to_string())], "{all:?}");
+    assert!(all.len() >= 3, "the painted copy is there: {all:?}");
+}
+
+/// `1 Ap` shows the center point of the paths after it until `0 Ap` (§12, showCenter), which leaves
+/// them at an imported path's default: hidden.
+#[test]
+fn ap_shows_the_center_of_the_paths_after_it() {
+    let [a, b, c] = [0.0, 20.0, 40.0].map(|x| rect_path(x, 0.0, x + 10.0, 10.0));
+    let ellipse = "50 0 m\n50 5.5 45.5 10 40 10 c\n34.5 10 30 5.5 30 0 c\n30 -5.5 34.5 -10 40 -10 c\n45.5 -10 50 -5.5 50 0 c\n";
+    let body = format!("1 Ap\n{a}f\n{b}f\n0 Ap\n{c}f\n{ellipse}f\n2 Ap\n{a}f\n");
+    let doc = read_ok(&layer(&body)).doc;
+    let shown: Vec<_> = art(&doc).iter().map(|n| (n.extras().attrs.as_deref().and_then(|a| a.show_center), n.shows_center())).collect();
+    assert_eq!(shown, [(Some(true), true), (Some(true), true), (None, false), (None, false), (None, false)]);
+}
+
+/// What a skipped section sets doesn't reach the art after it.
+#[test]
+fn a_note_or_ap_in_a_skipped_section_does_not_reach_the_art_after_it() {
+    let a = rect_path(0.0, 0.0, 10.0, 10.0);
+    let body = format!("%AI3_BeginBrushPattern\n1 Ap\n%AI3_Note:brush\n{a}f\n%AI3_EndBrushPattern\n{}", layer(&format!("{a}f\n")));
+    let doc = read_ok(&body).doc;
+    let n = &art(&doc)[0];
+    assert_eq!(note(n), "");
+    assert!(!n.shows_center());
+}
+
 #[test]
 fn paths_colours_and_strokes() {
     let art_ = format!(

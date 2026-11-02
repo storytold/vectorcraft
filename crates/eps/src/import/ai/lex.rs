@@ -42,6 +42,8 @@ pub(super) struct Token<'a> {
 const PREVIEW: (&[u8], &[u8]) = (b"%AI26_BeginPlacedObjectPreview", b"%AI26_EndPlacedObjectPreview");
 /// A placed file's markers, which a hidden one has on `%_` lines.
 const PLACE: [&[u8]; 2] = [b"%AI5_BeginPlace", b"%AI5_EndPlace"];
+/// A path's note comments, also read on `%_` lines.
+const NOTES: [&[u8]; 3] = [b"%AI3_Note:", b"%%Note:", b"%AI5_NoteMore:"];
 /// A binary section skipped whole: (begin, end) markers.
 const DOCUMENT: (&[u8], &[u8]) = (b"%%BeginDocument", b"%%EndDocument");
 
@@ -144,8 +146,9 @@ impl<'a> Lexer<'a> {
                 if start {
                     return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: false });
                 }
-                // So does a hidden placed file: its `~` ends what `%_%AI5_BeginPlace` begins.
-                if prefixed && PLACE.iter().any(|m| line.starts_with(m)) {
+                // So does a hidden placed file: its `~` ends what `%_%AI5_BeginPlace` begins. And a
+                // hidden path's note.
+                if prefixed && PLACE.iter().chain(&NOTES).any(|m| line.starts_with(m)) {
                     return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: true });
                 }
                 // A comment later in a line.
