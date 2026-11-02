@@ -131,6 +131,10 @@ pub(crate) struct Tcy {
     pub width: f64,
     /// Horizontal scale that fits the block into one em (1 when it fits as it is).
     pub squeeze: f64,
+    /// Tate-chu-yoko Settings › Up/Down of the block, in points (positive moves it up).
+    pub up: f64,
+    /// Tate-chu-yoko Settings › Left/Right of the block, in points (positive moves it right).
+    pub right: f64,
 }
 
 impl SGlyph {
@@ -716,6 +720,8 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         char_direction: _,
         proportional_metrics,
         tate_chu_yoko,
+        tcy_up_down: _,
+        tcy_left_right: _,
         standard_vertical_roman: _,
         digits,
         font_height_reference,

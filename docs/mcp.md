@@ -4871,6 +4871,24 @@ undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
 ```
 
+## Tate-chu-yoko Settings
+
+`text.setFormat` and `text.setRangeStyle {tcyUpDown?, tcyLeftRight?}` set the Character panel menu's Tate-chu-yoko
+Settings of the characters, in points from -1296 to 1296 (document points, as `baselineShift`). In vertical type a
+block of tate-chu-yoko characters (`tateChuYoko`) moves up by a positive Up/Down and down by a negative one, and right
+by a positive Left/Right and left by a negative one. The block moves as one piece with the values of its first
+character, and keeps its one em down the column, its caret positions and its hit region. Two or three digits set
+across the column without the mark do not move, and horizontal type keeps the values without moving the characters.
+Neither value turns `tateChuYoko` on. Both are 0 by default and saved only when not 0, and character styles carry
+them. A value that is not a number is refused with `` `tcyUpDown` must be a number ``, and one outside the range with
+`` `tcyUpDown` must be from -1296 to 1296 ``, naming the key. One undo step. `ui.tateChuYokoSettings` opens the
+Tate-chu-yoko Settings dialog (the menu item shows with Show East Asian Options) on the values the selected characters
+share, a blank field where they differ; OK sends the values that changed.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
+```
+
 ## Optical Margin Alignment
 
 `type.opticalMarginAlignment {on?: bool}` (Type › Optical Margin Alignment) turns Optical Margin Alignment on or off

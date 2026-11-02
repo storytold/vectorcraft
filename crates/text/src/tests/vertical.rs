@@ -356,6 +356,47 @@ fn manual_tate_chu_yoko_sets_marked_characters_across_one_em() {
     assert!(ink(&row, 1).center().x > ink(&row, 0).center().x + 5.0, "horizontal type stays a row");
 }
 
+/// Character panel menu › Tate-chu-yoko Settings: a marked block moves up by a positive Up/Down
+/// and right by a positive Left/Right, in points, as one piece (the offsets of its first
+/// character), and keeps its one em down the column. An automatic two-digit block and horizontal
+/// type do not move.
+#[test]
+fn tate_chu_yoko_settings_move_a_marked_block_up_down_left_and_right() {
+    let marked = CharStyle { size: 20.0, tate_chu_yoko: true, ..CharStyle::default() };
+    let union = |l: &TextLayout, r: std::ops::Range<usize>| r.map(|i| ink(l, i)).reduce(|a, b| a.union(b)).unwrap();
+    let at = |up: f64, right: f64| {
+        let mut t = vertical_styled("", marked.clone());
+        t.runs = vec![
+            TextRun::new("AB", CharStyle { tcy_up_down: up, tcy_left_right: right, ..marked.clone() }),
+            TextRun::new("C", CharStyle { tcy_up_down: -up, tcy_left_right: -right, ..marked.clone() }),
+            TextRun::new("§", CharStyle { size: 20.0, ..CharStyle::default() }),
+        ];
+        layout(FontDb::global(), &t)
+    };
+    let still = at(0.0, 0.0);
+    for (up, right) in [(5.0, 0.0), (-3.5, 0.0), (0.0, 4.0), (0.0, -2.0), (6.0, -7.0)] {
+        let moved = at(up, right);
+        let (a, b) = (union(&still, 0..3), union(&moved, 0..3));
+        assert!((b.y0 - (a.y0 - up)).abs() < 1e-6 && (b.y1 - (a.y1 - up)).abs() < 1e-6, "up {up}: {a:?} {b:?}");
+        assert!((b.x0 - (a.x0 + right)).abs() < 1e-6 && (b.x1 - (a.x1 + right)).abs() < 1e-6, "right {right}: {a:?} {b:?}");
+        assert!((moved.glyphs[0].advance - 20.0).abs() < 1e-6 && moved.glyphs[1..3].iter().all(|g| g.advance == 0.0), "one em");
+        assert_eq!(ink(&moved, 3), ink(&still, 3), "the mark after the block stays");
+        assert_eq!(moved.glyphs[0].origin, still.glyphs[0].origin, "the caret and hit region stay");
+    }
+
+    // An automatic block of two digits takes no offsets, and horizontal type does not move.
+    let shifted = CharStyle { size: 20.0, tcy_up_down: 5.0, tcy_left_right: 5.0, ..CharStyle::default() };
+    let digits = layout(FontDb::global(), &vertical_styled("10", shifted.clone()));
+    let plain = layout(FontDb::global(), &vertical("10"));
+    assert_eq!(union(&digits, 0..2), union(&plain, 0..2));
+    let row = |st: CharStyle| {
+        let mut t = TextObject::point(Point::ZERO, "AB", st);
+        t.xf = Affine::IDENTITY;
+        layout(FontDb::global(), &t)
+    };
+    assert_eq!(union(&row(CharStyle { tate_chu_yoko: true, ..shifted }), 0..2), union(&row(marked.clone()), 0..2));
+}
+
 /// A marked run is one block; the unmarked digits beside it still follow the automatic rule.
 /// A column shorter than two ems holds the marked number on one line.
 #[test]
