@@ -269,18 +269,14 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let added: Vec<Variable> = lib.text.iter().map(|n| Variable { name: n.clone(), kind: VariableKind::Text }).collect();
     let names: Vec<String> = lib.datasets.iter().map(|d| d.name.clone()).collect();
-    let mut vars = s.doc()?.doc.variables.clone();
-    vars.prune(&deleted);
-    vars.variables.extend(added);
-    vars.datasets = lib.datasets;
-    vars.active_dataset = None;
     // A load that leaves the variables and data sets as they were adds no undo step.
-    if vars != s.doc()?.doc.variables {
-        s.edit("Load Variable Library", |d, _| {
-            d.variables = vars;
-            Ok(())
-        })?;
-    }
+    super::edit_variables(s, "Load Variable Library", |vars| {
+        vars.prune(&deleted);
+        vars.variables.extend(added);
+        vars.datasets = lib.datasets;
+        vars.active_dataset = None;
+        Ok(())
+    })?;
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
     st.drop_stale_variables_highlight();
