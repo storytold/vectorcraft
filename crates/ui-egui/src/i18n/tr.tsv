@@ -191,6 +191,7 @@ font-technology	Variable	Değişken
 	Appearance panel	Görünüm paneli
 	Applies when the linked file is relinked or updated.	Bağlantılı dosya yeniden bağlandığında veya güncellendiğinde geçerlidir.
 	Applies the next time VectorCraft starts.	VectorCraft'ın bir sonraki başlatılışında uygulanır.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR ortam değişkeni ayarlı olduğu sürece başlık çubuğunu o seçer.
 	Apply	Uygula
 	Apply Brush	Fırça Uygula
 	Apply Character Style	Karakter Stilini Uygula

@@ -3701,6 +3701,7 @@ font-technology	Variable	Variable
 	Panel menu	Panelmenu
 	Unembed…	Ophæv integrering…
 	Applies the next time VectorCraft starts.	Anvendes næste gang VectorCraft starter.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljøvariablen VECTORCRAFT_TITLEBAR vælger titellinjen, så længe den er angivet.
 	Enable Contextual Task Bar	Aktivér kontekstuel opgavelinje
 	Next	Næste
 	OK	OK

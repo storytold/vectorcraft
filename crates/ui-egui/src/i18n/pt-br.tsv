@@ -201,6 +201,7 @@
 	Appearance of Black	Aparência do Preto
 	Appearance panel	Painel de Aparência
 	Applies the next time VectorCraft starts.	Aplica na próxima inicialização do VectorCraft.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Enquanto estiver definida, a variável de ambiente VECTORCRAFT_TITLEBAR escolhe a barra de título.
 	Applies when the linked file is relinked or updated.	Aplica quando o arquivo vinculado é revinculado ou atualizado.
 	Apply Brush	Aplicar Pincel
 	Apply Character Style	Aplicar Estilo de Caractere

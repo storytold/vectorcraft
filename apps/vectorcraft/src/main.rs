@@ -91,7 +91,7 @@ use titlebar::custom_titlebar_from;
 use titlebar::opted_into_system_title_bar;
 #[cfg(windows)]
 use titlebar::set_taskbar_icon;
-use titlebar::{custom_titlebar, native_options};
+use titlebar::{custom_titlebar, native_options, titlebar_override};
 
 struct App {
     app: VectorcraftApp,
@@ -459,6 +459,7 @@ fn main() -> std::process::ExitCode {
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
                 app.custom_titlebar = custom_titlebar;
+                app.titlebar_from_env = titlebar_override().is_some();
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());

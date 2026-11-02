@@ -3973,6 +3973,7 @@ font-technology	Variable	Variabilní
 	Panel menu	Nabídka panelu
 	Unembed…	Zrušit vložení…
 	Applies the next time VectorCraft starts.	Projeví se při příštím spuštění VectorCraftu.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dokud je proměnná prostředí VECTORCRAFT_TITLEBAR nastavena, záhlaví okna volí ona.
 	Enable Contextual Task Bar	Povolit kontextový panel úloh
 	Next	Další
 	OK	OK

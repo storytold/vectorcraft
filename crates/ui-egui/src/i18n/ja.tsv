@@ -965,6 +965,7 @@ digits	Malayalam	マラヤーラム数字
 	Appearance of Black	ブラックのアピアランス
 	Appearance panel	アピアランスパネル
 	Applies the next time VectorCraft starts.	VectorCraft の次回起動時に適用されます。
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	環境変数 VECTORCRAFT_TITLEBAR が設定されている間は、この変数でタイトルバーが決まります。
 	Applies when the linked file is relinked or updated.	リンクファイルを再リンクまたは更新したときに適用されます。
 	Apply Brush	ブラシを適用
 	Apply Character Style	文字スタイルを適用

@@ -3483,6 +3483,7 @@ font-technology	Variable	ცვლადი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
 	Applies the next time VectorCraft starts.	ძალაში შევა VectorCraft-ის მომდევნო გაშვებისას.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	სანამ გარემოს ცვლადი VECTORCRAFT_TITLEBAR დაყენებულია, სათაურის ზოლს ის ირჩევს.
 	Enable Contextual Task Bar	კონტექსტური ამოცანების ზოლის ჩართვა
 	Next	შემდეგი
 	OK	OK

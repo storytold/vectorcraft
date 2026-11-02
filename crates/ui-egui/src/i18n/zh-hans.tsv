@@ -4791,6 +4791,7 @@ imageTrace	Outline	轮廓
 	Font Technology	字体技术
 font-technology	Variable	可变
 	Applies the next time VectorCraft starts.	下次启动 VectorCraft 时生效。
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	设置了环境变量 VECTORCRAFT_TITLEBAR 时，由它选择标题栏。
 	Collapse to Icons	折叠为图标
 	Decorative	装饰
 	Dim Images to:	图像变暗至：

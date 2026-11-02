@@ -3813,6 +3813,7 @@ font-technology	Variable	Zmienne
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
 	Applies the next time VectorCraft starts.	Zostanie zastosowane przy następnym uruchomieniu VectorCraft.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dopóki zmienna środowiskowa VECTORCRAFT_TITLEBAR jest ustawiona, to ona wybiera pasek tytułu.
 	Enable Contextual Task Bar	Włącz kontekstowy pasek zadań
 	Next	Dalej
 	OK	OK

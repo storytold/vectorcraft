@@ -32,6 +32,8 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
     fields.insert("__snapToGrid".into(), json!(app.ui.view.snap_to_grid));
     fields.insert("__taskBar".into(), json!(app.ui.task_bar));
+    // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (System Title Bar's note).
+    fields.insert("__titlebarFromEnv".into(), json!(app.titlebar_from_env));
     app.ui.dialog = Some(Dialog { kind: "preferences".into(), fields });
 }
 
@@ -290,9 +292,16 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
                 if cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) {
-                    bool_row(ui, d, sp.key, sp.label);
-                    // The window's decorations are chosen once, when the app starts.
-                    ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
+                    // The window's decorations are chosen once, when the app starts; while
+                    // VECTORCRAFT_TITLEBAR is set it chooses them, and the checkbox is dimmed.
+                    let from_env = d.bool("__titlebarFromEnv");
+                    ui.add_enabled_ui(!from_env, |ui| bool_row(ui, d, sp.key, sp.label));
+                    let note = if from_env {
+                        tl!("The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.")
+                    } else {
+                        tl!("Applies the next time VectorCraft starts.")
+                    };
+                    ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),

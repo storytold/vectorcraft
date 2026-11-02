@@ -164,6 +164,7 @@ font-technology	Variable	可變
 	Appearance panel	外觀面板
 	Applies when the linked file is relinked or updated.	重新連結或更新連結檔案時套用。
 	Applies the next time VectorCraft starts.	下次啟動 VectorCraft 時生效。
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	設定了環境變數 VECTORCRAFT_TITLEBAR 時，由它選擇標題列。
 	Apply	套用
 	Apply Brush	套用筆刷
 	Apply Character Style	套用字元樣式

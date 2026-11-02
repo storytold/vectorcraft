@@ -319,7 +319,11 @@ not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (th
 modified documents), and empty bar space and the 5 pt window edges move and resize the window. Preferences › User
 Interface › System Title Bar (`systemTitleBar`, read when the app starts) gives the window its OS decorations back
 instead: the OS title then shows the active document (`*name — VectorCraft` with unsaved changes) and the app bar
-drops its brand mark. On macOS the window buttons are centred on the app bar; the web build is unchanged.
+drops its brand mark. On Linux and the BSDs the environment variable `VECTORCRAFT_TITLEBAR` chooses the frame for one
+run, whatever the preference says: `app` keeps the app bar as the title bar, and `system` or `desktop` gives the
+window the desktop's decorations. While it is set, the Preferences dialog dims System Title Bar and its
+`__titlebarFromEnv` field is `true`. On macOS the window buttons are centred on the app bar; the web build is
+unchanged.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);

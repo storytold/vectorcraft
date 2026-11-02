@@ -3892,6 +3892,7 @@ font-technology	Variable	Muuttuvat
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…
 	Applies the next time VectorCraft starts.	Tulee voimaan, kun VectorCraft käynnistetään seuraavan kerran.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Ympäristömuuttuja VECTORCRAFT_TITLEBAR valitsee otsikkorivin niin kauan kuin se on asetettu.
 	Enable Contextual Task Bar	Ota kontekstuaalinen tehtäväpalkki käyttöön
 	Next	Seuraava
 	OK	OK

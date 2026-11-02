@@ -1164,6 +1164,19 @@ fn system_mode_hides_the_mark() {
 }
 
 #[test]
+fn a_desktop_frame_from_the_environment_variable_is_system_mode() {
+    // VECTORCRAFT_TITLEBAR=system with System Title Bar off: the desktop draws the title bar.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.titlebar_from_env = true;
+    assert!(!app.session.prefs.system_title_bar);
+    assert_eq!(super::system_title_bar(&app), !cfg!(target_os = "macos"));
+    // VECTORCRAFT_TITLEBAR=app: VectorCraft draws it, whatever the preference says.
+    app.custom_titlebar = true;
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+}
+
+#[test]
 fn sync_window_title_sends_only_on_change() {
     let mut app = title_test_app(true);
     let ctx = egui::Context::default();
