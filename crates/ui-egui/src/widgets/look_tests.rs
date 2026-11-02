@@ -67,98 +67,6 @@ fn the_strip_scroll_bar_stays_a_slim_line_while_the_pointer_is_on_it() {
     assert!(widest > 0.0, "the scroll bar is drawn");
     assert!(widest <= 4.5, "the scroll bar is {widest} points wide");
 }
-// Regression test for #900: a number field with a spinner and a preset list drew as three
-// boxes side by side: its text box was a point taller than the 26-point row, and each joint had
-// two borders.
-#[test]
-fn a_spinner_field_reads_as_one_box_in_three_parts() {
-    let ctx = themed(Default::default());
-    let mut add = |ui: &mut Ui| {
-        ui.horizontal(|ui| spin_field(ui, "weight", Some(4.0), Unit::Points, 100.0, 1.0, 0.0, &[1.0, 2.0]));
-    };
-    frame(&ctx, 0.0, vec![], &mut add);
-    let shapes = frame(&ctx, 0.1, vec![], &mut add);
-    // The boxes of the row: the spinner, the field and the preset chevron, left to right.
-    let mut boxes: Vec<Rect> = vec![];
-    for s in &shapes {
-        if let egui::Shape::Rect(r) = s
-            && r.rect.height() > 20.0
-            // egui 0.37's TextEdit paints its `Frame::NONE` as a transparent rect too: that is
-            // not a box of the row.
-            && r.fill != Color32::TRANSPARENT
-            && !boxes.contains(&r.rect)
-        {
-            boxes.push(r.rect);
-        }
-    }
-    boxes.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
-    assert_eq!(boxes.len(), 3, "{boxes:?}");
-    for b in &boxes {
-        assert_eq!((b.min.y, b.height()), (boxes[0].min.y, 26.0), "all as tall as the row: {boxes:?}");
-    }
-    for pair in boxes.windows(2) {
-        assert!((pair[1].min.x - pair[0].max.x + 1.0).abs() < 0.01, "neighbours share one border: {boxes:?}");
-    }
-    // The number text in the numeric field is vertically centered in the row box (#900, #4567).
-    let text_shape = shapes
-        .iter()
-        .find_map(|s| match s {
-            egui::Shape::Text(t) if t.galley.text() == "4 pt" => Some(t),
-            _ => None,
-        })
-        .expect("field text shape present");
-    let text_top = text_shape.pos.y - boxes[1].min.y;
-    let text_bottom = boxes[1].max.y - (text_shape.pos.y + text_shape.galley.rect.height());
-    assert!((text_top - text_bottom).abs() <= 1.5, "text is vertically centered in its box: top gap {text_top}, bottom gap {text_bottom}");
-}
-
-// Regression test for #4567: numbers and text in input fields (numeric fields, dash/gap fields,
-// etc.) are vertically centered in their boxes, not shoved against the top edge.
-#[test]
-fn input_elements_are_vertically_centered_in_their_boxes() {
-    let ctx = themed(Default::default());
-    let mut add = |ui: &mut Ui| {
-        ui.horizontal(|ui| {
-            num_field(ui, "plain_num", Some(12.0), Unit::Points, 70.0);
-            opt_field(ui, "dash_cell", Some(12.0), Unit::Points, 40.0);
-        });
-    };
-    frame(&ctx, 0.0, vec![], &mut add);
-    let shapes = frame(&ctx, 0.1, vec![], &mut add);
-    let mut boxes: Vec<Rect> = vec![];
-    for s in &shapes {
-        if let egui::Shape::Rect(r) = s
-            && r.rect.height() > 20.0
-            && r.fill != Color32::TRANSPARENT
-            && !boxes.contains(&r.rect)
-        {
-            boxes.push(r.rect);
-        }
-    }
-    boxes.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
-    assert_eq!(boxes.len(), 2, "found both field boxes: {boxes:?}");
-
-    let mut text_shapes: Vec<&egui::epaint::TextShape> = vec![];
-    for s in &shapes {
-        if let egui::Shape::Text(t) = s
-            && (t.galley.text() == "12 pt" || t.galley.text() == "12")
-        {
-            text_shapes.push(t);
-        }
-    }
-    text_shapes.sort_by(|a, b| a.pos.x.total_cmp(&b.pos.x));
-    assert_eq!(text_shapes.len(), 2, "found both text shapes: {text_shapes:?}");
-
-    for (b, t) in boxes.iter().zip(text_shapes.iter()) {
-        let text_top = t.pos.y - b.min.y;
-        let text_bottom = b.max.y - (t.pos.y + t.galley.rect.height());
-        assert!(
-            (text_top - text_bottom).abs() <= 1.5,
-            "text '{}' is vertically centered: top gap {text_top}, bottom gap {text_bottom} in box {b:?}",
-            t.galley.text()
-        );
-    }
-}
 
 /// The colour of every glyph of the text in `shapes`: selected glyphs are drawn in the
 /// selection stroke's colour.
@@ -428,6 +336,128 @@ fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
     assert_eq!(open, [false, true, true]);
 }
 
+// In every scheme the parts of a field group (a spinner field, Opacity's field and
+// arrow) are as tall as the other controls (24 pt), share their borders, are square where they
+// meet and take the scheme's control corners at the group's two ends.
+#[test]
+fn grouped_fields_have_square_joints_matching_heights_and_shared_borders() {
+    use theme::Scheme;
+    // The corners of part `i` of a group whose last part is `last`.
+    let corners = |i: usize, last: usize, t: &Tokens| {
+        let (start, end) = (if i == 0 { t.radius } else { 0 }, if i == last { t.radius } else { 0 });
+        CornerRadius { nw: start, sw: start, ne: end, se: end }
+    };
+    let visible = |r: &egui::epaint::RectShape| r.fill != Color32::TRANSPARENT || !r.stroke.is_empty();
+    for scheme in Scheme::ALL {
+        let ctx = themed(Default::default());
+        theme::apply_with(&ctx, theme::Brightness::default(), theme::Accent::default(), scheme);
+        let t = Tokens::get(&ctx);
+        let mut add = |ui: &mut Ui| {
+            ui.horizontal(|ui| spin_field(ui, "weight", Some(4.0), Unit::Points, 100.0, 1.0, 0.0, &[1.0, 2.0]));
+        };
+        frame(&ctx, 0.0, vec![], &mut add);
+        let shapes = frame(&ctx, 0.1, vec![], &mut add);
+        // The boxes of the row: the spinner, the field and the preset chevron, left to right.
+        let rects: Vec<&egui::epaint::RectShape> = shapes
+            .iter()
+            .filter_map(|s| match s {
+                egui::Shape::Rect(r) if r.rect.height() > 20.0 && visible(r) => Some(r),
+                _ => None,
+            })
+            .collect();
+        let mut boxes: Vec<Rect> = vec![];
+        for r in &rects {
+            if !boxes.contains(&r.rect) {
+                boxes.push(r.rect);
+            }
+        }
+        boxes.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+        assert_eq!(boxes.len(), 3, "{scheme:?}: {boxes:?}");
+        for r in &rects {
+            let i = boxes.iter().position(|b| *b == r.rect).unwrap_or_default();
+            assert_eq!(r.corner_radius, corners(i, 2, &t), "{scheme:?}: part {i} is square at its joints: {r:?}");
+        }
+        for b in &boxes {
+            assert_eq!((b.min.y, b.height()), (boxes[0].min.y, 24.0), "{scheme:?}: all as tall as the neighboring controls: {boxes:?}");
+        }
+        for pair in boxes.windows(2) {
+            assert!((pair[1].min.x - pair[0].max.x + 1.0).abs() < 0.01, "{scheme:?}: neighbours share one border: {boxes:?}");
+        }
+
+        let mut add_opacity = |ui: &mut Ui| {
+            opacity_blend(ui, "opacity", Some(1.0), Some(BlendMode::Normal), true);
+        };
+        let shapes = frame(&ctx, 0.2, vec![], &mut add_opacity);
+        let rects: Vec<&egui::epaint::RectShape> = shapes
+            .iter()
+            .filter_map(|s| match s {
+                egui::Shape::Rect(r) if (r.rect.width() == 50.0 || r.rect.width() == 18.0) && visible(r) => Some(r),
+                _ => None,
+            })
+            .collect();
+        let mut boxes: Vec<Rect> = rects.iter().map(|r| r.rect).collect();
+        boxes.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+        boxes.dedup();
+        assert_eq!(boxes.len(), 2, "{scheme:?}: the opacity field and popup arrow: {boxes:?}");
+        for r in &rects {
+            let i = boxes.iter().position(|b| *b == r.rect).unwrap_or_default();
+            assert_eq!(r.corner_radius, corners(i, 1, &t), "{scheme:?}: opacity part {i}: {r:?}");
+            assert_eq!(r.rect.height(), 24.0);
+        }
+        assert_eq!(boxes[0].top(), boxes[1].top());
+        assert_eq!(boxes[0].right() - boxes[1].left(), 1.0, "{scheme:?}: opacity cells share one border");
+    }
+}
+
+/// A spinner field, with and without presets and in every scheme, is one box in three (or
+/// two) parts: each part one box, square where it meets the next, the box's outer ends
+/// rounded with the scheme's control corners.
+#[test]
+fn a_spinner_field_has_square_joints_and_the_schemes_outer_corners() {
+    use theme::Scheme;
+    let square = |r: CornerRadius| r == CornerRadius::ZERO;
+    for scheme in Scheme::ALL {
+        for presets in [&[1.0, 2.0][..], &[]] {
+            let ctx = themed(Default::default());
+            theme::apply_with(&ctx, theme::Brightness::default(), theme::Accent::default(), scheme);
+            let t = Tokens::get(&ctx);
+            let mut add = |ui: &mut Ui| {
+                ui.horizontal(|ui| spin_field(ui, "weight", Some(4.0), Unit::Points, 100.0, 1.0, 0.0, presets));
+            };
+            frame(&ctx, 0.0, vec![], &mut add);
+            let shapes = frame(&ctx, 0.1, vec![], &mut add);
+            // Each part's visible shapes as tall as the row, by its box (the text's frame
+            // leaves an empty rectangle over the field).
+            let mut parts: Vec<(Rect, Vec<CornerRadius>)> = vec![];
+            for s in &shapes {
+                if let egui::Shape::Rect(r) = s
+                    && r.rect.height() > 20.0
+                    && (r.fill != Color32::TRANSPARENT || !r.stroke.is_empty())
+                {
+                    match parts.iter_mut().find(|(rect, _)| rect.x_range() == r.rect.x_range()) {
+                        Some((rect, corners)) => {
+                            assert_eq!(*rect, r.rect, "{scheme:?} {presets:?}: a part's shapes cover one box");
+                            corners.push(r.corner_radius);
+                        }
+                        None => parts.push((r.rect, vec![r.corner_radius])),
+                    }
+                }
+            }
+            parts.sort_by(|a, b| a.0.min.x.total_cmp(&b.0.min.x));
+            assert_eq!(parts.len(), if presets.is_empty() { 2 } else { 3 }, "{scheme:?}: {parts:?}");
+            let last = parts.len() - 1;
+            for (i, (_, corners)) in parts.iter().enumerate() {
+                for &c in corners {
+                    let (left, right) = (CornerRadius { ne: 0, se: 0, ..c }, CornerRadius { nw: 0, sw: 0, ..c });
+                    let outer = |side: CornerRadius| side.nw.max(side.ne) == t.radius && side.sw.max(side.se) == t.radius;
+                    assert!(if i == 0 { outer(left) } else { square(left) }, "{scheme:?} {presets:?}: part {i}'s left corners {c:?}");
+                    assert!(if i == last { outer(right) } else { square(right) }, "{scheme:?} {presets:?}: part {i}'s right corners {c:?}");
+                }
+            }
+        }
+    }
+}
+
 /// #4267: a click on a spinner arrow steps once; an arrow held down steps again and again after a
 /// pause, and letting go of it doesn't step once more.
 #[test]
@@ -467,4 +497,78 @@ fn a_held_spinner_arrow_repeats() {
     frame(&ctx, 1.75, vec![button(false)], &mut add);
     frame(&ctx, 1.8, vec![], &mut add);
     assert_eq!(value.get(), 9.0, "letting go doesn't step once more");
+}
+
+// Regression test for #4567: numbers and text in input fields (numeric fields, dash/gap fields,
+// etc.) are vertically centered in their boxes, not shoved against the top edge.
+#[test]
+fn input_elements_are_vertically_centered_in_their_boxes() {
+    let ctx = themed(Default::default());
+    let mut add = |ui: &mut Ui| {
+        ui.horizontal(|ui| {
+            num_field(ui, "plain_num", Some(12.0), Unit::Points, 70.0);
+            opt_field(ui, "dash_cell", Some(12.0), Unit::Points, 40.0);
+        });
+    };
+    frame(&ctx, 0.0, vec![], &mut add);
+    let shapes = frame(&ctx, 0.1, vec![], &mut add);
+    let mut boxes: Vec<Rect> = vec![];
+    for s in &shapes {
+        if let egui::Shape::Rect(r) = s
+            && r.rect.height() > 20.0
+            && r.fill != Color32::TRANSPARENT
+            && !boxes.contains(&r.rect)
+        {
+            boxes.push(r.rect);
+        }
+    }
+    boxes.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+    assert_eq!(boxes.len(), 2, "found both field boxes: {boxes:?}");
+
+    let mut text_shapes: Vec<&egui::epaint::TextShape> = vec![];
+    for s in &shapes {
+        if let egui::Shape::Text(t) = s
+            && (t.galley.text() == "12 pt" || t.galley.text() == "12")
+        {
+            text_shapes.push(t);
+        }
+    }
+    text_shapes.sort_by(|a, b| a.pos.x.total_cmp(&b.pos.x));
+    assert_eq!(text_shapes.len(), 2, "found both text shapes: {text_shapes:?}");
+
+    for (b, t) in boxes.iter().zip(text_shapes.iter()) {
+        let text_top = t.pos.y - b.min.y;
+        let text_bottom = b.max.y - (t.pos.y + t.galley.rect.height());
+        assert!(
+            (text_top - text_bottom).abs() <= 1.5,
+            "text '{}' is vertically centered: top gap {text_top}, bottom gap {text_bottom} in box {b:?}",
+            t.galley.text()
+        );
+    }
+}
+
+/// The 24 pt field height is in points, so Preferences > User Interface > Scaling (egui's zoom
+/// factor) scales it with everything else: at any scale the field is 24 points tall, which is
+/// 24 times the scale in device pixels.
+#[test]
+fn field_height_follows_the_interface_scaling() {
+    for zoom in [0.75_f32, 1.0, 1.5, 2.0] {
+        let ctx = themed(Default::default());
+        ctx.set_zoom_factor(zoom);
+        let mut add = |ui: &mut Ui| {
+            num_field(ui, "scaled", Some(12.0), Unit::Points, 70.0);
+        };
+        frame(&ctx, 0.0, vec![], &mut add);
+        let shapes = frame(&ctx, 0.1, vec![], &mut add);
+        let heights: Vec<f32> = shapes
+            .iter()
+            .filter_map(|s| match s {
+                egui::Shape::Rect(r) if r.rect.height() > 20.0 && r.fill != Color32::TRANSPARENT => Some(r.rect.height()),
+                _ => None,
+            })
+            .collect();
+        assert!(!heights.is_empty(), "the field's box at {zoom}");
+        assert!(heights.iter().all(|h| (h - 24.0).abs() < 0.01), "24 points at {zoom}: {heights:?}");
+        assert!((ctx.pixels_per_point() - zoom).abs() < 1e-6, "{zoom} points to the pixel: {}", ctx.pixels_per_point());
+    }
 }

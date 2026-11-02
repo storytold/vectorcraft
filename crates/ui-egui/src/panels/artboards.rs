@@ -557,7 +557,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         let new = widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0);
         if new.dnd_hover_payload::<RowDrag>().is_some() {
-            ui.painter().rect_stroke(new.rect, 3.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+            ui.painter().rect_stroke(new.rect, t.cr(), egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
         }
         if let Some(row) = new.dnd_release_payload::<RowDrag>() {
             duplicate(app, row.0);

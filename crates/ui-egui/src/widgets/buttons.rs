@@ -1,4 +1,4 @@
-use super::{Color32, CornerRadius, Rect, Response, Sense, Stroke, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
+use super::{Color32, Rect, Response, Sense, Stroke, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
 
 /// Square icon button; `selected` draws the pressed well.
 pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32) -> Response {
@@ -18,7 +18,7 @@ pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, sel
     } else {
         Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(rect, CornerRadius::same(5), bg);
+    ui.painter().rect_filled(rect, t.cr(), bg);
     let pad = (size * 0.2).round();
     icons::paint(ui, icon, rect.shrink(pad), if selected { t.text_strong } else { t.icon });
     resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, tl!(tip)));
@@ -30,7 +30,7 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
-    ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
+    ui.painter().rect_filled(rect, t.cr(), t.button);
     flat_fill(ui, rect, &resp);
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
@@ -44,7 +44,7 @@ pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     let width = (galley.size().x + 24.0).max(min_width);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
-    ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
+    ui.painter().rect_filled(rect, t.cr(), t.button);
     flat_fill(ui, rect, &resp);
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
@@ -71,7 +71,7 @@ pub fn split_button_named(ui: &mut Ui, text: &str, arrow_tip: &str, width: f32) 
     let arrow_rect = Rect::from_min_max(pos2(split, rect.top()), rect.max);
     let main = ui.interact(main_rect, ui.scope_id().with((text, "split")), Sense::click());
     let arrow = ui.interact(arrow_rect, ui.scope_id().with((text, "split-arrow")), Sense::click());
-    ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
+    ui.painter().rect_filled(rect, t.cr(), t.button);
     flat_fill(ui, main_rect, &main);
     flat_fill(ui, arrow_rect, &arrow);
     ui.painter().vline(split, rect.y_range().shrink(5.0), Stroke::new(1.0, t.panel));
@@ -95,9 +95,9 @@ pub fn split_button_named(ui: &mut Ui, text: &str, arrow_tip: &str, width: f32) 
 fn flat_fill(ui: &Ui, rect: Rect, resp: &Response) {
     let t = Tokens::get(ui.ctx());
     if resp.is_pointer_button_down_on() {
-        ui.painter().rect_filled(rect, CornerRadius::same(5), t.tool_active);
+        ui.painter().rect_filled(rect, t.cr(), t.tool_active);
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(5), t.hover);
+        ui.painter().rect_filled(rect, t.cr(), t.hover);
     }
 }
 
@@ -129,9 +129,9 @@ fn primary_button_sized(ui: &mut Ui, text: &str, enabled: bool, min_width: f32) 
         (true, true) => t.accent,
         (true, false) => t.accent_strong,
     };
-    ui.painter().rect_filled(rect, CornerRadius::same(6), bg);
+    ui.painter().rect_filled(rect, t.cr(), bg);
     if !enabled {
-        ui.painter().rect_stroke(rect, CornerRadius::same(6), egui::Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(rect, t.cr(), egui::Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
     }
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, fg);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled && ui.is_enabled(), tl!(text)));
@@ -149,7 +149,7 @@ pub(crate) fn secondary_button_width(ui: &mut Ui, text: &str, min_width: f32) ->
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), t.text);
     let w = galley.size().x + 32.0;
     let (rect, resp) = ui.allocate_exact_size(vec2(w.max(min_width), 28.0), Sense::click());
-    ui.painter().rect_filled(rect, CornerRadius::same(6), if resp.hovered() { t.hover } else { t.button });
+    ui.painter().rect_filled(rect, t.cr(), if resp.hovered() { t.hover } else { t.button });
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.text);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
     resp

@@ -394,7 +394,7 @@ fn current_sheet<'a>(d: &Dialog, pv: &'a Value) -> Option<(usize, usize, &'a Val
 fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(PREVIEW, egui::Sense::drag());
-    ui.painter().rect_filled(rect, 3.0, t.pasteboard);
+    ui.painter().rect_filled(rect, t.cr_small(), t.pasteboard);
     let sheet = pv.as_ref().ok().and_then(|v| current_sheet(d, v));
     let Some((index, count, sheet)) = sheet else {
         let text = match pv {

@@ -177,7 +177,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
     }
     if focused && !ui.data(|d| d.get_temp::<bool>(by_pointer)).unwrap_or(false) {
         let t = Tokens::get(ui.ctx());
-        ui.painter().rect_stroke(resp.rect, 2.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+        ui.painter().rect_stroke(resp.rect, t.cr_small(), Stroke::new(1.0, t.accent), StrokeKind::Inside);
     }
     stepped
 }

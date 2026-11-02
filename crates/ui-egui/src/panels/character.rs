@@ -1000,9 +1000,9 @@ fn style_toggle(ui: &mut Ui, g: Glyph, tip: &str, on: bool) -> bool {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 26.0), egui::Sense::click());
     if on {
-        ui.painter().rect_filled(r, 3, t.tool_active);
+        ui.painter().rect_filled(r, t.cr(), t.tool_active);
     } else if resp.hovered() {
-        ui.painter().rect_filled(r, 3, t.hover);
+        ui.painter().rect_filled(r, t.cr(), t.hover);
     }
     let col = t.text_strong;
     let big = egui::FontId::proportional(15.0);

@@ -301,7 +301,7 @@ pub(crate) fn toolbar_drop(app: &mut VectorcraftApp, ui: &Ui, slots: &[(usize, R
         let line = Stroke::new(2.0, t.accent);
         match (place, cols == 1) {
             (Place::Group, _) => {
-                ui.painter().rect_stroke(r.shrink(1.0), 2.0, line, StrokeKind::Inside);
+                ui.painter().rect_stroke(r.shrink(1.0), t.cr_small(), line, StrokeKind::Inside);
             }
             (Place::Before, true) => {
                 ui.painter().hline(r.x_range(), r.top(), line);
@@ -469,7 +469,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ui.add_space(4.0);
                     for g in gs {
                         // A flyout group: its tools framed together, as one toolbar button holds them.
-                        egui::Frame::NONE.stroke(Stroke::new(1.0, t.divider)).corner_radius(2.0).show(ui, |ui| {
+                        egui::Frame::NONE.stroke(Stroke::new(1.0, t.divider)).corner_radius(t.cr()).show(ui, |ui| {
                             ui.set_width(inner);
                             for tool in g.iter() {
                                 if row(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id)) {
@@ -537,9 +537,9 @@ fn show_button(ui: &mut Ui, t: &Tokens, name: &str, label: &str, icon: &str, on:
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, tl!(label)));
     let p = ui.painter();
     if on {
-        p.rect_filled(r, 3.0, t.tool_active);
+        p.rect_filled(r, t.cr(), t.tool_active);
     } else if resp.hovered() {
-        p.rect_filled(r, 3.0, t.hover);
+        p.rect_filled(r, t.cr(), t.hover);
     }
     let ink = if on { t.text_strong } else { t.icon };
     let c = r.center();
@@ -587,9 +587,9 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     }
     let fill = rect.shrink(1.0);
     if on {
-        ui.painter().rect_filled(fill, 2.0, t.selection);
+        ui.painter().rect_filled(fill, t.cr(), t.selection);
     } else if resp.hovered() {
-        ui.painter().rect_filled(fill, 2.0, t.hover);
+        ui.painter().rect_filled(fill, t.cr(), t.hover);
     }
     // The active tool's row is lit, dimmed or not.
     let color = if on {
@@ -634,7 +634,7 @@ fn ghost(ctx: &egui::Context, t: &Tokens) {
     let r = Rect::from_min_size(at + vec2(8.0, 8.0), vec2(GHOST, GHOST));
     egui::Area::new(egui::Id::unique("tool-drag-ghost")).order(egui::Order::Tooltip).fixed_pos(r.min).interactable(false).show(ctx, |ui| {
         let (r, _) = ui.allocate_exact_size(r.size(), Sense::hover());
-        ui.painter().rect(r, 3.0, t.panel, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+        ui.painter().rect(r, t.cr(), t.panel, Stroke::new(1.0, t.accent), StrokeKind::Inside);
         icons::paint(ui, icons::tool_icon(tool.icon), Rect::from_center_size(r.center(), vec2(18.0, 18.0)), t.text_strong);
     });
 }

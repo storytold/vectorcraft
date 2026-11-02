@@ -59,14 +59,14 @@ pub fn num_field_within(
     bounds: RangeInclusive<f64>,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[])
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], Tokens::get(ui.ctx()).cr())
 }
 
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[])
+    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], Tokens::get(ui.ctx()).cr())
 }
 
 /// Any number: the bounds of a field that has none.
@@ -93,11 +93,12 @@ fn unit_field(
     share_of_value: bool,
     bounds: RangeInclusive<f64>,
     stops: &[f64],
+    corners: CornerRadius,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
-    let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
+    let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, corners, label, name);
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
     let typed = typed_unit(ui.ctx(), unit);
@@ -312,7 +313,7 @@ pub fn size_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
             }
         });
     }
-    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[])
+    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], Tokens::get(ui.ctx()).cr())
 }
 
 /// [`plain_field`] for a number kept within `range` (the values of dialogs, preferences and panels
@@ -346,7 +347,26 @@ pub fn range_field_named(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None, false).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None, Tokens::get(ui.ctx()).cr(), false)
+        .map(|v| within(round_to(v, places), &range))
+}
+
+/// [`range_field`] with explicit `corners`.
+#[allow(clippy::too_many_arguments)]
+pub fn range_field_with(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: impl Into<Option<f64>>,
+    range: RangeInclusive<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    corners: CornerRadius,
+) -> Option<f64> {
+    let places = decimals.min(6) as i32;
+    let value = value.into().map(|v| within(v, &range));
+    let label = take_previous_label(ui);
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, None, corners, false).map(|v| within(round_to(v, places), &range))
 }
 
 /// [`range_field`] whose ↑/↓ and wheel take `step`'s steps instead of whole numbers (see
@@ -366,7 +386,8 @@ pub fn range_field_stepped(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step), false).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step), Tokens::get(ui.ctx()).cr(), false)
+        .map(|v| within(round_to(v, places), &range))
 }
 
 /// [`plain_field`] for a value the selected objects may not share: `None` shows a blank field.
@@ -385,7 +406,7 @@ pub fn mixed_field_named(
     width: f32,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, false)
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, Tokens::get(ui.ctx()).cr(), false)
 }
 
 /// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
@@ -403,6 +424,7 @@ fn bounded_field(
     width: f32,
     bounds: &RangeInclusive<f64>,
     step: Option<fn(f64, f64) -> f64>,
+    corners: CornerRadius,
     parentheses: bool,
 ) -> Option<f64> {
     let armed = take_armed_focus(ui, &id);
@@ -420,7 +442,7 @@ fn bounded_field(
     if armed {
         focus_field(ui, id, &shown);
     }
-    let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
+    let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, corners, label, name);
     if armed {
         // A field armed while it has focus keeps the text typed into it: select all of that text.
         select_all(ui, id, &buf);
@@ -509,8 +531,8 @@ pub fn spin_field_stops_named(
     presets: &[f64],
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets)
+    spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, corners, label| {
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, corners)
     })
     .and_then(SpinPick::value)
 }
@@ -566,8 +588,8 @@ pub fn spin_field_auto_named(
     presets: &[f64],
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[])
+    spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, corners, label| {
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], corners)
     })
 }
 
@@ -605,8 +627,8 @@ pub fn spin_plain_named(
     let label = take_previous_label(ui);
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
-        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, false)
+    spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, corners, label| {
+        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, corners, false)
     })
     .and_then(SpinPick::value)
 }
@@ -638,11 +660,11 @@ pub fn spin_kerning(
         presets,
         &[],
         &|v| format!("{v}"),
-        &mut |ui, fw, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses),
+        &mut |ui, fw, corners, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, corners, parentheses),
     )
 }
 
-type SpinField<'a> = dyn FnMut(&mut Ui, f32, Option<PreviousLabel>) -> Option<f64> + 'a;
+type SpinField<'a> = dyn FnMut(&mut Ui, f32, CornerRadius, Option<PreviousLabel>) -> Option<f64> + 'a;
 
 #[allow(clippy::too_many_arguments)]
 fn spin_generic(
@@ -662,14 +684,14 @@ fn spin_generic(
 ) -> Option<SpinPick> {
     let t = Tokens::get(ui.ctx());
     let mut out = None;
-    let h = 26.0;
+    let h = super::FIELD_HEIGHT;
     let enabled = ui.is_enabled();
     ui.scope(|ui| {
         // The spinner, the field and the chevron share their borders: one box in three parts.
         ui.spacing_mut().item_spacing.x = -1.0;
         let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::click());
-        ui.painter().rect_filled(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, t.input);
-        ui.painter().rect_stroke(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+        ui.painter().rect_filled(sr, super::group_start(&t), t.input);
+        ui.painter().rect_stroke(sr, super::group_start(&t), Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         let up = Rect::from_min_max(sr.min, pos2(sr.right(), sr.center().y));
         let down = Rect::from_min_max(pos2(sr.left(), sr.center().y), sr.max);
         let hover = sresp.hover_pos();
@@ -698,7 +720,10 @@ fn spin_generic(
             out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers, stops, fmt)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
-        if let Some(v) = field(ui, fw, label) {
+        // The field is the middle of the box: square where it meets the spinner, and where it
+        // meets the chevron; the box's right end when there are no presets.
+        let corners = if presets.is_empty() { super::group_end(&t) } else { CornerRadius::ZERO };
+        if let Some(v) = field(ui, fw, corners, label) {
             out = Some(SpinPick::Value(v.max(min)));
         }
         if !presets.is_empty() {

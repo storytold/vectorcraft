@@ -499,7 +499,7 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
                     ui.painter().image(tex.id(), egui::Rect::from_center_size(r.center(), sz * s), uv, egui::Color32::WHITE);
                 }
                 None => {
-                    ui.painter().rect_filled(r, 2.0, egui::Color32::WHITE);
+                    ui.painter().rect_filled(r, Tokens::get(ui.ctx()).cr_small(), egui::Color32::WHITE);
                 }
             }
             let name = names.get(i).cloned().unwrap_or_default();

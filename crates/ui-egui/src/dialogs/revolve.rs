@@ -43,7 +43,7 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             let response = ui.interact(r, Id::unique("revolve-reset-all"), Sense::click());
             response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset all")));
             if response.hovered() {
-                ui.painter().rect_filled(r, 3.0, t.hover);
+                ui.painter().rect_filled(r, t.cr(), t.hover);
             }
             ui.painter().text(r.left_center() + vec2(4.0, 0.0), Align2::LEFT_CENTER, tl!("Reset all"), FontId::proportional(11.5), t.text);
             dot(ui, r.right_center() - vec2(10.0, 0.0), changed);
@@ -575,7 +575,7 @@ fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool
     let response = ui.interact(r, Id::unique(("revolve-reset", key)), Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset to default")));
     if response.hovered() {
-        ui.painter().rect_filled(r, 3.0, Tokens::get(ui.ctx()).hover);
+        ui.painter().rect_filled(r, Tokens::get(ui.ctx()).cr(), Tokens::get(ui.ctx()).hover);
     }
     dot(ui, r.center(), changed);
     response.on_hover_text(format!("{}: {default}", tl!("Reset to default"))).clicked()
