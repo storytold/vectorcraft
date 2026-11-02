@@ -5014,7 +5014,8 @@ next to the same character, and that frame becomes the selection when it was not
 Typing starts a list too. When the Type tool types a space on its own (one key press, or `type_text {text: " "}`) right
 after `1.` or `1)`, `A.` or `A)`, or one of `*`, `#`, `>` and `+` at the start of a paragraph that is in no list, the
 typed characters and the space are removed and the paragraph becomes a numbered list in 1, 2, 3 or A, B, C, or a
-bulleted list with the filled dot. A list started with `1)` or `A)` also writes its numbers with a period. A paragraph
+bulleted list: `*` gives the filled dot (•), `+` the hollow circle (◦), `#` the filled square (▪) and `>` the dash
+(–). A list started with `1)` or `A)` also writes its numbers with a period. A paragraph
 whose left and first-line indents are both 0 gets 18 pt and -18 pt. The tool runs `text.startList {id, at}`, with `at`
 the byte after the space, as an undo step of its own after the typing: one Undo puts the characters back as text with no
 list, and typing goes on after them; Redo removes them again, and typing goes on before the paragraph's text. The same
