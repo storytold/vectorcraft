@@ -4348,6 +4348,9 @@ axis	Both	И двете
 @msg	unsupported: {0}	не се поддържа: {0}
 @msg	variables are locked	променливите са заключени
 @msg	variables that aren't text were left out: {kinds}	променливите, които не са текстови, бяха пропуснати: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	нов документ няма да прочете тези променливи обратно с техния вид: {names}
+@msg	a new document refuses this file because of these variables: {names}	нов документ отказва този файл заради тези променливи: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заглавието `{header}` за `{name}` ще бъде прочетено като променливата `{other}`: преименувайте едната от тях
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файловете от версия {0} не могат да бъдат компресирани: само версия {COMPRESSED_SINCE} и по-нови отварят компресирани файлове
 @msg	width and height are at least 1 pixel	ширината и височината са най-малко 1 пиксел
 @msg	workspace name can't be empty	името на работното пространство не може да бъде празно

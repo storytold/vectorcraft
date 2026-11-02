@@ -5598,6 +5598,9 @@ digits	Malayalam	Malaiàlam
 @msg	unsupported: {0}	no compatible: {0}
 @msg	variables are locked	les variables estan blocades
 @msg	variables that aren't text were left out: {kinds}	les variables que no són text s’han omès: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	un document nou no tornarà a llegir aquestes variables amb el seu tipus: {names}
+@msg	a new document refuses this file because of these variables: {names}	un document nou rebutja aquest fitxer a causa d'aquestes variables: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	la capçalera `{header}` de `{name}` es tornaria a llegir com la variable `{other}`: canvieu el nom d’una de les dues
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no cerca a les carpetes d’altres aplicacions ni del sistema: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft no cerca a la carpeta Shared o Public d’Usuaris: {path}
 @msg	VectorCraft failed to start: {e}	VectorCraft no s’ha pogut iniciar: {e}

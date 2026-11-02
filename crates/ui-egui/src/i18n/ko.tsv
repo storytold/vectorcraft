@@ -4004,6 +4004,9 @@ theme	Appearance	외관
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	variables are locked	변수가 잠겨 있습니다
 @msg	variables that aren't text were left out: {kinds}	텍스트가 아닌 변수는 제외되었습니다: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	새 문서는 이 변수들을 원래 종류로 다시 읽지 않습니다: {names}
+@msg	a new document refuses this file because of these variables: {names}	새 문서는 이 변수들 때문에 이 파일을 거부합니다: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}`의 머리글 `{header}`은(는) 변수 `{other}`(으)로 다시 읽힙니다: 둘 중 하나의 이름을 바꾸십시오
 @msg	guides are locked	안내선이 잠겨 있습니다
 @msg	handle must be in or out	handle은 in 또는 out이어야 합니다
 @msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다

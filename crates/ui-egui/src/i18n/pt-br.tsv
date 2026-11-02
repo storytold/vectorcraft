@@ -4053,6 +4053,9 @@ axis	Both	Ambos
 @msg	unsupported: {0}	não suportado: {0}
 @msg	variables are locked	as variáveis estão bloqueadas
 @msg	variables that aren't text were left out: {kinds}	as variáveis que não são de texto foram omitidas: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	um novo documento não lerá essas variáveis de volta com o tipo delas: {names}
+@msg	a new document refuses this file because of these variables: {names}	um novo documento recusa este arquivo por causa destas variáveis: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	o cabeçalho `{header}` de `{name}` seria lido como a variável `{other}`: renomeie uma delas
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` e `options.{key}: {inner}` não coincidem: informe a opção uma só vez
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	arquivos da versão {0} não podem ser compactados: somente a versão {COMPRESSED_SINCE} e posteriores abrem arquivos compactados
 @msg	width and height are at least 1 pixel	largura e altura têm pelo menos 1 pixel

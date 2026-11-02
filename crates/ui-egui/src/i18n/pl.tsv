@@ -4613,6 +4613,9 @@ imageTrace	Outline	Kontur
 @msg	unsupported: {0}	nieobsługiwane: {0}
 @msg	variables are locked	zmienne są zablokowane
 @msg	variables that aren't text were left out: {kinds}	pominięto zmienne, które nie są tekstowe: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	nowy dokument nie odczyta tych zmiennych z ich rodzajem: {names}
+@msg	a new document refuses this file because of these variables: {names}	nowy dokument odrzuca ten plik z powodu tych zmiennych: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	nagłówek `{header}` dla `{name}` zostałby odczytany jako zmienna `{other}`: zmień nazwę jednej z nich
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` i `options.{key}: {inner}` są sprzeczne: podaj opcję tylko raz
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	plików w wersji {0} nie można kompresować: skompresowane pliki otwierają tylko wersje {COMPRESSED_SINCE} i nowsze
 @msg	width and height are at least 1 pixel	szerokość i wysokość muszą wynosić co najmniej 1 piksel

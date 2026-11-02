@@ -5418,6 +5418,9 @@ imageTrace	Outline	კონტური
 @msg	too many library panels were opened in this session	ამ სესიაში ზედმეტად ბევრი ბიბლიოთეკის პანელი გაიხსნა
 @msg	variables are locked	ცვლადები ჩაკეტილია
 @msg	variables that aren't text were left out: {kinds}	ცვლადები, რომლებიც ტექსტი არ არის, გამოტოვებულია: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	ახალი დოკუმენტი ამ ცვლადებს მათი ტიპით ვერ წაიკითხავს: {names}
+@msg	a new document refuses this file because of these variables: {names}	ახალი დოკუმენტი ამ ფაილს ამ ცვლადების გამო უარყოფს: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}`-ის სათაური `{header}` წაიკითხება როგორც ცვლადი `{other}`: გადაარქვით სახელი ერთ-ერთს
 @msg	x and y must be finite	x და y სასრული უნდა იყოს
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} სხვა აპს ხსნის: მისი გაშვება მხოლოდ კლავიატურასთან მყოფ ადამიანს შეუძლია
 @msg	“{name}” is not a file	„{name}“ ფაილი არ არის

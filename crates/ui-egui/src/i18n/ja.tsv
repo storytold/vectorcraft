@@ -4077,6 +4077,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Release Guides: no guides	ガイドを解除: ガイドがありません
 @msg	variables are locked	変数がロックされています
 @msg	variables that aren't text were left out: {kinds}	テキスト以外の変数は除外されました: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	新しいドキュメントでは、これらの変数は元の種類で読み込まれません: {names}
+@msg	a new document refuses this file because of these variables: {names}	新しいドキュメントは、これらの変数のためにこのファイルを拒否します: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` の見出し `{header}` は変数 `{other}` として読み込まれます: どちらかの名前を変更してください
 @msg	guides are locked	ガイドがロックされています
 @msg	handle must be in or out	handle には in または out を指定してください
 @msg	no saved selection recalled	保存した選択範囲を呼び出していません
