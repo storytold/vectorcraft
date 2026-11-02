@@ -1586,7 +1586,8 @@ already walks Image Trace. Short agent entry points:
   a path that names no object. `symbol.instance.reset {ids?}` drops the selected instances' changes (the Properties
   panel's Reset). Redefining the symbol (`symbol.update`) reshapes every instance and keeps each change whose path the
   new art still has; `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own
-  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them.
+  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them, and
+  so does `symbol.replace` with a different symbol (a replace with the instance's own symbol keeps them).
 
 ```json
 {"name":"run_command","arguments":{"command":"symbol.instance.setAppearance","params":{"id":42,"path":[1],"fill":"#d0021b","opacity":80}}}

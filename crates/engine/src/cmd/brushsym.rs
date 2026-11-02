@@ -247,7 +247,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Symbol",
             [],
             None,
-            "{name, ids?|id?} swap the symbol of the selected instances (they keep their appearance changes to the objects at paths a dynamic new symbol's art has) → {ids}",
+            "{name, ids?|id?} swap the symbol of the selected instances (an instance given a different symbol drops its appearance changes; one given its own symbol keeps them) → {ids}",
             has_selection,
             symbol_replace
         ),

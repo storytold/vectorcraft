@@ -590,13 +590,18 @@ pub(super) fn symbol_replace(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Replace Symbol", |d, _| {
         let new = natural_size(d, &name);
         for id in &ids {
-            let old = match d.node(*id).map(|n| &n.kind) {
-                Some(NodeKind::SymbolInstance { symbol, .. }) => natural_size(d, symbol),
+            let (old, other) = match d.node(*id).map(|n| &n.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => (natural_size(d, symbol), *symbol != name),
                 _ => continue,
             };
-            if let Some(NodeKind::SymbolInstance { symbol, xf }) = d.node_mut(*id).map(|n| &mut n.kind) {
+            let Some(n) = d.node_mut(*id) else { continue };
+            if let NodeKind::SymbolInstance { symbol, xf } = &mut n.kind {
                 *symbol = name.clone();
                 *xf *= Affine::scale_non_uniform(new.0 / old.0, new.1 / old.1);
+            }
+            // An override's path names an object of the old symbol's art.
+            if other && !n.extras().symbol_overrides.is_empty() {
+                n.extras_mut().symbol_overrides.clear();
             }
         }
         fit_overrides(d, &ids);
