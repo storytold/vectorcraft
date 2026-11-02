@@ -150,6 +150,9 @@ pub struct SelectionTool {
     /// The last hover had Alt held: what it measures depends on what lies under the pointer
     /// ([`Tool::wants_rehover`]).
     alt_hover: bool,
+    /// The text the pointer was loaded with when the button went down: a dropped press loads it
+    /// again.
+    loaded_at_press: Option<(NodeId, bool)>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -556,6 +559,21 @@ impl SelectionTool {
         })
     }
 
+    /// On a press, notes the text the pointer is loaded with ([`Self::loaded_at_press`]); a
+    /// release clears it.
+    fn note_loaded_at_press(&mut self, kind: PointerKind) {
+        match kind {
+            PointerKind::Down => {
+                self.loaded_at_press = match self.state {
+                    State::Loaded { from, before, .. } => Some((from, before)),
+                    _ => None,
+                }
+            }
+            PointerKind::Up => self.loaded_at_press = None,
+            _ => {}
+        }
+    }
+
     /// The pointer loaded with the text of area type or type on a path `from` ([`State::Loaded`]):
     /// a press starts placing it, and its release threads it (`text.thread.add`), into a frame put
     /// `before` `from` or after it. None when `from` can no longer thread: the press is an
@@ -669,6 +687,18 @@ impl Tool for SelectionTool {
         if key == ToolKey::Escape { self.guide.cancel() } else { vec![] }
     }
 
+    /// A dropped press is canceled as by Escape, so a dropped press on a port loads no text. With
+    /// the pointer loaded with text, the press threads nothing and the text stays loaded for the
+    /// next click, a press on the port that loaded it included.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let loaded = self.loaded_at_press.take();
+        let out = if matches!(self.state, State::Loaded { press: Some(_), .. }) { vec![] } else { self.key(cx, ToolKey::Escape, Mods::default()) };
+        if let Some((from, before)) = loaded {
+            self.state = State::Loaded { from, before, press: None };
+        }
+        out
+    }
+
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
@@ -703,6 +733,7 @@ impl Tool for SelectionTool {
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        self.note_loaded_at_press(ev.kind);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.alt_hover = hovering && ev.mods.alt;
         self.distance = hovering.then(|| distance_target(cx, ev.pos, ev.mods)).flatten();
