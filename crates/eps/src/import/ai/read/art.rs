@@ -185,7 +185,8 @@ impl<'a> Reader<'a> {
                 ..FillLayer::new(fill_paint.clone().unwrap_or(gs.fill.clone()))
             }));
         }
-        if stroke && !clip {
+        // A clipping path keeps its stroke, which paints over the art it clips.
+        if stroke {
             let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.width);
             st.cap = gs.cap;
             st.join = gs.join;
@@ -297,11 +298,20 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
+    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state. A clipping path
+    /// takes the stroke itself, not the painted copy of its fill.
     pub(super) fn stroke_last(&mut self) {
         let gs = self.gs.clone();
-        let Some(n) = self.last_object() else { return };
-        if !matches!(n.kind, NodeKind::Path { clipping: false, .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
+        if !self.after_object {
+            return;
+        }
+        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
+        let Some(mut at) = kids.len().checked_sub(1) else { return };
+        if kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) && at > 0 {
+            at -= 1;
+        }
+        let Some(n) = kids.get_mut(at) else { return };
+        if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
         let mut st = StrokeLayer::new(gs.stroke.clone(), gs.width);
