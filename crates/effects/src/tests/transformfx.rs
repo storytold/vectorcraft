@@ -231,10 +231,35 @@ fn a_fills_own_transform_with_scale_strokes_and_effects_scales_its_later_effects
     let art = reshape(None, &n, None).unwrap();
     let fill = leaves(&art).into_iter().find(|p| p.appearance.stroke().is_none()).unwrap();
     let AppearanceItem::Fill(f) = &fill.appearance.items[0] else { panic!("not a fill") };
-    let ids: Vec<&str> = f.effects.iter().map(|e| e.id.as_str()).collect();
-    assert_eq!(ids, vec!["path.offsetPath"]);
-    assert!(close(f.effects[0].params["offset"].as_f64().unwrap(), 15.0));
-    assert!(close(fill.geometric_bounds().unwrap().width(), 300.0));
+    // The Offset Path, scaled from 5 to 15, applies to the transformed fill's path.
+    assert!(f.effects.is_empty(), "{:?}", f.effects);
+    let w = fill.geometric_bounds().unwrap().width();
+    assert!(close(w, 330.0), "{w}");
+}
+
+#[test]
+fn a_later_transform_on_a_stroke_turns_its_copies_about_their_combined_center() {
+    for later in [json!({"rotate": 90}), json!({"rotate": 90, "strokes": true})] {
+        let mut n = stroke_with_effect(json!({"moveH": 200, "copies": 1, "strokes": true}));
+        if let Some(s) = n.appearance.stroke_mut() {
+            s.effects.push(transform(later.clone()));
+        }
+        let art = reshape(None, &n, None).unwrap();
+        let paths = stroked_leaves(&art);
+        assert_eq!(paths.len(), 2, "{later}");
+        // The copies span 0 to 300 by 0 to 100 before the turn; about the center (150, 50) both
+        // go to x 100 to 200, one above the other.
+        let boxes: Vec<Rect> = paths.iter().map(|p| p.geometric_bounds().unwrap()).collect();
+        for b in &boxes {
+            assert!(close(b.x0, 100.0) && close(b.x1, 200.0), "{later}: {boxes:?}");
+        }
+        let top = boxes.iter().map(|b| b.y0).fold(f64::INFINITY, f64::min);
+        let bottom = boxes.iter().map(|b| b.y1).fold(f64::NEG_INFINITY, f64::max);
+        assert!(close(top, -100.0) && close(bottom, 200.0), "{later}: {boxes:?}");
+        for p in &paths {
+            assert!(p.appearance.stroke().unwrap().effects.is_empty(), "{later}");
+        }
+    }
 }
 
 #[test]
