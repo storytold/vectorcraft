@@ -2,6 +2,7 @@ use super::{
     BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, Variables, absolute_path, bad,
     json, read_file_head, str_param, variables_unlocked, write_file,
 };
+use crate::cmd::place::text::windows_1252;
 
 /// Cap on a graph variable's CSV (MCP and files are untrusted).
 pub(super) const MAX_GRAPH_CSV: usize = 256 * 1024;
@@ -13,20 +14,45 @@ const MAX_CSV_ROWS: usize = 1_000;
 
 const MAX_CSV_COLS: usize = 256;
 
-/// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`.
-fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
-    let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
+/// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`, and whether they came
+/// as text (`data` or `csv`).
+fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<(Vec<u8>, bool)> {
+    let (bytes, text) = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
         // One byte past the cap is enough to refuse the file below.
-        (Some(path), ..) => read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?,
-        (None, Some(text), ..) => text.as_bytes().to_vec(),
-        (None, None, Some(b64), _) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
-        (None, None, None, Some(csv)) => csv.as_bytes().to_vec(),
+        (Some(path), ..) => (read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?, false),
+        (None, Some(text), ..) => (text.as_bytes().to_vec(), true),
+        (None, None, Some(b64), _) => (vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?, false),
+        (None, None, None, Some(csv)) => (csv.as_bytes().to_vec(), true),
         _ => return Err(bad(cmd, "give `path`, `data`, `dataBase64` or `csv`")),
     };
     if bytes.len() > MAX_CSV_BYTES {
         return Err(bad(cmd, format!("CSV is larger than {MAX_CSV_BYTES} bytes")));
     }
-    Ok(bytes)
+    Ok((bytes, text))
+}
+
+/// The text of a datasets CSV given as a file or as `dataBase64`: UTF-16 after a UTF-16
+/// byte-order mark, else UTF-8, with or without a byte-order mark, else Windows-1252. A file
+/// that starts with a byte-order mark must be valid in its encoding, and a file without one must
+/// not hold NUL bytes (UTF-16 without a byte-order mark).
+fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
+    let utf16 = |rest: &[u8], le: bool| {
+        let (units, odd) = rest.as_chunks::<2>();
+        let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
+        let text = char::decode_utf16(units).collect::<std::result::Result<String, _>>();
+        text.ok().filter(|_| odd.is_empty()).ok_or_else(|| bad(cmd, "CSV is not UTF-16"))
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false),
+        _ if bytes.contains(&0) => return Err(bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark")),
+        _ => {}
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(text) => Ok(text.to_string()),
+        Err(_) if bytes.starts_with(b"\xEF\xBB\xBF") => Err(bad(cmd, "CSV is not UTF-8")),
+        Err(_) => Ok(bytes.iter().map(|&b| windows_1252(b)).collect()),
+    }
 }
 
 /// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.
@@ -254,9 +280,10 @@ fn header_variable(
 /// undo step.
 pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
-    let bytes = datasets_csv_bytes(p, C)?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| bad(C, "CSV is not UTF-8"))?;
-    let rows = parse_datasets_csv(text, C)?;
+    let (bytes, given_as_text) = datasets_csv_bytes(p, C)?;
+    // `data` and `csv` are already text, NUL characters included (`dataset.export` writes them).
+    let text = if given_as_text { String::from_utf8(bytes).map_err(|_| bad(C, "CSV is not UTF-8"))? } else { datasets_csv_text(&bytes, C)? };
+    let rows = parse_datasets_csv(&text, C)?;
     let Some((_, header, _)) = rows.first() else {
         return Err(bad(C, "CSV is empty"));
     };
