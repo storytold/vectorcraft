@@ -1705,6 +1705,25 @@ fn blend_spine_param_errors_say_what_is_wrong() {
     assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == "select a blend or give `id`"), "{e}");
 }
 
+/// Import Data Sets' refusal of two header cells that name one variable is translated in every
+/// language that translates every message.
+#[test]
+fn dataset_import_repeated_column_error_is_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let e = s.execute("dataset.import", &json!({"csv": "name,City,City\nR,Paris,Rome"})).unwrap_err();
+    let want = "columns 2 and 3 both name the variable `City`";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    let e = e.to_string();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &e);
+        assert!(!shown.contains(want), "{code}: {shown}");
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]
