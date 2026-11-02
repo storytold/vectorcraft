@@ -298,8 +298,13 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // `pattern_objects` and `pattern_rows` hold the `patternObjects` entries and the rows of the objects filled or stroked with a pattern, in walk order.
     let mut pattern_objects: Vec<Value> = vec![];
     let mut pattern_rows: Vec<(String, String)> = vec![];
+    // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
+    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
     for r in roots {
         r.walk(&mut |n| {
+            if !seen.insert(n.id) {
+                return;
+            }
             let k = match &n.kind {
                 NodeKind::Layer { .. } => None,
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
@@ -658,7 +663,7 @@ mod tests {
         s.execute("layer.setProps", &json!({"id": a, "name": "Both"})).unwrap();
         s.execute("paint.setStroke", &json!({"ids": [b], "swatch": "Dots"})).unwrap();
         s.execute("select.set", &json!({"ids": [b, c]})).unwrap();
-        s.execute("object.group", &json!({})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
         let i = s.execute("document.info", &json!({})).unwrap();
         assert_eq!(i["objects"]["patterns"], 2, "{}", i["objects"]);
         assert_eq!(
@@ -676,6 +681,15 @@ mod tests {
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
         assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
         assert_eq!(i["objects"]["patterns"], 1);
+        // A selection that holds a group and its patterned child lists the child once.
+        s.execute("select.set", &json!({"ids": [group, b]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
+        assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
+        assert_eq!(i["patternObjects"], json!([{"id": b, "name": "<Rectangle>", "patterns": ["Dots"]}]));
+        assert_eq!((i["objects"]["patterns"].as_u64(), i["objects"]["paths"].as_u64(), i["objects"]["groups"].as_u64()), (Some(1), Some(2), Some(1)));
+        s.execute("select.set", &json!({"ids": [b, group]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
+        assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
         let text = s.execute("document.info", &json!({"category": "patterns", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\n"), "{text}");
         assert!(!text.contains("Unused"), "{text}");
