@@ -263,6 +263,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let locked = st.doc.variables.locked;
+    // Save Variable Library writes text variables only.
+    let has_text = st.doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text);
 
     if widgets::menu_item(ui, tl!("New Variable…"), !locked, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -326,6 +328,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("Load Variable Library…"), true, false) {
         crate::picks::button(app, load_library);
     }
+    if widgets::menu_item(ui, tl!("Save Variable Library…"), has_text, false) {
+        crate::picks::button(app, save_library);
+    }
     ui.separator();
     // What the highlighted variable drives, selected — its bindings are left alone.
     if widgets::menu_item(ui, tl!("Select Bound Object"), !highlighted_bound.is_empty(), false) {
@@ -360,6 +365,16 @@ fn load_library(app: &mut VectorcraftApp) {
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
     let Some(path) = crate::picks::open(app, &pick) else { return };
     if let Err(e) = app.run("variable.loadLibrary", json!({"path": path})) {
+        app.status(e);
+    }
+}
+
+/// Variables panel: Save Variable Library… opens a save dialog for an XML file and runs
+/// `variable.saveLibrary` with the chosen path.
+fn save_library(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick { name: "variables.xml".into(), filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
+    let Some(path) = crate::picks::save(app, &pick) else { return };
+    if let Err(e) = app.run("variable.saveLibrary", json!({"path": path})) {
         app.status(e);
     }
 }
@@ -451,6 +466,7 @@ mod tests {
             "Rename Data Set…",
             "Delete Data Set",
             "Load Variable Library…",
+            "Save Variable Library…",
             "Select Bound Object",
             "Select All Bound Objects",
         ] {
