@@ -127,17 +127,15 @@ impl Homography {
     }
 
     /// Inverse; `None` when [`Self::has_significant_det`] counts the map as not invertible. The
-    /// inverse is formed from the map itself when its determinant is finite and in the normal
-    /// range, and is kept when every entry is finite and it passes [`Self::has_significant_det`].
-    /// Otherwise it is the inverse of [`Self::scaled`] (the exact inverse multiplied by one power
-    /// of two, which is the same map), and `None` when that one fails the same checks.
+    /// inverse is formed from the map itself when its determinant is finite, and is kept when every
+    /// entry is finite and it passes [`Self::has_significant_det`]. Otherwise it is the inverse of
+    /// [`Self::scaled`] (the exact inverse multiplied by one power of two, which is the same map),
+    /// and `None` when that one fails the same checks.
     pub fn inverse(&self) -> Option<Self> {
         if !self.has_significant_det() {
             return None;
         }
-        let d = self.det();
-        if d.is_finite()
-            && d.abs() >= f64::MIN_POSITIVE
+        if self.det().is_finite()
             && let Some(inv) = self.adjugate_inverse()
         {
             return Some(inv);
@@ -145,22 +143,35 @@ impl Homography {
         self.scaled()?.adjugate_inverse()
     }
 
-    /// The adjugate divided by the determinant; `None` when an entry is not finite or the result
-    /// fails [`Self::has_significant_det`] (a cofactor that underflows to 0 can leave a whole row
-    /// at 0).
+    /// The adjugate divided by the determinant; `None` when an entry is not finite, the
+    /// determinant is 0, or the result fails [`Self::has_significant_det`]. Every cofactor and the
+    /// determinant are held as a mantissa and a power of two, so an entry of the result is lost
+    /// only when that entry itself is beyond the range of `f64`.
     fn adjugate_inverse(&self) -> Option<Self> {
-        let d = self.det();
-        let m = &self.0;
-        let c = |r0: usize, c0: usize, r1: usize, c1: usize| m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0];
+        if !self.is_finite() {
+            return None;
+        }
+        let f = self.0.map(|row| row.map(frexp));
+        let mul = |a: (f64, i32), b: (f64, i32)| (a.0 * b.0, a.1 + b.1);
+        let c = |r0: usize, c0: usize, r1: usize, c1: usize| {
+            let (a, b) = (mul(f[r0][c0], f[r1][c1]), mul(f[r0][c1], f[r1][c0]));
+            split_sum(&[a, (-b.0, b.1)])
+        };
+        let neg = |(m, e): (f64, i32)| (-m, e);
         let adj = [
-            [c(1, 1, 2, 2), -c(0, 1, 2, 2), c(0, 1, 1, 2)],
-            [-c(1, 0, 2, 2), c(0, 0, 2, 2), -c(0, 0, 1, 2)],
-            [c(1, 0, 2, 1), -c(0, 0, 2, 1), c(0, 0, 1, 1)],
+            [c(1, 1, 2, 2), neg(c(0, 1, 2, 2)), c(0, 1, 1, 2)],
+            [neg(c(1, 0, 2, 2)), c(0, 0, 2, 2), neg(c(0, 0, 1, 2))],
+            [c(1, 0, 2, 1), neg(c(0, 0, 2, 1)), c(0, 0, 1, 1)],
         ];
+        // The determinant expanded along the first row, as `det` sums it.
+        let (dm, de) = split_sum(&[mul(f[0][0], adj[0][0]), mul(f[0][1], adj[1][0]), mul(f[0][2], adj[2][0])]);
+        if dm == 0.0 {
+            return None;
+        }
         let mut out = [[0.0; 3]; 3];
         for (r, row) in adj.iter().enumerate() {
-            for (k, v) in row.iter().enumerate() {
-                out[r][k] = v / d;
+            for (k, (m, e)) in row.iter().enumerate() {
+                out[r][k] = ldexp(m / dm, e - de);
             }
         }
         let out = Self(out);
@@ -267,6 +278,17 @@ fn frexp(v: f64) -> (f64, i32) {
     let bits = v.to_bits();
     let e = ((bits >> 52) & 0x7ff) as i32 - 1022;
     (f64::from_bits((bits & !(0x7ff << 52)) | (1022 << 52)), e + bias)
+}
+
+/// The sum of `m·2^e` over `terms`, in order, as a mantissa `0.5 ≤ |m| < 1` (or 0) and a power of
+/// two. Every term is first divided by the power of two of the largest nonzero one, so none of
+/// them overflows.
+fn split_sum(terms: &[(f64, i32)]) -> (f64, i32) {
+    let Some(e) = terms.iter().filter(|(m, _)| *m != 0.0).map(|(_, e)| *e).max() else {
+        return (0.0, 0);
+    };
+    let (m, x) = frexp(terms.iter().map(|&(m, x)| ldexp(m, x - e)).sum());
+    (m, e + x)
 }
 
 /// `m·2^e`, multiplied in steps of powers of two that are each within the normal range.
@@ -484,6 +506,16 @@ mod tests {
             let q = tiny.apply(p).unwrap();
             let back = inv.apply(q).unwrap();
             assert!((back.x - p.x).abs() <= 1e-9 * p.x.abs() && (back.y - p.y).abs() <= 1e-9 * p.y.abs(), "{p:?} {back:?}");
+        }
+        // A normal determinant (1e-300) whose cofactor 1e-300 · 1e-300 is below the smallest
+        // positive f64, and where one power of two that brings the products near 1 takes 1e300 past
+        // the largest finite number: the inverse is still diag(1e300, 1e-300, 1e300).
+        let spread = Homography([[1e-300, 0.0, 0.0], [0.0, 1e300, 0.0], [0.0, 0.0, 1e-300]]);
+        assert_eq!(Homography::from_array(spread.to_array()), Some(spread));
+        let inv = spread.inverse().unwrap();
+        let want = [1e300, 0.0, 0.0, 0.0, 1e-300, 0.0, 0.0, 0.0, 1e300];
+        for (v, w) in inv.to_array().iter().zip(want) {
+            assert!((v - w).abs() <= 1e-12 * w.abs(), "{inv:?}");
         }
     }
 
