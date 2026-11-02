@@ -353,12 +353,23 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
     if d.bool("__newGroup") {
-        // The new colors with the Global Adjust, as `recolor.apply` gives them to a group.
+        // The new colors with the Global Adjust, snapped to Limit to Library, as `recolor.apply`
+        // gives them to a group.
         let adjust = global_adjust(adjust_values(&d));
+        let limit = d.str("limitTo");
+        let palette = Some(limit).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l));
         let colors: Vec<Value> = rows(&d)
             .into_iter()
             .filter(|r| !excluded(r))
-            .map(|r| to_color(&r).filter(|_| !adjust.is_identity()).map_or_else(|| r["to"].clone(), |c| key(&adjust.apply(c))))
+            .map(|r| {
+                to_color(&r).filter(|_| !adjust.is_identity()).map_or_else(
+                    || r["to"].clone(),
+                    |c| {
+                        let c = adjust.apply(c);
+                        key(&palette.as_ref().map_or(c, |p| p.nearest(c)))
+                    },
+                )
+            })
             .collect();
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }

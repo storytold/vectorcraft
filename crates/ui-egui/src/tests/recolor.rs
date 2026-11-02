@@ -642,6 +642,24 @@ fn global_adjust_changes_every_color_at_once() {
     }
 }
 
+/// Colors opened alone with Limit to Library: OK saves the new colors with the Global Adjust as a
+/// new color group, each snapped to the library again, as `recolor.apply` gives them to a group.
+#[test]
+fn global_adjust_on_a_new_group_keeps_its_colors_in_the_library() {
+    let mut app = app();
+    app.run("ui.recolorDialog", json!({"colors": ["#123456", "#abcdef"], "library": ""})).unwrap();
+    assert_eq!(field(&app, "limitTo"), "web-safe-216");
+    let web = |k: &Value| vectorcraft_engine::cmd::color_value(k).unwrap().to_rgb().iter().all(|v| ((v * 5.0).round() - v * 5.0).abs() < 1e-3);
+    let rows: Vec<Value> = field(&app, "rows").as_array().unwrap().iter().map(|r| r["to"].clone()).collect();
+    assert!(rows.iter().all(web), "the rows open snapped: {rows:?}");
+    set(&mut app, "globalAdjust", json!({"brightness": -60}));
+    dialogs::confirm(&mut app).unwrap();
+    let keys = group_keys(&app, "Color Group");
+    assert_eq!(keys.len(), 2);
+    assert_ne!(keys, rows, "the Global Adjust changed the colors");
+    assert!(keys.iter().all(web), "every group color is a library color: {keys:?}");
+}
+
 /// The Assign tab's per-row hex fields are named by their row, not all "Color": a screen reader can
 /// tell the second from the first.
 #[test]
