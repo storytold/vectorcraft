@@ -636,6 +636,10 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
         p.extras_mut().mask = None;
         p
     };
+    // The pieces replace the leaf's own geometry (counted in `used`): each plain piece costs that
+    // geometry again, and each transformed fill or stroke what its paths cost.
+    let cost = Budget::of(&path);
+    *used = used.minus(cost);
     let mut pieces: Vec<Arc<Node>> = vec![];
     let mut plain: Vec<AppearanceItem> = vec![];
     for item in &original.appearance.items {
@@ -646,11 +650,12 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
         };
         if !plain.is_empty() {
             pieces.push(Arc::new(piece(std::mem::take(&mut plain))));
+            *used = used.plus(cost);
         }
         let before = &fx[..at];
-        // What the art's other paths leave of the budget, with the leaf's own geometry (counted in
-        // `used`) given back: the geometry before the Transform effect and its copies keep to it.
-        let room = max.minus(*used).plus(Budget::of(&path));
+        // What the art's other paths leave of the budget: the geometry before the Transform effect
+        // and its copies keep to it.
+        let room = max.minus(*used);
         let g = if crate::has_geometry(before) && !path.is_empty() {
             crate::geometry::apply_geometry_within(before, &path, bounds, &ctx.item(item), room)
         } else {
@@ -673,6 +678,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
     }
     if !plain.is_empty() {
         pieces.push(Arc::new(piece(plain)));
+        *used = used.plus(cost);
     }
     leaf.appearance.items.clear();
     leaf.appearance.contents_index = None;
