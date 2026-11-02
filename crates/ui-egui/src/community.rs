@@ -65,7 +65,7 @@ fn link(app: &mut VectorcraftApp, ui: &mut Ui, icon: &str, label: &str, cmd: &st
 /// The Discord button and the website / app page / GitHub links.
 pub fn links(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Preferences ▸ General ▸ Show the Discord button (on by default; hidden only when turned off).
-    if app.ui.show_discord {
+    if app.ui.show_discord_button {
         discord_button(app, ui, true);
         ui.add_space(8.0);
     }
