@@ -158,9 +158,21 @@ impl VectorcraftApp {
                 if matches!(id, "dataset.select" | "dataset.next" | "dataset.prev") {
                     self.ui.status.clear();
                 }
-                if matches!(id, "text.setStyle" | "text.setRangeStyle")
-                    && let Some(font) = params.get("font").and_then(Value::as_str)
-                {
+                // A font applied with Character's font menu or Find Font's Change becomes the newest recent font.
+                // Find Font's Change records the family the text now carries (any name of it is stored as its
+                // own name), and only when it changed some text.
+                let applied = match id {
+                    "text.setStyle" | "text.setRangeStyle" => params.get("font").and_then(Value::as_str).map(str::to_string),
+                    "text.replaceFont" if v["runs"].as_u64().is_some_and(|n| n > 0) => {
+                        let to = &params["to"];
+                        to["family"].as_str().and_then(|family| {
+                            let style = to["style"].as_str().unwrap_or("Regular");
+                            vectorcraft_text::FontDb::global().resolve(family, style).map(|(face, _)| face.family.clone())
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(font) = applied.as_deref() {
                     let r = &mut self.ui.recent_fonts;
                     r.retain(|f| !f.eq_ignore_ascii_case(font));
                     r.insert(0, font.to_string());

@@ -2699,6 +2699,8 @@ mark-style	Japanese	日本式
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
 	Replace With Font	置換するフォント
+	Replace With Font From	置換するフォントの一覧
+	System	システム
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	別のファイルに置き換えるか、無視してください。無視した場合、画像にはドキュメントに保存されたプレビューが表示され続けます。
 	Replaces the saved preset of that name.	同じ名前の保存済みプリセットを置き換えます。
 	Replace…	置換…

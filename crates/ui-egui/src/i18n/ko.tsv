@@ -2688,6 +2688,8 @@ mark-style	Japanese	일본식
 	Replace Font	글꼴 바꾸기
 	Replace Symbol	심볼 바꾸기
 	Replace With Font	바꿀 글꼴
+	Replace With Font From	바꿀 글꼴 목록
+	System	시스템
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	다른 파일로 바꾸거나 무시하세요. 무시하면 해당 이미지는 문서에 저장된 미리 보기로 계속 표시됩니다.
 	Replaces the saved preset of that name.	같은 이름으로 저장된 사전 설정을 대체합니다.
 	Replace…	바꾸기…

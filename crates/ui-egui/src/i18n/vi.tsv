@@ -2986,6 +2986,8 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
 	Replace With Font	Thay thế bằng phông chữ
+	Replace With Font From	Thay thế bằng phông chữ từ
+	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
 	Replace…	Thay thế…

@@ -3218,6 +3218,8 @@ mark-style	Japanese	Japán
 	Replace Spine	Gerinc cseréje
 	Replace Symbol	Szimbólum cseréje
 	Replace With Font	Helyettesítő betűtípus
+	Replace With Font From	Helyettesítő betűtípus forrása
+	System	Rendszer
 	Replace “{name}”, the file this document was opened from?	Felülírod ezt a fájlt, amelyből a dokumentumot megnyitottad: „{name}”?
 	Replaces the saved preset of that name.	Felülírja az azonos nevű mentett előbeállítást.
 	Replace…	Csere…
