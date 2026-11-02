@@ -1948,6 +1948,38 @@ fn select_same_font_size_and_fill() {
     assert!(s.execute("select.same.fontSize", &json!({})).is_err());
 }
 
+#[test]
+fn select_same_link_block_series_selects_the_frames_of_a_thread() {
+    let mut s = session();
+    let frame = |s: &mut Session, x: f64, y: f64| {
+        id_of(&s.execute("text.create", &json!({"x": x, "y": y, "text": "words ".repeat(40), "area": {"width": 80, "height": 30}})).unwrap())
+    };
+    let (a, b, c) = (frame(&mut s, 10.0, 10.0), frame(&mut s, 110.0, 10.0), frame(&mut s, 210.0, 10.0));
+    sel(&mut s, &[a, b, c]);
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (d, e) = (frame(&mut s, 10.0, 200.0), frame(&mut s, 110.0, 200.0));
+    sel(&mut s, &[d, e]);
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let lone = text(&mut s, "alone");
+    let r = rect(&mut s, 300.0, 300.0, 10.0, 10.0);
+    let undo = s.doc().unwrap().history.undo.len();
+    // The middle frame of the first thread selects that thread's three frames, in thread order.
+    sel(&mut s, &[b]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 3);
+    assert_eq!(selected(&s), vec![a, b, c]);
+    // Frames of two threads select both threads.
+    sel(&mut s, &[c, e]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 5);
+    // Type in no thread selects itself; a path beside it is left out.
+    sel(&mut s, &[lone, r]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![lone]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "selecting adds no undo step");
+    // With no type selected the command is not available.
+    sel(&mut s, &[r]);
+    assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
+}
+
 /// #1737: Select > Same reads type's fill and stroke from its characters (the first run), so type
 /// matches type and paths both ways.
 #[test]

@@ -4883,6 +4883,11 @@ after it (`out`). The whole story flows into the frames before the break; the fr
 threaded with each other when two or more remain, and the first of them starts a paragraph. It refuses an `id` that
 doesn't exist, a `port` other than `in` or `out`, and a side where no frame of a thread comes before or after `id`.
 
+`select.same.linkBlockSeries` (Select › Same › Link Block Series) selects every frame of the threads that the selected
+type objects, and the type inside selected groups, are in, in thread order, and returns `{count}`. Type in no thread
+selects itself, and other selected objects are left out. With frames of several threads selected, it selects the frames
+of all of them. It is off while no type is selected, and records no undo step.
+
 In every thread, a paragraph that continues from one frame into the next has its first line, first-line indent and
 bullet or number in the frame where it starts. In the next frame its first line starts where its wrapped lines start,
 and it has no bullet or number. In a frame that is no longer threaded (after `text.thread.releaseSelection` or

@@ -508,6 +508,26 @@ fn update_selection_follows_save_selection_and_needs_a_recall() {
 }
 
 #[test]
+fn select_same_link_block_series_selects_a_thread_from_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entry = menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("select.same.linkBlockSeries")).expect("menu entry");
+    assert_eq!((entry.path, entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Link Block Series"));
+    // A rectangle selected: no type, so the item is off.
+    assert!(!enabled(&app, "select.same.linkBlockSeries"));
+    let frame = |app: &mut VectorcraftApp, x: i32| {
+        app.run("text.create", json!({"x": x, "y": 40, "text": "words ".repeat(40), "area": {"width": 60, "height": 30}})).unwrap()["id"].clone()
+    };
+    let (a, b) = (frame(&mut app, 0), frame(&mut app, 100));
+    app.run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    assert!(enabled(&app, "select.same.linkBlockSeries"));
+    invoke(&mut app, "select.same.linkBlockSeries", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
 fn edit_selection_opens_its_dialog_on_the_saved_selections() {
     let mut app = app_with_a_rectangle();
     // Nothing saved yet: the item is off, and invoking it (palette, shortcut) only says so.

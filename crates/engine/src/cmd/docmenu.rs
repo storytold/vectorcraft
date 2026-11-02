@@ -27,6 +27,15 @@ pub fn specs() -> Vec<CommandSpec> {
                 _ => false,
             }
         )),
+        cmd!(
+            "select.same.linkBlockSeries",
+            "Link Block Series",
+            ["Select", "Same"],
+            None,
+            "{} select every frame of the threads of the selected type objects (and of the type inside selected groups); type in no thread selects itself; frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer are left out → {count}",
+            has_text_selection,
+            same_link_block_series
+        ),
         cmd!("select.same.fontFamily", "Font Family", ["Select", "Same"], None, "{} → {count}", has_selection, |s, _| same_text(
             s,
             "select.same.fontFamily",
@@ -311,6 +320,48 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
         _ => false,
     })?;
     finish_same(s, cmd, ids)
+}
+
+/// The type objects among the selected objects and inside them, in selection order.
+fn selected_text(s: &Session) -> Vec<NodeId> {
+    let Some(st) = s.active() else { return vec![] };
+    let mut out = vec![];
+    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
+                out.push(c.id);
+            }
+        });
+    }
+    out
+}
+
+/// A type object is selected, or is inside a selected object.
+fn has_text_selection(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    if selected_text(s).is_empty() { Err("select a text object".into()) } else { Ok(()) }
+}
+
+/// Select › Same › Link Block Series: the frames of the threads the selected type objects are
+/// in, in thread order; a type object in no thread is its own series.
+fn same_link_block_series(s: &mut Session, _: &Value) -> Result<Value> {
+    const C: &str = "select.same.linkBlockSeries";
+    let seeds = selected_text(s);
+    if seeds.is_empty() {
+        return Err(bad(C, "select a text object"));
+    }
+    let st = s.doc()?;
+    let can = selectable_ids(&st.doc, st.isolation);
+    let mut ids: Vec<NodeId> = vec![];
+    for seed in seeds {
+        let series = st.doc.text_threads.iter().find(|t| t.contains(&seed)).cloned().unwrap_or_else(|| vec![seed]);
+        for id in series {
+            if can.contains(&id) && !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    finish_same(s, C, ids)
 }
 
 fn by_kind(s: &mut Session, f: impl Fn(&Node) -> bool) -> Result<Value> {
