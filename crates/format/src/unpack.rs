@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use std::io::{self, Read};
 use std::sync::Arc;
 
+use craft_vectorcraft_format::{Entries, marker_at, split_tail};
 use flate2::read::GzDecoder;
 
-use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED, is_compressed, split_tail};
+use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED, is_compressed};
 
 /// Bytes unpacked at a time while looking for the end of the JSON.
 const CHUNK: u64 = 64 << 10;
@@ -87,19 +88,16 @@ impl<'a> Unpacked<'a> {
                 return Err(FormatError::TooBig);
             }
         }
-        let Some(z) = nul else {
+        if nul.is_none() {
             // No NUL, so no marker: all of it is JSON.
             if buf.len() as u64 > max_json {
                 return Err(FormatError::TooBig);
             }
             return Ok(Self { json: Json::Owned(buf), tail: Tail::None });
-        };
-        // JSON holds no raw NUL, so the marker (which has one) starts right before the first NUL;
-        // the writer puts it right after the JSON's last byte.
-        if let Some(end) = z.checked_sub(1)
-            && buf.get(end..).is_some_and(|r| r.starts_with(BLOB_MAGIC))
-            && end.checked_sub(1).and_then(|k| buf.get(k)).is_some_and(|b| matches!(b, b'}' | b']' | b'"'))
-        {
+        }
+        // The marker where the writer puts it, right after the JSON's last byte: what is unpacked
+        // so far reaches past it.
+        if let Some(end) = marker_at(&buf) {
             if end as u64 > max_json {
                 return Err(FormatError::TooBig);
             }
@@ -143,24 +141,17 @@ impl<'a> Unpacked<'a> {
     /// [`Self::entries`], unpacking at most `work` bytes of a streamed file to find them.
     fn entries_within(self, wanted: &[[u64; 2]], work: u64) -> Result<Vec<Entry>, FormatError> {
         let mut out: Vec<Entry> = vec![None; wanted.len()];
-        // The entries read so far, by `[offset, length]`, and the bytes copied for them.
-        let mut done: HashMap<[u64; 2], Entry> = HashMap::new();
-        let mut copied = 0u64;
-        let mut in_memory = |tail: &[u8], out: &mut Vec<Entry>| {
+        // Data in memory is read through the crate's `Entries`: entries naming the same bytes
+        // share them, and the bytes copied stay within the data.
+        let in_memory = |tail: &[u8], out: &mut Vec<Entry>| {
+            let mut entries = Entries::new(tail);
             for (slot, &w) in out.iter_mut().zip(wanted) {
-                if let Some(e) = done.get(&w) {
-                    *slot = e.clone();
-                    continue;
-                }
-                let bytes = range(w[0], w[1]).and_then(|(a, b)| tail.get(a..b));
-                copied = copied.saturating_add(bytes.map_or(0, |b| b.len() as u64));
-                if copied > tail.len() as u64 {
-                    return Err(FormatError::TooBig);
-                }
-                *slot = bytes.map(|b| Arc::new(b.to_vec()));
-                done.insert(w, slot.clone());
+                *slot = entries.blob(w).map_err(|e| match e {
+                    craft_vectorcraft_format::Error::TooBig => FormatError::TooBig,
+                    e => e.into(),
+                })?;
             }
-            Ok(())
+            Ok::<(), FormatError>(())
         };
         match self.tail {
             Tail::Slice(tail) => {
@@ -179,6 +170,9 @@ impl<'a> Unpacked<'a> {
             Tail::Stream { file, at, read, rest } => {
                 within(wanted, MAX_BLOB, MAX_BLOBS)?;
                 drop(self.json);
+                // The entries read so far, by `[offset, length]`, and the bytes copied for them.
+                let mut done: HashMap<[u64; 2], Entry> = HashMap::new();
+                let mut copied = 0u64;
                 let mut order: Vec<usize> = (0..wanted.len()).collect();
                 order.sort_by_key(|&i| wanted.get(i).map_or(0, |w| w[0]));
                 let mut s = Stream { r: Box::new(io::Cursor::new(read).chain(rest)), pos: 0, file, at, left: work };
@@ -218,12 +212,6 @@ fn within(wanted: &[[u64; 2]], each: u64, all: u64) -> Result<(), FormatError> {
         total = total.saturating_add(len);
     }
     if total > all { Err(FormatError::TooBig) } else { Ok(()) }
-}
-
-/// `offset..offset + len` as indices, when they fit.
-fn range(offset: u64, len: u64) -> Option<(usize, usize)> {
-    let a = usize::try_from(offset).ok()?;
-    Some((a, a.checked_add(usize::try_from(len).ok()?)?))
 }
 
 /// The data after a compressed file's JSON, being unpacked.

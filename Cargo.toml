@@ -19,6 +19,8 @@ craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "92d392c
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
 craft-window = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", features = ["egui"] }
+# The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "14d5dbb50c317b8747a9cf9eb35ab8a22515f137" }
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "c5a1cbfb5f9049f9270955caffb5bee5997aebf7", features = ["egui"] }
 # internal

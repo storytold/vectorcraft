@@ -1082,6 +1082,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-vectorcraft-format"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=14d5dbb50c317b8747a9cf9eb35ab8a22515f137#14d5dbb50c317b8747a9cf9eb35ab8a22515f137"
+dependencies = [
+ "flate2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "craft-window"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
@@ -6281,6 +6292,7 @@ dependencies = [
 name = "vectorcraft-format"
 version = "0.20.0"
 dependencies = [
+ "craft-vectorcraft-format",
  "flate2",
  "proptest",
  "rustix 1.1.6",
