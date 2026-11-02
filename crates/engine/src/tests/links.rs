@@ -193,6 +193,34 @@ fn a_linked_targa_file_places_updates_and_relinks() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// A BMP file named `.dib` placed linked shows its pixels, is listed as BMP and updates when it
+/// changes; relinked to a PNG named `.pns`, it is listed as PNG.
+#[test]
+fn linked_dib_and_pns_files_place_update_and_relink() {
+    let bmp = |w: u32, h: u32, rgb: [u8; 3]| {
+        let mut out = vec![];
+        let [r, g, b] = rgb;
+        image::RgbImage::from_pixel(w, h, image::Rgb([r, g, b])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Bmp).unwrap();
+        out
+    };
+    let dir = Folder::new("dib");
+    let pic = dir.file("art/scan.DIB");
+    write(&pic, &bmp(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "BMP");
+    write(&pic, &bmp(400, 400, BLUE));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [id.0], "missing": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    let other = dir.file("other/red.pns");
+    write(&other, &png(300, 100, RED));
+    assert_eq!(s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap(), json!({"relinked": [id.0], "notFound": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.unwrap().path), (300, 100, other));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "PNG");
+}
+
 #[test]
 fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let a = Folder::new("move-a");

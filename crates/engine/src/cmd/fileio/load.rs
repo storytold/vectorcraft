@@ -9,7 +9,7 @@ use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, psdread, read_file, readable_format_for_name};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -67,7 +67,7 @@ pub fn file_name(name: &str) -> String {
 /// The readable format of a file: from its content (magic bytes) when that tells, else from the
 /// extension of `name`.
 pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
-    let by_name = format_for_name(name).filter(|f| f.read);
+    let by_name = readable_format_for_name(name);
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
