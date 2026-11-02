@@ -95,10 +95,10 @@ fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let result = s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
     assert_eq!(result["kerning"], "optical");
     assert!(obj(&s, id).runs[0].style.optical_kerning);
-    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    assert_eq!(obj(&s, id).runs[0].style.kerning, None, "choosing Optical clears the manual value");
     s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "kerning": 0})).unwrap();
     let styled = obj(&s, id);
-    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![Some(70.0), Some(0.0), Some(70.0)]);
+    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![None, Some(0.0), None]);
     assert!(styled.runs.iter().all(|r| r.style.optical_kerning));
     let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
     let opened = vectorcraft_format::load(&bytes).unwrap();
@@ -108,14 +108,18 @@ fn optical_command_manual_pair_undo_redo_and_native_reopen() {
         styled.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>()
     );
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.kerning.is_none()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0), "undoing Optical brings the manual value back");
+    assert!(!obj(&s, id).runs[0].style.optical_kerning);
+    s.execute("edit.redo", &json!({})).unwrap();
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).runs[1].style.kerning, Some(0.0));
     assert!(obj(&s, id).runs.iter().all(|r| r.style.optical_kerning));
 }
 
 #[test]
-fn optical_set_format_keeps_existing_pair_override() {
+fn optical_set_format_clears_existing_pair_override() {
     let mut s = session();
     let id = text(&mut s, "III");
     s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 40})).unwrap();
@@ -123,7 +127,7 @@ fn optical_set_format_keeps_existing_pair_override() {
     assert_eq!(result["kerning"], "optical");
     let t = obj(&s, id);
     assert!(t.runs.iter().all(|r| r.style.optical_kerning));
-    assert_eq!(t.runs[0].style.kerning, Some(40.0));
+    assert!(t.runs.iter().all(|r| r.style.kerning.is_none()), "choosing Optical clears the manual value");
 }
 
 #[test]

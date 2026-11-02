@@ -549,8 +549,8 @@ impl CharChange {
             tracking: num("tracking"),
             kerning: match p.get("kerning") {
                 None | Some(Value::Null) => None,
-                Some(Value::String(v)) if v.eq_ignore_ascii_case("optical") => None,
-                Some(Value::String(v)) if v.eq_ignore_ascii_case("auto") => Some(None),
+                // Auto and Optical both clear manual pair values.
+                Some(Value::String(v)) if v.eq_ignore_ascii_case("optical") || v.eq_ignore_ascii_case("auto") => Some(None),
                 Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(cmd, "kerning must be a number, \"auto\", or \"optical\""))?)),
             },
             optical_kerning: match p.get("kerning") {
