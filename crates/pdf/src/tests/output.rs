@@ -161,6 +161,70 @@ fn spot_alternates_and_device_n_gradient_inks_are_written_as_the_document_holds_
     assert!(text.contains("/C0[0 0 0.75]/C1[0.75 0.04 0]"), "the stops' C75, K4 and 75% Gold are written as they are");
 }
 
+/// A spot swatch's Separation space with alternate C0 M20 Y80 K10 under `colorant` (a PDF name).
+fn gold_separation(colorant: &str) -> String {
+    format!("[/Separation{colorant}/DeviceCMYK<</FunctionType 2/Domain[0 1]/Range[0 1 0 1 0 1 0 1]/C0[0 0 0 0]/C1[0 0.2 0.8 0.1]/N 1>>]")
+}
+
+#[test]
+fn spot_inks_named_all_or_none_are_written_under_names_of_their_own() {
+    let solid = |name: &str, color: Color| Paint::Solid { color, swatch: Some(name.into()), tint: 0.5 };
+    let gold = Color::cmyk(0.0, 0.2, 0.8, 0.1);
+    let rect = |d: &mut Document, i: usize, y: f64, paint: Paint, stroke: Paint| {
+        let l = d.layers[0].id;
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, y, 140.0, y + 20.0)), Appearance::basic(paint, stroke, 1.0));
+        d.insert(Some(l), i, n).unwrap();
+    };
+    let stop = |offset: f32, ink: &str, tint: f32| {
+        let mut s = GradientStop::new(offset, gold.tinted(tint));
+        s.swatch = Some(ink.into());
+        s.tint = tint;
+        s
+    };
+    let gradient = |stops| Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    for (name, colorant) in [("All", "/All#20Spot"), ("None", "/None#20Spot")] {
+        let mut d = doc(ColorMode::Cmyk, &[]);
+        for ink in [name, "Gold"] {
+            d.swatches.push(Swatch { name: ink.into(), paint: Paint::solid(gold), global: true, spot: true });
+        }
+        // A fill of the spot ink with a Registration stroke, a gradient of the spot ink's tints,
+        // and a gradient from Gold to the spot ink.
+        let registration = solid(vectorcraft_color::swatch::REGISTRATION, Color::cmyk(1.0, 1.0, 1.0, 1.0));
+        rect(&mut d, 0, 10.0, solid(name, gold), registration);
+        rect(&mut d, 1, 40.0, gradient(vec![stop(0.0, name, 1.0), stop(1.0, name, 0.25)]), Paint::None);
+        rect(&mut d, 2, 70.0, gradient(vec![stop(0.0, "Gold", 1.0), stop(1.0, name, 1.0)]), Paint::None);
+        let text = String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned();
+        let spaces = text.matches(&format!("[/Separation{colorant}/")).count();
+        assert!(spaces > 0 && text.matches(&gold_separation(colorant)).count() == spaces, "{name}: {text}");
+        assert!(!text.contains(&gold_separation(&format!("/{name}"))), "{name} is not the colorant: {text}");
+        assert!(text.contains("[/Separation/All/DeviceCMYK<<"), "Registration prints on every plate: {text}");
+        assert!(text.contains(&format!("[/DeviceN[/Gold{colorant}]")), "{name}: {text}");
+    }
+
+    // A spot swatch already named All Spot keeps its name, and All is numbered past it.
+    let mut d = doc(ColorMode::Cmyk, &[]);
+    for name in ["All", "All Spot"] {
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(gold), global: true, spot: true });
+    }
+    rect(&mut d, 0, 10.0, solid("All", gold), solid("All Spot", gold));
+    let text = String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned();
+    assert!(text.contains(&gold_separation("/All#20Spot#202")) && text.contains(&gold_separation("/All#20Spot")), "{text}");
+}
+
+#[test]
+fn a_lab_spot_ink_named_all_keeps_its_lab_alternate() {
+    let mut d = doc(ColorMode::Cmyk, &[]);
+    let lab = Color::Lab { l: 60.0, a: 40.0, b: 50.0 };
+    d.swatches.push(Swatch { name: "All".into(), paint: Paint::solid(lab), global: true, spot: true });
+    let fill = Paint::Solid { color: lab, swatch: Some("All".into()), tint: 1.0 };
+    let l = d.layers[0].id;
+    let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 40.0, 30.0, 60.0)), Appearance::basic(fill, Paint::None, 0.0));
+    d.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned();
+    assert!(text.contains("[/Separation/All#20Spot[/Lab<<"), "{text}");
+    assert!(!text.contains("[/Separation/All/") && !text.contains("[/Separation/All["), "{text}");
+}
+
 /// The uncompressed PDF of a CMYK document whose rectangle is filled with gradient `stops`
 /// (Perceptual when `perceptual`), with spot swatch "Gold" (C0 M20 Y80 K10).
 fn gold_gradient_pdf(stops: Vec<GradientStop>, perceptual: bool) -> String {
