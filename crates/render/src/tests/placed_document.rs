@@ -50,9 +50,6 @@ fn placed_node(id: u64, key: &str, width: f64, height: f64, xf: Affine) -> Node 
     Node::new(NodeId(id), NodeKind::PlacedDocument(Box::new(p)))
 }
 
-/// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
-/// generation and the jobs being made: one test's bitmaps don't push out another's, and
-/// [`settle`] waits for its own.
 /// Held shut, [`gated_blue_page`] makes the background worker wait before reading a file, so a
 /// frame drawn meanwhile shows the placeholders whatever the scheduler does (#5152: a fast worker
 /// could finish between scheduling a bitmap and the frame looking it up again).
@@ -83,6 +80,9 @@ fn open_gate() {
     GATE_SHUT.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
+/// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
+/// generation and the jobs being made: one test's bitmaps don't push out another's, and
+/// [`settle`] waits for its own.
 fn serial() -> std::sync::MutexGuard<'static, ()> {
     static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
     SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
