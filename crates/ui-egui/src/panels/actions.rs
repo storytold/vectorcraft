@@ -514,6 +514,29 @@ mod tests {
         assert_eq!(names(&app), ["Push", "Nudge Again"], "a refused rename renames nothing");
     }
 
+    /// OK in Action Options or Set Options whose `set` or `action` field `ui.dialog.set` changed to
+    /// something that is not an index is an error: it renames no set or action, adds no set, and
+    /// keeps the dialog open.
+    #[test]
+    fn options_with_a_field_that_is_not_an_index_change_nothing() {
+        use crate::dialogs::action_set_options::KIND;
+        let mut app = app_with_sets();
+        for fields in [
+            json!({"set": 1, "action": null, "name": "X"}),
+            json!({"set": null, "action": 0, "name": "X"}),
+            json!({"set": 1, "action": 9, "name": "X"}),
+            json!({"set": null, "name": "X"}),
+            json!({"set": 9, "name": "X"}),
+        ] {
+            app.ui.dialog = Some(crate::state::Dialog::new(KIND, fields.clone()));
+            assert!(crate::dialogs::confirm(&mut app).is_err(), "{fields}");
+            assert!(app.ui.dialog.is_some(), "the dialog stays open: {fields}");
+            assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "{fields}");
+            let names = app.ui.action_sets[1].actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>();
+            assert_eq!(names, ["Nudge", "Nudge Again"], "{fields}");
+        }
+    }
+
     /// An app with the default set and the sets Mine (two actions) and Other.
     fn app_with_sets() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
