@@ -97,7 +97,9 @@ fn applying_a_dataset_reports_the_area_type_it_overflows() {
     s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0, p.0]})).unwrap();
-    s.execute("variable.bind", &json!({"variable": "Title", "ids": [a.0]})).unwrap();
+    // `variable.bind` refuses a second text variable on one type object; a document saved
+    // before it did can hold two.
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).variables.bind(a, "Title");
     s.execute("dataset.new", &json!({"name": "Short", "values": {"Name": "Ann", "Title": "Ann"}})).unwrap();
     s.execute("dataset.new", &json!({"name": "Long", "values": {"Name": long, "Title": long}})).unwrap();
 
@@ -262,6 +264,7 @@ fn a_row_with_no_value_for_a_bound_variable_warns_that_nothing_was_applied() {
     assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(1), &json!(warning("B"))), "{v}");
 
     // Bound to a variable with a value, the row applies it and gives no warning.
+    s.execute("variable.unbind", &json!({"variable": "Other", "ids": [t.0]})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
     let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
     assert_eq!(v["applied"].as_u64(), Some(1), "{v}");
@@ -360,41 +363,137 @@ fn one_object_can_be_driven_by_several_variables() {
     let t = text(&mut s, "x");
     let r = rect(&mut s);
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
-    s.execute("variable.define", &json!({"name": "Price", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
     s.execute("variable.define", &json!({"name": "Badge", "kind": "visibility"})).unwrap();
 
-    // A text object driven by two text variables keeps both.
+    // A text object driven by a text variable and a visibility variable keeps both.
     assert_eq!(s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap()["bound"], 1);
-    let v = s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    let v = s.execute("variable.bind", &json!({"variable": "Shown", "ids": [t.0]})).unwrap();
     assert_eq!((v["bound"].clone(), v["already"].clone()), (json!(1), json!([])), "Title is untouched");
     // A rectangle driven by a visibility variable as well as nothing else yet.
     s.execute("variable.bind", &json!({"variable": "Badge", "ids": [r.0]})).unwrap();
-    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Price": "9.99", "Badge": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Shown": true, "Badge": false}})).unwrap();
 
     let v = s.execute("dataset.select", &json!({"name": "D"})).unwrap();
     assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(3), Some(0)), "every binding applied");
-    // Both text variables are counted; the later one in definition order is what is left.
-    assert_eq!(plain(&s, t), "9.99");
+    assert_eq!(plain(&s, t), "Hat");
+    assert!(s.doc().unwrap().doc.node(t).unwrap().visible);
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
 
     let vars = s.execute("variable.list", &json!({})).unwrap();
     let of = |n: &str| vars["variables"].as_array().unwrap().iter().find(|v| v["name"] == n).unwrap()["bindings"].as_u64();
-    assert_eq!((of("Title"), of("Price"), of("Badge")), (Some(1), Some(1), Some(1)));
+    assert_eq!((of("Title"), of("Shown"), of("Badge")), (Some(1), Some(1), Some(1)));
 
     // Binding again to one it already has is not a change, and says so.
-    let v = s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    let v = s.execute("variable.bind", &json!({"variable": "Shown", "ids": [t.0]})).unwrap();
     assert_eq!((v["bound"].clone(), v["already"].clone()), (json!(0), json!([t.0])));
     // Unbinding one variable leaves the object's others alone.
-    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Price"})).unwrap()["unbound"], 1);
+    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Shown"})).unwrap()["unbound"], 1);
     s.execute("edit.undo", &json!({})).unwrap();
     let vars = s.execute("variable.list", &json!({})).unwrap();
     assert_eq!(vars["variables"][1]["bindings"], 1, "the other binding is still there");
     assert!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Ghost"})).is_err());
 
     // Deleting a variable drops only its own binding.
-    s.execute("variable.delete", &json!({"names": ["Price"]})).unwrap();
+    s.execute("variable.delete", &json!({"names": ["Shown"]})).unwrap();
     let vars = s.execute("variable.list", &json!({})).unwrap();
     assert_eq!(vars["variables"][0]["bindings"], 1, "Title still drives the text");
+}
+
+/// A type object holds one text variable: binding another text variable to it is refused, the
+/// error names the one it has, and nothing is bound, not even the other objects of the call.
+/// Variables of other kinds still share the object.
+#[test]
+fn a_type_object_holds_one_text_variable() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let u = text(&mut s, "y");
+    for (name, kind) in [("Title", "text"), ("Price", "text"), ("Shown", "visibility")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    let bindings = |s: &Session, name: &str| s.doc().unwrap().doc.variables.objects_of(name);
+
+    let e = s.execute("variable.bind", &json!({"variable": "Price", "ids": [u.0, t.0]})).unwrap_err().to_string();
+    assert!(e.contains("`variable.bind`") && e.contains(&format!("node {} already has the text variable `Title`", t.0)), "{e}");
+    assert_eq!((bindings(&s, "Title"), bindings(&s, "Price")), (vec![t], vec![]), "nothing was bound");
+    // The same variable again is not a second one, and another type object takes Price.
+    assert_eq!(s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap()["already"], json!([t.0]));
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [u.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Shown", "ids": [t.0, u.0]})).unwrap();
+    assert_eq!(bindings(&s, "Shown"), vec![t, u]);
+    // After Title is unbound from it, the object takes Price.
+    s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Title"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    assert_eq!(bindings(&s, "Price"), vec![t, u]);
+}
+
+/// Make Text Dynamic refuses type that already has a text variable and defines no variable;
+/// Make Visibility Dynamic still binds it.
+#[test]
+fn make_text_dynamic_refuses_type_that_has_a_text_variable() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+
+    let e = s.execute("variable.makeTextDynamic", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("`variable.makeTextDynamic`") && e.contains(&format!("node {} already has the text variable `Alice`", t.0)), "{e}");
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"].as_array().map(Vec::len), Some(1), "{vars}");
+    let v = s.execute("variable.makeVisibilityDynamic", &json!({})).unwrap();
+    assert_eq!(v["ids"], json!([t.0]));
+}
+
+/// With unbound type selected before type that has a text variable, Make Text Dynamic is still
+/// refused: it defines no variable and binds neither object.
+#[test]
+fn make_text_dynamic_refuses_a_selection_where_a_later_object_has_a_text_variable() {
+    let mut s = session();
+    let u = text(&mut s, "Bob");
+    let t = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [u.0, t.0]})).unwrap();
+    let e = s.execute("variable.makeTextDynamic", &json!({})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} already has the text variable `Alice`", t.0)), "{e}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.variables.variables.len(), 1, "no variable was defined");
+    assert!(!doc.variables.bindings.contains_key(&u), "the unbound object stays unbound");
+    assert_eq!(doc.variables.bindings[&t].iter().collect::<Vec<_>>(), ["Alice"]);
+}
+
+/// A document saved with two text variables on one type object opens with both bindings, and
+/// applying a row still writes both, the later one defined last. Binding either again changes
+/// nothing, and binding a third is refused with the first one named.
+#[test]
+fn a_document_with_two_text_variables_on_one_type_object_opens_unchanged() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let u = text(&mut s, "y");
+    for name in ["Title", "Price", "Note"] {
+        s.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).variables.bind(t, "Price");
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Price": "9.99"}})).unwrap();
+    let saved = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "two.vectorcraft", "dataBase64": saved})).unwrap();
+    let held: Vec<String> = o.doc().unwrap().doc.variables.bindings[&t].iter().cloned().collect();
+    assert_eq!(held, ["Price", "Title"]);
+    let v = o.execute("dataset.select", &json!({"name": "D"})).unwrap();
+    assert_eq!(v["applied"], json!(2), "{v}");
+    assert_eq!(plain(&o, t), "9.99");
+    for name in ["Title", "Price"] {
+        let v = o.execute("variable.bind", &json!({"variable": name, "ids": [t.0, u.0]})).unwrap();
+        assert_eq!((&v["bound"], &v["already"]), (&json!(1), &json!([t.0])), "{name}: {v}");
+        o.execute("edit.undo", &json!({})).unwrap();
+    }
+    let e = o.execute("variable.bind", &json!({"variable": "Note", "ids": [t.0]})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} already has the text variable `Title`", t.0)), "{e}");
 }
 
 /// `unbound` counts what was actually dropped, like `variable.delete` does.
@@ -403,7 +502,7 @@ fn unbind_reports_what_it_actually_removed() {
     let mut s = session();
     let t = text(&mut s, "x");
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
-    s.execute("variable.define", &json!({"name": "Price", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Price", "kind": "visibility"})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
     assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Title"})).unwrap()["unbound"], 1);
@@ -489,8 +588,9 @@ fn making_a_selection_dynamic_names_and_binds_it() {
     let v = s.execute("variable.makeVisibilityDynamic", &json!({})).unwrap();
     assert_eq!(v["kind"], "visibility");
 
-    // The same object twice takes a number rather than colliding with the first variable.
-    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    // Type with the same name takes a number rather than colliding with the first variable.
+    let twin = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [twin.0]})).unwrap();
     let again = s.execute("variable.makeTextDynamic", &json!({})).unwrap();
     assert_eq!(again["name"], "Alice 2");
     let vars = s.execute("variable.list", &json!({})).unwrap();
@@ -1083,8 +1183,7 @@ fn a_row_writes_type_inside_a_group_it_shows_or_hides() {
     assert!(!s.doc().unwrap().doc.node(g).unwrap().visible);
 }
 
-/// Of two visibility variables on one object, the one defined later decides whether it shows,
-/// as with two text variables.
+/// Of two visibility variables on one object, the one defined later decides whether it shows.
 #[test]
 fn the_later_visibility_variable_on_an_object_wins() {
     let mut s = session();
