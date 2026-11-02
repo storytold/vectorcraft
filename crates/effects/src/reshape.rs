@@ -47,16 +47,28 @@ pub fn has_gradient_copies(n: &Node) -> bool {
 }
 
 /// Is `n` a path or compound path with a visible Transform effect whose Transform Patterns or
-/// Scale Strokes & Effects is on (#885)? Such an effect changes the fills and strokes as well as
-/// the geometry, so the object is drawn through its art ([`outline_art`]), each copy an object of
-/// its own with its strokes scaled and its patterns moved ([`transform_leaf`]).
+/// Scale Strokes & Effects is on (#885), its own or one of a fill or stroke that paints
+/// ([`item_transform_options`])? Such an effect changes the fills and strokes as well as the
+/// geometry, so the object is drawn through its art ([`outline_art`]), each copy an object of its
+/// own with its strokes scaled and its patterns moved ([`transform_leaf`], [`transform_items`]).
 pub fn has_transform_options(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. })
-        && geometry_effects(n)
+        && (geometry_effects(n)
             .iter()
             // Both options default to off, so the stored params tell without merging the defaults
             // (this runs for every object drawn).
             .any(|e| e.id == "distort.transform" && crate::distort::TransformOptions::of(&e.params).reach_appearance())
+            || n.appearance.items.iter().any(item_transform_options))
+}
+
+/// Does `item` paint and carry a Transform effect of its own that [`reaches_appearance`]?
+fn item_transform_options(item: &AppearanceItem) -> bool {
+    crate::paints(item) && item.effects().iter().any(reaches_appearance)
+}
+
+/// Is `e` a visible Transform effect whose Transform Patterns or Scale Strokes & Effects is on?
+fn reaches_appearance(e: &Effect) -> bool {
+    e.visible && e.id == "distort.transform" && crate::distort::TransformOptions::of(&e.params).reach_appearance()
 }
 
 /// Is `n` a path or compound path that its Transform effects make into art of separate objects
@@ -304,9 +316,11 @@ pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
 /// Object on. The result is a group with `n`'s id, name, visibility, transparency, opacity mask
 /// and remaining (raster) effects; `None` when `n` has no visible geometry effect, no perspective
 /// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts,
-/// or has no art (a symbol instance without `symbol_art`).
+/// or has no art (a symbol instance without `symbol_art`). A path with [`has_transform_art`] is
+/// always reshaped. The fills and strokes in the art whose own Transform effects reach their
+/// appearance become objects of their own ([`transform_items`]).
 pub fn reshape(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if (geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !(needs_outline(n) || has_transform_art(n)) {
+    if !has_transform_art(n) && ((geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !needs_outline(n)) {
         return None;
     }
     as_art(doc, n, symbol_art)
@@ -364,6 +378,7 @@ pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>
         _ => outline_art(doc, n, symbol_art)?,
     };
     reshape_leaves(&mut art, &fx);
+    transform_items(&mut art);
     // Type and symbols in perspective: the art projected onto their plane.
     if let Some(h) = n.projection() {
         project_leaves(&mut art, &h);
@@ -575,6 +590,94 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
     g.name = leaf.name.clone();
     *leaf = g;
     made
+}
+
+/// Every path and compound path under `art` (other than clipping paths) with a fill or stroke whose
+/// own Transform effect has Transform Patterns or Scale Strokes & Effects on
+/// ([`item_transform_options`]), made into a group of objects of its own ([`transform_item_leaf`]).
+/// The new paths keep to one [`Budget::EFFECTS`] together (or to what `art` costs, when that is
+/// more).
+fn transform_items(art: &mut Node) {
+    let mut used = art_cost(art);
+    let max = Budget::EFFECTS.at_least(used);
+    for_each_leaf(art, &mut |leaf| transform_item_leaf(leaf, max, &mut used));
+}
+
+/// `leaf`, a path or compound path with a fill or stroke whose own Transform effect has Transform
+/// Patterns or Scale Strokes & Effects on, as a group with its id, name, transparency and object
+/// effects. In paint order, each such fill or stroke is a path of its own: the leaf's geometry after
+/// the geometry effects of that fill or stroke before its first such Transform effect, transformed
+/// as [`transform_leaf`] transforms an object with that effect's map, copies and options, so the
+/// stroke's weight and dashes, the distances of its remaining effects and its pattern follow the
+/// map. The reference box is that geometry's bounds and the seed is the leaf's id, as the renderer
+/// draws a fill's or stroke's own effects. Its raster effects and the effects after the Transform
+/// effect stay on it (and on each copy), and a later such Transform effect applies to the result in
+/// the same way. The other fills and strokes stay together on paths of the leaf's geometry between
+/// them, with their own effects. `max` is the budget of the whole art and `used` what it has spent.
+fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
+    if matches!(leaf.kind, NodeKind::Path { clipping: true, .. }) || !leaf.appearance.items.iter().any(item_transform_options) {
+        return;
+    }
+    let Some((path, rule)) = leaf_geometry(leaf) else { return };
+    let original = leaf.clone();
+    let ctx = GeomContext::of(&original);
+    let bounds = path.to_bezpath().bounding_box();
+    // A path of the leaf's geometry painted by `items` alone, without the leaf's transparency and
+    // object effects (the group keeps them).
+    let piece = |items: Vec<AppearanceItem>| {
+        let mut p = original.clone();
+        p.appearance.items = items;
+        p.appearance.effects.clear();
+        p.appearance.contents_index = None;
+        p.opacity = 1.0;
+        p.blend = Default::default();
+        p.isolate = false;
+        p.knockout = Default::default();
+        p.extras_mut().mask = None;
+        p
+    };
+    let mut pieces: Vec<Arc<Node>> = vec![];
+    let mut plain: Vec<AppearanceItem> = vec![];
+    for item in &original.appearance.items {
+        let fx = item.effects();
+        let Some(at) = fx.iter().position(reaches_appearance).filter(|_| crate::paints(item)) else {
+            plain.push(item.clone());
+            continue;
+        };
+        if !plain.is_empty() {
+            pieces.push(Arc::new(piece(std::mem::take(&mut plain))));
+        }
+        let before = &fx[..at];
+        // What the art's other paths leave of the budget, with the leaf's own geometry (counted in
+        // `used`) given back: the geometry before the Transform effect and its copies keep to it.
+        let room = max.minus(*used).plus(Budget::of(&path));
+        let g = if crate::has_geometry(before) && !path.is_empty() {
+            crate::geometry::apply_geometry_within(before, &path, bounds, &ctx.item(item), room)
+        } else {
+            path.clone()
+        };
+        let Some(tb) = g.bounds() else { continue };
+        let params = merged_params(&fx[at].id, &fx[at].params);
+        let (_, copies) = crate::distort::transform_map(tb, &params, ctx.seed);
+        let options = crate::distort::TransformOptions::of(&params);
+        let map = crate::distort::transform_affine(tb, &params, ctx.seed);
+        let mut it = item.clone();
+        let rest: Vec<Effect> = before.iter().filter(|e| !is_geometry(&e.id)).chain(&fx[at + 1..]).cloned().collect();
+        *it.effects_mut() = rest;
+        let mut p = piece(vec![it]);
+        set_geometry(&mut p, g.clone(), rule);
+        let made = transform_leaf(&mut p, &g, map, copies, options, room);
+        *used = used.plus(made);
+        for_each_leaf(&mut p, &mut |l| transform_item_leaf(l, max, used));
+        pieces.push(Arc::new(p));
+    }
+    if !plain.is_empty() {
+        pieces.push(Arc::new(piece(plain)));
+    }
+    leaf.appearance.items.clear();
+    leaf.appearance.contents_index = None;
+    leaf.knockout = vectorcraft_doc::Knockout::Off;
+    leaf.kind = NodeKind::Group { children: pieces, clip: false };
 }
 
 /// The bounds of each group of type's outlines under `n` ([`outline_text`]), `n` included, in
