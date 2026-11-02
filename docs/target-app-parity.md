@@ -1505,10 +1505,15 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 
 A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Plug-ins › Color Effects › Create Swatch Legend… (`addon.color.swatchLegend`) opens a dialog (columns, chip size, gap, values, selected swatches only, with a preview) and draws a chip per colour swatch (the selected ones, else all) filled with and linked to its swatch, labelled with its name and values (HEX, RGB, CMYK, Lab or Grayscale; by default its own model; spot swatches marked), black on light chips and white on dark ones, in a grid of chosen columns, chip size and spacing, as one selected group in one undo step (#4919). Tests: `cmd::addons::color::legend::tests` (engine), `addons::color::legend::tests::create_swatch_legend_opens_its_dialog_previews_and_runs_on_ok` (ui-egui).
 
+## Keyboard shortcuts for Effect menu items (2026-11-01)
+
+Edit › Keyboard Shortcuts lists every item of the Effect menu under its menu path (Effect › Distort & Transform › Transform…) and gives each one a shortcut of its own (stored as `effect:<id>`; they all run `effect.dialog {effect}`, or `effect.apply` for an effect without options, so a shortcut on the command alone couldn't tell them apart). The menu shows the shortcut, and pressing it opens that effect's dialog for the selection (#3296). Test: `shortcuts::tests::an_effect_menu_item_takes_a_shortcut_of_its_own`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Shortcuts for Effect menu items (#3296); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Create Swatch Legend add-on under Object › Plug-ins › Color Effects (`addon.color.swatchLegend`, #4919); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); evidence added; scores unchanged. |
