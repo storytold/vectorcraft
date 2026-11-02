@@ -3087,6 +3087,54 @@ fn an_objects_on_path_record_that_doesnt_fit_leaves_a_plain_group() {
     }
 }
 
+/// The path and objects of a group are measured once however many records name it: a thousand
+/// copies of a record open about as fast as one copy followed by 999 records whose path id is
+/// missing, when the group opens live, when its long path has no length, and when its first object
+/// is a group of many paths and its last object has no bounds.
+#[test]
+fn repeated_objects_on_path_records_dont_measure_the_objects_again() {
+    use vectorcraft_testkit::ai::{on_path_member, on_path_options, on_path_record};
+    let paths: String = (0..20_000).map(|i| format!("{}f\n", rect_path(f64::from(i % 200), 40.0, f64::from(i % 200) + 1.0, 46.0))).collect();
+    let big = format!("u\n{RED}{paths}U\n{}", on_path_member(ON_PATH_IDS[1], Some(0), 0.0));
+    let empty = format!("u\nU\n{}", on_path_member(ON_PATH_IDS[2], Some(1), 0.0));
+    let still = format!("20 20 m\n{}S\n", "20 20 L\n".repeat(20_000));
+    let cases = [
+        ("a live group", OPEN_PATH.to_string(), big.clone(), 2, true),
+        ("a path without length", still, big.clone(), 2, false),
+        ("an object without bounds", OPEN_PATH.to_string(), format!("{big}{empty}"), 3, false),
+    ];
+    for (why, path, objects, n, live) in cases {
+        let ids = &ON_PATH_IDS[..n];
+        let group = format!(
+            "0 Ae\nu\n/ConstraintGroup :\n128 /GroupType ,\n;\n0 0 1 0 0 0 1 XA\n2 w\n{path}{}{objects}U\n",
+            on_path_member(ids[0], None, 0.0)
+        );
+        let record = on_path_record(ALIGN_ON_PATH, ids, &on_path_options(n - 1, 4, 0.0, ""));
+        let (start, end) = (record.find("%_/Dictionary :\n%_1 /Int").unwrap(), record.find("%_; (Constraint Data)").unwrap());
+        let copy = &record[start..end];
+        let unresolved = copy.replace(ids[0], "0a6d1e52-ffff-4000-8000-000000000000");
+        let one = format!("{}{copy}{}{}", &record[..start], unresolved.repeat(999), &record[end..]);
+        let many = format!("{}{}{}", &record[..start], copy.repeat(1000), &record[end..]);
+        let time = |data: &str| {
+            let started = std::time::Instant::now();
+            let doc = read_ok(&format!("{data}{}", layer(&group))).doc;
+            let elapsed = started.elapsed();
+            let g = art(&doc)[0].clone();
+            assert_eq!(g.children().unwrap().len(), n, "{why}");
+            assert_eq!(g.extras().objects_on_path.is_some(), live, "{why}");
+            elapsed
+        };
+        // The fastest of three runs each, taken in turn, so that other tests running at the same
+        // time weigh on both.
+        let (mut fastest_one, mut fastest_many) = (std::time::Duration::MAX, std::time::Duration::MAX);
+        for _ in 0..3 {
+            fastest_one = fastest_one.min(time(&one));
+            fastest_many = fastest_many.min(time(&many));
+        }
+        assert!(fastest_many < fastest_one * 5, "{why}: one copy: {fastest_one:?}, 1000 copies: {fastest_many:?}");
+    }
+}
+
 /// The copy of the drawn group that follows it as versioned content is skipped: the group opens once,
 /// live.
 #[test]
