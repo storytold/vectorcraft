@@ -303,8 +303,10 @@ fn sweep_graph(inputs: &[(BezPath, usize)], eps: f64, precision: f64) -> Option<
         // coordinates: merging them (a union) then cancels their common edge, which it can't when
         // each face carries its own rounding of the corner (#893).
         pin_ends(&mut segs, p0, p1);
-        let Some(source) = mid(&segs).and_then(|m| outlines.source_at(m)) else { continue };
-        // Coincident pieces the sweep left apart are one edge (the front-most input's).
+        let sources = mid(&segs).map(|m| outlines.sources_at(m)).unwrap_or_default();
+        let Some(&source) = sources.last() else { continue };
+        // Coincident pieces the sweep left apart are one edge (the front-most input's), lying on
+        // the inputs of both.
         let key = (ends[0].min(ends[1]), ends[0].max(ends[1]));
         let here = mid(&segs);
         let twin_of = between.get(&key).and_then(|v| {
@@ -314,15 +316,16 @@ fn sweep_graph(inputs: &[(BezPath, usize)], eps: f64, precision: f64) -> Option<
             })
         });
         if let Some(e) = twin_of {
-            if let Some(e) = edges.get_mut(e)
-                && source > e.source
-            {
-                e.source = source;
+            if let Some(e) = edges.get_mut(e) {
+                e.source = e.source.max(source);
+                e.sources.extend(sources);
+                e.sources.sort_unstable();
+                e.sources.dedup();
             }
             continue;
         }
         between.entry(key).or_default().push(edges.len());
-        edges.push(Edge { segs, ends, source });
+        edges.push(Edge { segs, ends, source, sources });
     }
     Some((points, edges))
 }
@@ -414,7 +417,10 @@ impl Map {
     }
 }
 
-pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Vec<Shape>)> {
+/// Faces and edges of `shapes`, and the pieces of the open paths (those with no closed subpath)
+/// that lie under the outline of a closed path in front of them, whose edges are that closed
+/// path's.
+pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Vec<Shape>, Vec<Shape>)> {
     let m = map_with(shapes, false, precision)?;
     let Map { edges, around, faces, holes, face_holes, tidy, anchors, snap, .. } = &m;
     let snap = *snap;
@@ -441,18 +447,38 @@ pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Ve
         .collect();
 
     // Edges: chains of segments through vertices where nothing else meets.
-    let degree: Vec<usize> = around.iter().map(Vec::len).collect();
+    let to_shapes = |chains: Vec<(Vec<Seg>, bool, usize)>| -> Vec<Shape> {
+        chains
+            .into_iter()
+            .filter_map(|(segs, closed, source)| {
+                let sp = segs_to_subpath(&tidy_segments(segs, closed, tidy), closed)?;
+                Some(Shape::new(unshear(PathData::new(vec![sp]), anchors, snap), FillRule::NonZero, shapes.get(source)?.key))
+            })
+            .collect()
+    };
+    let edge_shapes = to_shapes(chains_by(edges, around, |e| Some(e.source)));
+    let is_line = |i: usize| shapes.get(i).is_some_and(|s| !s.path.subpaths.iter().any(|sp| sp.closed));
+    let under = to_shapes(chains_by(edges, around, |e| if is_line(e.source) { None } else { e.sources.iter().rev().copied().find(|&i| is_line(i)) }));
+    Some((regions, edge_shapes, under))
+}
+
+/// The edges that `key` gives an input, joined into chains through the vertices where only two
+/// edges of the same input meet, each with that input. A chain is closed when it comes back round
+/// to where it started.
+fn chains_by(edges: &[Edge], around: &[Vec<usize>], key: impl Fn(&Edge) -> Option<usize>) -> Vec<(Vec<Seg>, bool, usize)> {
+    let keys: Vec<Option<usize>> = edges.iter().map(&key).collect();
+    let key_of = |h: usize| keys.get(h / 2).copied().flatten();
     let passes = |v: usize| -> Option<(usize, usize)> {
         let list = around.get(v)?;
         let (&a, &b) = (list.first()?, list.get(1)?);
-        (degree.get(v) == Some(&2) && edges.get(a / 2)?.source == edges.get(b / 2)?.source).then_some((a, b))
+        (list.len() == 2 && key_of(a).is_some() && key_of(a) == key_of(b)).then_some((a, b))
     };
-    let mut used = vec![false; edges.len()];
+    // Edges with no input to give are never walked.
+    let mut used: Vec<bool> = keys.iter().map(Option::is_none).collect();
     let mut chains: Vec<(Vec<Seg>, bool, usize)> = Vec::new();
-    // A chain from half-edge `h0` up to the next vertex where it doesn't pass straight through;
-    // closed when it comes back round to where it started.
+    // A chain from half-edge `h0` up to the next vertex where it doesn't pass straight through.
     let walk = |h0: usize, used: &mut Vec<bool>| -> Option<(Vec<Seg>, bool, usize)> {
-        let source = edges.get(h0 / 2)?.source;
+        let source = key_of(h0)?;
         let mut segs = Vec::new();
         let mut h = h0;
         loop {
@@ -487,14 +513,7 @@ pub(super) fn build(shapes: &[Shape], precision: f64) -> Option<(Vec<Region>, Ve
             chains.push(c);
         }
     }
-    let edge_shapes = chains
-        .into_iter()
-        .filter_map(|(segs, closed, source)| {
-            let sp = segs_to_subpath(&tidy_segments(segs, closed, tidy), closed)?;
-            Some(Shape::new(unshear(PathData::new(vec![sp]), anchors, snap), FillRule::NonZero, shapes.get(source)?.key))
-        })
-        .collect();
-    Some((regions, edge_shapes))
+    chains
 }
 
 /// A point strictly inside a filled path, well away from its edges where it can be (for re-finding

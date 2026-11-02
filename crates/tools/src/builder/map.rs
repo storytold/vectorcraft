@@ -81,7 +81,10 @@ impl BuilderMap {
                 })
                 .collect()
         };
-        Self { shapes, regions: faces_of(arr.regions), lines: bounded(arr.lines), edges: bounded(arr.edges) }
+        // A line keeps its pieces under the outline of a closed path in front of it, so a merge
+        // or an erase removes them as it does the rest of the line.
+        let lines = arr.lines.into_iter().chain(arr.lines_under).collect();
+        Self { shapes, regions: faces_of(arr.regions), lines: bounded(lines), edges: bounded(arr.edges) }
     }
 
     /// The region containing `p`.
@@ -117,10 +120,13 @@ impl BuilderMap {
     }
 
     /// The line piece or edge within `piece_tol` of `p` that [`Self::hit`] gives (None without
-    /// `piece_tol`).
+    /// `piece_tol`). Where a line lies under an edge, the one in front is hit.
     fn piece_hit(&self, p: Point, piece_tol: Option<f64>) -> Option<Hit> {
+        let key = |pieces: &[(po::Shape, Rect)], i: usize| pieces.get(i).map(|(s, _)| s.key);
         piece_tol.and_then(|t| match (piece_near(&self.lines, p, t), piece_near(&self.edges, p, t)) {
-            (Some(l), Some(e)) if e.0 < l.0 => Some(Hit::Edge(e.1)),
+            (Some(l), Some(e)) if e.0 < l.0 - 1e-6 * t || (e.0 <= l.0 + 1e-6 * t && key(&self.edges, e.1) > key(&self.lines, l.1)) => {
+                Some(Hit::Edge(e.1))
+            }
             (Some(l), _) => Some(Hit::Line(l.1)),
             (None, e) => e.map(|e| Hit::Edge(e.1)),
         })
