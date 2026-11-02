@@ -358,6 +358,24 @@ impl Session {
 
     /// Feed a pointer event to the active tool. Returns requests for the UI.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        self.pointer_event(ev, view, true)
+    }
+
+    /// Drop the press in progress (a long touch, a cancelled touch, a second finger): nothing it
+    /// began is kept. Its interaction is undone, the tool takes Escape as it does during a drag,
+    /// and then a release that returns it to rest. The options the press changed are not stored,
+    /// and what the tool asks of the UI along the way (a size dialog for a click) is dropped.
+    pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
+        // Nothing to roll back without a document; the tool still takes Escape and the release.
+        let _ = self.cancel_interaction();
+        let esc = self.tool_key(ToolKey::Escape, Mods::default(), view);
+        let up = PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None };
+        let up = self.pointer_event(&up, view, false);
+        esc.and(up).map(drop)
+    }
+
+    /// [`Self::pointer`]; a release stores the tool's options only with `keep`.
+    fn pointer_event(&mut self, ev: &PointerEvent, view: ViewInfo, keep: bool) -> Result<Vec<UiRequest>> {
         self.last_view = view;
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
@@ -373,7 +391,7 @@ impl Session {
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         let r = self.take_tool_panic().and_then(|()| {
             // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
-            if ev.kind == PointerKind::Up {
+            if keep && ev.kind == PointerKind::Up {
                 self.keep_tool_settings();
             }
             self.apply_actions(acts)

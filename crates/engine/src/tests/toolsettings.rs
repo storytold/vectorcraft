@@ -1,6 +1,7 @@
 //! Tool options that persist across tool switches, documents and launches (`Prefs::tool_settings`).
 
 use serde_json::json;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use crate::*;
 
@@ -88,6 +89,35 @@ fn a_gesture_keeps_what_it_changed_and_a_document_switch_keeps_options() {
     assert_eq!(s.tool_options()["segments"], json!(14));
     s.set_active(0);
     assert_eq!(s.tool_options()["segments"], json!(14));
+}
+
+/// A dropped press (a long touch, a cancelled touch, a second finger) keeps nothing it began: the
+/// tool takes Escape and ends at rest, and the options the drag changed are not stored. A release
+/// stores them.
+#[test]
+fn a_dropped_press_does_not_store_what_its_drag_changed() {
+    let mut s = session();
+    select(&mut s, "polygon");
+    let v = ViewInfo::default();
+    let drag_with_one_more_side = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+        s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    };
+    let before = s.tool_options()["sides"].clone();
+    drag_with_one_more_side(&mut s);
+    assert_eq!(s.tool_options()["sides"], json!(7));
+    s.drop_tool_press(v).unwrap();
+    assert!(!s.tool_busy(), "the tool is at rest");
+    let st = s.active().unwrap();
+    assert!(st.interaction.is_none() && st.doc.art_bounds().is_none(), "the polygon is not drawn");
+    // A tool whose Escape puts back the options the drag changed stores those; nothing else is stored.
+    let stored = s.prefs.tool_settings.get("polygon").and_then(|o| o.get("sides"));
+    assert!(stored.is_none_or(|v| *v == before), "the dropped drag's sides are not stored: {stored:?}");
+    drag_with_one_more_side(&mut s);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
+    assert!(s.active().unwrap().doc.art_bounds().is_some(), "a release draws the polygon");
+    assert_eq!(s.prefs.tool_settings["polygon"]["sides"], s.tool_options()["sides"], "and stores its sides");
 }
 
 #[test]

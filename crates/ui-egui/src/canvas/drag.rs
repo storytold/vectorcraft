@@ -230,15 +230,11 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
     match ui.data(|d| d.get_temp::<Drag>(drag_id())) {
         Some(Drag::Tool | Drag::Art) => {
-            // The tool's mouse-up returns it to rest. A move waiting over a panel is still live
-            // and would otherwise outlive the drag that owns it (#2826).
-            // Nothing to roll back without a document; the tool still gets its mouse-up.
-            let _ = app.session.cancel_interaction();
-            dispatch(
-                app,
-                &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None },
-                view,
-            );
+            // The tool takes Escape, as during a drag, and then a mouse-up that returns it to rest.
+            // A move waiting over a panel is still live and would otherwise outlive the drag that
+            // owns it (#2826).
+            let r = app.session.drop_tool_press(view);
+            apply_requests(app, r.map(|()| vec![]));
             egui::DragAndDrop::clear_payload(ui.ctx());
         }
         Some(_) => {}
