@@ -59,6 +59,7 @@ const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the 
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
+const SHAPE_EFFECTS: &str = "Adobe Shape Effects"; // brand-ok: the filter's name in the files
 
 const CHAIN: &str = "Chain Style Filter";
 const STACK: &str = "Stack Style Filter";
@@ -99,7 +100,7 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners and Scribble on the object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// Feather, Round Corners, Scribble and Convert to Shape on the object: what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -326,6 +327,11 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
             Tok::Word(w) => {
                 let entry = other_entry.take().flatten();
                 let op = std::str::from_utf8(w).unwrap_or_default();
+                if op == ","
+                    && let (Some(key), Some(f)) = (entry, filters.last_mut())
+                {
+                    f.kinds.insert(key, Kind::Other);
+                }
                 if op == "[" {
                     array = Some(vec![]);
                     continue;
@@ -609,6 +615,55 @@ fn stylize(f: &Filter) -> Option<Option<(&'static str, serde_json::Value)>> {
     })
 }
 
+/// The largest size or radius Convert to Shape reads, in points.
+const MAX_SHAPE_SIZE: f64 = 1e5;
+
+/// Convert to Shape: Rectangle, Rounded Rectangle or Ellipse, with an absolute size or one relative
+/// to the object, and a corner radius
+/// (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+/// The keys are LiveEffect XML's: `Shape` 0 Rectangle, 1 Rounded Rectangle, 2 Ellipse
+/// (https://community.adobe.com/questions-652/effect-convert-to-shape-ellipse-in-javascript-761645),
+/// `Absolute` 1 for an absolute `AbsWidth` × `AbsHeight`, else `RelWidth` and `RelHeight` added to
+/// each side, and `CornerRadius`; a missing size is 18 pt a side or 36 pt, and a missing radius
+/// 9 pt. `None`: a key, a kind or a value that isn't read, which keeps the drawn look.
+fn shape_effect(f: &Filter) -> Option<Effect> {
+    const SIZES: [&str; 5] = ["AbsWidth", "AbsHeight", "RelWidth", "RelHeight", "CornerRadius"];
+    let known = f.kinds.iter().all(|(key, kind)| match key.as_str() {
+        "DisplayString" => *kind == Kind::Other,
+        "Shape" => *kind == Kind::Int,
+        key => (key == "Absolute" || SIZES.contains(&key)) && *kind == Kind::Real,
+    });
+    if !known || !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
+        return None;
+    }
+    // A written size is a finite number from `min`; a missing one is `default`.
+    let size = |key: &str, min: f64, default: f64| match f.kinds.get(key) {
+        None => Some(default),
+        Some(_) => f.params.get(key).copied().filter(|v| v.is_finite() && (min..=MAX_SHAPE_SIZE).contains(v)),
+    };
+    let shape = f.params.get("Shape").copied().filter(|_| f.kinds.get("Shape") == Some(&Kind::Int))?;
+    let absolute = match f.params.get("Absolute").copied() {
+        Some(0.0) => false,
+        Some(1.0) => true,
+        _ => return None,
+    };
+    let (rel_w, rel_h) = (size("RelWidth", -MAX_SHAPE_SIZE, 18.0)?, size("RelHeight", -MAX_SHAPE_SIZE, 18.0)?);
+    let (abs_w, abs_h, radius) = (size("AbsWidth", 0.0, 36.0)?, size("AbsHeight", 0.0, 36.0)?, size("CornerRadius", 0.0, 9.0)?);
+    let id = match shape {
+        0.0 => "convertToShape.rectangle",
+        1.0 => "convertToShape.roundedRectangle",
+        // A relative Ellipse in the file is drawn round the enlarged box, and VectorCraft's inside
+        // it: it keeps its drawn look.
+        2.0 if absolute => "convertToShape.ellipse",
+        _ => return None,
+    };
+    let mut params = json!({"relative": !absolute, "extraW": 2.0 * rel_w, "extraH": 2.0 * rel_h, "width": abs_w, "height": abs_h});
+    if id == "convertToShape.roundedRectangle" {
+        params["radius"] = json!(radius);
+    }
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
 /// The live effect filter `f` is, when it is one read here.
 fn effect(f: &Filter) -> Option<Effect> {
     if let Some(stylized) = stylize(f) {
@@ -662,6 +717,7 @@ fn effect(f: &Filter) -> Option<Effect> {
         GAUSSIAN => ("blur.gaussian", json!({"radius": param("blur").unwrap_or(5.0).clamp(0.0, 1000.0)})),
         // Its settings are in a Photoshop plug-in's binary block: the effect's defaults stand in.
         BAS_RELIEF => ("sketch.basRelief", json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"})),
+        SHAPE_EFFECTS => return shape_effect(f),
         _ => return None,
     };
     Some(Effect { id: id.into(), params, visible: f.visible })
@@ -748,9 +804,11 @@ impl Builder<'_> {
                         (look.blend, look.opacity) = (super::read::blend_mode(mode), opacity);
                     }
                 }
+                // Convert to Shape on one fill or stroke isn't read yet: what it draws there is
+                // the drawn look's.
                 _ => match effect(c) {
-                    Some(e) => look.effects.push(e),
-                    None => self.plain = false,
+                    Some(e) if !e.id.starts_with("convertToShape.") => look.effects.push(e),
+                    _ => self.plain = false,
                 },
             }
         }
@@ -817,7 +875,15 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && st.effects.iter().all(|e| {
             matches!(
                 e.id.as_str(),
-                "stylize.dropShadow" | "stylize.innerGlow" | "stylize.outerGlow" | "stylize.feather" | "stylize.roundCorners" | "stylize.scribble"
+                "stylize.dropShadow"
+                    | "stylize.innerGlow"
+                    | "stylize.outerGlow"
+                    | "stylize.feather"
+                    | "stylize.roundCorners"
+                    | "stylize.scribble"
+                    | "convertToShape.rectangle"
+                    | "convertToShape.roundedRectangle"
+                    | "convertToShape.ellipse"
             )
         });
     st

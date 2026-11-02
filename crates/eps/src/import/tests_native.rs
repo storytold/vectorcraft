@@ -2957,6 +2957,44 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
 }
 
 #[test]
+fn type_with_convert_to_shape_comes_in_as_type_with_it_live() {
+    // GUARDS: `Adobe Shape Effects` wasn't read, and type with it came in without its art style,
+    // the style's drawing beside it as paths.
+    let shape = "/BasicFilter :\n(Adobe Shape Effects) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+        (RoundedRectangle) /UnicodeString (DisplayString) ,\n1 /Int (Shape) ,\n0 /Real (Absolute) ,\n4 /Real (RelWidth) ,\n\
+        2 /Real (RelHeight) ,\n3 /Real (CornerRadius) ,\n; /Dict ;\n /Part ,\n";
+    let stack = "/CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n";
+    let styles = format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Boxed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        {shape}{stack};\n /Part ,\n%AI9_EndArtStyles\n"
+    );
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(styles + &layer("Art", true, &format!("{look}{own}1 (Boxed) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    let (mut texts, mut paths) = (vec![], 0);
+    d.walk(|n| match &n.kind {
+        NodeKind::Text(t) => texts.push((t.plain_text(), n.appearance.effects.clone())),
+        NodeKind::Path { .. } => paths += 1,
+        _ => {}
+    });
+    let [(text, effects)] = texts.as_slice() else { panic!("{texts:?} {notes:?}") };
+    assert_eq!((text.as_str(), paths), ("Bang", 0), "{notes:?}");
+    let [e] = effects.as_slice() else { panic!("{effects:?}") };
+    assert_eq!(
+        (e.id.as_str(), &e.params),
+        (
+            "convertToShape.roundedRectangle",
+            &serde_json::json!({"relative": true, "extraW": 8.0, "extraH": 4.0, "width": 36.0, "height": 36.0, "radius": 3.0})
+        )
+    );
+}
+
+#[test]
 fn point_type_without_a_matrix_is_placed_by_its_layout() {
     // GUARDS: Illustrator 24 leaves an unturned, unscaled point type's matrix out of its frame; such
     // stories weren't read, and the type was left out.
