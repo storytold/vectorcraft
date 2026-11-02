@@ -5609,6 +5609,8 @@ breakText	Glyphs	글리프
 	File + Data Set Name	파일 + 데이터 세트 이름
 	Data Set Name	데이터 세트 이름
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming`은 `fileNumber`, `fileDataSetName` 또는 `dataSetName`이어야 합니다
+	Each data set saves over the same file, which keeps only the last data set.	각 데이터 세트가 같은 파일에 덮어써지므로 마지막 데이터 세트만 남습니다.
+@msg	save the document with Save As before Save and Close	'저장 후 닫기' 전에 '다른 이름으로 저장'으로 문서를 저장하십시오
 @msg	no free data set file name in destination folder	대상 폴더에 사용할 수 있는 데이터 세트 파일 이름이 없습니다
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

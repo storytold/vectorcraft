@@ -5629,6 +5629,8 @@ breakText	Glyphs	Glyph
 	File + Data Set Name	Tệp + tên tập dữ liệu
 	Data Set Name	Tên tập dữ liệu
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` phải là `fileNumber`, `fileDataSetName` hoặc `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Mỗi tập dữ liệu được lưu đè lên cùng một tệp, nên tệp chỉ giữ lại tập dữ liệu cuối cùng.
+@msg	save the document with Save As before Save and Close	hãy lưu tài liệu bằng Lưu thành trước khi dùng Lưu và đóng
 @msg	no free data set file name in destination folder	Không có tên tệp tập dữ liệu còn trống trong thư mục đích
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

@@ -5612,6 +5612,8 @@ breakText	Glyphs	Glyphen
 	File + Data Set Name	Datei + Datensatzname
 	Data Set Name	Datensatzname
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` muss `fileNumber`, `fileDataSetName` oder `dataSetName` sein
+	Each data set saves over the same file, which keeps only the last data set.	Jeder Datensatz wird über dieselbe Datei gespeichert, die nur den letzten Datensatz behält.
+@msg	save the document with Save As before Save and Close	speichern Sie das Dokument mit „Speichern unter“, bevor Sie „Speichern und schließen“ wählen
 @msg	no free data set file name in destination folder	Kein freier Dateiname für den Datensatz im Zielordner
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

@@ -6057,6 +6057,8 @@ breakText	Glyphs	Merkit
 	File + Data Set Name	Tiedosto + tietojoukon nimi
 	Data Set Name	Tietojoukon nimi
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming`-arvon on oltava `fileNumber`, `fileDataSetName` tai `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Jokainen tietojoukko tallennetaan saman tiedoston päälle, johon jää vain viimeinen tietojoukko.
+@msg	save the document with Save As before Save and Close	tallenna asiakirja komennolla Tallenna nimellä ennen kuin valitset Tallenna ja sulje
 @msg	no free data set file name in destination folder	Kohdekansiossa ei ole vapaata tietojoukon tiedostonimeä
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

@@ -5870,6 +5870,8 @@ breakText	Glyphs	字形
 	File + Data Set Name	文件 + 数据集名称
 	Data Set Name	数据集名称
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` 必须是 `fileNumber`、`fileDataSetName` 或 `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	每个数据集都会存储到同一个文件并覆盖它，该文件只保留最后一个数据集。
+@msg	save the document with Save As before Save and Close	请先用“另存为”保存文档，再使用“保存并关闭”
 @msg	no free data set file name in destination folder	目标文件夹中没有可用的数据集文件名
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

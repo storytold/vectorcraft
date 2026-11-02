@@ -6015,6 +6015,8 @@ breakText	Glyphs	Glifs
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` ha de ser `fileNumber`, `fileDataSetName` o `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Cada conjunt de dades es desa sobre el mateix fitxer, que només conserva l'últim conjunt de dades.
+@msg	save the document with Save As before Save and Close	deseu el document amb «Desa com a» abans de «Desa i tanca»
 @msg	no free data set file name in destination folder	No hi ha cap nom de fitxer de conjunt de dades lliure a la carpeta de destinació
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

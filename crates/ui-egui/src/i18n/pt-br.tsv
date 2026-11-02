@@ -5944,6 +5944,8 @@ breakText	Glyphs	Glifos
 	File + Data Set Name	Arquivo + nome do conjunto de dados
 	Data Set Name	Nome do conjunto de dados
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` deve ser `fileNumber`, `fileDataSetName` ou `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Cada conjunto de dados é salvo sobre o mesmo arquivo, que mantém apenas o último conjunto de dados.
+@msg	save the document with Save As before Save and Close	salve o documento com Salvar Como antes de Salvar e fechar
 @msg	no free data set file name in destination folder	Não há nome de arquivo livre para o conjunto de dados na pasta de destino
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

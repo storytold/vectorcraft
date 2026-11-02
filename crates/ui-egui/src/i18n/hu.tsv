@@ -6013,6 +6013,8 @@ breakText	Glyphs	Glifák
 	File + Data Set Name	Fájl + adatkészlet neve
 	Data Set Name	Adatkészlet neve
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	A `datasetFileNaming` értéke `fileNumber`, `fileDataSetName` vagy `dataSetName` lehet
+	Each data set saves over the same file, which keeps only the last data set.	Minden adatkészlet ugyanabba a fájlba mentődik, amely csak az utolsó adatkészletet őrzi meg.
+@msg	save the document with Save As before Save and Close	mentse a dokumentumot a „Mentés másként” paranccsal a „Mentés és bezárás” előtt
 @msg	no free data set file name in destination folder	Nincs szabad adatkészlet-fájlnév a célmappában
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

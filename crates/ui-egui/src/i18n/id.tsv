@@ -5925,6 +5925,8 @@ breakText	Glyphs	Glif
 	File + Data Set Name	File + nama set data
 	Data Set Name	Nama set data
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` harus `fileNumber`, `fileDataSetName`, atau `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Setiap set data disimpan menimpa file yang sama, sehingga hanya set data terakhir yang tersisa.
+@msg	save the document with Save As before Save and Close	simpan dokumen dengan Simpan sebagai sebelum Simpan dan tutup
 @msg	no free data set file name in destination folder	Tidak ada nama file set data yang tersedia di folder tujuan
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

@@ -5713,6 +5713,8 @@ breakText	Glyphs	字形
 	File + Data Set Name	ファイル名 + データセット名
 	Data Set Name	データセット名
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` は `fileNumber`、`fileDataSetName`、`dataSetName` のいずれかである必要があります
+	Each data set saves over the same file, which keeps only the last data set.	各データセットが同じファイルに上書き保存されるため、最後のデータセットだけが残ります。
+@msg	save the document with Save As before Save and Close	「保存して閉じる」の前に「別名で保存」でドキュメントを保存してください
 @msg	no free data set file name in destination folder	保存先フォルダーに使用可能なデータセットのファイル名がありません
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

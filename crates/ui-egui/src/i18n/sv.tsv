@@ -6079,6 +6079,8 @@ breakText	Glyphs	Glyfer
 	File + Data Set Name	Fil + datauppsättningens namn
 	Data Set Name	Datauppsättningens namn
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` måste vara `fileNumber`, `fileDataSetName` eller `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Varje datauppsättning sparas över samma fil, som bara behåller den sista datauppsättningen.
+@msg	save the document with Save As before Save and Close	spara dokumentet med Spara som före Spara och stäng
 @msg	no free data set file name in destination folder	Inget ledigt filnamn för datauppsättningen i målmappen
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

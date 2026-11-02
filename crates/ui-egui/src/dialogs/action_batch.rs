@@ -86,7 +86,21 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::check(ui, d, "overrideSave", "Override Action \"Save\" Commands");
     form::check(ui, d, "overrideExport", "Override Action \"Export\" Commands");
     form::check(ui, d, "stopOnError", "Stop on Errors");
+    if overwrites_one_file(app, d) {
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(tl!("Each data set saves over the same file, which keeps only the last data set.")).size(11.5).color(t.warning));
+    }
     false
+}
+
+/// Whether the batch the dialog would run saves every data set over the same file
+/// ([`vectorcraft_engine::cmd::fileio::batch_overwrites_one_file`]).
+fn overwrites_one_file(app: &VectorcraftApp, d: &Dialog) -> bool {
+    let set = d.fields.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let action = d.fields.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let steps = app.ui.action_sets.get(set).and_then(|s| s.actions.get(action)).map_or(&[][..], |a| &a.steps[..]);
+    let commands = steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    vectorcraft_engine::cmd::fileio::batch_overwrites_one_file(&app.session, &params(d, "", commands))
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -149,6 +163,18 @@ mod tests {
     use vectorcraft_engine::Session;
 
     fn shown(source: &str) -> Vec<String> {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!(source);
+        render(&mut d)
+    }
+
+    /// Draws `d` once and returns the texts it shows.
+    fn render(d: &mut Dialog) -> Vec<String> {
+        render_in(&mut VectorcraftApp::new(Session::new(), Default::default()), d)
+    }
+
+    /// Draws `d` once over `app` and returns the texts it shows.
+    fn render_in(app: &mut VectorcraftApp, d: &mut Dialog) -> Vec<String> {
         fn collect(shape: &egui::Shape, out: &mut Vec<String>) {
             match shape {
                 egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
@@ -156,13 +182,10 @@ mod tests {
                 _ => {}
             }
         }
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
-        d.fields["source"] = json!(source);
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let mut frame = ctx.run_ui(Default::default(), |ui| {
-            body(&mut app, ui, &mut d);
+            body(app, ui, d);
         });
         frame.textures_delta.clear();
         let mut labels = vec![];
@@ -188,5 +211,38 @@ mod tests {
         }
         d.fields["source"] = json!("folder");
         assert!(params(&d, "Test", vec![]).get("datasetFileNaming").is_none());
+    }
+
+    const ONE_FILE: &str = "Each data set saves over the same file, which keeps only the last data set.";
+
+    #[test]
+    fn data_sets_offer_save_and_close_with_a_warning() {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["destination"] = json!("saveAndClose");
+        let labels = render(&mut d);
+        assert!(labels.iter().any(|label| label == "Save and Close"), "{labels:?}");
+        assert!(!labels.iter().any(|label| label == ONE_FILE), "a folder source opens a file per pass: {labels:?}");
+        d.fields["source"] = json!("datasets");
+        let labels = render(&mut d);
+        assert!(labels.iter().any(|label| label == "Save and Close"), "{labels:?}");
+        assert!(labels.iter().any(|label| label == ONE_FILE), "{labels:?}");
+        assert_eq!(params(&d, "Test", vec![])["destination"], "saveAndClose");
+        d.fields["destination"] = json!("folder");
+        assert!(!render(&mut d).iter().any(|label| label == ONE_FILE));
+    }
+
+    #[test]
+    fn data_sets_warn_about_a_recorded_save_left_in_place() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui.action_sets[0].actions[0].steps.push(("document.save".into(), json!({"path": "/x/a.vectorcraft"})));
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!("datasets");
+        d.fields["destinationFolder"] = json!("/out");
+        assert!(!render_in(&mut app, &mut d).iter().any(|label| label == ONE_FILE), "Override Save points the save into the folder");
+        d.fields["overrideSave"] = json!(false);
+        assert!(render_in(&mut app, &mut d).iter().any(|label| label == ONE_FILE));
+        d.fields["overrideSave"] = json!(true);
+        d.fields["destination"] = json!("none");
+        assert!(render_in(&mut app, &mut d).iter().any(|label| label == ONE_FILE));
     }
 }

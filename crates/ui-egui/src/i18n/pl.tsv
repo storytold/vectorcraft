@@ -5881,6 +5881,8 @@ breakText	Glyphs	Glify
 	File + Data Set Name	Plik + nazwa zestawu danych
 	Data Set Name	Nazwa zestawu danych
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` musi mieć wartość `fileNumber`, `fileDataSetName` lub `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Każdy zestaw danych jest zapisywany w tym samym pliku, który zachowuje tylko ostatni zestaw danych.
+@msg	save the document with Save As before Save and Close	zapisz dokument poleceniem „Zapisz jako” przed „Zapisz i zamknij”
 @msg	no free data set file name in destination folder	Brak wolnej nazwy pliku zestawu danych w folderze docelowym
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

@@ -5925,6 +5925,8 @@ breakText	Glyphs	Glyffer
 	File + Data Set Name	Fil + datasætnavn
 	Data Set Name	Datasætnavn
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` skal være `fileNumber`, `fileDataSetName` eller `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Hvert datasæt gemmes oven i den samme fil, som kun beholder det sidste datasæt.
+@msg	save the document with Save As before Save and Close	gem dokumentet med Gem som før Gem og luk
 @msg	no free data set file name in destination folder	Intet ledigt filnavn til datasættet i destinationsmappen
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

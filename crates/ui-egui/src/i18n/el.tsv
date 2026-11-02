@@ -5978,6 +5978,8 @@ breakText	Glyphs	Γλύφοι
 	File + Data Set Name	Αρχείο + όνομα συνόλου δεδομένων
 	Data Set Name	Όνομα συνόλου δεδομένων
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	Το `datasetFileNaming` πρέπει να είναι `fileNumber`, `fileDataSetName` ή `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Κάθε σύνολο δεδομένων αποθηκεύεται πάνω στο ίδιο αρχείο, το οποίο κρατά μόνο το τελευταίο σύνολο δεδομένων.
+@msg	save the document with Save As before Save and Close	αποθηκεύστε το έγγραφο με «Αποθήκευση ως» πριν από «Αποθήκευση και κλείσιμο»
 @msg	no free data set file name in destination folder	Δεν υπάρχει διαθέσιμο όνομα αρχείου συνόλου δεδομένων στον φάκελο προορισμού
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

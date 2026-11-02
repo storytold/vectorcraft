@@ -6024,6 +6024,8 @@ breakText	Glyphs	Glyphes
 	File + Data Set Name	Fichier + nom du jeu de données
 	Data Set Name	Nom du jeu de données
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` doit être `fileNumber`, `fileDataSetName` ou `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Chaque jeu de données est enregistré sur le même fichier, qui ne conserve que le dernier jeu de données.
+@msg	save the document with Save As before Save and Close	enregistrez le document avec Enregistrer sous avant Enregistrer et fermer
 @msg	no free data set file name in destination folder	Aucun nom de fichier libre pour le jeu de données dans le dossier de destination
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

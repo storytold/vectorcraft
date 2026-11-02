@@ -5984,6 +5984,8 @@ breakText	Glyphs	Glifler
 	File + Data Set Name	Dosya + veri kümesi adı
 	Data Set Name	Veri kümesi adı
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` değeri `fileNumber`, `fileDataSetName` veya `dataSetName` olmalıdır
+	Each data set saves over the same file, which keeps only the last data set.	Her veri kümesi aynı dosyanın üzerine kaydedilir ve dosyada yalnızca son veri kümesi kalır.
+@msg	save the document with Save As before Save and Close	Kaydet ve Kapat'tan önce belgeyi Farklı Kaydet ile kaydedin
 @msg	no free data set file name in destination folder	Hedef klasörde veri kümesi için boş bir dosya adı yok
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

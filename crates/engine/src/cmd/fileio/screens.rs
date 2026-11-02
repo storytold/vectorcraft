@@ -652,7 +652,7 @@ fn find_preset(s: &Session, name: &str) -> Option<ScreenExportPreset> {
 }
 
 /// `p` over the settings of its `exportPreset`, when it names one (its own keys win).
-fn with_preset(s: &Session, p: &Value) -> Result<Value> {
+pub(super) fn with_preset(s: &Session, p: &Value) -> Result<Value> {
     let Some(name) = str_param(p, "exportPreset") else { return Ok(p.clone()) };
     let preset = find_preset(s, name).ok_or_else(|| bad(C, format!("no export preset `{name}` (see document.exportPresets.list)")))?;
     let mut merged = preset.settings;

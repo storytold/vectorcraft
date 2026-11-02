@@ -6016,6 +6016,8 @@ breakText	Glyphs	გლიფები
 	File + Data Set Name	ფაილი + მონაცემთა ნაკრების სახელი
 	Data Set Name	მონაცემთა ნაკრების სახელი
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` უნდა იყოს `fileNumber`, `fileDataSetName` ან `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	თითოეული მონაცემთა ნაკრები ერთსა და იმავე ფაილზე ინახება, რომელშიც მხოლოდ ბოლო მონაცემთა ნაკრები რჩება.
+@msg	save the document with Save As before Save and Close	„შენახვა და დახურვამდე“ შეინახეთ დოკუმენტი „შენახვა როგორც“ ბრძანებით
 @msg	no free data set file name in destination folder	დანიშნულების საქაღალდეში მონაცემთა ნაკრებისთვის თავისუფალი ფაილის სახელი არ არის
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
