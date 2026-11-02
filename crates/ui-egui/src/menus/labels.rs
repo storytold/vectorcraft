@@ -138,7 +138,7 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom")
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
