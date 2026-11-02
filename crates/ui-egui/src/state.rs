@@ -502,6 +502,9 @@ pub struct UiState {
     /// switching back to it brings them back; Reset <name> drops them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workspace_changes: Vec<crate::workspaces::Workspace>,
+    /// Dynamic workspace configuration (profile, docker visibility, alignment, keymap).
+    #[serde(default)]
+    pub workspace_config: crate::workspace::WorkspaceConfig,
     /// File → Open Recent Files, most recent first.
     #[serde(default)]
     pub recent_files: Vec<String>,
@@ -956,6 +959,7 @@ impl Default for UiState {
             touch_workspace_restore: None,
             custom_workspaces: vec![],
             workspace_changes: vec![],
+            workspace_config: Default::default(),
             recent_files: vec![],
             recent_fonts: vec![],
             favorite_fonts: vec![],

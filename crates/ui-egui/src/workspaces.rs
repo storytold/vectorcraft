@@ -140,6 +140,13 @@ pub fn builtins() -> Vec<Workspace> {
             x.task_bar = true;
             x.open_panel = Some("align".into());
         }),
+        w("CorelDRAW Classic", &|x| {
+            x.control_bar = true;
+            x.rulers = true;
+            x.toolbar_advanced = true;
+            x.task_bar = true;
+            x.open_panel = Some("properties".into());
+        }),
     ]
 }
 
@@ -393,6 +400,18 @@ pub fn popup(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     ui.set_min_width(210.0);
     ui.set_max_width(240.0);
     let mut clicked: Option<(&'static str, Value)> = None;
+
+    // Workflow profile radio buttons
+    ui.label(egui::RichText::new("Workflow Profile").strong().size(11.0));
+    let current_profile = app.ui.workspace_config.active_profile;
+    for profile in crate::workspace::WorkspaceProfile::ALL {
+        let is_selected = current_profile == profile;
+        if ui.radio(is_selected, profile.display_name()).clicked() {
+            clicked = Some(("window.workspace.switchProfile", json!({ "profile": format!("{:?}", profile) })));
+            ui.close();
+        }
+    }
+    ui.separator();
     for it in menu_items() {
         match it {
             crate::menus::Item::Sep => {
@@ -424,7 +443,28 @@ pub fn popup(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
     let r = match id {
-        "window.workspace" => switch(&mut app.ui, &s("name").unwrap_or_default()).map(|name| json!({"workspace": name})),
+        "window.workspace" => {
+            let name = s("name").unwrap_or_default();
+            let res = switch(&mut app.ui, &name)?;
+            if name.eq_ignore_ascii_case("CorelDRAW Classic") {
+                app.ui.workspace_config.apply_profile(app, crate::workspace::WorkspaceProfile::CorelDrawClassic);
+            } else if name.eq_ignore_ascii_case("Printing and Proofing") {
+                app.ui.workspace_config.apply_profile(app, crate::workspace::WorkspaceProfile::PrintProduction);
+            } else {
+                app.ui.workspace_config.apply_profile(app, crate::workspace::WorkspaceProfile::VectorCraftDefault);
+            }
+            Ok(json!({"workspace": res}))
+        }
+        "window.workspace.switchProfile" => {
+            let profile_name = s("profile").unwrap_or_default();
+            let profile = match profile_name.to_lowercase().as_str() {
+                "coreldrawclassic" | "coreldraw" | "corel" => crate::workspace::WorkspaceProfile::CorelDrawClassic,
+                "printproduction" | "print" => crate::workspace::WorkspaceProfile::PrintProduction,
+                _ => crate::workspace::WorkspaceProfile::VectorCraftDefault,
+            };
+            app.ui.workspace_config.apply_profile(app, profile);
+            Ok(json!({"profile": format!("{:?}", profile)}))
+        }
         "window.workspace.reset" => Ok(json!({"workspace": reset(&mut app.ui)})),
         "window.workspace.new" => match s("name") {
             Some(n) => save_as(&mut app.ui, &n).map(|_| json!({"workspace": n})),
@@ -728,9 +768,24 @@ mod tests {
     #[test]
     fn all_requested_workspaces_exist() {
         let ui = UiState::default();
-        for n in ["Essentials", "Essentials Classic", "Painting", "Typography", "Layout", "Tracing", "Web", "Automation", TOUCH] {
+        for n in ["Essentials", "Essentials Classic", "Painting", "Typography", "Layout", "Tracing", "Web", "Automation", TOUCH, "CorelDRAW Classic"] {
             assert!(find(&ui, n).is_some(), "{n}");
         }
+    }
+
+    #[test]
+    fn coreldraw_classic_workspace_switches_profile_and_shortcuts() {
+        use crate::{Services, VectorcraftApp};
+        use vectorcraft_engine::Session;
+
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        let res = app.run("window.workspace", json!({"name": "CorelDRAW Classic"}));
+        assert!(res.is_ok());
+        assert_eq!(app.ui.workspace_config.active_profile, crate::workspace::WorkspaceProfile::CorelDrawClassic);
+        assert_eq!(app.ui.shortcut_set, "CorelDRAW Classic");
+        assert!(app.ui.shortcut_overrides.contains_key("tool:select"));
+        assert!(app.ui.shortcut_overrides.contains_key("tool:directSelect"));
+        assert!(app.ui.shortcut_overrides.contains_key("align.horizontalVerticalCenter"));
     }
 
     #[test]

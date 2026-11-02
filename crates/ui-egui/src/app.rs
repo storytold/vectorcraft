@@ -508,8 +508,14 @@ impl VectorcraftApp {
             toolbar::show_custom(self, ui.ctx());
         }
         panels::library_panel::tidy(self);
-        // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        // Route through SidePanel architecture if CorelDrawClassic is active,
+        // or through the default window docking architecture otherwise.
+        if self.ui.workspace_config.active_profile == crate::workspace::WorkspaceProfile::CorelDrawClassic && self.ui.dock && self.ui.screen_mode < 3 {
+            crate::workspace::show_corel_workspace(self, ui, &t);
+        } else {
+            // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
+            egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        }
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
