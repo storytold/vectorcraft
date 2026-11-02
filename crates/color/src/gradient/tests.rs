@@ -466,10 +466,14 @@ fn ink_tints_follow_the_perceptual_curve() {
     let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, ink.tinted(0.8)), GradientStop::new(1.0, Color::WHITE)]);
     g.method = GradientMethod::Perceptual;
     assert!(g.fits_ink_tints());
-    let tints = g.ink_tints(&ink).expect("a magenta ink's tints differ in lightness");
+    let tints = g.ink_tints(&ink, &[]).expect("a magenta ink's tints differ in lightness");
     assert!(tints.len() > 2, "the curve's stops: {tints:?}");
     let (first, last) = (tints[0], tints[tints.len() - 1]);
     assert!((first.0, last.0) == (0.0, 1.0) && (first.1 - 0.8).abs() < 1e-4 && last.1 < 1e-4, "{tints:?}");
+    // The stops' own tints, when given, are kept exactly; the tints in between are the same.
+    let own = g.ink_tints(&ink, &[0.8, 0.0]).expect("tints");
+    assert!(own.len() == tints.len() && own[0].1 == 0.8 && own[own.len() - 1].1 == 0.0, "{own:?}");
+    assert!(own[1..own.len() - 1] == tints[1..tints.len() - 1], "{own:?}");
     assert!(tints.windows(2).all(|w| w[0].0 <= w[1].0 && w[0].1 >= w[1].1), "in order, lighter along the way: {tints:?}");
     let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
     for (t, tint, _) in &tints {
@@ -479,11 +483,11 @@ fn ink_tints_follow_the_perceptual_curve() {
     let mid = tints.iter().find(|s| (s.0 - 0.5).abs() < 1e-6).expect("the midpoint");
     assert!((mid.1 - 0.4).abs() > 0.01, "not halfway in tint: {mid:?}");
     // A white ink's tints all have paper white's lightness: no tints by lightness.
-    assert_eq!(g.ink_tints(&Color::WHITE), None);
+    assert_eq!(g.ink_tints(&Color::WHITE, &[]), None);
     // More stops on the curve than MAX_INK_TINTS: no tints.
     let n = MAX_INK_TINTS + 1;
     g.stops = (0..n).map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { ink } else { Color::WHITE })).collect();
-    assert_eq!(g.ink_tints(&ink), None);
+    assert_eq!(g.ink_tints(&ink, &[]), None);
     assert!(!g.fits_ink_tints());
 }
 

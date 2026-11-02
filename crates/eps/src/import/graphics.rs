@@ -31,7 +31,7 @@ const MAX_NODES: usize = 1 << 20;
 /// are left out.
 const LIMIT: f64 = 1e6;
 /// Width of a zero-width line (the thinnest a device draws), points.
-const HAIRLINE: f64 = 0.25;
+pub(super) const HAIRLINE: f64 = 0.25;
 /// Most inks a `DeviceN` space has (PostScript's own limit).
 const MAX_INKS: usize = 32;
 /// Most dashes `strokepath` makes of a path (more and it outlines the path undashed).

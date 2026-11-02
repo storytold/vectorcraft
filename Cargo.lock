@@ -2863,7 +2863,7 @@ dependencies = [
 [[package]]
 name = "krilla"
 version = "0.8.2"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=fb08be5fa19eee8d37e624397fcdc96df6035e92#fb08be5fa19eee8d37e624397fcdc96df6035e92"
 dependencies = [
  "base64 0.22.1",
  "bumpalo",
@@ -6228,6 +6228,7 @@ name = "vectorcraft-engine"
 version = "0.20.0"
 dependencies = [
  "cfb",
+ "chrono",
  "craft-docpath",
  "crc32fast",
  "flate2",

@@ -1,4 +1,4 @@
-use super::{Drag, Mods, Point, PointerEvent, PointerKind, Pos2, StylusFeed, Ui, VectorcraftApp, Xf, widgets};
+use super::{Drag, Mods, PenPose, Point, PointerEvent, PointerKind, Pos2, StylusFeed, Ui, VectorcraftApp, Xf, widgets};
 
 /// Whether drag `d` is a press the tool holds. Every other drag (panning, zooming, turning the
 /// view, a touch gesture, Presentation Mode) never reaches the tool, so its hover ends with it.
@@ -109,13 +109,49 @@ pub(super) fn pen_pressure(ui: &Ui, app: &VectorcraftApp, pressed: bool) -> f32 
     p
 }
 
+/// The tilt and rotation of the pen in the host's feed while a pen is the pointer that moved last
+/// ([`crate::Services::stylus`], [`StylusFeed::pose`]), its tilt turned onto the page
+/// ([`pose_on_page`]); `None` for a mouse, or a pen that reads neither.
+pub(super) fn pen_pose(app: &VectorcraftApp, xf: &Xf) -> Option<PenPose> {
+    app.services.stylus.as_ref().and_then(StylusFeed::pose).map(|q| pose_on_page(q, xf))
+}
+
+/// The tilt and rotation for one move: the pose the host's feed kept for that move
+/// ([`frame_moves`]), turned onto the page and `None` when the pen read neither, else the latest
+/// ([`pen_pose`]).
+pub(super) fn move_pose(app: &VectorcraftApp, xf: &Xf, kept: Option<PenPose>) -> Option<PenPose> {
+    match kept {
+        Some(q) => (q != PenPose::default()).then(|| pose_on_page(q, xf)),
+        None => pen_pose(app, xf),
+    }
+}
+
+/// `pose` with its tilt, given in screen axes, turned into the document's (the view rotated by
+/// Rotate View): the pen leans the same way on the page as on the screen. The rotation is kept.
+pub(crate) fn pose_on_page(pose: PenPose, xf: &Xf) -> PenPose {
+    let tilt = pose.tilt.map(|[x, y]| {
+        // The direction the pen leans in, as `to_doc` turns a screen offset.
+        let (tx, ty) = (f64::from(x).to_radians().tan(), f64::from(y).to_radians().tan());
+        let (sn, cs) = xf.rot.sin_cos();
+        let (u, v) = (tx * cs + ty * sn, -tx * sn + ty * cs);
+        [u.atan().to_degrees() as f32, v.atan().to_degrees() as f32]
+    });
+    PenPose { tilt, ..pose }
+}
+
+/// One pointer move of a frame: its position, and the pressure and the tilt and rotation kept for
+/// it, if any ([`frame_moves`]).
+pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
+
 /// The positions this frame's pointer moves passed through before its last one, each with the
 /// pen force a touch event gave just before it, or the pressure the host's feed kept for that move
-/// ([`StylusFeed::take_moves`], macOS), if any. The last move is the pointer's position. A mouse's
-/// moves count too, with no pressure: a fast mouse stroke otherwise keeps one position a frame, a
-/// sample every few pixels, too few for a low Fidelity to follow the hand (#3328).
-pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Option<f32>)> {
-    let pressures = stylus.map(StylusFeed::take_moves).unwrap_or_default();
+/// ([`StylusFeed::take_moves`], macOS), if any, and the tilt and rotation the feed kept for that
+/// move (empty when the pen read neither), if any. The last move is the pointer's position; the
+/// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
+/// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
+/// too few for a low Fidelity to follow the hand (#3328).
+pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMove>, Option<PenPose>) {
+    let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
         let mut moves = vec![];
         if i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
@@ -123,38 +159,39 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Op
             for e in &i.events {
                 match e {
                     egui::Event::Touch { force: Some(f), .. } if f.is_finite() && *f > 0.0 => force = Some(f.clamp(0.0, 1.0)),
-                    egui::Event::PointerMoved(p) => moves.push((*p, force)),
+                    egui::Event::PointerMoved(p) => moves.push((*p, force, None)),
                     _ => {}
                 }
             }
-        } else if !pressures.is_empty() {
-            // The feed's last pressure is the last move's: pair them from the end. A lift's 0 is
+        } else if !samples.is_empty() {
+            // The feed's last sample is the last move's: pair them from the end. A lift's 0 is
             // no pressure (the press keeps its last touch).
             let points: Vec<Pos2> = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some(*p) } else { None }).collect();
-            let forces = pressures.iter().rev().map(|f| (*f > 0.0).then_some(*f)).chain(std::iter::repeat(None));
-            moves = points.into_iter().rev().zip(forces).collect();
+            let kept = samples.iter().rev().map(|&(f, q)| ((f > 0.0).then_some(f), Some(q)));
+            moves = points.into_iter().rev().zip(kept.chain(std::iter::repeat((None, None)))).map(|(p, (f, q))| (p, f, q)).collect();
             moves.reverse();
         } else {
-            moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None)) } else { None }).collect();
+            moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None, None)) } else { None }).collect();
         }
-        moves.pop();
+        let last_pose = moves.pop().and_then(|(_, _, q)| q);
         // A burst of events (a stalled frame) is thinned to a bounded count.
         const MAX: usize = 64;
         if moves.len() > MAX {
             let step = moves.len().div_ceil(MAX);
             moves = moves.into_iter().step_by(step).collect();
         }
-        moves
+        (moves, last_pose)
     })
 }
 
 /// The moves of this frame ([`frame_moves`]) the active tool gets before the pointer's position:
 /// all of them for a tool that builds a stroke from them ([`vectorcraft_engine::Session::tool_wants_samples`]), none
 /// for the others, which get one drag a frame. The moves are read either way, so the host's feed
-/// pairs the next frame's with its own.
-pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> Vec<(Pos2, Option<f32>)> {
-    let moves = frame_moves(ui, app.services.stylus.as_ref());
-    if app.session.tool_wants_samples() { moves } else { vec![] }
+/// pairs the next frame's with its own. The tilt and rotation the feed kept for the pointer's
+/// position come second, for every tool.
+pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> (Vec<FrameMove>, Option<PenPose>) {
+    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref());
+    (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
 }
 
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
@@ -170,7 +207,11 @@ pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_en
             // and would otherwise outlive the drag that owns it (#2826).
             // Nothing to roll back without a document; the tool still gets its mouse-up.
             let _ = app.session.cancel_interaction();
-            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0 }, view);
+            dispatch(
+                app,
+                &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None },
+                view,
+            );
             egui::DragAndDrop::clear_payload(ui.ctx());
         }
         Some(_) => {}
@@ -250,7 +291,7 @@ fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // With no document open there is nothing to roll back; the tool still gets its mouse-up.
     let _ = app.session.cancel_interaction();
     let view = app.view_info();
-    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0 }, view);
+    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None }, view);
     ctx.data_mut(|d| {
         d.remove::<Drag>(drag_id());
         d.remove::<bool>(drag_id().with("art-gone"));
