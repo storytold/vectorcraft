@@ -2850,6 +2850,42 @@ fn a_trace_run_hands_its_trace_to_the_command() {
     assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
 }
 
+#[test]
+fn image_trace_ignore_background_keeps_the_color_inside_the_art() {
+    // A black field, a light panel on it and a black ring on the panel.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 100.0).hypot(f64::from(y) + 0.5 - 75.0);
+        if !((20..180).contains(&x) && (20..130).contains(&y)) || (37.0..=43.0).contains(&r) { [0, 0, 0, 255] } else { [240, 240, 220, 255] }
+    });
+    let traced = |background: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let params = json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "ignoreWhite": true, "ignoreColor": "#000000", "ignoreBackground": background}});
+        let r = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        let g = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let black: Vec<_> = g
+            .children()
+            .unwrap()
+            .iter()
+            .filter(|n| n.appearance.fill_paint() == Paint::solid(Color::rgb8(0, 0, 0)))
+            .map(|n| outline(n).0.bounds().unwrap())
+            .collect();
+        (r["colors"].clone(), black)
+    };
+    // The whole color: the ring goes with the field.
+    let (colors, black) = traced(false);
+    assert_eq!(colors, 1);
+    assert!(black.is_empty(), "{black:?}");
+    // The background only: the ring stays, and nothing black reaches the image's edge.
+    let (colors, black) = traced(true);
+    assert_eq!(colors, 2);
+    assert_eq!(black.len(), 1, "{black:?}");
+    let bb = black[0];
+    assert!((bb.x0 - 57.0).abs() < 1.5 && (bb.x1 - 143.0).abs() < 1.5 && (bb.y0 - 32.0).abs() < 1.5 && (bb.y1 - 118.0).abs() < 1.5, "{bb:?}");
+    // The params doc tells agents about the option.
+    assert!(find_command("imageTrace.make").unwrap().params.contains("ignoreBackground: false"));
+}
+
 /// A Document Library trace made away from its command no longer applies once the library's
 /// colours change: the settings' JSON leaves them out (#4605 review).
 #[test]

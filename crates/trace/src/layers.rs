@@ -1,7 +1,7 @@
 use super::params::{Method, Mode, TraceParams};
 #[cfg(test)]
 use super::pipeline::bw_tones;
-use super::pipeline::{TracedPath, is_ignored};
+use super::pipeline::{TracedPath, drops_color, is_ignored};
 use super::raster::Raster;
 use super::{
     AtomicUsize, Crack, Loop, Ordering, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, centerline, contour, fit, logo, shapes,
@@ -13,6 +13,9 @@ use super::{denoise, quantize};
 /// What tracing one colour layer needs.
 pub(crate) struct Layers<'a> {
     pub(crate) q: &'a Quantized,
+    /// The label each layer traces a pixel as: `q.labels`, or with Ignore Color for the background
+    /// only, those with the background [`TRANSPARENT`]. Edges are placed by `q.labels`.
+    pub(crate) traced: &'a [u16],
     /// Each palette entry's layer, bottom (0) up.
     pub(crate) rank: &'a [usize],
     pub(crate) params: &'a TraceParams,
@@ -36,9 +39,10 @@ pub(crate) struct Layers<'a> {
 
 impl Layers<'_> {
     /// Ignore White: white is no part of any layer (stacked layers reach under the layers above
-    /// them, and must not reach under white that is left out).
+    /// them, and must not reach under white that is left out). With `ignore_background` the
+    /// background is [`TRANSPARENT`] in `traced`, and the color's other areas are traced.
     fn ignored(&self, label: u16) -> bool {
-        self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_ignored(*c, self.ignore))
+        drops_color(self.params) && self.q.palette.get(label as usize).is_some_and(|c| is_ignored(*c, self.ignore))
     }
     /// The region across a crack, for cutting outlines at their junctions: the outside pixel's
     /// colour. Stacked layers end on many colours at once and share no edge: one neighbour.
@@ -270,7 +274,7 @@ impl Layers<'_> {
         let (thin, lines) = if params.strokes {
             // The ink the lines are read against: the layer's colour; Black and White's own black.
             let ink = if params.mode == Mode::BlackAndWhite { [self.bw_tones[usize::from(ci == 1)]; 3] } else { color.map(f64::from) };
-            centerline::lines(&self.q.labels, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, self.img, ink, &self.style)
+            centerline::lines(self.traced, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, self.img, ink, &self.style)
         } else {
             (vec![], vec![])
         };
@@ -288,7 +292,7 @@ impl Layers<'_> {
         let (bw, bh) = (x1 - x0, y1 - y0);
         let mut mask = Vec::with_capacity(bw * bh);
         for y in y0..y1 {
-            let row = self.q.labels.get(y * w + x0..y * w + x1)?;
+            let row = self.traced.get(y * w + x0..y * w + x1)?;
             mask.extend(row.iter().enumerate().map(|(k, &l)| l != TRANSPARENT && !thin.get(y * w + x0 + k).copied().unwrap_or(false) && part(l)));
         }
         // Overlapping: a part of the mask with no pixel of this color holds only colors above it,
@@ -424,6 +428,7 @@ pub(crate) fn shift_probe(img: &Raster, params: &TraceParams) -> Vec<[f64; 4]> {
     let gradients = vec![None; n];
     let job = Layers {
         q: &q,
+        traced: &q.labels,
         rank: &rank,
         params,
         img,

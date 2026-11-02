@@ -1395,6 +1395,122 @@ fn ignore_color_leaves_out_the_colour_picked() {
     assert_eq!(serde_json::to_value(&params).unwrap()["ignoreColor"], serde_json::Value::Null);
 }
 
+/// A 600 × 400 field of `edge` with a light panel (40..560 × 40..360) and, on the panel, a ring of
+/// `line` 8 px wide and 100 px in radius around (300, 200), filled with `inside`.
+fn panel_with_ring(edge: [u8; 4], line: [u8; 4], inside: [u8; 4]) -> Raster {
+    Raster::from_fn(600, 400, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let r = Point::new(fx, fy).distance(Point::new(300.0, 200.0));
+        if !((40.0..560.0).contains(&fx) && (40.0..360.0).contains(&fy)) {
+            edge
+        } else if (96.0..=104.0).contains(&r) {
+            line
+        } else if r < 96.0 {
+            inside
+        } else {
+            [240, 240, 220, 255]
+        }
+    })
+}
+
+#[test]
+fn ignore_background_leaves_out_only_the_areas_of_the_color_that_reach_the_edge() {
+    use kurbo::Shape;
+    let covers = |res: &TraceResult, color: [u8; 3], x: f64, y: f64| {
+        res.paths.iter().any(|t| t.color == color && t.path.to_bezpath().winding(kurbo::Point::new(x, y)) != 0)
+    };
+    let covered = |res: &TraceResult, x: f64, y: f64| res.paths.iter().any(|t| t.path.to_bezpath().winding(kurbo::Point::new(x, y)) != 0);
+    // A black field, a light panel and a black ring on it.
+    let light = [240, 240, 220, 255];
+    let img = panel_with_ring(BLACK, BLACK, light);
+    for method in [Method::Abutting, Method::Overlapping] {
+        let params = TraceParams {
+            mode: Mode::Color,
+            palette: Palette::Limited,
+            colors: 2,
+            method,
+            ignore_white: true,
+            ignore_color: Some("#000000".into()),
+            ..TraceParams::default()
+        };
+        // The whole color: the ring goes with the field.
+        let all = trace(&img, &params);
+        assert!(all.paths.iter().all(|p| p.color != [0, 0, 0]), "{method:?}");
+        assert!(!covered(&all, 300.0, 100.0) && !covered(&all, 10.0, 10.0), "{method:?}");
+        // The background only: the field goes, the ring stays.
+        let res = trace(&img, &TraceParams { ignore_background: true, ..params.clone() });
+        assert!(covers(&res, [0, 0, 0], 300.0, 100.0) && covers(&res, [0, 0, 0], 300.0, 300.0), "{method:?}");
+        assert!(covers(&res, [240, 240, 220], 100.0, 200.0) && covers(&res, [240, 240, 220], 300.0, 200.0), "{method:?}");
+        assert!(!covered(&res, 10.0, 10.0) && !covered(&res, 590.0, 390.0) && !covered(&res, 300.0, 20.0), "{method:?}");
+        // Without Ignore Color, the setting has no effect.
+        let kept = |p: &TraceParams| trace(&img, &TraceParams { ignore_white: false, ..p.clone() });
+        assert_eq!(kept(&TraceParams { ignore_background: true, ..params.clone() }), kept(&params), "{method:?}");
+    }
+    // White, the default: a white field goes, the white inside a ring stays.
+    let img = panel_with_ring(WHITE, BLACK, WHITE);
+    let params = TraceParams { mode: Mode::Color, colors: 3, ignore_white: true, ignore_background: true, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    assert!(covers(&res, [255, 255, 255], 300.0, 200.0) && !covered(&res, 10.0, 10.0));
+    assert!(!covered(&trace(&img, &TraceParams { ignore_background: false, ..params }), 300.0, 200.0));
+    // With no area of the color enclosed, the trace is the one that leaves out the whole color,
+    // its anti-aliased edges placed the same.
+    let img = three_colour_art(0.0);
+    for method in [Method::Abutting, Method::Overlapping] {
+        let params = TraceParams { colors: 3, method, ignore_white: true, ignore_color: Some("#14285a".into()), ..sixteen_colors() };
+        assert_eq!(trace(&img, &TraceParams { ignore_background: true, ..params.clone() }), trace(&img, &params), "{method:?}");
+    }
+    // Old documents have no such setting: the whole color.
+    let old: TraceParams = serde_json::from_str(r#"{"mode":"color","ignoreWhite":true}"#).unwrap();
+    assert!(!old.ignore_background);
+    let on: TraceParams = serde_json::from_str(r#"{"ignoreWhite":true,"ignoreBackground":true}"#).unwrap();
+    assert!(on.ignore_background);
+}
+
+#[test]
+fn ignore_background_traces_a_color_within_the_box_of_its_remaining_areas() {
+    // A 40 × 30 field of color 0 with a ring of color 1 around a 2 × 2 area of color 0.
+    let (w, h) = (40, 30);
+    let mut labels = vec![0u16; w * h];
+    for y in 10..16 {
+        for x in 20..26 {
+            labels[y * w + x] = 1;
+        }
+    }
+    for y in 12..14 {
+        for x in 22..24 {
+            labels[y * w + x] = 0;
+        }
+    }
+    let mut cleared = labels.clone();
+    clear_background(&mut cleared, w, h, &[true, false]);
+    let (counts, boxes) = label_extents(&labels, &cleared, w, 2);
+    // The counts stay those of the whole image (they order the layers); the boxes are those of
+    // what is traced.
+    assert_eq!(counts, vec![w * h - 32, 32]);
+    assert_eq!(boxes, vec![Some((22, 12, 24, 14)), Some((20, 10, 26, 16))]);
+    // Without Ignore Color, the boxes are those of every pixel.
+    assert_eq!(label_extents(&labels, &labels, w, 2).1, vec![Some((0, 0, w, h)), Some((20, 10, 26, 16))]);
+}
+
+#[test]
+fn ignore_background_clears_a_tall_narrow_image_from_its_edges() {
+    // A 1 × 200,000 column of color 0 with color 1 at rows 1,000 to 1,009: every pixel is on the
+    // edge, so all of color 0 is background.
+    let (w, h) = (1, 200_000);
+    let mut labels = vec![0u16; w * h];
+    for l in &mut labels[1_000..1_010] {
+        *l = 1;
+    }
+    clear_background(&mut labels, w, h, &[true, false]);
+    assert_eq!(labels.iter().filter(|&&l| l == TRANSPARENT).count(), h - 10);
+    assert!(labels[1_000..1_010].iter().all(|&l| l == 1));
+    // In a 2 × 100,000 column of color 0, every pixel is on the edge too.
+    let (w, h) = (2, 100_000);
+    let mut labels = vec![0u16; w * h];
+    clear_background(&mut labels, w, h, &[true, false]);
+    assert!(labels.iter().all(|&l| l == TRANSPARENT));
+}
+
 #[test]
 fn snap_curves_to_lines_levels_a_rectangle_a_degree_askew() {
     // 120 × 60, turned 1.5° about its centre.
