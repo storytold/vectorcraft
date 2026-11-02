@@ -445,8 +445,10 @@ pub struct UiState {
     #[serde(default = "crate::panels::actions::default_sets")]
     pub action_sets: Vec<crate::panels::actions::ActionSet>,
     /// The current set of the Actions panel (its name clicked, one of its actions clicked, or made
-    /// with New Set): a recording goes into it and Set Options renames it. Not saved.
-    #[serde(skip)]
+    /// with New Set): a recording goes into it and Set Options renames it. Saved as an index into
+    /// [`UiState::action_sets`], so the same set is current after a restart
+    /// ([`crate::panels::actions::deserialize_current_set`]).
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::panels::actions::deserialize_current_set")]
     pub action_set: Option<usize>,
     /// The sets selected in the Actions panel, in index order: the current set and the sets a
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.

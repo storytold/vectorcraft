@@ -39,6 +39,14 @@ fn next_set_id() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Serde reader for the saved current set ([`crate::UiState::action_set`]): a whole number is the
+/// set's index, and any other value is no current set. An index past the last set is ignored where
+/// the panel reads it.
+pub fn deserialize_current_set<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<usize>, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_u64().and_then(|i| usize::try_from(i).ok()))
+}
+
 /// Built-in actions (our own, handy defaults).
 pub fn default_sets() -> Vec<ActionSet> {
     let step = |c: &str, p: Value| (c.to_string(), p);
@@ -292,6 +300,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 app.ui.action_sets.push(ActionSet::new("Set 1", vec![]));
             }
             let set = current.filter(|&s| s < app.ui.action_sets.len()).unwrap_or(0);
+            // With no set current, the recording goes into the first set, which becomes current so
+            // the panel shows where the recording goes.
+            if app.ui.action_set != Some(set) {
+                app.ui.action_set = Some(set);
+                app.ui.action_sets_selected = vec![set];
+            }
             let n = app.ui.action_sets.get(set).map_or(0, |s| s.actions.len()) + 1;
             let start = app.session.journal.len();
             // Keep every step from here on until recording stops, however long it runs.
@@ -649,6 +663,59 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), 6, "six sets, six ids");
+    }
+
+    /// The current set is saved with the UI preferences: after a restart a recording goes into the
+    /// set clicked before it, not into Default Actions.
+    #[test]
+    fn a_recording_after_a_restart_goes_into_the_set_current_before_it() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        click_set(&ctx, &mut app, "Other", egui::Modifiers::NONE);
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui = serde_json::from_value(saved).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        assert_eq!(app.ui.action_set, Some(2), "Other is current after the restart");
+        let ctx = egui::Context::default();
+        frame_events(&ctx, &mut app, vec![], show);
+        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
+        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        let [stop, record, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        click(&ctx, &mut app, record.center(), show);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        click(&ctx, &mut app, stop.center(), show);
+        let counts = app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>();
+        assert_eq!(counts, [6, 2, 1], "recorded into Other");
+    }
+
+    /// A saved current set that is not a set index, or is past the last set, leaves no set current;
+    /// the other preferences still load, and Begin Recording then records into the first set and
+    /// makes it current.
+    #[test]
+    fn a_saved_current_set_that_is_gone_falls_back_to_the_first_set() {
+        use super::super::tests_appearance::{click, frame_events};
+        let app = app_with_sets();
+        let mut saved = serde_json::to_value(&app.ui).unwrap();
+        saved["action_set"] = json!("Other");
+        let restored = serde_json::from_value::<crate::state::UiState>(saved.clone()).unwrap();
+        assert_eq!((restored.action_set, restored.action_sets.len()), (None, 3), "not an index: no set current, the sets load");
+        saved["action_set"] = json!(9);
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui = serde_json::from_value(saved).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        frame_events(&ctx, &mut app, vec![], show);
+        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
+        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        let [stop, record, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        click(&ctx, &mut app, record.center(), show);
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(0), vec![0]), "the set recorded into is current");
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        click(&ctx, &mut app, stop.center(), show);
+        let counts = app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>();
+        assert_eq!(counts, [7, 2, 0], "recorded into Default Actions");
     }
 
     /// Shift-click on another set's name while an action is selected selects the sets from the
