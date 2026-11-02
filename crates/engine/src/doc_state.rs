@@ -430,27 +430,66 @@ impl DocState {
     pub fn current_layer(&self) -> Option<NodeId> {
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()))
     }
+    /// Where new art is inserted: the isolation container (or its parent if the container cannot hold
+    /// the art type), else the active layer.
     pub fn insertion_parent(&self) -> Option<NodeId> {
-        // Ids are reused after undo (the id counter is part of the document), so a remembered
-        // layer or isolated group must still be one: a pasted group must never land in a path.
-        if let Some(i) = self.isolation
-            && self.doc.node(i).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
-        {
-            return Some(i);
+        self.insertion_parent_for(false)
+    }
+
+    /// Where new path art is inserted. When a compound path is isolated, returns the compound path
+    /// so new paths become members of the compound path.
+    pub fn insertion_parent_for_path(&self) -> Option<NodeId> {
+        self.insertion_parent_for(true)
+    }
+
+    fn insertion_parent_for(&self, for_path: bool) -> Option<NodeId> {
+        if let Some(i) = self.isolation {
+            if self.doc.node(i).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })) {
+                return Some(i);
+            }
+            if for_path && self.doc.node(i).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
+                return Some(i);
+            }
         }
-        // A single object isolated: new art goes beside it, in its group or layer.
-        if let Some(p) = self.isolation.filter(|i| self.doc.node(*i).is_some_and(|n| !n.is_container())).and_then(|i| self.doc.parent_of(i))
-            && self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
-        {
-            return Some(p);
+        if let Some(p) = self.isolation.filter(|i| self.doc.node(*i).is_some_and(|n| !n.is_container())).and_then(|i| self.doc.parent_of(i)) {
+            if self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })) {
+                return Some(p);
+            }
+            if for_path && self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
+                return Some(p);
+            }
+        }
+        // Non-path art created while a compound path is isolated goes into the compound's parent container:
+        if let Some(iso) = self.isolation {
+            let compound = if self.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
+                Some(iso)
+            } else {
+                self.doc.parent_of(iso).filter(|p| self.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })))
+            };
+            if let Some(c) = compound
+                && let Some(p) = self.doc.parent_of(c)
+                && self.doc.is_editable(p)
+            {
+                return Some(p);
+            }
         }
         // A sublayer takes new art only while it and the layers around it are shown and unlocked.
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
     }
+
     /// [`Self::insertion_parent`] for new art, which a locked or hidden layer never takes: an error
     /// when no layer is shown and unlocked, so the art is refused rather than hidden or locked away.
     pub fn target_parent(&self) -> Result<Option<NodeId>> {
-        match self.insertion_parent() {
+        self.target_parent_for(false)
+    }
+
+    /// [`Self::insertion_parent_for_path`] for new path art.
+    pub fn target_parent_for_path(&self) -> Result<Option<NodeId>> {
+        self.target_parent_for(true)
+    }
+
+    fn target_parent_for(&self, for_path: bool) -> Result<Option<NodeId>> {
+        match self.insertion_parent_for(for_path) {
             Some(p) if !self.doc.is_editable(p) => Err(EngineError::Other("the target layer is locked or hidden".into())),
             parent => Ok(parent),
         }

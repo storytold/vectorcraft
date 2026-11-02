@@ -207,7 +207,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     }
     let art = st.doc.paint_order(arts.into_iter().flat_map(|(_, a)| a));
     let boards: Vec<_> = indices.iter().filter_map(|i| st.doc.artboards.get(*i).cloned()).collect();
-    let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art) };
+    let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art, false) };
     let copied = clip.nodes.len();
     if cut {
         s.edit("Cut Artboard", |d, sel| {

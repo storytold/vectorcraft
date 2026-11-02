@@ -935,7 +935,7 @@ fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     if roots.is_empty() {
         return Err(bad(cmd, "select the art to add first"));
     }
-    let clip = Clipboard::copy(st, &roots);
+    let clip = Clipboard::copy(st, &roots, false);
     let bounds = clip.bounds().ok_or_else(|| bad(cmd, "the selection draws nothing"))?;
     let mut doc = clip.to_document();
     let board = bounds.inflate(1.0, 1.0);
