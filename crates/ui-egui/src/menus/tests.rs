@@ -528,6 +528,28 @@ fn select_same_link_block_series_selects_a_thread_from_the_menu() {
 }
 
 #[test]
+fn select_same_text_fill_and_stroke_color_follows_text_stroke_color_in_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entries = menu_entries(&app);
+    let at = |id: &str| entries.iter().position(|e| e.command.as_deref() == Some(id));
+    let entry = at("select.same.textFillAndStrokeColor").map(|i| &entries[i]).expect("menu entry");
+    assert_eq!((entry.path.clone(), entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Text Fill & Stroke Color"));
+    assert_eq!(at("select.same.textStrokeColor").map(|i| i + 1), at("select.same.textFillAndStrokeColor"));
+    let text = |app: &mut VectorcraftApp, y: i32, fill: &str, stroke: &str| {
+        let id = app.run("text.create", json!({"x": 0, "y": y, "text": "type"})).unwrap()["id"].clone();
+        app.run("text.setRangeStyle", json!({"id": id.clone(), "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let a = text(&mut app, 40, "#ff0000", "#0000ff");
+    let b = text(&mut app, 80, "#ff0000", "#0000ff");
+    let _ = text(&mut app, 120, "#ff0000", "#00ff00");
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    invoke(&mut app, "select.same.textFillAndStrokeColor", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
 fn edit_selection_opens_its_dialog_on_the_saved_selections() {
     let mut app = app_with_a_rectangle();
     // Nothing saved yet: the item is off, and invoking it (palette, shortcut) only says so.

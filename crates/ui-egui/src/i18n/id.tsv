@@ -393,6 +393,7 @@
 	Variable Font	Font variabel
 	Text Fill Color	Warna isian teks
 	Text Stroke Color	Warna stroke teks
+	Text Fill & Stroke Color	Warna isian & stroke teks
 	All on Same Layers	Semua di lapisan yang sama
 	Direction Handles	Gagang arah
 	Brush Strokes	Sapuan kuas
