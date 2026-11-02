@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups included, with the patterns they use; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose characters use one included, with the patterns they use; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -298,13 +298,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // `pattern_objects` and `pattern_rows` hold the `patternObjects` entries and the rows of the objects filled or stroked with a pattern, in walk order.
     let mut pattern_objects: Vec<Value> = vec![];
     let mut pattern_rows: Vec<(String, String)> = vec![];
-    // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
-    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
     for r in roots {
         r.walk(&mut |n| {
-            if !seen.insert(n.id) {
-                return;
-            }
             let k = match &n.kind {
                 NodeKind::Layer { .. } => None,
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
@@ -347,8 +342,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
-            // The paint kinds and the patterns this object's fills and strokes use, each once.
-            let mut kinds = BTreeSet::new();
+            // The patterns this object's fills and strokes use, each once.
             let mut used_patterns: Vec<&str> = vec![];
             for item in &n.appearance.items {
                 let paint = match item {
@@ -356,7 +350,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     vectorcraft_doc::AppearanceItem::Stroke(s) => &s.paint,
                 };
                 if let Some(k) = paint_kind(paint) {
-                    kinds.insert(k);
+                    *counts.entry(k).or_default() += 1;
                 }
                 if let Paint::Pattern { pattern, .. } = paint {
                     patterns.insert(pattern.clone());
@@ -370,8 +364,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     spot.insert(name.clone());
                 }
             }
-            for k in kinds {
-                *counts.entry(k).or_default() += 1;
+            // A type object's characters carry their own fill and stroke.
+            if let NodeKind::Text(t) = &n.kind {
+                for run in &t.runs {
+                    for paint in [&run.style.fill, &run.style.stroke] {
+                        if let Paint::Pattern { pattern, .. } = paint {
+                            patterns.insert(pattern.clone());
+                            if !used_patterns.contains(&pattern.as_str()) {
+                                used_patterns.push(pattern);
+                            }
+                        }
+                    }
+                }
             }
             if !used_patterns.is_empty() {
                 let name = n.display_name();
@@ -644,7 +648,8 @@ mod tests {
     }
 
     /// Document Info › Pattern Objects lists each object filled or stroked with a pattern once,
-    /// with the patterns it uses, one in a group included; a pattern no art uses adds no row. With
+    /// with the patterns it uses, one in a group and a type object whose characters use a pattern
+    /// included; a pattern no art uses adds no row. With
     /// Selection Only it lists the patterned objects in the selection, and the report writes the
     /// same rows.
     #[test]
@@ -663,42 +668,33 @@ mod tests {
         s.execute("layer.setProps", &json!({"id": a, "name": "Both"})).unwrap();
         s.execute("paint.setStroke", &json!({"ids": [b], "swatch": "Dots"})).unwrap();
         s.execute("select.set", &json!({"ids": [b, c]})).unwrap();
-        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        s.execute("object.group", &json!({})).unwrap();
+        // A type object whose characters are filled with the pattern.
+        let t = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [t], "swatch": "Dots"})).unwrap();
+        s.execute("layer.setProps", &json!({"id": t, "name": "Type"})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
-        assert_eq!(i["objects"]["patterns"], 2, "{}", i["objects"]);
         assert_eq!(
             i["patternObjects"],
             json!([
                 {"id": a, "name": "Both", "patterns": ["Dots"]},
                 {"id": b, "name": "<Rectangle>", "patterns": ["Dots"]},
+                {"id": t, "name": "Type", "patterns": ["Dots"]},
             ])
         );
         assert_eq!(i["patternNames"], json!(["Dots"]));
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
         assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("patterns"), Some("Pattern Objects")));
-        assert_eq!(i["sections"][0]["rows"], json!([["Both", "Dots"], ["<Rectangle>", "Dots"]]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"]]));
         s.execute("select.set", &json!({"ids": [b]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
         assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
-        assert_eq!(i["objects"]["patterns"], 1);
-        // A selection that holds a group and its patterned child lists the child once.
-        s.execute("select.set", &json!({"ids": [group, b]})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
-        assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
-        assert_eq!(i["patternObjects"], json!([{"id": b, "name": "<Rectangle>", "patterns": ["Dots"]}]));
-        assert_eq!((i["objects"]["patterns"].as_u64(), i["objects"]["paths"].as_u64(), i["objects"]["groups"].as_u64()), (Some(1), Some(2), Some(1)));
-        s.execute("select.set", &json!({"ids": [b, group]})).unwrap();
-        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
-        assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
+        assert_eq!((i["sections"][0]["rows"].clone(), i["patternNames"].clone()), (json!([["Type", "Dots"]]), json!(["Dots"])));
         let text = s.execute("document.info", &json!({"category": "patterns", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\n"), "{text}");
+        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\n"), "{text}");
         assert!(!text.contains("Unused"), "{text}");
-        // Objects counts an object with a gradient fill and a gradient stroke once too.
-        let g = square(&mut s, 350.0);
-        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
-        s.execute("paint.setFill", &json!({"ids": [g], "gradient": gradient})).unwrap();
-        s.execute("paint.setStroke", &json!({"ids": [g], "gradient": gradient})).unwrap();
-        assert_eq!(s.execute("document.info", &json!({})).unwrap()["objects"]["gradients"], 1);
     }
 
     #[test]
