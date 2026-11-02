@@ -2,7 +2,7 @@
 //! Japanese text only with craft-fonts' faces, skipped without them).
 use crate::*;
 use kurbo::Shape;
-use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
+use vectorcraft_doc::{AreaFit, CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
 fn vertical(text: &str) -> TextObject {
@@ -395,6 +395,30 @@ fn tate_chu_yoko_settings_move_a_marked_block_up_down_left_and_right() {
         layout(FontDb::global(), &t)
     };
     assert_eq!(union(&row(CharStyle { tate_chu_yoko: true, ..shifted }), 0..2), union(&row(marked.clone()), 0..2));
+}
+
+/// Shrink Text to Fit scales a marked block's Up/Down and Left/Right offsets with the size, as it
+/// scales the baseline shift.
+#[test]
+fn shrink_text_to_fit_scales_tate_chu_yoko_offsets() {
+    let marked = CharStyle { size: 20.0, tate_chu_yoko: true, ..CharStyle::default() };
+    let union = |l: &TextLayout, r: std::ops::Range<usize>| r.map(|i| ink(l, i)).reduce(|a, b| a.union(b)).unwrap();
+    let (up, right) = (6.0, -4.0);
+    let at = |up: f64, right: f64| {
+        let mut t = vertical_styled("", marked.clone());
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 60.0, 60.0).to_path(0.1)) };
+        t.area.fit = AreaFit::ShrinkText { min_percent: 10.0 };
+        t.runs = vec![
+            TextRun::new("AB", CharStyle { tcy_up_down: up, tcy_left_right: right, ..marked.clone() }),
+            TextRun::new("§§§§§§§§§§§§", CharStyle { size: 20.0, ..CharStyle::default() }),
+        ];
+        layout(FontDb::global(), &t)
+    };
+    let (still, moved) = (at(0.0, 0.0), at(up, right));
+    let f = moved.fit_scale;
+    assert!(f < 1.0 && f == still.fit_scale, "{f} {}", still.fit_scale);
+    let (a, b) = (union(&still, 0..2), union(&moved, 0..2));
+    assert!((b.y0 - (a.y0 - up * f)).abs() < 1e-6 && (b.x0 - (a.x0 + right * f)).abs() < 1e-6, "{f}: {a:?} {b:?}");
 }
 
 /// A marked run is one block; the unmarked digits beside it still follow the automatic rule.
