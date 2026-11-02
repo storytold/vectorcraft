@@ -20,8 +20,9 @@ use vello_cpu::color::PremulRgba8;
 
 use crate::ink::Ink;
 
-/// Largest default budget of the shared image store, in bytes; less on machines with under 8 GiB
-/// of memory (an eighth of it). [`set_image_cache_budget`] changes it.
+/// Default budget of the shared image store, in bytes, where the installed memory can't be read.
+/// Elsewhere the default is a quarter of the installed memory, and on the web it is 256 MiB.
+/// [`set_image_cache_budget`] changes it.
 pub const IMAGE_CACHE_MAX: usize = 1 << 30;
 
 /// The default budget on the web (a tab's memory is tight).
@@ -32,14 +33,14 @@ fn default_budget() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_budget() -> usize {
-    physical_memory().map_or(IMAGE_CACHE_MAX, budget_for)
+    physical_memory().filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
 }
 
-/// The default budget on a machine with `memory` bytes installed: an eighth of it, at most
-/// [`IMAGE_CACHE_MAX`].
+/// The default budget on a machine with `memory` bytes installed: a quarter of it, and at most a
+/// quarter of the address space (on 32-bit builds).
 #[cfg(not(target_arch = "wasm32"))]
 fn budget_for(memory: u64) -> usize {
-    usize::try_from(memory / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX)
+    usize::try_from(memory / 4).unwrap_or(usize::MAX).min(usize::MAX / 4)
 }
 
 /// Installed memory in bytes, `None` where it isn't known (the web, other systems). Other crates
@@ -51,25 +52,128 @@ pub fn installed_memory() -> Option<u64> {
     physical_memory()
 }
 
-/// Installed memory in bytes (`MemTotal` in `/proc/meminfo`).
+/// Installed memory in bytes (`MemTotal` in `/proc/meminfo`), or the memory limit of the process's
+/// cgroups where that is lower.
 #[cfg(target_os = "linux")]
-fn physical_memory() -> Option<u64> {
+pub fn physical_memory() -> Option<u64> {
     let info = std::fs::read_to_string("/proc/meminfo").ok()?;
     let line = info.lines().find(|l| l.starts_with("MemTotal:"))?;
     let kib: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
-    kib.checked_mul(1024)
+    let total = kib.checked_mul(1024)?;
+    let cgroups = std::fs::read_to_string("/proc/self/cgroup").unwrap_or_default();
+    let mounts = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+    Some(cgroup_limit(&cgroups, &mounts, |path| std::fs::read_to_string(path).ok()).map_or(total, |limit| limit.min(total)))
+}
+
+/// The lowest memory limit of the cgroups listed in `/proc/self/cgroup` (`cgroups`) and of their
+/// ancestors within the mounted cgroup hierarchy: `memory.max` under cgroup v2 and
+/// `memory.limit_in_bytes` under cgroup v1. Each cgroup is looked up under the mount in
+/// `/proc/self/mountinfo` (`mounts`) whose root holds it, or under `/sys/fs/cgroup` (v2) or
+/// `/sys/fs/cgroup/memory` (v1) when `mounts` lists no mount of its hierarchy; a cgroup that no
+/// listed mount holds sets no limit. A mount whose root lies above the cgroup namespace's root
+/// (`/..`) gives the limit of its mount point alone. `read` reads a file; a file that can't be read, or that holds
+/// `max`, sets no limit.
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_limit(cgroups: &str, mounts: &str, read: impl Fn(&str) -> Option<String>) -> Option<u64> {
+    let mut lowest: Option<u64> = None;
+    for line in cgroups.lines() {
+        let mut fields = line.splitn(3, ':');
+        let (Some(_), Some(controllers), Some(path)) = (fields.next(), fields.next(), fields.next()) else {
+            continue;
+        };
+        let v2 = controllers.is_empty();
+        if !v2 && !controllers.split(',').any(|c| c == "memory") {
+            continue;
+        }
+        let file = if v2 { "memory.max" } else { "memory.limit_in_bytes" };
+        let mounted = cgroup_mounts(mounts, v2);
+        // Every mount that holds the cgroup shows the same hierarchy; each may show more ancestors.
+        let holding: Vec<(String, String)> = if mounted.is_empty() {
+            vec![(path.to_owned(), (if v2 { "/sys/fs/cgroup" } else { "/sys/fs/cgroup/memory" }).to_owned())]
+        } else {
+            mounted
+                .into_iter()
+                .filter_map(|(root, point)| {
+                    let root = root.trim_end_matches('/');
+                    // A root of `..` steps is an ancestor of the cgroup namespace's root, so of every
+                    // cgroup listed: only the mount point's own limit can be read.
+                    if !root.is_empty() && root.split('/').skip(1).all(|step| step == "..") {
+                        return Some((String::new(), point));
+                    }
+                    let rest = path.strip_prefix(root).filter(|rest| rest.is_empty() || rest.starts_with('/'))?;
+                    Some((rest.to_owned(), point))
+                })
+                .collect()
+        };
+        for (relative, mount_point) in &holding {
+            let root = mount_point.trim_end_matches('/');
+            let mut dir = relative.trim_end_matches('/');
+            loop {
+                if let Some(limit) = read(&format!("{root}{dir}/{file}")).and_then(|s| s.trim().parse::<u64>().ok()) {
+                    lowest = Some(lowest.map_or(limit, |l| l.min(limit)));
+                }
+                match dir.rsplit_once('/') {
+                    Some((parent, _)) => dir = parent,
+                    None => break,
+                }
+            }
+        }
+    }
+    lowest
+}
+
+/// The root and the mount point of each cgroup v2 mount (`v2`) or cgroup v1 mount with the
+/// `memory` controller in `/proc/self/mountinfo` (`mounts`), with their octal escapes decoded.
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_mounts(mounts: &str, v2: bool) -> Vec<(String, String)> {
+    mounts
+        .lines()
+        .filter_map(|line| {
+            let (before, after) = line.split_once(" - ")?;
+            let mut fields = before.split_whitespace().skip(3);
+            let (root, point) = (fields.next()?, fields.next()?);
+            let mut after = after.split_whitespace();
+            let (fs, _, options) = (after.next()?, after.next()?, after.next().unwrap_or(""));
+            let found = if v2 { fs == "cgroup2" } else { fs == "cgroup" && options.split(',').any(|o| o == "memory") };
+            found.then(|| (mountinfo_unescape(root), mountinfo_unescape(point)))
+        })
+        .collect()
+}
+
+/// A path field of `/proc/self/mountinfo` with its octal escapes (`\040` for a space) decoded.
+#[cfg(any(target_os = "linux", test))]
+fn mountinfo_unescape(field: &str) -> String {
+    let mut bytes = Vec::with_capacity(field.len());
+    let mut rest = field.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let code = match tail {
+            [a @ b'0'..=b'3', c @ b'0'..=b'7', d @ b'0'..=b'7', ..] if b == b'\\' => Some(((a - b'0') << 6) | ((c - b'0') << 3) | (d - b'0')),
+            _ => None,
+        };
+        match code {
+            Some(code) => {
+                bytes.push(code);
+                rest = tail.get(3..).unwrap_or_default();
+            }
+            None => {
+                bytes.push(b);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// Installed memory in bytes (`GlobalMemoryStatusEx`).
 #[cfg(windows)]
-fn physical_memory() -> Option<u64> {
+pub fn physical_memory() -> Option<u64> {
     winsafe::GlobalMemoryStatusEx().ok().map(|m| m.ullTotalPhys)
 }
 
 /// Installed memory in bytes, as `sysctl` prints it (`hw.memsize` on macOS, `hw.physmem` on
 /// FreeBSD).
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
-fn physical_memory() -> Option<u64> {
+pub fn physical_memory() -> Option<u64> {
     let (sysctl, name) = if cfg!(target_os = "macos") { ("/usr/sbin/sysctl", "hw.memsize") } else { ("/sbin/sysctl", "hw.physmem") };
     let out = std::process::Command::new(sysctl).args(["-n", name]).output().ok().filter(|o| o.status.success())?;
     sysctl_bytes(&out.stdout)
@@ -81,8 +185,9 @@ fn sysctl_bytes(out: &[u8]) -> Option<u64> {
     std::str::from_utf8(out).ok()?.trim().parse().ok()
 }
 
-#[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd", target_arch = "wasm32")))]
-fn physical_memory() -> Option<u64> {
+/// Installed memory in bytes: not read on other targets, the web among them.
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd")))]
+pub fn physical_memory() -> Option<u64> {
     None
 }
 
@@ -472,17 +577,103 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn default_budget_is_an_eighth_of_installed_memory_at_most_1_gib() {
-        assert_eq!(budget_for(4 << 30), 512 << 20);
-        assert_eq!(budget_for(8 << 30), IMAGE_CACHE_MAX);
-        assert_eq!(budget_for(64 << 30), IMAGE_CACHE_MAX);
+    #[cfg(target_pointer_width = "64")]
+    fn default_budget_is_a_quarter_of_installed_memory() {
+        assert_eq!(budget_for(16 << 30), 4 << 30);
+        assert_eq!(budget_for(64 << 30), 16 << 30, "no fixed ceiling");
+        assert_eq!(budget_for(2 << 30), 512 << 20);
     }
 
     #[test]
     #[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
     fn installed_memory_is_read() {
-        assert!(physical_memory().is_some_and(|m| m >= 256 << 20), "{:?}", physical_memory());
+        // A cgroup's limit can be far below the installed memory.
+        assert!(physical_memory().is_some_and(|m| m > 0), "{:?}", physical_memory());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn two_images_of_a_tenth_of_memory_each_stay_cached() {
+        // 16 MiB installed (16 GiB scaled down): two images of 1,600 KiB (640 × 640 pixels) take
+        // about a fifth of it.
+        let mut s = ImageStore::new(budget_for(16 << 20));
+        drop(s.insert(key("a"), Arc::new(Pixmap::new(640, 640))));
+        drop(s.insert(key("b"), Arc::new(Pixmap::new(640, 640))));
+        assert!(s.peek(&key("a")).is_some() && s.peek(&key("b")).is_some(), "neither image is decoded again");
+        assert_eq!(s.bytes(), 2 * 640 * 640 * 4);
+    }
+
+    #[test]
+    fn cgroup_limit_is_the_lowest_limit_of_the_cgroups_and_their_ancestors() {
+        let files = |list: &'static [(&'static str, &'static str)]| {
+            move |path: &str| list.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned())
+        };
+        let v2 = files(&[("/sys/fs/cgroup/user.slice/memory.max", "2147483648\n"), ("/sys/fs/cgroup/user.slice/app.scope/memory.max", "max\n")]);
+        assert_eq!(cgroup_limit("0::/user.slice/app.scope\n", "", v2), Some(2 << 30), "the parent's limit applies");
+        let v1 = files(&[("/sys/fs/cgroup/memory/memory.limit_in_bytes", "1073741824\n")]);
+        let v1_mounts = "30 25 0:26 / /sys/fs/cgroup/cpu rw - cgroup cgroup rw,cpu,cpuacct\n\
+                         31 25 0:27 /docker/1 /sys/fs/cgroup/memory rw,nosuid master:9 - cgroup cgroup rw,memory\n";
+        let cgroups = "4:cpu,cpuacct:/docker/1\n5:memory:/docker/1\n";
+        assert_eq!(cgroup_limit(cgroups, v1_mounts, v1), Some(1 << 30), "a container's own mount");
+        assert_eq!(cgroup_limit("0::/\n", "", files(&[("/sys/fs/cgroup/memory.max", "max\n")])), None, "no limit");
+        assert_eq!(cgroup_limit("", "", files(&[])), None);
+    }
+
+    #[test]
+    fn cgroup_limit_reads_a_subtree_mount_relative_to_its_root() {
+        let mounts = "25 1 0:22 / /proc rw - proc proc rw\n\
+                      40 25 0:30 /docker/id /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw,nsdelegate\n";
+        let files = [("/sys/fs/cgroup/worker/memory.max", "536870912\n"), ("/sys/fs/cgroup/memory.max", "4294967296\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/docker/id/worker\n", mounts, read), Some(512 << 20), "the worker's own limit");
+        assert_eq!(cgroup_limit("0::/elsewhere\n", mounts, read), None, "no mount holds the cgroup");
+    }
+
+    #[test]
+    fn cgroup_limit_reads_the_mount_that_holds_the_cgroup() {
+        let mounts = "40 25 0:30 /other /mnt/other rw - cgroup2 cgroup2 rw\n\
+                      41 25 0:30 /docker/id /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/mnt/other/memory.max", "1048576\n"), ("/sys/fs/cgroup/memory.max", "268435456\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/docker/id\n", mounts, read), Some(256 << 20), "the unrelated subtree's limit is not read");
+        let both = "40 25 0:30 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n\
+                    41 25 0:30 /parent/child /mnt/child rw - cgroup2 cgroup2 rw\n";
+        let files = [("/mnt/child/memory.max", "max\n"), ("/sys/fs/cgroup/parent/memory.max", "1073741824\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/parent/child\n", both, read), Some(1 << 30), "the ancestor that only the full mount shows");
+    }
+
+    #[test]
+    fn cgroup_limit_reads_a_mount_above_the_namespace_root() {
+        let mounts = "40 25 0:30 /.. /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/sys/fs/cgroup/memory.max", "1073741824\n"), ("/sys/fs/cgroup/worker/memory.max", "4096\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/\n", mounts, read), Some(1 << 30), "the namespace root's ancestor");
+        assert_eq!(cgroup_limit("0::/worker\n", mounts, read), Some(1 << 30), "the cgroup's directory is hidden");
+        let v1 = "31 25 0:27 /../.. /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory\n";
+        let files = [("/sys/fs/cgroup/memory/memory.limit_in_bytes", "536870912\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("5:memory:/\n", v1, read), Some(512 << 20));
+        let sibling = "40 25 0:30 /../other /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n";
+        let files = [("/sys/fs/cgroup/memory.max", "1048576\n")];
+        let read = |path: &str| files.iter().find(|(p, _)| *p == path).map(|(_, text)| (*text).to_owned());
+        assert_eq!(cgroup_limit("0::/\n", sibling, read), None, "a sibling of the namespace root is not an ancestor");
+    }
+
+    #[test]
+    fn cgroup_mounts_lists_the_hierarchy_of_the_memory_limit() {
+        let mounts = "30 25 0:26 / /sys/fs/cgroup/cpu rw - cgroup cgroup rw,cpu\n\
+                      31 25 0:27 /a\\040b /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory\n\
+                      32 25 0:28 / /sys/fs/cgroup/unified rw - cgroup2 cgroup2 rw\n";
+        assert_eq!(cgroup_mounts(mounts, false), [("/a b".to_owned(), "/sys/fs/cgroup/memory".to_owned())]);
+        assert_eq!(cgroup_mounts(mounts, true), [("/".to_owned(), "/sys/fs/cgroup/unified".to_owned())]);
+        assert!(cgroup_mounts("", true).is_empty());
+    }
+
+    #[test]
+    fn mountinfo_paths_have_their_escapes_decoded() {
+        assert_eq!(mountinfo_unescape(r"/a\040b\011c\012d\134e"), "/a b\tc\nd\\e");
+        assert_eq!(mountinfo_unescape(r"/plain\9x\04"), r"/plain\9x\04", "not an escape");
     }
 
     #[test]

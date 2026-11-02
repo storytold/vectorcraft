@@ -146,23 +146,20 @@ impl History {
     }
 }
 
-/// The default [`History::byte_budget`]: an eighth of the machine's memory where it is known
-/// (Linux), at most 1 GiB (the figure elsewhere); 256 MiB on the web, whose memory is small.
+/// The default [`History::byte_budget`]: a quarter of the installed memory, or on Linux of the
+/// process's cgroup memory limit where that is lower ([`vectorcraft_render::physical_memory`], see
+/// [`history_budget_for`]); 1 GiB where the installed memory can't be read, and 256 MiB on the web.
 pub fn default_history_budget() -> usize {
-    const MAX: usize = 1 << 30;
     if cfg!(target_arch = "wasm32") {
         return 256 << 20;
     }
     static BUDGET: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-    *BUDGET.get_or_init(|| physical_memory().map_or(MAX, |m| (m / 8).clamp(64 << 20, MAX)))
+    *BUDGET.get_or_init(|| history_budget_for(vectorcraft_render::physical_memory()))
 }
 
-/// The machine's memory, where cheap to learn without platform calls.
-fn physical_memory() -> Option<usize> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-    let info = std::fs::read_to_string("/proc/meminfo").ok()?;
-    let kb: usize = info.lines().find_map(|l| l.strip_prefix("MemTotal:"))?.trim().trim_end_matches("kB").trim().parse().ok()?;
-    kb.checked_mul(1024)
+/// The default [`History::byte_budget`] for a reading of `memory` bytes installed: a quarter of it,
+/// at least 64 MiB, and at most a quarter of the address space (on 32-bit builds); 1 GiB when the
+/// reading is `None` or 0.
+pub(crate) fn history_budget_for(memory: Option<u64>) -> usize {
+    memory.filter(|&m| m > 0).map_or(1 << 30, |m| usize::try_from(m / 4).unwrap_or(usize::MAX).clamp(64 << 20, usize::MAX / 4))
 }
