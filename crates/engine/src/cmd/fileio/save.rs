@@ -631,6 +631,8 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
 /// file becomes the document's own; the live document gets them in [`SaveJob::finish`]). Bad
 /// options fail here, before anything is encoded.
 pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
+    // A Shape Builder merge still being computed for a click is saved with the document.
+    s.finish_tool_edit_later()?;
     // The web build, without a clock, leaves the dates unless given one.
     let at = if plan.path.is_some() && plan.retargets() { clock_date(s, "modified", plan.modified) } else { None };
     job_for_stamped(s, s.doc()?, plan, at)

@@ -607,6 +607,391 @@ fn shape_builder_merge_uses_the_map_the_tool_has() {
     assert_eq!(maps_built(), built + 1, "another gap");
 }
 
+/// 40 squares 20 pt wide in a row, each 10 pt right of the one before (160 segments, which the
+/// Shape Builder merges on another thread), all selected.
+fn square_row(s: &mut Session) -> Vec<NodeId> {
+    let ids: Vec<NodeId> = (0..40).map(|k| rect(s, f64::from(k) * 10.0, 0.0, 20.0, 20.0)).collect();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    ids
+}
+
+/// The active document of `s` without its dates, so documents made in two sessions at different
+/// times compare equal when their art is.
+fn undated(s: &Session) -> vectorcraft_doc::Document {
+    let mut d = (*s.doc().unwrap().doc).clone();
+    (d.metadata.created, d.metadata.modified) = (None, None);
+    d
+}
+
+/// The Shape Builder over [`square_row`], its map built, after a click at (15, 10): the merge is
+/// being computed on another thread, and the document is as it was.
+fn click_row(s: &mut Session, v: ViewInfo) {
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 15.0, 10.0), v).unwrap();
+    s.tool_poll(v, true).unwrap();
+    let revision = s.doc().unwrap().revision;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 15.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 15.0, 10.0), v).unwrap();
+    assert!(s.tool_editing() && s.tool_waiting());
+    assert_eq!(s.doc().unwrap().revision, revision, "the release returns before the merge is applied");
+}
+
+/// A click of the Shape Builder on a large selection merges on another thread, and the merge the
+/// next poll applies is the command's own, as one undo step.
+#[test]
+fn shape_builder_merges_a_large_selection_on_another_thread() {
+    use vectorcraft_tools::builder::merges_computed;
+    let v = ViewInfo::default();
+    let mut s = session();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    let computed = merges_computed();
+    s.tool_poll(v, true).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(merges_computed(), computed, "the command takes the merge computed on another thread");
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    assert_eq!(layer_children(&s), 41, "the overlap and what is left of the two squares over it");
+    let mut direct = session();
+    square_row(&mut direct);
+    direct.execute("shapeBuilder.merge", &json!({"points": [[15, 10]]})).unwrap();
+    assert!(undated(&s) == undated(&direct), "the same document as the command gives");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layer_children(&s), 40, "one undo step");
+}
+
+/// What comes after a click whose merge is being computed on another thread waits for the merge
+/// and runs on the merged art, as when the merge ran on the calling thread: a command (an edit,
+/// an undo, a selection, a save, a batch, Lock Guides, the proof views, a preference, Add Font
+/// Files), an option change, another tool, a save made outside a command, preferences applied
+/// outside a command, a dialog's preview, a scrubbed field's undo scope, a Cmd-click or Cmd-drag
+/// with the selection tool. The merge is the one computed on the other thread.
+#[test]
+fn shape_builder_applies_a_merge_before_what_comes_next() {
+    use vectorcraft_tools::builder::merges_computed;
+    type Next = (&'static str, fn(&mut Session, &[NodeId], &std::path::Path));
+    let v = ViewInfo::default();
+    let next: Vec<Next> = vec![
+        ("Select All Instances", |s, _, _| {
+            s.execute("symbol.selectInstances", &json!({"name": "S"})).unwrap();
+            assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+        }),
+        ("an edit", |s, _, _| {
+            s.execute("object.move", &json!({"dx": 0, "dy": 100})).unwrap();
+        }),
+        ("an undo", |s, _, _| {
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(layer_children(s), 40, "the undo takes the merge back");
+            s.execute("edit.redo", &json!({})).unwrap();
+        }),
+        ("another selection", |s, _, _| {
+            s.execute("select.inverse", &json!({})).unwrap();
+        }),
+        ("Select All", |s, _, _| {
+            s.execute("select.all", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().selection.objects.len(), 41);
+        }),
+        ("a save", |s, _, dir| {
+            s.execute("file.saveAs", &json!({"path": dir.join("a.vectorcraft").to_string_lossy()})).unwrap();
+            assert!(!s.doc().unwrap().is_dirty(), "the file holds the merge");
+        }),
+        ("a save outside a command", |s, _, dir| {
+            let p = json!({"path": dir.join("b.vectorcraft").to_string_lossy()});
+            let plan = cmd::fileio::save_plan(s, cmd::fileio::SaveMode::SaveAs, &p).unwrap();
+            assert_eq!(layer_children(s), 40, "planning a save leaves the document");
+            let job = cmd::fileio::save_job(s, plan).unwrap();
+            assert_eq!(layer_children(s), 41, "the snapshot is taken after the merge");
+            drop(job);
+        }),
+        ("a batch", |s, _, _| {
+            s.execute("command.batch", &json!({"commands": [{"command": "object.move", "params": {"dx": 0, "dy": 50}}]})).unwrap();
+        }),
+        ("an option change", |s, _, _| {
+            s.set_tool_option_cmd(&json!({"key": "gapDetection", "value": true})).unwrap();
+        }),
+        ("another tool", |s, _, _| {
+            s.select_tool("selection", ViewInfo::default()).unwrap();
+        }),
+        ("a closed document", |s, _, _| {
+            s.execute("file.close", &json!({})).unwrap();
+        }),
+        ("Lock Guides", |s, _, _| {
+            s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+        }),
+        ("an option set from a panel", |s, _, _| {
+            s.set_tool_option("gapDetection", &json!(true));
+        }),
+        ("a dialog's preview, canceled", |s, _, _| {
+            s.begin_interaction("Move").unwrap();
+            s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+            s.preview("object.move", &json!({"dx": 9, "dy": 0})).unwrap();
+            s.cancel_interaction().unwrap();
+            assert_eq!(layer_children(s), 41, "canceling the preview keeps the merge");
+        }),
+        ("a dialog's preview, kept", |s, _, _| {
+            s.begin_interaction("Move").unwrap();
+            s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+            s.commit_interaction().unwrap();
+            let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Move", "Shape Builder"]);
+        }),
+        ("a scrubbed field, canceled", |s, _, _| {
+            let scope = s.begin_undo_scope().unwrap();
+            s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+            s.end_undo_scope(scope, true);
+            assert_eq!(
+                s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()),
+                Some("Shape Builder"),
+                "the scrub's step is undone, not the merge"
+            );
+        }),
+        ("a held click, then another tool", |s, _, _| {
+            let v = ViewInfo::default();
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+            assert!(s.tool_editing(), "the click is held");
+            s.select_tool("selection", v).unwrap();
+            let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Shape Builder", "Shape Builder"], "the held click merges with the Shape Builder first");
+        }),
+        ("a held click, then another document", |s, _, _| {
+            let v = ViewInfo::default();
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+            let first = s.active_index().unwrap();
+            s.add_document(vectorcraft_doc::Document::new(100.0, 100.0), None);
+            assert!(!s.tool_editing());
+            let labels: Vec<&str> = s.documents()[first].history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Shape Builder", "Shape Builder"], "the held click merges in its own document first");
+            s.set_active(first);
+        }),
+        ("a Cmd-click", |s, _, _| {
+            let v = ViewInfo::default();
+            let cmd = Mods { cmd: true, ..Default::default() };
+            assert_eq!(s.cursor(Point::new(500.0, 300.0), cmd, v), vectorcraft_tools::Cursor::Busy, "Cmd shows the merge is computed");
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 500.0, 300.0).with_mods(cmd), v).unwrap();
+            }
+            assert!(s.tool_editing(), "the click is held");
+            while s.tool_waiting() {
+                s.tool_poll(v, true).unwrap();
+            }
+            assert!(s.doc().unwrap().selection.is_empty(), "the lent selection tool deselects after the merge");
+            assert_eq!(s.tool_id(), "shapeBuilder");
+        }),
+        ("a Cmd-drag", |s, _, _| {
+            let v = ViewInfo::default();
+            let cmd = Mods { cmd: true, ..Default::default() };
+            for (kind, y) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 60.0), (PointerKind::Drag, 110.0), (PointerKind::Up, 110.0)] {
+                s.pointer(&PointerEvent::new(kind, 305.0, y).with_mods(cmd), v).unwrap();
+            }
+            assert!(s.tool_editing(), "the drag is held");
+            while s.tool_waiting() {
+                s.tool_poll(v, true).unwrap();
+            }
+            let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Move", "Shape Builder"]);
+        }),
+        // The proof views redraw every document (a new revision); they are left off, as the
+        // other tests of the process-wide proof view expect.
+        ("Separations Preview", |s, _, _| {
+            s.execute("view.separationsPreview", &json!({"on": false})).unwrap();
+        }),
+        ("Overprint Preview", |s, _, _| {
+            s.execute("view.overprintPreview", &json!({"on": false})).unwrap();
+        }),
+        ("Proof Colors", |s, _, _| {
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+        }),
+        ("Proof Setup", |s, _, _| {
+            s.execute("view.proofSetup", &json!({})).unwrap();
+        }),
+        ("a preference", |s, _, _| {
+            let every = s.prefs.gridline_every;
+            s.execute("prefs.set", &json!({"key": "gridlineEvery", "value": every + 10.0})).unwrap();
+        }),
+        ("Reset Preferences", |s, _, _| {
+            s.execute("prefs.reset", &json!({})).unwrap();
+        }),
+        ("preferences applied outside a command", |s, _, _| {
+            let mut p = s.prefs.clone();
+            p.gridline_every += 10.0;
+            s.apply_prefs(p);
+        }),
+        ("Add Font Files", |s, _, _| {
+            // No files: the command fails after the merge.
+            assert!(s.execute("text.addFontFiles", &json!({"files": []})).is_err());
+        }),
+    ];
+    let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");
+    for (what, then) in next {
+        let mut s = session();
+        if what == "Select All Instances" {
+            let far = rect(&mut s, 500.0, 500.0, 20.0, 20.0);
+            s.execute("symbol.new", &json!({"name": "S", "ids": [far.0]})).unwrap();
+        }
+        let ids = square_row(&mut s);
+        click_row(&mut s, v);
+        let computed = merges_computed();
+        let journal = s.journal.len();
+        then(&mut s, &ids, &dir);
+        assert!(!s.tool_editing(), "{what}");
+        assert_eq!(merges_computed(), computed, "{what}: the merge computed on another thread");
+        assert_eq!(s.journal.since(journal).first().map(|j| j.0.as_str()), Some("shapeBuilder.merge"), "{what}: the merge comes first");
+        if what != "a closed document" {
+            assert!(layer_children(&s) >= 41, "{what}: the merge stays");
+        }
+    }
+}
+
+/// Gestures and arrow keys that come while a merge is computed on another thread are held and
+/// made after it, in order: the document is the one they make one after the other, and the
+/// events count as made once they are and the merge they start is applied.
+#[test]
+fn shape_builder_holds_gestures_made_during_a_merge() {
+    type Gesture = fn(&mut Session, ViewInfo);
+    let cases: [(&str, bool, Gesture); 6] = [
+        ("a second click", false, |s, v| {
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+        }),
+        ("a drag", false, |s, v| {
+            for (kind, x) in [(PointerKind::Down, 75.0), (PointerKind::Drag, 85.0), (PointerKind::Drag, 95.0), (PointerKind::Up, 95.0)] {
+                s.pointer(&PointerEvent::new(kind, x, 10.0), v).unwrap();
+            }
+        }),
+        ("two clicks", false, |s, v| {
+            for x in [55.0, 135.0] {
+                for kind in [PointerKind::Down, PointerKind::Up] {
+                    s.pointer(&PointerEvent::new(kind, x, 10.0), v).unwrap();
+                }
+            }
+        }),
+        ("a Cmd-click", false, |s, v| {
+            let cmd = Mods { cmd: true, ..Default::default() };
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 500.0, 300.0).with_mods(cmd), v).unwrap();
+            }
+        }),
+        ("a Cmd-drag and a click", false, |s, v| {
+            let cmd = Mods { cmd: true, ..Default::default() };
+            for (kind, y) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 110.0), (PointerKind::Up, 110.0)] {
+                s.pointer(&PointerEvent::new(kind, 305.0, y).with_mods(cmd), v).unwrap();
+            }
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+        }),
+        ("an arrow key", true, |s, v| {
+            s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        }),
+    ];
+    let v = ViewInfo::default();
+    let start = |swatches: bool| {
+        let mut s = session();
+        if swatches {
+            s.select_tool("shapeBuilder", v).unwrap();
+            s.set_tool_option_cmd(&json!({"key": "pickColorFrom", "value": "swatches"})).unwrap();
+        }
+        square_row(&mut s);
+        click_row(&mut s, v);
+        s
+    };
+    for (what, swatches, send) in cases {
+        // One after the other: the merge applied before the gesture, and each merge after its own.
+        let mut one = start(swatches);
+        while one.tool_waiting() {
+            one.tool_poll(v, true).unwrap();
+        }
+        send(&mut one, v);
+        while one.tool_waiting() {
+            one.tool_poll(v, true).unwrap();
+        }
+        // While the merge is computed.
+        let mut s = start(swatches);
+        let revision = s.doc().unwrap().revision;
+        let from = s.input_count();
+        send(&mut s, v);
+        let to = s.input_count();
+        assert!(s.tool_editing() && !s.input_applied(from, to), "{what}: held");
+        assert_eq!(s.doc().unwrap().revision, revision, "{what}: nothing made before the merge");
+        while s.tool_waiting() {
+            s.tool_poll(v, true).unwrap();
+        }
+        assert!(!s.tool_editing() && s.input_applied(from, to), "{what}");
+        assert!(undated(&s) == undated(&one), "{what}: the document the gestures make one after the other");
+        assert_eq!(s.doc().unwrap().selection, one.doc().unwrap().selection, "{what}");
+        assert_eq!(s.paint.fill, one.paint.fill, "{what}");
+        let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&s), labels(&one), "{what}");
+        // The click's merge alone.
+        let mut merged = start(swatches);
+        while merged.tool_waiting() {
+            merged.tool_poll(v, true).unwrap();
+        }
+        let changed = labels(&s).len() > labels(&merged).len()
+            || s.paint.fill != merged.paint.fill
+            || s.doc().unwrap().selection != merged.doc().unwrap().selection;
+        assert!(changed, "{what}: the gesture did something");
+    }
+}
+
+/// A new revision of the document made outside a command while a merge is computed on another
+/// thread keeps the merge when the selected art is as it was (the next poll applies it, as the
+/// command computes it), and drops it when the art changed.
+#[test]
+fn shape_builder_keeps_a_merge_over_a_new_revision_of_the_same_art() {
+    use vectorcraft_tools::builder::merges_computed;
+    let v = ViewInfo::default();
+    let mut s = session();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    let computed = merges_computed();
+    s.active_mut().unwrap().revision += 1;
+    s.tool_poll(v, true).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(merges_computed(), computed, "the merge computed on another thread");
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    let mut direct = session();
+    square_row(&mut direct);
+    direct.execute("shapeBuilder.merge", &json!({"points": [[15, 10]]})).unwrap();
+    assert!(undated(&s) == undated(&direct), "the same document as the command gives");
+    // The art changed: the merge is dropped.
+    let mut s = session();
+    let ids = square_row(&mut s);
+    click_row(&mut s, v);
+    let journal = s.journal.len();
+    let st = s.active_mut().unwrap();
+    Arc::make_mut(&mut st.doc).node_mut(ids[1]).unwrap().transform(Affine::translate((0.0, 50.0)), false);
+    st.revision += 1;
+    s.tool_poll(v, true).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(s.journal.len(), journal, "nothing merged");
+    assert_eq!(layer_children(&s), 40);
+}
+
+/// A merge computed for the tool Cmd lent the selection tool's drag away from is applied before
+/// a command too.
+#[test]
+fn shape_builder_merge_of_the_lending_tool_comes_first() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    let lent = s.make_tool("selection");
+    s.lender = Some(std::mem::replace(&mut s.tool, lent));
+    assert!(s.tool_editing());
+    let journal = s.journal.len();
+    s.execute("object.move", &json!({"dx": 0, "dy": 100})).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(s.journal.since(journal).first().map(|j| j.0.as_str()), Some("shapeBuilder.merge"));
+    assert_eq!(s.tool_id(), "selection", "the lent tool stays active until the release");
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("shapeBuilder"));
+}
+
 #[test]
 fn shape_builder_tool_merges_the_narrow_shape_it_highlights_in_a_wide_selection() {
     let mut s = session();

@@ -1,4 +1,4 @@
-use super::command_sets::{SELECTS_GIVEN_IDS, given_ids, strip_replay_only};
+use super::command_sets::{SELECTS_GIVEN_IDS, given_ids, strip_replay_only, waits_for_tool_edit};
 use super::doc_state::DocState;
 use super::error::{EngineError, Result};
 use super::history::NamedStep;

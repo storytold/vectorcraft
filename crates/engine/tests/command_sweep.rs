@@ -219,6 +219,56 @@ fn every_command_with_junk_params() {
     );
 }
 
+/// Each document's uid, revision and selected ids, the active document and the current paint.
+type ToolEditState = (Vec<(u64, u64, Vec<u64>)>, Option<usize>, vectorcraft_tools::PaintDefaults);
+
+/// What a command that runs while the active tool computes an edit on another thread must leave
+/// as it was: every document's revision and selection, which document is active, and the current
+/// paint.
+fn tool_edit_state(s: &Session) -> ToolEditState {
+    let docs = s.documents().iter().map(|d| (d.uid, d.revision, d.selection.objects.iter().map(|i| i.0).collect())).collect();
+    (docs, s.active_index(), s.paint.clone())
+}
+
+/// Every command that runs at once while the active tool computes an edit on another thread (a
+/// Shape Builder merge), rather than applying the edit first (`waits_for_tool_edit`), leaves the
+/// documents' revisions and selections, the active document and the current paint as they were,
+/// with `{}`, junk params and params that turn its options on and off: the edit, computed for the
+/// document as it was, still applies after it.
+#[test]
+fn commands_that_do_not_wait_for_a_tool_edit_change_no_document() {
+    let path = safe_path();
+    let mut failures = vec![];
+    for fx in [Fixture::Single, Fixture::Multi] {
+        for c in command_specs().iter().filter(|c| !vectorcraft_engine::waits_for_tool_edit(c.id)) {
+            let mut cases = junk_params(c.params, &path);
+            if heavy(c.id) {
+                cases.truncate(12);
+            }
+            for k in param_keys(c.params) {
+                for v in [json!(true), json!(false), json!(1), json!("on")] {
+                    cases.push(json!({ k.as_str(): v }));
+                }
+            }
+            // Find Objects selects only with a filter, which one key at a time does not give it.
+            if c.id == "document.find" {
+                cases.extend([json!({"kind": "Path", "select": true}), json!({"name": "no such name", "select": true})]);
+            }
+            for p in &cases {
+                let mut s = fx.session();
+                let before = tool_edit_state(&s);
+                let _ = catch_quiet(|| no_panic(s.execute(c.id, p)));
+                if tool_edit_state(&s) != before {
+                    failures.push(format!("{} {p} [{fx:?}]", c.id));
+                }
+            }
+        }
+    }
+    failures.sort();
+    failures.dedup_by(|a, b| a.split(' ').next() == b.split(' ').next());
+    assert!(failures.is_empty(), "{} commands change a document without waiting for a tool edit:\n{}", failures.len(), failures.join("\n"));
+}
+
 /// Junk inside the obvious structured params: ids arrays, anchors, matrices, colours, stops.
 #[test]
 fn structured_junk() {
