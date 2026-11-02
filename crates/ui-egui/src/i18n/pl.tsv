@@ -5490,6 +5490,9 @@ axis	Y Axis	Oś Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	Pliki: {n} w {folder}. Pokazać folder pakietu?|Pliki: {n} w {folder}. Pokazać folder pakietu?|Pliki: {n} w {folder}. Pokazać folder pakietu?
+	Reading	Odczyt
+	Overhang	Wystawanie
+	applied	Zastosowano
 	Clockwise	Zgodnie z ruchem wskazówek zegara
 	Dither	Rozpraszanie
 	Fine noise hides banding in the gradient fill	Drobny szum ukrywa pasy w wypełnieniu gradientem

@@ -5546,6 +5546,9 @@ axis	Y Axis	Y ос
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Пакетиран е {n} файл в {folder}|Пакетирани са {n} файла в {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Пакетиран е {n} файл {note}|Пакетирани са {n} файла {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} файл в {folder}. Показване на папката на пакета?|{n} файла в {folder}. Показване на папката на пакета?
+	Reading	Четене
+	Overhang	Надвес
+	applied	Приложено
 	Clockwise	По часовниковата стрелка
 	Dither	Дитъринг
 	Fine noise hides banding in the gradient fill	Фин шум скрива ивиците в градиентната запълка

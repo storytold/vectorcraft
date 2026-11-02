@@ -1060,6 +1060,169 @@ fn reset_panel_resets_every_attribute_but_the_font() {
     assert_eq!(runs(&app), [("One ".to_string(), styled), ("12".to_string(), plain)]);
 }
 
+#[test]
+fn ruby_params_set_and_remove_the_reading() {
+    let id = NodeId(7);
+    let f = RubyFields {
+        reading: " かんじ ".into(),
+        position: "below".into(),
+        align: "end".into(),
+        size: 40.0,
+        overhang: false,
+        ..RubyFields::default()
+    };
+    let p = ruby_params(id, 3, 9, &f, false);
+    assert_eq!(p["id"], 7);
+    assert_eq!((p["start"].as_u64(), p["end"].as_u64()), (Some(3), Some(9)));
+    assert_eq!(p["text"], "かんじ", "the reading is trimmed");
+    assert_eq!(p["position"], "below");
+    assert_eq!(p["align"], "end");
+    assert_eq!(p["size"], 40.0);
+    assert_eq!(p["overhang"], false);
+    let r = ruby_params(id, 3, 9, &f, true);
+    assert_eq!(r["remove"], true);
+    assert!(r.get("text").is_none());
+}
+
+#[test]
+fn ruby_fields_load_the_ruby_under_the_selection() {
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "漢字です", CharStyle::default());
+    let span =
+        RubySpan { position: RubyPosition::Below, align: RubyAlign::End, size_percent: 40.0, overhang: false, ..RubySpan::new(0, 6, "かんじ") };
+    t.ruby = vec![span];
+    let found = ruby_in(&t, 0, 6).expect("the ruby under the selection");
+    let f = RubyFields::from_span(Some(found));
+    assert_eq!(f.reading, "かんじ");
+    assert_eq!((f.position.as_str(), f.align.as_str()), ("below", "end"));
+    assert!((f.size - 40.0).abs() < 1e-9 && !f.overhang);
+    assert!(ruby_covers(&t, 0, 6), "the only span over exactly the selection");
+    // A selection outside it has none; no span is the defaults.
+    assert!(ruby_in(&t, 9, 12).is_none() && !ruby_covers(&t, 9, 12));
+    assert_eq!(RubyFields::from_span(None), RubyFields::default());
+    // The fields reload when the selection or its ruby changes.
+    assert_ne!(ruby_sync_key(NodeId(1), 0, 6, Some(found)), ruby_sync_key(NodeId(1), 0, 3, Some(found)));
+    assert_ne!(ruby_sync_key(NodeId(1), 0, 6, Some(found)), ruby_sync_key(NodeId(1), 0, 6, None));
+    // A partial selection and a second reading under it are not re-applied in place.
+    assert!(!ruby_covers(&t, 0, 3), "the selection is only part of the span");
+    t.ruby.push(RubySpan::new(3, 6, "じ"));
+    assert!(!ruby_covers(&t, 0, 6), "two readings under the selection");
+}
+
+/// The reading typed into the panel is applied to the selected text through `type.ruby`, shown
+/// as applied, and removable again; Undo brings it back (one step per action).
+#[test]
+fn ruby_panel_applies_and_removes_the_reading() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "漢字です", "size": 12})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    let labels: Vec<&str> = texts.iter().map(|(s, _)| s.as_str()).collect();
+    for label in ["Ruby", "Reading:", "Position:", "Align:", "Size:", "Overhang", "Apply", "Remove"] {
+        assert!(labels.contains(&label), "`{label}` not drawn: {labels:?}");
+    }
+    assert!(labels.contains(&"Above") && labels.contains(&"Center"), "the defaults: {labels:?}");
+    // Type the reading into its field, then Apply.
+    let row = text_rect(&texts, "Reading:");
+    click(&ctx, &mut app, row.right_center() + egui::vec2(30.0, 0.0), show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("かんじ".into())], show);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    assert!(texts.iter().any(|(s, _)| s == "かんじ"), "the field shows the typed reading: {texts:?}");
+    click(&ctx, &mut app, text_rect(&texts, "Apply").center(), show);
+    let ruby = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => t.ruby.clone(),
+        _ => panic!("text"),
+    };
+    let r = ruby(&app);
+    assert_eq!((r.len(), r[0].start, r[0].end, r[0].text.as_str()), (1, 0, 12, "かんじ"), "the whole selected text (12 bytes)");
+    assert_eq!(r[0].position, RubyPosition::Above);
+    assert!(r[0].overhang);
+    // The panel shows it as applied, and Remove takes it off; Undo puts it back.
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    assert!(texts.iter().any(|(s, _)| s == "かんじ"), "the reading stays in the field: {texts:?}");
+    click(&ctx, &mut app, text_rect(&texts, "Remove").center(), show);
+    assert!(ruby(&app).is_empty());
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(ruby(&app).len(), 1);
+}
+
+/// With the Type tool, the section acts on the selected characters only, not the whole text.
+#[test]
+fn ruby_panel_acts_on_the_type_tools_selection() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "漢字です", "size": 12})).unwrap()["id"].as_u64().unwrap());
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    let row = text_rect(&texts, "Reading:");
+    click(&ctx, &mut app, row.right_center() + egui::vec2(30.0, 0.0), show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("かん".into())], show);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Apply").center(), show);
+    let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.ruby.len(), 1);
+    assert_eq!((t.ruby[0].start, t.ruby[0].end, t.ruby[0].text.as_str()), (0, 3, "かん"), "only the selected character");
+}
+
+/// A typed size commits on Enter and re-applies the ruby, like dragging the value does.
+#[test]
+fn ruby_panel_typing_a_size_reapplies_the_ruby() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "漢字", "size": 12})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    app.run("type.ruby", json!({"text": "かんじ"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Size:").right_center() + egui::vec2(30.0, 0.0), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("40".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, Default::default())], show);
+    let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.ruby.len(), 1);
+    assert_eq!(t.ruby[0].text, "かんじ");
+    assert!((t.ruby[0].size_percent - 40.0).abs() < 1e-9, "the typed size is applied: {:?}", t.ruby[0]);
+}
+
+/// Option edits re-apply only the one ruby over exactly the selection: over two readings,
+/// changing Position leaves them alone until Apply replaces them over the selection.
+#[test]
+fn ruby_panel_option_edits_do_not_merge_overlapping_readings() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "漢字", "size": 12})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    app.run("type.ruby", json!({"start": 0, "end": 3, "text": "かん"})).unwrap();
+    app.run("type.ruby", json!({"start": 3, "end": 6, "text": "じ"})).unwrap();
+    let readings = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => t.ruby.iter().map(|r| (r.start, r.end, r.text.clone(), r.position)).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    // Open Position and pick Below: the field shows it, but both readings stay.
+    click(&ctx, &mut app, text_rect(&texts, "Above").center(), show);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Below").center(), show);
+    assert_eq!(
+        readings(&app),
+        [(0, 3, "かん".to_string(), RubyPosition::Above), (3, 6, "じ".to_string(), RubyPosition::Above)],
+        "no option edit collapses the readings"
+    );
+    // Apply still replaces the ruby over the whole selection.
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Apply").center(), show);
+    assert_eq!(readings(&app), [(0, 6, "かん".to_string(), RubyPosition::Below)]);
+}
+
 /// #4232: the panel menu's Show Snap to Glyph Options shows the Snap to Glyph section (with no
 /// type selected too) and Hide Snap to Glyph Options hides it; its checkboxes, dimmed while View ›
 /// Snap to Glyph is off, set the options.

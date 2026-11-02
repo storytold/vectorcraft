@@ -5590,6 +5590,9 @@ axis	Y Axis	Y ekseni
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} içinde {n} dosya. Paket klasörü gösterilsin mi?
+	Reading	Okuma
+	Overhang	Taşma
+	applied	Uygulandı
 	Clockwise	Saat yönünde
 	Dither	Titreme
 	Fine noise hides banding in the gradient fill	İnce gürültü, degrade dolgudaki bantları gizler

@@ -5562,6 +5562,9 @@ axis	Y Axis	Sumbu Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Berhasil mengemas {n} file di {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Berhasil mengemas {n} file {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} file dalam {folder}. Tampilkan folder paket?
+	Reading	Bacaan
+	Overhang	Tonjolan
+	applied	Diterapkan
 	Clockwise	Searah jarum jam
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Derau halus menyembunyikan pita warna pada isian gradien

@@ -5634,6 +5634,9 @@ axis	Y Axis	Axe Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} fichier assemblé dans {folder}|{n} fichiers assemblés dans {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} fichier assemblé {note}|{n} fichiers assemblés {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} fichier dans {folder}. Afficher le dossier de l’assemblage ?|{n} fichiers dans {folder}. Afficher le dossier de l’assemblage ?
+	Reading	Lecture
+	Overhang	Dépassement
+	applied	Appliqué
 	Clockwise	Sens horaire
 	Dither	Simulation
 	Fine noise hides banding in the gradient fill	Un bruit fin masque les bandes du fond en dégradé

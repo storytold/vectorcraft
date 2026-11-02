@@ -5660,6 +5660,9 @@ axis	Y Axis	Y-axel
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Paketerade {n} fil i {folder}|Paketerade {n} filer i {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Paketerade {n} fil {note}|Paketerade {n} filer {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} fil i {folder}. Visa paketmappen?|{n} filer i {folder}. Visa paketmappen?
+	Reading	Läsning
+	Overhang	Överhäng
+	applied	Använd
 	Clockwise	Medurs
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Fint brus döljer bandningen i gradientfyllningen

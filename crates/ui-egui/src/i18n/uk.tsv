@@ -5232,6 +5232,9 @@ axis	Y Axis	Вісь Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	файлів: {n} {folder}. Показати папку пакета?|файлів: {n} {folder}. Показати папку пакета?|файлів: {n} {folder}. Показати папку пакета?
+	Reading	Читання
+	Overhang	Виступ
+	applied	Застосовано
 	Clockwise	За годинниковою стрілкою
 	Dither	Дизеринг
 	Fine noise hides banding in the gradient fill	Дрібний шум приховує смуги в градієнтній заливці

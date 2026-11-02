@@ -5552,6 +5552,9 @@ axis	Y Axis	Y ღერძი
 @msg	this kind of brush has no options dialog yet	ამ ტიპის ფუნჯს პარამეტრების დიალოგი ჯერ არ აქვს
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	გადმოათრიეთ აქ გრაფიკა, ფერები და ტექსტის სტილები, რომ სხვა დოკუმენტებშიც გამოიყენოთ. ბიბლიოთეკები ამ კომპიუტერზე ინახება — ანგარიში არ არის საჭირო.
 	Choose a filter	ფილტრის არჩევა
+	Reading	კითხვა
+	Overhang	გადაკიდება
+	applied	გამოყენებულია
 	Clockwise	საათის ისრის მიმართულებით
 	Dither	დიზერინგი
 	Fine noise hides banding in the gradient fill	წვრილი ხმაური მალავს ზოლებს გრადიენტულ შევსებაში

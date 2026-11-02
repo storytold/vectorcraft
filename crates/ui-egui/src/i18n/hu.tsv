@@ -5622,6 +5622,9 @@ axis	Y Axis	Y tengely
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Becsomagolt fájlok: {n} {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	Fájlok: {n}, mappa: {folder}. Megnyitod a csomag mappáját?
+	Reading	Olvasat
+	Overhang	Túlnyúlás
+	applied	Alkalmazva
 	Clockwise	Óramutató járásával megegyező
 	Dither	Árnyalatkeverés
 	Fine noise hides banding in the gradient fill	A finom zaj elrejti a sávokat a színátmenetes kitöltésben

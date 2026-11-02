@@ -5247,6 +5247,9 @@ axis	Y Axis	Ось Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файлов: {n} в {folder}|Упаковано файлов: {n} в {folder}|Упаковано файлов: {n} в {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файлов: {n} {note}|Упаковано файлов: {n} {note}|Упаковано файлов: {n} {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	Файлов: {n} в {folder}. Показать папку пакета?|Файлов: {n} в {folder}. Показать папку пакета?|Файлов: {n} в {folder}. Показать папку пакета?
+	Reading	Чтение
+	Overhang	Выступ
+	applied	Применено
 	Clockwise	По часовой стрелке
 	Dither	Дизеринг
 	Fine noise hides banding in the gradient fill	Мелкий шум скрывает полосы в градиентной заливке

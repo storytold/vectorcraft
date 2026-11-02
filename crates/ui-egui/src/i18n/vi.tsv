@@ -5235,6 +5235,9 @@ axis	Y Axis	Trục Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Đã đóng gói {n} tệp trong {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Đã đóng gói {n} tệp {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} tệp trong {folder}. Hiện thư mục gói?
+	Reading	Cách đọc
+	Overhang	Độ nhô
+	applied	Đã áp dụng
 	Clockwise	Theo chiều kim đồng hồ
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Nhiễu mịn che dải màu trong vùng tô chuyển sắc

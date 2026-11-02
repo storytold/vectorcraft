@@ -5319,6 +5319,9 @@ axis	Y Axis	Y 軸
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} 個のファイルを {folder} にパッケージしました
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} 個のファイルをパッケージしました {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} に {n} 個のファイル。パッケージフォルダーを表示しますか？
+	Reading	読み
+	Overhang	はみ出し
+	applied	適用済み
 	Clockwise	時計回り
 	Dither	ディザ
 	Fine noise hides banding in the gradient fill	細かいノイズでグラデーションの塗りの縞を目立たなくします

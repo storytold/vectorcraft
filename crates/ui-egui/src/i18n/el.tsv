@@ -5588,6 +5588,9 @@ axis	Y Axis	Άξονας Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder}|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Συσκευάστηκε {n} αρχείο {note}|Συσκευάστηκαν {n} αρχεία {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} αρχείο στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;
+	Reading	Ανάγνωση
+	Overhang	Προεξοχή
+	applied	Εφαρμόστηκε
 	Clockwise	Δεξιόστροφα
 	Dither	Πρόσθεση θορύβου
 	Fine noise hides banding in the gradient fill	Ο λεπτός θόρυβος κρύβει τις λωρίδες στο γέμισμα ντεγκραντέ

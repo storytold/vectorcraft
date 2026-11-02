@@ -5562,6 +5562,9 @@ axis	Y Axis	Y-akse
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pakkede {n} fil i {folder}|Pakkede {n} filer i {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Pakkede {n} fil {note}|Pakkede {n} filer {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} fil i {folder}. Vis pakkemappen?|{n} filer i {folder}. Vis pakkemappen?
+	Reading	Læsning
+	Overhang	Overhæng
+	applied	Anvendt
 	Clockwise	Med uret
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Fin støj skjuler striber i gradientfyldet

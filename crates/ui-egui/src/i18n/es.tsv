@@ -5578,6 +5578,9 @@ axis	Y Axis	Eje Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Se empaquetó {n} archivo en {folder}|Se empaquetaron {n} archivos en {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Se empaquetó {n} archivo {note}|Se empaquetaron {n} archivos {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} archivo en {folder}. ¿Mostrar la carpeta del paquete?|{n} archivos en {folder}. ¿Mostrar la carpeta del paquete?
+	Reading	Lectura
+	Overhang	Desbordamiento
+	applied	Aplicado
 	Clockwise	En sentido horario
 	Dither	Tramado
 	Fine noise hides banding in the gradient fill	Un ruido fino oculta las bandas del relleno de degradado

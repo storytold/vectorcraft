@@ -5553,6 +5553,9 @@ axis	Y Axis	Eixo Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} arquivo empacotado em {folder}|{n} arquivos empacotados em {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} arquivo empacotado {note}|{n} arquivos empacotados {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} arquivo em {folder}. Mostrar a pasta do pacote?|{n} arquivos em {folder}. Mostrar a pasta do pacote?
+	Reading	Leitura
+	Overhang	Transbordamento
+	applied	Aplicado
 	Clockwise	Sentido horário
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Um ruído fino esconde as faixas do preenchimento em gradiente

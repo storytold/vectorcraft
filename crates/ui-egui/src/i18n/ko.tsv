@@ -5215,6 +5215,9 @@ axis	Y Axis	Y축
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder}에 파일 {n}개를 패키지했습니다
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	파일 {n}개를 패키지했습니다 {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder}에 파일 {n}개. 패키지 폴더를 표시하시겠습니까?
+	Reading	읽기
+	Overhang	오버행
+	applied	적용됨
 	Clockwise	시계 방향
 	Dither	디더
 	Fine noise hides banding in the gradient fill	미세한 노이즈로 그레이디언트 칠의 띠를 감춥니다

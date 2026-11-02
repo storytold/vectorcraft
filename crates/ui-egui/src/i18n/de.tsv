@@ -5218,6 +5218,9 @@ axis	Y Axis	Y-Achse
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} Datei in {folder} verpackt|{n} Dateien in {folder} verpackt
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} Datei verpackt {note}|{n} Dateien verpackt {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} Datei in {folder}. Paketordner anzeigen?|{n} Dateien in {folder}. Paketordner anzeigen?
+	Reading	Lesung
+	Overhang	Überhang
+	applied	Angewendet
 	Clockwise	Im Uhrzeigersinn
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Feines Rauschen verbirgt Streifen in der Verlaufsfläche

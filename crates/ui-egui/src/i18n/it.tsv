@@ -5252,6 +5252,9 @@ axis	Y Axis	Asse Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} file in {folder}. Vuoi mostrare la cartella del pacchetto?|{n} file in {folder}. Vuoi mostrare la cartella del pacchetto?
+	Reading	Lettura
+	Overhang	Sporgenza
+	applied	Applicato
 	Clockwise	In senso orario
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Un rumore fine nasconde le bande nel riempimento sfumato

@@ -5637,6 +5637,9 @@ axis	Y Axis	osa Y
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Zabalen {n} soubor do {folder}|Zabaleny {n} soubory do {folder}|Zabaleno {n} souborů do {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Zabalen {n} soubor {note}|Zabaleny {n} soubory {note}|Zabaleno {n} souborů {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} soubor v {folder}. Zobrazit složku balíčku?|{n} soubory v {folder}. Zobrazit složku balíčku?|{n} souborů v {folder}. Zobrazit složku balíčku?
+	Reading	Čtení
+	Overhang	Přesah
+	applied	Použito
 	Clockwise	Ve směru hodinových ručiček
 	Dither	Rozptýlení
 	Fine noise hides banding in the gradient fill	Jemný šum skryje pruhy ve výplni přechodem

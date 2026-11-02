@@ -5667,6 +5667,9 @@ axis	Y Axis	Y-akseli
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Paketoitiin {n} tiedosto kansioon {folder}|Paketoitiin {n} tiedostoa kansioon {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Paketoitiin {n} tiedosto {note}|Paketoitiin {n} tiedostoa {note}
 @plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} tiedosto kansiossa {folder}. Näytetäänkö pakettikansio?|{n} tiedostoa kansiossa {folder}. Näytetäänkö pakettikansio?
+	Reading	Lukutapa
+	Overhang	Ylitys
+	applied	Käytetty
 	Clockwise	Myötäpäivään
 	Dither	Rasterointi
 	Fine noise hides banding in the gradient fill	Hieno kohina piilottaa raidat liukuväritäytöstä

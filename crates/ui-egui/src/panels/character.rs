@@ -7,7 +7,7 @@ use std::sync::{Mutex, OnceLock};
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
-use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_doc::{CharStyle, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject};
 use vectorcraft_tools::{Mods, ToolKey};
 
 use super::{pstate, set_pstate};
@@ -942,6 +942,8 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.character_focus.is_some() && !widgets::disarm_field_focus(ui.ctx()) {
         app.character_focus = None;
     }
+    // Ruby (ふりがな): the reading over the selected characters, its placement and options.
+    ruby_section(app, ui);
     if hidden {
         return;
     }
@@ -1255,6 +1257,205 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );
+}
+
+// ---------- Ruby (ふりがな, phonetic guide) ----------
+
+/// The Ruby section's fields, kept between frames; `synced` is the selection and ruby they were
+/// read from, so they reload when either changes.
+#[derive(Clone, Debug, PartialEq)]
+struct RubyFields {
+    reading: String,
+    /// "above" or "below" (right/left of the column in vertical type).
+    position: String,
+    /// "start", "center" or "end".
+    align: String,
+    /// Percentage of the base text's size, 1–100.
+    size: f64,
+    overhang: bool,
+    synced: String,
+}
+
+impl Default for RubyFields {
+    fn default() -> Self {
+        Self { reading: String::new(), position: "above".into(), align: "center".into(), size: 50.0, overhang: true, synced: String::new() }
+    }
+}
+
+impl RubyFields {
+    /// The fields of `span`, or the defaults (no reading, above, centred, half size, overhanging).
+    fn from_span(span: Option<&RubySpan>) -> Self {
+        let mut f = Self::default();
+        if let Some(r) = span {
+            f.reading.clone_from(&r.text);
+            f.position = match r.position {
+                RubyPosition::Above => "above",
+                RubyPosition::Below => "below",
+            }
+            .into();
+            f.align = match r.align {
+                RubyAlign::Center => "center",
+                RubyAlign::Start => "start",
+                RubyAlign::End => "end",
+            }
+            .into();
+            f.size = r.safe_size_percent();
+            f.overhang = r.overhang;
+        }
+        f
+    }
+}
+
+/// The text the Ruby section acts on: the Type tool's selected characters when it edits a range,
+/// else the first selected text object's whole text.
+fn ruby_target(app: &VectorcraftApp) -> Option<(NodeId, usize, usize)> {
+    if let Some((id, a, b)) = text_editing(app) {
+        return (b > a).then_some((id, a, b));
+    }
+    let st = app.session.active()?;
+    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        let mut target: Option<(NodeId, usize)> = None;
+        node.walk(&mut |n| {
+            if target.is_none()
+                && let NodeKind::Text(t) = &n.kind
+            {
+                target = Some((n.id, t.plain_text().len()));
+            }
+        });
+        if let Some((id, len)) = target {
+            return (len > 0).then_some((id, 0, len));
+        }
+    }
+    None
+}
+
+/// The ruby over `a..b` of `t`: the first span touching the range.
+fn ruby_in(t: &TextObject, a: usize, b: usize) -> Option<&RubySpan> {
+    t.ruby_in(a, b).next()
+}
+
+/// Whether `a..b` is exactly one ruby span: an option edit can re-apply it in place, without
+/// dropping another reading under the selection or changing the span's range. Apply replaces the
+/// ruby over the selection when it is not.
+fn ruby_covers(t: &TextObject, a: usize, b: usize) -> bool {
+    let mut spans = t.ruby_in(a, b);
+    spans.next().is_some_and(|r| r.start == a && r.end == b) && spans.next().is_none()
+}
+
+/// The selection and ruby the section's fields were built from.
+fn ruby_sync_key(id: NodeId, a: usize, b: usize, span: Option<&RubySpan>) -> String {
+    let ruby = span.map_or_else(String::new, |r| format!("{}|{:?}|{:?}|{}|{}", r.text, r.position, r.align, r.size_percent, r.overhang));
+    format!("{}:{a}:{b}:{ruby}", id.0)
+}
+
+/// The `type.ruby` params of the section: set the reading over `a..b`, or `remove` it.
+fn ruby_params(id: NodeId, a: usize, b: usize, f: &RubyFields, remove: bool) -> Value {
+    let mut p = json!({"id": id.0, "start": a, "end": b});
+    if remove {
+        p["remove"] = json!(true);
+        return p;
+    }
+    p["text"] = json!(f.reading.trim());
+    p["position"] = json!(f.position);
+    p["align"] = json!(f.align);
+    p["size"] = json!(f.size);
+    p["overhang"] = json!(f.overhang);
+    p
+}
+
+/// Draw the Ruby section: the reading over the selected characters, its position, alignment,
+/// size and overhang, with Apply and Remove. Every action goes through `type.ruby` in one undo
+/// step; the fields follow the selection and the ruby it covers. An option edit re-applies the
+/// ruby only when it is the one span over exactly the selection; Apply replaces the ruby over
+/// the selection.
+fn ruby_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some((id, a, b)) = ruby_target(app) else { return };
+    let (span, auto_apply) = app.session.active().and_then(|st| st.doc.node(id)).map_or((None, false), |n| match &n.kind {
+        NodeKind::Text(t) => (ruby_in(t, a, b).cloned(), ruby_covers(t, a, b)),
+        _ => (None, false),
+    });
+    let key = ruby_sync_key(id, a, b, span.as_ref());
+    let mut f = pstate::<RubyFields>(ui.ctx(), "ruby-fields");
+    if f.synced != key {
+        f = RubyFields::from_span(span.as_ref());
+        f.synced.clone_from(&key);
+    }
+    ui.add_space(4.0);
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(tl!("Ruby")).strong());
+        if span.is_some() {
+            crate::widgets::dim_label(ui, tl!("applied"));
+        }
+    });
+    let mut apply = false;
+    ui.horizontal(|ui| {
+        crate::widgets::dim_label(ui, &format!("{}:", tl!("Reading")));
+        ui.add(egui::TextEdit::singleline(&mut f.reading).hint_text(tl!("Reading")).desired_width(f32::INFINITY));
+    });
+    ui.horizontal(|ui| {
+        crate::widgets::dim_label(ui, &format!("{}:", tl!("Position")));
+        let position = tl!(match f.position.as_str() {
+            "below" => "Below",
+            _ => "Above",
+        });
+        egui::ComboBox::from_id_salt("ruby-position").selected_text(position).width(64.0).show_ui(ui, |ui| {
+            for (value, label) in [("above", "Above"), ("below", "Below")] {
+                if ui.selectable_label(f.position == value, tl!(label)).clicked() && f.position != value {
+                    f.position = value.into();
+                    apply = auto_apply;
+                }
+            }
+        });
+        crate::widgets::dim_label(ui, &format!("{}:", tl!("Align")));
+        let align = tl!(match f.align.as_str() {
+            "start" => "Start",
+            "end" => "End",
+            _ => "Center",
+        });
+        egui::ComboBox::from_id_salt("ruby-align").selected_text(align).width(64.0).show_ui(ui, |ui| {
+            for (value, label) in [("start", "Start"), ("center", "Center"), ("end", "End")] {
+                if ui.selectable_label(f.align == value, tl!(label)).clicked() && f.align != value {
+                    f.align = value.into();
+                    apply = auto_apply;
+                }
+            }
+        });
+    });
+    ui.horizontal(|ui| {
+        crate::widgets::dim_label(ui, &format!("{}:", tl!("Size")));
+        let size = ui.add(egui::DragValue::new(&mut f.size).range(1.0..=100.0).speed(1.0).suffix("%"));
+        // Dragging sets the value as it goes and ends here; typed, it commits on Enter or focus
+        // loss. Apply then, unless it is already the ruby's size.
+        if (size.drag_stopped() || size.lost_focus()) && auto_apply && span.as_ref().is_some_and(|r| r.safe_size_percent() != f.size) {
+            apply = true;
+        }
+        if ui.checkbox(&mut f.overhang, tl!("Overhang")).changed() && auto_apply {
+            apply = true;
+        }
+    });
+    let remove = ui
+        .horizontal(|ui| {
+            let mut remove = false;
+            if ui.add_enabled(!f.reading.trim().is_empty(), egui::Button::new(tl!("Apply"))).clicked() {
+                apply = true;
+            }
+            if ui.add_enabled(span.is_some(), egui::Button::new(tl!("Remove"))).clicked() {
+                remove = true;
+            }
+            remove
+        })
+        .inner;
+    if remove || apply {
+        // A typing session is its own undo step; the ruby command is the next one.
+        end_typing(app);
+        if remove {
+            app.run("type.ruby", ruby_params(id, a, b, &f, true)).ok();
+        } else {
+            app.run("type.ruby", ruby_params(id, a, b, &f, false)).ok();
+        }
+    }
+    set_pstate(ui.ctx(), "ruby-fields", f);
 }
 
 #[cfg(test)]
