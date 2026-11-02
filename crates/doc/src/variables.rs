@@ -90,8 +90,9 @@ pub struct DataSet {
 
 impl DataSet {
     /// Whether the art, as [`Document::captured_values`] read it, still holds what this row
-    /// says. A value the art can't report (its object is locked or gone) isn't drift: the row
-    /// keeps it, and applying it again would skip it too.
+    /// says. A value the art can't report (its object is gone, or is locked or in a locked layer
+    /// or group and the variable isn't a visibility variable) isn't drift: the row keeps it, and
+    /// applying it again would skip it too.
     pub fn matches(&self, current: &BTreeMap<String, DataValue>) -> bool {
         self.values.iter().all(|(k, v)| current.get(k).is_none_or(|c| c == v))
     }
@@ -189,18 +190,21 @@ impl Document {
         self.variables.bindings = bindings;
     }
 
-    /// Whether a variable may be bound to the object `id`: it is in the document, neither it nor
-    /// anything above it is locked, and nothing above it is hidden. Its own visibility doesn't
-    /// count, as that is what a visibility variable drives.
-    pub fn variable_target(&self, id: NodeId) -> bool {
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked && (n.visible || *i == id))))
+    /// Whether a variable of `kind` may be bound to the object `id`: it is in the document,
+    /// nothing above it is hidden, and, unless `kind` is visibility, neither it nor anything above
+    /// it is locked. Its own visibility doesn't count, as that is what a visibility variable
+    /// drives.
+    pub fn variable_target(&self, id: NodeId, kind: VariableKind) -> bool {
+        let locks = kind != VariableKind::Visibility;
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locks && n.locked) && (n.visible || *i == id))))
     }
 
-    /// Whether a data set reads and rewrites the bound object `id`: it is in the document and
-    /// neither it nor anything above it is locked. Hidden objects count, and so do objects in a
-    /// hidden layer or group.
-    pub fn dataset_target(&self, id: NodeId) -> bool {
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked)))
+    /// Whether a data set reads and rewrites the bound object `id` for a variable of `kind`: it
+    /// is in the document and, unless `kind` is visibility, neither it nor anything above it is
+    /// locked. Hidden objects count, and so do objects in a hidden layer or group.
+    pub fn dataset_target(&self, id: NodeId, kind: VariableKind) -> bool {
+        let locks = kind != VariableKind::Visibility;
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locks && n.locked))))
     }
 
     /// The type objects of the story that the type object `id` belongs to, in thread order: the
@@ -228,16 +232,16 @@ impl Document {
     /// Whether a data set reads and rewrites the text of the type object `id`: every frame of its
     /// story ([`Document::story_of`]) is a [`Document::dataset_target`].
     pub fn story_target(&self, id: NodeId) -> bool {
-        self.story_of(id).into_iter().all(|f| self.dataset_target(f))
+        self.story_of(id).into_iter().all(|f| self.dataset_target(f, VariableKind::Text))
     }
 
     /// What the object `id` holds for the variable of `kind`: its characters (the whole story
     /// for a frame of threaded text), whether it shows, or a linked image's path. `None` when the
-    /// object is gone, is not of that kind, has no link path yet (an embedded image), or is locked
-    /// or in a locked layer or group, or for text when a frame of its story is (the document's
-    /// value is whatever it was left at).
+    /// object is gone, is not of that kind, has no link path yet (an embedded image), or, unless
+    /// `kind` is visibility, is locked or in a locked layer or group, or for text when a frame of
+    /// its story is (the document's value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
-        if !self.dataset_target(id) {
+        if !self.dataset_target(id, kind) {
             return None;
         }
         let node = self.node(id)?;
