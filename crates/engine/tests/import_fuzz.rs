@@ -3142,6 +3142,40 @@ proptest! {
     }
 }
 
+/// A pattern's definition in the version 7 form (§3.4): a layer whose `_ &` fills the tile's box,
+/// and one whose tile string has CR-separated lines, comments and escapes.
+const LEGACY_PATTERN: &str = "%AI3_BeginPattern: (P)\n(P) 0 0 10 10 [\n%AI3_Tile\n(0 O 0 R 0 0 0 0.5 k) @ _ &\n\
+    (0 O 1 R 0 0 0 1 \\(Ink\\) 0 X) @ (\r%AI6_BeginPatternLayer\r1 w u\r0 5 m\\r10 5 L\rS\rU\r%AI6_EndPatternLayer\r) &\n] E\n%AI3_EndPattern\n";
+
+/// [`NAMED_PROLOG_AI`] with `pattern` in its setup, filling the square.
+fn legacy_pattern_ai(pattern: &str) -> String {
+    NAMED_PROLOG_AI
+        .replace("%AI5_Begin_NonPrinting", &format!("{pattern}%AI5_Begin_NonPrinting"))
+        .replace("0 D\n10 10 m", "0 D\n(P) 5 5 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n10 10 m")
+        .replace("10 10 L\nS\n", "10 10 L\nB\n")
+}
+
+/// The fixture, as it is, opens with the pattern filling the square.
+#[test]
+fn the_legacy_pattern_fixture_opens_with_its_pattern() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.ai", legacy_pattern_ai(LEGACY_PATTERN).as_bytes()).unwrap();
+    assert_eq!(l.doc.pattern("P").map(|p| p.art.len()), Some(2), "{:?}", l.warnings);
+    let square = &l.doc.layers[0].children().unwrap()[0];
+    assert!(matches!(square.appearance.fill().map(|f| &f.paint), Some(vectorcraft_color::Paint::Pattern { .. })));
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// That `.ai` with its pattern's definition damaged (its strings, `@`, `&`, `_`, the list's
+    /// brackets and its `E`): read, without the pattern where it can't be read whole, or refused.
+    #[test]
+    fn ps_form_ai_legacy_pattern_never_panics(cut in 0usize..500, edits in prop::collection::vec((0usize..500, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '\r', '(', ')', '\\', '[', ']', '%', '@', '&', '_', 'E', 'u', 'U', 'q', 'Q', 'm', 'f', 'S', 'k', 'X'])), 0..12)) {
+        let text = legacy_pattern_ai(&mutate_text(LEGACY_PATTERN, cut, &edits));
+        survive("PostScript-form .ai with a damaged version 7 pattern", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
+    }
+}
+
 /// An operand of a layer's options (`Lb`): a flag, a colour index or component, a percentage, or
 /// anything else.
 fn arb_layer_operand() -> impl Strategy<Value = String> {

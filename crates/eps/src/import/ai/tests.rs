@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use kurbo::{Point, Rect};
+use kurbo::{Affine, Point, Rect};
 use vectorcraft_color::gradient::GradientKind;
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Guide, Knockout, LayerColor, LineCap, LineJoin, Node, NodeKind, Unit};
@@ -217,7 +217,7 @@ fn patterns_are_pattern_swatches_and_fill_with_them() {
     let body = format!(
         "{DOTS}%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(Ground) Ln\n{}{}LB\n%AI5_EndLayer--\n",
         sub("Lawn", &format!("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0))),
-        sub("Paving", &format!("(Dots) 10 20 2 2 0 0 0 0 0 [2 0 0 2 10 20] P\n{}S\n", rect_path(90.0, 20.0, 150.0, 80.0))),
+        sub("Paving", &format!("(Dots) 10 20 2 2 0 0 0 0 0 [1 0 0 1 0 0] P\n{}S\n", rect_path(90.0, 20.0, 150.0, 80.0))),
     );
     let s = read_ok(&body);
     let doc = &s.doc;
@@ -288,7 +288,7 @@ fn a_gradient_in_a_patterns_definition_is_placed_from_the_canvas() {
 /// has that isn't read, where it shows. Its definition costs nothing else.
 #[test]
 fn a_pattern_it_cant_read_is_an_error_only_where_it_fills() {
-    let unread = "%AI3_BeginPattern: (Old)\n(Old) 0 0 8 8 [\n(0 O 0 R 0 g) @\n(\n0 0 m 8 8 L S\n) &\n] E\n%AI3_EndPattern\n\
+    let unread = "%AI3_BeginPattern: (Old)\n(Old) 0 0 8 8 [\n(0 O 0 R 0 g) @\n(\n0 0 m 8 8 L frobnicate S\n) &\n] E\n%AI3_EndPattern\n\
                   %AI3_BeginPattern: (Odd)\n(Odd) 0 0 8 8\n%_U\nE\n%AI3_EndPattern\n%AI3_BeginPattern: (Flat)\n(Flat) 0 0 8 0\n%_0 0 m\n%_8 0 L\n%_S\nE\n%AI3_EndPattern\n";
     let s = read_ok(&format!("{unread}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
     assert!(s.doc.patterns.is_empty() && s.doc.swatches.iter().all(|w| !matches!(w.paint, Paint::Pattern { .. })));
@@ -326,6 +326,180 @@ fn a_pattern_painting_with_an_unread_pattern_is_not_kept() {
         let s = read_ok(&format!("{repainted}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
         assert!(s.doc.pattern("Nest").is_some(), "{prefix:?}");
     }
+}
+
+/// A pattern's definition inside another's isn't read, so the outer one isn't kept either.
+#[test]
+fn a_pattern_with_a_definition_inside_it_isnt_kept() {
+    let tile = rect_path(0.0, 0.0, 8.0, 8.0).replace('\n', "\n%_");
+    let inner = "%AI3_BeginPattern: (In)\n(In) 0 0 1 1\n%_0 0 m\n%_1 1 L\n%_S\nE\n%AI3_EndPattern\n";
+    let def = format!("%AI3_BeginPattern: (Out)\n(Out) 0 0 8 8\n{inner}%_{tile}f\nE\n%AI3_EndPattern\n");
+    let s = read_ok(&format!("{def}{}", layer("")));
+    assert!(s.doc.patterns.is_empty(), "{:?}", s.doc.patterns.iter().map(|p| &p.name).collect::<Vec<_>>());
+    // Without the definition inside it, it is kept.
+    let s = read_ok(&format!("{}{}", def.replace(inner, ""), layer("")));
+    assert!(s.doc.pattern("Out").is_some());
+}
+
+/// A definition whose art follows its head as operators is still read when that art starts with a
+/// dash array (`[]0 d`) off `%_` lines, which isn't a version 7 layer list.
+#[test]
+fn a_pattern_whose_art_starts_with_a_dash_array_is_read() {
+    let def = format!("%AI3_BeginPattern: (Dash)\n(Dash) 0 0 8 8 []0 d\n{}f\nE\n%AI3_EndPattern\n", rect_path(0.0, 0.0, 8.0, 8.0));
+    let s = read_ok(&format!("{def}{}", layer("")));
+    assert_eq!(s.doc.pattern("Dash").map(|p| p.art.len()), Some(1));
+}
+
+/// Editing data in the version 7 form: `%AI5_FileFormat 2.0`, the art size around the template
+/// box's center (an artboard 200 by 100 from the origin), `setup` (pattern definitions), then `body`.
+fn stream7(setup: &str, body: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: test\n%AI5_FileFormat 2.0\n%AI5_ArtSize: 200 100\n%AI3_TemplateBox: 100 50 100 50\n%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n{setup}%%EndSetup\n{body}\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n"
+    )
+}
+
+/// One layer named `name` with the version 7 form's ten operands before `Lb`, holding `art`.
+fn layer7(name: &str, art: &str) -> String {
+    format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n({name}) Ln\n0 A\n{art}LB\n%AI5_EndLayer--\n")
+}
+
+/// A definition of `name` in the version 7 form: its 20-point tile, then `layers`, the layer list.
+fn pattern7(name: &str, layers: &str) -> String {
+    format!("%AI3_BeginPattern: ({name})\n({name}) 0 0 20 20 [\n%AI3_Tile\n{layers}] E\n%AI3_EndPattern\n")
+}
+
+fn read7(setup: &str, body: &str) -> Structure {
+    match read(stream7(setup, body).as_bytes()) {
+        Ok(s) => s,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// A definition in the version 7 form (§3.4): each layer's colors (`@`) paint its tile's art (`&`),
+/// the first layer the lowest. The operator lines in the strings end in CR, and each layer starts
+/// from the definition's state, so the second layer's stroke doesn't take the first one's width.
+#[test]
+fn version_7_pattern_layers_paint_in_order_with_their_own_colors() {
+    let layers = "(0 O 0 R 1 0 0 0 k\r1 0 0 0 K) @\n(\r%AI6_BeginPatternLayer\r0 J 0 j 3 w 4 M []0 d\r2 2 m\r9 2 L\r9 9 L\r2 9 L\rf\r%AI6_EndPatternLayer\r) &\n\
+                  (0 O 1 R 0 0 0 1 k\r0 0 0 1 K) @\n(\r2 12 m\r18 12 L\rS\r) &\n";
+    let fill_with = format!("(Grid) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 10.0, 90.0, 90.0));
+    let s = read7(&pattern7("Grid", layers), &layer7("Art", &fill_with));
+    assert!(s.unread.is_empty() && s.warnings.is_empty(), "{:?} {:?}", s.unread, s.warnings);
+    let def = s.doc.pattern("Grid").unwrap();
+    assert_eq!(def.tile, Rect::new(0.0, -20.0, 20.0, 0.0), "the tile, y down");
+    assert_eq!(def.art.len(), 2, "one path for each layer");
+    let (square, line) = (&def.art[0], &def.art[1]);
+    assert_eq!(square.geometric_bounds(), Some(Rect::new(2.0, -9.0, 9.0, -2.0)));
+    assert_eq!(fill(square).color(), Some(Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+    assert!(square.appearance.stroke().is_none());
+    assert!(line.appearance.fill().is_none());
+    let stroke = line.appearance.stroke().unwrap();
+    assert_eq!(stroke.paint.color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    assert_eq!(stroke.width, 1.0, "the first layer's width stays with it");
+    assert!(stroke.overprint);
+    assert!(matches!(fill(&art(&s.doc)[0]), Paint::Pattern { pattern, .. } if pattern == "Grid"));
+}
+
+/// `_ &` fills the tile's box with the layer's fill color, without a stroke (§3.4).
+#[test]
+fn a_version_7_patterns_underbar_fills_the_tile_box() {
+    let layers = "(0 O 0 R 0 1 0 0 k 0 0 0 1 K) @ _ &\n(0 0 0 1 k 0 0 0 1 K) @ (2 2 m 18 18 L S) &\n";
+    let s = read7(&pattern7("Back", layers), &layer7("Art", ""));
+    let def = s.doc.pattern("Back").unwrap();
+    let back = &def.art[0];
+    assert_eq!(back.geometric_bounds(), Some(def.tile));
+    assert_eq!(fill(back).color(), Some(Color::cmyk(0.0, 1.0, 0.0, 0.0)));
+    assert!(back.appearance.stroke().is_none());
+    assert!(def.art[1].appearance.stroke().is_some());
+}
+
+/// A layer's strings are read with their escapes undone: `\r`, `\n`, an octal tab, a backslash at
+/// a line's end, and escaped parentheses around a custom color's name.
+#[test]
+fn a_version_7_patterns_strings_are_read_with_their_escapes_undone() {
+    let layers = "(0 O 0 R 0 0 0 1 \\(Ink \\(A\\)\\) 0 x) @\n(2 2 m\\r9 2 L\\n9 9 L\\0112 9 \\\nL f) &\n";
+    let s = read7(&pattern7("Ink", layers), &layer7("Art", ""));
+    let def = s.doc.pattern("Ink").unwrap();
+    assert_eq!(def.art.len(), 1);
+    assert_eq!(def.art[0].geometric_bounds(), Some(Rect::new(2.0, -9.0, 9.0, -2.0)));
+    assert!(s.doc.swatch("Ink (A)").is_some(), "{:?}", s.doc.swatches.iter().map(|w| &w.name).collect::<Vec<_>>());
+}
+
+/// A definition in the version 7 form that can't be read whole isn't kept, and a fill with it is
+/// something the file has that isn't read: an operator it doesn't know, type, a definition inside
+/// it, colors with other operators, a layer without its tile or its `&`, a string longer than the
+/// format allows, an `E`, a group or an array a layer doesn't end, more than 65,536 layers, a list
+/// without its `]` or its `E`.
+#[test]
+fn a_version_7_pattern_it_cant_read_whole_isnt_kept() {
+    let line = "(0 0 m 8 8 L S) &\n";
+    let long = format!("(0 g) @ ({}0 0 m 8 8 L S) &\n", " ".repeat(65_536));
+    let open = "%AI3_BeginPattern: (P)\n(P) 0 0 20 20 [\n(0 g) @ (0 0 m 8 8 L S) &\n";
+    let defs = [
+        pattern7("P", "(0 g) @ (0 0 m 8 8 L frobnicate S) &\n"),
+        pattern7("P", "(0 g) @ (0 To 1 0 0 1 2 2 0 Tp TP (a) Tx TO) &\n"),
+        pattern7("P", "(0 g) @ (\r%AI3_BeginPattern: (In)\r(In) 0 0 1 1\rE\r%AI3_EndPattern\r0 0 m 8 8 L S) &\n"),
+        pattern7("P", &format!("%AI3_BeginPattern: (In)\n(In) 0 0 1 1 [\n] E\n%AI3_EndPattern\n(0 g) @ {line}")),
+        pattern7("P", &format!("(0 g 0 0 m) @ {line}")),
+        pattern7("P", "(0 g) @\n"),
+        pattern7("P", "(0 g) @ _\n"),
+        pattern7("P", &long),
+        pattern7("P", "(0 g) @ (0 0 m 8 8 L S E) &\n"),
+        pattern7("P", "(0 g) @ (u 0 0 m 8 8 L S) &\n"),
+        pattern7("P", "(0 g) @ (0 0 m 8 8 L S [) &\n"),
+        pattern7("P", &"(0 g) @ _ &\n".repeat(65_537)),
+        format!("{open}E\n%AI3_EndPattern\n"),
+        format!("{open}]\n%AI3_EndPattern\n"),
+    ];
+    let fill_with = format!("(P) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(0.0, 0.0, 1.0, 1.0));
+    for (i, def) in defs.iter().enumerate() {
+        assert!(read7(def, &layer7("Art", "")).doc.patterns.is_empty(), "case {i}");
+        assert_unread(&read7(def, &layer7("Art", &fill_with)), "pattern fills");
+    }
+    // The same definition, whole, is kept.
+    let s = read7(&pattern7("P", &format!("(0 g) @ {line}")), &layer7("Art", &fill_with));
+    assert!(s.doc.pattern("P").is_some() && s.unread.is_empty());
+}
+
+/// A fill's other operands are applied in order before its initial matrix (§5.4.1): the shear along
+/// its axis, the reflection about the line at its angle, the rotation, the scale, then the offset.
+/// Identity ones move the tiles by the offset alone. `P` places a stroke's tiles the same way.
+#[test]
+fn a_pattern_fill_applies_its_offset_scale_rotation_reflection_and_shear() {
+    let def = pattern7("Grid", "(0 g) @ _ &\n");
+    // The operands, and the pattern's space → art space they make (a b c d e f).
+    let cases = [
+        ("10 15 1 1 0 0 0 0 0 [1 0 0 1 0 0]", [1.0, 0.0, 0.0, 1.0, 10.0, 15.0]),
+        ("25 30 1.5 .75 30 1 45 10 0 [1 0 0 1 0 0]", [-0.75, 0.649519, 1.166793, 0.489528, 25.0, 30.0]),
+        ("-5 7 2 .5 -45 0 0 -15 45 [1 0 0 1 0 0]", [1.793151, -0.353553, 1.035276, 0.353553, -5.0, 7.0]),
+        ("3 -4 1.2 .8 20 1 30 12 25 [.8 .1 -.2 1.1 4 -6]", [-0.028557, 0.816531, 1.054026, 0.117492, 7.2, -10.1]),
+    ];
+    // Art space → the document (the artboard is 100 high), and a tile's art (y down from its top
+    // left) → the pattern's space.
+    let space = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
+    let tile = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 20.0]);
+    for (ops, want) in cases {
+        for (op, paint) in [("p", "f"), ("P", "S")] {
+            let s = read7(&def, &layer7("Art", &format!("(Grid) {ops} {op}\n{}{paint}\n", rect_path(10.0, 10.0, 90.0, 90.0))));
+            let node = &art(&s.doc)[0];
+            let p = if op == "p" { fill(node) } else { node.appearance.stroke().unwrap().paint.clone() };
+            let Paint::Pattern { xf, .. } = p else { panic!("{ops} {op}: {p:?}") };
+            let got = (space.inverse() * xf * tile.inverse()).as_coeffs();
+            assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-6), "{ops} {op}: {got:?}");
+        }
+    }
+    // The tiles' corners: with identity operands but the offset, the tile's top left (0, 20) is at
+    // (10, 35) in art space; with the last ones, its lower right (20, 0) is at (6.628860, 6.230623).
+    let placed = |ops: &str| {
+        let s = read7(&def, &layer7("Art", &format!("(Grid) {ops} p\n{}f\n", rect_path(10.0, 10.0, 90.0, 90.0))));
+        let Paint::Pattern { xf, .. } = fill(&art(&s.doc)[0]) else { panic!() };
+        xf
+    };
+    assert_eq!(placed(cases[0].0) * Point::ZERO, Point::new(10.0, 65.0));
+    assert!((placed(cases[3].0) * Point::new(20.0, 20.0)).distance(Point::new(6.628860, 93.769377)) < 1e-5);
+    // Without its nine operands, a fill with the pattern isn't read.
+    let r = read7(&def, &layer7("Art", &format!("(Grid) 0 0 1 1 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 10.0, 90.0, 90.0))));
+    assert_unread(&r, "pattern fills");
 }
 
 #[test]

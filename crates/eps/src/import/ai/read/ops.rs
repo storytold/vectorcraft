@@ -337,8 +337,8 @@ impl<'a> Reader<'a> {
     }
 
     /// `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`: the stroke's):
-    /// the pattern swatch `name`, its space taken to art space by the matrix. A pattern this hasn't
-    /// read can't be drawn.
+    /// the pattern swatch `name`, its space taken to art space by the other operands applied in
+    /// order, then the initial matrix ([`pattern_controls`]). A pattern this hasn't read can't be drawn.
     fn pattern_paint(&mut self, w: &str, vals: &[V]) {
         // In the setup it paints nothing (and the art's space isn't fixed yet).
         if self.frames.is_empty() {
@@ -350,7 +350,13 @@ impl<'a> Reader<'a> {
             return;
         };
         let matrix = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { paint::affine(&Self::nums(a)) } else { None });
-        let Some(xf) = pattern_xf(self.space(), matrix, tile) else {
+        let controls: Vec<f64> =
+            vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
+        let Some(controls) = pattern_controls(&controls) else {
+            self.unread_pattern(w);
+            return;
+        };
+        let Some(xf) = pattern_xf(self.space(), Some(matrix.unwrap_or(Affine::IDENTITY) * controls), tile) else {
             self.unread_pattern(w);
             return;
         };
@@ -618,6 +624,27 @@ pub(super) fn path_rule(n: &Node) -> FillRule {
 fn pattern_xf(space: Affine, matrix: Option<Affine>, tile: Rect) -> Option<Affine> {
     let xf = space * matrix.unwrap_or(Affine::IDENTITY) * FLIP * Affine::translate((0.0, -tile.height()));
     (xf.determinant().abs() >= 1e-12 && xf.as_coeffs().iter().all(|v| v.is_finite())).then_some(xf)
+}
+
+/// A pattern fill's `x y scaleX scaleY angle reflect axis shear shearAxis` as one transform of the
+/// pattern's space, applied before its initial matrix: the shear (by `shear` degrees along the line
+/// at `shearAxis` degrees), the reflection about the line at `axis` degrees when `reflect` isn't
+/// 0, the counterclockwise rotation by `angle` degrees, the scale, then the move to `x y`. `None`
+/// unless there are nine finite numbers.
+fn pattern_controls(n: &[f64]) -> Option<Affine> {
+    let &[x, y, sx, sy, angle, reflect, axis, shear, shear_axis] = n else { return None };
+    if !n.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let turn = |deg: f64| Affine::rotate(deg.to_radians());
+    let reflection = if reflect != 0.0 { turn(axis) * Affine::scale_non_uniform(1.0, -1.0) * turn(-axis) } else { Affine::IDENTITY };
+    let shearing = if shear != 0.0 {
+        turn(shear_axis) * Affine::new([1.0, 0.0, shear.to_radians().tan(), 1.0, 0.0, 0.0]) * turn(-shear_axis)
+    } else {
+        Affine::IDENTITY
+    };
+    let xf = Affine::translate((x, y)) * Affine::scale_non_uniform(sx, sy) * turn(angle) * reflection * shearing;
+    xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
 }
 
 /// What a style's fills paint with: the file's gradients and pattern tiles, and art space → the document.
