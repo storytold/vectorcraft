@@ -92,11 +92,18 @@ fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
     // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
+    // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
+    // with the pointer instead.
+    let moved = app.session.deferred_move();
     let show_box = app.session.tool_id() == "selection"
-        && !app.session.tool_transforming()
+        && (!app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
     let bbox = if show_box { app.selection_box() } else { None };
+    let bbox = bbox.map(|b| match moved {
+        Some(d) => vectorcraft_doc::OrientedBox { rect: b.rect + b.to_local(d.to_point()).to_vec2(), ..b },
+        None => b,
+    });
     let st = app.session.active();
     let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
     let big_bounds = if big { app.selection_bounds() } else { None };

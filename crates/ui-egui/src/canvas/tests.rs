@@ -1105,6 +1105,53 @@ fn a_guide_dragged_out_of_a_ruler_shows_while_dragged() {
     }
 }
 
+/// With Preferences › Performance › Real-time Drawing and Editing off, the bounding box moves
+/// with a Selection-tool move drag while the object stays put until the release. With it on, the
+/// art moves and the box hides during the drag (#712).
+#[test]
+fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
+    for real_time in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        app.ui.view.smart_guides = false;
+        app.ui.view.snap_to_point = false;
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let is_handle = |s: &Shape| matches!(s, Shape::Rect(r) if (r.rect.width() - 6.0).abs() < 1.0 && (r.rect.height() - 6.0).abs() < 1.0 && r.fill == Color32::WHITE);
+        let handles = |app: &mut VectorcraftApp| {
+            shapes(app, &ctx).iter().filter(|s| is_handle(s)).map(|s| s.visual_bounding_rect().center()).collect::<Vec<_>>()
+        };
+        let at_rest = handles(&mut app);
+        assert_eq!(at_rest.len(), 8, "real-time drawing {real_time}: the box's handles at rest");
+        let left = |app: &VectorcraftApp| app.session.active().unwrap().doc.art_bounds().unwrap().x0;
+        let start = left(&app);
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 130.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 230.0), view).unwrap();
+        let during = handles(&mut app);
+        if real_time {
+            assert!(during.is_empty(), "the box hides while the art moves: {during:?}");
+            assert_eq!(left(&app), start + 100.0, "the art moves with the pointer");
+        } else {
+            assert_eq!(during.len(), 8, "the box shows during the drag");
+            let corner = xf.to_screen(Point::new(200.0, 200.0));
+            assert!(during.iter().any(|c| c.distance(corner) < 0.5), "the box's corner is at the dragged position: {during:?}");
+            assert!(!during.iter().any(|c| c.distance(xf.to_screen(Point::new(100.0, 100.0))) < 0.5), "not at the start");
+            assert_eq!(left(&app), start, "the object waits for the release");
+        }
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 230.0), view).unwrap();
+        assert_eq!(left(&app), start + 100.0, "real-time drawing {real_time}: moved on release");
+        assert_eq!(handles(&mut app).len(), 8, "real-time drawing {real_time}: the box at rest again");
+    }
+}
+
 #[test]
 fn new_ruler_guides_follow_alt_through_preview_release_and_undo() {
     use egui::{Event, Modifiers};
