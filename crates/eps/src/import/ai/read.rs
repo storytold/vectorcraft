@@ -40,6 +40,11 @@
 //!   box is as large as the file has pixels; the matrix takes them into art space from the canvas
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
+//!   The version 7 form (§16) has no `%AI5_BeginPlace`: `[matrix] llx lly urx ury (path)` and
+//!   `` ` ``, then `%%IncludeFile:` or the file between `%%BeginDocument:` and `%%EndDocument`,
+//!   then `~`; its box is the file's `%%BoundingBox`. Newer files have three more numbers before
+//!   the path. Operands of any other shape, a second `` ` `` before `~` or an included document
+//!   that doesn't end leave the placed file unread.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
 //!   effects, brushes) comes first as that look, drawn (a group, or an image where an effect
 //!   rasterizes it), then the object itself on `%_`
@@ -454,6 +459,13 @@ impl<'a> Reader<'a> {
                         p.preview = preview_png(d);
                     }
                 }
+                // A placed file's document, included whole: its art isn't read here. When no
+                // `%%EndDocument` ends it, the placed file isn't read.
+                Tok::Document(d) => {
+                    if let Some(p) = self.place.as_mut() {
+                        p.broken |= d.is_none();
+                    }
+                }
             }
         }
         // A pattern's or symbol's reader opens a group of its own and checks it is the only frame
@@ -467,6 +479,10 @@ impl<'a> Reader<'a> {
         }
         if self.multi_mask.is_some() {
             return Err("it ends inside a multi-layer mask".into());
+        }
+        // A placed file that no `~` ends isn't read.
+        if let Some(open) = self.place.take() {
+            self.unreadable("placed files", open.hidden);
         }
         Ok(())
     }

@@ -533,6 +533,10 @@ impl<'a> Reader<'a> {
     /// without a preview, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
         let (m, b, path, png, w, h, folder) = match self.place.take() {
+            Some(Place { broken: true, .. }) => {
+                self.unreadable("placed files", hidden);
+                return Ok(());
+            }
             Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)), folder, .. }) if !path.is_empty() => {
                 (m, b, path, png, w, h, folder)
             }

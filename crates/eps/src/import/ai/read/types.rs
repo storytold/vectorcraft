@@ -242,6 +242,13 @@ pub(super) struct Place {
     pub(super) folder: Option<String>,
     /// The operand stack's height at `%AI28_BeginPlacedRelativePath`, until its end.
     pub(super) folder_at: Option<usize>,
+    /// Its `` ` `` was read.
+    pub(super) ticked: bool,
+    /// It began on a `%_` line, in a hidden object or on a layer that doesn't show.
+    pub(super) hidden: bool,
+    /// What it holds can't be read: operands of another shape, a second `` ` ``, or a document
+    /// included in it that doesn't end.
+    pub(super) broken: bool,
 }
 
 /// The longest relative folder of a placed file read (bytes).
@@ -278,7 +285,6 @@ pub(super) const IGNORED: &[&str] = &[
     "XD",
     "Xi",
     "XI",
-    "`",
     "LB2",
     "Lc",
     "Xv",

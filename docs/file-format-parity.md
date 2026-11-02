@@ -96,6 +96,9 @@ private editing data. VectorCraft:
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868.
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
   brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
+  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, and its placed EPS files
+  in the version 7 form (`` ` `` … `~` with no `%AI5_BeginPlace`) are read like other placed files without a
+  preview: as the page's art in their box.
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868. Graphs (`%_Gs` … `%_GS`)
   come in as their drawn art, as plain groups, paths and type, without their data or settings, with a note.
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, with its paragraphs' letter
