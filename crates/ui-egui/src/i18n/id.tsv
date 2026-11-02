@@ -1252,6 +1252,8 @@ lighting	Light	Cahaya
 	No actions. Press ● to record.	Tidak ada aksi. Tekan ● untuk merekam.
 	Outline Text	Garis luar teks
 	Play Current Selection	Putar seleksi saat ini
+	Save Actions…	Simpan tindakan…
+	Load Actions…	Muat tindakan…
 	Reflect Horizontal	Pencerminan horizontal
 	Rotate 90° CW	Putar 90° searah jarum jam
 	Set 1	Set 1
@@ -4233,6 +4235,14 @@ imageTrace	Outline	Kontur
 @msg	no selection bounds	tidak ada batas seleksi
 @msg	no slice selected	tidak ada slice yang dipilih
 @msg	no such action	tidak ada aksi seperti itu
+@msg	no such action set	tidak ada set tindakan seperti itu
+@msg	the action sets changed; nothing was deleted	set tindakan telah berubah; tidak ada yang dihapus
+@msg	no action set to save	tidak ada set tindakan untuk disimpan
+@msg	not an action set file	bukan file set tindakan
+@msg	the action set file is larger than 8 MiB	file set tindakan lebih besar dari 8 MiB
+@msg	the action set file holds more than 1,000 actions	file set tindakan berisi lebih dari 1.000 tindakan
+@msg	the action set file needs a later version of VectorCraft	file set tindakan memerlukan versi VectorCraft yang lebih baru
+@msg	an action in the action set file has more than 10,000 steps	sebuah tindakan dalam file set tindakan memiliki lebih dari 10.000 langkah
 @msg	no such anchor	tidak ada jangkar seperti itu
 @msg	no such artboard	tidak ada artboard seperti itu
 @msg	no such document	tidak ada dokumen seperti itu

@@ -2702,6 +2702,8 @@ diagnostics	ui	giao diện
 	Plates	Bản in
 	Platform:	Nền tảng:
 	Play Current Selection	Phát vùng chọn hiện tại
+	Save Actions…	Lưu hành động…
+	Load Actions…	Tải hành động…
 	Plug-in Info	Thông tin plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Phần bổ trợ…
@@ -4561,6 +4563,14 @@ theme	Appearance	Giao diện
 @msg	no selection bounds	vùng chọn không có giới hạn
 @msg	no slice selected	chưa chọn lát cắt
 @msg	no such action	không có hành động như vậy
+@msg	no such action set	không có bộ hành động như vậy
+@msg	the action sets changed; nothing was deleted	các bộ hành động đã thay đổi; không có gì bị xóa
+@msg	no action set to save	không có bộ hành động nào để lưu
+@msg	not an action set file	không phải tệp bộ hành động
+@msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
+@msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
+@msg	the action set file needs a later version of VectorCraft	tệp bộ hành động cần phiên bản VectorCraft mới hơn
+@msg	an action in the action set file has more than 10,000 steps	một hành động trong tệp bộ hành động có hơn 10.000 bước
 @msg	no such anchor	không có điểm neo như vậy
 @msg	no such artboard	không có bảng vẽ như vậy
 @msg	the artboard is locked	bảng vẽ bị khóa

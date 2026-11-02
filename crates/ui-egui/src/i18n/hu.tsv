@@ -2908,6 +2908,8 @@ diagnostics	ui	felület
 	Plates	Nyomólemezek
 	Platform:	Platform:
 	Play Current Selection	Kijelölt művelet lejátszása
+	Save Actions…	Műveletek mentése…
+	Load Actions…	Műveletek betöltése…
 	Plug-in Info	Bővítmény adatai
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…
@@ -4909,6 +4911,14 @@ imageTrace	Outline	Körvonal
 @msg	no selection bounds	a kijelölésnek nincsenek határai
 @msg	no slice selected	nincs kijelölt szelet
 @msg	no such action	nincs ilyen művelet
+@msg	no such action set	nincs ilyen műveletkészlet
+@msg	the action sets changed; nothing was deleted	a műveletkészletek megváltoztak; semmi sem törlődött
+@msg	no action set to save	nincs menthető műveletkészlet
+@msg	not an action set file	nem műveletkészlet-fájl
+@msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
+@msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz
+@msg	the action set file needs a later version of VectorCraft	a műveletkészlet-fájlhoz a VectorCraft újabb verziója kell
+@msg	an action in the action set file has more than 10,000 steps	a műveletkészlet-fájl egyik műveletében több mint 10 000 lépés van
 @msg	no such anchor	nincs ilyen horgonypont
 @msg	no such artboard	nincs ilyen rajztábla
 @msg	the artboard is locked	a rajztábla zárolt

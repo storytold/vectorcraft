@@ -2241,6 +2241,14 @@ file-filter	Templates	範本
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`
 @msg	no such action	沒有這個動作
+@msg	no such action set	沒有這個動作組
+@msg	the action sets changed; nothing was deleted	動作組已變更；未刪除任何內容
+@msg	no action set to save	沒有要儲存的動作組
+@msg	not an action set file	不是動作組檔案
+@msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
+@msg	the action set file holds more than 1,000 actions	動作組檔案包含超過 1,000 個動作
+@msg	the action set file needs a later version of VectorCraft	動作組檔案需要較新版本的 VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	動作組檔案中有動作超過 10,000 個步驟
 @msg	choose a folder to export to	請選擇要匯出至的資料夾
 @msg	the selection has no URL (or they differ)	選取範圍沒有 URL (或其 URL 各不相同)
 @msg	select some type first	請先選取一些文字
@@ -3231,6 +3239,8 @@ diagnostics	ui	介面
 	Plates	色版
 	Platform:	平台：
 	Play Current Selection	播放目前選取項目
+	Save Actions…	儲存動作…
+	Load Actions…	載入動作…
 	Plug-in Info	增效模組資訊
 	Plug-ins	增效模組
 	Plug-in…	增效模組…

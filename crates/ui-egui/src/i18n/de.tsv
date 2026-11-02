@@ -2339,6 +2339,8 @@ diagnostics	ui	Oberfläche
 	Plates	Platten
 	Platform:	Plattform:
 	Play Current Selection	Aktuelle Auswahl abspielen
+	Save Actions…	Aktionen speichern…
+	Load Actions…	Aktionen laden…
 	Plug-in Info	Plug-in-Informationen
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -4165,6 +4167,14 @@ theme	Appearance	Erscheinungsbild
 @msg	no selection bounds	keine Auswahlbegrenzung
 @msg	no slice selected	kein Slice ausgewählt
 @msg	no such action	keine solche Aktion
+@msg	no such action set	kein solcher Aktionssatz
+@msg	the action sets changed; nothing was deleted	die Aktionssätze haben sich geändert; nichts wurde gelöscht
+@msg	no action set to save	kein Aktionssatz zum Speichern
+@msg	not an action set file	keine Aktionssatzdatei
+@msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
+@msg	the action set file holds more than 1,000 actions	die Aktionssatzdatei enthält mehr als 1.000 Aktionen
+@msg	the action set file needs a later version of VectorCraft	die Aktionssatzdatei erfordert eine neuere Version von VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	eine Aktion in der Aktionssatzdatei hat mehr als 10.000 Schritte
 @msg	no such anchor	kein solcher Ankerpunkt
 @msg	no such artboard	keine solche Zeichenfläche
 @msg	the artboard is locked	die Zeichenfläche ist gesperrt

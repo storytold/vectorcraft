@@ -1255,6 +1255,8 @@ lighting	Light	Światło
 	No actions. Press ● to record.	Brak operacji. Naciśnij ●, aby nagrać.
 	Outline Text	Kontury tekstu
 	Play Current Selection	Odtwórz bieżące zaznaczenie
+	Save Actions…	Zapisz operacje…
+	Load Actions…	Wczytaj operacje…
 	Reflect Horizontal	Odbij w poziomie
 	Rotate 90° CW	Obróć o 90° w prawo
 	Set 1	Zestaw 1
@@ -4380,6 +4382,14 @@ imageTrace	Outline	Kontur
 @msg	no selection bounds	brak granic zaznaczenia
 @msg	no slice selected	nie zaznaczono plasterka
 @msg	no such action	brak takiej operacji
+@msg	no such action set	brak takiego zestawu operacji
+@msg	the action sets changed; nothing was deleted	zestawy operacji się zmieniły; nic nie usunięto
+@msg	no action set to save	brak zestawu operacji do zapisania
+@msg	not an action set file	to nie jest plik zestawu operacji
+@msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
+@msg	the action set file holds more than 1,000 actions	plik zestawu operacji zawiera ponad 1000 operacji
+@msg	the action set file needs a later version of VectorCraft	plik zestawu operacji wymaga nowszej wersji programu VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	operacja w pliku zestawu operacji ma ponad 10 000 kroków
 @msg	no such anchor	brak takiego punktu
 @msg	no such artboard	brak takiego obszaru kompozycji
 @msg	the artboard is locked	obszar kompozycji jest zablokowany

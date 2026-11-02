@@ -2322,6 +2322,8 @@ font-technology	Variable	Променливи
 	Plates	Пластини
 	Platform:	Платформа:
 	Play Current Selection	Изпълнение на текущия избор
+	Save Actions…	Запазване на действия…
+	Load Actions…	Зареждане на действия…
 	Plug-in Info	Информация за приставката
 	Plug-ins	Приставки
 	Plug-in…	Приставка…
@@ -4124,6 +4126,14 @@ axis	Both	И двете
 @msg	no selection bounds	няма граници на селекцията
 @msg	no slice selected	няма избран срез
 @msg	no such action	няма такова действие
+@msg	no such action set	няма такъв набор от действия
+@msg	the action sets changed; nothing was deleted	наборите от действия се промениха; нищо не беше изтрито
+@msg	no action set to save	няма набор от действия за запазване
+@msg	not an action set file	не е файл с набор от действия
+@msg	the action set file is larger than 8 MiB	файлът с набор от действия е по-голям от 8 MiB
+@msg	the action set file holds more than 1,000 actions	файлът с набор от действия съдържа повече от 1000 действия
+@msg	the action set file needs a later version of VectorCraft	файлът с набор от действия изисква по-нова версия на VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	действие във файла с набор от действия има повече от 10 000 стъпки
 @msg	no such anchor	няма такава опорна точка
 @msg	no such artboard	няма такава работна област
 @msg	the artboard is locked	работната област е заключена

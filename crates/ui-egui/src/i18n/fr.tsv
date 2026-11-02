@@ -2377,6 +2377,8 @@ font-technology	Variable	Variables
 	Plates	Plaques
 	Platform:	Plateforme :
 	Play Current Selection	Exécuter la sélection actuelle
+	Save Actions…	Enregistrer les scripts…
+	Load Actions…	Charger des scripts…
 	Plug-in Info	Informations sur le module externe
 	Plug-ins	Modules externes
 	Plug-in…	Module externe…
@@ -4240,6 +4242,14 @@ axis	Both	Les deux
 @msg	no selection bounds	la sélection n’a pas de limites
 @msg	no slice selected	aucune tranche sélectionnée
 @msg	no such action	script inexistant
+@msg	no such action set	jeu de scripts inexistant
+@msg	the action sets changed; nothing was deleted	les jeux de scripts ont changé ; rien n’a été supprimé
+@msg	no action set to save	aucun jeu de scripts à enregistrer
+@msg	not an action set file	ce n’est pas un fichier de jeu de scripts
+@msg	the action set file is larger than 8 MiB	le fichier de jeu de scripts dépasse 8 Mio
+@msg	the action set file holds more than 1,000 actions	le fichier de jeu de scripts contient plus de 1 000 scripts
+@msg	the action set file needs a later version of VectorCraft	le fichier de jeu de scripts nécessite une version plus récente de VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	un script du fichier de jeu de scripts compte plus de 10 000 étapes
 @msg	no such anchor	point d’ancrage inexistant
 @msg	no such artboard	plan de travail inexistant
 @msg	the artboard is locked	le plan de travail est verrouillé

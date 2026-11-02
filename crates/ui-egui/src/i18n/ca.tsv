@@ -2983,6 +2983,8 @@ digits	Malayalam	Malaiàlam
 	Plates	Planxes
 	Platform:	Plataforma:
 	Play Current Selection	Reprodueix la selecció actual
+	Save Actions…	Desa les accions…
+	Load Actions…	Carrega accions…
 	Play:	Reprodueix:
 	Plug-in Info	Informació del complement
 	Plug-ins	Complements
@@ -5199,6 +5201,14 @@ digits	Malayalam	Malaiàlam
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies girades o reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
 @msg	no slice selected	no hi ha cap tall seleccionat
 @msg	no such action	no existeix aquesta acció
+@msg	no such action set	no existeix aquest conjunt d’accions
+@msg	the action sets changed; nothing was deleted	els conjunts d’accions han canviat; no s’ha suprimit res
+@msg	no action set to save	no hi ha cap conjunt d’accions per desar
+@msg	not an action set file	no és un fitxer de conjunt d’accions
+@msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
+@msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions
+@msg	the action set file needs a later version of VectorCraft	el fitxer de conjunt d’accions necessita una versió més recent del VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	una acció del fitxer de conjunt d’accions té més de 10.000 passos
 @msg	no such anchor	no existeix aquest punt d’ancoratge
 @msg	no such artboard	no existeix aquest tauler
 @msg	no such document	no existeix aquest document

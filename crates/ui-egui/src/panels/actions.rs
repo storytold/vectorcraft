@@ -10,6 +10,10 @@ use crate::theme::Tokens;
 use crate::widgets::{self, dim_label};
 use crate::{VectorcraftApp, icons};
 
+mod files;
+pub(crate) use files::can_load;
+pub use files::{ACTIONS_EXT, LOAD_SET, SAVE_SET, load_set, save_set};
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
     pub name: String,
@@ -195,6 +199,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         && let Err(e) = play(app, s, a)
     {
         app.status(e);
+    }
+    ui.separator();
+    // As commands, so a file dialog shown off the UI thread saves or loads when it answers.
+    // Save Actions… names the current set by its id, so a file dialog that answers later saves that set.
+    let save = json!({ "id": current.and_then(|s| app.ui.action_sets.get(s)).map(|s| s.id) });
+    for (label, id, on, params) in
+        [(tl!("Save Actions…"), SAVE_SET, current.is_some(), save), (tl!("Load Actions…"), LOAD_SET, can_load(app), json!({}))]
+    {
+        if widgets::menu_item(ui, label, on, false)
+            && let Err(e) = app.run(id, params)
+            && e != "cancelled"
+        {
+            app.status(e);
+        }
     }
 }
 
@@ -844,5 +862,137 @@ mod tests {
         assert_eq!(lefts(&app), [x0, x0 + 90.0, x1 - 20.0], "distributed across artboard 2, active when the action plays");
         play(&mut app, 0, spacing).unwrap();
         assert_eq!(lefts(&app), [x0, x0 + 80.0, x1 - 20.0], "spaced across artboard 2, active when the action plays");
+    }
+
+    /// Files in memory for `app`: what it writes, and what it reads back. Save dialogs pick
+    /// `/sets/` and the suggested name, open dialogs pick `open`.
+    fn with_files(app: &mut VectorcraftApp, open: &str) -> std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<String, Vec<u8>>>> {
+        let files = std::rc::Rc::new(std::cell::RefCell::new(std::collections::BTreeMap::<String, Vec<u8>>::new()));
+        let (w, r) = (files.clone(), files.clone());
+        app.services.write = Some(Box::new(move |path: &str, bytes: &[u8]| {
+            w.borrow_mut().insert(path.to_string(), bytes.to_vec());
+            Ok(())
+        }));
+        app.services.read = Some(Box::new(move |path: &str| r.borrow().get(path).cloned().ok_or_else(|| "no such file".to_string())));
+        app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/sets/{}", pick.name))));
+        let open = open.to_string();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(open.clone())));
+        files
+    }
+
+    /// The panel menu's Save Actions… writes the current set with its actions to a file named
+    /// after it, and Load Actions… adds the set it reads after the others, with the same actions
+    /// and steps; a set named like one in the panel gets the next free number, and the other sets
+    /// and the current set stay as they are.
+    #[test]
+    fn save_actions_and_load_actions_round_trip_a_set() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/Mine.vcactions");
+        let ctx = egui::Context::default();
+        let item = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            texts.iter().find(|(s, _)| s.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"))
+        };
+        let save = item(&ctx, &mut app, "Save Actions…");
+        click(&ctx, &mut app, save, menu);
+        assert!(files.borrow().is_empty(), "no set is current: nothing to save");
+        click_set(&ctx, &mut app, "Mine", egui::Modifiers::NONE);
+        let save = item(&ctx, &mut app, "Save Actions…");
+        click(&ctx, &mut app, save, menu);
+        let text = String::from_utf8(files.borrow()["/sets/Mine.vcactions"].clone()).unwrap();
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!((v["format"].clone(), v["version"].clone(), v["name"].clone()), (json!("vcactions"), json!(1), json!("Mine")));
+        assert_eq!(v["actions"][1], json!({"name": "Nudge Again", "steps": [{"command": "object.move", "params": {"dx": 1, "dy": 0}}]}));
+        let load = item(&ctx, &mut app, "Load Actions…");
+        click(&ctx, &mut app, load, menu);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other", "Mine 2"], "added after the others, numbered");
+        assert_eq!(app.ui.action_set, Some(1), "the current set stays");
+        let steps = |s: &ActionSet| s.actions.iter().map(|a| (a.name.clone(), a.steps.clone())).collect::<Vec<_>>();
+        assert_eq!(steps(&app.ui.action_sets[3]), steps(&app.ui.action_sets[1]), "the same actions and steps");
+        let r = app.run(LOAD_SET, json!({"data": text})).unwrap();
+        assert_eq!(r, json!({"set": 4, "name": "Mine 3", "actions": 2}));
+        assert_ne!(app.ui.action_sets[3].id, app.ui.action_sets[4].id, "each loaded set has an id of its own");
+    }
+
+    /// `ui.actionSet.save` saves the set at `set`, else the current one, and `ui.actionSet.load` of
+    /// a set no other set is named like keeps its name; one with no name takes the file's.
+    #[test]
+    fn load_actions_adds_a_set_and_keeps_the_others() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/Other.vcactions");
+        assert_eq!(app.run(SAVE_SET, json!({})).unwrap_err(), "no action set to save");
+        assert_eq!(app.run(SAVE_SET, json!({"set": 3})).unwrap_err(), "no such action set");
+        assert_eq!(app.run(SAVE_SET, json!({"set": 1, "path": "/sets/kept.vcactions"})).unwrap(), json!({"path": "/sets/kept.vcactions"}));
+        let text = String::from_utf8(files.borrow()["/sets/kept.vcactions"].clone()).unwrap();
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/kept.vcactions"})).unwrap(), json!({"set": 2, "name": "Mine", "actions": 2}));
+        assert_eq!(set_names(&app), ["Default Actions", "Other", "Mine"]);
+        let unnamed = text.replacen("\"name\": \"Mine\"", "\"name\": \"\"", 1);
+        files.borrow_mut().insert("/sets/Print Jobs.vcactions".into(), unnamed.into_bytes());
+        assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/Print Jobs.vcactions"})).unwrap()["name"], json!("Print Jobs"));
+        assert_eq!(app.run(SAVE_SET, json!({"set": 0, "path": "/sets/d.vcactions"})).unwrap(), json!({"path": "/sets/d.vcactions"}));
+        assert_eq!(files::set_file_stem("a/b: c?."), "a-b- c-");
+        for (name, stem) in
+            [("CON", "CON-"), ("nul", "nul-"), ("Com1.print", "Com1-.print"), ("lpt²", "lpt²-"), ("COM10", "COM10"), ("Console", "Console")]
+        {
+            assert_eq!(files::set_file_stem(name), stem, "{name}");
+        }
+    }
+
+    /// A file that is not an action set file, or is too large, is refused with a message, and no
+    /// set is added.
+    #[test]
+    fn load_actions_refuses_a_file_that_is_not_an_action_set() {
+        let mut app = app_with_sets();
+        let before = set_names(&app);
+        let many = json!({"format": "vcactions", "version": 1, "name": "Many", "actions": vec![json!({"name": "A", "steps": []}); 1001]});
+        let steps = vec![json!({"command": "object.move"}); 10_001];
+        let long = json!({"format": "vcactions", "version": 1, "name": "Long", "actions": [{"name": "A", "steps": steps}]});
+        for (data, want) in [
+            (json!("GIMP Palette"), "not an action set file (expected value at line 1 column 1)"),
+            (json!("{\"format\": \"vcstyles\", \"version\": 1, \"name\": \"S\", \"actions\": []}"), "not an action set file"),
+            (json!(42), "not an action set file"),
+            (json!(many.to_string()), "the action set file holds more than 1,000 actions"),
+            (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
+            (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
+            (
+                json!("{\"format\": \"vcactions\", \"version\": 2, \"name\": \"S\", \"actions\": []}"),
+                "the action set file needs a later version of VectorCraft",
+            ),
+        ] {
+            assert_eq!(app.run(LOAD_SET, json!({ "data": data })).unwrap_err(), want);
+        }
+        with_files(&mut app, "/sets/missing.vcactions");
+        assert_eq!(app.run(LOAD_SET, json!({})).unwrap_err(), "no such file");
+        assert_eq!(set_names(&app), before, "no set added");
+    }
+
+    /// Save Actions… does not write a set that Load Actions… would refuse: more than 1,000 actions.
+    #[test]
+    fn save_actions_does_not_write_a_set_load_actions_refuses() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/none.vcactions");
+        app.ui.action_sets[2].actions = vec![Action { name: "A".into(), steps: vec![] }; 1001];
+        let r = app.run(SAVE_SET, json!({"set": 2, "path": "/sets/big.vcactions"}));
+        assert_eq!(r.unwrap_err(), "the action set file holds more than 1,000 actions");
+        assert!(files.borrow().is_empty(), "nothing written");
+    }
+
+    /// `ui.actionSet.save` with the set id the panel menu passes saves that set after another set
+    /// took its index and the current set changed, as when its file dialog answers later; an id
+    /// that no set has saves nothing, and `set` is not read.
+    #[test]
+    fn save_actions_saves_the_set_it_was_chosen_for() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/none.vcactions");
+        let id = app.ui.action_sets[2].id;
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        app.ui.action_sets.push(ActionSet::new("Third", vec![]));
+        app.ui.action_set = Some(2);
+        app.run(SAVE_SET, json!({"id": id, "path": "/sets/x.vcactions"})).unwrap();
+        let v: Value = serde_json::from_slice(&files.borrow()["/sets/x.vcactions"]).unwrap();
+        assert_eq!(v["name"], json!("Other"), "the set chosen, not the current one");
+        assert_eq!(app.run(SAVE_SET, json!({"id": 0, "set": 0, "path": "/sets/y.vcactions"})).unwrap_err(), "no such action set");
     }
 }

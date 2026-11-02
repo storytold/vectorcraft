@@ -1963,6 +1963,8 @@
 	Plates	Placas
 	Platform:	Plataforma:
 	Play Current Selection	Reproduzir Seleção Atual
+	Save Actions…	Salvar Ações…
+	Load Actions…	Carregar Ações…
 	Plug-in Info	Informações do Plug-in
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -3824,6 +3826,14 @@ axis	Both	Ambos
 @msg	no selection bounds	sem limites de seleção
 @msg	no slice selected	nenhuma fatia selecionada
 @msg	no such action	ação inexistente
+@msg	no such action set	conjunto de ações inexistente
+@msg	the action sets changed; nothing was deleted	os conjuntos de ações mudaram; nada foi excluído
+@msg	no action set to save	nenhum conjunto de ações para salvar
+@msg	not an action set file	não é um arquivo de conjunto de ações
+@msg	the action set file is larger than 8 MiB	o arquivo de conjunto de ações tem mais de 8 MiB
+@msg	the action set file holds more than 1,000 actions	o arquivo de conjunto de ações contém mais de 1.000 ações
+@msg	the action set file needs a later version of VectorCraft	o arquivo de conjunto de ações requer uma versão mais recente do VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	uma ação do arquivo de conjunto de ações tem mais de 10.000 etapas
 @msg	no such anchor	âncora inexistente
 @msg	no such artboard	prancheta inexistente
 @msg	the artboard is locked	a prancheta está bloqueada

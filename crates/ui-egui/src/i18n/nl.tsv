@@ -1266,6 +1266,8 @@ lighting	Light	Licht
 	No actions. Press ● to record.	Geen acties. Druk op ● om op te nemen.
 	Outline Text	Tekst omlijnen
 	Play Current Selection	Huidige selectie afspelen
+	Save Actions…	Acties opslaan…
+	Load Actions…	Acties laden…
 	Reflect Horizontal	Horizontaal spiegelen
 	Rotate 90° CW	90° met de klok mee draaien
 	Set 1	Set 1
@@ -4245,6 +4247,14 @@ imageTrace	Outline	Contour
 @msg	no selection bounds	geen begrenzing van de selectie
 @msg	no slice selected	geen slice geselecteerd
 @msg	no such action	actie bestaat niet
+@msg	no such action set	actieset bestaat niet
+@msg	the action sets changed; nothing was deleted	de actiesets zijn gewijzigd; er is niets verwijderd
+@msg	no action set to save	geen actieset om op te slaan
+@msg	not an action set file	geen actiesetbestand
+@msg	the action set file is larger than 8 MiB	het actiesetbestand is groter dan 8 MiB
+@msg	the action set file holds more than 1,000 actions	het actiesetbestand bevat meer dan 1.000 acties
+@msg	the action set file needs a later version of VectorCraft	het actiesetbestand vereist een nieuwere versie van VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	een actie in het actiesetbestand heeft meer dan 10.000 stappen
 @msg	no such anchor	anker bestaat niet
 @msg	no such artboard	tekengebied bestaat niet
 @msg	no such document	document bestaat niet

@@ -1252,6 +1252,8 @@ lighting	Light	Lys
 	No actions. Press ● to record.	Ingen handlinger. Tryk på ● for at optage.
 	Outline Text	Tekst til konturer
 	Play Current Selection	Afspil aktuel markering
+	Save Actions…	Gem handlinger…
+	Load Actions…	Indlæs handlinger…
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1
@@ -4233,6 +4235,14 @@ imageTrace	Outline	Kontur
 @msg	no selection bounds	ingen grænser for markeringen
 @msg	no slice selected	intet udsnit markeret
 @msg	no such action	ingen sådan handling
+@msg	no such action set	intet sådant handlingssæt
+@msg	the action sets changed; nothing was deleted	handlingssættene er ændret; intet blev slettet
+@msg	no action set to save	intet handlingssæt at gemme
+@msg	not an action set file	ikke en handlingssætfil
+@msg	the action set file is larger than 8 MiB	handlingssætfilen er større end 8 MiB
+@msg	the action set file holds more than 1,000 actions	handlingssætfilen indeholder mere end 1.000 handlinger
+@msg	the action set file needs a later version of VectorCraft	handlingssætfilen kræver en nyere version af VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	en handling i handlingssætfilen har mere end 10.000 trin
 @msg	no such anchor	intet sådant anker
 @msg	no such artboard	intet sådant artboard
 @msg	no such document	intet sådant dokument
