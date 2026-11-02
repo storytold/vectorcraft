@@ -548,7 +548,7 @@ Brushes of different types, or a `type` other than theirs, are refused with "bru
 Document colour mode: `file.new {colorMode: "cmyk"}` starts a CMYK document with CMYK default swatches, and RGB
 colors applied to it (`paint.setFill`/`setStroke` colors, gradient stops and freeform points, `paint.editGradient`
 stops, `paint.freeform.addPoint`/`setPoint`, `paint.sampleColor`, `object.mesh.setPointColor`/`addLine`, the
-`text.create` and `text.createInPath` color, the `text.setStyle` fill, `text.setRangeStyle` fills and strokes, a
+`text.create` and `text.createInPath` color, `text.setStyle` and `text.setRangeStyle` fills and strokes, a
 `shapeBuilder.merge` hex fill (its `fill: {color, keepModel: true}` form keeps RGB), the
 `symbol.adjust` stain color, `swatch.new {color}` and `{colors}`, `swatch.newGroup`, `swatch.editGroup` and
 `swatch.edit`) are stored as CMYK, converted through the color settings (`edit.colorSettings`: the CMYK
@@ -2358,7 +2358,10 @@ dash options go to every run (the object keeps no stroke of its own); an `item` 
 with `appearance.addStroke`, which takes every stroke option (dashes, profile, opacity, blend) like a path's and paints under or over the
 characters as its place relative to the Characters row says. To stroke
 some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, align?,
-dash?, dashOffset?, alignDashes?}}`. `align: "inside"|"outside"` keeps the characters' stroke on that side of the
+dash?, dashOffset?, alignDashes?}}`. `text.setStyle {ids?, stroke?, strokeWidth?, start?, end?}` sets the stroke color
+and weight of the characters of each object given (without `start` and `end`: all of its text), with its other keys in
+one undo step; `strokeWidth` is in document points, as `stroke.set` gives the weight of scaled type.
+`align: "inside"|"outside"` keeps the characters' stroke on that side of the
 glyph outlines, drawn at twice the weight and clipped, while the type stays editable (beyond Illustrator); SVG export
 writes the text live and that stroke as glyph outlines over it. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
 run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.
