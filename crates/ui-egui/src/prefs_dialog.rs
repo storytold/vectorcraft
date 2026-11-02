@@ -17,7 +17,7 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__smartGuides", "Smart Guides", "Smart Guides (View → Smart Guides)"),
     ("__snapToGrid", "Guides & Grid", "Snap to Grid"),
     ("__taskBar", "General", "Enable Contextual Task Bar"),
-    ("__showDiscord", "General", "Show the Discord button in the title bar"),
+    ("__showDiscordButton", "General", "Show the Discord button in the title bar"),
 ];
 
 /// Whether User Interface shows VectorCraft Title Bar on Every Desktop (`appTitleBar`): Linux and the
@@ -37,7 +37,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
     fields.insert("__snapToGrid".into(), json!(app.ui.view.snap_to_grid));
     fields.insert("__taskBar".into(), json!(app.ui.task_bar));
-    fields.insert("__showDiscord".into(), json!(app.ui.show_discord));
+    fields.insert("__showDiscordButton".into(), json!(app.ui.show_discord_button));
     // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (System Title Bar's dimmed
     // row and VectorCraft Title Bar on Every Desktop's note).
     fields.insert("__titlebarFromEnv".into(), json!(app.titlebar_from_env));
@@ -208,7 +208,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.ui.view.smart_guides = d.fields.get("__smartGuides").and_then(Value::as_bool).unwrap_or(app.ui.view.smart_guides);
     app.ui.view.snap_to_grid = d.fields.get("__snapToGrid").and_then(Value::as_bool).unwrap_or(app.ui.view.snap_to_grid);
     app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
-    app.ui.show_discord = d.fields.get("__showDiscord").and_then(Value::as_bool).unwrap_or(app.ui.show_discord);
+    app.ui.show_discord_button = d.fields.get("__showDiscordButton").and_then(Value::as_bool).unwrap_or(app.ui.show_discord_button);
     app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
     app.prefs_changed = true;

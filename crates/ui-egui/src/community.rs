@@ -85,7 +85,7 @@ pub fn links_centered(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 fn links_in(app: &mut VectorcraftApp, ui: &mut Ui, centered: bool) {
     // Preferences ▸ General ▸ Show the Discord button (on by default; hidden only when turned off).
-    if app.ui.show_discord {
+    if app.ui.show_discord_button {
         discord_button(app, ui, true);
         ui.add_space(8.0);
     }

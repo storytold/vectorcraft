@@ -196,7 +196,7 @@ mod tests {
             app.custom_titlebar = true;
             // The layout with every header button (Discord is on by default; set explicitly so
             // the test is clear about what it checks).
-            app.ui.show_discord = true;
+            app.ui.show_discord_button = true;
             Self { ctx, app, width, time: 0.0, maximized: false }
         }
 
@@ -301,13 +301,13 @@ mod tests {
 
     #[test]
     fn the_discord_button_is_shown_by_default() {
-        assert!(crate::state::UiState::default().show_discord, "the Discord button is on by default");
+        assert!(crate::state::UiState::default().show_discord_button, "the Discord button is on by default");
     }
 
     #[test]
     fn the_discord_button_is_hidden_when_the_preference_is_off() {
         let mut w = Win::new(1440.0);
-        w.app.ui.show_discord = false;
+        w.app.ui.show_discord_button = false;
         w.frame(vec![]);
         let out = w.frame(vec![]);
         assert!(!texts(&out).into_iter().any(|(t, _)| t == "Discord"));
