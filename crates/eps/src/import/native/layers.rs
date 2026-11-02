@@ -13,8 +13,11 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
     let Some(data) = editing_copy(ps) else { return visible };
     // The layer tree is kept from the structure read, for the page to come in on when the layers
     // can't be used.
+    // Private data kept apart from the program: the program's own header gives the author and
+    // custom colors the private data's header may lack.
+    let read = |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps) } else { ai::read(d, true) };
     let (tree, result) = match data.as_deref() {
-        Ok(d) => match ai::read(d, true) {
+        Ok(d) => match read(d) {
             Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },

@@ -83,6 +83,29 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
 }
 
 #[test]
+fn an_ai_file_opens_with_its_artboard_options_raster_settings_and_author() {
+    let document = "%_/Document :\n%_/Dictionary :\n%_/Dictionary :\n%_150 /Int (dpi.) ,\n%_1 /Bool (mask) ,\n%_; (AI Auto Rasterize) ,\n\
+                    %_/Array :\n%_/Dictionary :\n%_3 /Int (DisplayMark) ,\n%_1.33 /Real (PAR) ,\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n\
+                    %_200 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_(Board) /UnicodeString (Name) ,\n%_; ,\n%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    // The sample (it holds binary samples) with `insert` before the first `at`.
+    let before = |data: Vec<u8>, at: &[u8], insert: &str| {
+        let i = data.windows(at.len()).position(|w| w == at).unwrap();
+        [&data[..i], insert.as_bytes(), &data[i..]].concat()
+    };
+    let data = before(before(ai::sample_data(), b"%%EndComments", "%%For: (Ann Lee) (Studio)\n"), b"%AI5_BeginLayer", document);
+    let mut s = Session::new();
+    let r = open(&mut s, "art.ai", &ai::ai(&data, ai::page_pdf()), json!({})).unwrap();
+    check_sample(&s);
+    let d = &s.doc().unwrap().doc;
+    assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("weren't read")), "{r}");
+    let b = &d.artboards[0];
+    assert_eq!((b.name.as_str(), b.show_center_mark, b.show_cross_hairs, b.show_video_safe_areas), ("Board", true, true, false));
+    assert_eq!(b.video_ruler_pixel_aspect_ratio, 1.33);
+    assert_eq!((d.raster_effects_ppi, d.raster_effects.clipping_mask), (150.0, true));
+    assert_eq!(d.metadata.author, "Ann Lee");
+}
+
+#[test]
 fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
     let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
     let unread = format!("u\n0 0 1 0 k\n{}f\nZZ\nU\n{}", ai::rect(50.0, 10.0, 54.0, 14.0), ai::named("Unread"));
