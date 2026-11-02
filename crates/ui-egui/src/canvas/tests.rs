@@ -6321,6 +6321,69 @@ fn a_bezier_drag_preview_follows_the_pointer_back_into_the_window_and_to_the_rel
     assert!(app.session.active().unwrap().interaction.is_none(), "committed");
 }
 
+/// A drag ends where its button went up. Pointer moves that come after the release in the same
+/// frame are hover: they do not stretch a Rectangle drag, add to a Pencil stroke or move dragged
+/// art.
+#[test]
+fn a_drag_ends_where_the_button_went_up_in_its_frame() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let last_bounds = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap()
+    };
+    let center = app.canvas_rect.unwrap().center();
+    let far = center + vec2(150.0, 100.0);
+
+    app.select_tool("rectangle");
+    let a = center - vec2(100.0, 60.0);
+    let end = a + vec2(80.0, 50.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(40.0, 20.0))]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(end), button(end, false), Event::PointerMoved(far)]);
+    let r = last_bounds(&app);
+    let want = xf.to_doc(end);
+    assert!((r.x1 - want.x).abs() < 1e-3 && (r.y1 - want.y).abs() < 1e-3, "the rectangle ends at the release: {r:?}, {want:?}");
+
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("pencil");
+    let a = center - vec2(100.0, 0.0);
+    let end = a + vec2(120.0, 0.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    for x in [20.0, 40.0, 60.0] {
+        frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(x, 0.0))]);
+    }
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(90.0, 0.0)), Event::PointerMoved(end), button(end, false), Event::PointerMoved(far)]);
+    let r = last_bounds(&app);
+    let (left, right) = (xf.to_doc(a), xf.to_doc(end));
+    assert!((r.x0 - left.x).abs() < 1.0 && (r.x1 - right.x).abs() < 1.0 && r.height() < 1.0, "the stroke ends at the release: {r:?}");
+
+    app.session.execute("shape.rectangle", &json!({"x": 250, "y": 40, "width": 60, "height": 40})).unwrap();
+    app.session.execute("paint.setFill", &json!({"color": "#3366cc"})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("selection");
+    let before = Rect::new(250.0, 40.0, 310.0, 80.0);
+    let grab = xf.to_screen(Point::new(280.0, 60.0));
+    let to = grab + vec2(30.0, 40.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(grab)]);
+    frame(&mut app, &ctx, vec![button(grab, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(grab + vec2(10.0, 10.0))]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to), button(to, false), Event::PointerMoved(far)]);
+    let moved = last_bounds(&app);
+    let d = xf.to_doc(to) - xf.to_doc(grab);
+    assert!((moved.x0 - before.x0 - d.x).abs() < 1e-3 && (moved.y0 - before.y0 - d.y).abs() < 1e-3, "the art moves to the release: {moved:?}, {d:?}");
+    assert!(app.session.active().unwrap().interaction.is_none(), "committed");
+}
+
 #[test]
 fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let ctx = egui::Context::default();
