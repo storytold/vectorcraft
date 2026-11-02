@@ -677,8 +677,8 @@ fn convert_to_shape_keeps_its_place_among_effects_and_its_visibility() {
     assert!(st.plain, "{st:?}");
     let ids: Vec<_> = st.effects.iter().map(|e| e.id.as_str()).collect();
     assert_eq!(ids, ["convertToShape.rectangle", "path.offsetPath"]);
-    // Offset Path isn't read on objects other than type yet.
-    assert!(!st.simple);
+    // Offset Path is read on any object too.
+    assert!(st.simple);
     // A hidden one stays, hidden, with its settings.
     let hidden = shape(&format!("1 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}")).replacen("1 /Visible", "0 /Visible", 1);
     let st = shape_style(&[hidden]);
