@@ -50,14 +50,16 @@ impl Homography {
         [m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]]
     }
 
-    /// Map a point; `None` when it lands on or beyond the horizon (w ≤ 0), or when it does not map
-    /// to a finite page point.
+    /// Map a point; `None` when it lands on or beyond the horizon (w at most 1e-9 times the largest
+    /// magnitude in the map's `w` row, so the answer is the same at any scale of the map), or when
+    /// it does not map to a finite page point.
     pub fn apply(&self, p: Point) -> Option<Point> {
         let m = &self.0;
         let x = m[0][0] * p.x + m[0][1] * p.y + m[0][2];
         let y = m[1][0] * p.x + m[1][1] * p.y + m[1][2];
         let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
-        if w <= 1e-9 || !x.is_finite() || !y.is_finite() {
+        let k = m[2].iter().fold(0.0_f64, |k, v| k.max(v.abs()));
+        if w <= 1e-9 * k || !x.is_finite() || !y.is_finite() {
             return None;
         }
         let q = Point::new(x / w, y / w);
@@ -70,14 +72,32 @@ impl Homography {
             + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
     }
 
-    /// Whether the map is invertible: the magnitude of its determinant is above 1e-15, or, when the
+    /// Whether the map is invertible: [`Self::scaled_det`] gives a determinant, or, when the
     /// determinant is not finite, [`Self::inverse`] gives one.
     fn is_invertible(&self) -> bool {
-        let d = self.det();
-        if d.is_finite() {
-            return d.abs() > 1e-15;
+        if self.det().is_finite() {
+            return self.scaled_det().is_some();
         }
         self.inverse().is_some()
+    }
+
+    /// [`Self::scaled`] and its determinant; `None` when the magnitude of that determinant is at
+    /// most 1e-15 times that of the largest of the six products it sums (a test that gives the
+    /// same answer at any scale of the map).
+    fn scaled_det(&self) -> Option<(Self, f64)> {
+        let s = self.scaled()?;
+        let m = &s.0;
+        let terms = [
+            m[0][0] * m[1][1] * m[2][2],
+            m[0][0] * m[1][2] * m[2][1],
+            m[0][1] * m[1][0] * m[2][2],
+            m[0][1] * m[1][2] * m[2][0],
+            m[0][2] * m[1][0] * m[2][1],
+            m[0][2] * m[1][1] * m[2][0],
+        ];
+        let largest = terms.iter().fold(0.0_f64, |k, v| k.max(v.abs()));
+        let d = s.det();
+        (d.abs() > 1e-15 * largest).then_some((s, d))
     }
 
     /// The same map with every entry divided by one power of two, chosen so that the largest of the
@@ -100,36 +120,14 @@ impl Homography {
         Some(Self(self.0.map(|row| row.map(|v| ldexp(v, -e)))))
     }
 
-    /// Inverse; `None` when the map is not invertible or its inverse has an entry that is not
-    /// finite. When the determinant is not finite, this is the inverse of [`Self::scaled`] (the
-    /// exact inverse multiplied by one power of two, which is the same map), and that copy counts
-    /// as not invertible when the magnitude of its determinant is at most 1e-15 times that of the largest
-    /// of the six products the determinant sums.
+    /// Inverse; `None` when [`Self::scaled_det`] counts the map as not invertible or its inverse
+    /// has an entry that is not finite. When the determinant is not finite or is below the normal
+    /// range, this is the inverse of [`Self::scaled`] (the exact inverse multiplied by one power of
+    /// two, which is the same map).
     pub fn inverse(&self) -> Option<Self> {
+        let (s, sd) = self.scaled_det()?;
         let d = self.det();
-        let (h, d) = if d.is_finite() {
-            if d.abs() < 1e-15 {
-                return None;
-            }
-            (*self, d)
-        } else {
-            let s = self.scaled()?;
-            let m = &s.0;
-            let terms = [
-                m[0][0] * m[1][1] * m[2][2],
-                m[0][0] * m[1][2] * m[2][1],
-                m[0][1] * m[1][0] * m[2][2],
-                m[0][1] * m[1][2] * m[2][0],
-                m[0][2] * m[1][0] * m[2][1],
-                m[0][2] * m[1][1] * m[2][0],
-            ];
-            let largest = terms.iter().fold(0.0_f64, |k, v| k.max(v.abs()));
-            let d = s.det();
-            if d.abs() <= 1e-15 * largest {
-                return None;
-            }
-            (s, d)
-        };
+        let (h, d) = if d.is_finite() && d.abs() >= f64::MIN_POSITIVE { (*self, d) } else { (s, sd) };
         let m = &h.0;
         let c = |r0: usize, c0: usize, r1: usize, c1: usize| m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0];
         let adj = [
@@ -397,10 +395,54 @@ mod tests {
             let want = t * far.apply(p).unwrap();
             assert!(c.apply(t * p).unwrap().distance(want) <= 1e-9 * want.to_vec2().hypot(), "{c:?}");
         }
-        // A determinant that does not overflow is judged as it is.
-        assert!(Homography::from_array([1e-6, 0.0, 0.0, 0.0, 1e-6, 0.0, 0.0, 0.0, 1e-6]).is_none());
+        // A determinant that does not overflow is judged against the size of the map's entries:
+        // the identity with every entry 1e-6 is the identity, and two equal rows are not invertible.
+        let small = [1e-6, 0.0, 0.0, 0.0, 1e-6, 0.0, 0.0, 0.0, 1e-6];
+        let q = Homography::from_array(small).unwrap().apply(Point::new(2.0, 3.0)).unwrap();
+        assert!(q.distance(Point::new(2.0, 3.0)) < 1e-12);
+        assert!(Homography::from_array([1e-6, 2e-6, 0.0, 1e-6, 2e-6, 0.0, 0.0, 0.0, 1e-6]).is_none());
         assert!(Homography::from_array([f64::NAN; 9]).is_none());
         assert!(Homography::from_array([0.0; 9]).is_none());
+    }
+
+    #[test]
+    fn the_checks_do_not_depend_on_the_scale_of_the_map() {
+        let times = |h: Homography, f: f64| Homography(h.0.map(|row| row.map(|v| v * f)));
+        // The same map with its w row's largest entry 1.
+        let unit = |h: Homography| {
+            let k = h.0[2].iter().fold(0.0_f64, |k, v| k.max(v.abs()));
+            Homography(h.0.map(|row| row.map(|v| v / k)))
+        };
+        // The horizon of h() is 0.001x + 0.002y + 1 = 0: two points in front of it, one with w of
+        // about 5e-10 (too close to it to draw), and two beyond it.
+        let pts =
+            [Point::new(30.0, -12.0), Point::new(-999.99, 0.0), Point::new(-999.9999995, 0.0), Point::new(-2000.0, 0.0), Point::new(0.0, -600.0)];
+        let at_unit: Vec<_> = pts.iter().map(|&p| h().apply(p)).collect();
+        assert!(at_unit[0].is_some() && at_unit[1].is_some());
+        assert!(at_unit[2..].iter().all(Option::is_none));
+        let inv = h().inverse().unwrap();
+        // Two equal rows (up to a factor of 2), with entries that are exact in binary.
+        let flat = Homography([[1.0, 2.0, 3.0], [2.0, 4.0, 6.0], [0.25, 0.5, 1.0]]);
+        assert!(!flat.is_invertible());
+        assert_eq!(flat.inverse(), None);
+        for f in [1e-200, 1e-12, 1e12, 1e200] {
+            let s = times(h(), f);
+            for (&p, want) in pts.iter().zip(&at_unit) {
+                match (s.apply(p), want) {
+                    (Some(q), Some(w)) => assert!(q.distance(*w) <= 1e-6 * w.to_vec2().hypot(), "{f} {p:?}"),
+                    (None, None) => {}
+                    (got, _) => panic!("{f} {p:?}: {got:?}"),
+                }
+            }
+            assert!(s.is_invertible(), "{f}");
+            let si = unit(s.inverse().unwrap_or_else(|| panic!("{f}")));
+            for (a, b) in si.to_array().iter().zip(unit(inv).to_array()) {
+                assert!((a - b).abs() <= 1e-9 * b.abs().max(1.0), "{f}: {si:?}");
+            }
+            let sf = times(flat, f);
+            assert!(!sf.is_invertible(), "{f}");
+            assert_eq!(sf.inverse(), None, "{f}");
+        }
     }
 
     #[test]
