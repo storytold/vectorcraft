@@ -127,12 +127,13 @@ impl EditedNineSlice {
     }
 
     /// The guides with guide `g` moved across its axis to document point `p`. The guide stays
-    /// within the art's box, and [`MIN_CENTER_BAND`] short of the opposite guide. A point that is
-    /// not finite leaves the guides as they are.
+    /// within the art's box, and [`MIN_CENTER_BAND`] short of the opposite guide, or where it is
+    /// when the guides are already closer than that. A point that is not finite leaves the guides
+    /// as they are.
     pub fn moved(&self, g: NineSliceGuide, p: Point) -> SymbolNineSlice {
         let (b, mut out) = (self.art, self.guides);
         let q = self.to_doc.inverse() * p;
-        let fit = |v: f64, other: f64, now: f64| if v.is_finite() { v.clamp(0.0, (1.0 - other - MIN_CENTER_BAND).max(0.0)) } else { now };
+        let fit = |v: f64, other: f64, now: f64| if v.is_finite() { v.clamp(0.0, (1.0 - other - MIN_CENTER_BAND).max(now)) } else { now };
         match g {
             NineSliceGuide::Left => out.left = fit((q.x - b.x0) / b.width(), out.right, out.left),
             NineSliceGuide::Right => out.right = fit((b.x1 - q.x) / b.width(), out.left, out.right),
@@ -1431,6 +1432,12 @@ mod tests {
         assert!((crossed.left - (0.75 - MIN_CENTER_BAND)).abs() < 1e-12, "{crossed:?}");
         assert!(SymbolNineSlice::new(crossed.left, crossed.top, crossed.right, crossed.bottom).is_some());
         assert_eq!(e.moved(NineSliceGuide::Top, Point::new(f64::NAN, f64::NAN)), q);
+        // Saved guides closer than the minimum center band keep their place when a drag does not
+        // move them closer.
+        let narrow = SymbolNineSlice::new(0.00005, 0.25, 0.9999, 0.25).unwrap();
+        let e = editing(Some(narrow), xf).edited_nine_slice().unwrap();
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(200.0, 50.0)), narrow);
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(0.0, 50.0)), SymbolNineSlice { left: 0.0, ..narrow });
         // A mirrored placement measures along the symbol's own axes.
         let e = editing(Some(SymbolNineSlice::default()), Affine::scale_non_uniform(-1.0, 1.0)).edited_nine_slice().unwrap();
         assert!(near_point(e.line(NineSliceGuide::Left).0, Point::new(-25.0, 0.0)));
