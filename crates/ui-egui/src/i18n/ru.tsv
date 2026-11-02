@@ -4620,6 +4620,7 @@ axis	Both	Оба
 @msg	`{w}` takes no operands	`{w}` не принимает операндов
 @msg	a wraparound group is inside a compound path	группа обтекания текстом находится внутри составного контура
 @msg	a path has too many points	в контуре слишком много точек
+@msg	it ends inside a group or compound path	они заканчиваются внутри группы или составного контура
 @msg	it ends inside a layer	они заканчиваются внутри слоя
 @msg	it ends inside a multi-layer mask	они заканчиваются внутри многослойной маски
 @msg	a multi-layer mask's operators are out of order	операторы многослойной маски идут в неправильном порядке

@@ -4775,6 +4775,7 @@ imageTrace	Outline	Körvonal
 @msg	invalid PDF setting: {0}	érvénytelen PDF-beállítás: {0}
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
 @msg	is not an image VectorCraft reads	nem olyan kép, amelyet a VectorCraft olvas
+@msg	it ends inside a group or compound path	egy csoporton vagy összetett útvonalon belül ér véget
 @msg	it ends inside a layer	egy rétegen belül ér véget
 @msg	it ends inside a multi-layer mask	egy többrétegű maszkon belül ér véget
 @msg	a multi-layer mask's operators are out of order	egy többrétegű maszk operátorai rossz sorrendben vannak

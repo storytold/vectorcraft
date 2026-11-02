@@ -4716,6 +4716,7 @@ imageTrace	Outline	Kontur
 @msg	`{w}` takes no operands	`{w}` nie przyjmuje operandów
 @msg	a wraparound group is inside a compound path	grupa oblewania tekstem jest wewnątrz ścieżki złożonej
 @msg	a path has too many points	ścieżka ma zbyt wiele punktów
+@msg	it ends inside a group or compound path	kończy się wewnątrz grupy lub ścieżki złożonej
 @msg	it ends inside a layer	kończy się wewnątrz warstwy
 @msg	it ends inside a multi-layer mask	kończy się wewnątrz maski wielowarstwowej
 @msg	a multi-layer mask's operators are out of order	operatory maski wielowarstwowej są w złej kolejności

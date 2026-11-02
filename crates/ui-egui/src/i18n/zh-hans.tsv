@@ -4044,6 +4044,7 @@ imageTrace	Outline	轮廓
 @msg	`{w}` takes no operands	`{w}` 不接受操作数
 @msg	a wraparound group is inside a compound path	文本绕排组位于复合路径内
 @msg	a path has too many points	某条路径的点过多
+@msg	it ends inside a group or compound path	它在编组或复合路径内部结束
 @msg	it ends inside a layer	它在图层内部结束
 @msg	it ends inside a multi-layer mask	它在跨图层蒙版内部结束
 @msg	a multi-layer mask's operators are out of order	跨图层蒙版的运算符顺序错误

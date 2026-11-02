@@ -4532,6 +4532,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{w}` takes no operands	το `{w}` δεν δέχεται τελεστέους
 @msg	a wraparound group is inside a compound path	μια ομάδα αναδίπλωσης κειμένου βρίσκεται μέσα σε σύνθετη διαδρομή
 @msg	a path has too many points	η διαδρομή έχει υπερβολικά πολλά σημεία
+@msg	it ends inside a group or compound path	τερματίζει μέσα σε ομάδα ή σύνθετη διαδρομή
 @msg	it ends inside a layer	τερματίζει μέσα σε επίπεδο
 @msg	it ends inside a multi-layer mask	τερματίζει μέσα σε μάσκα πολλών επιπέδων
 @msg	a multi-layer mask's operators are out of order	οι τελεστές μιας μάσκας πολλών επιπέδων είναι σε λάθος σειρά

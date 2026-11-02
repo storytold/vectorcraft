@@ -4890,6 +4890,7 @@ imageTrace	Outline	Obrys
 @msg	`{w}` takes no operands	`{w}` nepřijímá žádné operandy
 @msg	a wraparound group is inside a compound path	skupina obtékání textu je uvnitř složené cesty
 @msg	a path has too many points	cesta má příliš mnoho bodů
+@msg	it ends inside a group or compound path	končí uvnitř skupiny nebo složené cesty
 @msg	it ends inside a layer	končí uvnitř vrstvy
 @msg	it ends inside a multi-layer mask	končí uvnitř masky přes více vrstev
 @msg	a multi-layer mask's operators are out of order	operátory masky přes více vrstev jsou ve špatném pořadí
