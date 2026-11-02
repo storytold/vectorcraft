@@ -344,6 +344,26 @@ fn map_of(d: &Document, s: &Selection) -> BuilderMap {
 }
 
 #[test]
+fn shape_builder_keeps_a_line_under_an_edge_in_front_and_alt_click_there_takes_the_edge() {
+    // A line from (0, 50) to (200, 50), then a rectangle in front of it whose bottom edge lies
+    // along its left half.
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut s = Selection::default();
+    let line = PathData::new(vec![SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(200.0, 50.0)], false)]);
+    for (k, path) in [line, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0))].into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, Node::path(id, path, Appearance::default_art())).unwrap();
+        s.add(id);
+    }
+    let map = map_of(&d, &s);
+    let under = map.lines.iter().any(|(piece, b)| piece.key == 0 && b.x1 <= 100.5 && (b.y0 - 50.0).abs() < 1e-6 && b.width() > 99.0);
+    assert!(under, "the line keeps its piece under the rectangle's edge: {:?}", map.lines.iter().map(|(_, b)| b).collect::<Vec<_>>());
+    assert!(matches!(map.hit(Point::new(50.0, 51.0), Some(4.0)), Some(Hit::Edge(_))), "the rectangle in front is hit");
+    assert!(matches!(map.hit(Point::new(150.0, 51.0), Some(4.0)), Some(Hit::Line(_))));
+}
+
+#[test]
 fn shape_builder_erase_drag_across_an_overlap_narrower_than_twice_the_tolerance_touches_it() {
     let (d, s) = sliver_rects();
     let map = map_of(&d, &s);
