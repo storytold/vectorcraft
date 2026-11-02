@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Artboard, Background, ColorMode, Document, Unit};
 use vectorcraft_geom::{Point, Rect};
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

@@ -68,143 +68,8 @@ fn map_with(shapes: &[Shape], cover: bool, precision: f64) -> Option<Map> {
     if !crate::budget::sweep_fits(inputs.iter().map(|p| &p.0)) {
         return None;
     }
-    // The sweep can panic on rare near-degenerate input; that must never take the app down.
-    let sweep =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Topology::<Crossings>::from_paths(inputs.iter().map(|(p, i)| (p, *i)), eps)));
-    let top = sweep.ok()?.ok()?;
     let tidy = Tidy::keeping(precision, inputs.iter().map(|p| &p.0));
-
-    // The planar graph: vertices are the sweep's points, edges its segments. Points closer than
-    // the sweep's tolerance are one vertex (it can put a corner that lies on another path's edge
-    // a rounding error away from where it cuts that edge).
-    let positions = top.compute_positions();
-    let cell = 4.0 * eps;
-    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
-    let mut points: Vec<Point> = Vec::new();
-    let mut vertex_id = |p: Point| {
-        let (cx, cy) = ((p.x / cell).floor() as i64, (p.y / cell).floor() as i64);
-        let near = (cx - 1..=cx + 1)
-            .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
-            .filter_map(|k| grid.get(&k))
-            .flatten()
-            .copied()
-            .find(|&v| points.get(v).is_some_and(|q| q.distance(p) <= eps));
-        near.unwrap_or_else(|| {
-            points.push(p);
-            grid.entry((cx, cy)).or_default().push(points.len() - 1);
-            points.len() - 1
-        })
-    };
-    let mut pieces: Vec<(Vec<Seg>, [usize; 2])> = Vec::new();
-    for idx in top.segment_indices() {
-        let segs: Vec<Seg> = positions[idx].path.segments().map(to_seg).collect();
-        let ends = [vertex_id(top.point(idx.first_half()).to_kurbo()), vertex_id(top.point(idx.second_half()).to_kurbo())];
-        if !segs.is_empty() && ends[0] != ends[1] {
-            pieces.push((segs, ends));
-        }
-    }
-    // The sweep can cut the paths through one crossing at points more than `eps` apart, so copies of
-    // one edge (such as an open path's two passes) can end on different vertices. Pieces whose
-    // middles and ends lie within `tol` of each other are such copies, and their ends are one vertex.
-    let tol = 16.0 * eps;
-    let cell_of = |p: Point| ((p.x / tol).floor() as i64, (p.y / tol).floor() as i64);
-    let mids: Vec<Option<Point>> = pieces.iter().map(|(segs, _)| mid(segs)).collect();
-    let mut by_mid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
-    for (k, m) in mids.iter().enumerate() {
-        if let Some(m) = m {
-            by_mid.entry(cell_of(*m)).or_default().push(k);
-        }
-    }
-    let close = |a: usize, b: usize| matches!((points.get(a), points.get(b)), (Some(p), Some(q)) if p.distance(*q) <= tol);
-    let mut joined: Vec<usize> = (0..points.len()).collect();
-    // Where two passes of one path cross another (an open path's way there and back, coincident
-    // outlines), the sweep can also join its two cuts, a rounding error apart, with a stub of that
-    // length: a speck of a piece, and a vertex twice over. Such stubs are no edges: their ends are
-    // one vertex. The sweep moves points by a few `eps` at most up and down its frame; along a path
-    // that runs nearly level in it (where the height a cut is found at pins its position down
-    // least) a cut can slide further, here up to a small fraction of the precision results are
-    // tidied to, below which no edge is drawn anyway. A vertex's cluster stays within those bounds
-    // as a whole: a run of short, nearly level segments (a finely flattened or traced path) is real
-    // geometry, not one stub after another, and must not collapse into one vertex.
-    let (stub_y, stub_x) = (4.0 * eps, (DEFAULT_PRECISION / 16.0).max(4.0 * eps));
-    let mut extent: Vec<kurbo::Rect> = points.iter().map(|&p| kurbo::Rect::from_points(p, p)).collect();
-    for (segs, [v0, v1]) in &pieces {
-        let Some(&p0) = points.get(*v0) else { continue };
-        if !segs.iter().flat_map(|s| [s.c.p1, s.c.p2, s.c.p3]).all(|p| (p.y - p0.y).abs() <= stub_y && (p.x - p0.x).abs() <= stub_x) {
-            continue;
-        }
-        let (a, b) = (find(&mut joined, *v0), find(&mut joined, *v1));
-        let (Some(&ra), Some(&rb)) = (extent.get(a), extent.get(b)) else { continue };
-        let both = ra.union(rb);
-        if a == b || both.width() > stub_x || both.height() > stub_y {
-            continue;
-        }
-        let (root, child) = (a.min(b), a.max(b));
-        if let Some(p) = joined.get_mut(child) {
-            *p = root;
-        }
-        if let Some(r) = extent.get_mut(root) {
-            *r = both;
-        }
-    }
-    for (k, (_, [a, b])) in pieces.iter().enumerate() {
-        let Some(&Some(m)) = mids.get(k) else { continue };
-        let (cx, cy) = cell_of(m);
-        let others = (cx - 1..=cx + 1).flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y))).filter_map(|c| by_mid.get(&c)).flatten();
-        for &j in others.filter(|&&j| j > k) {
-            let (Some((_, [c, d])), Some(&Some(n))) = (pieces.get(j), mids.get(j)) else { continue };
-            if m.distance(n) > tol {
-                continue;
-            }
-            let pairs = if close(*a, *c) && close(*b, *d) {
-                [(*a, *c), (*b, *d)]
-            } else if close(*a, *d) && close(*b, *c) {
-                [(*a, *d), (*b, *c)]
-            } else {
-                continue;
-            };
-            for (x, y) in pairs {
-                let (x, y) = (find(&mut joined, x), find(&mut joined, y));
-                if let Some(r) = joined.get_mut(x.max(y)) {
-                    *r = x.min(y);
-                }
-            }
-        }
-    }
-    let mut edges: Vec<Edge> = Vec::new();
-    let mut between: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
-    let outlines = Outlines::new(&inputs, eps);
-    for (mut segs, ends) in pieces {
-        let ends = ends.map(|v| find(&mut joined, v));
-        let (Some(&p0), Some(&p1)) = (points.get(ends[0]), points.get(ends[1])) else { continue };
-        if ends[0] == ends[1] {
-            continue;
-        }
-        // Every edge at a vertex starts or ends exactly on it, so faces meeting there share its
-        // coordinates: merging them (a union) then cancels their common edge, which it can't when
-        // each face carries its own rounding of the corner (#893).
-        pin_ends(&mut segs, p0, p1);
-        let Some(source) = mid(&segs).and_then(|m| outlines.source_at(m)) else { continue };
-        // Coincident pieces the sweep left apart are one edge (the front-most input's).
-        let key = (ends[0].min(ends[1]), ends[0].max(ends[1]));
-        let here = mid(&segs);
-        let twin_of = between.get(&key).and_then(|v| {
-            v.iter().copied().find(|&e| {
-                let other = edges.get(e).and_then(|e| mid(&e.segs));
-                matches!((here, other), (Some(a), Some(b)) if a.distance(b) < precision)
-            })
-        });
-        if let Some(e) = twin_of {
-            if let Some(e) = edges.get_mut(e)
-                && source > e.source
-            {
-                e.source = source;
-            }
-            continue;
-        }
-        between.entry(key).or_default().push(edges.len());
-        edges.push(Edge { segs, ends, source });
-    }
+    let (points, edges) = sweep_graph(&inputs, eps, precision)?;
     let nv = points.len();
 
     // Half-edges leaving each vertex, sorted by direction; walking a face, the next half-edge is
@@ -321,6 +186,145 @@ fn map_with(shapes: &[Shape], cover: bool, precision: f64) -> Option<Map> {
     let mut anchors: Vec<Point> = shapes.iter().flat_map(|s| s.path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
     anchors.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
     Some(Map { edges, around, slot_of, faces, face_index, slivers, holes, face_holes, tidy, anchors, snap })
+}
+
+fn sweep_graph(inputs: &[(BezPath, usize)], eps: f64, precision: f64) -> Option<(Vec<Point>, Vec<Edge>)> {
+    // The sweep can panic on rare near-degenerate input; that must never take the app down.
+    let sweep =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Topology::<Crossings>::from_paths(inputs.iter().map(|(p, i)| (p, *i)), eps)));
+    let top = sweep.ok()?.ok()?;
+    // The planar graph: vertices are the sweep's points, edges its segments. Points closer than
+    // the sweep's tolerance are one vertex (it can put a corner that lies on another path's edge
+    // a rounding error away from where it cuts that edge).
+    let positions = top.compute_positions();
+    let cell = 4.0 * eps;
+    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    let mut points: Vec<Point> = Vec::new();
+    let mut vertex_id = |p: Point| {
+        let (cx, cy) = ((p.x / cell).floor() as i64, (p.y / cell).floor() as i64);
+        let near = (cx - 1..=cx + 1)
+            .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
+            .filter_map(|k| grid.get(&k))
+            .flatten()
+            .copied()
+            .find(|&v| points.get(v).is_some_and(|q| q.distance(p) <= eps));
+        near.unwrap_or_else(|| {
+            points.push(p);
+            grid.entry((cx, cy)).or_default().push(points.len() - 1);
+            points.len() - 1
+        })
+    };
+    let mut pieces: Vec<(Vec<Seg>, [usize; 2])> = Vec::new();
+    for idx in top.segment_indices() {
+        let segs: Vec<Seg> = positions[idx].path.segments().map(to_seg).collect();
+        let ends = [vertex_id(top.point(idx.first_half()).to_kurbo()), vertex_id(top.point(idx.second_half()).to_kurbo())];
+        if !segs.is_empty() && ends[0] != ends[1] {
+            pieces.push((segs, ends));
+        }
+    }
+    // The sweep can cut the paths through one crossing at points more than `eps` apart, so copies of
+    // one edge (such as an open path's two passes) can end on different vertices. Pieces whose
+    // middles and ends lie within `tol` of each other are such copies, and their ends are one vertex.
+    let tol = 16.0 * eps;
+    let cell_of = |p: Point| ((p.x / tol).floor() as i64, (p.y / tol).floor() as i64);
+    let mids: Vec<Option<Point>> = pieces.iter().map(|(segs, _)| mid(segs)).collect();
+    let mut by_mid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (k, m) in mids.iter().enumerate() {
+        if let Some(m) = m {
+            by_mid.entry(cell_of(*m)).or_default().push(k);
+        }
+    }
+    let close = |a: usize, b: usize| matches!((points.get(a), points.get(b)), (Some(p), Some(q)) if p.distance(*q) <= tol);
+    let mut joined: Vec<usize> = (0..points.len()).collect();
+    // Where two passes of one path cross another (an open path's way there and back, coincident
+    // outlines), the sweep can also join its two cuts, a rounding error apart, with a stub of that
+    // length: a speck of a piece, and a vertex twice over. Such stubs are no edges: their ends are
+    // one vertex. The sweep moves points by a few `eps` at most up and down its frame; along a path
+    // that runs nearly level in it (where the height a cut is found at pins its position down
+    // least) a cut can slide further, here up to a small fraction of the precision results are
+    // tidied to, below which no edge is drawn anyway. A vertex's cluster stays within those bounds
+    // as a whole: a run of short, nearly level segments (a finely flattened or traced path) is real
+    // geometry, not one stub after another, and must not collapse into one vertex.
+    let (stub_y, stub_x) = (4.0 * eps, (DEFAULT_PRECISION / 16.0).max(4.0 * eps));
+    let mut extent: Vec<kurbo::Rect> = points.iter().map(|&p| kurbo::Rect::from_points(p, p)).collect();
+    for (segs, [v0, v1]) in &pieces {
+        let Some(&p0) = points.get(*v0) else { continue };
+        if !segs.iter().flat_map(|s| [s.c.p1, s.c.p2, s.c.p3]).all(|p| (p.y - p0.y).abs() <= stub_y && (p.x - p0.x).abs() <= stub_x) {
+            continue;
+        }
+        let (a, b) = (find(&mut joined, *v0), find(&mut joined, *v1));
+        let (Some(&ra), Some(&rb)) = (extent.get(a), extent.get(b)) else { continue };
+        let both = ra.union(rb);
+        if a == b || both.width() > stub_x || both.height() > stub_y {
+            continue;
+        }
+        let (root, child) = (a.min(b), a.max(b));
+        if let Some(p) = joined.get_mut(child) {
+            *p = root;
+        }
+        if let Some(r) = extent.get_mut(root) {
+            *r = both;
+        }
+    }
+    for (k, (_, [a, b])) in pieces.iter().enumerate() {
+        let Some(&Some(m)) = mids.get(k) else { continue };
+        let (cx, cy) = cell_of(m);
+        let others = (cx - 1..=cx + 1).flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y))).filter_map(|c| by_mid.get(&c)).flatten();
+        for &j in others.filter(|&&j| j > k) {
+            let (Some((_, [c, d])), Some(&Some(n))) = (pieces.get(j), mids.get(j)) else { continue };
+            if m.distance(n) > tol {
+                continue;
+            }
+            let pairs = if close(*a, *c) && close(*b, *d) {
+                [(*a, *c), (*b, *d)]
+            } else if close(*a, *d) && close(*b, *c) {
+                [(*a, *d), (*b, *c)]
+            } else {
+                continue;
+            };
+            for (x, y) in pairs {
+                let (x, y) = (find(&mut joined, x), find(&mut joined, y));
+                if let Some(r) = joined.get_mut(x.max(y)) {
+                    *r = x.min(y);
+                }
+            }
+        }
+    }
+    let mut edges: Vec<Edge> = Vec::new();
+    let mut between: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+    let outlines = Outlines::new(inputs, eps);
+    for (mut segs, ends) in pieces {
+        let ends = ends.map(|v| find(&mut joined, v));
+        let (Some(&p0), Some(&p1)) = (points.get(ends[0]), points.get(ends[1])) else { continue };
+        if ends[0] == ends[1] {
+            continue;
+        }
+        // Every edge at a vertex starts or ends exactly on it, so faces meeting there share its
+        // coordinates: merging them (a union) then cancels their common edge, which it can't when
+        // each face carries its own rounding of the corner (#893).
+        pin_ends(&mut segs, p0, p1);
+        let Some(source) = mid(&segs).and_then(|m| outlines.source_at(m)) else { continue };
+        // Coincident pieces the sweep left apart are one edge (the front-most input's).
+        let key = (ends[0].min(ends[1]), ends[0].max(ends[1]));
+        let here = mid(&segs);
+        let twin_of = between.get(&key).and_then(|v| {
+            v.iter().copied().find(|&e| {
+                let other = edges.get(e).and_then(|e| mid(&e.segs));
+                matches!((here, other), (Some(a), Some(b)) if a.distance(b) < precision)
+            })
+        });
+        if let Some(e) = twin_of {
+            if let Some(e) = edges.get_mut(e)
+                && source > e.source
+            {
+                e.source = source;
+            }
+            continue;
+        }
+        between.entry(key).or_default().push(edges.len());
+        edges.push(Edge { segs, ends, source });
+    }
+    Some((points, edges))
 }
 
 impl Map {

@@ -236,7 +236,7 @@ fn art_bounds_take_in_the_effects_in_a_symbols_art() {
     let mut art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), black);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Box".into(), art: std::sync::Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Box".into(), art: std::sync::Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let xf = vectorcraft_geom::Affine::translate((20.0, 20.0));
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf })).unwrap();

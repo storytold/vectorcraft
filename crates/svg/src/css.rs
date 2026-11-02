@@ -567,8 +567,12 @@ impl Rules<'_> {
         }
     }
 
-    /// Type: its first character style's font, colour and spacing, its paragraph's alignment.
+    /// Type: its first character style's font, colour and spacing, its paragraph's alignment. The
+    /// font size is the em size the characters are drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn type_art(&mut self, n: &Node, t: &vectorcraft_doc::TextObject, art: &mut Art) {
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
+        let t = &*resolved;
         if matches!(t.kind, TextKind::OnPath { .. }) {
             art.unsupported("type on a path");
         }

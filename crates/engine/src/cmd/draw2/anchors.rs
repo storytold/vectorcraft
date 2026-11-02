@@ -1,5 +1,8 @@
 use super::common::{MAX_INPUT, path_kind, path_mut, point_entry, usize_opt, usize_req, within_input_bound};
-use super::*;
+use super::{
+    Anchor, BTreeSet, Beside, Color, Document, EngineError, Node, NodeId, NodeKind, Paint, PathData, Point, Result, Selection, Session, Value, Vec2,
+    add_look, bad, check_numbers, f64_or, id_param, json, number_or, ok, po, str_param, switch_or,
+};
 
 // ---------- Curvature ----------
 
@@ -106,13 +109,14 @@ pub(super) fn remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = usize_req(p, "anchor", C)?;
+    let curvature = switch_or(p, "curvature", false, C)?;
     let removed = s.edit("Delete Anchor Point", |d, sel| {
         let sp = path_mut(d, id)?.subpaths.get(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
         if ai >= sp.anchors.len() {
             return Err(EngineError::Other("no such anchor".into()));
         }
         let mut emptied = Beside::replacing(d, &[id]);
-        let removed = remove_anchors_of(d, sel, &mut emptied, id, [(si, ai)])?;
+        let removed = remove_anchors_of(d, sel, &mut emptied, id, [(si, ai)], curvature)?;
         emptied.finish(d)?;
         Ok(removed)
     })?;
@@ -138,7 +142,7 @@ pub(super) fn remove_anchors(s: &mut Session, _: &Value) -> Result<Value> {
             let shape: Vec<(usize, bool)> =
                 d.node(id).and_then(Node::path_data).map(|p| p.subpaths.iter().map(|sp| (sp.anchors.len(), sp.closed)).collect()).unwrap_or_default();
             let next = following_anchors(&shape, &anchors);
-            if remove_anchors_of(d, sel, &mut emptied, id, anchors)? {
+            if remove_anchors_of(d, sel, &mut emptied, id, anchors, false)? {
                 removed += 1;
             } else if !next.is_empty() {
                 // The next anchor along is selected, so the next Remove Anchor Points goes on from
@@ -177,14 +181,16 @@ fn following_anchors(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTr
 }
 
 /// Remove `anchors` (subpath, anchor) of path `id` without opening it, refitting the curve round
-/// each one. A subpath left with one anchor is removed, and a path left with no subpath is removed
-/// through `emptied`. True when the path went.
+/// each one, or with `curvature` re-curving it as the Curvature tool curves its points
+/// ([`vectorcraft_tools::draw2::curvature_remove`]). A subpath left with one anchor is removed,
+/// and a path left with no subpath is removed through `emptied`. True when the path went.
 fn remove_anchors_of(
     d: &mut Document,
     sel: &mut Selection,
     emptied: &mut Beside,
     id: NodeId,
     anchors: impl IntoIterator<Item = (usize, usize)>,
+    curvature: bool,
 ) -> Result<bool> {
     let mut anchors: Vec<(usize, usize)> = anchors.into_iter().collect();
     // The last first, so the indexes still to come stay valid.
@@ -193,7 +199,11 @@ fn remove_anchors_of(
     let path = path_mut(d, id)?;
     for (si, ai) in anchors {
         if let Some(sp) = path.subpaths.get_mut(si) {
-            po::remove_anchor(sp, ai);
+            if curvature {
+                vectorcraft_tools::draw2::curvature_remove(sp, ai);
+            } else {
+                po::remove_anchor(sp, ai);
+            }
         }
     }
     path.subpaths.retain(|sp| sp.anchors.len() >= 2);

@@ -90,6 +90,26 @@ fn parse_exception(entry: &str) -> (String, Exception) {
     (word, Exception::Only(points))
 }
 
+/// Exception points count chars of the lowercased word; lowercasing can add chars ('İ' becomes
+/// 'i' + U+0307), so map each point back to the char index in `word` it falls before. Points
+/// inside one char's lowercase expansion are dropped; a point at the end of the word is kept.
+fn lowercase_points_to_word(word: &str, pts: &[usize]) -> Vec<usize> {
+    let mut out = Vec::with_capacity(pts.len());
+    let mut lower = 0;
+    let mut len = 0;
+    for (i, ch) in word.chars().enumerate() {
+        if pts.contains(&lower) {
+            out.push(i);
+        }
+        lower += ch.to_lowercase().count();
+        len = i + 1;
+    }
+    if pts.contains(&lower) {
+        out.push(len);
+    }
+    out
+}
+
 fn normalize_word(word: &str) -> String {
     word.chars().flat_map(|c| c.to_lowercase()).collect()
 }
@@ -140,7 +160,7 @@ pub fn hyphen_points_with(word: &str, opts: &HyphenationOptions) -> Vec<usize> {
     if let Some(ex) = exception_for(word) {
         return match ex {
             Exception::Never => vec![],
-            Exception::Only(pts) => pts,
+            Exception::Only(pts) => lowercase_points_to_word(word, &pts),
         };
     }
     let c: Vec<char> = word.chars().collect();
@@ -241,6 +261,17 @@ mod tests {
         });
 
         assert_eq!(hyphen_points("typography"), pattern, "override cleared");
+    }
+
+    /// Exception break points are char indices into the word itself, even when lowercasing
+    /// changes the char count ('İ' lowercases to 'i' + U+0307).
+    #[test]
+    fn exception_points_index_the_original_word() {
+        with_exceptions("İs-tan-bul", || {
+            assert_eq!(hyphen_points("İstanbul"), vec![2, 5]);
+            assert_eq!(hyphenate_word("İstanbul"), "İs-tan-bul");
+            assert_eq!(hyphenate_word("İSTANBUL"), "İS-TAN-BUL");
+        });
     }
 
     /// The default Hyphenation options are the limits of [`hyphen_points`]: words of 6 letters or

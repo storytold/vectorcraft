@@ -1,5 +1,5 @@
 use super::nodes::MAX_DEPTH;
-use super::*;
+use super::{AfAlign, CharStyle, Cursor, Justify, Kind, Rect, TextKind, TextObject, VerticalAlign, af, shapes};
 
 /// The master page instances among `nodes` (also inside layers and groups): (master, first page,
 /// first master page, page count).

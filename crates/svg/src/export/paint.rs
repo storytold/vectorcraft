@@ -1,6 +1,10 @@
-use super::nodes::{MASK, doc_path};
+use super::nodes::{MASK, UNDECODED, doc_path};
 use super::output::sanitize_id;
-use super::*;
+use super::{
+    Affine, BezPath, BlendMode, Color, FillLayer, FillRule, GradientKind, GradientPaint, HashMap, ImageBlob, ImageMode, LineCap, LineJoin,
+    LinkedImage, Node, NodeKind, Paint, PathData, Point, Props, Rect, StrokeAlign, StrokeLayer, Writer, Written, base64_encode, blend_css, css,
+    fmt_num, stroke, xml_escape,
+};
 
 /// Image `b` as SVG viewers show it: PNG, JPEG, GIF, WebP and SVG as they are, other formats (a
 /// CMYK TIFF) as PNG.
@@ -34,6 +38,125 @@ pub(super) enum StrokePlan {
 }
 
 impl Writer<'_> {
+    pub(super) fn count_colorized_images(&mut self, art: &Node) {
+        art.walk(&mut |n| {
+            let NodeKind::Image(im) = &n.kind else { return };
+            let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
+                return;
+            }
+            let key = self.colorized_key(im, *color);
+            *self.colorized_counts.entry(key).or_default() += 1;
+        });
+    }
+
+    fn colorized_key(&self, im: &vectorcraft_doc::ImageObject, color: Color) -> super::ColorizedKey {
+        let rgb = color.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        (im.key.clone(), im.width, im.height, self.tiny().then_some(rgb))
+    }
+
+    /// Colorize the decoded gray pixels without changing the source blob. The white pixels of the
+    /// coverage image contribute their alpha to an alpha mask; Tiny uses the same alpha in RGBA.
+    pub(super) fn colorized_image(&mut self, n: &Node, im: &vectorcraft_doc::ImageObject, color: Color, blob: &ImageBlob) {
+        let key = self.colorized_key(im, color);
+        let rgb = color.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        let href = if let Some(href) = self.colorized_hrefs.get(&key) {
+            href.clone()
+        } else {
+            let Some((width, height, coverage)) = blob.coverage() else {
+                self.warn(UNDECODED);
+                return;
+            };
+            if u64::from(width)
+                .checked_mul(u64::from(height))
+                .and_then(|pixels| pixels.checked_mul(4))
+                .is_none_or(|bytes| bytes > vectorcraft_doc::MAX_RASTER_ALLOC)
+            {
+                self.warn(UNDECODED);
+                return;
+            }
+            let mut rgba = Vec::with_capacity(coverage.len().saturating_mul(4));
+            for alpha in coverage {
+                rgba.extend_from_slice(&if self.tiny() { [rgb[0], rgb[1], rgb[2], alpha] } else { [255, 255, 255, alpha] });
+            }
+            let Some(pixels) = image::RgbaImage::from_raw(width, height, rgba) else {
+                self.warn(UNDECODED);
+                return;
+            };
+            let mut png = Vec::new();
+            if pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+                self.warn(UNDECODED);
+                return;
+            }
+            let href = self.blob_href(&ImageBlob::png(png));
+            self.colorized_hrefs.insert(key.clone(), href.clone());
+            href
+        };
+        let shared = if self.opts.images == ImageMode::Embed && self.colorized_counts.get(&key).is_some_and(|count| *count > 1) {
+            if let Some(id) = self.shared_colorized.get(&key) {
+                Some(id.clone())
+            } else {
+                let id = self.fresh_id("colorize-image");
+                self.def(
+                    0,
+                    &format!(
+                        "<image id=\"{id}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+                        im.width,
+                        im.height,
+                        xml_escape(&href)
+                    ),
+                );
+                self.shared_colorized.insert(key, id.clone());
+                Some(id)
+            }
+        } else {
+            None
+        };
+        let id = self.id_attr(n);
+        let transform = self.matrix(self.xf * im.xf);
+        let outer = self.attrs(&css::transparency(n));
+        let sampling = if n.extras().pixelated { " image-rendering=\"pixelated\"" } else { "" };
+        if self.tiny() {
+            if let Some(shared) = shared {
+                self.line(&format!("<use{id} transform=\"{transform}\"{outer}{sampling} xlink:href=\"#{shared}\"/>"));
+            } else {
+                self.line(&format!(
+                    "<image{id} width=\"{}\" height=\"{}\" transform=\"{transform}\" preserveAspectRatio=\"none\"{outer}{sampling} xlink:href=\"{}\"/>",
+                    im.width, im.height, xml_escape(&href)
+                ));
+            }
+            return;
+        }
+        let mask = self.fresh_id("colorize-mask");
+        let size = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height));
+        let b = (self.xf * im.xf).transform_rect_bbox(size).inflate(1.0, 1.0);
+        let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+        self.def(1, &format!("<mask id=\"{mask}\" {MASK} mask-type=\"alpha\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"));
+        if let Some(shared) = shared {
+            self.def(2, &format!("<use transform=\"{transform}\"{sampling} xlink:href=\"#{shared}\"/>"));
+        } else {
+            self.def(
+                2,
+                &format!(
+                    "<image width=\"{}\" height=\"{}\" transform=\"{transform}\" preserveAspectRatio=\"none\"{sampling} xlink:href=\"{}\"/>",
+                    im.width,
+                    im.height,
+                    xml_escape(&href)
+                ),
+            );
+        }
+        self.def(1, "</mask>");
+        self.line(&format!("<g{id} mask=\"url(#{mask})\"{outer}>"));
+        self.depth += 1;
+        self.line(&format!("<g transform=\"{transform}\">"));
+        self.depth += 1;
+        self.line(&format!("<rect width=\"{}\" height=\"{}\" fill=\"{}\"{sampling}/>", im.width, im.height, color.to_hex()));
+        self.depth -= 1;
+        self.line("</g>");
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
     /// The `href` of image `im`: its file with [`ImageMode::Link`] (or when its pixels are
     /// missing), else its bytes. `None` when it has neither.
     pub(super) fn image_href(&mut self, im: &vectorcraft_doc::ImageObject) -> Option<String> {
@@ -48,10 +171,16 @@ impl Writer<'_> {
     /// Images drawn more than once in `art` (the pieces of a distorted image) go into the defs
     /// once; each piece then draws them with `<use>`.
     pub(super) fn share_images(&mut self, art: &Node) {
+        self.count_colorized_images(art);
         // Each image's count and its first piece, which shows what they all show.
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
         art.walk(&mut |c| {
             if let NodeKind::Image(im) = &c.kind {
+                if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+                    && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
+                {
+                    return;
+                }
                 seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
             }
         });
@@ -364,7 +493,9 @@ impl Writer<'_> {
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
     /// per effect, the first effect innermost (the reference app's stacking order). A drop shadow
-    /// with Darkness darkens the screen colors, in a CMYK document too. Photoshop-style
+    /// with Darkness can use a live filter for a uniform RGB source. Other source colors and
+    /// gradients require rendered-effect preparation by the caller to preserve their appearance.
+    /// Photoshop-style
     /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
     /// such objects into images first).
     pub(super) fn filtered(&mut self, n: &Node) {
@@ -399,6 +530,19 @@ impl Writer<'_> {
                 self.warn("SVG has no pixel effects such as Radial Blur, Smart Blur or Unsharp Mask: they are left out");
                 continue;
             }
+            if matches!(f, RasterFx::DropShadow { darkness: Some(_), .. }) {
+                let mut paints = n.appearance.items.iter().filter(|i| vectorcraft_effects::paints(i));
+                let uniform = paints.next().is_some_and(|i| {
+                    matches!(i.paint(), vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, swatch: None, .. })
+                }) && paints.next().is_none();
+                if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk
+                    || !vectorcraft_color::cms::active().rgb_is_srgb()
+                    || !uniform
+                    || !matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. } | vectorcraft_doc::NodeKind::Compound { .. })
+                {
+                    self.warn("Some Darkness shadows require rendered images to preserve source colors, profiles and gradients");
+                }
+            }
             let fid = self.fresh_id("filter");
             let region_attr = match region {
                 Some(r) => format!(
@@ -415,14 +559,14 @@ impl Writer<'_> {
                 format!("<feFlood flood-color=\"{}\" flood-opacity=\"{}\"/>", c.to_hex(), fmt_num(o as f64, 3))
             };
             let body = match f {
-                // Darkness: the object blurred and moved, each color channel times 1 − darkness.
+                // Subtract in sRGB before blur, preserving coverage and separate opacity.
                 RasterFx::DropShadow { opacity, dx, dy, blur, darkness: Some(darkness), .. } => format!(
-                    "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\"/><feComponentTransfer result=\"paint\"><feFuncR type=\"linear\" slope=\"{keep}\"/><feFuncG type=\"linear\" slope=\"{keep}\"/><feFuncB type=\"linear\" slope=\"{keep}\"/><feFuncA type=\"linear\" slope=\"{}\"/></feComponentTransfer><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
+                    "<feComponentTransfer in=\"SourceGraphic\"><feFuncR type=\"linear\" slope=\"1\" intercept=\"{offset}\"/><feFuncG type=\"linear\" slope=\"1\" intercept=\"{offset}\"/><feFuncB type=\"linear\" slope=\"1\" intercept=\"{offset}\"/></feComponentTransfer><feGaussianBlur stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\"/><feComponentTransfer result=\"paint\"><feFuncA type=\"linear\" slope=\"{}\"/></feComponentTransfer><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
                     sd(*blur),
                     self.num(*dx),
                     self.num(*dy),
                     fmt_num(*opacity as f64, 3),
-                    keep = fmt_num(1.0 - *darkness as f64, 3)
+                    offset = fmt_num(-f64::from(*darkness), 4)
                 ),
                 RasterFx::DropShadow { opacity, dx, dy, blur, color, .. } => format!(
                     "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\" result=\"shadow\"/>{}<feComposite in2=\"shadow\" operator=\"in\" result=\"paint\"/><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",

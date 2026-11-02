@@ -18,7 +18,10 @@ use vectorcraft_doc::recolor::{ColorVisitor, Reach, map_links, recolor_node};
 use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, NodeKind};
 
 use super::edit::selected_roots;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, check_numbers, cmd, color_value, f64_or, f64_req, has_selection, ids_param,
+    str_param, unique_name,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -27,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed}",
             has_selection,
             |s, p| recolor(s, p, "Invert Colors", &invert)
         ),
@@ -68,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Saturate…",
             ["Edit", "Edit Colors"],
             None,
-            "{intensity: -100..100 (%), fill?, stroke?, includeImages?, includePatterns?, ids?} scale saturation by (1 + intensity/100), reaching what edit.colors.invert does → {changed}",
+            "{intensity: -100..100 (%; a number outside the range counts as its nearest end), fill?, stroke?, includeImages?, includePatterns?, ids?} scale saturation by (1 + intensity/100), reaching what edit.colors.invert does → {changed}",
             has_selection,
             saturate
         ),
@@ -175,10 +178,10 @@ impl Scope {
 
 /// One recolouring pass, the colour visitor Edit Colors and Recolor Artwork share: `f` maps the
 /// solid colours and gradient stops of fills, strokes and text runs, gradient-mesh points, the
-/// pixels of embedded images and the art of patterns used as fills or strokes. A recoloured image
-/// becomes a new image and a recoloured pattern a new pattern swatch ("Dots 2"); the originals stay
-/// as they are for other objects. Colours that change lose their swatch link. Only nodes that
-/// change are kept as copies.
+/// pixels of embedded images without a colorize paint and the art of patterns used as fills or
+/// strokes. A recoloured image becomes a new image and a recoloured pattern a new pattern swatch
+/// ("Dots 2"); the originals stay as they are for other objects. Colours that change lose their
+/// swatch link. Only nodes that change are kept as copies.
 pub(crate) struct Recolor<'a> {
     f: &'a dyn Fn(Color) -> Color,
     /// Maps solid colours and gradient stops with their link and tint in place of `f`.
@@ -332,29 +335,43 @@ pub(crate) fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color)
     run_pass(s, p, label, Recolor::new(Scope::of(p), f))
 }
 
+/// [`recolor`] with solid colours and gradient stops mapped through `links`, with their swatch
+/// link and tint.
+pub(crate) fn recolor_links(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color, links: &LinkMap) -> Result<Value> {
+    run_pass(s, p, label, Recolor::with_links(Scope::of(p), f, links))
+}
+
 /// Run `pass` on the `ids` param's objects (default: the selection) as one undo step.
 fn run_pass(s: &mut Session, p: &Value, label: &str, pass: Recolor) -> Result<Value> {
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
         None => selected_roots(s)?,
     };
-    let n = s.edit(label, |d, _| Ok(pass.run(d, &ids)))?;
+    let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
+    let n = s.edit(label, |d, _| {
+        let n = pass.run(d, &ids);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
+        Ok(n)
+    })?;
     Ok(json!({ "changed": n }))
 }
 
 fn saturate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = (f64_or(p, "intensity", 0.0).clamp(-100.0, 100.0) / 100.0) as f32;
+    let i = (f64_req(p, "intensity", "edit.colors.saturate")?.clamp(-100.0, 100.0) / 100.0) as f32;
     recolor(s, p, "Saturate", &move |c| {
         let [h, sat, v] = c.to_hsb();
-        if sat <= 0.0 {
+        let to = (sat * (1.0 + i)).clamp(0.0, 1.0);
+        // A color whose saturation stays the same is returned as it is, so it keeps its swatch link.
+        if sat <= 0.0 || to == sat {
             return c;
         }
-        keep_model(c, Color::from_hsb(h, (sat * (1.0 + i)).clamp(0.0, 1.0), v))
+        keep_model(c, Color::from_hsb(h, to, v))
     })
 }
 
 fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colors.adjustBalance";
+    check_numbers(p, &["r", "g", "b", "c", "m", "y", "k", "gray", "tint"], C)?;
     let given = |keys: &[&str]| keys.iter().any(|k| p.get(*k).is_some());
     let mode = match str_param(p, "mode") {
         Some(m) => m.to_ascii_lowercase(),
@@ -445,6 +462,7 @@ fn filled_leaves(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 fn fill_color(n: &Node) -> Option<Color> {
     match &n.kind {
         NodeKind::Text(t) => t.first_style().fill.color(),
+        NodeKind::Image(_) => n.extras().colorize.as_deref().and_then(Paint::color).or_else(|| n.appearance.fill_paint().color()),
         NodeKind::Mesh(m) => {
             let k = m.points.len() as f32;
             let sum = m.points.iter().map(|p| p.color.to_rgb()).reduce(|a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]])?;
@@ -481,6 +499,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         BlendOrder::Vertical => "Blend Vertically",
     };
     let fills = Scope { fill: true, stroke: false, images: false, patterns: false };
+    let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let changed = s.edit(label, |d, _| {
         let mut changed = 0;
         for (i, id) in ids.iter().enumerate().take(n - 1).skip(1) {
@@ -498,6 +517,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
             };
             changed += Recolor::new(fills, &*f).run(d, &[*id]);
         }
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
         Ok(changed)
     })?;
     Ok(json!({ "changed": changed }))
@@ -511,6 +531,7 @@ fn harmony(s: &mut Session, p: &Value) -> Result<Value> {
         let ids: Vec<String> = Harmony::ALL.iter().map(|h| h.id()).collect();
         bad(C, format!("unknown rule `{rule}` ({})", ids.join("|")))
     })?;
+    check_numbers(p, &["steps", "amount"], C)?;
     let mut opts = GuideOptions::default();
     if let Some(n) = p.get("steps").and_then(Value::as_u64) {
         opts.steps = n.min(u32::MAX as u64) as u32;

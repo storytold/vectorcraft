@@ -93,6 +93,9 @@ fn window(xf: Affine, w: u16, h: u16, b: Rect, cols: u16, rows: u16) -> Option<[
 /// premultiplied pixmap, colours as `ink` paints them.
 pub(crate) fn rasterize(g: &GradientPaint, b: Rect, cols: u16, rows: u16, win: [Range<u16>; 2], ink: Ink) -> Pixmap {
     let (w, h) = (win[0].len() as u16, win[1].len() as u16);
+    let adjusted = ink.gradient(&g.gradient).map(|gradient| GradientPaint { gradient, ..g.clone() });
+    let ink = if adjusted.is_some() { ink.base() } else { ink };
+    let g = adjusted.as_ref().unwrap_or(g);
     let data = g
         .pixels_within(b, b, cols, rows, win, true, &|c| ink.rgb(c))
         .map(|[r, gr, bl, a]| {

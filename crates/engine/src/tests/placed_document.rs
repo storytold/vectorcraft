@@ -32,7 +32,7 @@ fn star_source(path: &str, title: &str) {
     d.title = title.into();
     let layer = d.layers[0].id;
     let art = Node::path(vectorcraft_doc::NodeId(900), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look(BLUE));
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Star".into(), art: std::sync::Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Star".into(), art: std::sync::Arc::new(art) });
     let id = d.alloc_id();
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Star".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
     write(path, &vectorcraft_format::save_file(&d));
@@ -45,9 +45,11 @@ fn look(c: [u8; 3]) -> Appearance {
 /// The active document gets a red symbol named `Star` of its own.
 fn parent_star(s: &mut Session) {
     let star = Node::path(vectorcraft_doc::NodeId(901), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look(RED));
-    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
-        .symbols
-        .push(vectorcraft_doc::Symbol { name: "Star".into(), art: std::sync::Arc::new(star) });
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).symbols.push(vectorcraft_doc::Symbol {
+        dynamic: false,
+        name: "Star".into(),
+        art: std::sync::Arc::new(star),
+    });
 }
 
 /// Place `path` (linked: the default), centred on the artboard → its id.

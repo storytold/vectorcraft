@@ -1,6 +1,9 @@
 use super::exporter::{GlyphLine, MAX_INLINE_DEPTH, in_range, norm, to_path, writable, xf};
 use super::images::embed;
-use super::*;
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Color, Cow, Embedding, Exporter, Fill, FillRule, Glyph, GlyphId, KrillaGlyph, ListMarker, Mark, Node,
+    NormalizedF32, Paint, Path, Rect, Shape, Size, Surface, TextLayout, TextObject, krilla, write,
+};
 
 impl Exporter<'_> {
     ///

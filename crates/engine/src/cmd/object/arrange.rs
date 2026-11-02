@@ -1,4 +1,5 @@
-use super::*;
+use super::align::choice;
+use super::{Document, EngineError, Node, NodeId, NodeKind, Result, Session, Value, bad, id_param, json, ok, selected_roots};
 
 pub(super) enum Arrange {
     Front,
@@ -128,7 +129,7 @@ pub(super) fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
                 {
                     *clipping = false;
                 }
-                c.opacity *= n.opacity;
+                // Each member keeps its own opacity; the group's opacity goes with the group.
                 new_sel.push(c.id);
                 out.push(c);
             }
@@ -142,7 +143,7 @@ pub(super) fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 pub(super) fn lock(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids = selected_lock_hide_roots(s)?;
     // With every selected object already locked, the document and its undo history stay as they
     // are, and the objects are deselected.
     let d = &s.doc()?.doc;
@@ -162,6 +163,16 @@ pub(super) fn lock(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// The selected objects ([`selected_roots`]) that Lock › Selection and Hide › Selection change: in
+/// isolation mode, only those inside the isolated object, where a path of the isolated compound
+/// path is an object of its own.
+fn selected_lock_hide_roots(s: &Session) -> Result<Vec<NodeId>> {
+    match crate::cmd::ordinary_isolation(s.doc()?) {
+        Some(root) => crate::cmd::edit::selected_roots_inside(s, root, false),
+        None => selected_roots(s),
+    }
+}
+
 fn collect_flag(d: &Document, f: impl Fn(&Node) -> bool) -> Vec<NodeId> {
     let mut v = vec![];
     d.walk(|n| {
@@ -172,8 +183,60 @@ fn collect_flag(d: &Document, f: impl Fn(&Node) -> bool) -> Vec<NodeId> {
     v
 }
 
-pub(super) fn unlock_all(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = collect_flag(&s.doc()?.doc, |n| n.locked);
+/// The objects that `f` picks for `object.unlockAll` and `object.showAll` (`cmd`): in the whole
+/// document, inside the isolated object in isolation mode, or with `scope: "group"` inside the
+/// groups that hold the selected objects (in isolation mode, only the objects of those groups
+/// that are inside the isolated object). A selected group is the group that holds its own
+/// members, and the objects of a group inside another such group are taken once. With
+/// `scope: "group"` and no selected object in a group, it returns an error.
+fn collect_flag_in_scope(s: &Session, cmd: &str, p: &Value, f: impl Fn(&Node) -> bool) -> Result<Vec<NodeId>> {
+    let st = s.doc()?;
+    let d = &st.doc;
+    if choice(p, cmd, "scope", &["document", "group"])? != Some("group") {
+        if let Some(root) = crate::cmd::ordinary_isolation(st) {
+            let mut ids = vec![];
+            if let Some(node) = d.node(root) {
+                for child in node.children().into_iter().flatten() {
+                    child.walk(&mut |n| {
+                        if !n.is_layer() && f(n) {
+                            ids.push(n.id);
+                        }
+                    });
+                }
+            }
+            return Ok(ids);
+        }
+        return Ok(collect_flag(d, f));
+    }
+    let is_group = |id: &NodeId| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. }));
+    let mut groups: Vec<NodeId> = st.selection.objects.iter().filter_map(|id| d.ancestry(*id)?.into_iter().rev().find(is_group)).collect();
+    groups.sort();
+    groups.dedup();
+    if groups.is_empty() {
+        return Err(EngineError::Other("nothing selected is in a group".into()));
+    }
+    let mut v = vec![];
+    for g in &groups {
+        if d.ancestry(*g).is_some_and(|a| a.iter().any(|up| up != g && groups.contains(up))) {
+            continue;
+        }
+        for c in d.node(*g).and_then(Node::children).into_iter().flatten() {
+            c.walk(&mut |n| {
+                if !n.is_layer() && f(n) {
+                    v.push(n.id)
+                }
+            });
+        }
+    }
+    // In isolation mode only the objects inside the isolated object are taken.
+    if let Some(root) = crate::cmd::ordinary_isolation(st) {
+        v.retain(|id| crate::cmd::inside_isolation(d, root, *id));
+    }
+    Ok(v)
+}
+
+pub(super) fn unlock_all(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = collect_flag_in_scope(s, "object.unlockAll", p, |n| n.locked)?;
     // With nothing locked, the document, the selection and the undo history stay as they are.
     if ids.is_empty() {
         return Ok(json!({ "count": 0 }));
@@ -191,7 +254,7 @@ pub(super) fn unlock_all(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 pub(super) fn hide(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids = selected_lock_hide_roots(s)?;
     // With every selected object already hidden, the document and its undo history stay as they
     // are, and the objects are deselected.
     let d = &s.doc()?.doc;
@@ -211,8 +274,8 @@ pub(super) fn hide(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
-pub(super) fn show_all(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = collect_flag(&s.doc()?.doc, |n| !n.visible);
+pub(super) fn show_all(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = collect_flag_in_scope(s, "object.showAll", p, |n| !n.visible)?;
     // With nothing hidden, the document, the selection and the undo history stay as they are.
     if ids.is_empty() {
         return Ok(json!({ "count": 0 }));
@@ -234,22 +297,34 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("object.isolate", "missing id"))?;
     let guides_locked = s.menu.guides_locked;
+    let (isolation, prev) = {
+        let st = s.doc_mut()?;
+        // Groups, layers and single objects (a path, a compound path, an image…); type isn't
+        // isolated: a double-click on it edits its text.
+        if matches!(st.doc.node(id).ok_or(EngineError::NoNode(id))?.kind, NodeKind::Text(_)) {
+            return Err(bad("object.isolate", "type objects can't be isolated"));
+        }
+        let isolation =
+            st.doc.node(id).filter(|n| n.extras().shaper.is_some()).and_then(|n| n.children()).and_then(|c| c.first()).map_or(id, |n| n.id);
+        // A hidden or locked object, one in a hidden or locked group or layer, and a guide path while
+        // Lock Guides is on aren't isolated either: a click with the Selection tool doesn't select them.
+        // A Shaper Group isolates its source group, so that group is the one checked.
+        if !st.doc.is_editable(isolation) {
+            return Err(bad("object.isolate", "the object is hidden or locked"));
+        }
+        if guides_locked && crate::is_guide_path(&st.doc, isolation) {
+            return Err(EngineError::Other("guides are locked".into()));
+        }
+        (isolation, st.isolation)
+    };
+    if let Some(prev) = prev
+        && prev != isolation
+    {
+        crate::cmd::settle_interaction(s)?;
+        let st = s.doc_mut()?;
+        crate::cmd::distortcmds::finish_edit_text(st, prev);
+    }
     let st = s.doc_mut()?;
-    // Groups, layers and single objects (a path, a compound path, an image…); type isn't
-    // isolated: a double-click on it edits its text.
-    if matches!(st.doc.node(id).ok_or(EngineError::NoNode(id))?.kind, NodeKind::Text(_)) {
-        return Err(bad("object.isolate", "type objects can't be isolated"));
-    }
-    let isolation = st.doc.node(id).filter(|n| n.extras().shaper.is_some()).and_then(|n| n.children()).and_then(|c| c.first()).map_or(id, |n| n.id);
-    // A hidden or locked object, one in a hidden or locked group or layer, and a guide path while
-    // Lock Guides is on aren't isolated either: a click with the Selection tool doesn't select them.
-    // A Shaper Group isolates its source group, so that group is the one checked.
-    if !st.doc.is_editable(isolation) {
-        return Err(bad("object.isolate", "the object is hidden or locked"));
-    }
-    if guides_locked && crate::is_guide_path(&st.doc, isolation) {
-        return Err(EngineError::Other("guides are locked".into()));
-    }
     st.isolation = Some(isolation);
     st.selection.clear();
     // New art on a locked artboard, now deselected, is protected.
@@ -258,10 +333,44 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-pub(super) fn exit_isolation(s: &mut Session, _: &Value) -> Result<Value> {
+pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
+    // Opacity mask editing, pattern editing and symbol editing isolate their editing layer. Leaving
+    // isolation mode then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's
+    // Done do. A group isolated inside the symbol's art goes back to the symbol's layer.
+    let st = s.doc()?;
+    if let Some(layer) = st.doc.symbol_edit.as_ref().map(|e| e.layer)
+        && let Some(inner) = st.isolation.filter(|i| *i != layer)
+    {
+        crate::cmd::settle_interaction(s)?;
+        let st = s.doc_mut()?;
+        crate::cmd::distortcmds::finish_edit_text(st, inner);
+        st.isolation = Some(layer);
+        st.selection.set([inner]);
+        st.revision += 1;
+        return ok();
+    }
+    let leave_mode: Option<fn(&mut Session, &Value) -> Result<Value>> = if st.doc.mask_edit.is_some() {
+        Some(crate::cmd::maskedit::leave)
+    } else if st.doc.pattern_edit.is_some() {
+        Some(crate::cmd::patterncmds::pattern_done)
+    } else if st.doc.symbol_edit.is_some() {
+        Some(crate::cmd::symboledit::leave)
+    } else {
+        None
+    };
+    if let Some(leave_mode) = leave_mode {
+        if let Some(i) = st.isolation {
+            crate::cmd::distortcmds::finish_edit_text(s.doc_mut()?, i);
+        }
+        leave_mode(s, p)?;
+        return ok();
+    }
     let menu = s.menu.clone();
-    let st = s.doc_mut()?;
-    if let Some(i) = st.isolation.take() {
+    let prev = s.active().and_then(|d| d.isolation);
+    if let Some(i) = prev {
+        crate::cmd::settle_interaction(s)?;
+        let st = s.doc_mut()?;
+        st.isolation = None;
         crate::cmd::distortcmds::finish_edit_text(st, i);
         let target = st.doc.parent_of(i).filter(|p| st.doc.node(*p).is_some_and(|n| n.extras().shaper.is_some())).unwrap_or(i);
         st.selection.set([target]);
@@ -270,6 +379,7 @@ pub(super) fn exit_isolation(s: &mut Session, _: &Value) -> Result<Value> {
         // The art on a locked artboard can't be selected.
         st.protect_locked_artboards(&[], &Default::default(), None);
     }
+    let st = s.doc_mut()?;
     st.revision += 1;
     ok()
 }

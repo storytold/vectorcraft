@@ -67,7 +67,7 @@ fn curves_roundtrip() {
     let n = Node::path(id, shapes::ellipse(Rect::new(20.0, 30.0, 120.0, 90.0)), Appearance::default_art());
     let d = doc_with(vec![n]);
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains(" C"), "{s}");
+    assert!(s.contains("<ellipse cx=\"70\" cy=\"60\" rx=\"50\" ry=\"30\""), "{s}");
     let r = roundtrip(&d);
     let a = art(&r);
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 120.0, 90.0), 0.01));
@@ -295,7 +295,7 @@ fn multiple_fills_stack_in_paint_order() {
     let green = s.find("#00ff00").unwrap();
     let blue = s.find("#0000ff").unwrap();
     assert!(red < green && green < blue, "{s}");
-    assert_eq!(s.matches("<path").count(), 3);
+    assert_eq!(s.matches("<rect").count(), 3);
     let r = import(&s).unwrap();
     let a = art(&r);
     assert!(matches!(a[0].kind, NodeKind::Group { .. }));
@@ -324,7 +324,7 @@ fn hidden_and_guides_omitted() {
     a.visible = false;
     let b = rect_node(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), Appearance::default_art());
     let s = export(&doc_with(vec![a, b]), &ExportOptions::default());
-    assert_eq!(s.matches("<path").count(), 1);
+    assert_eq!(s.matches("<rect").count(), 1);
     let r = import(&s).unwrap();
     assert_eq!(art(&r).len(), 1);
 }
@@ -537,9 +537,9 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(!s.contains("<?xml"));
     assert!(!s.contains(" width=\"200\""));
     assert!(s.contains("viewBox=\"0 0 200 100\""), "{s}");
-    assert!(s.contains("M10.12 20"), "{s}");
+    assert!(s.contains("<rect x=\"10.12\" y=\"20\""), "{s}");
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("M10.123 20"), "{s}");
+    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("<rect x=\"10.123\" y=\"20\""), "{s}");
     // All art bounds: the rectangle and half its 1 pt stroke (right-angle miters stay inside).
     let s = export(&d, &ExportOptions { artboard: None, ..Default::default() });
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");

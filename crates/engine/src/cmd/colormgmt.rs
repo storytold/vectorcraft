@@ -17,7 +17,9 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
 use vectorcraft_render::proof;
 
-use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use super::EngineError;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, color_value, has_doc, str_param, targets};
 
 /// `Document.unknown` key under which files before format v3 kept the assigned profiles (migrated
 /// to `Document::color_profiles` on load).
@@ -320,12 +322,16 @@ pub(crate) fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "changed": changed }))
 }
 
-/// Put `d` in colour `mode` and, with `convert`, convert every colour of its art, symbols,
-/// pattern tiles and swatches through the colour settings (`intent`, default: theirs) → how many
-/// colours of the art, symbols and patterns changed. Gray colours stay Gray (they print on the
-/// black plate in either mode); RGB greys are colours like any other and separate through the
-/// CMYK profile, unless `grays` puts them on the black plate. Lab colours (spot colour
-/// definitions) are device independent and fit either mode. Document Color Mode and
+/// Put `d` in color `mode` and, with `convert`, convert every color of its art (opacity masks
+/// included), symbols, graph designs, pattern tiles (the tile that pattern editing's Cancel puts
+/// back included), graphic styles, brushes (their art and a Hue Shift key color) and swatches
+/// through the color settings (`intent`, default: theirs) → how many colors of the art (opacity
+/// masks included), symbols, graph designs and pattern tiles changed; the colors of graphic
+/// styles and brushes convert without being counted. Gray colors stay
+/// Gray (they print on the black plate in either mode); RGB grays are colors like any other and
+/// separate through the CMYK profile, unless `grays` puts them on the black plate. Lab colors
+/// (spot color definitions) are device independent and fit either mode. A tint of a global
+/// swatch becomes the converted swatch's color at its tint. Document Color Mode and
 /// `document.open {colorMode}` both convert this way.
 pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode, convert: bool, intent: Option<Intent>, grays: Grays) -> usize {
     d.color_mode = mode;
@@ -342,18 +348,6 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
         Color::Rgb { .. } if k_only && Neutral::of(col).is_some() => c.convert(&c.convert(col, Model::Gray, intent), Model::Cmyk, intent),
         _ => c.convert(col, model, intent),
     };
-    let mut changed = 0usize;
-    let mut count = |col: &Color, _: proof::Link| {
-        let n = conv(col);
-        if n != *col {
-            changed += 1;
-        }
-        n
-    };
-    proof::map_document_colors(d, &mut count);
-    for a in d.patterns.iter_mut().flat_map(|p| &mut p.art) {
-        proof::map_node_colors(Arc::make_mut(a), &mut count);
-    }
     for sw in d.swatches_iter_mut() {
         match &mut sw.paint {
             Paint::Solid { color, .. } => *color = conv(color),
@@ -367,6 +361,73 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     }
     // Tints are their converted swatch's colour at their tint (exact ink percentages).
     let bases: Vec<(String, Color)> = d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
+    let changed = std::cell::Cell::new(0usize);
+    let mut count = |col: &Color, link: proof::Link| {
+        let n = match link.and_then(|(name, tint)| Some((bases.iter().find(|(n, _)| n == name)?, tint))) {
+            Some(((_, base), tint)) if tint < 1.0 => base.tinted(tint),
+            _ => conv(col),
+        };
+        if n != *col {
+            changed.set(changed.get() + 1);
+        }
+        n
+    };
+    let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|e| e.original.as_mut()));
+    for a in d
+        .layers
+        .iter_mut()
+        .chain(d.symbols.iter_mut().map(|s| &mut s.art))
+        .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
+        .chain(patterns.flat_map(|p| &mut p.art))
+    {
+        map_art_colors(Arc::make_mut(a), &mut count);
+    }
+    // The reply counts the colors of the document's art only, not those of the graphic styles and brushes.
+    let in_art = changed.get();
+    for it in d.graphic_styles.iter_mut().flat_map(|g| &mut g.appearance.items) {
+        let paint = match it {
+            vectorcraft_doc::AppearanceItem::Fill(l) => &mut l.paint,
+            vectorcraft_doc::AppearanceItem::Stroke(l) => &mut l.paint,
+        };
+        map_paint_colors(paint, &mut count);
+    }
+    // Convert each brush's art. A Hue Shift key color takes the converted color of the art color
+    // it matches (a tint of a global swatch included), so the key still matches the converted art;
+    // a key that matches no art color converts on its own.
+    let in_styles = changed.get();
+    let mut brushes = vectorcraft_brush::library(d);
+    let mut keys = false;
+    for b in &mut brushes {
+        let old_key = match b.kind.colorization() {
+            vectorcraft_brush::Colorization::HueShift { key } => Some(key),
+            _ => None,
+        };
+        let mut new_key = None;
+        for art in b.art_mut() {
+            map_art_colors(art, &mut |col: &Color, link: proof::Link| {
+                let n = count(col, link);
+                if new_key.is_none() && old_key.is_some_and(|k| matches_key(col, &k)) {
+                    new_key = Some(n);
+                }
+                n
+            });
+        }
+        let colorization = match &mut b.kind {
+            vectorcraft_brush::BrushKind::Art(a) => Some(&mut a.colorization),
+            vectorcraft_brush::BrushKind::Scatter(s) => Some(&mut s.colorization),
+            vectorcraft_brush::BrushKind::Pattern(p) => Some(&mut p.colorization),
+            vectorcraft_brush::BrushKind::Calligraphic(_) | vectorcraft_brush::BrushKind::Bristle(_) => None,
+        };
+        if let Some(vectorcraft_brush::Colorization::HueShift { key }) = colorization {
+            let n = new_key.unwrap_or_else(|| conv(key));
+            keys |= n != *key;
+            *key = n;
+        }
+    }
+    if keys || changed.get() > in_styles {
+        vectorcraft_brush::store(d, &brushes);
+    }
+    // This pass gives tint swatches their converted swatch's color at their tint; the passes above already did the same for the art's tints.
     d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
         Some((_, base)) if *tint < 1.0 => {
             *c = base.tinted(*tint);
@@ -374,7 +435,43 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
         }
         _ => false,
     });
-    changed
+    in_art
+}
+
+/// [`proof::map_node_colors`] over `n`'s subtree and the art of every opacity mask in it.
+fn map_art_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    proof::map_node_colors(n, f);
+    map_mask_colors(n, f);
+}
+
+fn map_mask_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+        map_art_colors(Arc::make_mut(&mut mask.art), f);
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch.iter_mut() {
+            map_mask_colors(Arc::make_mut(c), f);
+        }
+    }
+}
+
+/// Whether art color `c` is the Hue Shift key color `key`, with the tolerance the brush's
+/// colorization matches it with.
+fn matches_key(c: &Color, key: &Color) -> bool {
+    c.to_rgb().iter().zip(key.to_rgb()).map(|(a, b)| (a - b).abs()).sum::<f32>() < 0.02
+}
+
+/// `f` applied to a solid paint's color or a gradient's stop colors, given their swatch link.
+fn map_paint_colors(p: &mut Paint, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    match p {
+        Paint::Solid { color, swatch, tint } => *color = f(color, swatch.as_deref().map(|s| (s, *tint))),
+        Paint::Gradient(g) => {
+            for st in &mut g.gradient.stops {
+                st.color = f(&st.color, st.swatch.as_deref().map(|s| (s, st.tint)));
+            }
+        }
+        _ => {}
+    }
 }
 
 fn values(c: &Color) -> Vec<f32> {
@@ -548,6 +645,7 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if sw.spot != spot {
         let n = name.clone();
+        let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
         s.edit("Swatch Options", |d, _| {
             if let Some(w) = d.swatch_mut(&n) {
                 w.spot = spot;
@@ -555,7 +653,7 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
                     w.global = true;
                 }
             }
-            Ok(())
+            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))
         })?;
     }
     Ok(json!({"name": name, "spot": spot}))

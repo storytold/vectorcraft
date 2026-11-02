@@ -150,7 +150,7 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
         }
         match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {
             Some(first) => io::report_saved(app, first, &r),
-            None => app.status(format!("Downloaded {} file(s)", names.len())),
+            None => app.status(crate::i18n::msg_n(names.len() as u64, "Downloaded {n} file", "Downloaded {n} files", &[])),
         }
         return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }

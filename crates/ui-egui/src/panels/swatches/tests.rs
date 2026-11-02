@@ -133,6 +133,49 @@ fn modifier_clicks_select_several_swatches_and_groups() {
     assert_eq!(selected(&ctx), ["Grays"], "a plain click on a group selects it alone");
 }
 
+#[test]
+fn switching_documents_clears_the_swatch_range_anchor() {
+    let mut app = app();
+    let ctx = context();
+    click_tile(&mut app, &ctx, "White", Modifiers::NONE, 0.0);
+    assert_eq!(selected(&ctx), ["White"]);
+
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    frame(&mut app, &ctx, vec![], 1.0, show);
+    assert!(selected(&ctx).is_empty());
+
+    click_tile(&mut app, &ctx, "Black", Modifiers::SHIFT, 2.0);
+    assert_eq!(selected(&ctx), ["Black"]);
+}
+
+/// A color swatch or a recent color clicked in the panel becomes the Color Guide's base color
+/// (#3137); a modifier click only selects.
+#[test]
+fn a_clicked_color_swatch_becomes_the_color_guides_base() {
+    let mut app = app();
+    let ctx = context();
+    app.ui.color_guide_base = Some(Color::WHITE);
+    click_tile(&mut app, &ctx, "Red", Modifiers::NONE, 0.0);
+    let base = |app: &VectorcraftApp| crate::panels::color_guide::base_color(app).to_hex();
+    assert_eq!(base(&app), "#ed1c24");
+    click_tile(&mut app, &ctx, "Amber", Modifiers::SHIFT, 2.0);
+    assert_eq!(base(&app), "#ed1c24", "a modifier click only selects");
+    // A recent color: the panel's first recent chip.
+    app.run("paint.setFill", json!({"color": "#2050a0"})).unwrap();
+    app.ui.color_guide_base = Some(Color::WHITE);
+    let mut chip = None;
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(4.0), screen_rect, ..Default::default() }, |ui| {
+        show(&mut app, ui);
+        chip = ctx.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect.center());
+    });
+    out.textures_delta.clear();
+    let at = chip.expect("the recent chip is drawn");
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true), button(false)], 5.0, show);
+    assert_eq!(base(&app), "#2050a0");
+}
+
 /// The hex colors of the stops of the selection's gradient fill, and its stroke's color.
 fn stops_and_stroke(app: &VectorcraftApp) -> (Vec<String>, String) {
     let (fill, stroke) = crate::panels::current_paints(app);
@@ -220,6 +263,28 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     delete(&mut app, vec!["Orange".into()], true);
     assert!(app.ui.dialog.is_none() && app.session.doc().unwrap().doc.swatch("Orange").is_none());
     assert_eq!(deletable(&["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+}
+
+/// The prompt for several swatches and groups gives the form the language's plural rule picks for the count.
+#[test]
+fn deleting_several_swatches_uses_each_count_form() {
+    let mut app = app();
+    let mut prompt = |code: &str, count: usize| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        let names: Vec<String> = (1..=count).map(|n| format!("Swatch {n}")).collect();
+        delete(&mut app, names, false);
+        let message = app.ui.dialog.as_ref().map(|d| d.str("message"));
+        crate::dialogs::cancel(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        message
+    };
+    assert_eq!(prompt("pl", 2), Some("Usunąć 2 próbki i grupy?".to_string()));
+    assert_eq!(prompt("pl", 5), Some("Usunąć 5 próbek i grup?".to_string()));
+    assert_eq!(prompt("uk", 21), Some("Видалити зразки та групи (21)?".to_string()));
+    assert_eq!(prompt("ru", 21), Some("Удалить образцы и группы (21)?".to_string()));
+    assert_eq!(prompt("bs", 21), Some("Izbrisati uzorke boja i grupe (21)?".to_string()));
+    assert_eq!(prompt("uk", 22), Some("Видалити 22 зразки та групи?".to_string()));
+    assert_eq!(prompt("uk", 25), Some("Видалити 25 зразків і груп?".to_string()));
 }
 
 #[test]

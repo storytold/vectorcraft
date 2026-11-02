@@ -42,9 +42,14 @@ fn placed(s: &mut Session, path: &Path) -> u64 {
     place(s, &path.to_string_lossy()).0
 }
 
-/// `links.findFiles {}` once the search ended (10 seconds at most).
+/// How long a test waits for a search to end or to read a file. The wait only ends a test whose
+/// search never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// `links.findFiles {}` once the search ended ([`WAIT`] at most).
 fn finished(s: &mut Session) -> Value {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     loop {
         let r = s.execute("links.findFiles", &json!({})).unwrap();
         if r["state"] != "searching" || Instant::now() > until {
@@ -206,7 +211,7 @@ fn stop_ends_only_the_search_it_names() {
     let search = findfiles::start(root.clone(), s.search_rules.clone(), Limits::default(), 1, 2, Arc::new(Blocked(Mutex::new(rx)))).unwrap();
     let links = vec![Sought { name: "a.png".into(), path: "/gone/a.png".into(), ids: vec![], size: None, hash: None }];
     s.link_search = Some(LinkSearch { id: 7, folder: root.to_string_lossy().into_owned(), links, sizes: Arc::default(), search });
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s.execute("links.findFiles", &json!({})).unwrap()["searched"]["read"] != 1 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }

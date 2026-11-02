@@ -2,7 +2,10 @@ use super::axis::LABEL_SIZE;
 use super::columns::{Allowance, ColumnArt};
 use super::markers::fit_design;
 use super::series::{default_series_paint, series_marks};
-use super::*;
+use super::{
+    Affine, Appearance, Arc, BezPath, CharStyle, Color, Document, GraphSpec, Justify, Node, NodeId, NodeKind, Paint, PathData, Point, Rect,
+    TextObject, refresh_bounds, shapes,
+};
 
 pub(super) struct Gen<'a> {
     pub(super) d: &'a mut Document,

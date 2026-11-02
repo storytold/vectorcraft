@@ -131,7 +131,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         ui.horizontal(|ui| {
             widgets::label_row(ui, tl!("Scale:"), 96.0, |ui| {
                 let mut scale = f.get("scale").and_then(Value::as_str).unwrap_or_default().to_owned();
-                let changed = ui.name_inputs(tl!("Scale"), |ui| ui.add(egui::TextEdit::singleline(&mut scale).desired_width(72.0))).changed();
+                let changed = ui
+                    .name_inputs(tl!("Scale"), |ui| {
+                        ui.add(egui::TextEdit::singleline(&mut scale).align(egui::Align2::LEFT_CENTER).desired_width(72.0))
+                    })
+                    .changed();
                 if changed {
                     f.insert("scale".into(), json!(scale));
                 }

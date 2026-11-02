@@ -1,4 +1,4 @@
-use super::*;
+use super::{Paint, Response, Stroke, StrokeKind, Tokens, Ui, Vec2};
 
 /// What panels drag onto art and onto each other. One payload type, so the canvas has one drop
 /// handler for all of them (`canvas::panel_drop`); a chip of a dragged paint follows the pointer.

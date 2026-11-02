@@ -1,6 +1,6 @@
 use super::lookup::{drawn_outlines, faces_of, shape_builder_shapes, shapes_for};
 use super::map::{BuilderMap, sorted_roots};
-use super::*;
+use super::{Arc, Document, NodeId, PathData, Point, Receiver, ToolContext, TryRecvError, po};
 
 /// What a [`RegionCache`] map was built for: the document's address and revision, the selected ids
 /// and whether filled open paths count as closed.

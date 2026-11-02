@@ -275,6 +275,30 @@ fn open_set_hex_and_confirm_fills() {
     assert_eq!(crate::panels::current_paints(&app).0.color(), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
 }
 
+/// OK makes the picked fill or stroke color the Color Guide's base color (#3137); Cancel and a
+/// color picked for an artboard leave the base as it is.
+#[test]
+fn ok_makes_the_picked_color_the_color_guides_base() {
+    let mut app = app();
+    let base = |app: &VectorcraftApp| crate::panels::color_guide::base_color(app).to_hex();
+    app.ui.color_guide_base = Some(Color::WHITE);
+    app.run("ui.colorPicker", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("2050a0"));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(base(&app), "#2050a0");
+    app.run("ui.colorPicker", json!({"stroke": true})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("a02050"));
+    frame(&mut app);
+    super::super::cancel(&mut app);
+    assert_eq!(base(&app), "#2050a0", "Cancel keeps the base");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("00ff00"));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(base(&app), "#2050a0", "an artboard's color leaves the base");
+}
+
 /// #1692: Tab goes through one color model's fields before the next: H, S, B, then R, G, B, the
 /// hex field, then L, a, b, then C, M, Y, K. Each Lab or CMYK field is level with the field on
 /// its left.

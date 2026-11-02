@@ -1,7 +1,13 @@
 use super::encoding::{
     Ink, average, direct_fill, direct_stroke, finite, font_of, invertible, latin_string, lost_attributes, segment_point, unit, writable,
 };
-use super::*;
+use super::{
+    Affine, AnchorKind, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, LineCap, LineJoin, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS,
+    Paint, ParaDirection, ParaStyle, PathData, Point, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY,
+    TYPE, TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, latin, ps, stroke,
+};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -272,7 +278,7 @@ impl<'a> Writer<'a> {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
                 {
-                    let mut art = (*sym.art).clone();
+                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
                     art.transform(*xf, false);
                     art.visible = true;
                     self.nest += 1;
@@ -713,11 +719,15 @@ impl<'a> Writer<'a> {
 
     // ---------- type ----------
 
-    /// Type: a text object when the format can hold it as text, else its outlines.
+    /// Type: a text object when the format can hold it as text, else its outlines. A run whose
+    /// font size measures a height other than the em box is written at the em size it is drawn
+    /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text(&mut self, t: &TextObject) {
         if !invertible(t.xf) {
             return;
         }
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
+        let t = &*resolved;
         if !self.outline_text {
             if writable(t) {
                 return self.text_object(t);
@@ -843,7 +853,8 @@ impl<'a> Writer<'a> {
         ps::push_num(&mut self.body, finite(st.tracking, 0.0));
         self.line(" Tt");
         self.line(if st.kerning.is_none() { "1 TA" } else { "0 TA" });
-        ps::push_nums(&mut self.body, &[finite(st.effective_leading(), size * 1.2), finite(p.space_before, 0.0)]);
+        let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
+        ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
     }
 

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Write, latin};
 
 /// The setup's fonts (§3.1, §3.3): `%%IncludeFont` for each, the encoding strings are in (`TE`),
 /// and each font re-encoded to it as `_name` (`TZ`; a TrueType font takes the encoding as its own,

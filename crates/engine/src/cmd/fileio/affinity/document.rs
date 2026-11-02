@@ -1,7 +1,7 @@
 use super::layout::{master_instances, master_prefix, page_masters};
 use super::master_copies::{CopyCost, MAX_MASTER_COPIES, MasterPart, copy_cost};
 use super::nodes::rect_of;
-use super::*;
+use super::{Affine, Arc, Artboard, Blend, Builder, Document, Kind, Node, NodeKind, Result, af, err};
 
 impl Builder {
     pub(super) fn new(k: f64) -> Self {

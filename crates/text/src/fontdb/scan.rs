@@ -4,7 +4,7 @@ use super::dirs::sfnt_of;
 use super::face::{MAX_AXES, MAX_INSTANCES};
 use super::names::{all_names, name, norm};
 use super::traits::{FaceKeys, FaceStyle, FontTraits, face_styles};
-use super::*;
+use super::{FileRef, MetadataProvider, Path, StringId, Tag};
 
 /// The named instances of a variable font face (its `fvar` table) as styles of the face's family,
 /// named by their subfamily names, without the default instance (the face itself) and without

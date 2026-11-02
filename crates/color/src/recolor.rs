@@ -69,7 +69,7 @@ impl fmt::Display for ColorKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Components are hundredths of the written units: exact with two decimals.
         let num = |q: i32| {
-            let s = format!("{}{}.{:02}", if q < 0 { "-" } else { "" }, q.abs() / 100, q.abs() % 100);
+            let s = format!("{}{}.{:02}", if q < 0 { "-" } else { "" }, q.unsigned_abs() / 100, q.unsigned_abs() % 100);
             s.trim_end_matches('0').trim_end_matches('.').to_string()
         };
         let [a, b, c, k] = self.v.map(num);
@@ -460,6 +460,14 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn key_display_survives_saturated_lab() {
+        for text in ["lab 50 -1e20 0", "lab 50 0 -1e20", "lab 50 1e20 0"] {
+            let k = ColorKey::parse(text).unwrap();
+            assert_eq!(ColorKey::parse(&k.to_string()), Some(k), "{text}");
+        }
+    }
 
     fn close(a: Color, b: Color) -> bool {
         let v = |c: Color| match c {

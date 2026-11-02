@@ -1,9 +1,11 @@
-//! Symbol Options: name, Export Type (Graphic or Movie Clip) and Registration for a new symbol
+//! Symbol Options: name, Export Type (Graphic or Movie Clip), Symbol Type (Dynamic or Static) and
+//! Registration for a new symbol
 //! from the selection (`symbol.new`), or for the current symbol in the Symbols panel
 //! (`symbol.options`).
 //!
 //! Fields: `name`, `nineSlice` (bool) with `sliceLeft` / `sliceTop` / `sliceRight` / `sliceBottom`
-//! (percent of the symbol's size), `exportType` (`movieClip` | `graphic`), `registration` (0..8, the 9-point grid;
+//! (percent of the symbol's size), `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
+//! `static`; a new symbol is dynamic), `registration` (0..8, the 9-point grid;
 //! 4 = centre), `__edit` (true when editing an existing symbol). Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
@@ -38,7 +40,7 @@ fn slice_params(d: &Dialog) -> Value {
     if d.bool("nineSlice") { json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] }) } else { json!({ "nineSlice": false }) }
 }
 
-/// Export Type choices: (value, label). Illustrator's default is Movie Clip.
+/// Export Type choices: (value, label). The reference app's default is Movie Clip.
 const EXPORT_TYPES: [(&str, &str); 2] = [("movieClip", "Movie Clip"), ("graphic", "Graphic")];
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Symbol Options").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
@@ -50,7 +52,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         return Err("nothing selected".into());
     }
     let name = st.doc.unique_symbol_name("New Symbol");
-    let mut fields = json!({ "name": name, "exportType": "movieClip", "registration": 4, "__edit": false });
+    let mut fields = json!({ "name": name, "exportType": "movieClip", "type": "dynamic", "registration": 4, "__edit": false });
     if let Some(o) = fields.as_object_mut() {
         o.extend(slice_fields(None));
     }
@@ -76,9 +78,11 @@ pub fn open_edit(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, 
     };
     let export = st.doc.symbol_export_type(&name).id();
     let registration = st.doc.symbol_registration(&name).0;
+    let kind = if st.doc.symbols.iter().any(|s| s.name == name && s.dynamic) { "dynamic" } else { "static" };
     let mut fields = json!({
         "name": name,
         "exportType": export,
+        "type": kind,
         "registration": registration,
         "__edit": true,
         "__from": name,
@@ -102,6 +106,17 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         if let Some((value, _)) = widgets::dropdown(ui, "symbol-export-type", shown, &labels, 190.0).and_then(|i| EXPORT_TYPES.get(i)) {
             d.fields.insert("exportType".into(), json!(value));
         }
+        ui.end_row();
+        label(ui, tl!("Symbol Type:"));
+        // A dynamic symbol's instances may change the appearance of parts of its art and stay linked.
+        ui.horizontal(|ui| {
+            let cur = d.str("type");
+            for (value, text) in [("dynamic", tl!("Dynamic Symbol")), ("static", tl!("Static Symbol"))] {
+                if widgets::radio(ui, text, cur == value, true) {
+                    d.fields.insert("type".into(), json!(value));
+                }
+            }
+        });
         ui.end_row();
         label(ui, tl!("Registration:"));
         let cur = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4) as usize;
@@ -134,18 +149,19 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         return Err("name is empty".into());
     }
     let export = d.str("exportType");
+    let kind = d.str("type");
     let registration = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4);
     let edit = d.fields.get("__edit").and_then(Value::as_bool).unwrap_or(false);
     let r = if edit {
         let from = d.fields.get("__from").and_then(Value::as_str).unwrap_or(name);
-        let mut params = json!({ "name": from, "exportType": export, "registration": registration });
+        let mut params = json!({ "name": from, "exportType": export, "type": kind, "registration": registration });
         merge(&mut params, slice_params(d));
         if from != name {
             params["newName"] = json!(name);
         }
         app.run("symbol.options", params)
     } else {
-        let mut params = json!({ "name": name, "exportType": export, "registration": registration });
+        let mut params = json!({ "name": name, "exportType": export, "type": kind, "registration": registration });
         merge(&mut params, slice_params(d));
         app.run("symbol.new", params)
     };

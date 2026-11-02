@@ -699,6 +699,64 @@ impl<'s> Lexer<'s> {
     }
 }
 
+impl<'s> Lexer<'s> {
+    /// Update expression, statement and nesting state after reading a significant token.
+    fn update_context(&mut self, kind: T, text: &str) {
+        self.line_start = false;
+        // A name after `.`, `..`, `.@` or `::` is a property's, also when it is a keyword: no
+        // expression or statement starts after it.
+        let property = kind == T::Ident && self.member;
+        // After the `)` of a condition comes a statement, which may start with a regular
+        // expression or an XML literal.
+        let condition = kind == T::Punct && self.paren(text);
+        // A statement may also start after the `}` of a block. After the `}` of an object
+        // literal or of a function expression's body, `/` divides.
+        let brace = if kind == T::Punct { self.brace(text) } else { None };
+        self.expr = condition
+            || match (text, brace) {
+                ("}", Some(brace)) => brace == Brace::Block,
+                _ => !property && expr_after(kind, text),
+            };
+        if kind == T::Ident && !property && text == "function" {
+            self.function = Some(!self.stmt);
+        }
+        if kind == T::Punct {
+            match text {
+                "(" | "[" | "{" => self.open_level(),
+                ")" | "]" | "}" => self.close_level(),
+                _ => {}
+            }
+        }
+        let ternary = kind == T::Punct && self.conditional(text);
+        // A statement may start inside a block or a function's body, after `;`, `=>`, a
+        // preprocessor line, `else`, `do`, `try` and `finally`, and after the `:` of a label or
+        // a `case` (not a conditional's, and outside an object literal).
+        self.stmt = condition
+            || match (text, brace) {
+                ("{", Some(brace)) => brace != Brace::Object,
+                ("}", Some(brace)) => brace == Brace::Block,
+                _ => false,
+            }
+            || kind == T::Directive
+            || (kind == T::Punct && matches!(text, ";" | "=>"))
+            || (kind == T::Punct && text == ":" && !ternary && self.braces.last() != Some(&Brace::Object))
+            || (kind == T::Ident && !property && matches!(text, "else" | "do" | "try" | "finally"));
+        self.cond = kind == T::Ident && !property && (matches!(text, "if" | "while" | "for" | "with") || (text == "each" && self.cond));
+        self.restricted = kind == T::Ident && !property && matches!(text, "return" | "throw" | "break" | "continue");
+        self.member = kind == T::Punct && matches!(text, "." | ".." | ".@" | "::");
+        // The braces inside the code of an XML literal.
+        if kind == T::Punct
+            && let Some(Level::Code { braces }) = self.xml.last_mut()
+        {
+            match text {
+                "{" => *braces = braces.saturating_add(1),
+                "}" => *braces = braces.saturating_sub(1),
+                _ => {}
+            }
+        }
+    }
+}
+
 impl<'s> Iterator for Lexer<'s> {
     type Item = Token<'s>;
 
@@ -789,60 +847,7 @@ impl<'s> Iterator for Lexer<'s> {
                     self.line_ended();
                 }
             }
-            _ => {
-                self.line_start = false;
-                // A name after `.`, `..`, `.@` or `::` is a property's, also when it is a keyword: no
-                // expression or statement starts after it.
-                let property = kind == T::Ident && self.member;
-                // After the `)` of a condition comes a statement, which may start with a regular
-                // expression or an XML literal.
-                let condition = kind == T::Punct && self.paren(text);
-                // A statement may also start after the `}` of a block. After the `}` of an object
-                // literal or of a function expression's body, `/` divides.
-                let brace = if kind == T::Punct { self.brace(text) } else { None };
-                self.expr = condition
-                    || match (text, brace) {
-                        ("}", Some(brace)) => brace == Brace::Block,
-                        _ => !property && expr_after(kind, text),
-                    };
-                if kind == T::Ident && !property && text == "function" {
-                    self.function = Some(!self.stmt);
-                }
-                if kind == T::Punct {
-                    match text {
-                        "(" | "[" | "{" => self.open_level(),
-                        ")" | "]" | "}" => self.close_level(),
-                        _ => {}
-                    }
-                }
-                let ternary = kind == T::Punct && self.conditional(text);
-                // A statement may start inside a block or a function's body, after `;`, `=>`, a
-                // preprocessor line, `else`, `do`, `try` and `finally`, and after the `:` of a label or
-                // a `case` (not a conditional's, and outside an object literal).
-                self.stmt = condition
-                    || match (text, brace) {
-                        ("{", Some(brace)) => brace != Brace::Object,
-                        ("}", Some(brace)) => brace == Brace::Block,
-                        _ => false,
-                    }
-                    || kind == T::Directive
-                    || (kind == T::Punct && matches!(text, ";" | "=>"))
-                    || (kind == T::Punct && text == ":" && !ternary && self.braces.last() != Some(&Brace::Object))
-                    || (kind == T::Ident && !property && matches!(text, "else" | "do" | "try" | "finally"));
-                self.cond = kind == T::Ident && !property && (matches!(text, "if" | "while" | "for" | "with") || (text == "each" && self.cond));
-                self.restricted = kind == T::Ident && !property && matches!(text, "return" | "throw" | "break" | "continue");
-                self.member = kind == T::Punct && matches!(text, "." | ".." | ".@" | "::");
-                // The braces inside the code of an XML literal.
-                if kind == T::Punct
-                    && let Some(Level::Code { braces }) = self.xml.last_mut()
-                {
-                    match text {
-                        "{" => *braces = braces.saturating_add(1),
-                        "}" => *braces = braces.saturating_sub(1),
-                        _ => {}
-                    }
-                }
-            }
+            _ => self.update_context(kind, text),
         }
         Some(Token { kind, text, line, problem, stmt, expr, start })
     }

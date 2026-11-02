@@ -1,5 +1,5 @@
 use super::labels::{Role, label_style};
-use super::*;
+use super::{CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
 
 // ---------- generation ----------
 
