@@ -20,10 +20,11 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 ///
 /// Manual (Character panel menu › Tate-chu-yoko): any characters marked `tateChuYoko`, including
 /// one character, letters and numbers longer than three digits. Marked characters are taken
-/// before the automatic digit rule.
+/// before the automatic digit rule. A marked block moves by the Tate-chu-yoko Settings Up/Down
+/// and Left/Right of its first character; an automatic block does not move.
 /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
-pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, bool)) {
-    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).1).collect();
+pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyle) {
+    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).marked).collect();
     let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
     let mut i = 0;
     while i < g.len() {
@@ -32,8 +33,8 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, b
             while manual.get(end).copied().unwrap_or(false) {
                 end += 1;
             }
-            let em = style(&g[i]).0;
-            place_tcy_block(&mut g[i..end], em);
+            let first = style(&g[i]);
+            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right));
             i = end;
             continue;
         }
@@ -46,21 +47,31 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, b
             end += 1;
         }
         if (2..=3).contains(&(end - i)) {
-            let em = style(&g[i]).0;
-            place_tcy_block(&mut g[i..end], em);
+            let em = style(&g[i]).size;
+            place_tcy_block(&mut g[i..end], em, (0.0, 0.0));
         }
         i = end;
     }
 }
 
-/// Lay `g` across one em of the column. The first glyph takes the em; the rest share its cell.
-fn place_tcy_block(g: &mut [SGlyph], em: f64) {
+/// What [`tate_chu_yoko`] reads from a glyph's character style: its size, whether it is marked
+/// Tate-chu-yoko, and its Tate-chu-yoko Settings Up/Down and Left/Right in points.
+pub(super) struct TcyStyle {
+    pub size: f64,
+    pub marked: bool,
+    pub up: f64,
+    pub right: f64,
+}
+
+/// Lay `g` across one em of the column, moved by `(up, right)` points. The first glyph takes the
+/// em; the rest share its cell.
+fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64)) {
     let width: f64 = g.iter().map(|gl| gl.adv).sum();
     let squeeze = if width > em && width > 0.0 { em / width } else { 1.0 };
     let mut ink = 0.0;
     for (k, gl) in g.iter_mut().enumerate() {
         let adv = gl.adv;
-        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze });
+        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up, right });
         gl.adv = if k == 0 { em } else { 0.0 };
         ink += adv;
     }

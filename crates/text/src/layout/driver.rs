@@ -173,7 +173,7 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
     Some(best.unwrap_or_else(|| at(lo)))
 }
 
-/// `t` with every run's size, explicit leading and baseline shift scaled by `f`, inline art's own
+/// `t` with every run's size, explicit leading, baseline shift and tate-chu-yoko offsets scaled by `f`, inline art's own
 /// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
 /// Shrink Text to Fit lays `t` out as `scaled(t, f)`, where `f` is the layout's
 /// [`TextLayout::fit_scale`], so the result holds the styles the text is drawn in.
@@ -183,6 +183,8 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         r.style.size *= f;
         r.style.leading = r.style.leading.map(|l| l * f);
         r.style.baseline_shift *= f;
+        r.style.tcy_up_down *= f;
+        r.style.tcy_left_right *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }

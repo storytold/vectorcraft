@@ -218,8 +218,28 @@ impl<T: PartialEq> Shared<T> {
 fn style(app: &mut VectorcraftApp, p: Value) {
     char_cmd(app, "text.setStyle", p);
 }
-fn format(app: &mut VectorcraftApp, p: Value) {
+pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
     char_cmd(app, "text.setFormat", p);
+}
+
+/// [`format`] that returns the command's result: `text.setRangeStyle` on the range the Type tool
+/// has selected (the whole text when nothing is selected) while it edits text, else
+/// `text.setFormat` on the selected text objects.
+pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
+    let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    end_typing(app);
+    p["id"] = json!(id.0);
+    if b > a {
+        p["start"] = json!(a);
+        p["end"] = json!(b);
+    }
+    app.run("text.setRangeStyle", p)
+}
+
+/// The Tate-chu-yoko Settings Up/Down and Left/Right the characters the panels act on share, in
+/// document points; `None` where they differ, or with no type.
+pub(crate) fn shared_tcy_offsets(app: &VectorcraftApp) -> (Option<f64>, Option<f64>) {
+    (shared_effective(app, |s| s.tcy_up_down), shared_effective(app, |s| s.tcy_left_right))
 }
 
 /// Apply character attributes: to the selected range while the Type tool edits text (the whole
@@ -1168,6 +1188,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!("Tate-chu-yoko"), has, tcy) {
             format(app, json!({"tateChuYoko": !tcy}));
         }
+        // Tate-chu-yoko Settings…: the Up/Down and Left/Right that move a tate-chu-yoko block.
+        if menu_item(ui, tl!("Tate-chu-yoko Settings…"), has, false)
+            && let Err(e) = app.run("ui.tateChuYokoSettings", json!({}))
+        {
+            app.status(e);
+        }
         // Standard Vertical Roman Alignment: the selected half-width characters stand upright in
         // vertical type instead of being rotated. Checked when every selected character has it; a
         // mixed selection turns it on.
@@ -1239,9 +1265,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
-/// No Break off, the Default character direction, the Default digits and the Em Box font height
-/// reference, whether or not Show East Asian Options, Show Indic Options and Show Font Height
-/// Options are on.
+/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
+/// the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// Options, Show Indic Options and Show Font Height Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -1251,6 +1277,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
+            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),

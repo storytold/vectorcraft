@@ -37,7 +37,7 @@ use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
 pub use driver::{decorations, fit_first_line, layout, layout_with, scaled};
-use vertical::{stands_upright, tate_chu_yoko, upright_cell, upright_centre, whole_character_widths};
+use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, whole_character_widths};
 
 const EPS: f64 = 1e-6;
 
@@ -114,7 +114,7 @@ impl Ctx<'_> {
         if self.vertical {
             tate_chu_yoko(v, |g| {
                 let st = style(g);
-                (st.size, st.tate_chu_yoko)
+                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right }
             });
             // An upright glyph advances down the column by its vertical advance (the font's vertical
             // metrics; without them at least one em, as CJK fonts' is), centred across it: a narrow
@@ -252,13 +252,16 @@ impl Ctx<'_> {
             // Vertical path type keeps the baseline path and turns each glyph across it.
             m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
         } else if let (true, Some(t)) = (self.vertical, g.tcy) {
-            // Tate-chu-yoko: the block set across the column, centred on its em of it.
+            // Tate-chu-yoko: the block set across the column, centred on its em of it, then moved up
+            // by its Up/Down and right by its Left/Right (line x runs down the column and line y
+            // from right to left across it).
             let em = self.style_at(g.byte).size;
             let start = origin.x - t.pen;
             let centre = Point::new(start + em * 0.5, origin.y - g.face.ideographic_centre() * em);
             let across = Affine::translate((centre.x - t.width * 0.5 + t.ink - origin.x, 0.0));
             let squeeze = Affine::translate((centre.x, 0.0)) * Affine::scale_non_uniform(t.squeeze, 1.0) * Affine::translate((-centre.x, 0.0));
-            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze * across * m;
+            let offset = Affine::translate((-t.up, -t.right));
+            m = offset * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze * across * m;
         } else if self.vertical && stands_upright(g) {
             let next = self.out.glyphs.len();
             let after_base = self.out.glyphs.last().is_some_and(|p| p.byte == g.byte && p.line == line && p.len > 0);

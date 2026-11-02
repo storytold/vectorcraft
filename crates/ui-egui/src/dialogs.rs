@@ -113,6 +113,7 @@ pub mod swatch_options;
 pub mod symbol_delete;
 pub mod symbol_options;
 pub mod symbolism_options;
+pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
 mod tiff_bmp_tga;
@@ -331,6 +332,7 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,

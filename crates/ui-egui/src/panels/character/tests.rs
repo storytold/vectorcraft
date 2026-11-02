@@ -673,6 +673,23 @@ fn tate_chu_yoko_menu_item_shows_with_east_asian_options_and_toggles() {
     assert!(!on(&app));
 }
 
+/// Tate-chu-yoko Settings… is in the panel menu with the East Asian options, and choosing it opens
+/// the dialog on the selected characters.
+#[test]
+fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "2026"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains("Tate-chu-yoko Settings…"));
+    app.session.prefs.show_east_asian_options = true;
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim() == "Tate-chu-yoko Settings…").unwrap_or_else(|| panic!("{texts:?}")).1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
+}
+
 /// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
 /// marks the selected characters, one undo step each way; its check shows only while every
 /// selected character has it, and a mixed selection turns it on.
@@ -995,7 +1012,7 @@ fn no_break_menu_item_toggles_the_selected_characters() {
 
 /// Reset Panel sets every character attribute the panel shows, except the font family, style
 /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
-/// Metrics, Tate-chu-yoko, No Break, Character Direction, Digits and the font height reference
+/// Metrics, Tate-chu-yoko and its settings, No Break, Character Direction, Digits and the font height reference
 /// included), in the selected type and in the text the Type tool has selected while it edits.
 #[test]
 fn reset_panel_resets_every_attribute_but_the_font() {
@@ -1023,6 +1040,8 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.char_align != d.char_align,
             s.proportional_metrics != d.proportional_metrics,
             s.tate_chu_yoko != d.tate_chu_yoko,
+            s.tcy_up_down != d.tcy_up_down,
+            s.tcy_left_right != d.tcy_left_right,
             s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
@@ -1036,17 +1055,17 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             json!({
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
-                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "standardVerticalRoman": true,
-                "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
+                "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 20]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 22]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 20]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 22]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);
