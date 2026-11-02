@@ -178,6 +178,10 @@ struct Out {
     toggle: Vec<(NodeId, bool)>,
 }
 
+/// The panel state that says the Layers panel's rows have the keyboard ([`super::has_row_keys`]).
+pub(crate) const ROW_KEYS: &str = "ly-keys";
+
+/// The Layers panel: the layer tree with its click, drag and rename rules and the bottom buttons; Delete/Backspace after a row click delete the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
@@ -346,18 +350,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !released
         && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
         && let LayersDrag::Rows(ids) = &*drag
-        && let Some(src) = ids.first()
+        && let Some(&grabbed) = ui.data(|d| d.get_temp::<NodeId>(key("grabbed"))).as_ref().or(ids.first())
         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
     {
-        drag_ghost(ui, &view, *src, pos);
+        drag_ghost(ui, &view, widgets::ghost_row(ids, grabbed), pos);
     }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
+    // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
+    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]).
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    if pressed_outside {
-        ui.data_mut(|d| d.insert_temp(key("focus"), false));
-    }
-    let focus: bool = ui.data(|d| d.get_temp(key("focus"))).unwrap_or(false);
+    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside;
+    super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
     if focus
         && !view.rows.is_empty()
         && ui.ctx().memory(|m| m.focused().is_none())

@@ -1,5 +1,90 @@
 use super::*;
 
+/// Duplicating rows highlights the copies, each right above its original, as the Layers panel
+/// does: the active row's copy becomes active, the anchor's copy the anchor.
+#[test]
+fn a_duplicate_highlights_the_copies_above_the_originals() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    for _ in 0..3 {
+        app.run("effect.apply", json!({"effect": "distort.roughen"})).unwrap();
+    }
+    let owner = Some(NodeId(id));
+    let ctx = egui::Context::default();
+    let duplicate = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let node = first_subject(app);
+            let sel = current_sel(app, ui.ctx(), node.as_ref());
+            duplicate_selected(app, ui, node.as_ref(), sel);
+        });
+        out.textures_delta.clear();
+    };
+    // Effects 0 and 2 highlighted, 2 selected: the list reads copy, 0, 1, copy, 2 (top down), so
+    // the copies are rows 0 and 3.
+    app.run("appearance.setActiveItem", json!({ "index": null })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::Effect(2)));
+    set_pstate(&ctx, "ap-multi", Highlight { owner, rows: Rows::Effects(None), order: vec![2, 0], anchor: Some(0), active: Some(2) });
+    duplicate(&mut app);
+    let h: Highlight = pstate(&ctx, "ap-multi");
+    assert_eq!((h.order, h.anchor), (vec![3, 0], Some(0)));
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::Effect(3));
+    // [Fill, Stroke] both highlighted, the stroke active: paint order fill, copy, stroke, copy,
+    // so the copies are 1 and 3 and the stroke's copy is active.
+    app.run("appearance.setActiveItem", json!({ "index": 1 })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::Item(1)));
+    set_pstate(&ctx, "ap-multi", Highlight { owner, rows: Rows::Items, order: vec![1, 0], anchor: Some(1), active: Some(1) });
+    duplicate(&mut app);
+    let h: Highlight = pstate(&ctx, "ap-multi");
+    assert_eq!((h.order, h.anchor), (vec![3, 1], Some(3)));
+    assert_eq!(app.session.appearance_item(), Some(3));
+    // A row outside the highlight (dropped on Duplicate): only its copy is highlighted and active.
+    app.run("appearance.setActiveItem", json!({ "index": null })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::Effect(0)));
+    set_pstate(&ctx, "ap-multi", Highlight { owner, rows: Rows::Effects(None), order: vec![0], anchor: Some(0), active: Some(0) });
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let n = first_subject(&app).unwrap();
+        let sel = current_sel(&app, ui.ctx(), Some(&n));
+        app.run("effect.duplicate", json!({"item": null, "indices": [4]})).unwrap();
+        highlight_copies(&mut app, ui.ctx(), &n, sel, Rows::Effects(None), &[4]);
+    });
+    out.textures_delta.clear();
+    let h: Highlight = pstate(&ctx, "ap-multi");
+    assert_eq!((h.order, h.anchor), (vec![4], Some(4)));
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::Effect(4));
+}
+
+/// Removing other fills/strokes keeps a fill/stroke's Opacity row selected, renumbered with its
+/// item (so the Transparency panel keeps editing it); removing that item clears the selection.
+#[test]
+fn removing_items_keeps_a_surviving_item_opacity_row_selected() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app.run("appearance.duplicateItem", json!({ "indices": [0] })).unwrap();
+    let owner = Some(NodeId(id));
+    let ctx = egui::Context::default();
+    let remove = |app: &mut VectorcraftApp, k: usize| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let n = first_subject(app).unwrap();
+            let sel = current_sel(app, ui.ctx(), Some(&n));
+            app.run("appearance.removeItem", json!({ "indices": [k] })).unwrap();
+            highlight_after_removal(app, ui.ctx(), &n, sel, Rows::Items, &[k]);
+        });
+        out.textures_delta.clear();
+    };
+    app.run("appearance.setActiveItem", json!({ "index": 2 })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::ItemOpacity(2)));
+    remove(&mut app, 0);
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::ItemOpacity(1));
+    assert_eq!(app.session.appearance_item(), Some(1));
+    remove(&mut app, 1);
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::None);
+    assert_eq!(app.session.appearance_item(), None);
+}
+
 #[test]
 fn opacity_labels() {
     assert_eq!(opacity_text(1.0, BlendMode::Normal), "Default");
@@ -311,7 +396,7 @@ fn the_effect_editor_keeps_text_typed_across_frames() {
         out.textures_delta.clear();
         out
     };
-    // Every text drawn, with its center.
+    /// Every text drawn, with its center.
     fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
         match s {
             egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
@@ -358,6 +443,7 @@ fn the_effect_editor_keeps_text_typed_across_frames() {
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
 }
 
+/// Each place a dragged row can be dropped picks the command it runs and its parameters.
 #[test]
 fn drops_pick_the_command() {
     use vectorcraft_doc::{Appearance, FillLayer};
@@ -396,6 +482,72 @@ fn drops_pick_the_command() {
     assert_eq!(drop(Dragged::Effect(Some(1), 1), at(7, false), false), mv(1, json!(1), 1, Value::Null, false));
     assert_eq!(drop(Dragged::Effect(None, 0), at(3, false), false), mv(0, Value::Null, 0, json!(1), false));
     assert_eq!(drop(Dragged::Effect(None, 0), pos2(500.0, 10.0), false), None, "outside the stack");
+}
+
+/// Several highlighted rows dropped together (the owner's straddling example): a group listed
+/// top-down `S3, FA*, Contents, S1*, F0` (paint order F0 S1 FA S3, Contents above two).
+#[test]
+fn several_rows_drop_as_one_block() {
+    use vectorcraft_doc::FillLayer;
+    let mut n = Node::group(NodeId(1), vec![]);
+    n.appearance.items = (0..4).map(|_| AppearanceItem::Fill(FillLayer::new(Paint::None))).collect();
+    n.appearance.set_contents_at(2);
+    let slots = [
+        Slot::Object { top: true },
+        Slot::Item { index: 3, sub: false },
+        Slot::Item { index: 2, sub: false },
+        Slot::Contents,
+        Slot::Item { index: 1, sub: false },
+        Slot::Item { index: 0, sub: false },
+        Slot::Object { top: false },
+    ];
+    let rows: Vec<(Slot, Rect)> =
+        slots.iter().enumerate().map(|(i, s)| (*s, Rect::from_min_size(pos2(0.0, i as f32 * ROW), vec2(200.0, ROW)))).collect();
+    let at = |i: usize| pos2(50.0, i as f32 * ROW + ROW / 2.0);
+    let set = [1, 2];
+    let drop = |grabbed, i, copy| block_drop_command(&n, &rows, Dragged::Item(grabbed), &set, at(i), copy);
+    let mv = |to: usize, contents: usize| Some(("appearance.moveItem", json!({"indices": [1, 2], "to": to, "contents": contents})));
+    // On S3 (FA grabbed, so dropped upwards: above it): FA, S1, S3, Contents, F0.
+    assert_eq!(drop(2, 1, false), mv(2, 1));
+    // On the Contents row: grabbed above it, just below; grabbed below it, just above.
+    assert_eq!(drop(2, 3, false), mv(1, 3));
+    assert_eq!(drop(1, 3, false), mv(1, 1));
+    // On the object row: on top, Contents below; under the stack: at the bottom, Contents above.
+    assert_eq!(drop(2, 0, false), mv(2, 1));
+    assert_eq!(drop(2, 6, false), mv(0, 3));
+    // On F0 (below it, on its side of Contents).
+    assert_eq!(drop(2, 5, false), mv(0, 3));
+    // On one of its own rows: nothing.
+    assert_eq!(drop(2, 2, false), None);
+    assert_eq!(drop(2, 4, true), None);
+    // Alt: copies as a block, placed the same way; Contents stays between the same rows.
+    let cp = |to: usize, contents: usize| Some(("appearance.duplicateItem", json!({"indices": [1, 2], "to": to, "contents": contents})));
+    assert_eq!(drop(2, 0, true), cp(4, 2));
+    assert_eq!(drop(2, 5, true), cp(0, 4));
+    assert_eq!(drop(2, 3, true), cp(2, 4));
+    // Effects of one list: they land together; on one of their own rows nothing happens.
+    let fx = |id: &str| Effect { id: id.into(), params: Value::Null, visible: true };
+    let mut p = Node::path(NodeId(2), vectorcraft_geom::PathData::default(), vectorcraft_doc::Appearance::default_art());
+    p.appearance.effects.extend([fx("a"), fx("b"), fx("c")]);
+    let fslots = [
+        Slot::Object { top: true },
+        Slot::Item { index: 1, sub: false },
+        Slot::Item { index: 0, sub: false },
+        Slot::Effect(None, 0),
+        Slot::Effect(None, 1),
+        Slot::Effect(None, 2),
+    ];
+    let frows: Vec<(Slot, Rect)> =
+        fslots.iter().enumerate().map(|(i, s)| (*s, Rect::from_min_size(pos2(0.0, i as f32 * ROW), vec2(200.0, ROW)))).collect();
+    let lower = |i: usize| pos2(50.0, i as f32 * ROW + ROW * 0.75);
+    let fdrop = |i, copy| block_drop_command(&p, &frows, Dragged::Effect(None, 0), &[0, 2], lower(i), copy);
+    let fmv = |to: usize, to_item: Value, copy: bool| {
+        Some(("effect.move", json!({"from": [0, 2], "fromItem": null, "to": to, "toItem": to_item, "copy": copy})))
+    };
+    assert_eq!(fdrop(4, false), fmv(1, Value::Null, false), "below b: a, c land after it");
+    assert_eq!(fdrop(1, true), fmv(0, json!(1), true), "into the stroke's list");
+    assert_eq!(fdrop(3, false), None);
+    assert_eq!(fdrop(5, false), None);
 }
 
 /// One headless frame of the panel: the texts drawn, top to bottom.
@@ -448,9 +600,9 @@ fn add_new_fill_selects_the_new_fill_alone() {
     app.run("appearance.addFill", json!({})).unwrap(); // [Fill, Stroke, Fill]
     let ctx = egui::Context::default();
     let n = app.session.doc().unwrap().doc.node(id).unwrap().clone();
-    // Rows 0 and 1 (the stroke) Cmd-clicked together, row 0 active.
-    click_item(&mut app, &ctx, &n, Sel::None, 0, egui::Modifiers::NONE);
-    click_item(&mut app, &ctx, &n, Sel::Item(0), 1, egui::Modifiers::COMMAND);
+    // Rows 1 (the stroke) and 0 Cmd-clicked together, row 0 (clicked last) active.
+    click_row(&mut app, &ctx, &n, Sel::None, Rows::Items, 1, egui::Modifiers::NONE);
+    click_row(&mut app, &ctx, &n, Sel::Item(1), Rows::Items, 0, egui::Modifiers::COMMAND);
     assert_eq!(selected_items(&ctx, Some(&n), Sel::Item(0)), [0, 1]);
     app.run("appearance.addFill", json!({})).unwrap();
     let n = app.session.doc().unwrap().doc.node(id).unwrap().clone();
@@ -555,6 +707,42 @@ fn inline_stroke_weight_and_effect_fields_are_named() {
     assert_eq!(h.get_all_by_role_and_label(egui::accesskit::Role::TextInput, "Weight:").count(), 2, "both stroke rows are named");
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Blur");
     let _ = h.get_by_role_and_label(egui::accesskit::Role::RadioButton, "Color");
+}
+
+/// A style that gives the next object two fills and two strokes: each row's swatch and weight
+/// field has an id of its own (egui flags a clash with a 🔥 warning drawn over the widgets).
+#[test]
+fn new_art_rows_of_the_same_kind_have_their_own_widget_ids() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    run(&mut app, "appearance.addFill", json!({}));
+    run(&mut app, "appearance.addStroke", json!({}));
+    run(&mut app, "graphicStyle.new", json!({"name": "Twice"}));
+    run(&mut app, "select.none", json!({}));
+    run(&mut app, "graphicStyle.apply", json!({"name": "Twice"}));
+    let ctx = egui::Context::default();
+    ctx.options_mut(|o| o.warn_on_id_clash = true);
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let mut shown = vec![];
+    // The second frame: ids from the first are known by then.
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        shown.clear();
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    }
+    let rows = shown.iter().filter(|t| ["Fill:", "Stroke:"].contains(&t.as_str())).count();
+    assert_eq!(rows, 4, "two fills and two strokes: {shown:?}");
+    let clashes: Vec<&String> = shown.iter().filter(|t| t.contains('🔥')).collect();
+    assert!(clashes.is_empty(), "{clashes:?}");
 }
 
 /// #4174: two circles with different fills and the same stroke, effect and opacity list the

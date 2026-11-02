@@ -23,6 +23,8 @@ struct Window {
     events: Vec<Event>,
     dropped: Vec<egui::DroppedFileHandle>,
     frames: usize,
+    /// The texts its last frame drew, with their rects in the window.
+    texts: Vec<(String, Rect)>,
 }
 
 struct Host {
@@ -69,7 +71,7 @@ impl Host {
             let mut host = host.borrow_mut();
             let builder = &viewport.builder;
             let rect = Rect::from_min_size(builder.position.unwrap_or_default(), builder.inner_size.unwrap_or(vec2(300.0, 200.0)));
-            host.windows.entry(id).or_insert_with(|| Window { rect, events: Vec::new(), dropped: Vec::new(), frames: 0 });
+            host.windows.entry(id).or_insert_with(|| Window { rect, events: Vec::new(), dropped: Vec::new(), frames: 0, texts: Vec::new() });
             let viewports = host.infos();
             let (time, focused) = (host.time, host.focus == id);
             let Some(window) = host.windows.get_mut(&id) else { return };
@@ -87,7 +89,20 @@ impl Host {
         };
         let mut full = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
         full.textures_delta.clear();
-        host.borrow_mut().apply(&full);
+        fn texts(s: &egui::Shape, out: &mut Vec<(String, Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut shown = Vec::new();
+        full.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let mut host = host.borrow_mut();
+        if let Some(window) = host.windows.get_mut(&id) {
+            window.texts = shown;
+        }
+        host.apply(&full);
     }
 }
 
@@ -335,6 +350,42 @@ fn art_dragged_from_the_canvas_onto_a_native_panel_window_drops_there() {
     assert_eq!(st.doc.graphic_styles.len(), styles + 1, "the art became a graphic style");
     assert!(st.interaction.is_none(), "no move is left open");
     assert_eq!(art(&h), before, "the art stays where it was");
+}
+
+/// A click on a row of the Appearance panel floating in an OS window of its own gives the panel
+/// Delete, as in the main window: the panel removes the highlighted row in its own window, which
+/// forwards only the keys its widgets left over, so Edit › Clear doesn't delete the object.
+#[test]
+fn delete_after_a_row_click_in_a_native_appearance_window_removes_the_row() {
+    let mut h = Harness::new();
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let items = |h: &Harness| {
+        h.app.session.active().and_then(|d| d.selection.objects.first().and_then(|id| d.doc.node(*id))).map(|n| n.appearance.items.len())
+    };
+    assert_eq!(items(&h), Some(2), "a fill and a stroke");
+    let viewport = h.float("appearance");
+    for _ in 0..20 {
+        h.frame(vec![]);
+    }
+    let fill =
+        h.host.borrow().windows.get(&viewport).and_then(|w| w.texts.iter().find(|(t, _)| t == "Fill:").map(|(_, r)| *r)).expect("the Fill row");
+    // The row's empty space right of its swatch (its name is a link that opens the Color panel).
+    let at = pos2(fill.left() + 110.0, fill.center().y);
+    for (events, pressed) in [(vec![Event::PointerMoved(at)], None), (vec![], Some(true)), (vec![], Some(false))] {
+        let mut events = events;
+        if let Some(pressed) = pressed {
+            events.push(button(at, pressed));
+        }
+        if let Some(window) = h.host.borrow_mut().windows.get_mut(&viewport) {
+            window.events.extend(events);
+        }
+        h.frame(vec![]);
+    }
+    h.frames(2);
+    let before = h.objects();
+    h.key_in(viewport, Key::Delete);
+    assert_eq!(h.objects(), before, "the object stays");
+    assert_eq!(items(&h), Some(1), "the fill row goes");
 }
 
 #[test]

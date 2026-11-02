@@ -266,8 +266,8 @@ fn a_slider_focused_by_a_click_shows_its_outline_only_after_a_key() {
     assert!(outlined(&shapes), "an arrow key shows the outline");
 }
 
-// Regression test for #2083: the rows of the panels' menus didn't light up under the pointer, as
-// the menu bar's items do.
+/// Regression test for #2083: the rows of the panels' menus didn't light up under the pointer, as
+/// the menu bar's items do.
 #[test]
 fn a_panel_menu_row_lights_up_under_the_pointer() {
     let ctx = themed(Default::default());
@@ -390,9 +390,9 @@ fn a_combos_keyboard_guard_reads_the_combos_own_button_id() {
     assert!(same.get(), "the guard's id is the ComboBox button's id");
 }
 
-// Regression test for #3440: the Fill/Stroke chip's popover closed on the click that ended a
-// drag between its proxies. It stays open for a click on its own anchor and while a panel
-// drag is on; a click elsewhere still closes it.
+/// Regression test for #3440: the Fill/Stroke chip's popover closed on the click that ended a
+/// drag between its proxies. It stays open for a click on its own anchor and while a panel
+/// drag is on; a click elsewhere still closes it.
 #[test]
 fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
     let press = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
