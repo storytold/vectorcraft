@@ -202,7 +202,7 @@ impl<'a> Reader<'a> {
         }
         // A clipping path keeps its stroke, which paints over the art it clips.
         if stroke {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.width);
+            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
             st.cap = gs.cap;
             st.join = gs.join;
             st.miter_limit = gs.miter;
@@ -334,7 +334,7 @@ impl<'a> Reader<'a> {
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.width);
+        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
         st.cap = gs.cap;
         st.join = gs.join;
         st.miter_limit = gs.miter;
@@ -532,8 +532,14 @@ impl<'a> Reader<'a> {
     /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
     /// without a preview, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
-        let (m, b, path, png, w, h) = match self.place.take() {
-            Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)) }) if !path.is_empty() => (m, b, path, png, w, h),
+        let (m, b, path, png, w, h, folder) = match self.place.take() {
+            Some(Place { broken: true, .. }) => {
+                self.unreadable("placed files", hidden);
+                return Ok(());
+            }
+            Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)), folder, .. }) if !path.is_empty() => {
+                (m, b, path, png, w, h, folder)
+            }
             other => {
                 let boxed = other.as_ref().and_then(|p| Some((p.matrix?, p.bounds?))).filter(|(_, b)| sane(*b) && b.area() > 0.0);
                 let mut have_bounds = false;
@@ -595,10 +601,9 @@ impl<'a> Reader<'a> {
         {
             self.placed_elsewhere.push((NodeId(self.doc.peek_next_id()), shift));
         }
-        self.add_image(
-            ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None },
-            hidden,
-        )
+        let mut link = LinkInfo::new(path);
+        link.relative = folder.and_then(|f| relative_path(&f, link.name()));
+        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)
     }
 
     pub(super) fn warn(&mut self, w: &str) {
@@ -668,11 +673,6 @@ pub(super) fn element_name(o: &Obj) -> Option<String> {
     Some(name.rsplit(':').next().unwrap_or(&name).to_string())
 }
 
-/// The child nodes named `name` (see [`element_name`]) of the XML node `o`.
-pub(super) fn elements<'o>(o: &'o Obj, name: &'o str) -> impl Iterator<Item = &'o Obj> {
-    o.obj("xmlnode-children").into_iter().flat_map(Obj::items).filter(move |c| c.ty == "XMLNode" && element_name(c).as_deref() == Some(name))
-}
-
 /// A placed file's preview as a PNG, with its size: `w h rowBytes 32 n ` (each number followed by
 /// a space), then `h` rows of `rowBytes` bytes, premultiplied ARGB. `None` when it isn't that, is
 /// larger than [`MAX_PIXELS`] or is cut short.
@@ -705,6 +705,18 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     let mut png = vec![];
     image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some((png, width, height))
+}
+
+/// A placed file's path relative to the document's folder (`/` separators): its relative `folder`
+/// (`src/`, `..\art`) followed by its file `name`. `None` when the folder is empty, absolute, or
+/// holds control characters, or when there is no name.
+pub(super) fn relative_path(folder: &str, name: &str) -> Option<String> {
+    let folder = folder.replace('\\', "/");
+    let absolute = folder.starts_with('/') || folder.as_bytes().get(1) == Some(&b':') || folder.contains("://");
+    if folder.is_empty() || absolute || name.is_empty() || folder.chars().chain(name.chars()).any(char::is_control) {
+        return None;
+    }
+    Some(format!("{}/{name}", folder.trim_end_matches('/')))
 }
 
 pub(super) fn sane(r: Rect) -> bool {

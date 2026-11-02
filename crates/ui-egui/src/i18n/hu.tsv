@@ -396,6 +396,7 @@ font-technology	Variable	Változó
 	Basic	Alap
 	Basic Latin	Alap latin
 	Batch	Kötegelt feldolgozás
+	Bearing	Irány
 	Begin Recording	Felvétel indítása
 	Begin Undo Group	Visszavonási csoport kezdete
 	Bend:	Hajlítás mértéke:
@@ -1100,6 +1101,8 @@ font-technology	Variable	Változó
 	Double Slash	Kettős ferde vonal
 	Double-click	Dupla kattintás
 	Double-click to edit the characters' paint	Dupla kattintással a karakterek festése szerkeszthető
+	Click to edit	Kattintással szerkeszthető
+	Double-click to edit	Dupla kattintással szerkeszthető
 	Double-click to insert	Beszúrás dupla kattintással
 	Double-click to rename	Dupla kattintással átnevezhető
 	Double-click to target the contents	Dupla kattintással a tartalom lesz a cél
@@ -1314,6 +1317,16 @@ font-technology	Variable	Változó
 	Delete Export Preset	Exportálási előbeállítás törlése
 	Export Presets	Exportálási előbeállítások
 	Save Export Preset	Exportálási előbeállítás mentése
+	Export Export Presets	Exportálási előbeállítások exportálása
+	Export Preset…	Előbeállítás exportálása…
+	Import Export Presets	Exportálási előbeállítások importálása
+	Import Preset…	Előbeállítás importálása…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`: a document.exportPresets.list egyik előbeállításának neve kell
+@msg	no export preset `{n}` (see document.exportPresets.list)	nincs ilyen exportálási előbeállítás: `{n}` (lásd: document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	nincs exportálható mentett exportálási előbeállítás (a beépítetteket a `names` paraméterben add meg)
+@msg	not an export presets file (format `{_1}`)	nem exportálási előbeállítás-fájl (formátum: `{_1}`)
+@msg	not an export presets file: {e}	nem exportálási előbeállítás-fájl: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Réteg exportálása
 	Export Selection	Kijelölés exportálása
 	All in One Folder	Mind egy mappába
@@ -1499,6 +1512,7 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
 file-filter	PDF-compatible .ai	PDF-kompatibilis .ai
 file-filter	VectorCraft Template	VectorCraft-sablon
@@ -2535,6 +2549,10 @@ file-filter	Templates	Sablonok
 	New Without Dialog	Új párbeszédablak nélkül
 	New Workspace	Új munkaterület
 	New Workspace…	Új munkaterület…
+	New Toolbar…	Új eszköztár…
+	New Toolbar	Új eszköztár
+	Show Toolbar	Eszköztár megjelenítése
+	List Toolbars	Eszköztárak listája
 	New {kind} Style…	Új stílus: {kind}…
 	New…	Új…
 	Next	Következő
@@ -2900,6 +2918,8 @@ diagnostics	ui	felület
 	Plates	Nyomólemezek
 	Platform:	Platform:
 	Play Current Selection	Kijelölt művelet lejátszása
+	Save Actions…	Műveletek mentése…
+	Load Actions…	Műveletek betöltése…
 	Plug-in Info	Bővítmény adatai
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…
@@ -3356,11 +3376,13 @@ mark-style	Japanese	Japán
 	Save a Copy	Másolat mentése
 	Save a Copy…	Másolat mentése…
 	Save As	Mentés másként
+	Save As Preset…	Mentés készletként…
 	Save as PDF…	Mentés PDF-ként…
 	Save as preset:	Mentés előbeállításként:
 	Save as Template	Mentés sablonként
 	Save as Template…	Mentés sablonként…
 	Save As…	Mentés másként…
+	Save Changes	Módosítások mentése
 	Save changes to {name}	Módosítások mentése: {name}
 	Save color group to Swatch panel	Színcsoport mentése a Színminták panelre
 	Save Colors as Swatches	Színek mentése színmintaként
@@ -3966,6 +3988,7 @@ mark-style	Japanese	Japán
 	Switch workspace	Munkaterület váltása
 	Symbol	Szimbólum
 	Symbol Instance	Szimbólumpéldány
+	Link Block Series	Csatolt blokkok sorozata
 	Symbol Libraries	Szimbólumkönyvtárak
 	Symbol Screener Tool	Szimbólumhalványító
 	Symbol Scruncher Tool	Szimbólumtömörítő
@@ -4002,6 +4025,10 @@ mark-style	Japanese	Japán
 	Target Contents	Tartalom célzása
 	Target:	Cél:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Tate-chu-yoko beállításai…
+	Tate-chu-yoko Settings	Tate-chu-yoko beállításai
+	Up/Down:	Fel/le:
+	Left/Right:	Balra/jobbra:
 	Technical Drawing	Műszaki rajz
 	Temperature	Színhőmérséklet
 	Temperature/Tint…	Színhőmérséklet/tónus…
@@ -4072,6 +4099,7 @@ mark-style	Japanese	Japán
 	Tile Type:	Csempézés módja:
 	tile {number}	csempe {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	A csempék számozása vízszintesen, majd lefelé halad; az összes csempéhez hagyd üresen a tartományt.
+	Tilt	Dőlés
 	Tint	Tónus
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok
@@ -4695,6 +4723,7 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}
 @msg	Couldn't open {name}: {e}	Nem sikerült megnyitni: {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nem sikerült beilleszteni a vágólapról: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, bezárták
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nem sikerült elhelyezni: {name}; a céldokumentumot bezárták
 @msg	Couldn't place {name}: the document it was placed in was closed	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, bezárták
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
@@ -4731,6 +4760,7 @@ imageTrace	Outline	Körvonal
 @msg	Exporting {_1}	Exportálás: {_1}
 @msg	Packaging {_1}	Csomagolás: {_1}
 @msg	Placing {_1}	Elhelyezés: {_1}
+@msg	Pasting	Beillesztés
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	a fájl verziója újabb, mint amit ez a VectorCraft támogat: {0} (támogatott: {VERSION})
 @msg	Flatten Transparency: select objects to flatten	Átlátszóság lapítása: jelöld ki a lapítandó objektumokat
 @msg	Flatten Transparency: {e}	Átlátszóság lapítása: {e}
@@ -4773,6 +4803,7 @@ imageTrace	Outline	Körvonal
 @msg	invalid PDF setting: {0}	érvénytelen PDF-beállítás: {0}
 @msg	invalid restored panel group	érvénytelen visszaállított panelcsoport
 @msg	is not an image VectorCraft reads	nem olyan kép, amelyet a VectorCraft olvas
+@msg	it ends inside a group or compound path	egy csoporton vagy összetett útvonalon belül ér véget
 @msg	it ends inside a layer	egy rétegen belül ér véget
 @msg	it ends inside a multi-layer mask	egy többrétegű maszkon belül ér véget
 @msg	a multi-layer mask's operators are out of order	egy többrétegű maszk operátorai rossz sorrendben vannak
@@ -4911,6 +4942,14 @@ imageTrace	Outline	Körvonal
 @msg	no selection bounds	a kijelölésnek nincsenek határai
 @msg	no slice selected	nincs kijelölt szelet
 @msg	no such action	nincs ilyen művelet
+@msg	no such action set	nincs ilyen műveletkészlet
+@msg	the action sets changed; nothing was deleted	a műveletkészletek megváltoztak; semmi sem törlődött
+@msg	no action set to save	nincs menthető műveletkészlet
+@msg	not an action set file	nem műveletkészlet-fájl
+@msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
+@msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz
+@msg	the action set file needs a later version of VectorCraft	a műveletkészlet-fájlhoz a VectorCraft újabb verziója kell
+@msg	an action in the action set file has more than 10,000 steps	a műveletkészlet-fájl egyik műveletében több mint 10 000 lépés van
 @msg	no such anchor	nincs ilyen horgonypont
 @msg	no such artboard	nincs ilyen rajztábla
 @msg	the artboard is locked	a rajztábla zárolt
@@ -4937,6 +4976,7 @@ imageTrace	Outline	Körvonal
 @msg	no user library folder here	itt nincs felhasználói könyvtármappa
 @msg	no user workspace `{from}`	nincs ilyen felhasználói munkaterület: `{from}`
 @msg	node {_1} is not text	a csomópont nem szöveg: {_1}
+@msg	node {_1} is on a locked artboard	a csomópont zárolt rajztáblán van: {_1}
 @msg	not a DXF drawing	nem DXF-rajz
 @msg	not a file	nem fájl
 @msg	not a font file	nem betűtípusfájl
@@ -5193,6 +5233,9 @@ imageTrace	Outline	Körvonal
 @msg	the PCX file is cut short	a PCX-fájl csonka
 @msg	the PCX file's header is damaged	a PCX-fájl fejléce sérült
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	a {bits} bites pixeleket {planes} síkban tároló PCX-fájlok nem olvashatók
+@msg	the Pixar file is cut short	a Pixar-fájl csonka
+@msg	the Pixar file's header is damaged	a Pixar-fájl fejléce sérült
+@msg	the Pixar file's image data is damaged	a Pixar-fájl képadatai sérültek
 @msg	the JPEG 2000 file can't be read	a JPEG 2000 fájl nem olvasható
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	a JPEG 2000 fájl nem támogatott színteret vagy JPX-tartalmat tartalmaz
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
@@ -5453,6 +5496,11 @@ imageTrace	Outline	Körvonal
 	Import Data Sets…	Adatkészletek importálása…
 	Export Data Sets…	Adatkészletek exportálása…
 	Load Variable Library…	Változókönyvtár betöltése…
+	Save Variable Library…	Változókönyvtár mentése…
+@msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
+@msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
 	Batch…	Kötegelt feldolgozás…
 	Source Folder:	Forrásmappa:
@@ -5579,7 +5627,9 @@ imageTrace	Outline	Körvonal
 	Effect Gallery	Effektusgaléria
 	Filters	Szűrők
 	Select artwork to apply effects	Válasszon ki grafikát az effektusok alkalmazásához
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	a fájl változói és adatkészletei nem lettek beolvasva (változók: {variables}, adatkészletek: {data_sets}): a Változók panel nem listázza őket
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	a fájl változókönyvtára csak részben lett beolvasva (kihagyott bejegyzések: {_1}): a Változók panel a többit listázza
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	a fájl változókönyvtárát nem sikerült beolvasni: a Változók panel nem listázza
+@msg	a variable of unknown kind can't be bound to objects	ismeretlen típusú változó nem köthető objektumokhoz
 # Select by Color (select.color)
 	Select by Color	Kijelölés szín szerint
 	Move Anchor Point	Horgonypont áthelyezése
@@ -5663,6 +5713,9 @@ axis	Y Axis	Y tengely
 	New Set	Új készlet
 	Set Options…	Készlet beállításai…
 	Set Options	Készlet beállításai
+	Action Options…	Művelet beállításai…
+	Action Options	Művelet beállításai
+	Rename Action	Művelet átnevezése
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
@@ -6173,3 +6226,9 @@ breakText	Glyphs	Glifák
 	Small to Large	Kicsitől a nagyig
 	Large to Small	Nagytól a kicsiig
 	Distribute Evenly	Egyenletes elosztás
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Színmintajelmagyarázat létrehozása
+	Create Swatch Legend…	Színmintajelmagyarázat létrehozása…
+	HEX	HEX

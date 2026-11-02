@@ -851,6 +851,8 @@ font-technology	Variable	Variables
 	Double Right Quotation Marks	Comillas dobles de cierre
 	Double-click	Doble clic
 	Double-click to edit the characters' paint	Doble clic para editar la pintura de los caracteres
+	Click to edit	Clic para editar
+	Double-click to edit	Doble clic para editar
 	Double-click to insert	Doble clic para insertar
 	Double-click to rename	Doble clic para cambiar el nombre
 	Double-click to target the contents	Doble clic para seleccionar el contenido como destino
@@ -1039,6 +1041,16 @@ font-technology	Variable	Variables
 	Delete Export Preset	Eliminar ajuste de exportación
 	Export Presets	Ajustes de exportación
 	Save Export Preset	Guardar ajuste de exportación
+	Export Export Presets	Exportar ajustes de exportación
+	Export Preset…	Exportar ajuste…
+	Import Export Presets	Importar ajustes de exportación
+	Import Preset…	Importar ajuste…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` es el nombre de un ajuste de document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	no hay ningún ajuste de exportación `{n}` (consulta document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	no hay ajustes de exportación guardados para exportar (indica los integrados en `names`)
+@msg	not an export presets file (format `{_1}`)	no es un archivo de ajustes de exportación (formato `{_1}`)
+@msg	not an export presets file: {e}	no es un archivo de ajustes de exportación: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportar capa
 	Export Selection	Exportar selección
 	All in One Folder	Todo en una carpeta
@@ -2018,6 +2030,8 @@ font-technology	Variable	Variables
 	Roundness:	Redondez:
 	Fixed	Fijo
 	Pressure	Presión
+	Tilt	Inclinación
+	Bearing	Orientación
 	Shape:	Forma:
 	Bristle Length:	Longitud de cerdas:
 	Bristle Density:	Densidad de cerdas:
@@ -2080,6 +2094,10 @@ font-technology	Variable	Variables
 	New Without Dialog	Nuevo sin cuadro de diálogo
 	New Workspace	Nuevo espacio de trabajo
 	New Workspace…	Nuevo espacio de trabajo…
+	New Toolbar…	Nueva barra de herramientas…
+	New Toolbar	Nueva barra de herramientas
+	Show Toolbar	Mostrar barra de herramientas
+	List Toolbars	Lista de barras de herramientas
 	New {kind} Style…	Nuevo estilo de {kind}…
 	New…	Nuevo…
 	Next	Siguiente
@@ -2377,6 +2395,8 @@ font-technology	Variable	Variables
 	Plates	Planchas
 	Platform:	Plataforma:
 	Play Current Selection	Reproducir la selección actual
+	Save Actions…	Guardar acciones…
+	Load Actions…	Cargar acciones…
 	Plug-in Info	Información del plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -2779,11 +2799,13 @@ digits	Malayalam	Malayálam
 	Save a Copy	Guardar una copia
 	Save a Copy…	Guardar una copia…
 	Save As	Guardar como
+	Save As Preset…	Guardar como ajuste preestablecido…
 	Save as PDF…	Guardar como PDF…
 	Save as preset:	Guardar como preajuste:
 	Save as Template	Guardar como plantilla
 	Save as Template…	Guardar como plantilla…
 	Save As…	Guardar como…
+	Save Changes	Guardar cambios
 	Save changes to {name}	Guardar cambios en {name}
 	Save color group to Swatch panel	Guardar grupo de colores en el panel Muestras
 	Save Colors as Swatches	Guardar colores como muestras
@@ -3332,6 +3354,7 @@ digits	Malayalam	Malayálam
 	Graphic	Gráfico
 	Show all open documents	Mostrar todos los documentos abiertos
 	Symbol Instance	Instancia de símbolo
+	Link Block Series	Serie de bloques enlazados
 	Symbol Libraries	Bibliotecas de símbolos
 	Symbol Screener Tool	Herramienta Transparencia de símbolos
 	Symbol Scruncher Tool	Herramienta Concentración de símbolos
@@ -3355,6 +3378,10 @@ digits	Malayalam	Malayálam
 	Target Contents	Contenido de destino
 	Target:	Destino:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Ajustes de Tate-chu-yoko…
+	Tate-chu-yoko Settings	Ajustes de Tate-chu-yoko
+	Up/Down:	Arriba/abajo:
+	Left/Right:	Izquierda/derecha:
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/tinte…
 	Template	Plantilla
@@ -4241,6 +4268,14 @@ axis	Both	Ambos
 @msg	no selection bounds	la selección no tiene límites
 @msg	no slice selected	no hay ningún sector seleccionado
 @msg	no such action	no existe esa acción
+@msg	no such action set	no existe ese conjunto de acciones
+@msg	the action sets changed; nothing was deleted	los conjuntos de acciones han cambiado; no se ha eliminado nada
+@msg	no action set to save	no hay ningún conjunto de acciones que guardar
+@msg	not an action set file	no es un archivo de conjunto de acciones
+@msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
+@msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones
+@msg	the action set file needs a later version of VectorCraft	el archivo de conjunto de acciones necesita una versión más reciente de VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	una acción del archivo de conjunto de acciones tiene más de 10 000 pasos
 @msg	no such anchor	no existe ese punto de ancla
 @msg	no such artboard	no existe esa mesa de trabajo
 @msg	the artboard is locked	la mesa de trabajo está bloqueada
@@ -4267,6 +4302,7 @@ axis	Both	Ambos
 @msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
+@msg	node {_1} is on a locked artboard	el nodo {_1} está en una mesa de trabajo bloqueada
 @msg	not a DXF drawing	no es un dibujo DXF
 @msg	not a VectorCraft file: {0}	no es un archivo de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no es un conjunto de atajos de VectorCraft (falta `overrides`)
@@ -4510,6 +4546,9 @@ axis	Both	Ambos
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	No se pudo colocar {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	No se pudo pegar desde el portapapeles: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	No se pudo pegar: se cerró el documento en el que se estaba pegando
+@msg	Saved {path} with {_1} note(s): {first}	Se guardó {path} con {_1} nota(s): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Se exportó {what} con {_1} nota(s): {first}
 @msg	Exported {what}	Se exportó {what}
 @msg	Saved {n} files beside {path}	Se guardaron {n} archivos junto a {path}
 @msg	Saving	Guardando
@@ -4517,6 +4556,7 @@ axis	Both	Ambos
 @msg	Exporting {_1}	Exportando {_1}
 @msg	Packaging {_1}	Empaquetando {_1}
 @msg	Placing {_1}	Colocando {_1}
+@msg	Pasting	Pegando
 @msg	Saving recovery data for {_1}	Guardando datos de recuperación de {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Se descartó {n} documento recuperado|Se descartaron {n} documentos recuperados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Se restauró {n} documento recuperado: guárdalo para conservarlo|Se restauraron {n} documentos recuperados: guárdalos para conservarlos
@@ -4574,6 +4614,7 @@ axis	Both	Ambos
 @msg	`{w}` takes no operands	`{w}` no admite operandos
 @msg	a wraparound group is inside a compound path	un grupo de ceñir texto está dentro de un trazado compuesto
 @msg	a path has too many points	un trazado tiene demasiados puntos
+@msg	it ends inside a group or compound path	terminan dentro de un grupo o un trazado compuesto
 @msg	it ends inside a layer	terminan dentro de una capa
 @msg	it ends inside a multi-layer mask	terminan dentro de una máscara de varias capas
 @msg	a multi-layer mask's operators are out of order	los operadores de una máscara de varias capas están desordenados
@@ -4668,6 +4709,9 @@ axis	Both	Ambos
 @msg	the PCX file is cut short	el archivo PCX está incompleto
 @msg	the PCX file's header is damaged	el encabezado del archivo PCX está dañado
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	los archivos PCX con píxeles de {bits} bits en {planes} planos no se pueden leer
+@msg	the Pixar file is cut short	el archivo Pixar está incompleto
+@msg	the Pixar file's header is damaged	el encabezado del archivo Pixar está dañado
+@msg	the Pixar file's image data is damaged	los datos de imagen del archivo Pixar están dañados
 @msg	the JPEG 2000 file can't be read	no se puede leer el archivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el archivo JPEG 2000 tiene un espacio de color o contenido JPX no compatible
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
@@ -5177,6 +5221,7 @@ file-filter	Swatch libraries	Bibliotecas de muestras
 file-filter	Flattener presets	Preajustes del acoplador
 file-filter	PDF presets	Preajustes de PDF
 file-filter	Print presets	Preajustes de impresión
+file-filter	Export presets	Ajustes de exportación
 file-filter	SVG Compressed	SVG comprimido
 file-filter	PDF-compatible .ai	.ai compatible con PDF
 file-filter	VectorCraft Template	Plantilla de VectorCraft
@@ -5409,6 +5454,11 @@ mark-style	Japanese	Japonesas
 	Import Data Sets…	Importar conjuntos de datos…
 	Export Data Sets…	Exportar conjuntos de datos…
 	Load Variable Library…	Cargar biblioteca de variables…
+	Save Variable Library…	Guardar biblioteca de variables…
+@msg	a variable library holds text variables, and the document has none	una biblioteca de variables contiene variables de texto y el documento no tiene ninguna
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no se puede guardar en una biblioteca de variables: cámbiele el nombre para que empiece por una letra o `_`, sin espacios ni símbolos distintos de `-`, `_` y `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	el conjunto de datos `{name}` contiene un carácter de control, que una biblioteca de variables no puede contener
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	el conjunto de datos `{name}` empieza o termina con espacio en blanco, que una biblioteca de variables no puede contener
 	Make Graph Dynamic	Hacer gráfico dinámico
 	Batch…	Lote…
 	Source Folder:	Carpeta de origen:
@@ -5535,7 +5585,9 @@ mark-style	Japanese	Japonesas
 	Effect Gallery	Galería de efectos
 	Filters	Filtros
 	Select artwork to apply effects	Seleccione gráficos para aplicar efectos
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no se leyeron las variables ni los conjuntos de datos del archivo (variables: {variables}, conjuntos de datos: {data_sets}): el panel Variables no los muestra
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del archivo se leyó solo en parte (entradas omitidas: {_1}): el panel Variables muestra el resto
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no se pudo leer la biblioteca de variables del archivo: el panel Variables no la muestra
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipo desconocido no se puede vincular a objetos
 # Select by Color (select.color)
 	Select by Color	Seleccionar por color
 	Move Anchor Point	Mover punto de ancla
@@ -5619,6 +5671,9 @@ axis	Y Axis	Eje Y
 	New Set	Nuevo conjunto
 	Set Options…	Opciones de conjunto…
 	Set Options	Opciones de conjunto
+	Action Options…	Opciones de acción…
+	Action Options	Opciones de acción
+	Rename Action	Cambiar nombre de acción
 	Create New Set	Crear nuevo conjunto
 	Stop Global Edit	Detener edición global
 	Global Edit Options	Opciones de edición global
@@ -6129,3 +6184,9 @@ breakText	Glyphs	Glifos
 	Small to Large	De menor a mayor
 	Large to Small	De mayor a menor
 	Distribute Evenly	Distribuir uniformemente
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Crear leyenda de muestras
+	Create Swatch Legend…	Crear leyenda de muestras…
+	HEX	HEX

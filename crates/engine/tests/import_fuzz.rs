@@ -1,6 +1,6 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
-//! (`.vcflattener`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions),
+//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
+//! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
@@ -1228,6 +1228,16 @@ fn flattener_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
     })
 }
 
+fn export_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "document.exportPresets.import", data, |s, r| {
+        if let Some(name) = r["imported"].get(0) {
+            let _ = no_panic(s.execute("assets.settings.set", &json!({"exportPreset": name})));
+            let _ = no_panic(s.execute("document.exportPresets.export", &json!({"names": [name]})));
+            let _ = no_panic(s.execute("document.exportForScreens", &json!({"exportPreset": name, "range": "1"})));
+        }
+    })
+}
+
 /// Swatch exchange (`.ase`) bytes loaded as a swatch library, then added to the rich document.
 fn swatch_exchange(what: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
     survive(what, || {
@@ -1279,11 +1289,12 @@ proptest! {
     #![proptest_config(config())]
 
     #[test]
-    fn library_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "GIMP Palette\n","{\"format\": \"vcswatches\", ", "{\"format\": \"vcstyles\", ", "{\"format\": \"vcflattener\", ", "{\"name\": \"L\", "])) {
+    fn library_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "GIMP Palette\n","{\"format\": \"vcswatches\", ", "{\"format\": \"vcstyles\", ", "{\"format\": \"vcflattener\", ", "{\"format\": \"vcexportpresets\", ", "{\"name\": \"L\", "])) {
         let data = format!("{head}{s}");
         swatches("swatch library garbage", &data)?;
         styles("style library garbage", &data)?;
         flattener_presets("flattener preset garbage", &data)?;
+        export_presets("export preset garbage", &data)?;
         libraries("library garbage", &data)?;
     }
 
@@ -1303,6 +1314,12 @@ proptest! {
     fn mutated_flattener_presets_never_panic(cut in 0usize..5_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
         let text = saved("flattener.presets.export", json!({"names": ["high", "medium", "low"]}));
         flattener_presets("mutated flattener presets", &mutate_text(&text, cut, &edits))?;
+    }
+
+    #[test]
+    fn mutated_export_presets_never_panic(cut in 0usize..5_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        let text = saved("document.exportPresets.export", json!({"names": ["Logo Package", "Print-Ready PDF"]}));
+        export_presets("mutated export presets", &mutate_text(&text, cut, &edits))?;
     }
 
     #[test]
@@ -1779,6 +1796,74 @@ proptest! {
     }
 }
 
+/// Pixar picture files, 3 × 2 pixels: RGBA dumped in 8 bits, RGB dumped in 12 bits, RGBA encoded
+/// with every packet kind and a block end, and gray in 2 × 1 tiles with a null tile.
+fn pxr_samples() -> Vec<(&'static str, Vec<u8>)> {
+    let pxr = |tile: (u16, u16), format: u16, storage: u16, tiles: &[Option<Vec<u8>>]| {
+        let mut f = vec![0x80, 0xe8, 0, 0];
+        f.resize(416, 0);
+        for v in [2, 3, tile.1, tile.0, format, storage, 16, 1, 0, 0] {
+            f.extend(u16::to_le_bytes(v));
+        }
+        f.resize(512, 0);
+        let mut at = (512 + tiles.len() * 8).next_multiple_of(16);
+        let mut data: Vec<u8> = vec![];
+        for t in tiles {
+            match t {
+                Some(bytes) => {
+                    f.extend((at as u32).to_le_bytes());
+                    f.extend((bytes.len() as u32).to_le_bytes());
+                    data.extend(bytes);
+                    at += bytes.len();
+                }
+                None => f.extend([0; 8]),
+            }
+        }
+        f.resize((512 + tiles.len() * 8).next_multiple_of(16), 0);
+        f.extend(data);
+        f
+    };
+    let rgba: Vec<u8> = (0..24u8).map(|i| i.wrapping_mul(41)).collect();
+    let wide: Vec<u8> = (0..18u16).flat_map(|i| (i * 300).to_le_bytes()).collect();
+    let mut packets = vec![0x01, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0x00, 0x20, 0, 9, 9, 9, 9];
+    packets.extend([0x00, 0x00]);
+    packets.resize(32, 0);
+    packets.extend([0x00, 0x30, 200, 1, 2, 3, 0x01, 0x40, 100, 0, 4, 5, 6, 0, 7, 8, 9]);
+    vec![
+        ("a.pxr", pxr((3, 2), 15, 2, &[Some(rgba)])),
+        ("b.pxr", pxr((3, 2), 14, 3, &[Some(wide)])),
+        ("c.pxr", pxr((3, 2), 15, 0, &[Some(packets)])),
+        ("d.pxr", pxr((2, 1), 8, 2, &[Some(vec![1, 2]), Some(vec![3, 4]), None, Some(vec![5, 6])])),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated Pixar picture files (header fields, the tile pointer table, samples and packets)
+    /// never crash placing, opening or pasting them.
+    #[test]
+    fn mutated_pxr_files_place_without_panics(which in 0usize..4, cut in 0usize..640, edits in prop::collection::vec((400usize..640, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = pxr_samples().swap_remove(which);
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at) {
+                *x = b;
+            }
+        }
+        bytes.truncate(cut.max(4));
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+            let _ = no_panic(s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+}
+
 // ---------- SVG saved with hidden layers and editing data ----------
 
 proptest! {
@@ -2070,10 +2155,11 @@ proptest! {
     /// Hostile PostScript programs: operators in any order with any operands, opened and placed;
     /// as files in the legacy Illustrator format too (the creator line is what turns on its
     /// documented `u` … `U` groups), the groups unbalanced, deep and among clips; in a layer, which
-    /// the editing data reader reads from the program too.
+    /// the editing data reader reads from the program too, or after a setup without a layer, which
+    /// it reads with the art on one layer.
     #[test]
     fn eps_hostile_programs_never_panic(tokens in prop::collection::vec(arb_ps_token(), 0..60), illustrator in any::<bool>(), layers in any::<bool>()) {
-        let head = if illustrator { "%%Creator: Adobe Illustrator(R) 8.0\n%%EndComments\n/u {} def /U {} def" } else { "%%EndComments" };
+        let head = if illustrator { "%%Creator: Adobe Illustrator(R) 8.0\n%%EndComments\n/u {} def /U {} def\n%%BeginSetup\n%%EndSetup" } else { "%%EndComments" };
         let (open, close) = if layers {
             ("/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def\n%AI5_BeginLayer\n1 1 1 1 0 0 -1 0 0 0 Lb\n(L) Ln\n", "\nLB\n%AI5_EndLayer--")
         } else {
@@ -3186,6 +3272,28 @@ proptest! {
         prop_assert!(!opened);
     }
 
+    /// A `.ai` whose strokes have any width (0, which draws a hairline, negative, huge, not a number) on a
+    /// path, on a gradient-filled path that `1 BB` strokes and on type in any rendering mode,
+    /// damaged or hostile.
+    #[test]
+    fn ai_line_widths_never_panic(
+        width in prop::sample::select(vec!["0", "0.0", "-0", "-1", "1e308", "1e-308", "nan", "inf", "2"]),
+        render in prop::sample::select(vec!["0", "1", "2", "5", "6", "7", "-1", "99"]),
+        cut in 0usize..2_000,
+        edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', 'w', 'B', 'S', 'T'])), 0..8),
+    ) {
+        use vectorcraft_testkit::ai;
+        let gradient = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+        let art = format!(
+            "0 1 1 0 1 0 0 XA\n{width} w\n10 10 m\n90 90 L\nS\n{}Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\nf\n1 BB\n\
+             0 To\n1 0 0 1 10 50 0 Tp\nTP\n{render} Tr\n/_Helvetica 9 Tf\n(hi) Tx\nTO\n",
+            ai::rect(20.0, 20.0, 80.0, 80.0)
+        );
+        let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{gradient}{}", ai::layer("L", &art))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai line widths", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning
     /// whether the layers are read or not (an inserted `Z` can make an operator the reader doesn't
     /// handle, and then the layers aren't read).
@@ -3199,6 +3307,51 @@ proptest! {
         survive("mutated .ai variable library", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose variable library holds values of every kind, values of the wrong type, elements
+    /// nested deep, and more variables and data sets than are read, then is damaged: its layers are
+    /// read, or it comes in as its PDF part (an unknown operator), with or without layers.
+    #[test]
+    fn ai_variable_library_values_never_panic(
+        cut in 0usize..40_000,
+        edits in prop::collection::vec((0usize..40_000, prop::sample::select(vec!['0', '1', '2', '3', '9', ' ', '\n', '(', ')', '\\', '/', ':', ';', ',', '%', '_', 'Z'])), 0..16),
+        locked in prop::sample::select(vec!["none", "variableAndTypes", "", "other"]),
+        extra_variables in 0usize..300,
+        extra_rows in 0usize..1_100,
+        depth in 0usize..300,
+        bad in prop::sample::select(vec![0u8, 1, 2, 3, 4]),
+        layers in prop::sample::select(vec![0u8, 1, 2]),
+    ) {
+        use vectorcraft_testkit::ai::{self, XmlValue};
+        let mut nested = ai::xml_text(XmlValue::Str("deep"));
+        for _ in 0..depth {
+            nested = ai::xml_element("p", &[], &[nested]);
+        }
+        // A value of the wrong type, a second value, a value for no variable, wrong-typed children.
+        let wrong = match bad {
+            0 => ai::xml_element("v_visible", &[], &[ai::xml_text(XmlValue::Str("true"))]),
+            1 => ai::xml_element("v_text", &[], &[ai::xml_text(XmlValue::Bool(true))]),
+            2 => ai::xml_element("v_nope", &[], &[ai::xml_text(XmlValue::Raw("5 /Int"))]),
+            3 => ai::xml_element("v_graph", &[], &[ai::xml_text(XmlValue::Str("a,b\n1,2"))]),
+            _ => ai::xml_element("v_file", &[], &[]).replacen("%_/Array :", "%_/Dictionary :", 1),
+        };
+        let mut library = ai::sample_variable_sets(locked, &[ai::xml_element("v_text", &[], &[nested]), wrong]);
+        if extra_variables + extra_rows > 0 {
+            let declared: Vec<String> = (0..extra_variables).map(|i| ai::xml_element("variable", &[("varName", &format!("x{i}")), ("trait", "textcontent")], &[])).collect();
+            let rows: Vec<String> = (0..extra_rows).map(|i| ai::xml_element("v:sampleDataSet", &[("dataSetName", &format!("r{}", i % 900))], &[])).collect();
+            let set = ai::xml_element("variableSet", &[], &[ai::xml_element("variables", &[], &declared), ai::xml_element("v:sampleDataSets", &[], &rows)]);
+            library = ai::xml_element("variableSets", &[], &[set]);
+        }
+        let art = match layers {
+            0 => ai::layer("L", "0 g\n10 10 m\n20 20 L\nS\n"),
+            1 => ai::layer("L", "1 Zz\n"),
+            _ => String::new(),
+        };
+        let data = ai::editing_data(100.0, 100.0, &format!("{}{art}", ai::variable_library_data(&library)));
+        let text = mutate_text(&data, cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("hostile .ai variable library values", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose Objects on Path record and group are damaged or hostile.
     #[test]
     fn ai_objects_on_path_never_panics(cut in 0usize..4_000, edits in prop::collection::vec((0usize..4_000, prop::sample::select(vec!['0', '1', '9', '-', '.', 'e', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U'])), 0..12)) {
@@ -3206,6 +3359,46 @@ proptest! {
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
         // Trusted, so that the layers read are built whatever the empty page shows.
         survive("mutated .ai Objects on Path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+
+    /// Style lists (`%AI9_BeginArtStyleList`) of any entries, repeated, empty, malformed or not
+    /// defined, with or without their end, and objects whose `XW` has any code and any style name.
+    #[test]
+    fn ai_style_lists_and_style_links_never_panic(
+        listed in prop::collection::vec(prop_oneof![
+            prop::sample::select(vec!["(A)", "(B)", "()", "(Caf\\303\\251)", "(A(B))", "(x\\)", "(", ")", "<41>", "/A", "1"]).prop_map(str::to_string),
+            "[ -~]{0,12}",
+        ], 0..12),
+        ended in any::<bool>(),
+        objects in prop::collection::vec((prop_oneof![arb_num(), prop::sample::select(vec!["1".to_string(), "6".into(), "9".into()])], prop::sample::select(vec!["A", "B", "", "Caf\u{e9}", "Missing"]), any::<bool>()), 0..6),
+    ) {
+        use vectorcraft_testkit::ai;
+        let style = |name: &str| {
+            format!(
+                "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 1 0 0 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+                 /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n; /Part ,\n;\n"
+            )
+        };
+        let end = if ended { "%AI9_EndArtStyleList\n" } else { "" };
+        let header = format!(
+            "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n{}\n{end}",
+            style("A"),
+            style("B"),
+            style("Caf\u{e9}"),
+            listed.join("\n")
+        );
+        let art: String = objects
+            .iter()
+            .map(|(code, name, group)| {
+                let object = if *group { "%_0 Ae\n%_u\n%_0 0 m\n%_0 9 L\n%_9 9 L\n%_f\n%_U\n" } else { "%_0 0 m\n%_0 9 L\n%_9 9 L\n%_f\n" };
+                format!("0 Ae\nu\n0 0 m\n0 9 L\n9 9 L\nf\nU\n{object}{code} ({name}) XW\n")
+            })
+            .collect();
+        let data = ai::editing_data(200.0, 100.0, &format!("{header}%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n{art}LB\n%AI5_EndLayer--\n"));
+        survive("style lists and links", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("style lists and links in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
     /// Objects on Path records of any shape: ids in any order, repeated or missing, any number of
@@ -3363,6 +3556,48 @@ proptest! {
         survive("multi-layer masks", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         let eps = ai::eps(data.as_bytes(), ai::page_ps());
         survive("multi-layer masks in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+
+    /// The same file with placed EPS files in the version 7 form (no `%AI5_BeginPlace`), one
+    /// linked and one included whole with a nested document and counted data in it, damaged.
+    #[test]
+    fn ps_form_ai_with_placed_files_never_panics(cut in 0usize..1_600, edits in prop::collection::vec((0usize..1_600, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', '`', '~', 'E', 'D'])), 0..12)) {
+        let placed = "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `\n%%IncludeFile: a.eps\n~\n\
+            [-1 0 0 1 100 0] 10 20 50 50 4 4 0 (b.eps) `\n%%BeginDocument: b.eps\n%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n\
+            %%BeginDocument: c.eps\n~\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n0 0 1 setrgbcolor 10 20 40 30 rectfill\n%%EndDocument\n~\n";
+        let fixture = NAMED_PROLOG_AI.replacen("0 Ap\nu\n", &format!("0 Ap\n{placed}u\n"), 1);
+        prop_assert!(fixture.contains("(b.eps)"));
+        let text = mutate_text(&fixture, cut, &edits);
+        survive("mutated PostScript-form .ai with placed files", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
+    }
+}
+
+/// A `.ai` in the legacy format without layers (Illustrator 3) whose prolog is included: its
+/// program runs, and its art is read on one layer.
+const LAYERLESS_AI: &str = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 200 100\n%AI3_Cropmarks: 0 0 200 100\n%%EndComments\n\
+    %%BeginProlog\n/m {moveto} def /L {lineto} def /f {closepath fill} def /S {stroke} def /A {pop} def /k {setcmykcolor} def /u {} def /U {} def\n\
+    %%EndProlog\n%%BeginSetup\n%%EndSetup\n1 A\n0 0 0 1 k\n10 10 m\n90 10 L\n90 90 L\nf\n0 A\nu\n110 10 m\n190 90 L\n150 90 L\nf\nU\n\
+    %%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n";
+
+/// The fixture, as it is, opens through the reader: its first path keeps its lock.
+#[test]
+fn the_layerless_fixture_opens_through_the_reader() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.ai", LAYERLESS_AI.as_bytes()).unwrap();
+    assert_eq!(l.doc.layers.len(), 1, "{:?}", l.warnings);
+    let art = l.doc.layers[0].children().unwrap();
+    assert_eq!(art.len(), 2, "{:?}", l.warnings);
+    assert!(art[0].locked && !art[1].locked);
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` in the legacy format without layers, damaged: read through the reader, as its page,
+    /// or refused.
+    #[test]
+    fn layerless_ai_never_panics(cut in 0usize..800, edits in prop::collection::vec((0usize..800, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '{', '}', '%', 'u', 'U', 'L', 'f', 'A', 'k'])), 0..12)) {
+        let text = mutate_text(LAYERLESS_AI, cut, &edits);
+        survive("mutated layerless .ai", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
     }
 }
 
@@ -3595,8 +3830,24 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI26_EndPlacedObjectPreview\n",
             "[1 0 0 -1 0 0] 0 0 2 1 4 4 0 (a.png) `",
             "[1e308 0 0 1e308 0 0] 0 0 -1e308 1e308 4 4 0 (a.png) `",
+            "\n%AI28_BeginPlacedRelativePath\n",
+            "\n%AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n",
+            "\n%AI28_BeginPlacedRelativePath\n(..\\\\..\\\\art\\\\)\n%AI28_EndPlacedRelativePath\n",
+            "\n%AI28_BeginPlacedRelativePath\n(C:\\\\x\\001)\n%AI28_EndPlacedRelativePath\n",
+            "\n%_%AI28_BeginPlacedRelativePath\n%_(src/)\n%_%AI28_EndPlacedRelativePath\n",
+            "\n%AI28_EndPlacedRelativePath\n",
             "`",
             "~",
+            // The version 7 form (§16): an 11-value `` ` `` with no `%AI5_BeginPlace`, its file
+            // linked or included whole, a nested document and counted data in that.
+            "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `",
+            "[0 0 0 0 0 0] 0 0 0 0 (a.eps) `",
+            "\n%%IncludeFile: a.eps\n",
+            "\n%%BeginDocument: a.eps\n",
+            "\n%%EndDocument\n",
+            "\n%%BeginData: 14 Binary Bytes\n",
+            "\n%%BeginBinary: 99999999999\n",
+            "\n%%BeginData: 3 Hex Lines\n",
             "\n%AI5_EndPlace\n",
             "Xm",
             "50 -50 -100 -100 5000 -2000 Xm",
@@ -3634,6 +3885,18 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "9 () XW",
             "\n%AI9_BeginArtStyles\n",
             "\n%AI9_EndArtStyles\n",
+            "\n%AI9_BeginArtStyleList\n",
+            "\n%AI9_EndArtStyleList\n",
+            "(style)\n",
+            "(st\\)y(le)\n",
+            "(\\303\\251",
+            "(style) XW",
+            "1 () XW",
+            "6 (style) XW",
+            "7 (style) XW",
+            "-1 (style) XW",
+            "1e308 (style) XW",
+            "1 (Caf\\351) XW",
             "/KnownStyle :",
             "(style) /Name ,",
             "/ActiveStyle :",
@@ -3643,6 +3906,29 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "(Fill Style Filter) 0 0 /Filter ,",
             "(Adobe Outer Glow) 1 0 /Filter ,",
             "(Adobe Drop Shadow) 1 0 /Filter ,",
+            "(Adobe Transform) 1 0 /Filter ,",
+            "(Adobe Free Distort) 1 0 /Filter ,",
+            "(Adobe Punk and Bloat) 1 0 /Filter ,",
+            "(Adobe Roughen) 1 0 /Filter ,",
+            "(Adobe Scribble and Tweak) 1 0 /Filter ,",
+            "(Adobe Twirl) 1 0 /Filter ,",
+            "(Adobe Zigzag) 1 0 /Filter ,",
+            "1e308 /Real (scaleH_Factor) ,",
+            "-1e308 /Real (rotate_Radians) ,",
+            "1000 /Int (numCopies) ,",
+            "8 /Int (pinPoint) ,",
+            "0 /Bool (scaleLines) ,",
+            "0 /Bool (transformPatterns) ,",
+            "0 /Real (src0h) ,",
+            "1e-300 /Real (src1h) ,",
+            "-1 /Real (src2v) ,",
+            "1e308 /Real (dst3v) ,",
+            "-200 /Real (d_factor) ,",
+            "3600 /Real (angle) ,",
+            "1 /Real (absoluteness) ,",
+            "100 /Real (ridges) ,",
+            "1e4 /Real (amount) ,",
+            "0 /Bool (anch) ,",
             "(Adobe Inner Glow) 1 0 /Filter ,",
             "(Adobe Fuzzy Mask) 1 0 /Filter ,",
             "(Adobe Round Corners) 1 0 /Filter ,",
@@ -3666,6 +3952,17 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "/FillStyle : 0 O\n0 0 0 0 1 0 0 Xa\n0 1 Xd\n/Def ;\n (sclr) ,",
             "/FillStyle : 0 O\nBb\n2 (G) 0 0 0 1 1 0 0 1 0 0 Bg\n0 BB\n/Def ;\n (gclr) ,",
             "(sclr) ,",
+            "(Adobe Offset Path) 1 0 /Filter ,",
+            "(Adobe Outline Type) 1 0 /Filter ,",
+            "(Adobe Outline Stroke) 1 0 /Filter ,",
+            "(Chain Style Filter) 0 0 /Filter ,",
+            "-1e308 /Real (ofst) ,",
+            "1e999 /Real (ofst) ,",
+            "2 /Int (jntp) ,",
+            "7 /Int (jntp) ,",
+            "NaN /Real (mlim) ,",
+            "(x) /UnicodeString (mlim) ,",
+            "0 /Visible ,",
             "1 /Visible ,",
             "2 /FillOrStroke ,",
             "1 /Bool (BSDashAdj) ,",
@@ -3817,6 +4114,114 @@ proptest! {
         // An EPS whose page is its art's box, not its artboard: what prints outside it is compared too.
         let boxed = ai::eps(data.replace("%AI3_Cropmarks: 0 0 200 100", "%AI3_Cropmarks: -50 -50 300 200").as_bytes(), ai::page_ps());
         survive("hostile editing data in an EPS of its art's box", || vectorcraft_engine::cmd::fileio::load("x.eps", &boxed).ok().map(|l| l.doc))?;
+    }
+
+    /// Art styles with Offset Path, Outline Object and Outline Stroke, in any order, shown or hidden,
+    /// whose dictionaries hold any of Offset Path's entries and unknown ones, as any kind, with any
+    /// value (huge, tiny, not a number, a string), repeated or left out, on the whole object, a fill
+    /// or a stroke, of a path, a group and type.
+    #[test]
+    fn ai_path_effects_never_panic(
+        effects in prop::collection::vec((
+            prop::sample::select(vec!["Adobe Offset Path", "Adobe Outline Type", "Adobe Outline Stroke"]),
+            prop::collection::vec((
+                prop::sample::select(vec!["ofst", "jntp", "mlim", "width", "DisplayString"]),
+                prop::sample::select(vec!["Int", "Real", "Bool", "UnicodeString"]),
+                prop_oneof![
+                    (-2e5f64..2e5).prop_map(|v| v.to_string()),
+                    prop::sample::select(vec!["0", "1", "2", "3", "-1", "0.5", "1e-300", "1e308", "-1e308", "1e999", "NaN", "(x)", ""]).prop_map(str::to_string),
+                ],
+            ), 0..6),
+            any::<bool>(),
+        ), 0..5),
+        target in 0..3usize,
+    ) {
+        use vectorcraft_testkit::ai;
+        let basic = |name: &str, body: &str| format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n");
+        let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+        let filters: Vec<String> = effects
+            .iter()
+            .map(|(name, entries, visible)| {
+                let keys: String = entries.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+                basic(name, &keys).replacen("1 /Visible", if *visible { "1 /Visible" } else { "0 /Visible" }, 1)
+            })
+            .collect();
+        let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+        let stroke = basic("Stroke Style Filter", "/StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 4 w 10 M []0 d0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n");
+        let conduit = basic("Conduit Filter", "");
+        let chain = |item: String| compound("Chain Style Filter", &[filters.concat(), item, filters.concat()]);
+        let root = match target {
+            0 => compound("Chain Style Filter", &[filters.concat(), compound("Stack Style Filter", &[stroke, fill, conduit])]),
+            1 => compound("Chain Style Filter", &[compound("Stack Style Filter", &[stroke, chain(fill), conduit])]),
+            _ => compound("Chain Style Filter", &[compound("Stack Style Filter", &[chain(stroke), fill, conduit])]),
+        };
+        let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n");
+        let hidden = ai::rect(20.0, 20.0, 80.0, 60.0).replace('\n', "\n%_");
+        let art = format!(
+            "0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{hidden}f\n1 (Fx) XW\n0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_0 Ae\n%_u\n%_{hidden}f\n%_U\n1 (Fx) XW\nu\n/AI11Text :\n1 /FreeUndo ,\n;\n0 0 1 0 k\n{}f\nU\n1 (Fx) XW\n",
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(100.0, 20.0, 180.0, 60.0)
+        );
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
+        survive("Path effect art style", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("Path effect art style in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+
+    /// Art styles with a Distort & Transform effect (Transform, Free Distort, Pucker & Bloat, Roughen,
+    /// Tweak, Twist, Zig Zag) whose dictionary holds any of its entries, and unknown ones, as any kind,
+    /// with any value (huge, tiny, not a number, a string), repeated or left out, on a path and on type,
+    /// on the whole object or on its fill.
+    #[test]
+    fn ai_distort_effects_never_panic(
+        name in prop::sample::select(vec![
+            "Adobe Transform",
+            "Adobe Free Distort",
+            "Adobe Punk and Bloat",
+            "Adobe Roughen",
+            "Adobe Scribble and Tweak",
+            "Adobe Twirl",
+            "Adobe Zigzag",
+        ]),
+        entries in prop::collection::vec((
+            prop::sample::select(vec![
+                "scaleH_Factor", "scaleV_Factor", "scaleH_Percent", "rotate_Radians", "rotate_Degrees", "moveH_Pts", "moveV_Pts",
+                "numCopies", "pinPoint", "reflectX", "reflectY", "randomize", "transformObjects", "transformPatterns", "scaleLines",
+                "src0h", "src0v", "src1h", "src1v", "src2h", "src2v", "src3h", "src3v", "dst0h", "dst0v", "dst1h", "dst1v", "dst2h",
+                "dst2v", "dst3h", "dst3v", "d_factor", "absoluteness", "size", "asiz", "dtal", "roundness", "horz", "vert", "ahor",
+                "aver", "anch", "in", "out", "angle", "amount", "relAmount", "ridges", "futureKey",
+            ]),
+            prop::sample::select(vec!["Int", "Real", "Bool"]),
+            prop_oneof![
+                (-1e4f64..1e4).prop_map(|v| v.to_string()),
+                prop::sample::select(vec!["0", "1", "-1", "0.5", "1e-300", "1e308", "-1e308", "1e999", "NaN", "(x)", ""]).prop_map(str::to_string),
+            ],
+        ), 0..24),
+        on_fill in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let keys: String = entries.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+        let basic = |name: &str, body: &str| format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n");
+        let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+        let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+        let effect = basic(name, &keys);
+        let root = if on_fill {
+            compound("Chain Style Filter", &[compound("Stack Style Filter", &[compound("Chain Style Filter", &[fill, effect]), basic("Conduit Filter", "")])])
+        } else {
+            compound("Chain Style Filter", &[compound("Stack Style Filter", &[fill, basic("Conduit Filter", "")]), effect])
+        };
+        let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n");
+        let hidden = ai::rect(20.0, 20.0, 80.0, 60.0).replace('\n', "\n%_");
+        let art = format!(
+            "0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{hidden}f\n1 (Fx) XW\nu\n/AI11Text :\n1 /FreeUndo ,\n;\n0 0 1 0 k\n{}f\nU\n1 (Fx) XW\n",
+            ai::rect(20.0, 20.0, 80.0, 60.0),
+            ai::rect(100.0, 20.0, 180.0, 60.0)
+        );
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
+        survive("distort art style", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("distort art style in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
     /// Layer options (`Lb`) of any number of operands with any values, and guide paths (`(N) *`,

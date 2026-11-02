@@ -113,6 +113,7 @@ pub mod swatch_options;
 pub mod symbol_delete;
 pub mod symbol_options;
 pub mod symbolism_options;
+pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
 mod tiff_bmp_tga;
@@ -134,8 +135,9 @@ pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES,
 pub use export_as::open as open_export_as;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options,
-    saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
+    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
+    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
 pub(crate) use form::{humanize, number_list_text, read_number_list, unit_suffix};
 pub(crate) use new_document::preset_name;
@@ -294,6 +296,7 @@ registry! {
     Preferences: ["preferences"] => DialogSpec::window(crate::prefs_dialog::show, |app, _| crate::prefs_dialog::confirm(app)),
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
+    NewToolbar: [crate::custom_toolbars::KIND] => DialogSpec::window(crate::custom_toolbars::show_dialog, |app, _| crate::custom_toolbars::confirm(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
@@ -331,6 +334,7 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
@@ -403,6 +407,7 @@ registry! {
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
+    SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
     ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
@@ -484,11 +489,32 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
     d.fields.get(PARENT).and_then(|v| serde::Deserialize::deserialize(v).ok())
 }
 
+/// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), and a change
+/// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
+/// the dialog.
+pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
+    match field {
+        "exportPreset" => export_for_screens::preset_set(app),
+        "subfolders" | "subfolderBy" => {
+            if d.fields.get(field) != old {
+                d.fields.remove("__itemFolders");
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
     if let Some(d) = app.ui.dialog.take() {
+        if d.kind == swatch_conflict::KIND {
+            crate::placing::cancel_swatch_paste(app);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -533,6 +559,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
 /// (one dialog at a time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
+    crate::placing::settle_swatch_paste(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);

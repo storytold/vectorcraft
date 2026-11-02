@@ -385,6 +385,7 @@
 	Stroke Weight	Ketebalan stroke
 	Graphic Style	Gaya grafis
 	Symbol Instance	Instans simbol
+	Link Block Series	Rangkaian blok tertaut
 	Font Family	Keluarga font
 	Font Family & Style	Keluarga & gaya font
 	Font Family, Style & Size	Keluarga, gaya & ukuran font
@@ -596,6 +597,10 @@
 	Reset Typography	Atur ulang Typography
 	Reset Web	Atur ulang Web
 	New Workspace…	Ruang kerja baru…
+	New Toolbar…	Bilah alat baru…
+	New Toolbar	Bilah alat baru
+	Show Toolbar	Tampilkan bilah alat
+	List Toolbars	Daftar bilah alat
 	Manage Workspaces…	Kelola ruang kerja…
 	Control	Kontrol
 	Contextual Task Bar	Bilah tugas kontekstual
@@ -1252,6 +1257,8 @@ lighting	Light	Cahaya
 	No actions. Press ● to record.	Tidak ada aksi. Tekan ● untuk merekam.
 	Outline Text	Garis luar teks
 	Play Current Selection	Putar seleksi saat ini
+	Save Actions…	Simpan tindakan…
+	Load Actions…	Muat tindakan…
 	Reflect Horizontal	Pencerminan horizontal
 	Rotate 90° CW	Putar 90° searah jarum jam
 	Set 1	Set 1
@@ -1280,6 +1287,8 @@ lighting	Light	Cahaya
 	Dashed	Putus-putus
 	Delete Selected Item	Hapus item terpilih
 	Double-click to edit the characters' paint	Klik ganda untuk mengedit pewarnaan karakter
+	Click to edit	Klik untuk mengedit
+	Double-click to edit	Klik ganda untuk mengedit
 	Double-click to target the contents	Klik ganda untuk menargetkan konten
 	Drag onto art to apply this appearance	Seret ke karya seni untuk menerapkan penampilan ini
 	Duplicate Selected Item	Duplikatkan item terpilih
@@ -1383,6 +1392,10 @@ digits	Malayalam	Malayalam
 	Superscript (on the roadmap)	Superskrip (masih dalam roadmap)
 	System Layout	Tata letak sistem
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Pengaturan Tate-chu-yoko…
+	Tate-chu-yoko Settings	Pengaturan Tate-chu-yoko
+	Up/Down:	Atas/bawah:
+	Left/Right:	Kiri/kanan:
 	Underline	Garis bawah
 	Vertical Scale %	Skala vertikal %
 	Axis	Sumbu
@@ -2145,6 +2158,8 @@ digits	Malayalam	Malayalam
 	Preserve Overprints and Spot Colors	Pertahankan overprint dan warna spot
 	Rasters	Raster
 	Replaces the saved preset of that name.	Mengganti preset tersimpan dengan nama tersebut.
+	Save As Preset…	Simpan sebagai Preset…
+	Save Changes	Simpan Perubahan
 	Save Preset…	Simpan preset…
 	Vectors	Vektor
 	A saved copy of the selected preset	Salinan tersimpan dari preset terpilih
@@ -2763,6 +2778,7 @@ digits	Malayalam	Malayalam
 	Total Width:	Lebar total:
 	Width Point Edit	Edit titik lebar
 	Art	Seni
+	Bearing	Arah
 	Bristle	Bristle
 	Calligraphic	Kaligrafis
 	Dots	Titik
@@ -2770,6 +2786,7 @@ digits	Malayalam	Malayalam
 	Pressure	Tekanan
 	Random	Acak
 	Scatter	Sebar
+	Tilt	Kemiringan
 	Color Burn	Bakar warna
 	Color Dodge	Dodge warna
 	Darken	Menggelapkan
@@ -4221,6 +4238,14 @@ imageTrace	Outline	Kontur
 @msg	no selection bounds	tidak ada batas seleksi
 @msg	no slice selected	tidak ada slice yang dipilih
 @msg	no such action	tidak ada aksi seperti itu
+@msg	no such action set	tidak ada set tindakan seperti itu
+@msg	the action sets changed; nothing was deleted	set tindakan telah berubah; tidak ada yang dihapus
+@msg	no action set to save	tidak ada set tindakan untuk disimpan
+@msg	not an action set file	bukan file set tindakan
+@msg	the action set file is larger than 8 MiB	file set tindakan lebih besar dari 8 MiB
+@msg	the action set file holds more than 1,000 actions	file set tindakan berisi lebih dari 1.000 tindakan
+@msg	the action set file needs a later version of VectorCraft	file set tindakan memerlukan versi VectorCraft yang lebih baru
+@msg	an action in the action set file has more than 10,000 steps	sebuah tindakan dalam file set tindakan memiliki lebih dari 10.000 langkah
 @msg	no such anchor	tidak ada jangkar seperti itu
 @msg	no such artboard	tidak ada artboard seperti itu
 @msg	no such document	tidak ada dokumen seperti itu
@@ -4462,6 +4487,9 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Tidak dapat menempatkan {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Tidak dapat menempel: dokumen tempatnya ditempel sudah ditutup
+@msg	Saved {path} with {_1} note(s): {first}	{path} disimpan dengan {_1} catatan: {first}
+@msg	Exported {what} with {_1} note(s): {first}	{what} diekspor dengan {_1} catatan: {first}
 @msg	Exported {what}	{what} diekspor
 @msg	Saved {n} files beside {path}	{n} berkas disimpan di sebelah {path}
 @msg	Saving	Menyimpan
@@ -4469,6 +4497,7 @@ imageTrace	Outline	Kontur
 @msg	Exporting {_1}	Mengekspor {_1}
 @msg	Packaging {_1}	Mengemas {_1}
 @msg	Placing {_1}	Menempatkan {_1}
+@msg	Pasting	Menempel
 @msg	Saving recovery data for {_1}	Menyimpan data pemulihan untuk {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
@@ -4519,7 +4548,15 @@ imageTrace	Outline	Kontur
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ini bukan logo dengan warna rata ({_1}% area solidnya cocok dengan beberapa warna rata), jadi mode Logo Rata akan mengubah gradiennya menjadi patch: gunakan mode Warna sebagai gantinya
 @msg	`{what}` closes nothing	`{what}` tidak menutup apa pun
 @msg	`{what}` closes something it didn't open	`{what}` menutup sesuatu yang tidak dibukanya
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` adalah nama preset dari document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	tidak ada preset ekspor `{n}` (lihat document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	tidak ada preset ekspor tersimpan untuk diekspor (sebutkan yang bawaan di `names`)
+@msg	not an export presets file (format `{_1}`)	bukan file preset ekspor (format `{_1}`)
+@msg	not an export presets file: {e}	bukan file preset ekspor: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` harus berupa objek
 @msg	a path has too many points	sebuah jalur memiliki terlalu banyak titik
+@msg	it ends inside a group or compound path	berakhir di dalam grup atau jalur majemuk
 @msg	it ends inside a layer	berakhir di dalam lapisan
 @msg	it has art outside its layers	memiliki karya seni di luar lapisannya
 @msg	it has more than {MAX_NODES} objects	memiliki lebih dari {MAX_NODES} objek
@@ -4895,6 +4932,7 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
 file-filter	PDF-compatible .ai	.ai kompatibel PDF
 file-filter	VectorCraft Template	Templat VectorCraft
@@ -5129,6 +5167,11 @@ mark-style	Japanese	Jepang
 	Import Data Sets…	Impor himpunan data…
 	Export Data Sets…	Ekspor himpunan data…
 	Load Variable Library…	Muat pustaka variabel…
+	Save Variable Library…	Simpan pustaka variabel…
+@msg	a variable library holds text variables, and the document has none	pustaka variabel berisi variabel teks, dan dokumen tidak memilikinya
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabel `{name}` tidak dapat disimpan dalam pustaka variabel: ganti namanya agar diawali huruf atau `_`, tanpa spasi atau simbol selain `-`, `_`, dan `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	himpunan data `{name}` berisi karakter kontrol, yang tidak dapat dimuat dalam pustaka variabel
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	himpunan data `{name}` diawali atau diakhiri spasi, yang tidak dapat dimuat dalam pustaka variabel
 @msg	variables that aren't text were left out: {kinds}	variabel yang bukan teks dihilangkan: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	dokumen baru tidak akan membaca kembali variabel ini dengan jenisnya: {names}
 @msg	a new document refuses this file because of these variables: {names}	dokumen baru menolak file ini karena variabel berikut: {names}
@@ -5173,6 +5216,9 @@ mark-style	Japanese	Jepang
 	Path Length	Panjang jalur
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	lapisan file tidak terbaca ({_1}): file masuk sebagai halamannya, dalam satu lapisan
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	lapisan file tidak terbaca dari data pengeditannya ({_1}): lapisannya berasal dari bagian PDF file
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	pustaka variabel file hanya terbaca sebagian (entri yang dilewati: {_1}): panel Variabel menampilkan sisanya
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	pustaka variabel file tidak dapat dibaca: panel Variabel tidak menampilkannya
+@msg	a variable of unknown kind can't be bound to objects	variabel bertipe tidak dikenal tidak dapat diikat ke objek
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
@@ -5246,6 +5292,10 @@ swatch	Bright Violet	Violet cerah
 	Delete Export Preset	Hapus preset ekspor
 	Export Presets	Daftar preset ekspor
 	Save Export Preset	Simpan preset ekspor
+	Export Export Presets	Ekspor preset ekspor
+	Export Preset…	Ekspor preset…
+	Import Export Presets	Impor preset ekspor
+	Import Preset…	Impor preset…
 	Export Layer	Ekspor lapisan
 	Export Selection	Ekspor seleksi
 	All in One Folder	Semua dalam satu folder
@@ -5577,6 +5627,9 @@ axis	Y Axis	Sumbu Y
 	New Set	Set baru
 	Set Options…	Opsi set…
 	Set Options	Opsi set
+	Action Options…	Opsi tindakan…
+	Action Options	Opsi tindakan
+	Rename Action	Ganti nama tindakan
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
@@ -6059,3 +6112,9 @@ breakText	Glyphs	Glif
 	Small to Large	Kecil ke besar
 	Large to Small	Besar ke kecil
 	Distribute Evenly	Distribusikan merata
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Buat Legenda Swatch
+	Create Swatch Legend…	Buat Legenda Swatch…
+	HEX	HEX

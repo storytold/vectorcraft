@@ -1,4 +1,4 @@
-use super::{Affine, BlendMode, Dash, FillRule, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
+use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -94,6 +94,18 @@ impl Default for GState {
             show_center: None,
         }
     }
+}
+
+impl GState {
+    /// The width its stroke draws at (see [`line_width`]).
+    pub(crate) fn line_width(&self) -> f64 {
+        line_width(self.width)
+    }
+}
+
+/// The width a stroke of `w w` draws at: `0 w` is the thinnest line a device draws, a [`HAIRLINE`].
+pub(super) fn line_width(w: f64) -> f64 {
+    if w > 0.0 { w } else { HAIRLINE }
 }
 
 /// The blend modes by their number in `Xy`.
@@ -225,7 +237,22 @@ pub(super) struct Place {
     pub(super) path: String,
     /// The preview as a PNG, and its size in pixels.
     pub(super) preview: Option<(Vec<u8>, u32, u32)>,
+    /// The file's folder relative to the document's (`src/`), from the string between
+    /// `%AI28_BeginPlacedRelativePath` and its end.
+    pub(super) folder: Option<String>,
+    /// The operand stack's height at `%AI28_BeginPlacedRelativePath`, until its end.
+    pub(super) folder_at: Option<usize>,
+    /// Its `` ` `` was read.
+    pub(super) ticked: bool,
+    /// It began on a `%_` line, in a hidden object or on a layer that doesn't show.
+    pub(super) hidden: bool,
+    /// What it holds can't be read: operands of another shape, a second `` ` ``, or a document
+    /// included in it that doesn't end.
+    pub(super) broken: bool,
 }
+
+/// The longest relative folder of a placed file read (bytes).
+pub(super) const MAX_PLACED_FOLDER: usize = 4096;
 
 /// What the open result says of placed files: they show the preview the file keeps of them.
 pub(super) const LINKED_PREVIEWS: &str =
@@ -258,7 +285,6 @@ pub(super) const IGNORED: &[&str] = &[
     "XD",
     "Xi",
     "XI",
-    "`",
     "LB2",
     "Lc",
     "Xv",

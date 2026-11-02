@@ -79,7 +79,7 @@ const PERCEPTUAL_TOLERANCE: f32 = 0.4 / 255.0;
 /// halved to keep within [`PERCEPTUAL_TOLERANCE`].
 const PERCEPTUAL_DEPTH: u32 = 10;
 /// How many times [`Gradient::ink_tints`] halves the range of tints it searches: to within
-/// 1/65536 of a tint, finer than the 1/255 steps PDF writes.
+/// 1/65536 of a tint.
 const TINT_STEPS: u32 = 16;
 /// The least OKLab lightness by which an ink at 100% must differ from paper white for
 /// [`Gradient::ink_tints`] to tell its tints apart by lightness.
@@ -277,6 +277,11 @@ impl Gradient {
     /// [`Self::expanded_stops`], each stop that stands for a midpoint with that midpoint (`None`
     /// on the gradient's own stops and a Perceptual gradient's other in-between stops).
     pub fn expanded(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>)> + '_ {
+        self.expanded_with_stops().map(|(t, c, o, mid, _)| (t, c, o, mid))
+    }
+    /// [`Self::expanded`], each of the gradient's own stops with its index in [`Self::stops`]
+    /// (`None` on the stops in between).
+    fn expanded_with_stops(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>, Option<usize>)> + '_ {
         // Direct interpolation matches `sample` only for strictly increasing offsets.
         let increasing = self.stops.windows(2).all(|w| w[0].offset < w[1].offset);
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
@@ -289,7 +294,7 @@ impl Gradient {
                 // stops again for each midpoint made many stops cost their square.
                 let mix = |a: &Color, b: &Color, v| self.method.mix(a, b, v);
                 let (c, o) = if increasing { between(s, n, t, &mix) } else { self.sample_with(t, mix) };
-                (t, c, o, Some(s.midpoint))
+                (t, c, o, Some(s.midpoint), None)
             });
             // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the
             // midpoint (v = ½) among them, placed through the midpoint as [`Self::sample`] maps them.
@@ -298,26 +303,27 @@ impl Gradient {
                     let mid = v == 0.5;
                     let t = curve_offset(s, n, v);
                     let o = s.opacity + (n.opacity - s.opacity) * v;
-                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint))
+                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint), None)
                 })
             });
-            std::iter::once((s.offset, s.color, s.opacity, None)).chain(classic).chain(perceptual.into_iter().flatten())
+            std::iter::once((s.offset, s.color, s.opacity, None, Some(i))).chain(classic).chain(perceptual.into_iter().flatten())
         })
     }
     /// A gradient of tints of one ink `ink` (its color at 100%; paper white is 0% of it) as
     /// (offset, tint, opacity) at each of [`Self::expanded_stops`]: the tint (0..1) whose OKLab
-    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings. Mixed
-    /// linearly between them, the tints follow a Perceptual gradient's curve. `None` when the
-    /// ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of paper white's (a white or nearly
-    /// white ink), so lightness does not tell its tints apart, and when the curve has more than
-    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
-    pub fn ink_tints(&self, ink: &Color) -> Option<Vec<(f32, f32, f32)>> {
+    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings, except at
+    /// the gradient's own stops, which take their tints from `stop_tints` (one per stop, in
+    /// order) where it has one. Mixed linearly between them, the tints follow a Perceptual
+    /// gradient's curve. `None` when the ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of
+    /// paper white's (a white or nearly white ink), so lightness does not tell its tints apart,
+    /// and when the curve has more than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_tints(&self, ink: &Color, stop_tints: &[f32]) -> Option<Vec<(f32, f32, f32)>> {
         use crate::libraries::srgb_to_oklab;
         let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
         if lightness(&ink.tinted(0.0)) - lightness(ink) < MIN_INK_LIGHTNESS_SPAN {
             return None;
         }
-        let curve: Vec<_> = self.expanded().take(MAX_INK_TINTS + 1).collect();
+        let curve: Vec<_> = self.expanded_with_stops().take(MAX_INK_TINTS + 1).collect();
         if curve.len() > MAX_INK_TINTS {
             return None;
         }
@@ -334,7 +340,7 @@ impl Gradient {
             }
             (lo + hi) / 2.0
         };
-        Some(curve.into_iter().map(|(t, c, o, _)| (t, tint(&c), o)).collect())
+        Some(curve.into_iter().map(|(t, c, o, _, i)| (t, i.and_then(|i| stop_tints.get(i).copied()).unwrap_or_else(|| tint(&c)), o)).collect())
     }
     /// Does the gradient's curve ([`Self::expanded`]) have at most [`MAX_INK_TINTS`] stops, so
     /// [`Self::ink_tints`] finds tints for it?

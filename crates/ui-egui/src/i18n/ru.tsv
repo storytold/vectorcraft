@@ -849,6 +849,8 @@ font-technology	Variable	Вариативные
 	Double Right Quotation Marks	Двойные закрывающие кавычки
 	Double-click	Двойной щелчок
 	Double-click to edit the characters' paint	Дважды щёлкните, чтобы редактировать заливку символов
+	Click to edit	Щёлкните, чтобы редактировать
+	Double-click to edit	Дважды щёлкните, чтобы редактировать
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект
@@ -1037,6 +1039,16 @@ font-technology	Variable	Вариативные
 	Delete Export Preset	Удалить набор настроек экспорта
 	Export Presets	Наборы настроек экспорта
 	Save Export Preset	Сохранить набор настроек экспорта
+	Export Export Presets	Экспортировать наборы настроек экспорта
+	Export Preset…	Экспортировать набор…
+	Import Export Presets	Импортировать наборы настроек экспорта
+	Import Preset…	Импортировать набор…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` — имя набора из document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	нет набора настроек экспорта `{n}` (см. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	нет сохранённых наборов настроек экспорта для экспорта (встроенные укажите в `names`)
+@msg	not an export presets file (format `{_1}`)	не является файлом наборов настроек экспорта (формат `{_1}`)
+@msg	not an export presets file: {e}	не является файлом наборов настроек экспорта: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Экспортировать слой
 	Export Selection	Экспортировать выделение
 	All in One Folder	Всё в одну папку
@@ -1209,6 +1221,7 @@ file-filter	Swatch libraries	Библиотеки образцов
 file-filter	Flattener presets	Наборы объединения
 file-filter	PDF presets	Наборы PDF
 file-filter	Print presets	Наборы печати
+file-filter	Export presets	Наборы настроек экспорта
 file-filter	SVG Compressed	Сжатый SVG
 file-filter	PDF-compatible .ai	.ai, совместимый с PDF
 file-filter	VectorCraft Template	Шаблон VectorCraft
@@ -2041,6 +2054,8 @@ file-filter	Templates	Шаблоны
 	Roundness:	Округлость:
 	Fixed	Фиксированный
 	Pressure	Нажим
+	Tilt	Наклон
+	Bearing	Азимут
 	Shape:	Форма:
 	Bristle Length:	Длина щетинок:
 	Bristle Density:	Плотность щетинок:
@@ -2103,6 +2118,10 @@ file-filter	Templates	Шаблоны
 	New Without Dialog	Создать без диалогового окна
 	New Workspace	Новая рабочая среда
 	New Workspace…	Новая рабочая среда…
+	New Toolbar…	Новая панель инструментов…
+	New Toolbar	Новая панель инструментов
+	Show Toolbar	Показать панель инструментов
+	List Toolbars	Список панелей инструментов
 	New {kind} Style…	Новый стиль {kind}…
 	New…	Создать…
 	Next	Далее
@@ -2402,6 +2421,8 @@ diagnostics	ui	интерфейс
 	Plates	Пластины
 	Platform:	Платформа:
 	Play Current Selection	Воспроизвести текущее выделение
+	Save Actions…	Сохранить действия…
+	Load Actions…	Загрузить действия…
 	Plug-in Info	Сведения о модуле
 	Plug-ins	Модули
 	Plug-in…	Модуль…
@@ -2807,11 +2828,13 @@ digits	Malayalam	Малаялам
 	Save a Copy	Сохранить копию
 	Save a Copy…	Сохранить копию…
 	Save As	Сохранить как
+	Save As Preset…	Сохранить как набор настроек…
 	Save as PDF…	Сохранить как PDF…
 	Save as preset:	Сохранить как набор:
 	Save as Template	Сохранить как шаблон
 	Save as Template…	Сохранить как шаблон…
 	Save As…	Сохранить как…
+	Save Changes	Сохранить изменения
 	Save changes to {name}	Сохранить изменения в {name}
 	Save color group to Swatch panel	Сохранить цветовую группу на панели «Образцы»
 	Save Colors as Swatches	Сохранить цвета как образцы
@@ -3362,6 +3385,7 @@ digits	Malayalam	Малаялам
 	Graphic	Графика
 	Show all open documents	Показать все открытые документы
 	Symbol Instance	Экземпляр символа
+	Link Block Series	Серия связанных блоков
 	Symbol Libraries	Библиотеки символов
 	Symbol Screener Tool	Инструмент «Прозрачность символов»
 	Symbol Scruncher Tool	Инструмент «Сжатие символов»
@@ -3385,6 +3409,10 @@ digits	Malayalam	Малаялам
 	Target Contents	Содержимое объекта
 	Target:	Объект:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
+	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Up/Down:	Вверх/вниз:
+	Left/Right:	Влево/вправо:
 	Temperature	Температура
 	Temperature/Tint…	Температура/оттенок…
 	Template	Шаблон
@@ -4277,6 +4305,14 @@ axis	Both	Оба
 @msg	no selection bounds	у выделения нет границ
 @msg	no slice selected	фрагмент не выделен
 @msg	no such action	такого действия нет
+@msg	no such action set	такого набора действий нет
+@msg	the action sets changed; nothing was deleted	наборы действий изменились; ничего не удалено
+@msg	no action set to save	нет набора действий для сохранения
+@msg	not an action set file	это не файл набора действий
+@msg	the action set file is larger than 8 MiB	файл набора действий больше 8 MiB
+@msg	the action set file holds more than 1,000 actions	файл набора действий содержит более 1000 действий
+@msg	the action set file needs a later version of VectorCraft	для файла набора действий нужна более новая версия VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	в файле набора действий есть действие более чем из 10 000 шагов
 @msg	no such anchor	такой опорной точки нет
 @msg	no such artboard	такой монтажной области нет
 @msg	the artboard is locked	монтажная область заблокирована
@@ -4303,6 +4339,7 @@ axis	Both	Оба
 @msg	no user library folder here	здесь нет папки пользовательских библиотек
 @msg	no user workspace `{from}`	нет пользовательской рабочей среды `{from}`
 @msg	node {_1} is not text	узел {_1} не является текстом
+@msg	node {_1} is on a locked artboard	узел {_1} находится на заблокированной монтажной области
 @msg	not a DXF drawing	не является чертежом DXF
 @msg	not a VectorCraft file: {0}	не является файлом VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не является набором сочетаний клавиш VectorCraft (отсутствует `overrides`)
@@ -4546,6 +4583,9 @@ axis	Both	Оба
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не удалось поместить {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не удалось вставить из буфера обмена: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Не удалось вставить: документ, в который выполнялась вставка, был закрыт
+@msg	Saved {path} with {_1} note(s): {first}	Сохранено: {path} с примечаниями ({_1}) : {first}
+@msg	Exported {what} with {_1} note(s): {first}	Экспортировано: {what} с примечаниями ({_1}) : {first}
 @msg	Exported {what}	Экспортировано: {what}
 @msg	Saved {n} files beside {path}	Сохранено файлов: {n} рядом с {path}
 @msg	Saving	Сохранение
@@ -4553,6 +4593,7 @@ axis	Both	Оба
 @msg	Exporting {_1}	Экспорт {_1}
 @msg	Packaging {_1}	Упаковка {_1}
 @msg	Placing {_1}	Размещение {_1}
+@msg	Pasting	Вставка
 @msg	Saving recovery data for {_1}	Сохранение данных восстановления для {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
@@ -4610,6 +4651,7 @@ axis	Both	Оба
 @msg	`{w}` takes no operands	`{w}` не принимает операндов
 @msg	a wraparound group is inside a compound path	группа обтекания текстом находится внутри составного контура
 @msg	a path has too many points	в контуре слишком много точек
+@msg	it ends inside a group or compound path	они заканчиваются внутри группы или составного контура
 @msg	it ends inside a layer	они заканчиваются внутри слоя
 @msg	it ends inside a multi-layer mask	они заканчиваются внутри многослойной маски
 @msg	a multi-layer mask's operators are out of order	операторы многослойной маски идут в неправильном порядке
@@ -4706,6 +4748,9 @@ axis	Both	Оба
 @msg	the PCX file is cut short	файл PCX обрезан
 @msg	the PCX file's header is damaged	заголовок файла PCX повреждён
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файлы PCX с {bits}-битными пикселями в {planes} плоскостях не читаются
+@msg	the Pixar file is cut short	файл Pixar обрезан
+@msg	the Pixar file's header is damaged	заголовок файла Pixar повреждён
+@msg	the Pixar file's image data is damaged	данные изображения в файле Pixar повреждены
 @msg	the JPEG 2000 file can't be read	не удается прочитать файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 содержит неподдерживаемое цветовое пространство или содержимое JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
@@ -5075,6 +5120,11 @@ lighting	Light	Свет
 	Import Data Sets…	Импортировать наборы данных…
 	Export Data Sets…	Экспортировать наборы данных…
 	Load Variable Library…	Загрузить библиотеку переменных…
+	Save Variable Library…	Сохранить библиотеку переменных…
+@msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	набор данных `{name}` содержит управляющий символ, который не может храниться в библиотеке переменных
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набор данных `{name}` начинается или заканчивается пробелом, который не может храниться в библиотеке переменных
 	Make Graph Dynamic	Сделать диаграмму динамической
 	Batch…	Пакетная обработка…
 	Source Folder:	Исходная папка:
@@ -5203,7 +5253,9 @@ lighting	Light	Свет
 	Effect Gallery	Галерея эффектов
 	Filters	Фильтры
 	Select artwork to apply effects	Выберите графику, чтобы применить эффекты
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	переменные и наборы данных файла не прочитаны (переменных: {variables}, наборов данных: {data_sets}): панель «Переменные» их не показывает
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотека переменных файла прочитана только частично (пропущено записей: {_1}): панель «Переменные» показывает остальные
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не удалось прочитать библиотеку переменных файла: панель «Переменные» её не показывает
+@msg	a variable of unknown kind can't be bound to objects	переменную неизвестного вида нельзя связать с объектами
 # Select by Color (select.color)
 	Select by Color	Выделить по цвету
 	Move Anchor Point	Переместить опорную точку
@@ -5289,6 +5341,9 @@ axis	Y Axis	Ось Y
 	New Set	Новый набор
 	Set Options…	Параметры набора…
 	Set Options	Параметры набора
+	Action Options…	Параметры действия…
+	Action Options	Параметры действия
+	Rename Action	Переименовать действие
 	Create New Set	Создать новый набор
 	Stop Global Edit	Завершить глобальное редактирование
 	Global Edit Options	Параметры глобального редактирования
@@ -6164,3 +6219,9 @@ breakText	Glyphs	Глифы
 	Small to Large	От меньшего к большему
 	Large to Small	От большего к меньшему
 	Distribute Evenly	Распределить равномерно
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Создать легенду образцов
+	Create Swatch Legend…	Создать легенду образцов…
+	HEX	HEX

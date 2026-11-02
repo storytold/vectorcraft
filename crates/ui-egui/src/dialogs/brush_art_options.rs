@@ -8,7 +8,8 @@
 //! `tintsAndShades` | `hueShift`), `keyColor` (a color), `tips` (whether Colorization Tips is
 //! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
-//! (`fixed` | `random` | `pressure`), `rotationRelativeTo` (`page` | `path`).
+//! (`fixed` | `random` | `pressure` | `tilt` | `bearing` | `rotation`), `rotationRelativeTo` (`page` |
+//! `path`).
 //! Art: `width` (%), `widthMode` (`fixed` | `pressure`), `widthMax` (the width at the heaviest pen
 //! pressure, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,

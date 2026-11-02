@@ -70,6 +70,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
+        crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })
@@ -164,7 +165,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
-    if let Err(e) = app.run(id, p) {
+    // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
+    app.placing.for_user = id.starts_with("edit.paste");
+    let r = app.run(id, p);
+    app.placing.for_user = false;
+    if let Err(e) = r {
         app.status(e);
     } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
         app.ui.open_panel = Some("patternOptions".into());

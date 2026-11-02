@@ -26,8 +26,9 @@
 //! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
 //!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
 //!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
-//! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
-//!   gives how many variables and data sets it has ([`VariableLibrary`]).
+//! - Variables: the variable library, XML nodes of the `/Document` dictionary: its variables, data
+//!   sets, active data set and lock, without bindings; a note gives how many entries were left out
+//!   ([`VariableRead`]).
 //! - Objects on Path: a group whose objects' dictionaries carry ids, and a record of the
 //!   `/Document` dictionary naming them, read by [`on_path`].
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
@@ -40,6 +41,11 @@
 //!   box is as large as the file has pixels; the matrix takes them into art space from the canvas
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
+//!   The version 7 form (§16) has no `%AI5_BeginPlace`: `[matrix] llx lly urx ury (path)` and
+//!   `` ` ``, then `%%IncludeFile:` or the file between `%%BeginDocument:` and `%%EndDocument`,
+//!   then `~`; its box is the file's `%%BoundingBox`. Newer files have three more numbers before
+//!   the path. Operands of any other shape, a second `` ` `` before `~` or an included document
+//!   that doesn't end leave the placed file unread.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
 //!   effects, brushes) comes first as that look, drawn (a group, or an image where an effect
 //!   rasterizes it), then the object itself on `%_`
@@ -60,9 +66,16 @@
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
 //!
+//! - Graphic styles: the style list (`%AI9_BeginArtStyleList`), one `(name)` per style in the
+//!   panel's order, each the name of an art style. The listed styles whose appearance reads
+//!   ([`appearance_from_art_style`](ops::appearance_from_art_style)) replace the default graphic
+//!   styles, and an object read as itself with a listed style (`1 (name) XW`) that has the
+//!   style's appearance and transparency is linked to it. A `1` naming a style the list doesn't
+//!   have is the object's own appearance, not a link.
+//!
 //! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
 //! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
-//! it doesn't know are errors.
+//! it doesn't know are errors. So is data that ends inside a layer, a group or a compound path.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
@@ -80,6 +93,7 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
 use super::super::ate::CANVAS_CENTRE;
+use super::super::graphics::HAIRLINE;
 use super::lex::{Lexer, Tok};
 use super::obj::{self, Obj, V};
 use super::paint::{self, GradientDef, Instance, Named};
@@ -96,7 +110,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
+pub use document::{PaletteSwatches, VariableRead, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
@@ -139,6 +153,8 @@ pub struct Structure {
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
+    /// The document's graphic styles are those of the file's style list, in place of the defaults.
+    pub styles_read: bool,
     pub warnings: Vec<String>,
 }
 
@@ -189,8 +205,8 @@ struct Reader<'a> {
     custom_more: Option<bool>,
     /// The header ended (`%%EndComments`).
     header_done: bool,
-    /// The variables and data sets of the `/Document` dictionary's variable library.
-    variables: VariableLibrary,
+    /// The `/Document` dictionary's variable library.
+    variables: VariableRead,
     /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
     on_path: on_path::OnPath,
     gradients: HashMap<String, Gradient>,
@@ -276,6 +292,11 @@ struct Reader<'a> {
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
     styles: HashMap<String, super::style::ArtStyle>,
+    /// The style list (`%AI9_BeginArtStyleList`): the Graphic Styles panel's names, in its order.
+    style_list: Vec<Vec<u8>>,
+    /// The objects read as themselves with the style their `1 (style) XW` names: their id and the
+    /// style's name, as written.
+    style_links: Vec<(NodeId, String)>,
     /// The swatches (`%AI5_BeginPalette`).
     palette: super::palette::Palette,
     /// See [`Structure::restyled`].
@@ -344,7 +365,7 @@ impl<'a> Reader<'a> {
             custom_colors: Vec::new(),
             custom_more: None,
             header_done: false,
-            variables: VariableLibrary::default(),
+            variables: VariableRead::default(),
             on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),
             gradient_def: None,
@@ -393,6 +414,8 @@ impl<'a> Reader<'a> {
             layer_state: None,
             mesh_undo: None,
             styles: HashMap::new(),
+            style_list: vec![],
+            style_links: vec![],
             palette: super::palette::Palette::default(),
             restyled: vec![],
             placed_elsewhere: vec![],
@@ -437,13 +460,30 @@ impl<'a> Reader<'a> {
                         p.preview = preview_png(d);
                     }
                 }
+                // A placed file's document, included whole: its art isn't read here. When no
+                // `%%EndDocument` ends it, the placed file isn't read.
+                Tok::Document(d) => {
+                    if let Some(p) = self.place.as_mut() {
+                        p.broken |= d.is_none();
+                    }
+                }
             }
+        }
+        // A pattern's or symbol's reader opens a group of its own and checks it is the only frame
+        // left. In the document, a container still open after the last layer holds art no layer has.
+        let in_layer = self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_)));
+        if self.subreader_depth == 0 && !in_layer && self.frames.iter().any(|f| !matches!(f.kind, Kind::Obj(_) | Kind::Mask)) {
+            return Err("it ends inside a group or compound path".into());
         }
         if self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_))) {
             return Err("it ends inside a layer".into());
         }
         if self.multi_mask.is_some() {
             return Err("it ends inside a multi-layer mask".into());
+        }
+        // A placed file that no `~` ends isn't read.
+        if let Some(open) = self.place.take() {
+            self.unreadable("placed files", open.hidden);
         }
         Ok(())
     }

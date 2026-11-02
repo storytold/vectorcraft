@@ -809,6 +809,8 @@ font-technology	Variable	Μεταβλητές
 	Double Right Quotation Marks	Δεξιά διπλά εισαγωγικά
 	Double-click	Διπλό κλικ
 	Double-click to edit the characters' paint	Διπλό κλικ για επεξεργασία του χρωματισμού χαρακτήρων
+	Click to edit	Κλικ για επεξεργασία
+	Double-click to edit	Διπλό κλικ για επεξεργασία
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου
@@ -983,6 +985,16 @@ font-technology	Variable	Μεταβλητές
 	Delete Export Preset	Διαγραφή προκαθορισμένου εξαγωγής
 	Export Presets	Προκαθορισμένα εξαγωγής
 	Save Export Preset	Αποθήκευση προκαθορισμένου εξαγωγής
+	Export Export Presets	Εξαγωγή προκαθορισμένων εξαγωγής
+	Export Preset…	Εξαγωγή προκαθορισμένου…
+	Import Export Presets	Εισαγωγή προκαθορισμένων εξαγωγής
+	Import Preset…	Εισαγωγή προκαθορισμένου…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	Το `exportPreset` είναι το όνομα ενός προκαθορισμένου από το document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	δεν υπάρχει προκαθορισμένο εξαγωγής `{n}` (δείτε document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	δεν υπάρχουν αποθηκευμένα προκαθορισμένα εξαγωγής για εξαγωγή (δώστε τα ενσωματωμένα στο `names`)
+@msg	not an export presets file (format `{_1}`)	δεν είναι αρχείο προκαθορισμένων εξαγωγής (μορφή `{_1}`)
+@msg	not an export presets file: {e}	δεν είναι αρχείο προκαθορισμένων εξαγωγής: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Εξαγωγή επιπέδου
 	Export Selection	Εξαγωγή επιλογής
 	All in One Folder	Όλα σε έναν φάκελο
@@ -1682,6 +1694,8 @@ font-technology	Variable	Μεταβλητές
 	Roundness:	Στρογγυλότητα:
 	Fixed	Σταθερό
 	Pressure	Πίεση
+	Tilt	Κλίση
+	Bearing	Αζιμούθιο
 	Shape:	Σχήμα:
 	New Brush…	Νέο πινέλο…
 	New Brush	Νέο πινέλο
@@ -1700,6 +1714,10 @@ font-technology	Variable	Μεταβλητές
 	New Without Dialog	Νέο χωρίς παράθυρο διαλόγου
 	New Workspace	Νέος χώρος εργασίας
 	New Workspace…	Νέος χώρος εργασίας…
+	New Toolbar…	Νέα γραμμή εργαλείων…
+	New Toolbar	Νέα γραμμή εργαλείων
+	Show Toolbar	Εμφάνιση γραμμής εργαλείων
+	List Toolbars	Λίστα γραμμών εργαλείων
 	New…	Νέο…
 	Next	Επόμενο
 	No document	Δεν υπάρχει έγγραφο
@@ -1847,6 +1865,7 @@ font-technology	Variable	Μεταβλητές
 	Save a Copy	Αποθήκευση αντιγράφου
 	Save a Copy…	Αποθήκευση αντιγράφου…
 	Save As	Αποθήκευση ως
+	Save As Preset…	Αποθήκευση ως προεπιλογή…
 	Save as PDF…	Αποθήκευση ως PDF…
 	Save As…	Αποθήκευση ως…
 	Save for Web (Legacy)…	Αποθήκευση για ιστό (παλαιού τύπου)…
@@ -2483,6 +2502,7 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
 file-filter	Swatch libraries	Βιβλιοθήκες δειγμάτων χρωμάτων
 file-filter	Templates	Πρότυπα
@@ -3000,6 +3020,8 @@ theme	Appearance	Εμφάνιση
 	Plates	Πλάκες εκτύπωσης
 	Platform:	Πλατφόρμα:
 	Play Current Selection	Αναπαραγωγή τρέχουσας επιλογής
+	Save Actions…	Αποθήκευση ενεργειών…
+	Load Actions…	Φόρτωση ενεργειών…
 	Plug-in Info	Πληροφορίες προσθέτου
 	Plug-in…	Πρόσθετο…
 	Point Text Objects	Αντικείμενα κειμένου σημείου
@@ -3305,6 +3327,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Save as preset:	Αποθήκευση ως προεπιλογή:
 	Save as Template	Αποθήκευση ως πρότυπο
 	Save as Template…	Αποθήκευση ως πρότυπο…
+	Save Changes	Αποθήκευση αλλαγών
 	Save changes to {name}	Αποθήκευση αλλαγών στο {name}
 	Save color group to Swatch panel	Αποθήκευση ομάδας χρωμάτων στον πίνακα Δείγματα
 	Save Colors as Swatches	Αποθήκευση χρωμάτων ως δειγμάτων
@@ -3674,6 +3697,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Graphic	Γραφικό
 	Show all open documents	Εμφάνιση όλων των ανοιχτών εγγράφων
 	Symbol Instance	Στιγμιότυπο συμβόλου
+	Link Block Series	Σειρά συνδεδεμένων μπλοκ
 	Symbol Libraries	Βιβλιοθήκες συμβόλων
 	Symbol Screener Tool	Αραίωση συμβόλων (Symbol Screener Tool)
 	Symbol Scruncher Tool	Σύμπτυξη συμβόλων (Symbol Scruncher Tool)
@@ -3695,6 +3719,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	Target	Στόχος
 	Target Contents	Περιεχόμενα στόχου
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Ρυθμίσεις Tate-chu-yoko…
+	Tate-chu-yoko Settings	Ρυθμίσεις Tate-chu-yoko
+	Up/Down:	Πάνω/Κάτω:
+	Left/Right:	Αριστερά/Δεξιά:
 	Temperature/Tint…	Θερμοκρασία/Απόχρωση…
 	Templates Folder	Φάκελος προτύπων
 	Text Displayed in Cell:	Κείμενο που εμφανίζεται στο κελί:
@@ -4195,6 +4223,14 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no selection bounds	δεν υπάρχουν όρια επιλογής
 @msg	no slice selected	δεν έχει επιλεγεί τομή
 @msg	no such action	δεν υπάρχει τέτοια ενέργεια
+@msg	no such action set	δεν υπάρχει τέτοιο σύνολο ενεργειών
+@msg	the action sets changed; nothing was deleted	τα σύνολα ενεργειών άλλαξαν· δεν διαγράφηκε τίποτα
+@msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
+@msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
+@msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
+@msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες
+@msg	the action set file needs a later version of VectorCraft	το αρχείο συνόλου ενεργειών απαιτεί νεότερη έκδοση του VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	μια ενέργεια στο αρχείο συνόλου ενεργειών έχει περισσότερα από 10.000 βήματα
 @msg	no such anchor	δεν υπάρχει τέτοιο σημείο αγκύρωσης
 @msg	no such artboard	δεν υπάρχει τέτοιος πίνακας σχεδίασης
 @msg	the artboard is locked	ο πίνακας σχεδίασης είναι κλειδωμένος
@@ -4221,6 +4257,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no user library folder here	δεν υπάρχει φάκελος βιβλιοθήκης χρήστη εδώ
 @msg	no user workspace `{from}`	δεν υπάρχει χώρος εργασίας χρήστη `{from}`
 @msg	node {_1} is not text	ο κόμβος {_1} δεν είναι κείμενο
+@msg	node {_1} is on a locked artboard	ο κόμβος {_1} βρίσκεται σε κλειδωμένο πίνακα σχεδίασης
 @msg	not a DXF drawing	δεν είναι σχέδιο DXF
 @msg	not a VectorCraft file: {0}	δεν είναι αρχείο VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	δεν είναι σύνολο συντομεύσεων VectorCraft (λείπει το `overrides`)
@@ -4458,6 +4495,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Δεν ήταν δυνατή η τοποθέτηση του {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Δεν ήταν δυνατή η επικόλληση από το πρόχειρο: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση έκλεισε
+@msg	Saved {path} with {_1} note(s): {first}	Αποθηκεύτηκε το {path} με {_1} σημειώσεις: {first}
+@msg	Exported {what} with {_1} note(s): {first}	Εξήχθη το {what} με {_1} σημειώσεις: {first}
 @msg	Exported {what}	Εξήχθη: {what}
 @msg	Saved {n} files beside {path}	Αποθηκεύτηκαν {n} αρχεία δίπλα στο {path}
 @msg	Saving	Αποθήκευση σε εξέλιξη
@@ -4465,6 +4505,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Exporting {_1}	Εξαγωγή {_1}
 @msg	Packaging {_1}	Συσκευασία {_1}
 @msg	Placing {_1}	Τοποθέτηση {_1}
+@msg	Pasting	Επικόλληση
 @msg	Saving recovery data for {_1}	Αποθήκευση δεδομένων ανάκτησης για {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Απορρίφθηκε {n} ανακτημένο έγγραφο|Απορρίφθηκαν {n} ανακτημένα έγγραφα
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Επαναφέρθηκε {n} ανακτημένο έγγραφο: αποθηκεύστε το για να διατηρηθεί|Επαναφέρθηκαν {n} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
@@ -4522,6 +4563,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{w}` takes no operands	το `{w}` δεν δέχεται τελεστέους
 @msg	a wraparound group is inside a compound path	μια ομάδα αναδίπλωσης κειμένου βρίσκεται μέσα σε σύνθετη διαδρομή
 @msg	a path has too many points	η διαδρομή έχει υπερβολικά πολλά σημεία
+@msg	it ends inside a group or compound path	τερματίζει μέσα σε ομάδα ή σύνθετη διαδρομή
 @msg	it ends inside a layer	τερματίζει μέσα σε επίπεδο
 @msg	it ends inside a multi-layer mask	τερματίζει μέσα σε μάσκα πολλών επιπέδων
 @msg	a multi-layer mask's operators are out of order	οι τελεστές μιας μάσκας πολλών επιπέδων είναι σε λάθος σειρά
@@ -4628,6 +4670,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PCX file is cut short	το αρχείο PCX είναι περικομμένο
 @msg	the PCX file's header is damaged	η κεφαλίδα του αρχείου PCX είναι κατεστραμμένη
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	τα αρχεία PCX με εικονοστοιχεία {bits} bit σε {planes} επίπεδα δεν διαβάζονται
+@msg	the Pixar file is cut short	το αρχείο Pixar είναι περικομμένο
+@msg	the Pixar file's header is damaged	η κεφαλίδα του αρχείου Pixar είναι κατεστραμμένη
+@msg	the Pixar file's image data is damaged	τα δεδομένα εικόνας του αρχείου Pixar είναι κατεστραμμένα
 @msg	the JPEG 2000 file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	το αρχείο JPEG 2000 έχει μη υποστηριζόμενο χρωματικό χώρο ή περιεχόμενο JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
@@ -5326,6 +5371,11 @@ effect	Points	Σημεία
 	Editable	Επεξεργάσιμο
 	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
 	Load Variable Library…	Φόρτωση βιβλιοθήκης μεταβλητών…
+	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
+@msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	το σύνολο δεδομένων `{name}` περιέχει χαρακτήρα ελέγχου, τον οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	το σύνολο δεδομένων `{name}` ξεκινά ή τελειώνει με κενό διάστημα, το οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 	Filter	Φίλτρο
 	Filter Layers Panel Rows	Φιλτράρισμα γραμμών πίνακα επιπέδων
 	Flatten	Ισοπέδωση
@@ -5545,7 +5595,9 @@ effect	Points	Σημεία
 	Effect Gallery	Συλλογή εφέ
 	Filters	Φίλτρα
 	Select artwork to apply effects	Επιλέξτε γραφικά για να εφαρμόσετε εφέ
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	η βιβλιοθήκη μεταβλητών του αρχείου διαβάστηκε μόνο εν μέρει (καταχωρίσεις που παραλείφθηκαν: {_1}): ο πίνακας Μεταβλητές εμφανίζει τις υπόλοιπες
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	δεν ήταν δυνατή η ανάγνωση της βιβλιοθήκης μεταβλητών του αρχείου: ο πίνακας Μεταβλητές δεν την εμφανίζει
+@msg	a variable of unknown kind can't be bound to objects	μια μεταβλητή άγνωστου είδους δεν μπορεί να συνδεθεί με αντικείμενα
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
 	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης
@@ -5629,6 +5681,9 @@ axis	Y Axis	Άξονας Y
 	New Set	Νέο σύνολο
 	Set Options…	Επιλογές συνόλου…
 	Set Options	Επιλογές συνόλου
+	Action Options…	Επιλογές ενέργειας…
+	Action Options	Επιλογές ενέργειας
+	Rename Action	Μετονομασία ενέργειας
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
@@ -6139,3 +6194,9 @@ breakText	Glyphs	Γλύφοι
 	Small to Large	Από μικρό σε μεγάλο
 	Large to Small	Από μεγάλο σε μικρό
 	Distribute Evenly	Ομοιόμορφη κατανομή
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Δημιουργία υπομνήματος δειγμάτων χρωμάτων
+	Create Swatch Legend…	Δημιουργία υπομνήματος δειγμάτων χρωμάτων…
+	HEX	HEX

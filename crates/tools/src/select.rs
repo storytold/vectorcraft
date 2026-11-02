@@ -617,6 +617,10 @@ impl Tool for SelectionTool {
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        // Up and Down while a corner widget is pressed: the corners' kind (#2898).
+        if let (ToolKey::Up | ToolKey::Down, State::Corner(c)) = (key, &mut self.state) {
+            return c.step_kind(key == ToolKey::Up);
+        }
         if key == ToolKey::Letter('e')
             && let State::Marquee { enclosed, .. } = &mut self.state
         {
@@ -652,6 +656,7 @@ impl Tool for SelectionTool {
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
+            State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) => key == ToolKey::Escape,
             _ => false,
         }
@@ -1030,7 +1035,8 @@ pub(crate) fn is_threadable(n: &vectorcraft_doc::Node) -> bool {
 
 /// Does a double-click or the Control bar's Isolate Selected Object button isolate an object of
 /// this kind? A group, a compound path or a single path, image, mesh or placed file does. Blends,
-/// envelopes, repeats and symbol instances do not; they have editing modes of their own.
+/// envelopes, repeats and symbol instances do not; they have editing modes of their own (a
+/// repeat's is isolation of the repeat itself, to edit its source art).
 pub fn isolates(kind: &vectorcraft_doc::NodeKind) -> bool {
     use vectorcraft_doc::NodeKind as K;
     matches!(kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
@@ -1192,6 +1198,14 @@ impl SelectionTool {
             // the art of a symbol already being edited.
             if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })) {
                 return if cx.doc.symbol_edit.is_some() { vec![] } else { vec![Action::Exec("symbol.edit".into(), json!({ "id": top.0 }))] };
+            }
+            // A repeat: its source art is edited in isolation mode, where the repeat follows each
+            // edit (#5054), as the reference app's Repeat does.
+            if cx.double_click_isolate
+                && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_)))
+                && cx.isolation != Some(top)
+            {
+                return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
             }
             // An object that [`isolates`], not the one already isolated.
             if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {

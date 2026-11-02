@@ -455,6 +455,7 @@ digits	Malayalam	マラヤーラム数字
 	Stroke Weight	線幅
 	Graphic Style	グラフィックスタイル
 	Symbol Instance	シンボルインスタンス
+	Link Block Series	連結ブロックの系列
 	Font Family	フォントファミリー
 	Font Family & Style	フォントファミリー (スタイル)
 	Font Family, Style & Size	フォントファミリー (スタイルとサイズ)
@@ -650,6 +651,10 @@ digits	Malayalam	マラヤーラム数字
 	Workspace	ワークスペース
 	Reset Essentials	初期設定をリセット
 	New Workspace…	新規ワークスペース…
+	New Toolbar…	新規ツールバー…
+	New Toolbar	新規ツールバー
+	Show Toolbar	ツールバーを表示
+	List Toolbars	ツールバーの一覧
 	Manage Workspaces…	ワークスペースを管理…
 	Control	コントロール
 	Contextual Task Bar	コンテキストタスクバー
@@ -1399,6 +1404,8 @@ digits	Malayalam	マラヤーラム数字
 	Double Quotes:	二重引用符:
 	Double-click	ダブルクリック
 	Double-click to edit the characters' paint	ダブルクリックで文字のペイントを編集
+	Click to edit	クリックで編集
+	Double-click to edit	ダブルクリックで編集
 	Double-click to insert	ダブルクリックで挿入
 	Double-click to rename	ダブルクリックで名前を変更
 	Double-click to target the contents	ダブルクリックで内容をターゲット
@@ -1523,6 +1530,16 @@ digits	Malayalam	マラヤーラム数字
 	Delete Export Preset	書き出しプリセットを削除
 	Export Presets	書き出しプリセット
 	Save Export Preset	書き出しプリセットを保存
+	Export Export Presets	書き出しプリセットを書き出し
+	Export Preset…	プリセットを書き出し…
+	Import Export Presets	書き出しプリセットを読み込み
+	Import Preset…	プリセットを読み込み…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` には document.exportPresets.list にあるプリセットの名前を指定してください
+@msg	no export preset `{n}` (see document.exportPresets.list)	書き出しプリセット `{n}` が見つかりません (document.exportPresets.list を参照)
+@msg	no saved export presets to export (name built-in ones in `names`)	書き出す保存済みの書き出しプリセットがありません (組み込みのプリセットは `names` で指定してください)
+@msg	not an export presets file (format `{_1}`)	書き出しプリセットファイルではありません (形式: `{_1}`)
+@msg	not an export presets file: {e}	書き出しプリセットファイルではありません: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	レイヤーを書き出し
 	Export Selection	選択範囲を書き出し
 	All in One Folder	すべて 1 つのフォルダーに
@@ -2202,6 +2219,8 @@ digits	Malayalam	マラヤーラム数字
 	Roundness:	真円率:
 	Fixed	固定
 	Pressure	筆圧
+	Tilt	傾き
+	Bearing	方位
 	Shape:	形状:
 	Bristle Length:	毛の長さ:
 	Bristle Density:	毛の密度:
@@ -2480,6 +2499,8 @@ diagnostics	ui	UI
 	Plates	版
 	Platform:	プラットフォーム:
 	Play Current Selection	選択項目を再生
+	Save Actions…	アクションを保存…
+	Load Actions…	アクションを読み込み…
 	Plug-in Info	プラグイン情報
 	Plug-in…	プラグイン…
 	Points	ポイント
@@ -2766,6 +2787,7 @@ mark-style	Japanese	日本式
 	Saturate	彩度を調整
 	Saturation	彩度
 	Save As	別名で保存
+	Save As Preset…	プリセットとして保存…
 	Save Colors as Swatches	カラーをスウォッチとして保存
 	Save Document	ドキュメントを保存
 	Save Document Info…	ドキュメント情報を保存…
@@ -2789,6 +2811,7 @@ mark-style	Japanese	日本式
 	Save a Copy	コピーを保存
 	Save as Template	テンプレートとして保存
 	Save as preset:	プリセットとして保存:
+	Save Changes	変更を保存
 	Save changes to {name}	{name} への変更を保存
 	Save color group to Swatch panel	カラーグループをスウォッチパネルに保存
 	Save each artboard to a separate file	アートボードごとに別のファイルに保存
@@ -3490,6 +3513,7 @@ file-filter	Swatch libraries	スウォッチライブラリ
 file-filter	Flattener presets	分割・統合プリセット
 file-filter	PDF presets	PDF プリセット
 file-filter	Print presets	プリントプリセット
+file-filter	Export presets	書き出しプリセット
 file-filter	SVG Compressed	SVG 圧縮
 file-filter	PDF-compatible .ai	PDF 互換の .ai
 file-filter	VectorCraft Template	VectorCraft テンプレート
@@ -3705,6 +3729,10 @@ file-filter	Templates	テンプレート
 	Tabular Oldstyle	等幅オールドスタイル
 	Titling Alternates	タイトル代替字
 	Tate-chu-yoko	縦中横
+	Tate-chu-yoko Settings…	縦中横の設定…
+	Tate-chu-yoko Settings	縦中横の設定
+	Up/Down:	上下:
+	Left/Right:	左右:
 	Temperature	色温度
 	Template	テンプレート
 	Templates	テンプレート
@@ -4278,6 +4306,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a key object sits on that point	そのポイントにはキーオブジェクトがあります
 @msg	no graphic style `{name}`	グラフィックスタイル `{name}` が見つかりません
 @msg	node {_1} is not text	ノード {_1} はテキストではありません
+@msg	node {_1} is on a locked artboard	ノード {_1} はロックされたアートボード上にあります
 @msg	Text Wrap: select a wrap object	テキストの回り込み: 回り込みオブジェクトを選択してください
 @msg	layers can't be wrap objects	レイヤーは回り込みオブジェクトにできません
 @msg	line {line}: value for `{var}` must be true or false	{line} 行目: `{var}` の値には true または false を指定してください
@@ -4317,6 +4346,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{w}` takes no operands	`{w}` はオペランドを取りません
 @msg	a wraparound group is inside a compound path	テキストの回り込みグループが複合パスの中にあります
 @msg	a path has too many points	ポイントが多すぎるパスがあります
+@msg	it ends inside a group or compound path	グループまたは複合パスの途中で終わっています
 @msg	it ends inside a layer	レイヤーの途中で終わっています
 @msg	it ends inside a multi-layer mask	複数レイヤーにまたがるマスクの途中で終わっています
 @msg	a multi-layer mask's operators are out of order	複数レイヤーにまたがるマスクの演算子の順序が正しくありません
@@ -4452,6 +4482,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Exporting {_1}	{_1} を書き出し中
 @msg	Packaging {_1}	{_1} をパッケージ中
 @msg	Placing {_1}	{_1} を配置中
+@msg	Pasting	貼り付け中
 @msg	Exported {what}	{what} を書き出しました
 @msg	"{0}" is not a colour: write it as #rrggbb	「{0}」はカラーではありません: #rrggbb の形式で指定してください
 @msg	could not decode image: {0}	画像をデコードできませんでした: {0}
@@ -4606,6 +4637,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです
 @msg	no such action	指定されたアクションが見つかりません
+@msg	no such action set	指定されたアクションセットが見つかりません
+@msg	the action sets changed; nothing was deleted	アクションセットが変更されたため、何も削除しませんでした
+@msg	no action set to save	保存するアクションセットがありません
+@msg	not an action set file	アクションセットファイルではありません
+@msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
+@msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています
+@msg	the action set file needs a later version of VectorCraft	このアクションセットファイルには新しいバージョンの VectorCraft が必要です
+@msg	an action in the action set file has more than 10,000 steps	アクションセットファイルに 10,000 ステップを超えるアクションがあります
 @msg	choose a folder to export to	書き出し先のフォルダーを選択してください
 @msg	the selection has no URL (or they differ)	選択したオブジェクトに URL がありません (または URL がそれぞれ異なります)
 @msg	select some type first	先にテキストを選択してください
@@ -4692,6 +4731,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{_1} is reserved by the system	{_1} はシステムで予約されています
 @msg	Couldn't copy to the system clipboard: {e}	システムのクリップボードにコピーできませんでした: {e}
 @msg	Couldn't paste from the clipboard: {e}	クリップボードから貼り付けられませんでした: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	貼り付けられませんでした: 貼り付け先のドキュメントは閉じられています
 @msg	nothing selected	何も選択されていません
 @msg	nothing selected is in a group	選択したオブジェクトはどれもグループ内にありません
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません
@@ -4752,6 +4792,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PCX file is cut short	PCX ファイルが途中で切れています
 @msg	the PCX file's header is damaged	PCX ファイルのヘッダーが壊れています
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} プレーンに {bits} bit のピクセルを持つ PCX ファイルは読み込めません
+@msg	the Pixar file is cut short	Pixar ファイルが途中で切れています
+@msg	the Pixar file's header is damaged	Pixar ファイルのヘッダーが壊れています
+@msg	the Pixar file's image data is damaged	Pixar ファイルの画像データが壊れています
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ファイルを読み込めません
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ファイルには未対応の色空間または JPX コンテンツがあります
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
@@ -5125,6 +5168,11 @@ lighting	Light	ライト
 	Import Data Sets…	データセットを読み込み…
 	Export Data Sets…	データセットを書き出し…
 	Load Variable Library…	変数ライブラリを読み込み…
+	Save Variable Library…	変数ライブラリを保存…
+@msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
+@msg	data set `{name}` holds a control character, which a variable library can't hold	データセット `{name}` に変数ライブラリに保存できない制御文字が含まれています
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	データセット `{name}` の先頭または末尾に変数ライブラリに保存できない空白があります
 	Make Graph Dynamic	グラフを動的にする
 	Batch…	バッチ…
 	Source Folder:	ソースフォルダー:
@@ -5253,7 +5301,9 @@ lighting	Light	ライト
 	Effect Gallery	効果ギャラリー
 	Filters	フィルター
 	Select artwork to apply effects	効果を適用するグラフィックを選択してください
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ファイルの変数ライブラリは一部だけ読み込まれました (スキップした項目: {_1})。残りは変数パネルに表示されます
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ファイルの変数ライブラリを読み込めませんでした。変数パネルには表示されません
+@msg	a variable of unknown kind can't be bound to objects	種類が不明な変数はオブジェクトにバインドできません
 # Select by Color (select.color)
 	Select by Color	カラーで選択
 	Move Anchor Point	アンカーポイントを移動
@@ -5361,6 +5411,9 @@ axis	Y Axis	Y 軸
 	New Set	新規セット
 	Set Options…	セットオプション…
 	Set Options	セットオプション
+	Action Options…	アクションオプション…
+	Action Options	アクションオプション
+	Rename Action	アクション名を変更
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
@@ -5874,3 +5927,9 @@ breakText	Glyphs	字形
 	Small to Large	小さい順
 	Large to Small	大きい順
 	Distribute Evenly	均等に分布
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	スウォッチの凡例を作成
+	Create Swatch Legend…	スウォッチの凡例を作成…
+	HEX	HEX

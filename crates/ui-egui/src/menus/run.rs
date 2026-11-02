@@ -74,6 +74,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if let Some(r) = crate::shortcut_editor::run_command(app, id, p)
         .or_else(|| crate::workspaces::run_command(app, id, p))
         .or_else(|| crate::edit_toolbar::command(app, id, p))
+        .or_else(|| crate::custom_toolbars::command(app, id, p))
     {
         return Some(r);
     }
@@ -374,6 +375,12 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "view.goToArtboard" => go_to_artboard(app, p),
+        // The navigator's four buttons as commands of their own, so Edit › Keyboard Shortcuts lists
+        // them (view.goToArtboard needs an index, so a key alone can't run it).
+        "view.firstArtboard" => go_to_artboard(app, &json!({ "index": "first" })),
+        "view.previousArtboard" => go_to_artboard(app, &json!({ "index": "previous" })),
+        "view.nextArtboard" => go_to_artboard(app, &json!({ "index": "next" })),
+        "view.lastArtboard" => go_to_artboard(app, &json!({ "index": "last" })),
         "view.presentation" => {
             app.ui.screen_mode = if app.ui.screen_mode == 3 { 0 } else { 3 };
             Ok(json!(app.ui.screen_mode))
@@ -427,11 +434,21 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.toolbar" => flag(&mut app.ui.toolbar),
-        "window.toolbarColumns" => opt_bool(p, "double").map(|on| {
-            let on = on.unwrap_or(!app.ui.toolbar_double);
-            app.ui.toolbar_double = on;
-            json!(on)
-        }),
+        "window.toolbarColumns" => {
+            let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
+                Ok(t) => t,
+                Err(e) => return Some(Err(e)),
+            };
+            let double = match toolbar.as_deref().and_then(|name| crate::custom_toolbars::find_mut(&mut app.ui, name)) {
+                Some(b) => &mut b.double,
+                None => &mut app.ui.toolbar_double,
+            };
+            opt_bool(p, "double").map(|on| {
+                let on = on.unwrap_or(!*double);
+                *double = on;
+                json!(on)
+            })
+        }
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
         "imageTrace.preview" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.image_trace_preview);
@@ -444,7 +461,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Err(e) => return Some(Err(e)),
             };
             let Some(tool) = s("tool") else { return Some(Err("tool (a tool id) is required".into())) };
-            crate::toolbar::float_group(app, &tool, floating).map(Value::Bool)
+            let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
+                Ok(t) => t,
+                Err(e) => return Some(Err(e)),
+            };
+            crate::toolbar::float_group(app, &tool, floating, toolbar.as_deref()).map(Value::Bool)
         }
         _ => return None,
     };
@@ -482,13 +503,16 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
             // another way since then (Window › Tools, Window › Control). Panels shown with Shift+Tab
             // in between stay shown. Switching workspaces clears the record (`workspaces::apply`).
-            let hid = ui.tab_hid.take().filter(|h| (h.dock || h.toolbar || h.control_bar) && !ui.toolbar && !ui.control_bar);
+            // A shown toolbar made with New Toolbar counts as a bar Tab hides, so a record with none
+            // of the three bars is of the toolbars made with New Toolbar alone.
+            let custom = ui.custom_toolbars.iter().any(|b| b.shown);
+            let hid = ui.tab_hid.take().filter(|_| !ui.toolbar && !ui.control_bar);
             let on = if let Some(h) = hid {
                 ui.dock |= h.dock;
                 ui.toolbar = h.toolbar;
                 ui.control_bar = h.control_bar;
                 true
-            } else if ui.dock || ui.toolbar || ui.control_bar {
+            } else if ui.dock || ui.toolbar || ui.control_bar || custom {
                 ui.tab_hid = Some(crate::state::TabHid { dock: ui.dock, toolbar: ui.toolbar, control_bar: ui.control_bar });
                 ui.dock = false;
                 ui.toolbar = false;
@@ -521,6 +545,8 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
         "window.newWindow" => Err("New Window isn't available yet: a document opens in one window".into()),
+        "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.consolidateAllWindows" => crate::canvas::consolidate(app),
         "window.nextDocument" => crate::chrome::step_document(app, true),
         "window.previousDocument" => crate::chrome::step_document(app, false),
         "tool.select" => match s("tool") {
@@ -743,6 +769,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.corners" => crate::dialogs::corners::open(app, p),
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),
         "ui.justification" => crate::dialogs::justification::open(app),
+        "ui.tateChuYokoSettings" => crate::dialogs::tate_chu_yoko::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
@@ -783,11 +810,14 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::dialogs::find_links::find_in_folder_command(app, s("folder"), p.get("ids").and_then(Value::as_array).cloned())
         }
         "ui.packageDialog" => crate::dialogs::package::open(app),
+        crate::panels::actions::RENAME_ACTION => crate::panels::actions::rename_action(app, p),
         "ui.batchDialog" => {
             let set = p.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
             let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
             crate::dialogs::action_batch::open(app, set, action)
         }
+        crate::panels::actions::SAVE_SET => crate::panels::actions::save_set(app, p),
+        crate::panels::actions::LOAD_SET => crate::panels::actions::load_set(app, p),
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         crate::panels::actions::DUPLICATE => crate::panels::actions::duplicate(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),

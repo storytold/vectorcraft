@@ -448,6 +448,7 @@ digits	Malayalam	말라얄람어
 	Stroke Weight	선 두께
 	Graphic Style	그래픽 스타일
 	Symbol Instance	심볼 인스턴스
+	Link Block Series	연결된 블록 시리즈
 	Font Family	글꼴 패밀리
 	Font Family & Style	글꼴 패밀리 및 스타일
 	Font Family, Style & Size	글꼴 패밀리, 스타일 및 크기
@@ -643,6 +644,10 @@ digits	Malayalam	말라얄람어
 	Workspace	작업 영역
 	Reset Essentials	Essentials 재설정
 	New Workspace…	새 작업 영역…
+	New Toolbar…	새 도구 막대…
+	New Toolbar	새 도구 막대
+	Show Toolbar	도구 막대 표시
+	List Toolbars	도구 막대 목록
 	Manage Workspaces…	작업 영역 관리…
 	Control	컨트롤
 	Contextual Task Bar	상황별 작업 표시줄
@@ -1389,6 +1394,8 @@ digits	Malayalam	말라얄람어
 	Double Quotes:	큰따옴표:
 	Double-click	더블클릭
 	Double-click to edit the characters' paint	더블클릭하여 문자의 색 편집
+	Click to edit	클릭하여 편집
+	Double-click to edit	더블클릭하여 편집
 	Double-click to insert	더블클릭하여 삽입
 	Double-click to rename	더블클릭하여 이름 변경
 	Double-click to target the contents	더블클릭하여 내용 선택
@@ -1513,6 +1520,16 @@ digits	Malayalam	말라얄람어
 	Delete Export Preset	내보내기 사전 설정 삭제
 	Export Presets	내보내기 사전 설정
 	Save Export Preset	내보내기 사전 설정 저장
+	Export Export Presets	내보내기 사전 설정 내보내기
+	Export Preset…	사전 설정 내보내기…
+	Import Export Presets	내보내기 사전 설정 가져오기
+	Import Preset…	사전 설정 가져오기…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`은(는) document.exportPresets.list에 있는 사전 설정의 이름입니다
+@msg	no export preset `{n}` (see document.exportPresets.list)	내보내기 사전 설정 `{n}`이(가) 없습니다(document.exportPresets.list 참조)
+@msg	no saved export presets to export (name built-in ones in `names`)	내보낼 저장된 내보내기 사전 설정이 없습니다(기본 제공 사전 설정은 `names`에 지정하세요)
+@msg	not an export presets file (format `{_1}`)	내보내기 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not an export presets file: {e}	내보내기 사전 설정 파일이 아닙니다: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	레이어 내보내기
 	Export Selection	선택 영역 내보내기
 	All in One Folder	모두 폴더 하나에
@@ -2192,6 +2209,8 @@ digits	Malayalam	말라얄람어
 	Roundness:	원형률:
 	Fixed	고정
 	Pressure	필압
+	Tilt	기울기
+	Bearing	방위
 	Shape:	모양:
 	Bristle Length:	강모 길이:
 	Bristle Density:	강모 밀도:
@@ -2470,6 +2489,8 @@ diagnostics	ui	UI
 	Plates	인쇄판
 	Platform:	플랫폼:
 	Play Current Selection	현재 선택 항목 재생
+	Save Actions…	액션 저장…
+	Load Actions…	액션 불러오기…
 	Plug-in Info	플러그인 정보
 	Plug-in…	플러그인…
 	Points	포인트
@@ -2755,6 +2776,7 @@ mark-style	Japanese	일본식
 	Saturate	채도 높이기
 	Saturation	채도
 	Save As	다른 이름으로 저장
+	Save As Preset…	사전 설정으로 저장…
 	Save Colors as Swatches	색상을 견본으로 저장
 	Save Document	문서 저장
 	Save Document Info…	문서 정보 저장…
@@ -2778,6 +2800,7 @@ mark-style	Japanese	일본식
 	Save a Copy	사본 저장
 	Save as Template	템플릿으로 저장
 	Save as preset:	사전 설정으로 저장:
+	Save Changes	변경 사항 저장
 	Save changes to {name}	{name}의 변경 내용 저장
 	Save color group to Swatch panel	색상 그룹을 견본 패널에 저장
 	Save each artboard to a separate file	아트보드별로 별도 파일에 저장
@@ -3478,6 +3501,7 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
 file-filter	PDF-compatible .ai	PDF 호환 .ai
 file-filter	VectorCraft Template	VectorCraft 템플릿
@@ -3693,6 +3717,10 @@ file-filter	Templates	템플릿
 	Tabular Oldstyle	고정폭 올드스타일
 	Titling Alternates	제목 대체 글자
 	Tate-chu-yoko	다테추요코
+	Tate-chu-yoko Settings…	다테추요코 설정…
+	Tate-chu-yoko Settings	다테추요코 설정
+	Up/Down:	위/아래:
+	Left/Right:	왼쪽/오른쪽:
 	Temperature	색온도
 	Template	템플릿
 	Templates	템플릿
@@ -4205,6 +4233,7 @@ theme	Appearance	외관
 @msg	a key object sits on that point	그 포인트에 키 개체가 있습니다
 @msg	no graphic style `{name}`	`{name}` 그래픽 스타일이 없습니다
 @msg	node {_1} is not text	노드 {_1}은(는) 텍스트가 아닙니다
+@msg	node {_1} is on a locked artboard	노드 {_1}이(가) 잠긴 아트보드에 있습니다
 @msg	Text Wrap: select a wrap object	텍스트 감싸기: 감싸기 개체를 선택하세요
 @msg	layers can't be wrap objects	레이어는 감싸기 개체가 될 수 없습니다
 @msg	line {line}: value for `{var}` must be true or false	{line}행: `{var}`의 값은 true 또는 false여야 합니다
@@ -4244,6 +4273,7 @@ theme	Appearance	외관
 @msg	`{w}` takes no operands	`{w}`은(는) 피연산자를 받지 않습니다
 @msg	a wraparound group is inside a compound path	문자 감싸기 그룹이 컴파운드 패스 안에 있습니다
 @msg	a path has too many points	패스의 점이 너무 많습니다
+@msg	it ends inside a group or compound path	그룹 또는 컴파운드 패스 안에서 끝납니다
 @msg	it ends inside a layer	레이어 안에서 끝납니다
 @msg	it ends inside a multi-layer mask	여러 레이어 마스크 안에서 끝납니다
 @msg	a multi-layer mask's operators are out of order	여러 레이어 마스크의 연산자 순서가 잘못되었습니다
@@ -4379,6 +4409,7 @@ theme	Appearance	외관
 @msg	Exporting {_1}	{_1} 내보내는 중
 @msg	Packaging {_1}	{_1} 패키지 만드는 중
 @msg	Placing {_1}	{_1} 가져오는 중
+@msg	Pasting	붙여넣는 중
 @msg	Exported {what}	{what}을(를) 내보냈습니다
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}"은(는) 색상이 아닙니다: #rrggbb 형식으로 입력하세요
 @msg	could not decode image: {0}	이미지를 디코딩할 수 없습니다: {0}
@@ -4533,6 +4564,14 @@ theme	Appearance	외관
 @msg	tool (a tool id) is required	도구(도구 id)가 필요합니다
 @msg	unknown tool `{t}`	알 수 없는 도구 `{t}`
 @msg	no such action	해당 동작이 없습니다
+@msg	no such action set	해당 액션 세트가 없습니다
+@msg	the action sets changed; nothing was deleted	액션 세트가 바뀌어 아무것도 삭제하지 않았습니다
+@msg	no action set to save	저장할 액션 세트가 없습니다
+@msg	not an action set file	액션 세트 파일이 아닙니다
+@msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
+@msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
+@msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
 @msg	choose a folder to export to	내보낼 폴더를 선택하세요
 @msg	the selection has no URL (or they differ)	선택 항목에 URL이 없거나 서로 다릅니다
 @msg	select some type first	먼저 문자를 선택하세요
@@ -4619,6 +4658,7 @@ theme	Appearance	외관
 @msg	{_1} is reserved by the system	{_1}은(는) 시스템에서 예약되어 있습니다
 @msg	Couldn't copy to the system clipboard: {e}	시스템 클립보드로 복사할 수 없습니다: {e}
 @msg	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	붙여넣을 수 없습니다: 붙여넣던 문서가 닫혔습니다
 @msg	nothing selected	선택된 항목이 없습니다
 @msg	nothing selected is in a group	선택한 항목 중 그룹에 속한 항목이 없습니다
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
@@ -4679,6 +4719,9 @@ theme	Appearance	외관
 @msg	the PCX file is cut short	PCX 파일이 잘려 있습니다
 @msg	the PCX file's header is damaged	PCX 파일의 헤더가 손상되었습니다
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes}개 평면에 {bits}비트 픽셀이 있는 PCX 파일은 읽을 수 없습니다
+@msg	the Pixar file is cut short	Pixar 파일이 잘려 있습니다
+@msg	the Pixar file's header is damaged	Pixar 파일의 헤더가 손상되었습니다
+@msg	the Pixar file's image data is damaged	Pixar 파일의 이미지 데이터가 손상되었습니다
 @msg	the JPEG 2000 file can't be read	JPEG 2000 파일을 읽을 수 없습니다
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 파일에 지원되지 않는 색 공간 또는 JPX 콘텐츠가 있습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
@@ -5043,6 +5086,11 @@ lighting	Light	광원
 	Import Data Sets…	데이터 세트 가져오기…
 	Export Data Sets…	데이터 세트 내보내기…
 	Load Variable Library…	변수 라이브러리 불러오기…
+	Save Variable Library…	변수 라이브러리 저장…
+@msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	데이터 세트 `{name}`의 앞이나 뒤에 변수 라이브러리에 담을 수 없는 공백이 있습니다
 	Make Graph Dynamic	그래프를 동적으로 만들기
 	Batch…	일괄 처리…
 	Source Folder:	소스 폴더:
@@ -5171,7 +5219,9 @@ lighting	Light	광원
 	Effect Gallery	효과 갤러리
 	Filters	필터
 	Select artwork to apply effects	효과를 적용할 그래픽을 선택하세요
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	파일의 변수와 데이터 세트를 읽지 않았습니다(변수: {variables}, 데이터 세트: {data_sets}). 변수 패널에 표시되지 않습니다
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	파일의 변수 라이브러리를 일부만 읽었습니다(건너뛴 항목: {_1}). 나머지는 변수 패널에 표시됩니다
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	파일의 변수 라이브러리를 읽을 수 없습니다. 변수 패널에 표시되지 않습니다
+@msg	a variable of unknown kind can't be bound to objects	종류를 알 수 없는 변수는 개체에 바인딩할 수 없습니다
 # Select by Color (select.color)
 	Select by Color	색상별 선택
 	Move Anchor Point	앵커 포인트 이동
@@ -5257,6 +5307,9 @@ axis	Y Axis	Y축
 	New Set	새 세트
 	Set Options…	세트 옵션…
 	Set Options	세트 옵션
+	Action Options…	액션 옵션…
+	Action Options	액션 옵션
+	Rename Action	액션 이름 바꾸기
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션
@@ -5770,3 +5823,9 @@ breakText	Glyphs	글리프
 	Small to Large	작은 것부터
 	Large to Small	큰 것부터
 	Distribute Evenly	균등 분포
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	견본 범례 만들기
+	Create Swatch Legend…	견본 범례 만들기…
+	HEX	HEX

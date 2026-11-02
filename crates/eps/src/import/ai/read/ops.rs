@@ -1,6 +1,6 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH};
+use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, Place, line_width};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
     Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
@@ -55,6 +55,22 @@ impl<'a> Reader<'a> {
             self.warn(GRAPH_UNENDED);
         }
         self.end_layer_in_mask()
+    }
+
+    /// A placed file's `` ` ``: its matrix, box and path; a second one, or operands of another
+    /// shape, leave it unreadable.
+    fn place_tick(&mut self, vals: &[V], hidden: bool) {
+        let unseen = hidden || self.gs.hidden || !self.shown();
+        let p = self.place.get_or_insert_with(|| Place { hidden: unseen, ..Place::default() });
+        if p.ticked {
+            p.broken = true;
+        } else {
+            p.ticked = true;
+            match tick(vals) {
+                Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
+                None => p.broken = true,
+            }
+        }
     }
 
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
@@ -288,16 +304,10 @@ impl<'a> Reader<'a> {
                 }
             }
             // Placed files.
-            "`" if self.place.is_some() => {
-                let matrix = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None });
-                let path = vals.iter().rev().find_map(V::text).unwrap_or_default();
-                if let Some(p) = self.place.as_mut() {
-                    p.matrix = matrix.and_then(|m| <[f64; 6]>::try_from(m).ok()).map(Affine::new);
-                    p.bounds =
-                        Self::nums(&vals).get(..4).and_then(|b| <[f64; 4]>::try_from(b).ok()).map(|[x0, y0, x1, y1]| Rect::new(x0, y0, x1, y1));
-                    p.path = path;
-                }
-            }
+            // `[a b c d tx ty] llx lly urx ury (path) `` ` ``, three more numbers before the path in
+            // newer files: the version 7 form has no `%AI5_BeginPlace` before it. Before the art,
+            // the setup's procedures run.
+            "`" if self.place.is_some() || !self.frames.is_empty() => self.place_tick(&vals, hidden),
             "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
             "To" => self.begin_text(&vals, hidden),
@@ -586,11 +596,17 @@ impl<'a> Reader<'a> {
             return;
         }
         // A style read here: the object, painted as it says.
-        if let Some(appearance) = self
+        if let Some(mut appearance) = self
             .styles
             .get(&style)
             .and_then(|st| styled(object, look, st, &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, space }))
         {
+            // Strokes and effects at the document's scale, as the art (a Large Canvas copy's is scaled up).
+            let k = space.determinant().abs().sqrt();
+            if k.is_finite() && k > 0.0 && (k - 1.0).abs() > 1e-9 {
+                appearance.scale_strokes(k);
+                appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+            }
             let Some(mut object) = f.children.pop() else { return };
             let Some(look) = f.children.pop() else { return };
             if let Some(b) = look.visual_bounds().filter(|_| !hidden && object.visible && look.visible) {
@@ -601,6 +617,10 @@ impl<'a> Reader<'a> {
             (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
             // Now the object itself, not a copy an enclosing look's `strip` would remove.
             self.hidden_ids.remove(&object.id);
+            // Linked to the style when the style list has its name ([`Reader::finish`]).
+            if self.style_links.len() < MAX_NODES {
+                self.style_links.push((object.id, style.clone()));
+            }
             f.children.push(object);
             return;
         }
@@ -681,6 +701,20 @@ struct StylePaints<'a> {
     space: Affine,
 }
 
+/// A placed file's `` ` `` operands → its matrix, its box and its path: an array of six numbers, four
+/// numbers, three more or none, and a string. `None` for any other shape or a number that isn't
+/// finite.
+fn tick(vals: &[V]) -> Option<(Affine, Rect, String)> {
+    let [V::Arr(m), rest @ .., V::Str(path)] = vals else { return None };
+    let m = <[f64; 6]>::try_from(m.iter().map(V::num).collect::<Option<Vec<f64>>>()?).ok()?;
+    let nums: Vec<f64> = rest.iter().map(V::num).collect::<Option<_>>()?;
+    let [x0, y0, x1, y1] = match nums.as_slice() {
+        [x0, y0, x1, y1] | [x0, y0, x1, y1, _, _, _] => [*x0, *y0, *x1, *y1],
+        _ => return None,
+    };
+    m.iter().chain(&nums).all(|v| v.is_finite()).then(|| (Affine::new(m), Rect::new(x0, y0, x1, y1), obj::text(path)))
+}
+
 /// The gradients and patterns `look` paints with, placed as it draws them, by their swatch's name
 /// (the first of each; a pattern's name after `PATTERN_KEY`).
 fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
@@ -752,21 +786,10 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: name.clone(), xf }))
                 }
             },
-            StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } => {
-                let mut layer = StrokeLayer::new(paint.clone(), *width);
-                (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
-                AppearanceItem::Stroke(layer)
-            }
+            StyleItem::Stroke { .. } => stroke_layer(item)?,
         };
         if let Some(look) = st.looks.get(n) {
-            match &mut layer {
-                AppearanceItem::Fill(f) => {
-                    (f.visible, f.opacity, f.blend, f.effects) = (look.visible, look.opacity, look.blend, look.effects.clone())
-                }
-                AppearanceItem::Stroke(s) => {
-                    (s.visible, s.opacity, s.blend, s.effects) = (look.visible, look.opacity, look.blend, look.effects.clone())
-                }
-            }
+            with_look(&mut layer, look);
         }
         items.push(layer);
     }
@@ -776,6 +799,44 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
         object.appearance.contents_index
     };
     Some(Appearance { items, effects: st.effects.clone(), contents_index })
+}
+
+/// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
+/// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
+    use crate::import::ai::style::StyleItem;
+    if !st.plain {
+        return None;
+    }
+    let mut items = vec![];
+    for (n, item) in st.items.iter().enumerate() {
+        let mut layer = match item {
+            StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
+            StyleItem::Stroke { .. } => stroke_layer(item)?,
+            StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
+        };
+        if let Some(look) = st.looks.get(n) {
+            with_look(&mut layer, look);
+        }
+        items.push(layer);
+    }
+    Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
+}
+
+/// A style's stroke as an appearance item (`None` for a fill).
+fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } = item else { return None };
+    let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
+    (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+    Some(AppearanceItem::Stroke(layer))
+}
+
+/// Give `layer` a fill's or stroke's own visibility, transparency and effects.
+fn with_look(layer: &mut AppearanceItem, look: &crate::import::ai::style::ItemLook) {
+    match layer {
+        AppearanceItem::Fill(f) => (f.visible, f.opacity, f.blend, f.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
+        AppearanceItem::Stroke(s) => (s.visible, s.opacity, s.blend, s.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
+    }
 }
 
 /// Remove from `n` the children read from `%_` lines (`hidden`: the object itself, not its look).

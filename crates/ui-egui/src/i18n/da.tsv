@@ -385,6 +385,7 @@
 	Stroke Weight	Stregtykkelse
 	Graphic Style	Grafisk stil
 	Symbol Instance	Symbolforekomst
+	Link Block Series	Serie af sammenkædede blokke
 	Font Family	Skrifttypefamilie
 	Font Family & Style	Skrifttypefamilie og -stil
 	Font Family, Style & Size	Skrifttypefamilie, stil og størrelse
@@ -596,6 +597,10 @@
 	Reset Typography	Nulstil Typography
 	Reset Web	Nulstil Web
 	New Workspace…	Nyt arbejdsområde…
+	New Toolbar…	Ny værktøjslinje…
+	New Toolbar	Ny værktøjslinje
+	Show Toolbar	Vis værktøjslinje
+	List Toolbars	Liste over værktøjslinjer
 	Manage Workspaces…	Administrér arbejdsområder…
 	Control	Kontrol
 	Contextual Task Bar	Kontekstuel opgavelinje
@@ -1252,6 +1257,8 @@ lighting	Light	Lys
 	No actions. Press ● to record.	Ingen handlinger. Tryk på ● for at optage.
 	Outline Text	Tekst til konturer
 	Play Current Selection	Afspil aktuel markering
+	Save Actions…	Gem handlinger…
+	Load Actions…	Indlæs handlinger…
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1
@@ -1280,6 +1287,8 @@ lighting	Light	Lys
 	Dashed	Stiplet
 	Delete Selected Item	Slet markeret element
 	Double-click to edit the characters' paint	Dobbeltklik for at redigere tegnenes maling
+	Click to edit	Klik for at redigere
+	Double-click to edit	Dobbeltklik for at redigere
 	Double-click to target the contents	Dobbeltklik for at målrette indholdet
 	Drag onto art to apply this appearance	Træk hen over grafikken for at anvende dette udseende
 	Duplicate Selected Item	Duplikér markeret element
@@ -1383,6 +1392,10 @@ digits	Malayalam	Malayalam
 	Superscript (on the roadmap)	Hævet skrift (på vejkortet)
 	System Layout	Systemlayout
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
+	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Up/Down:	Op/ned:
+	Left/Right:	Venstre/højre:
 	Underline	Understreget
 	Vertical Scale %	Lodret skalering %
 	Axis	Akse
@@ -2145,6 +2158,8 @@ digits	Malayalam	Malayalam
 	Preserve Overprints and Spot Colors	Bevar overtryk og spotfarver
 	Rasters	Rasterbilleder
 	Replaces the saved preset of that name.	Erstatter den gemte forudindstilling med det navn.
+	Save As Preset…	Gem som forudindstilling…
+	Save Changes	Gem ændringer
 	Save Preset…	Gem forudindstilling…
 	Vectors	Vektorer
 	A saved copy of the selected preset	En gemt kopi af den valgte forudindstilling
@@ -2763,6 +2778,7 @@ digits	Malayalam	Malayalam
 	Total Width:	Samlet bredde:
 	Width Point Edit	Redigér breddepunkt
 	Art	Kunst
+	Bearing	Retning
 	Bristle	Borst
 	Calligraphic	Kalligrafisk
 	Dots	Prikker
@@ -2770,6 +2786,7 @@ digits	Malayalam	Malayalam
 	Pressure	Tryk
 	Random	Tilfældig
 	Scatter	Spredning
+	Tilt	Hældning
 	Color Burn	Farvebrænding
 	Color Dodge	Farveudtynding
 	Darken	Mørkere
@@ -4221,6 +4238,14 @@ imageTrace	Outline	Kontur
 @msg	no selection bounds	ingen grænser for markeringen
 @msg	no slice selected	intet udsnit markeret
 @msg	no such action	ingen sådan handling
+@msg	no such action set	intet sådant handlingssæt
+@msg	the action sets changed; nothing was deleted	handlingssættene er ændret; intet blev slettet
+@msg	no action set to save	intet handlingssæt at gemme
+@msg	not an action set file	ikke en handlingssætfil
+@msg	the action set file is larger than 8 MiB	handlingssætfilen er større end 8 MiB
+@msg	the action set file holds more than 1,000 actions	handlingssætfilen indeholder mere end 1.000 handlinger
+@msg	the action set file needs a later version of VectorCraft	handlingssætfilen kræver en nyere version af VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	en handling i handlingssætfilen har mere end 10.000 trin
 @msg	no such anchor	intet sådant anker
 @msg	no such artboard	intet sådant artboard
 @msg	no such document	intet sådant dokument
@@ -4462,6 +4487,9 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunne ikke placere {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Kunne ikke indsætte: dokumentet, der blev indsat i, var lukket
+@msg	Saved {path} with {_1} note(s): {first}	Gemte {path} med {_1} note(r): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Eksporterede {what} med {_1} note(r): {first}
 @msg	Exported {what}	Eksporterede {what}
 @msg	Saved {n} files beside {path}	Gemte {n} filer ved siden af {path}
 @msg	Saving	Gemmer
@@ -4469,6 +4497,7 @@ imageTrace	Outline	Kontur
 @msg	Exporting {_1}	Eksporterer {_1}
 @msg	Packaging {_1}	Pakker {_1}
 @msg	Placing {_1}	Placerer {_1}
+@msg	Pasting	Indsætter
 @msg	Saving recovery data for {_1}	Gemmer gendannelsesdata for {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
@@ -4519,7 +4548,15 @@ imageTrace	Outline	Kontur
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dette er ikke et logo med flade farver ({_1}% af de ensfarvede områder matcher nogle få flade farver), så tilstanden Fladt logo ville omdanne dets gradienter til pletter: brug tilstanden Farve i stedet
 @msg	`{what}` closes nothing	`{what}` lukker intet
 @msg	`{what}` closes something it didn't open	`{what}` lukker noget, den ikke åbnede
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` er navnet på en forudindstilling fra document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	ingen eksportforudindstilling `{n}` (se document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	ingen gemte eksportforudindstillinger at eksportere (angiv de indbyggede i `names`)
+@msg	not an export presets file (format `{_1}`)	ikke en fil med eksportforudindstillinger (format `{_1}`)
+@msg	not an export presets file: {e}	ikke en fil med eksportforudindstillinger: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` skal være et objekt
 @msg	a path has too many points	en sti har for mange punkter
+@msg	it ends inside a group or compound path	den slutter inde i en gruppe eller en sammensat kurve
 @msg	it ends inside a layer	den slutter inde i et lag
 @msg	it has art outside its layers	den har grafik uden for sine lag
 @msg	it has more than {MAX_NODES} objects	den har flere end {MAX_NODES} objekter
@@ -4895,6 +4932,7 @@ file-filter	Swatch libraries	Farveprøvebiblioteker
 file-filter	Flattener presets	Flattener-forudindstillinger
 file-filter	PDF presets	PDF-forudindstillinger
 file-filter	Print presets	Printforudindstillinger
+file-filter	Export presets	Eksportforudindstillinger
 file-filter	SVG Compressed	Komprimeret SVG
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	VectorCraft Template	VectorCraft-skabelon
@@ -5129,6 +5167,11 @@ mark-style	Japanese	Japansk
 	Import Data Sets…	Importér datasæt…
 	Export Data Sets…	Eksportér datasæt…
 	Load Variable Library…	Indlæs variabelbibliotek…
+	Save Variable Library…	Gem variabelbibliotek…
+@msg	a variable library holds text variables, and the document has none	et variabelbibliotek indeholder tekstvariabler, og dokumentet har ingen
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variablen `{name}` kan ikke gemmes i et variabelbibliotek: omdøb den, så den begynder med et bogstav eller `_`, uden mellemrum eller andre symboler end `-`, `_` og `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	datasættet `{name}` indeholder et kontroltegn, som et variabelbibliotek ikke kan indeholde
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	datasættet `{name}` begynder eller slutter med mellemrum, som et variabelbibliotek ikke kan indeholde
 @msg	variables that aren't text were left out: {kinds}	variabler, der ikke er tekst, blev udeladt: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	et nyt dokument læser ikke disse variabler tilbage med deres type: {names}
 @msg	a new document refuses this file because of these variables: {names}	et nyt dokument afviser denne fil på grund af disse variabler: {names}
@@ -5173,6 +5216,9 @@ mark-style	Japanese	Japansk
 	Path Length	Stilængde
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lag blev ikke læst ({_1}): den kommer ind som sin side, i ét lag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lag blev ikke læst fra dens redigeringsdata ({_1}): de kommer fra dens PDF-del
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek blev kun delvist læst (udeladte poster: {_1}): variabelpanelet viser resten
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunne ikke læses: variabelpanelet viser det ikke
+@msg	a variable of unknown kind can't be bound to objects	en variabel af ukendt type kan ikke bindes til objekter
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` skal være grayscale, rgb, hsb, cmyk eller websafe
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
@@ -5246,6 +5292,10 @@ swatch	Bright Violet	Kraftig violet
 	Delete Export Preset	Slet eksportforudindstilling
 	Export Presets	Eksportforudindstillinger
 	Save Export Preset	Gem eksportforudindstilling
+	Export Export Presets	Eksportér eksportforudindstillinger
+	Export Preset…	Eksportér forudindstilling…
+	Import Export Presets	Importér eksportforudindstillinger
+	Import Preset…	Importér forudindstilling…
 	Export Layer	Eksportér lag
 	Export Selection	Eksportér markering
 	All in One Folder	Alt i én mappe
@@ -5577,6 +5627,9 @@ axis	Y Axis	Y-akse
 	New Set	Nyt sæt
 	Set Options…	Indstillinger for sæt…
 	Set Options	Indstillinger for sæt
+	Action Options…	Indstillinger for handling…
+	Action Options	Indstillinger for handling
+	Rename Action	Omdøb handling
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
@@ -6059,3 +6112,9 @@ breakText	Glyphs	Glyffer
 	Small to Large	Fra lille til stor
 	Large to Small	Fra stor til lille
 	Distribute Evenly	Fordel jævnt
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Opret farveprøveforklaring
+	Create Swatch Legend…	Opret farveprøveforklaring…
+	HEX	HEX

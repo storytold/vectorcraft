@@ -1135,6 +1135,46 @@ fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
     assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
 }
 
+/// A `.ai` that comes in as its PDF part, whose layers can't be used or that has none, gets the
+/// variables, data sets, active data set and lock of its editing data's variable library, and so
+/// does an EPS that comes in as its page.
+#[test]
+fn ai_variable_library_pdf_fallback() {
+    use vectorcraft_testkit::ai::{XmlValue, sample_variable_sets, variable_library_data, xml_element, xml_text};
+    let check = |d: &Document, warnings: &[String]| {
+        let vars = &d.variables;
+        assert_eq!((vars.variables.len(), vars.datasets.len()), (5, 3), "{warnings:?}");
+        assert!(vars.locked);
+        assert_eq!(vars.active_dataset.as_deref(), Some("ds_two"));
+    };
+    let library = variable_library_data(&sample_variable_sets("variableAndTypes", &[]));
+    // Layers that can't be used (an operator the reader doesn't know).
+    let art = native(&format!("{library}{}", layer("Art", true, "1 Zz")));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    check(&d, &warnings);
+    assert!(!warnings.iter().any(|w| w.contains("variable library")), "{warnings:?}");
+    // No layers at all.
+    let (d, warnings, read) = crate::layered_ai(&private(&native(&library)), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    check(&d, &warnings);
+    // An EPS that comes in as its page.
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    check(&r.document, &r.warnings);
+    // What can't be read is noted on each path.
+    let graph = xml_element("v_graph", &[], &[xml_text(XmlValue::Str("a,b"))]);
+    let partly = variable_library_data(&sample_variable_sets("variableAndTypes", &[graph]));
+    let note = "the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest".to_string();
+    let art = native(&format!("{partly}{}", layer("Art", true, "1 Zz")));
+    let (_, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(warnings.contains(&note), "{warnings:?}");
+    let (_, warnings, _) = crate::layered_ai(&private(&native(&partly)), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(warnings.contains(&note), "{warnings:?}");
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert!(r.warnings.contains(&note), "{:?}", r.warnings);
+}
+
 /// An EPS whose editing data can't be used, a palette with no layers among others, comes in as its
 /// page with the swatches and color groups of that palette in place of the defaults.
 #[test]
@@ -1191,6 +1231,26 @@ fn editing_data_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
     assert!(read, "{w:?}");
     assert_eq!(d.artboards[0].rect, vectorcraft_geom::Rect::new(0.0, 0.0, 1000.0, 1000.0));
     assert!(near(first(&d, 0), [100.0, 860.0, 140.0, 900.0]), "{:?}", first(&d, 0));
+}
+
+/// The graphic styles of a `.ai` whose editing data is in the units of a `UserUnit` page come in
+/// with their stroke weights as large as the art's; the default styles stay as they are.
+#[test]
+fn graphic_styles_in_the_units_of_a_user_unit_page_come_in_at_the_pages_size() {
+    let line = "/KnownStyle :\n(Line) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = format!("%AI9_BeginArtStyles\n{line}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Line)\n%AI9_EndArtStyleList\n");
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let art = native(&format!("{styles}{}", layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110))));
+    let (d, w, read) = crate::layered_ai(&private(&art), page.clone(), vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    let widths: Vec<(&str, f64)> = d.graphic_styles.iter().map(|g| (g.name.as_str(), g.appearance.stroke_width())).collect();
+    assert_eq!(widths, [("Line", 20.0)]);
+    let art = native(&(layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110))));
+    let (d, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.graphic_styles, Document::new(1.0, 1.0).graphic_styles);
 }
 
 /// #779: a `.ai`'s ruler guides come in as guides of their layers, at the page's size when the
@@ -1445,6 +1505,46 @@ fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
     let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &square(10, 10)));
     let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
     assert!(read && names(&d) == ["Art"], "{w:?}");
+}
+
+/// The graphic styles of a Large Canvas editing copy come in at the page's size, as its art does, and
+/// an object drawn with one stays linked to it.
+#[test]
+fn a_large_canvas_eps_keeps_its_graphic_styles_at_the_pages_size() {
+    let line = "/KnownStyle :\n(Line) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 0.2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = format!("%AI9_BeginArtStyles\n{line}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Line)\n%AI9_EndArtStyleList\n");
+    let square = "5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\n";
+    let hidden: String = square.lines().map(|l| format!("%_{l}\n")).collect();
+    let styled = format!("0 Ae\nu\n0 0 1 0 K\n0.2 w\n{square}s\nU\n{hidden}%_n\n1 (Line) XW\n");
+    let art = native_large_canvas(10.0, 10.0, &format!("{styles}{}", layer("Art", true, &styled)));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    let d = &r.document;
+    assert_eq!(names(d), ["Art"], "{:?}", r.warnings);
+    let widths: Vec<(&str, f64)> = d.graphic_styles.iter().map(|g| (g.name.as_str(), g.appearance.stroke_width())).collect();
+    assert_eq!(widths, [("Line", 2.0)]);
+    let object = &d.layers[0].children().unwrap()[0];
+    assert_eq!((object.appearance.stroke_width(), object.extras().graphic_style), (2.0, Some(1)), "{object:#?}");
+}
+
+#[test]
+fn type_with_a_listed_art_style_is_linked_to_its_graphic_style() {
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let list = "%AI9_BeginArtStyleList\n(Comic)\n%AI9_EndArtStyleList\n";
+    let art = native_with_text(&(comic_style() + list + &layer("Art", true, &format!("{look}{own}1 (Comic) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(d.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect::<Vec<_>>(), [("Comic", 1)]);
+    let mut texts = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            texts.push(n.extras().graphic_style);
+        }
+    });
+    assert_eq!(texts, [Some(1)], "{notes:?}");
 }
 
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
@@ -3304,14 +3404,18 @@ fn comic_style() -> String {
     let rim = compound(
         "Chain Style Filter",
         &[
-            basic("Adobe Offset Path", "3 /Real (ofst) ,\n0 /Int (jntp) ,\n"),
+            basic("Adobe Offset Path", "3 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n"),
             fill("0 0 0 0 1 1 1 Xa"),
             basic("Adobe Transform", "6 /Int (numCopies) ,\n1 /Real (moveH_Pts) ,\n"),
         ],
     );
     let red = compound(
         "Chain Style Filter",
-        &[fill("0 1 1 0 1 0 0 Xa"), basic("Blend Style Filter", "/BlendStyle : 1 0.5 0 0 0 Xy\n/Def ;\n (BlendStyle) ,\n")],
+        &[
+            basic("Adobe Outline Type", ""),
+            fill("0 1 1 0 1 0 0 Xa"),
+            basic("Blend Style Filter", "/BlendStyle : 1 0.5 0 0 0 Xy\n/Def ;\n (BlendStyle) ,\n"),
+        ],
     );
     let stack = compound("Stack Style Filter", &[red, rim, basic("Conduit Filter", "")]);
     format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Comic) /Name ,\n/ActiveStyle :\n{}%AI9_EndArtStyles\n", compound("Chain Style Filter", &[stack]))
@@ -3342,6 +3446,7 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
         let [AppearanceItem::Fill(rim), AppearanceItem::Fill(red)] = a.items.as_slice() else { panic!("{a:?}") };
         assert_eq!(rim.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["path.offsetPath", "distort.transform"]);
         assert_eq!((red.blend, red.opacity), (BlendMode::Multiply, 0.5));
+        assert_eq!(red.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["path.outlineObject"]);
         assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
     };
     let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
@@ -3352,6 +3457,71 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     let r = import(&eps(page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     check(&r.document, &r.warnings);
+}
+
+/// An art style section with style `Bent`: a blue fill over the characters, and effect `name`, its
+/// dictionary holding `keys`, on the whole object.
+fn whole_object_style(name: &str, keys: &str) -> String {
+    let basic = |name: &str, body: &str| {
+        format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n")
+    };
+    let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+    let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+    let stack = compound("Stack Style Filter", &[fill, basic("Conduit Filter", "")]);
+    let root = compound("Chain Style Filter", &[stack, basic(name, keys)]);
+    format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Bent) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n")
+}
+
+#[test]
+fn type_with_a_distort_effect_comes_in_as_type_with_it_live() {
+    // GUARDS: Free Distort, Pucker & Bloat, Twist, Zig Zag and Tweak weren't read, and type with them came in
+    // without its art style, the style's drawing beside it as paths.
+    use serde_json::json;
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let open = |name: &str, keys: &str| {
+        let art = native_with_text(&(whole_object_style(name, keys) + &layer("Art", true, &format!("{look}{own}1 (Bent) XW\n"))), &doc);
+        let (d, _) = crate::ai_alone(&private(&art)).unwrap();
+        let (mut texts, mut paths) = (vec![], 0);
+        d.walk(|n| match &n.kind {
+            NodeKind::Text(t) => texts.push((t.plain_text(), n.appearance.effects.clone())),
+            NodeKind::Path { .. } => paths += 1,
+            _ => {}
+        });
+        (texts, paths)
+    };
+    for (name, keys, id, param, want) in [
+        ("Adobe Twirl", "45 /Real (angle) ,\n", "distort.twist", "angle", json!(45.0)),
+        (
+            "Adobe Transform",
+            "5 /Real (moveH_Pts) ,\n-7 /Real (moveV_Pts) ,\n0 /Bool (transformPatterns) ,\n",
+            "distort.transform",
+            "moveV",
+            json!(7.0),
+        ),
+        (
+            "Adobe Scribble and Tweak",
+            "30 /Real (horz) ,\n20 /Real (vert) ,\n0 /Bool (anch) ,\n0 /Bool (in) ,\n0 /Bool (out) ,\n",
+            "distort.tweak",
+            "h",
+            json!(30.0),
+        ),
+        ("Adobe Punk and Bloat", "-50 /Real (d_factor) ,\n", "distort.puckerBloat", "amount", json!(-50.0)),
+        ("Adobe Zigzag", "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n7 /Real (ridges) ,\n", "distort.zigZag", "ridges", json!(7)),
+        ("Adobe Free Distort", "", "distort.freeDistort", "corners", json!([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])),
+    ] {
+        let (texts, paths) = open(name, keys);
+        let [(text, effects)] = texts.as_slice() else { panic!("{name}: {texts:?}") };
+        assert_eq!((text.as_str(), paths), ("Bang", 0), "{name}");
+        let [e] = effects.as_slice() else { panic!("{name}: {effects:?}") };
+        assert_eq!((e.id.as_str(), &e.params[param]), (id, &want), "{name}");
+    }
+    // An angle that isn't a number: the drawing as paths, and no effect on the type.
+    let (texts, paths) = open("Adobe Twirl", "NaN /Real (angle) ,\n");
+    assert_eq!(paths, 1, "{texts:?}");
+    assert!(texts.iter().all(|(_, effects)| effects.is_empty()), "{texts:?}");
 }
 
 #[test]

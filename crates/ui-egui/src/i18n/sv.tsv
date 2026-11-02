@@ -838,6 +838,8 @@ font-technology	Variable	Variabla
 	Double Right Quotation Marks	Dubbla högercitattecken
 	Double-click	Dubbelklick
 	Double-click to edit the characters' paint	Dubbelklicka för att redigera tecknens färg
+	Click to edit	Klicka för att redigera
+	Double-click to edit	Dubbelklicka för att redigera
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål
@@ -1018,6 +1020,16 @@ font-technology	Variable	Variabla
 	Delete Export Preset	Ta bort exportförinställning
 	Export Presets	Exportförinställningar
 	Save Export Preset	Spara exportförinställning
+	Export Export Presets	Exportera exportförinställningar
+	Export Preset…	Exportera förinställning…
+	Import Export Presets	Importera exportförinställningar
+	Import Preset…	Importera förinställning…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` är namnet på en förinställning i document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	ingen exportförinställning `{n}` (se document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	inga sparade exportförinställningar att exportera (ange inbyggda i `names`)
+@msg	not an export presets file (format `{_1}`)	inte en fil med exportförinställningar (format `{_1}`)
+@msg	not an export presets file: {e}	inte en fil med exportförinställningar: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportera lager
 	Export Selection	Exportera markering
 	All in One Folder	Allt i en mapp
@@ -1957,6 +1969,8 @@ font-technology	Variable	Variabla
 	Roundness:	Rundhet:
 	Fixed	Fast
 	Pressure	Tryck
+	Tilt	Lutning
+	Bearing	Riktning
 	Shape:	Form:
 	Bristle Length:	Borstlängd:
 	Bristle Density:	Borsttäthet:
@@ -2019,6 +2033,10 @@ font-technology	Variable	Variabla
 	New Without Dialog	Ny utan dialogruta
 	New Workspace	Ny arbetslayout
 	New Workspace…	Ny arbetslayout…
+	New Toolbar…	Nytt verktygsfält…
+	New Toolbar	Nytt verktygsfält
+	Show Toolbar	Visa verktygsfält
+	List Toolbars	Lista verktygsfält
 	New {kind} Style…	Ny {kind}stil…
 	New…	Ny…
 	Next	Nästa
@@ -2314,6 +2332,8 @@ font-technology	Variable	Variabla
 	Plates	Plåtar
 	Platform:	Plattform:
 	Play Current Selection	Spela upp aktuell markering
+	Save Actions…	Spara åtgärder…
+	Load Actions…	Läs in åtgärder…
 	Plug-in Info	Information om plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -2715,11 +2735,13 @@ digits	Malayalam	Malayalam
 	Save a Copy	Spara en kopia
 	Save a Copy…	Spara en kopia…
 	Save As	Spara som
+	Save As Preset…	Spara som förinställning…
 	Save as PDF…	Spara som PDF…
 	Save as preset:	Spara som förinställning:
 	Save as Template	Spara som mall
 	Save as Template…	Spara som mall…
 	Save As…	Spara som…
+	Save Changes	Spara ändringar
 	Save changes to {name}	Spara ändringar i {name}
 	Save color group to Swatch panel	Spara färggruppen i panelen Färgrutor
 	Save Colors as Swatches	Spara färger som färgrutor
@@ -3254,6 +3276,7 @@ digits	Malayalam	Malayalam
 	Graphic	Grafik
 	Show all open documents	Visa alla öppna dokument
 	Symbol Instance	Symbolinstans
+	Link Block Series	Serie av länkade block
 	Symbol Libraries	Symbolbibliotek
 	Symbol Screener Tool	Verktyg för symbolopacitet
 	Symbol Scruncher Tool	Verktyg för att dra ihop symboler
@@ -3277,6 +3300,10 @@ digits	Malayalam	Malayalam
 	Target Contents	Målets innehåll
 	Target:	Mål:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
+	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Up/Down:	Upp/ned:
+	Left/Right:	Vänster/höger:
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/färgton…
 	Template	Mall
@@ -4146,6 +4173,14 @@ axis	Both	Båda
 @msg	no selection bounds	inga markeringsgränser
 @msg	no slice selected	ingen skiva är markerad
 @msg	no such action	åtgärden finns inte
+@msg	no such action set	åtgärdsuppsättningen finns inte
+@msg	the action sets changed; nothing was deleted	åtgärdsuppsättningarna har ändrats; inget raderades
+@msg	no action set to save	ingen åtgärdsuppsättning att spara
+@msg	not an action set file	inte en fil med åtgärdsuppsättning
+@msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
+@msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder
+@msg	the action set file needs a later version of VectorCraft	filen med åtgärdsuppsättningen kräver en nyare version av VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	en åtgärd i filen med åtgärdsuppsättningen har fler än 10 000 steg
 @msg	no such anchor	ankaret finns inte
 @msg	no such artboard	ritytan finns inte
 @msg	the artboard is locked	ritytan är låst
@@ -4172,6 +4207,7 @@ axis	Both	Båda
 @msg	no user library folder here	ingen mapp för användarbibliotek här
 @msg	no user workspace `{from}`	ingen användararbetslayout `{from}`
 @msg	node {_1} is not text	nod {_1} är inte text
+@msg	node {_1} is on a locked artboard	nod {_1} ligger på en låst rityta
 @msg	not a DXF drawing	inte en DXF-ritning
 @msg	not a VectorCraft file: {0}	inte en VectorCraft-fil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	inte en kortkommandouppsättning för VectorCraft (`overrides` saknas)
@@ -4409,6 +4445,9 @@ axis	Both	Båda
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunde inte placera {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunde inte klistra in från urklippet: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Kunde inte klistra in: dokumentet det klistrades in i har stängts
+@msg	Saved {path} with {_1} note(s): {first}	Sparade {path} med {_1} anteckning(ar): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Exporterade {what} med {_1} anteckning(ar): {first}
 @msg	Exported {what}	Exporterade {what}
 @msg	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
 @msg	Saving	Sparar
@@ -4416,6 +4455,7 @@ axis	Both	Båda
 @msg	Exporting {_1}	Exporterar {_1}
 @msg	Packaging {_1}	Paketerar {_1}
 @msg	Placing {_1}	Placerar {_1}
+@msg	Pasting	Klistrar in
 @msg	Saving recovery data for {_1}	Sparar återställningsdata för {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kastade {n} återställt dokument|Kastade {n} återställda dokument
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Återställde {n} återskapat dokument: spara det för att behålla det|Återställde {n} återskapade dokument: spara dem för att behålla dem
@@ -4473,6 +4513,7 @@ axis	Both	Båda
 @msg	`{w}` takes no operands	`{w}` tar inga operander
 @msg	a wraparound group is inside a compound path	en textombrytningsgrupp ligger inuti en sammansatt bana
 @msg	a path has too many points	en bana har för många punkter
+@msg	it ends inside a group or compound path	den slutar inuti en grupp eller en sammansatt bana
 @msg	it ends inside a layer	den slutar inuti ett lager
 @msg	it ends inside a multi-layer mask	den slutar inuti en flerlagersmask
 @msg	a multi-layer mask's operators are out of order	operatorerna för en flerlagersmask står i fel ordning
@@ -4585,6 +4626,9 @@ axis	Both	Båda
 @msg	the PCX file is cut short	PCX-filen är avkortad
 @msg	the PCX file's header is damaged	PCX-filens huvud är skadat
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bitars pixlar i {planes} plan kan inte läsas
+@msg	the Pixar file is cut short	Pixar-filen är avkortad
+@msg	the Pixar file's header is damaged	Pixar-filens huvud är skadat
+@msg	the Pixar file's image data is damaged	Pixar-filens bilddata är skadade
 @msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan inte läsas
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har en färgrymd eller ett JPX-innehåll som inte stöds
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
@@ -5270,6 +5314,7 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
 file-filter	Swatch libraries	Färgrutebibliotek
 file-filter	Templates	Mallar
@@ -5330,6 +5375,11 @@ theme	Appearance	Utseende
 	Editable	Redigerbar
 	Export Data Sets…	Exportera datauppsättningar…
 	Load Variable Library…	Läs in variabelbibliotek…
+	Save Variable Library…	Spara variabelbibliotek…
+@msg	a variable library holds text variables, and the document has none	ett variabelbibliotek innehåller textvariabler, och dokumentet har inga
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabeln `{name}` kan inte sparas i ett variabelbibliotek: byt namn på den så att den börjar med en bokstav eller `_`, utan mellanslag eller andra symboler än `-`, `_` och `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	datauppsättningen `{name}` innehåller ett kontrolltecken, som ett variabelbibliotek inte kan innehålla
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	datauppsättningen `{name}` börjar eller slutar med blanksteg, som ett variabelbibliotek inte kan innehålla
 	Filter	Filter
 	Filter Layers Panel Rows	Filtrera rader i panelen Lager
 	Flatten	Platta till
@@ -5616,7 +5666,9 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
+@msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
 	Move Anchor Point	Flytta ankarpunkt
@@ -5701,6 +5753,9 @@ axis	Y Axis	Y-axel
 	New Set	Ny uppsättning
 	Set Options…	Alternativ för uppsättning…
 	Set Options	Alternativ för uppsättning
+	Action Options…	Alternativ för åtgärd…
+	Action Options	Alternativ för åtgärd
+	Rename Action	Byt namn på åtgärd
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
@@ -6239,3 +6294,9 @@ breakText	Glyphs	Glyfer
 	Small to Large	Från liten till stor
 	Large to Small	Från stor till liten
 	Distribute Evenly	Fördela jämnt
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Skapa färgrutelegend
+	Create Swatch Legend…	Skapa färgrutelegend…
+	HEX	HEX

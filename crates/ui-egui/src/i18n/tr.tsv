@@ -830,6 +830,8 @@ font-technology	Variable	Değişken
 	Double Right Quotation Marks	Çift Sağ Tırnak İşaretleri
 	Double-click	Çift tıklama
 	Double-click to edit the characters' paint	Karakterlerin boyasını düzenlemek için çift tıklayın
+	Click to edit	Düzenlemek için tıklayın
+	Double-click to edit	Düzenlemek için çift tıklayın
 	Double-click to insert	Eklemek için çift tıklayın
 	Double-click to rename	Yeniden adlandırmak için çift tıklayın
 	Double-click to target the contents	İçeriği hedeflemek için çift tıklayın
@@ -1010,6 +1012,16 @@ font-technology	Variable	Değişken
 	Delete Export Preset	Dışa Aktarma Ön Ayarını Sil
 	Export Presets	Ön Ayarları Dışa Aktarma
 	Save Export Preset	Dışa Aktarma Ön Ayarını Kaydet
+	Export Export Presets	Dışa Aktarma Ön Ayarlarını Dışa Aktar
+	Export Preset…	Ön Ayarı Dışa Aktar…
+	Import Export Presets	Dışa Aktarma Ön Ayarlarını İçe Aktar
+	Import Preset…	Ön Ayarı İçe Aktar…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`, document.exportPresets.list içindeki bir ön ayarın adıdır
+@msg	no export preset `{n}` (see document.exportPresets.list)	`{n}` adında dışa aktarma ön ayarı yok (bkz. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	dışa aktarılacak kayıtlı dışa aktarma ön ayarı yok (yerleşik olanları `names` içinde belirtin)
+@msg	not an export presets file (format `{_1}`)	dışa aktarma ön ayarları dosyası değil (`{_1}` biçimi)
+@msg	not an export presets file: {e}	dışa aktarma ön ayarları dosyası değil: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Katmanı Dışa Aktar
 	Export Selection	Seçimi Dışa Aktar
 	All in One Folder	Hepsi Bir Klasörde
@@ -1840,6 +1852,8 @@ font-technology	Variable	Değişken
 	Roundness:	Yuvarlaklık:
 	Fixed	Sabit
 	Pressure	Basınç
+	Tilt	Eğim
+	Bearing	Yön
 	Shape:	Şekil:
 	Bristle Length:	Kıl Uzunluğu:
 	Bristle Density:	Kıl Yoğunluğu:
@@ -1892,6 +1906,10 @@ font-technology	Variable	Değişken
 	Previous Document	Önceki Belge
 	New Workspace	Yeni Çalışma Alanı
 	New Workspace…	Yeni Çalışma Alanı…
+	New Toolbar…	Yeni Araç Çubuğu…
+	New Toolbar	Yeni Araç Çubuğu
+	Show Toolbar	Araç Çubuğunu Göster
+	List Toolbars	Araç Çubuklarını Listele
 	New {kind} Style…	Yeni {kind} Stili…
 	New…	Yeni…
 	Next	Sonraki
@@ -2189,6 +2207,8 @@ shape	Open	Açık
 	Plates	Plakalar
 	Platform:	Platform:
 	Play Current Selection	Geçerli Seçimi Oynat
+	Save Actions…	Eylemleri Kaydet…
+	Load Actions…	Eylemleri Yükle…
 	Plug-in Info	Eklenti Bilgisi
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
@@ -2583,11 +2603,13 @@ digits	Malayalam	Malayalam
 	Save a Copy	Bir Kopyasını Kaydet
 	Save a Copy…	Bir Kopyasını Kaydet…
 	Save As	Farklı Kaydet
+	Save As Preset…	Ön ayar olarak kaydet…
 	Save as PDF…	PDF olarak kaydet…
 	Save as preset:	Ön ayar olarak kaydet:
 	Save as Template	Şablon olarak kaydet
 	Save as Template…	Şablon Olarak Kaydet…
 	Save As…	Farklı Kaydet…
+	Save Changes	Değişiklikleri kaydet
 	Save changes to {name}	Değişiklikleri {name}'ye kaydet
 	Save color group to Swatch panel	Renk grubunu Swatch paneline kaydedin
 	Save Colors as Swatches	Renkleri Renk Örnekleri Olarak Kaydet
@@ -3147,6 +3169,7 @@ digits	Malayalam	Malayalam
 	Graphic	Grafik
 	Show all open documents	Tüm açık belgeleri göster
 	Symbol Instance	Sembol Örneği
+	Link Block Series	Bağlantılı Blok Serisi
 	Symbol Libraries	Sembol Kitaplıkları
 	Symbol Screener Tool	Sembol Perdeleyici Aracı
 	Symbol Scruncher Tool	Sembol Ezici Aracı
@@ -3170,6 +3193,10 @@ digits	Malayalam	Malayalam
 	Target Contents	Hedef İçerikler
 	Target:	Hedef:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Tate-chu-yoko Ayarları…
+	Tate-chu-yoko Settings	Tate-chu-yoko Ayarları
+	Up/Down:	Yukarı/Aşağı:
+	Left/Right:	Sol/Sağ:
 	Temperature	Sıcaklık
 	Temperature/Tint…	Sıcaklık/Renk Tonu…
 	Template	Şablon
@@ -4004,6 +4031,14 @@ axis	Both	Her İkisi
 @msg	no selection bounds	seçim sınırı yok
 @msg	no slice selected	dilim seçilmedi
 @msg	no such action	öyle bir eylem yok
+@msg	no such action set	öyle bir eylem seti yok
+@msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
+@msg	no action set to save	kaydedilecek eylem seti yok
+@msg	not an action set file	bir eylem seti dosyası değil
+@msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
+@msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
+@msg	the action set file needs a later version of VectorCraft	eylem seti dosyası VectorCraft'ın daha yeni bir sürümünü gerektiriyor
+@msg	an action in the action set file has more than 10,000 steps	eylem seti dosyasındaki bir eylemde 10.000'den fazla adım var
 @msg	no such anchor	öyle bir çapa yok
 @msg	no such artboard	böyle bir çalışma yüzeyi yok
 @msg	no such document	öyle bir belge yok
@@ -4027,6 +4062,7 @@ axis	Both	Her İkisi
 @msg	no user library folder here	burada kullanıcı kitaplığı klasörü yok
 @msg	no user workspace `{from}`	kullanıcı çalışma alanı yok `{from}`
 @msg	node {_1} is not text	{_1} düğümü metin değil
+@msg	node {_1} is on a locked artboard	{_1} düğümü kilitli bir çalışma yüzeyinde
 @msg	not a DXF drawing	DXF çizimi değil
 @msg	not a VectorCraft file: {0}	bir VectorCraft dosyası değil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft kısayol seti değil ("geçersiz kılmalar" eksik)
@@ -4247,6 +4283,9 @@ axis	Both	Her İkisi
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} yerleştirilemedi: {e}
 @msg	Couldn't paste from the clipboard: {e}	Panodan yapıştırılamadı: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Yapıştırılamadı: yapıştırıldığı belge kapatıldı
+@msg	Saved {path} with {_1} note(s): {first}	{path}, {_1} notlarıyla kaydedildi: {first}
+@msg	Exported {what} with {_1} note(s): {first}	{_1} notlarıyla birlikte dışa aktarılan {what}: {first}
 @msg	Exported {what}	Dışa aktarılan {what}
 @msg	Saved {n} files beside {path}	{path}'nin yanında kaydedilen {n} dosyaları
 @msg	Saving	Kaydediliyor
@@ -4254,6 +4293,7 @@ axis	Both	Her İkisi
 @msg	Exporting {_1}	{_1}'yi dışa aktarma
 @msg	Packaging {_1}	{_1} paketleniyor
 @msg	Placing {_1}	{_1} yerleştiriliyor
+@msg	Pasting	Yapıştırılıyor
 @msg	Saving recovery data for {_1}	{_1} için kurtarma verileri kaydediliyor
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin
@@ -4311,6 +4351,7 @@ axis	Both	Her İkisi
 @msg	`{w}` takes no operands	`{w}` işlenen almaz
 @msg	a wraparound group is inside a compound path	bir metin kaydırma grubu bileşik bir yolun içinde
 @msg	a path has too many points	bir yolun çok fazla noktası var
+@msg	it ends inside a group or compound path	bir grubun veya bileşik yolun içinde bitiyor
 @msg	it ends inside a layer	bir katmanın içinde bitiyor
 @msg	it ends inside a multi-layer mask	çok katmanlı bir maskenin içinde bitiyor
 @msg	a multi-layer mask's operators are out of order	çok katmanlı bir maskenin işleçleri yanlış sırada
@@ -4418,6 +4459,9 @@ axis	Both	Her İkisi
 @msg	the PCX file is cut short	PCX dosyası kısa kesildi
 @msg	the PCX file's header is damaged	PCX dosyasının başlığı bozuk
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} düzlemde {bits}-bit pikseller içeren PCX dosyaları okunamaz
+@msg	the Pixar file is cut short	Pixar dosyası kısa kesildi
+@msg	the Pixar file's header is damaged	Pixar dosyasının başlığı bozuk
+@msg	the Pixar file's image data is damaged	Pixar dosyasının görüntü verileri bozuk
 @msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
@@ -5064,6 +5108,7 @@ effect	Regular	Düzenli
 effect	Vertical	Dikey
 file-filter	All placeable files	Yerleştirilebilir tüm dosyalar
 file-filter	All readable files	Okunabilir tüm dosyalar
+file-filter	Export presets	Dışa aktarma önayarları
 file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
 file-filter	PDF-compatible .ai	PDF ile uyumlu .ai
@@ -5361,8 +5406,10 @@ theme	Appearance	Görünüm
 @msg	its zlib compression is damaged	zlib sıkıştırması hasarlı
 @msg	its Zstandard compression is damaged	Zstandard sıkıştırması hasarlı
 @msg	it decompresses to more than {_1} MB	açıldığında {_1} MB'tan fazla alan kaplıyor
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	dosyanın değişken kitaplığı yalnızca kısmen okundu (atlanan girdiler: {_1}): Değişkenler paneli kalanları listeliyor
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	dosyanın değişken kitaplığı okunamadı: Değişkenler paneli onu listelemiyor
+@msg	a variable of unknown kind can't be bound to objects	türü bilinmeyen bir değişken nesnelere bağlanamaz
 @msg	columns {first} and {column} both name the variable `{name}`	{first} ve {column} numaralı sütunların ikisi de `{name}` değişkenini adlandırıyor
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	dosyanın değişkenleri ve veri kümeleri okunmadı (değişkenler: {variables}, veri kümeleri: {data_sets}): Değişkenler paneli bunları listelemiyor
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin
@@ -5463,6 +5510,11 @@ theme	Appearance	Görünüm
 	In Merge Mode, Clicking Stroke Splits the Path	Birleştirme modunda kontura tıklamak yolu böler
 	Insert Kashidas	Keşide Ekle
 	Load Variable Library…	Değişken Kitaplığı Yükle…
+	Save Variable Library…	Değişken Kitaplığını Kaydet…
+@msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
+@msg	data set `{name}` holds a control character, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir denetim karakteri içeriyor
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir boşlukla başlıyor veya bitiyor
 	Long	Uzun
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası
@@ -5635,6 +5687,9 @@ axis	Y Axis	Y ekseni
 	New Set	Yeni Set
 	Set Options…	Set Seçenekleri…
 	Set Options	Set Seçenekleri
+	Action Options…	Eylem Seçenekleri…
+	Action Options	Eylem Seçenekleri
+	Rename Action	Eylemi Yeniden Adlandır
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
@@ -6144,3 +6199,9 @@ breakText	Glyphs	Glifler
 	Small to Large	Küçükten Büyüğe
 	Large to Small	Büyükten Küçüğe
 	Distribute Evenly	Eşit Dağıt
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Renk Örneği Açıklaması Oluştur
+	Create Swatch Legend…	Renk Örneği Açıklaması Oluştur…
+	HEX	HEX

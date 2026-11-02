@@ -43,6 +43,8 @@
 	Close All	Zatvori sve
 	Save	Sačuvaj
 	Save As…	Sačuvaj kao…
+	Save As Preset…	Sačuvaj kao predložak…
+	Save Changes	Sačuvaj promjene
 	Save a Copy…	Sačuvaj kopiju…
 	Save as Template…	Sačuvaj kao predložak…
 	Save as PDF…	Sačuvaj kao PDF…
@@ -416,6 +418,7 @@
 	Stroke Weight	Debljina poteza
 	Graphic Style	Grafički stil
 	Symbol Instance	Instanca simbola
+	Link Block Series	Niz povezanih blokova
 	Font Family	Porodica fonta
 	Font Family & Style	Porodica i stil fonta
 	Font Family, Style & Size	Porodica, stil i veličina fonta
@@ -636,6 +639,10 @@
 	Reset Typography	Vrati Tipografiju na početno
 	Reset Web	Vrati Web na početno
 	New Workspace…	Novi radni prostor…
+	New Toolbar…	Nova traka s alatima…
+	New Toolbar	Nova traka s alatima
+	Show Toolbar	Prikaži traku s alatima
+	List Toolbars	Izlistaj trake s alatima
 	Manage Workspaces…	Upravljaj radnim prostorima…
 	Control	Kontrola
 	Contextual Task Bar	Kontekstna traka zadataka
@@ -1316,6 +1323,8 @@ lighting	Light	Svjetlo
 	No actions. Press ● to record.	Nema akcija. Pritisnite ● za snimanje.
 	Outline Text	Tekst u obrise
 	Play Current Selection	Reprodukuj trenutni odabir
+	Save Actions…	Sačuvaj akcije…
+	Load Actions…	Učitaj akcije…
 	Reflect Horizontal	Odrazi vodoravno
 	Rotate 90° CW	Rotiraj za 90° u smjeru kazaljke
 	Set 1	Skup 1
@@ -1449,6 +1458,10 @@ digits	Malayalam	Malajalam
 	Superscript (on the roadmap)	Eksponent (u planu)
 	System Layout	Sistemski raspored
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Postavke za Tate-chu-yoko…
+	Tate-chu-yoko Settings	Postavke za Tate-chu-yoko
+	Up/Down:	Gore/dolje:
+	Left/Right:	Lijevo/desno:
 	Underline	Podvučeno
 	Vertical Scale %	Okomita skala %
 	Axis	Osa
@@ -2918,6 +2931,10 @@ digits	Malayalam	Malajalam
 	Delete Export Preset	Izbriši predložak izvoza
 	Export Presets	Izvezi predloške
 	Save Export Preset	Sačuvaj predložak izvoza
+	Export Export Presets	Izvezi predloške izvoza
+	Export Preset…	Izvezi predložak…
+	Import Export Presets	Uvezi predloške izvoza
+	Import Preset…	Uvezi predložak…
 	Export Layer	Izvezi sloj
 	Export Selection	Izvezi odabir
 	All in One Folder	Sve u jednom folderu
@@ -2978,6 +2995,8 @@ digits	Malayalam	Malajalam
 	Dots	Tačke
 	Fixed	Fiksno
 	Pressure	Pritisak
+	Tilt	Nagib
+	Bearing	Smjer
 	Random	Nasumično
 	Scatter	Raspršeno
 	Color Burn	Tamnjenje boje
@@ -4243,6 +4262,7 @@ imageTrace	Outline	Obris
 @msg	`freeform.points` must be an array	`freeform.points` mora biti niz
 @msg	`freeform.lines` must be an array	`freeform.lines` mora biti niz
 @msg	`gradient` must be an object	`gradient` mora biti objekat
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` je naziv predloška iz document.exportPresets.list
 @msg	`groupColors` must be an array	`groupColors` mora biti niz
 @msg	`library` is a library id or name (see {list})	`library` je ID ili naziv biblioteke (vidi {list})
 @msg	`mode` applies to freeform gradients	`mode` se primjenjuje na gradijente slobodnog oblika
@@ -4252,6 +4272,7 @@ imageTrace	Outline	Obris
 @msg	`stops` must be an array	`stops` mora biti niz
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` mora biti objekat SVG opcija (vidi document.formats)
 @msg	`{_1}` is no save command	`{_1}` nije naredba čuvanja
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 @msg	`{area}` is no recovery area name	`{area}` nije naziv područja za oporavak
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` nije boja (#rrggbb ili naziv predloška)
 @msg	`{id}` has no envelope dialog	`{id}` nema dijalog omotnice
@@ -4486,12 +4507,14 @@ imageTrace	Outline	Obris
 @msg	no plug-in {id} is installed	nije instaliran dodatak {id}
 @msg	no point {i} (the gradient has {_1})	nema tačke {i} (gradijent ima {_1})
 @msg	no preset editor	nema uređivača predložaka
+@msg	no export preset `{n}` (see document.exportPresets.list)	nema predloška izvoza `{n}` (vidi document.exportPresets.list)
 @msg	no previous transform	nema prethodne transformacije
 @msg	no print preset named `{base}`	nema predloška štampanja pod nazivom `{base}`
 @msg	no print preset named `{name}`	nema predloška štampanja pod nazivom `{name}`
 @msg	no print service	nema usluge štampanja
 @msg	no revert command	nema naredbe za vraćanje
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	nema sačuvanog PDF predloška pod nazivom `{name}` (ugrađeni predlošci su samo za čitanje: započnite novi od njih)
+@msg	no saved export presets to export (name built-in ones in `names`)	nema sačuvanih predložaka izvoza za izvoz (ugrađene navedite u `names`)
 @msg	no saved preset named `{name}`	nema sačuvane unaprijed postavljene vrijednosti `{name}`
 @msg	no saved preset named `{name}` to rename	nema sačuvane unaprijed postavljene vrijednosti `{name}` za preimenovanje
 @msg	no saved presets	nema sačuvanih predložaka
@@ -4505,6 +4528,14 @@ imageTrace	Outline	Obris
 @msg	no selection bounds	nema granica odabira
 @msg	no slice selected	nije odabran isječak
 @msg	no such action	nema takve akcije
+@msg	no such action set	nema takvog skupa akcija
+@msg	the action sets changed; nothing was deleted	skupovi akcija su se promijenili; ništa nije izbrisano
+@msg	no action set to save	nema skupa akcija za čuvanje
+@msg	not an action set file	nije datoteka skupa akcija
+@msg	the action set file is larger than 8 MiB	datoteka skupa akcija je veća od 8 MiB
+@msg	the action set file holds more than 1,000 actions	datoteka skupa akcija sadrži više od 1.000 akcija
+@msg	the action set file needs a later version of VectorCraft	datoteka skupa akcija zahtijeva noviju verziju programa VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	akcija u datoteci skupa akcija ima više od 10.000 koraka
 @msg	no such anchor	nema takvog sidra
 @msg	no such artboard	nema takve radne ploče
 @msg	the artboard is locked	radna ploča je zaključana
@@ -4539,6 +4570,8 @@ imageTrace	Outline	Obris
 @msg	not a stored central record	nije sačuvani centralni zapis
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
+@msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
+@msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
 @msg	not in pattern editing mode	nije u načinu uređivanja uzorka
 @msg	finish editing the pattern first	prvo završite uređivanje uzorka
@@ -4771,6 +4804,9 @@ imageTrace	Outline	Obris
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nije moguće postaviti {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nije moguće zalijepiti: dokument u koji se lijepilo je zatvoren
+@msg	Saved {path} with {_1} note(s): {first}	Sačuvano {path} s bilješkama ({_1}): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Izvezeno {what} s bilješkama ({_1}): {first}
 @msg	Exported {what}	Izvezeno: {what}
 @msg	Saved {n} files beside {path}	Sačuvano datoteka pored {path}: {n}
 @msg	Saving	Čuvanje
@@ -4778,6 +4814,7 @@ imageTrace	Outline	Obris
 @msg	Exporting {_1}	Izvoz {_1}
 @msg	Packaging {_1}	Pakovanje {_1}
 @msg	Placing {_1}	Postavljanje {_1}
+@msg	Pasting	Lijepljenje
 @msg	Saving recovery data for {_1}	Čuvanje podataka za oporavak za {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
@@ -4831,6 +4868,7 @@ imageTrace	Outline	Obris
 @msg	`{what}` closes nothing	`{what}` ne zatvara ništa
 @msg	`{what}` closes something it didn't open	`{what}` zatvara nešto što nije otvorio
 @msg	a path has too many points	putanja ima previše tačaka
+@msg	it ends inside a group or compound path	završava unutar grupe ili složene putanje
 @msg	it ends inside a layer	završava unutar sloja
 @msg	it has art outside its layers	ima crtež izvan svojih slojeva
 @msg	it has more than {MAX_NODES} objects	ima više od {MAX_NODES} objekata
@@ -4894,6 +4932,9 @@ imageTrace	Outline	Obris
 @msg	the PCX file is cut short	PCX datoteka je skraćena
 @msg	the PCX file's header is damaged	zaglavlje PCX datoteke je oštećeno
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX datoteke s {bits}-bitnim pikselima u {planes} ravni nije moguće pročitati
+@msg	the Pixar file is cut short	Pixar datoteka je skraćena
+@msg	the Pixar file's header is damaged	zaglavlje Pixar datoteke je oštećeno
+@msg	the Pixar file's image data is damaged	slikovni podaci Pixar datoteke su oštećeni
 @msg	the JPEG 2000 file can't be read	datoteku JPEG 2000 nije moguće pročitati
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	datoteka JPEG 2000 ima nepodržan prostor boja ili JPX sadržaj
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
@@ -5239,6 +5280,7 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
 file-filter	PDF-compatible .ai	.ai kompatibilan s PDF-om
 file-filter	VectorCraft Template	VectorCraft predložak
@@ -5391,6 +5433,11 @@ mark-style	Japanese	Japanski
 	Import Data Sets…	Uvezi skupove podataka…
 	Export Data Sets…	Izvezi skupove podataka…
 	Load Variable Library…	Učitaj biblioteku varijabli…
+	Save Variable Library…	Sačuvaj biblioteku varijabli…
+@msg	a variable library holds text variables, and the document has none	biblioteka varijabli sadrži tekstualne varijable, a dokument ih nema
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	varijabla `{name}` ne može se sačuvati u biblioteci varijabli: preimenujte je tako da počinje slovom ili sa `_`, bez razmaka i simbola osim `-`, `_` i `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	skup podataka `{name}` sadrži kontrolni znak, koji biblioteka varijabli ne može sadržavati
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	skup podataka `{name}` počinje ili završava razmakom, koji biblioteka varijabli ne može sadržavati
 	Make Graph Dynamic	Učini grafikon dinamičkim
 	Batch…	Paketna obrada…
 	Source Folder:	Izvorni folder:
@@ -5503,7 +5550,9 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	varijable i skupovi podataka datoteke nisu pročitani (varijable: {variables}, skupovi podataka: {data_sets}): panel Varijable ih ne navodi
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
+@msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
 	Select by Color	Odaberi po boji
 	Move Anchor Point	Pomjeri sidrenu tačku
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zadržava 1 od {n} radnih ploča dokumenta: datoteka se ponovo otvara s jednom. Uključite Očuvaj mogućnosti uređivanja da ih zadržite sve.
@@ -5584,6 +5633,9 @@ axis	Y Axis	Y osa
 	New Set	Novi skup
 	Set Options…	Opcije skupa…
 	Set Options	Opcije skupa
+	Action Options…	Opcije akcije…
+	Action Options	Opcije akcije
+	Rename Action	Preimenuj akciju
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
@@ -6076,3 +6128,9 @@ shape	Open	Otvoren
 	Small to Large	Od manjeg prema većem
 	Large to Small	Od većeg prema manjem
 	Distribute Evenly	Rasporedi ravnomjerno
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Kreiraj legendu uzoraka boja
+	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
+	HEX	HEX

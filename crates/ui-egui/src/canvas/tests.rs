@@ -41,8 +41,10 @@ fn rendered_rasters_become_the_same_egui_images() {
     assert!(img.pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0 && p[3] != 255), "partly covered pixels");
     let egui = egui::ColorImage::from_rgba_premultiplied([97, 61], &img.pixels);
     assert_eq!(color_image(&img), egui);
+    assert_eq!(color_image_owned(img), egui);
     let short = vectorcraft_render::Rendered { width: 3, height: 2, pixels: vec![255; 5] };
     assert_eq!(color_image(&short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
+    assert_eq!(color_image_owned(short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
 }
 
 /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of
@@ -620,7 +622,7 @@ fn a_click_activates_its_artboard_and_paste_in_place_goes_onto_it() {
     let view = app.view_info();
     let at = boards[2].center();
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), backquote: false, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
     let ids: Vec<vectorcraft_doc::NodeId> = app.run("edit.pasteInPlace", json!({})).unwrap()["ids"]
@@ -653,7 +655,7 @@ fn a_shift_click_activates_its_artboard_and_align_to_artboard_aligns_to_it() {
     let view = app.view_info();
     let shift = Mods { shift: true, ..Default::default() };
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, backquote: false, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
     assert_eq!(app.session.active().unwrap().selection.objects, ids, "the selection stays");
@@ -708,7 +710,7 @@ fn the_active_artboard_is_outlined_in_black() {
     let view = app.view_info();
     let shift = Mods { shift: true, ..Default::default() };
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, backquote: false, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.session.tool_options()["selected"], json!([2, 1]));
     assert_eq!(edges(&mut app), active(2), "Artboard 3 is the active one of the two selected");
@@ -1102,6 +1104,53 @@ fn a_guide_dragged_out_of_a_ruler_shows_while_dragged() {
         assert!(shapes(&mut app, &ctx).iter().any(across), "real-time drawing {real_time}: the guide shows while dragged");
         frame(&mut app, &ctx, vec![button(at, false)]);
         assert_eq!(app.session.active().unwrap().doc.guides.len(), 1, "real-time drawing {real_time}: released, it is made");
+    }
+}
+
+/// With Preferences › Performance › Real-time Drawing and Editing off, the bounding box moves
+/// with a Selection-tool move drag while the object stays put until the release. With it on, the
+/// art moves and the box hides during the drag (#712).
+#[test]
+fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
+    for real_time in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        app.ui.view.smart_guides = false;
+        app.ui.view.snap_to_point = false;
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let is_handle = |s: &Shape| matches!(s, Shape::Rect(r) if (r.rect.width() - 6.0).abs() < 1.0 && (r.rect.height() - 6.0).abs() < 1.0 && r.fill == Color32::WHITE);
+        let handles = |app: &mut VectorcraftApp| {
+            shapes(app, &ctx).iter().filter(|s| is_handle(s)).map(|s| s.visual_bounding_rect().center()).collect::<Vec<_>>()
+        };
+        let at_rest = handles(&mut app);
+        assert_eq!(at_rest.len(), 8, "real-time drawing {real_time}: the box's handles at rest");
+        let left = |app: &VectorcraftApp| app.session.active().unwrap().doc.art_bounds().unwrap().x0;
+        let start = left(&app);
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 130.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 230.0), view).unwrap();
+        let during = handles(&mut app);
+        if real_time {
+            assert!(during.is_empty(), "the box hides while the art moves: {during:?}");
+            assert_eq!(left(&app), start + 100.0, "the art moves with the pointer");
+        } else {
+            assert_eq!(during.len(), 8, "the box shows during the drag");
+            let corner = xf.to_screen(Point::new(200.0, 200.0));
+            assert!(during.iter().any(|c| c.distance(corner) < 0.5), "the box's corner is at the dragged position: {during:?}");
+            assert!(!during.iter().any(|c| c.distance(xf.to_screen(Point::new(100.0, 100.0))) < 0.5), "not at the start");
+            assert_eq!(left(&app), start, "the object waits for the release");
+        }
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 230.0), view).unwrap();
+        assert_eq!(left(&app), start + 100.0, "real-time drawing {real_time}: moved on release");
+        assert_eq!(handles(&mut app).len(), 8, "real-time drawing {real_time}: the box at rest again");
     }
 }
 
@@ -6478,29 +6527,36 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let c = pos2(30.0, 40.0);
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
     let mut mouse = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None).0);
     out.textures_delta.clear();
-    // A mouse keeps its moves too, without a pressure.
-    assert_eq!(mouse, [(a, None), (b, None)], "the last move follows the normal pointer path");
-    // A macOS pen: the feed kept a pressure for each move, the last for the last.
+    // A mouse keeps its moves too, without a pressure or a pose.
+    assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
+    // A macOS pen: the feed kept a pressure and a pose for each move, the last for the last.
     let feed = StylusFeed::default();
-    for p in [0.9, 0.3, 0.0, 0.5] {
-        feed.set_move(crate::stylus::PenSample { pressure: p, eraser: false });
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
-    let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
+    let (mut samples, mut last) = (vec![], None);
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, Some(0.3)), (b, None)], "paired from the end; a lift's 0 is no pressure");
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
+    assert_eq!(
+        samples,
+        [(a, Some(0.3), Some(leaning)), (b, None, Some(PenPose::default()))],
+        "paired from the end, each with its own pose; a lift's 0 is no pressure"
+    );
+    assert_eq!(last, Some(leaning), "the last move's pose comes with the moves");
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, None), (b, None)], "the moves were taken: a mouse's moves again");
+    assert_eq!(samples, [(a, None, None), (b, None, None)], "the moves were taken: a mouse's moves again");
+    assert_eq!(last, None);
     let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
     let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, Some(0.2)), (b, Some(0.8))], "the last sample follows the normal pointer path");
+    assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
     let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
     out.textures_delta.clear();
     assert!(samples.len() <= 64, "a stalled frame stays bounded");
 }
@@ -6711,7 +6767,7 @@ fn pen_app() -> (VectorcraftApp, StylusFeed, egui::Context) {
 
 /// The pen turned to its eraser end, with `pressure`.
 fn eraser_end(pressure: f32) -> Option<crate::stylus::PenSample> {
-    Some(crate::stylus::PenSample { pressure, eraser: true })
+    Some(crate::stylus::PenSample { pressure, eraser: true, ..Default::default() })
 }
 
 /// #764: turning the pen to its eraser end selects the Eraser, and turning it back to the tip
@@ -6890,6 +6946,131 @@ fn the_tip_brings_back_the_perspective_grid_tool_without_showing_the_grid() {
     assert!(!visible(&app), "the grid stays hidden");
 }
 
+/// #764: the pen's tilt and barrel rotation in the host's feed reach the Paintbrush's points,
+/// the tilt turned onto the page when the view is rotated; a mouse's points carry neither.
+#[test]
+fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    // A stroke at `y`, one frame per sample, with the pen held as `pose` (`None`: a mouse); the
+    // tilt x, tilt y and rotation of each of its points.
+    let stroke = |app: &mut VectorcraftApp, y: f64, pose: Option<PenPose>| -> Vec<[Option<f64>; 3]> {
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let mut at = Pos2::ZERO;
+        for (i, x) in [360.0, 400.0, 440.0].into_iter().enumerate() {
+            match pose {
+                Some(pose) => feed.set_sample(Some(crate::stylus::PenSample { pressure: 0.5, pose, ..Default::default() })),
+                None => feed.set(None),
+            }
+            at = xf.to_screen(Point::new(x, y));
+            let mut events = vec![egui::Event::PointerMoved(at)];
+            if i == 0 {
+                events.push(button(at, true));
+            }
+            frame(app, &ctx, events);
+        }
+        frame(app, &ctx, vec![button(at, false)]);
+        let (cmd, p) = app.session.journal.last().unwrap().clone();
+        assert_eq!(cmd, "path.freehand");
+        p["points"].as_array().unwrap().iter().map(|s| [3, 4, 5].map(|i| s.get(i).and_then(serde_json::Value::as_f64))).collect()
+    };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0) };
+    let points = stroke(&mut app, 260.0, Some(leaning));
+    assert!(!points.is_empty() && points.iter().all(|p| *p == [Some(30.0), Some(0.0), Some(45.0)]), "{points:?}");
+    // With the view rotated 90° clockwise, a pen leaning to the right of the screen leans up the
+    // page; the barrel's rotation stays as it was.
+    app.run("view.rotate", json!({"angle": 90})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let points = stroke(&mut app, 340.0, Some(leaning));
+    let up = |p: &[Option<f64>; 3]| matches!(*p, [Some(x), Some(y), Some(r)] if x.abs() < 0.01 && (y + 30.0).abs() < 0.01 && r == 45.0);
+    assert!(!points.is_empty() && points.iter().all(up), "{points:?}");
+    let points = stroke(&mut app, 300.0, None);
+    assert!(!points.is_empty() && points.iter().all(|p| *p == [None; 3]), "a mouse: {points:?}");
+}
+
+/// The moves that come in the frame of the release reach the Paintbrush before it lifts, each
+/// with the tilt the host's feed kept for that move.
+#[test]
+fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let moved = |tilt: f32| {
+        feed.set_move(crate::stylus::PenSample {
+            pressure: 0.5,
+            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) },
+            ..Default::default()
+        })
+    };
+    moved(10.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
+    moved(20.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(340.0))]);
+    for tilt in [30.0, 40.0, 50.0] {
+        moved(tilt);
+    }
+    frame(
+        &mut app,
+        &ctx,
+        vec![
+            egui::Event::PointerMoved(at(380.0)),
+            egui::Event::PointerMoved(at(420.0)),
+            egui::Event::PointerMoved(at(460.0)),
+            button(at(460.0), false),
+        ],
+    );
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let tilts: Vec<f64> = p["points"].as_array().unwrap().iter().filter_map(|s| s.get(3).and_then(serde_json::Value::as_f64)).collect();
+    for tilt in [30.0, 40.0] {
+        assert!(tilts.iter().any(|t| (t - tilt).abs() < 0.01), "{tilt}: {tilts:?}");
+    }
+}
+
+/// The last move of a frame reaches the Paintbrush with the tilt the host's feed kept for that
+/// move, not with a later pen sample that came without a move.
+#[test]
+fn the_last_move_of_a_frame_keeps_its_own_tilt() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let sample =
+        |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
+    feed.set_move(sample(10.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
+    feed.set_move(sample(20.0));
+    feed.set_move(sample(30.0));
+    // A pen sample with no pointer move of its own, after the frame's last move.
+    feed.set_sample(Some(sample(70.0)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(340.0)), egui::Event::PointerMoved(at(380.0))]);
+    frame(&mut app, &ctx, vec![button(at(380.0), false)]);
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let points: Vec<(f64, f64)> = p["points"].as_array().unwrap().iter().filter_map(|s| Some((s.get(0)?.as_f64()?, s.get(3)?.as_f64()?))).collect();
+    let last_move = points.iter().find(|(x, _)| (x - 380.0).abs() < 0.5);
+    assert!(last_move.is_some_and(|(_, t)| (t - 30.0).abs() < 0.01), "{points:?}");
+}
+
 /// #3328: every position a mouse reports within one frame reaches the Pencil, not only the
 /// frame's last one, so a fast stroke keeps the hand's movement.
 #[test]
@@ -6960,7 +7141,7 @@ fn only_the_freehand_tools_get_every_move_of_a_frame() {
     {
         app.select_tool(tool);
         let mut moves = vec![];
-        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app));
+        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app).0);
         out.textures_delta.clear();
         assert_eq!(moves.len(), if every { 19 } else { 0 }, "{tool}");
     }
@@ -8358,4 +8539,118 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     app.select_tool("selection");
     app.run("view.artboards", json!({})).unwrap();
     assert_eq!(look(&mut app), (false, true));
+}
+
+/// Finished worker renders are uploaded whenever they are not older than what is currently
+/// displayed on screen. During continuous edit streams (drag previews, held arrow nudges, or
+/// command bursts) where the document revision advances every frame, intermediate worker frames
+/// are uploaded progressively to prevent the canvas from freezing. Obsolete frames older than what
+/// is already displayed are discarded.
+#[test]
+fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_frames() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw.clone(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    let doc = app.session.active().unwrap().doc.clone();
+    let initial_key = app.canvas.key.clone().expect("first frame initializes key");
+    let key_doc = initial_key.doc;
+
+    // Displayed canvas texture is initially at revision 2.
+    let mut displayed_key = initial_key.clone();
+    displayed_key.revision = 2;
+    app.canvas.key = Some(displayed_key);
+
+    let (worker, _jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+
+    // Worker completes revision 5 (intermediate frame from an edit stream).
+    // It is newer than displayed revision 2: it MUST be accepted and uploaded.
+    let mut rev5_key = initial_key.clone();
+    rev5_key.revision = 5;
+    let img5 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![200; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev5_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img5,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 1, "intermediate frame 5 is uploaded to texture");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "intermediate frame 5 is uploaded");
+    assert!(app.canvas.from_worker);
+
+    // Worker completes an older revision 3 (out of order). It is older than displayed 5, so discarded.
+    let mut rev3_key = initial_key.clone();
+    rev3_key.revision = 3;
+    let img3 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![150; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev3_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img3,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 0, "older out-of-order frame 3 emits NO texture upload delta, leaving displayed texture intact");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "older out-of-order frame 3 is discarded");
+
+    // Worker completes another intermediate revision 8. Newer than displayed 5, so uploaded.
+    let mut rev8_key = initial_key.clone();
+    rev8_key.revision = 8;
+    let img8 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![180; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev8_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img8,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 1, "newer frame 8 is uploaded to texture");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 8, "newer frame 8 is uploaded");
+
+    // Finally, the settling frame at revision 10 completes: it is accepted and uploaded.
+    let mut rev10_key = initial_key;
+    rev10_key.revision = 10;
+    let img10 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![255; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev10_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img10,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw, |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 1, "settled frame 10 is uploaded to texture");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }

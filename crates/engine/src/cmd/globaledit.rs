@@ -39,8 +39,8 @@
 //! - of its fills and strokes, each setting that changed (paint, weight, opacity, blending,
 //!   effects, caps, dashes, arrowheads …), as it is: it goes to the member's fill or stroke of the
 //!   same rank (the second fill from the bottom to the second fill), and a member without one is
-//!   left without it. A weight set to 4 pt is 4 pt on a smaller member too. The pen pressure a
-//!   stroke was drawn with stays each member's own;
+//!   left without it. A weight set to 4 pt is 4 pt on a smaller member too. The pen pressure,
+//!   tilt, bearing and rotation a stroke was drawn with stay each member's own;
 //! - a fill or stroke added or removed: a member whose fills and strokes lie in the model's
 //!   former order gains the same item at the same place (or loses the one at that place). A
 //!   member with another order, and any other change to the list (items moved, or several added
@@ -559,7 +559,8 @@ fn give_appearance(a: &Appearance, b: &Appearance, m: &Appearance, n: &mut Share
 }
 
 /// Give the member's fill or stroke `n` the settings of the model's that changed from `a` to `b`,
-/// with the values of `m` (`b` placed on the member). A stroke's pen pressure stays its own.
+/// with the values of `m` (`b` placed on the member). A stroke's pen pressure, tilt, bearing and
+/// rotation stay its own.
 fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut AppearanceItem) {
     use AppearanceItem::{Fill, Stroke};
     match (a, b, m, n) {
@@ -589,6 +590,9 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 overprint,
                 gradient_mode,
                 pressure: _,
+                tilt: _,
+                bearing: _,
+                rotation: _,
             } = m;
             give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
         }

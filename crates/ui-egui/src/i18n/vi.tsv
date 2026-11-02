@@ -318,6 +318,7 @@ font-technology	Variable	Biến thiên
 	Baseline Shift	Dịch chuyển đường cơ sở
 	Basic Latin	Latin cơ bản
 	Batch	Hàng loạt
+	Bearing	Hướng
 	Begin Recording	Bắt đầu ghi
 	Begin Undo Group	Bắt đầu nhóm hoàn tác
 	Bend:	Uốn cong:
@@ -985,6 +986,8 @@ font-technology	Variable	Biến thiên
 	Double Right Quotation Marks	Dấu ngoặc kép phải đôi
 	Double-click	Bấm đúp
 	Double-click to edit the characters' paint	Bấm đúp để chỉnh sửa màu ký tự
+	Click to edit	Bấm để chỉnh sửa
+	Double-click to edit	Bấm đúp để chỉnh sửa
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung
@@ -1191,6 +1194,16 @@ font-technology	Variable	Biến thiên
 	Delete Export Preset	Xóa cài đặt sẵn xuất
 	Export Presets	Cài đặt sẵn xuất
 	Save Export Preset	Lưu cài đặt sẵn xuất
+	Export Export Presets	Xuất cài đặt sẵn xuất
+	Export Preset…	Xuất cài đặt sẵn…
+	Import Export Presets	Nhập cài đặt sẵn xuất
+	Import Preset…	Nhập cài đặt sẵn…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` là tên của một cài đặt sẵn trong document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	không có cài đặt sẵn xuất `{n}` (xem document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	không có cài đặt sẵn xuất đã lưu nào để xuất (ghi các cài đặt tích hợp sẵn trong `names`)
+@msg	not an export presets file (format `{_1}`)	không phải tệp cài đặt sẵn xuất (định dạng `{_1}`)
+@msg	not an export presets file: {e}	không phải tệp cài đặt sẵn xuất: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Xuất lớp
 	Export Selection	Xuất vùng chọn
 	All in One Folder	Tất cả trong một thư mục
@@ -1402,6 +1415,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
 file-filter	VectorCraft Template	Mẫu VectorCraft
@@ -2345,6 +2359,10 @@ digits	Hindi	Hindi
 	New Without Dialog	Mới không qua hộp thoại
 	New Workspace	Không gian làm việc mới
 	New Workspace…	Không gian làm việc mới…
+	New Toolbar…	Thanh công cụ mới…
+	New Toolbar	Thanh công cụ mới
+	Show Toolbar	Hiện thanh công cụ
+	List Toolbars	Danh sách thanh công cụ
 	New {kind} Style…	Kiểu {kind} mới…
 	New…	Mới…
 	Next	Tiếp theo
@@ -2694,6 +2712,8 @@ diagnostics	ui	giao diện
 	Plates	Bản in
 	Platform:	Nền tảng:
 	Play Current Selection	Phát vùng chọn hiện tại
+	Save Actions…	Lưu hành động…
+	Load Actions…	Tải hành động…
 	Plug-in Info	Thông tin plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Phần bổ trợ…
@@ -3112,11 +3132,13 @@ mark-style	Japanese	Kiểu Nhật
 	Save a Copy	Lưu bản sao
 	Save a Copy…	Lưu bản sao…
 	Save As	Lưu thành
+	Save As Preset…	Lưu dưới dạng cài đặt sẵn…
 	Save as PDF…	Lưu thành PDF…
 	Save as preset:	Lưu thành thiết lập sẵn:
 	Save as Template	Lưu thành mẫu
 	Save as Template…	Lưu thành mẫu…
 	Save As…	Lưu thành…
+	Save Changes	Lưu thay đổi
 	Save changes to {name}	Lưu thay đổi vào {name}
 	Save color group to Swatch panel	Lưu nhóm màu vào bảng mẫu màu
 	Save Colors as Swatches	Lưu màu thành mẫu màu
@@ -3684,6 +3706,7 @@ mark-style	Japanese	Kiểu Nhật
 	Switch workspace	Chuyển không gian làm việc
 	Switch x/y	Đổi x/y
 	Symbol Instance	Thực thể ký hiệu
+	Link Block Series	Chuỗi khối liên kết
 	Symbol Libraries	Thư viện ký hiệu
 	Symbol Screener Tool	Công cụ Lọc ký hiệu
 	Symbol Scruncher Tool	Công cụ Thu gọn ký hiệu
@@ -3712,6 +3735,10 @@ mark-style	Japanese	Kiểu Nhật
 	Target Contents	Nội dung mục tiêu
 	Target:	Mục tiêu:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
+	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Up/Down:	Lên/Xuống:
+	Left/Right:	Trái/Phải:
 	Temperature	Nhiệt độ màu
 	Temperature/Tint…	Nhiệt độ màu/Tông…
 	Template	Mẫu
@@ -3774,6 +3801,7 @@ mark-style	Japanese	Kiểu Nhật
 	Tile Type:	Loại ô:
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
+	Tilt	Độ nghiêng
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
@@ -4347,6 +4375,7 @@ theme	Appearance	Giao diện
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
 @msg	Couldn't open {name}: {e}	Không thể mở {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Không thể dán từ khay nhớ tạm: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
@@ -4382,6 +4411,7 @@ theme	Appearance	Giao diện
 @msg	Exporting {_1}	Đang xuất {_1}
 @msg	Packaging {_1}	Đang đóng gói {_1}
 @msg	Placing {_1}	Đang đặt {_1}
+@msg	Pasting	Đang dán
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	phiên bản tệp {0} mới hơn VectorCraft hỗ trợ ({VERSION})
 @msg	Flatten Transparency: select objects to flatten	Dẹp phẳng độ trong suốt: hãy chọn đối tượng để dẹp phẳng
 @msg	Flatten Transparency: {e}	Dẹp phẳng độ trong suốt: {e}
@@ -4423,6 +4453,7 @@ theme	Appearance	Giao diện
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
 @msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
+@msg	it ends inside a group or compound path	nó kết thúc bên trong một nhóm hoặc đường dẫn phức
 @msg	it ends inside a layer	nó kết thúc bên trong một lớp
 @msg	it ends inside a multi-layer mask	nó kết thúc bên trong một mặt nạ nhiều lớp
 @msg	a multi-layer mask's operators are out of order	các toán tử của mặt nạ nhiều lớp không đúng thứ tự
@@ -4563,6 +4594,14 @@ theme	Appearance	Giao diện
 @msg	no selection bounds	vùng chọn không có giới hạn
 @msg	no slice selected	chưa chọn lát cắt
 @msg	no such action	không có hành động như vậy
+@msg	no such action set	không có bộ hành động như vậy
+@msg	the action sets changed; nothing was deleted	các bộ hành động đã thay đổi; không có gì bị xóa
+@msg	no action set to save	không có bộ hành động nào để lưu
+@msg	not an action set file	không phải tệp bộ hành động
+@msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
+@msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
+@msg	the action set file needs a later version of VectorCraft	tệp bộ hành động cần phiên bản VectorCraft mới hơn
+@msg	an action in the action set file has more than 10,000 steps	một hành động trong tệp bộ hành động có hơn 10.000 bước
 @msg	no such anchor	không có điểm neo như vậy
 @msg	no such artboard	không có bảng vẽ như vậy
 @msg	the artboard is locked	bảng vẽ bị khóa
@@ -4589,6 +4628,7 @@ theme	Appearance	Giao diện
 @msg	no user library folder here	không có thư mục thư viện người dùng ở đây
 @msg	no user workspace `{from}`	không có không gian làm việc người dùng `{from}`
 @msg	node {_1} is not text	nút {_1} không phải là văn bản
+@msg	node {_1} is on a locked artboard	nút {_1} nằm trên bảng vẽ bị khóa
 @msg	not a blend	không phải đối tượng hòa trộn
 @msg	not a DXF drawing	không phải bản vẽ DXF
 @msg	not a file	không phải tệp
@@ -4852,6 +4892,9 @@ theme	Appearance	Giao diện
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	tệp PCX có điểm ảnh {bits}-bit trong {planes} mặt phẳng không thể đọc được
+@msg	the Pixar file is cut short	tệp Pixar bị cắt ngắn
+@msg	the Pixar file's header is damaged	phần đầu của tệp Pixar bị hỏng
+@msg	the Pixar file's image data is damaged	dữ liệu ảnh của tệp Pixar bị hỏng
 @msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
@@ -5063,6 +5106,11 @@ theme	Appearance	Giao diện
 	Import Data Sets…	Nhập tập dữ liệu…
 	Export Data Sets…	Xuất tập dữ liệu…
 	Load Variable Library…	Tải thư viện biến số…
+	Save Variable Library…	Lưu thư viện biến số…
+@msg	a variable library holds text variables, and the document has none	thư viện biến số chứa các biến số văn bản, và tài liệu không có biến số văn bản nào
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	không thể lưu biến số `{name}` vào thư viện biến số: hãy đổi tên để bắt đầu bằng một chữ cái hoặc `_`, không có khoảng trắng hay ký hiệu nào ngoài `-`, `_` và `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	tập dữ liệu `{name}` chứa ký tự điều khiển mà thư viện biến số không thể chứa
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	tập dữ liệu `{name}` bắt đầu hoặc kết thúc bằng khoảng trắng mà thư viện biến số không thể chứa
 	Make Graph Dynamic	Tạo biểu đồ động
 	Batch…	Hàng loạt…
 	Source Folder:	Thư mục nguồn:
@@ -5191,7 +5239,9 @@ theme	Appearance	Giao diện
 	Effect Gallery	Thư viện hiệu ứng
 	Filters	Bộ lọc
 	Select artwork to apply effects	Chọn đồ họa để áp dụng hiệu ứng
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	thư viện biến số của tệp chỉ được đọc một phần (mục đã bỏ qua: {_1}): bảng Biến liệt kê phần còn lại
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	không thể đọc thư viện biến số của tệp: bảng Biến không liệt kê nó
+@msg	a variable of unknown kind can't be bound to objects	không thể liên kết biến thuộc loại không xác định với đối tượng
 # Select by Color (select.color)
 	Select by Color	Chọn theo màu
 	Move Anchor Point	Di chuyển điểm neo
@@ -5277,6 +5327,9 @@ axis	Y Axis	Trục Y
 	New Set	Bộ mới
 	Set Options…	Tùy chọn bộ…
 	Set Options	Tùy chọn bộ
+	Action Options…	Tùy chọn hành động…
+	Action Options	Tùy chọn hành động
+	Rename Action	Đổi tên hành động
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
@@ -5790,3 +5843,9 @@ breakText	Glyphs	Glyph
 	Small to Large	Từ nhỏ đến lớn
 	Large to Small	Từ lớn đến nhỏ
 	Distribute Evenly	Phân bố đều
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Tạo chú giải mẫu màu
+	Create Swatch Legend…	Tạo chú giải mẫu màu…
+	HEX	HEX

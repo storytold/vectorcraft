@@ -173,6 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 VariableKind::Visibility => "eye",
                 VariableKind::Image => "image",
                 VariableKind::Graph => "chart-column",
+                VariableKind::Unknown => "square-dashed",
             };
             ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
@@ -263,6 +264,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let locked = st.doc.variables.locked;
+    // Save Variable Library writes text variables only.
+    let has_text = st.doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text);
 
     if widgets::menu_item(ui, tl!("New Variable…"), !locked, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -326,6 +329,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("Load Variable Library…"), true, false) {
         crate::picks::button(app, load_library);
     }
+    if widgets::menu_item(ui, tl!("Save Variable Library…"), has_text, false) {
+        crate::picks::button(app, save_library);
+    }
     ui.separator();
     // What the highlighted variable drives, selected — its bindings are left alone.
     if widgets::menu_item(ui, tl!("Select Bound Object"), !highlighted_bound.is_empty(), false) {
@@ -360,6 +366,16 @@ fn load_library(app: &mut VectorcraftApp) {
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
     let Some(path) = crate::picks::open(app, &pick) else { return };
     if let Err(e) = app.run("variable.loadLibrary", json!({"path": path})) {
+        app.status(e);
+    }
+}
+
+/// Variables panel: Save Variable Library… opens a save dialog for an XML file and runs
+/// `variable.saveLibrary` with the chosen path.
+fn save_library(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick { name: "variables.xml".into(), filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
+    let Some(path) = crate::picks::save(app, &pick) else { return };
+    if let Err(e) = app.run("variable.saveLibrary", json!({"path": path})) {
         app.status(e);
     }
 }
@@ -451,6 +467,7 @@ mod tests {
             "Rename Data Set…",
             "Delete Data Set",
             "Load Variable Library…",
+            "Save Variable Library…",
             "Select Bound Object",
             "Select All Bound Objects",
         ] {
@@ -523,6 +540,24 @@ mod tests {
             assert!(!shown.contains("refuses") && shown.contains("`%Rate`"), "{}: {shown}", l.code());
             let shown = message(l, &refused);
             assert!(!shown.contains("would read back") && shown.contains("`#Tag`") && shown.contains("`Tag`"), "{}: {shown}", l.code());
+        }
+    }
+
+    /// The notes of a `.ai` whose variable library was read in part, or couldn't be read, are
+    /// translated in every language that translated the note they replace.
+    #[test]
+    fn the_notes_of_an_ai_variable_library_are_translated() {
+        use crate::i18n::{Lang, message};
+        let partly = "the file's variable library was partly read (entries skipped: 7): the Variables panel lists the rest";
+        let unread = "the file's variable library couldn't be read: the Variables panel doesn't list it";
+        let codes = [
+            "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv", "tr",
+            "uk", "vi", "zh-hans", "zh-hant",
+        ];
+        for l in codes.iter().map(|c| Lang::from_code(c).expect("registered")) {
+            let shown = message(l, partly);
+            assert!(shown != partly && shown.contains('7'), "{}: {shown}", l.code());
+            assert_ne!(message(l, unread), unread, "{}", l.code());
         }
     }
 

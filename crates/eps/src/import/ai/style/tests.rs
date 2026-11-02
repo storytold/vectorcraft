@@ -276,6 +276,19 @@ fn art_styles_ignore_filters_beyond_the_cap() {
 }
 
 #[test]
+fn a_style_list_keeps_its_strings_in_order() {
+    let list = art_style_list(b"(A)\n(B\\)C)\n(D(E))\n/Name 3 x\n(Caf\\303\\251)\n(F");
+    let want: [&[u8]; 4] = [b"A", b"B)C", b"D(E)", "Caf\u{e9}".as_bytes()];
+    assert_eq!(list, want, "the string the data ends inside is left out");
+    assert!(art_style_list(b"").is_empty());
+    let unended: [&[u8]; 1] = [b"A"];
+    assert_eq!(art_style_list(b"(A)\n(B\\)"), unended, "an escaped `)` doesn't end the string");
+    assert_eq!(art_style_list(b"(A)\n(B(C)"), unended, "nor does one that closes a nested pair");
+    assert_eq!(art_style_list(format!("({})", "x".repeat(MAX_LISTED_NAME + 1)).as_bytes()), Vec::<Vec<u8>>::new());
+    assert_eq!(art_style_list("(x)\n".repeat(MAX_LISTED + 5).as_bytes()).len(), MAX_LISTED);
+}
+
+#[test]
 fn hostile_dash_offsets_and_width_profiles_are_tamed() {
     let mut f = Filter::default();
     paint_op(&mut f, "d", &[V::Arr(vec![V::Num(5.0)]), V::Num(f64::NAN)]);
@@ -458,6 +471,348 @@ fn an_effect_not_read_here_keeps_the_drawn_look() {
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
 }
 
+fn stroke(paint: &str) -> String {
+    basic("Stroke Style Filter", &format!("/StrokeStyle : 0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d0 XR\n{paint}\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n"))
+}
+
+fn offset(ofst: f64, jntp: i64, mlim: f64) -> String {
+    basic("Adobe Offset Path", &format!("{ofst} /Real (ofst) ,\n{mlim} /Real (mlim) ,\n{jntp} /Int (jntp) ,\n"))
+}
+
+/// Style `Fx`: `effects` on the whole object over a stack of a fill (with `on_fill` before its
+/// fill style, `after_fill` after it) and a stroke (with `on_stroke` and `after_stroke`).
+fn path_style(effects: &[String], on_fill: &[String], after_fill: &[String], on_stroke: &[String], after_stroke: &[String]) -> ArtStyle {
+    let item = |before: &[String], paint: String, after: &[String]| {
+        if before.is_empty() && after.is_empty() {
+            return paint;
+        }
+        compound("Chain Style Filter", &[before.concat(), paint, after.concat()])
+    };
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            item(on_stroke, stroke("0 0 0 1 0 0 0 XA"), after_stroke),
+            item(on_fill, fill("0 0 0 0 1 0 0 Xa"), after_fill),
+            basic("Conduit Filter", ""),
+        ],
+    );
+    let root = compound("Chain Style Filter", &[effects.concat(), stack]);
+    let data = format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}");
+    art_styles(data.as_bytes()).remove("Fx").unwrap()
+}
+
+fn ids(effects: &[Effect]) -> Vec<&str> {
+    effects.iter().map(|e| e.id.as_str()).collect()
+}
+
+#[test]
+fn offset_path_on_the_object_is_read_with_its_settings() {
+    // GUARDS: an object with Offset Path kept its drawn look, and the effect was read only on type.
+    let st = path_style(&[offset(4.0, 1, 6.0)], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let [e] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
+    assert_eq!((e.id.as_str(), &e.params), ("path.offsetPath", &json!({"offset": 4.0, "joins": "bevel", "miterLimit": 6.0})));
+    assert!(e.visible);
+    for (jntp, joins) in [(0, "round"), (2, "miter")] {
+        let st = path_style(&[offset(-5.0, jntp, 7.0)], &[], &[], &[], &[]);
+        assert_eq!((&st.effects[0].params["joins"], &st.effects[0].params["offset"]), (&json!(joins), &json!(-5.0)));
+    }
+}
+
+#[test]
+fn outline_object_and_outline_stroke_are_read_with_no_settings() {
+    // GUARDS: `Adobe Outline Type` and `Adobe Outline Stroke` weren't read, so the style kept its drawn look.
+    let outline = basic("Adobe Outline Type", "");
+    let outline_stroke = basic("Adobe Outline Stroke", "");
+    let st = path_style(&[outline.clone(), outline_stroke.clone()], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    assert_eq!(ids(&st.effects), ["path.outlineObject", "path.outlineStroke"]);
+    // No `width`: the stroke gives it.
+    assert!(st.effects.iter().all(|e| e.params == json!({})), "{:?}", st.effects);
+    // On a fill and on a stroke: Outline Object before the item's own style, Outline Stroke after it.
+    let (before, after) = (std::slice::from_ref(&outline), std::slice::from_ref(&outline_stroke));
+    let st = path_style(&[], before, after, before, after);
+    assert!(st.plain && !st.simple, "{st:?}");
+    // Bottom first: the fill, then the stroke.
+    assert!(matches!(st.items.as_slice(), [StyleItem::Fill(_), StyleItem::Stroke { .. }]), "{:?}", st.items);
+    for look in &st.looks {
+        assert_eq!(ids(&look.effects), ["path.outlineObject", "path.outlineStroke"]);
+    }
+}
+
+#[test]
+fn path_effects_keep_their_order_and_visibility() {
+    let hidden = offset(3.0, 0, 4.0).replacen("1 /Visible", "0 /Visible", 1);
+    let st = path_style(&[hidden, offset(6.0, 1, 4.0)], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let offsets: Vec<_> = st.effects.iter().map(|e| (e.params["offset"].as_f64(), e.visible)).collect();
+    assert_eq!(offsets, [(Some(3.0), false), (Some(6.0), true)]);
+    // On a fill and a stroke, with another effect after it.
+    let transform = basic("Adobe Transform", "2 /Int (numCopies) ,\n");
+    let after = std::slice::from_ref(&transform);
+    let st = path_style(&[], &[offset(2.0, 2, 4.0)], after, &[offset(-1.0, 0, 4.0)], after);
+    assert!(st.plain, "{st:?}");
+    assert_eq!(ids(&st.looks[0].effects), ["path.offsetPath", "distort.transform"]);
+    assert_eq!(ids(&st.looks[1].effects), ["path.offsetPath", "distort.transform"]);
+    assert_eq!((st.looks[0].effects[0].params["offset"].as_f64(), st.looks[1].effects[0].params["offset"].as_f64()), (Some(2.0), Some(-1.0)));
+}
+
+#[test]
+fn offset_path_with_settings_not_read_keeps_the_drawn_look() {
+    // GUARDS: a missing setting was read as 10 pt, miter or 4, and an out-of-range one was clamped.
+    let complete = "4 /Real (ofst) ,\n1 /Int (jntp) ,\n6 /Real (mlim) ,\n";
+    let bodies = [
+        String::new(),
+        "4 /Real (ofst) ,\n".into(),
+        "1 /Int (jntp) ,\n".into(),
+        "4 /Real (ofst) ,\n1 /Int (jntp) ,\n".into(),
+        format!("{complete}1 /Int (later) ,\n"),
+        format!("{complete}(x) /UnicodeString (DisplayString) ,\n"),
+        complete.replace("/Int (jntp)", "/Real (jntp)"),
+        complete.replace("4 /Real (ofst)", "(4) /Real (ofst)"),
+        complete.replace("4 /Real (ofst)", "1e999 /Real (ofst)"),
+        complete.replace("4 /Real (ofst)", "100001 /Real (ofst)"),
+        complete.replace("6 /Real (mlim)", "0.5 /Real (mlim)"),
+        complete.replace("6 /Real (mlim)", "501 /Real (mlim)"),
+        complete.replace("1 /Int (jntp)", "3 /Int (jntp)"),
+        complete.replace("1 /Int (jntp)", "-1 /Int (jntp)"),
+        complete.replace("1 /Int (jntp)", "0.5 /Int (jntp)"),
+    ];
+    for body in &bodies {
+        let filter = basic("Adobe Offset Path", body);
+        let one = std::slice::from_ref(&filter);
+        for st in [path_style(one, &[], &[], &[], &[]), path_style(&[], one, &[], &[], &[])] {
+            assert!(!st.plain, "{body:?}: {st:?}");
+        }
+    }
+    assert!(path_style(&[basic("Adobe Offset Path", complete)], &[], &[], &[], &[]).plain);
+    // The outline effects have no settings.
+    for name in ["Adobe Outline Type", "Adobe Outline Stroke"] {
+        assert!(!path_style(&[basic(name, "1 /Real (width) ,\n")], &[], &[], &[], &[]).plain, "{name}");
+        assert!(!path_style(&[basic(name, "/Array : 1 /Real , ; (width) ,\n")], &[], &[], &[], &[]).plain, "{name}");
+    }
+}
+
+/// The style `Fx`: effect `name` on the whole object, its dictionary holding `keys`.
+fn distort_effect_style(name: &str, keys: &str) -> ArtStyle {
+    let data = format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[basic(name, keys)]));
+    art_styles(data.as_bytes()).remove("Fx").unwrap_or_default()
+}
+
+/// The params of effect `name` with `keys`, `None` when the style keeps the drawn look.
+fn read_effect(name: &str, keys: &str) -> Option<serde_json::Value> {
+    let st = distort_effect_style(name, keys);
+    if !st.plain {
+        return None;
+    }
+    let [e] = st.effects.as_slice() else { panic!("{st:?}") };
+    Some(e.params.clone())
+}
+
+/// A filter named `name` whose dictionary holds `entries`.
+fn dict(name: &str, entries: &[(&str, Kind, f64)]) -> Filter {
+    let kinds = entries.iter().map(|(k, kind, _)| (k.to_string(), *kind)).collect();
+    let params = entries.iter().map(|(k, _, v)| (k.to_string(), *v)).collect();
+    Filter { name: name.into(), kinds, params, ..Filter::default() }
+}
+
+fn close(a: &serde_json::Value, want: f64) -> bool {
+    a.as_f64().is_some_and(|a| (a - want).abs() < 1e-6)
+}
+
+/// Every switch of the Transform effect, as files write them.
+const SWITCHES: &str = "0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n";
+
+#[test]
+fn a_transform_reads_its_factors_and_radians() {
+    // GUARDS: the percent and degree entries (what the dialog shows) were read, and the options were not.
+    let p = read_effect(
+        "Adobe Transform",
+        "150 /Real (scaleH_Percent) ,\n1.4 /Real (scaleH_Factor) ,\n80 /Real (scaleV_Percent) ,\n1.2 /Real (scaleV_Factor) ,\n\
+         30 /Real (rotate_Degrees) ,\n0.471238898 /Real (rotate_Radians) ,\n-8 /Real (moveV_Pts) ,\n3 /Real (moveH_Pts) ,\n\
+         2 /Int (numCopies) ,\n0 /Int (pinPoint) ,\n1 /Bool (reflectX) ,\n0 /Bool (transformObjects) ,\n1 /Bool (transformPatterns) ,\n\
+         1 /Bool (scaleLines) ,\n0 /Bool (randomize) ,\n",
+    )
+    .unwrap();
+    assert!(close(&p["scaleH"], 140.0) && close(&p["scaleV"], 120.0) && close(&p["rotate"], 27.0), "{p}");
+    assert_eq!((&p["moveH"], &p["moveV"], &p["copies"], &p["reference"]), (&json!(3.0), &json!(8.0), &json!(2), &json!(0)));
+    assert_eq!((&p["reflectX"], &p["reflectY"]), (&json!(true), &json!(false)));
+    assert_eq!((&p["objects"], &p["patterns"], &p["strokes"]), (&json!(false), &json!(true), &json!(true)));
+}
+
+#[test]
+fn a_transforms_percent_and_degrees_alone_change_nothing() {
+    let p = read_effect("Adobe Transform", &format!("150 /Real (scaleH_Percent) ,\n30 /Real (rotate_Degrees) ,\n{SWITCHES}")).unwrap();
+    assert_eq!((&p["scaleH"], &p["scaleV"], &p["rotate"]), (&json!(100.0), &json!(100.0), &json!(0.0)));
+}
+
+#[test]
+fn a_transforms_reference_point_and_move_up() {
+    for pin in 0..9 {
+        let p = read_effect("Adobe Transform", &format!("0.5 /Real (scaleH_Factor) ,\n{pin} /Int (pinPoint) ,\n{SWITCHES}")).unwrap();
+        assert_eq!(p["reference"], json!(pin));
+    }
+    // A move up the page in the file is a move up in the document, whose y runs down.
+    let p = read_effect("Adobe Transform", &format!("10 /Real (moveV_Pts) ,\n{SWITCHES}")).unwrap();
+    assert_eq!(p["moveV"], json!(-10.0));
+    let p = read_effect("Adobe Transform", &format!("4 /Int (pinPoint) ,\n{SWITCHES}")).unwrap();
+    assert_eq!((&p["objects"], &p["copies"], &p["scaleH"]), (&json!(true), &json!(0), &json!(100.0)));
+}
+
+#[test]
+fn a_transform_without_the_options_its_change_depends_on_keeps_the_drawn_look() {
+    // Missing Scale Strokes & Effects or Transform Patterns are the app's settings, not the file's.
+    let half = "0.5 /Real (scaleH_Factor) ,\n0.5 /Real (scaleV_Factor) ,\n";
+    assert_eq!(read_effect("Adobe Transform", &format!("{half}0 /Bool (transformPatterns) ,\n")), None);
+    assert_eq!(read_effect("Adobe Transform", &format!("{half}0 /Bool (scaleLines) ,\n")), None);
+    // A move scales nothing; with Transform Patterns given, it reads.
+    let p = read_effect("Adobe Transform", "5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n").unwrap();
+    assert_eq!(p["strokes"], json!(false));
+    // On a fill's own Transform, only that fill's paint counts: a solid fill moves the same either way.
+    let moved = basic("Adobe Transform", "5 /Real (moveH_Pts) ,\n");
+    let item = |paint: &str| {
+        let item = compound("Chain Style Filter", &[fill(paint), moved.clone()]);
+        let data =
+            format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+        art_styles(data.as_bytes()).remove("Fx").unwrap_or_default().plain
+    };
+    assert!(item("0 0 0 1 0 0 0 Xa"));
+    assert!(!item("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"));
+}
+
+#[test]
+fn a_random_transform_keeps_the_drawn_look() {
+    // The file holds no seed for its random share.
+    assert_eq!(read_effect("Adobe Transform", &format!("1 /Bool (randomize) ,\n{SWITCHES}")), None);
+}
+
+/// Free Distort's dictionary: the source corners `src` and the destination `dst`, top left, top
+/// right, bottom left, bottom right, y up.
+fn corners(src: [[f64; 2]; 4], dst: [[f64; 2]; 4]) -> String {
+    let mut out = String::new();
+    for (which, c) in [("src", src), ("dst", dst)] {
+        for (i, [h, v]) in c.into_iter().enumerate() {
+            out += &format!("{h} /Real ({which}{i}h) ,\n{v} /Real ({which}{i}v) ,\n");
+        }
+    }
+    out
+}
+
+fn unit_corners(p: &serde_json::Value) -> Vec<[f64; 2]> {
+    p["corners"].as_array().unwrap().iter().map(|c| [c[0].as_f64().unwrap(), c[1].as_f64().unwrap()]).collect()
+}
+
+fn corners_near(a: &[[f64; 2]], b: &[[f64; 2]]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9)
+}
+
+#[test]
+fn free_distort_measures_its_corners_in_its_own_frame() {
+    // GUARDS: Free Distort wasn't read, and type with it came in as its drawn look.
+    let dst = [[180.0, 310.0], [320.0, 300.0], [210.0, 240.0], [250.0, 260.0]];
+    // A frame wider than the object (its stroke's): the corners are fractions of that frame.
+    let p = read_effect("Adobe Free Distort", &corners([[195.0, 305.0], [305.0, 305.0], [195.0, 245.0], [305.0, 245.0]], dst)).unwrap();
+    let want = [[-15.0 / 110.0, -5.0 / 60.0], [125.0 / 110.0, 5.0 / 60.0], [0.5, 0.75], [15.0 / 110.0, 65.0 / 60.0]];
+    assert!(corners_near(&unit_corners(&p), &want), "{p}");
+    // A unit frame: the same corners measured in it, far outside the unit box.
+    let p = read_effect("Adobe Free Distort", &corners([[0.0, 0.0], [1.0, 0.0], [0.0, -1.0], [1.0, -1.0]], dst)).unwrap();
+    assert!(corners_near(&unit_corners(&p), &[[180.0, -310.0], [320.0, -300.0], [250.0, -260.0], [210.0, -240.0]]), "{p}");
+    // No corners: no change.
+    let p = read_effect("Adobe Free Distort", "").unwrap();
+    assert!(corners_near(&unit_corners(&p), &[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]), "{p}");
+}
+
+#[test]
+fn free_distort_without_every_corner_or_an_upright_frame_keeps_the_drawn_look() {
+    let src = [[0.0, 0.0], [1.0, 0.0], [0.0, -1.0], [1.0, -1.0]];
+    let dst = [[0.1, 0.0], [1.0, 0.1], [0.0, -1.0], [1.0, -1.2]];
+    let all = corners(src, dst);
+    // The destination alone, one entry missing, a frame that is turned or of no height.
+    let dst_only: String = all.lines().filter(|l| l.contains("(dst")).map(|l| format!("{l}\n")).collect();
+    let short = all.replace("-1.2 /Real (dst3v) ,\n", "");
+    for keys in [
+        dst_only,
+        short,
+        corners([[0.0, 0.0], [1.0, 0.5], [0.0, -1.0], [1.0, -1.0]], dst),
+        corners([[0.0, 0.0], [1.0, 0.0], [0.0, 0.0], [1.0, 0.0]], dst),
+        // A frame too wide for a number.
+        corners([[-1e308, 0.0], [1e308, 0.0], [-1e308, -1.0], [1e308, -1.0]], dst),
+    ] {
+        assert_eq!(read_effect("Adobe Free Distort", &keys), None, "{keys}");
+    }
+}
+
+#[test]
+fn pucker_and_twist_keep_their_sense() {
+    // Negative is Pucker; a positive angle turns clockwise in the file and in the catalog.
+    assert_eq!(read_effect("Adobe Punk and Bloat", "-35 /Real (d_factor) ,\n"), Some(json!({"amount": -35.0})));
+    assert_eq!(read_effect("Adobe Punk and Bloat", ""), Some(json!({"amount": 0.0})));
+    assert_eq!(read_effect("Adobe Twirl", "45 /Real (angle) ,\n"), Some(json!({"angle": 45.0})));
+    assert_eq!(read_effect("Adobe Twirl", ""), Some(json!({"angle": 0.0})));
+    assert_eq!(read_effect("Adobe Punk and Bloat", "250 /Real (d_factor) ,\n"), None);
+    assert_eq!(read_effect("Adobe Twirl", "4000 /Real (angle) ,\n"), None);
+}
+
+#[test]
+fn roughen_keeps_the_drawn_look() {
+    // Its outline is random and the file holds no seed; at a size of 0 the effect still redraws the
+    // path's segments.
+    assert_eq!(read_effect("Adobe Roughen", "30 /Real (size) ,\n"), None);
+    assert_eq!(read_effect("Adobe Roughen", ""), None);
+}
+
+#[test]
+fn tweak_picks_its_amounts_by_its_mode_and_moves_every_point_unless_told() {
+    let amounts = [("horz", Kind::Real, 30.0), ("vert", Kind::Real, 20.0), ("ahor", Kind::Real, 2.0), ("aver", Kind::Real, 3.0)];
+    let mut absolute = amounts.to_vec();
+    absolute.push(("absoluteness", Kind::Real, 1.0));
+    let want = |h: f64, v: f64, relative: bool| json!({"h": h, "v": v, "relative": relative, "anchors": true, "in": true, "out": true});
+    assert_eq!(tweak(&dict("Adobe Scribble and Tweak", &amounts)), Some(want(30.0, 20.0, true)));
+    assert_eq!(tweak(&dict("Adobe Scribble and Tweak", &absolute)), Some(want(2.0, 3.0, false)));
+    let off = tweak(&dict("Adobe Scribble and Tweak", &[("in", Kind::Bool, 0.0)])).unwrap();
+    assert_eq!((&off["anchors"], &off["in"], &off["out"]), (&json!(true), &json!(false), &json!(true)));
+    // Random too: it reads only when it moves nothing.
+    assert_eq!(read_effect("Adobe Scribble and Tweak", "30 /Real (horz) ,\n"), None);
+    assert!(read_effect("Adobe Scribble and Tweak", "").is_some());
+    let still = "30 /Real (horz) ,\n0 /Bool (anch) ,\n0 /Bool (in) ,\n0 /Bool (out) ,\n";
+    assert!(read_effect("Adobe Scribble and Tweak", still).is_some());
+}
+
+#[test]
+fn zig_zag_is_absolute_with_four_ridges_and_corners_unless_told() {
+    let p = read_effect("Adobe Zigzag", "30 /Real (relAmount) ,\n2 /Real (amount) ,\n").unwrap();
+    assert_eq!(p, json!({"size": 2.0, "relative": false, "ridges": 4, "points": "corner"}));
+    let p = read_effect(
+        "Adobe Zigzag",
+        "30 /Real (relAmount) ,\n2 /Real (amount) ,\n0 /Real (absoluteness) ,\n6 /Real (ridges) ,\n1 /Real (roundness) ,\n",
+    )
+    .unwrap();
+    assert_eq!(p, json!({"size": 30.0, "relative": true, "ridges": 6, "points": "smooth"}));
+    assert_eq!(read_effect("Adobe Zigzag", "2.5 /Real (ridges) ,\n"), None);
+}
+
+#[test]
+fn a_distort_entry_this_cant_read_keeps_the_drawn_look_and_unknown_ones_are_ignored() {
+    // Not a number, the wrong kind, a switch other than 0 or 1, a whole number that isn't.
+    for (name, keys) in [
+        ("Adobe Twirl", "NaN /Real (angle) ,\n"),
+        ("Adobe Twirl", "45 /Int (angle) ,\n"),
+        ("Adobe Zigzag", "2 /Real (absoluteness) ,\n"),
+        ("Adobe Transform", "4 /Real (pinPoint) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Transform", "2 /Bool (reflectX) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Transform", "1e999 /Real (scaleH_Percent) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Transform", "1001 /Int (numCopies) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        // In degrees, too large for a number.
+        ("Adobe Transform", "1e308 /Real (rotate_Radians) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Free Distort", "(x) /Real (src0h) ,\n"),
+    ] {
+        assert_eq!(read_effect(name, keys), None, "{name}: {keys}");
+    }
+    assert_eq!(read_effect("Adobe Twirl", "37 /Real (angle) ,\n9 /Real (futureKey) ,\n"), Some(json!({"angle": 37.0})));
+    // The last of a repeated entry stands.
+    assert_eq!(read_effect("Adobe Twirl", "37 /Real (angle) ,\n12 /Real (angle) ,\n"), Some(json!({"angle": 12.0})));
+}
+
 #[test]
 fn a_hidden_fill_comes_in_hidden() {
     let hidden = fill("0 0 0 1 0 0 0 Xa").replacen("1 /Visible", "0 /Visible", 1);
@@ -555,8 +910,8 @@ fn convert_to_shape_keeps_its_place_among_effects_and_its_visibility() {
     assert!(st.plain, "{st:?}");
     let ids: Vec<_> = st.effects.iter().map(|e| e.id.as_str()).collect();
     assert_eq!(ids, ["convertToShape.rectangle", "path.offsetPath"]);
-    // Offset Path isn't read on objects other than type yet.
-    assert!(!st.simple);
+    // Offset Path is read on any object too.
+    assert!(st.simple);
     // A hidden one stays, hidden, with its settings.
     let hidden = shape(&format!("1 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}")).replacen("1 /Visible", "0 /Visible", 1);
     let st = shape_style(&[hidden]);

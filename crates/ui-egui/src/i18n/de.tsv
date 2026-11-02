@@ -830,6 +830,8 @@ font-technology	Variable	Variabel
 	Double Right Quotation Marks	Doppelte schließende Anführungszeichen
 	Double-click	Doppelklicken
 	Double-click to edit the characters' paint	Doppelklicken, um die Farbe der Zeichen zu bearbeiten
+	Click to edit	Klicken, um zu bearbeiten
+	Double-click to edit	Doppelklicken, um zu bearbeiten
 	Double-click to insert	Doppelklicken zum Einfügen
 	Double-click to rename	Doppelklicken zum Umbenennen
 	Double-click to target the contents	Doppelklicken, um den Inhalt als Ziel auszuwählen
@@ -1010,6 +1012,16 @@ font-technology	Variable	Variabel
 	Delete Export Preset	Exportvorgabe löschen
 	Export Presets	Exportvorgaben
 	Save Export Preset	Exportvorgabe speichern
+	Export Export Presets	Exportvorgaben exportieren
+	Export Preset…	Vorgabe exportieren…
+	Import Export Presets	Exportvorgaben importieren
+	Import Preset…	Vorgabe importieren…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` ist der Name einer Vorgabe aus document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	keine Exportvorgabe `{n}` (siehe document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	keine gespeicherten Exportvorgaben zum Exportieren (integrierte in `names` angeben)
+@msg	not an export presets file (format `{_1}`)	keine Exportvorgabendatei (Format `{_1}`)
+@msg	not an export presets file: {e}	keine Exportvorgabendatei: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Ebene exportieren
 	Export Selection	Auswahl exportieren
 	All in One Folder	Alles in einem Ordner
@@ -1182,6 +1194,7 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert
 file-filter	PDF-compatible .ai	PDF-kompatible .ai
 file-filter	VectorCraft Template	VectorCraft-Vorlage
@@ -1970,6 +1983,8 @@ file-filter	Templates	Vorlagen
 	Roundness:	Rundheit:
 	Fixed	Fest
 	Pressure	Druck
+	Tilt	Neigung
+	Bearing	Richtung
 	Shape:	Form:
 	Bristle Length:	Borstenlänge:
 	Bristle Density:	Borstendichte:
@@ -2032,6 +2047,10 @@ file-filter	Templates	Vorlagen
 	New Without Dialog	Neu ohne Dialogfeld
 	New Workspace	Neuer Arbeitsbereich
 	New Workspace…	Neuer Arbeitsbereich…
+	New Toolbar…	Neue Werkzeugleiste…
+	New Toolbar	Neue Werkzeugleiste
+	Show Toolbar	Werkzeugleiste einblenden
+	List Toolbars	Werkzeugleisten auflisten
 	New {kind} Style…	Neues {kind}format…
 	New…	Neu…
 	Next	Weiter
@@ -2331,6 +2350,8 @@ diagnostics	ui	Oberfläche
 	Plates	Platten
 	Platform:	Plattform:
 	Play Current Selection	Aktuelle Auswahl abspielen
+	Save Actions…	Aktionen speichern…
+	Load Actions…	Aktionen laden…
 	Plug-in Info	Plug-in-Informationen
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -2736,11 +2757,13 @@ digits	Malayalam	Malayalam
 	Save a Copy	Kopie speichern
 	Save a Copy…	Kopie speichern…
 	Save As	Speichern unter
+	Save As Preset…	Als Vorgabe speichern…
 	Save as PDF…	Als PDF speichern…
 	Save as preset:	Als Vorgabe speichern:
 	Save as Template	Als Vorlage speichern
 	Save as Template…	Als Vorlage speichern…
 	Save As…	Speichern unter…
+	Save Changes	Änderungen speichern
 	Save changes to {name}	Änderungen an {name} speichern
 	Save color group to Swatch panel	Farbgruppe im Bedienfeld „Farbfelder“ speichern
 	Save Colors as Swatches	Farben als Farbfelder speichern
@@ -3275,6 +3298,7 @@ effect	Points	Punkte
 	Graphic	Grafik
 	Show all open documents	Alle geöffneten Dokumente anzeigen
 	Symbol Instance	Symbolinstanz
+	Link Block Series	Reihe verketteter Blöcke
 	Symbol Libraries	Symbol-Bibliotheken
 	Symbol Screener Tool	Symbol-transparent-gestalten-Werkzeug
 	Symbol Scruncher Tool	Symbol-stauchen-Werkzeug
@@ -3298,6 +3322,10 @@ effect	Points	Punkte
 	Target Contents	Inhalt als Ziel auswählen
 	Target:	Ziel:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Tate-chu-yoko-Einstellungen…
+	Tate-chu-yoko Settings	Tate-chu-yoko-Einstellungen
+	Up/Down:	Oben/Unten:
+	Left/Right:	Links/Rechts:
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/Farbstich…
 	Template	Vorlage
@@ -4156,6 +4184,14 @@ theme	Appearance	Erscheinungsbild
 @msg	no selection bounds	keine Auswahlbegrenzung
 @msg	no slice selected	kein Slice ausgewählt
 @msg	no such action	keine solche Aktion
+@msg	no such action set	kein solcher Aktionssatz
+@msg	the action sets changed; nothing was deleted	die Aktionssätze haben sich geändert; nichts wurde gelöscht
+@msg	no action set to save	kein Aktionssatz zum Speichern
+@msg	not an action set file	keine Aktionssatzdatei
+@msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
+@msg	the action set file holds more than 1,000 actions	die Aktionssatzdatei enthält mehr als 1.000 Aktionen
+@msg	the action set file needs a later version of VectorCraft	die Aktionssatzdatei erfordert eine neuere Version von VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	eine Aktion in der Aktionssatzdatei hat mehr als 10.000 Schritte
 @msg	no such anchor	kein solcher Ankerpunkt
 @msg	no such artboard	keine solche Zeichenfläche
 @msg	the artboard is locked	die Zeichenfläche ist gesperrt
@@ -4182,6 +4218,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no user library folder here	hier gibt es keinen Ordner für Benutzerbibliotheken
 @msg	no user workspace `{from}`	kein Benutzerarbeitsbereich `{from}`
 @msg	node {_1} is not text	Knoten {_1} ist kein Text
+@msg	node {_1} is on a locked artboard	Knoten {_1} liegt auf einer gesperrten Zeichenfläche
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	kein VectorCraft-Tastaturbefehlssatz (`overrides` fehlt)
@@ -4425,6 +4462,9 @@ theme	Appearance	Erscheinungsbild
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}
 @msg	Couldn't paste from the clipboard: {e}	Aus der Zwischenablage konnte nicht eingefügt werden: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde geschlossen
+@msg	Saved {path} with {_1} note(s): {first}	{path} mit {_1} Hinweis(en) gespeichert: {first}
+@msg	Exported {what} with {_1} note(s): {first}	{what} mit {_1} Hinweis(en) exportiert: {first}
 @msg	Exported {what}	{what} exportiert
 @msg	Saved {n} files beside {path}	{n} Dateien neben {path} gespeichert
 @msg	Saving	Wird gespeichert
@@ -4432,6 +4472,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Exporting {_1}	{_1} wird exportiert
 @msg	Packaging {_1}	{_1} wird verpackt
 @msg	Placing {_1}	{_1} wird platziert
+@msg	Pasting	Wird eingefügt
 @msg	Saving recovery data for {_1}	Wiederherstellungsdaten für {_1} werden gespeichert
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten
@@ -4489,6 +4530,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{w}` takes no operands	`{w}` nimmt keine Operanden
 @msg	a wraparound group is inside a compound path	eine Textumfluss-Gruppe liegt in einem zusammengesetzten Pfad
 @msg	a path has too many points	ein Pfad hat zu viele Punkte
+@msg	it ends inside a group or compound path	es endet innerhalb einer Gruppe oder eines zusammengesetzten Pfads
 @msg	it ends inside a layer	es endet innerhalb einer Ebene
 @msg	it ends inside a multi-layer mask	es endet innerhalb einer ebenenübergreifenden Maske
 @msg	a multi-layer mask's operators are out of order	die Operatoren einer ebenenübergreifenden Maske stehen in falscher Reihenfolge
@@ -4688,6 +4730,9 @@ theme	Appearance	Erscheinungsbild
 @msg	the PCX file is cut short	die PCX-Datei ist unvollständig
 @msg	the PCX file's header is damaged	der Dateikopf der PCX-Datei ist beschädigt
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-Dateien mit {bits}-Bit-Pixeln in {planes} Ebenen können nicht gelesen werden
+@msg	the Pixar file is cut short	die Pixar-Datei ist unvollständig
+@msg	the Pixar file's header is damaged	der Dateikopf der Pixar-Datei ist beschädigt
+@msg	the Pixar file's image data is damaged	die Bilddaten der Pixar-Datei sind beschädigt
 @msg	the JPEG 2000 file can't be read	die JPEG-2000-Datei kann nicht gelesen werden
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	die JPEG-2000-Datei enthält einen nicht unterstützten Farbraum oder JPX-Inhalt
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
@@ -5045,6 +5090,11 @@ effect	Soft	Weich
 	Import Data Sets…	Datensätze importieren…
 	Export Data Sets…	Datensätze exportieren…
 	Load Variable Library…	Variablenbibliothek laden…
+	Save Variable Library…	Variablenbibliothek speichern…
+@msg	a variable library holds text variables, and the document has none	eine Variablenbibliothek enthält Textvariablen, und das Dokument hat keine
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	die Variable `{name}` kann nicht in einer Variablenbibliothek gespeichert werden: Benennen Sie sie so um, dass sie mit einem Buchstaben oder `_` beginnt, ohne Leerzeichen oder andere Symbole als `-`, `_` und `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	der Datensatz `{name}` enthält ein Steuerzeichen, das eine Variablenbibliothek nicht enthalten kann
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	der Datensatz `{name}` beginnt oder endet mit Leerraum, den eine Variablenbibliothek nicht enthalten kann
 	Make Graph Dynamic	Diagramm dynamisch machen
 	Batch…	Stapelverarbeitung…
 	Source Folder:	Quellordner:
@@ -5174,7 +5224,9 @@ effect	Soft	Weich
 	Effect Gallery	Effekt-Galerie
 	Filters	Filter
 	Select artwork to apply effects	Wählen Sie Grafik aus, um Effekte anzuwenden
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	die Variablen und Datensätze der Datei wurden nicht gelesen (Variablen: {variables}, Datensätze: {data_sets}): Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	die Variablenbibliothek der Datei wurde nur teilweise gelesen (übersprungene Einträge: {_1}): Das Bedienfeld „Variablen“ listet den Rest auf
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	die Variablenbibliothek der Datei konnte nicht gelesen werden: Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	a variable of unknown kind can't be bound to objects	eine Variable unbekannter Art kann nicht an Objekte gebunden werden
 # Select by Color (select.color)
 	Select by Color	Nach Farbe auswählen
 	Move Anchor Point	Ankerpunkt verschieben
@@ -5260,6 +5312,9 @@ axis	Y Axis	Y-Achse
 	New Set	Neuer Satz
 	Set Options…	Satzoptionen…
 	Set Options	Satzoptionen
+	Action Options…	Aktionsoptionen…
+	Action Options	Aktionsoptionen
+	Rename Action	Aktion umbenennen
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung
@@ -5773,3 +5828,9 @@ breakText	Glyphs	Glyphen
 	Small to Large	Von klein nach groß
 	Large to Small	Von groß nach klein
 	Distribute Evenly	Gleichmäßig verteilen
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Farbfeldlegende erstellen
+	Create Swatch Legend…	Farbfeldlegende erstellen…
+	HEX	HEX

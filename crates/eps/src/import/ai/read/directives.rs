@@ -1,5 +1,7 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{
+    FLIP, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED,
+};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -96,6 +98,11 @@ impl<'a> Reader<'a> {
             self.styles = crate::import::ai::style::art_styles(section);
             return Ok(());
         }
+        if m == "BeginArtStyleList" {
+            let section = self.section("EndArtStyleList")?;
+            self.style_list = crate::import::ai::style::art_style_list(section);
+            return Ok(());
+        }
         if m == "BeginPalette" {
             let section = self.section("EndPalette")?;
             self.palette = crate::import::ai::palette::palette(section);
@@ -142,11 +149,32 @@ impl<'a> Reader<'a> {
                 return self.image_from(vals, &hex);
             }
         } else if line.starts_with("AI5_BeginPlace") {
-            self.place = Some(Place::default());
+            // One that is still open (no `~` ended it) isn't read.
+            let unseen = hidden || self.gs.hidden || !self.shown();
+            if let Some(open) = self.place.replace(Place { hidden: unseen, ..Place::default() }) {
+                self.unreadable("placed files", open.hidden);
+            }
         } else if line.starts_with("AI5_EndPlace") {
             // One that `~` didn't end isn't read.
             if self.place.is_some() {
                 self.end_place(hidden)?;
+            }
+        } else if m == "BeginPlacedRelativePath" {
+            let at = self.stack.len();
+            if let Some(p) = self.place.as_mut() {
+                p.folder_at = Some(at);
+            }
+        } else if m == "EndPlacedRelativePath" {
+            // The folder is the string between the markers, taken off the stack.
+            let base = self.frames.last().map_or(0, |f| f.base);
+            if let Some(at) = self.place.as_mut().and_then(|p| p.folder_at.take()).filter(|at| (base..=self.stack.len()).contains(at)) {
+                let vals = self.stack.split_off(at);
+                if let Some(p) = self.place.as_mut() {
+                    p.folder = vals
+                        .iter()
+                        .find_map(|v| if let V::Str(s) = v { Some(super::obj::text(s)) } else { None })
+                        .filter(|f| f.len() <= MAX_PLACED_FOLDER);
+                }
             }
         } else if self.frames.is_empty()
             && let Some(v) = line.strip_prefix("%HiResBoundingBox:")

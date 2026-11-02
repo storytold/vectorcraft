@@ -43,7 +43,7 @@ egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_
 # `default_fonts`: egui 0.37 makes its bundled faces opt-in, and a dependency's dev-features do not
 # reach our tests; `theme::install_fonts` starts from `FontDefinitions::default()`, which is empty
 # without them (production would lay out tofu, and the no-interface-fonts tests would bind nothing).
-bytemuck = "1"
+bytemuck = { version = "1", features = ["extern_crate_alloc"] }
 egui_extras = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }
