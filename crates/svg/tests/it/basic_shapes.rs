@@ -163,9 +163,10 @@ fn circles_and_ellipses_import_as_the_ellipse_drawn() {
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
         <circle cx="50" cy="50" r="40" transform="translate(10 20)"/>
         <ellipse cx="100" cy="100" rx="60" ry="20" transform="rotate(30 100 100)"/>
-        <ellipse cx="36.255" cy="154.118" rx="36.255" ry="5.421"/></svg>"#;
+        <ellipse cx="36.255" cy="154.118" rx="36.255" ry="5.421"/>
+        <circle cx="40000000" cy="0" r="400"/></svg>"#;
     let back = paths(&import(svg).unwrap());
-    assert_eq!(back.len(), 3);
+    assert_eq!(back.len(), 4);
     let circle = &back[0].subpaths[0].anchors;
     let want: Vec<Point> = [(100.0, 70.0), (60.0, 110.0), (20.0, 70.0), (60.0, 30.0)].map(|(x, y)| Point::new(x, y)).into();
     assert_eq!(circle.len(), 4);
@@ -178,4 +179,7 @@ fn circles_and_ellipses_import_as_the_ellipse_drawn() {
     // However many curves the arcs of a flat ellipse make.
     let flat = &back[2].subpaths[0].anchors;
     assert!(flat.len() == 4 && flat[0].p.distance(Point::new(72.51, 154.118)) < 1e-3, "{flat:?}");
+    // A small circle far from the origin too.
+    let far = &back[3].subpaths[0].anchors;
+    assert!(far.len() == 4 && far[0].p.distance(Point::new(40_000_400.0, 0.0)) < 8.0, "{far:?}");
 }

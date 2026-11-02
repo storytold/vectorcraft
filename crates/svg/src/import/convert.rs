@@ -156,10 +156,11 @@ pub(super) fn drawn_ellipse(p: &usvg::tiny_skia_path::Path) -> Option<PathData> 
     let (x0, x1) = ends.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| (lo.min(q.x), hi.max(q.x)));
     let (y0, y1) = ends.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| (lo.min(q.y), hi.max(q.y)));
     let (c, rx, ry) = (Point::new((x0 + x1) / 2.0, (y0 + y1) / 2.0), (x1 - x0) / 2.0, (y1 - y0) / 2.0);
-    // usvg works in f32: the tolerance follows the size of the numbers.
-    let tol = 1e-5 * (c.x.abs() + c.y.abs() + rx + ry).max(1.0);
+    // usvg works in f32: points match within a few of its steps at the size of the coordinates.
+    let tol = 16.0 * f64::from(f32::EPSILON) * [x0, x1, y0, y1].iter().fold(1.0f64, |m, v| m.max(v.abs()));
     let axes = [Point::new(x1, c.y), Point::new(c.x, y1), Point::new(x0, c.y), Point::new(c.x, y0)];
-    let on_ellipse = |q: &Point| (((q.x - c.x) / rx).powi(2) + ((q.y - c.y) / ry).powi(2) - 1.0).abs() <= 1e-3;
+    let off = 1e-3 + 4.0 * tol / rx.min(ry);
+    let on_ellipse = |q: &Point| (((q.x - c.x) / rx).powi(2) + ((q.y - c.y) / ry).powi(2) - 1.0).abs() <= off;
     if !closed
         || rx <= tol
         || ry <= tol
