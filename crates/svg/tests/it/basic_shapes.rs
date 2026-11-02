@@ -164,9 +164,10 @@ fn circles_and_ellipses_import_as_the_ellipse_drawn() {
         <circle cx="50" cy="50" r="40" transform="translate(10 20)"/>
         <ellipse cx="100" cy="100" rx="60" ry="20" transform="rotate(30 100 100)"/>
         <ellipse cx="36.255" cy="154.118" rx="36.255" ry="5.421"/>
-        <circle cx="40000000" cy="0" r="400"/></svg>"#;
+        <circle cx="40000000" cy="0" r="400"/>
+        <ellipse cx="1000000" cy="1000000" rx="36" ry="1"/></svg>"#;
     let back = paths(&import(svg).unwrap());
-    assert_eq!(back.len(), 4);
+    assert_eq!(back.len(), 5);
     let circle = &back[0].subpaths[0].anchors;
     let want: Vec<Point> = [(100.0, 70.0), (60.0, 110.0), (20.0, 70.0), (60.0, 30.0)].map(|(x, y)| Point::new(x, y)).into();
     assert_eq!(circle.len(), 4);
@@ -182,6 +183,11 @@ fn circles_and_ellipses_import_as_the_ellipse_drawn() {
     // A small circle far from the origin too.
     let far = &back[3].subpaths[0].anchors;
     assert!(far.len() == 4 && far[0].p.distance(Point::new(40_000_400.0, 0.0)) < 8.0, "{far:?}");
+    // A radius of a few of f32's steps at its coordinates, with handles of the standard length.
+    let thin = &back[4].subpaths[0].anchors;
+    let handle = thin.first().map(|a| a.h_out - a.p);
+    assert!(thin.len() == 4 && thin[0].p.distance(Point::new(1_000_036.0, 1_000_000.0)) < 0.25, "{thin:?}");
+    assert!(handle.is_some_and(|h| h.x.abs() < 1e-6 && (h.y - shapes::KAPPA).abs() < 1e-6), "{thin:?}");
 }
 
 #[test]
