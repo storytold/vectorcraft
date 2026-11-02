@@ -49,6 +49,7 @@ mod envelope;
 mod envelope_distort;
 mod envelope_edit;
 pub(super) mod expand;
+mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;

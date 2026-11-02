@@ -756,6 +756,27 @@ fn expand_turns_a_placed_document_into_editable_art_with_its_resources() {
     assert_eq!(info["object"], false, "nothing left to expand: {info}");
 }
 
+/// Expand also outlines the strokes in a placed document's art, in the same command.
+#[test]
+fn expand_outlines_the_strokes_in_a_placed_documents_art() {
+    let dir = Folder::new("placed-expand-stroke");
+    let src = dir.file("frame.vectorcraft");
+    let mut d = Document::new(100.0, 50.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let stroked = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(0, 0, 255)), 4.0);
+    d.insert(Some(layer), 0, Node::path(id, shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)), stroked)).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("object.expand", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let mut strokes = 0;
+    doc.node(id).unwrap().walk(&mut |c| strokes += usize::from(!c.appearance.stroke_paint().is_none()));
+    assert!(!doc.has_placed());
+    assert_eq!(strokes, 0, "the stroke is outlined");
+}
+
 #[test]
 fn saving_a_document_refreshes_the_open_documents_that_place_it() {
     let dir = Folder::new("placed-refresh");

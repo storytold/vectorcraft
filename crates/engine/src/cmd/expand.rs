@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (symbol instances without effects and not in perspective, and those their art holds → their art, as Break Link to Symbol places it, type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
             has_selection,
             expand
         ),
@@ -124,45 +124,104 @@ struct Expandable {
     repeats: bool,
     /// Intertwine groups (Object expands them into groups of what they draw).
     intertwines: bool,
+    /// Symbol instances (Object expands them into their art, as Break Link to Symbol does).
+    symbols: bool,
 }
 
 impl Expandable {
     fn of(d: &Document, roots: &[NodeId]) -> Self {
         let mut e = Self::default();
         for n in roots.iter().filter_map(|r| d.node(*r)) {
-            n.walk(&mut |c| {
-                let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
-                e.text |= matches!(c.kind, NodeKind::Text(_));
-                e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
-                e.effects |= !c.appearance.effects.is_empty();
-                e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
-                e.blends |= matches!(c.kind, NodeKind::Blend { .. });
-                e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
-                e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
-                e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
-                e.stroke |= match &c.kind {
-                    // Type's outlines take its characters' stroke (see `type.createOutlines`).
-                    NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
-                    _ => shape && !c.appearance.stroke_paint().is_none(),
-                };
-                e.gradient |= match &c.kind {
-                    NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
-                    _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
-                };
-                e.fill |= e.gradient;
-                e.fill |= match &c.kind {
-                    NodeKind::Text(t) => {
-                        t.runs.iter().any(|r| matches!(&r.style.fill, Paint::Pattern { pattern, .. } if d.pattern(pattern).is_some()))
-                    }
-                    _ => shape && c.appearance.items.iter().any(|i| pattern_fill(d, i).is_some()),
-                };
-            });
+            e.add(d, n);
+        }
+        e.symbols = super::brushsym::expandable_instances(d, roots);
+        // The Fill and Stroke options also reach the art of the symbol instances that Object
+        // expands, and of the instances in that art, up to `MAX_ARTS` arts. Past that, all three
+        // options are offered.
+        const MAX_ARTS: usize = 4096;
+        let mut seen = std::collections::HashSet::new();
+        let mut todo = vec![];
+        let (mut queued, mut skipped) = (0, false);
+        let mut queue = |c: &Node, todo: &mut Vec<(Arc<Node>, Option<Node>)>| {
+            if let Some(p) = instance_art(d, c, &mut seen) {
+                if queued < MAX_ARTS {
+                    queued += 1;
+                    todo.push(p);
+                } else {
+                    skipped = true;
+                }
+            }
+        };
+        for n in roots.iter().filter_map(|r| d.node(*r)) {
+            n.walk(&mut |c| queue(c, &mut todo));
+        }
+        while let Some((art, inst)) = todo.pop() {
+            let art = match inst {
+                Some(inst) => Arc::new(vectorcraft_doc::symbol_overrides::dynamic_art(&art, &inst)),
+                None => art,
+            };
+            let mut a = Self::default();
+            a.add(d, &art);
+            e.fill |= a.fill;
+            e.gradient |= a.gradient;
+            e.stroke |= a.stroke;
+            art.walk(&mut |c| queue(c, &mut todo));
+        }
+        if skipped {
+            e.fill = true;
+            e.gradient = true;
+            e.stroke = true;
         }
         e
     }
 
+    /// Adds what `n` and the nodes under it hold.
+    fn add(&mut self, d: &Document, n: &Node) {
+        let e = self;
+        n.walk(&mut |c| {
+            let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+            e.text |= matches!(c.kind, NodeKind::Text(_));
+            e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
+            e.effects |= !c.appearance.effects.is_empty();
+            e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
+            e.blends |= matches!(c.kind, NodeKind::Blend { .. });
+            e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
+            e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
+            e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
+            e.stroke |= match &c.kind {
+                // Type's outlines take its characters' stroke (see `type.createOutlines`).
+                NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
+                _ => shape && !c.appearance.stroke_paint().is_none(),
+            };
+            e.gradient |= match &c.kind {
+                NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
+                _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
+            };
+            e.fill |= e.gradient;
+            e.fill |= match &c.kind {
+                NodeKind::Text(t) => t.runs.iter().any(|r| matches!(&r.style.fill, Paint::Pattern { pattern, .. } if d.pattern(pattern).is_some())),
+                _ => shape && c.appearance.items.iter().any(|i| pattern_fill(d, i).is_some()),
+            };
+        });
+    }
+
     fn object(&self) -> bool {
-        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.repeats || self.intertwines
+        self.text || self.live || self.effects || self.envelope || self.blends || self.placed || self.repeats || self.intertwines || self.symbols
+    }
+}
+
+/// The art that Object › Expand gives symbol instance `c` of `d` when it is not in perspective:
+/// its symbol's art, with the instance when its own appearance changes apply to a dynamic
+/// symbol's art, or else the first time `seen` meets that symbol. `None` for any other node.
+fn instance_art(d: &Document, c: &Node, seen: &mut std::collections::HashSet<String>) -> Option<(Arc<Node>, Option<Node>)> {
+    let NodeKind::SymbolInstance { symbol, .. } = &c.kind else { return None };
+    let sym = d.symbols.iter().find(|s| &s.name == symbol).filter(|_| c.projection().is_none())?;
+    if !c.extras().symbol_overrides.is_empty() {
+        Some((sym.art.clone(), Some(c.clone())))
+    } else if seen.insert(symbol.clone()) {
+        Some((sym.art.clone(), None))
+    } else {
+        None
     }
 }
 
@@ -205,38 +264,57 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let from = s.doc()?.history.undo.len();
     let rev0 = s.doc()?.revision;
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-    // Placed documents first: their art (type, strokes, gradients) expands below.
-    if object && e.placed {
-        let roots = selected_roots(s)?;
-        s.edit("Expand", |d, _| expand_placed_under(d, &roots))?;
-    }
-    // Intertwine groups before what they hold: their objects, and the copies of the parts drawn
-    // over the others, expand below.
-    if object && e.intertwines {
-        let roots = selected_roots(s)?;
-        s.edit("Expand", |d, _| super::intertwine::expand_intertwines(d, &roots).map(|_| ()))?;
-    }
-    // Blends first: what their steps hold (type, effects, strokes, gradients) expands below.
-    if object && e.blends {
-        let roots = selected_roots(s)?;
-        s.edit("Expand", |d, _| super::live::expand_blends(d, &roots).map(|_| ()))?;
-    }
-    // Repeats too: their instances are copies of art that expands below.
-    if object && e.repeats {
-        let roots = selected_roots(s)?;
-        s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
-    }
-    if object && e.effects {
-        // Effects that Expand Appearance can't expand are left as they are. When it refuses to
-        // leave a process color on a grayscale image with transparency, Expand fails as a whole.
-        if let Err(e) = run_raw(s, "effect.expandAppearance", &json!({}))
-            && super::paint::is_colorize_refusal(&e)
-        {
-            return Err(e);
+    // Up to 8 rounds: placed documents and symbol instances, then Intertwine groups, blends and
+    // repeats, then effects. A round that changes the document runs again while what it leaves
+    // holds more of the first two kinds. What all of them hold (type, strokes, gradients)
+    // expands below.
+    for _ in 0..8 {
+        if !object {
+            break;
         }
-        // What is left to expand is in the baked art: Expand Appearance leaves strokes strokes
-        // (#3089), a group's own as stroked paths among its members, which Stroke outlines below.
-        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+        let round = s.doc()?.revision;
+        if e.placed || e.symbols {
+            e = expand_placed_and_symbols(s, e)?;
+        }
+        // Intertwine groups before what they hold: their objects, and the copies of the parts
+        // drawn over the others, expand below.
+        if e.intertwines {
+            let roots = selected_roots(s)?;
+            s.edit("Expand", |d, _| super::intertwine::expand_intertwines(d, &roots).map(|_| ()))?;
+        }
+        // Blends first: what their steps hold (type, effects, strokes, gradients) expands below.
+        if e.blends {
+            let roots = selected_roots(s)?;
+            s.edit("Expand", |d, _| super::live::expand_blends(d, &roots).map(|_| ()))?;
+        }
+        // Repeats too: their instances are copies of art that expands below.
+        if e.repeats {
+            let roots = selected_roots(s)?;
+            s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
+        }
+        if e.intertwines || e.blends || e.repeats {
+            e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+            if e.placed || e.symbols {
+                e = expand_placed_and_symbols(s, e)?;
+            }
+        }
+        if e.effects {
+            // Effects that Expand Appearance can't expand are left as they are. When it refuses
+            // to leave a process color on a grayscale image with transparency, Expand fails as a
+            // whole.
+            if let Err(e) = run_raw(s, "effect.expandAppearance", &json!({}))
+                && super::paint::is_colorize_refusal(&e)
+            {
+                return Err(e);
+            }
+            // What is left to expand is in the baked art: Expand Appearance leaves strokes
+            // strokes (#3089), a group's own as stroked paths among its members, which Stroke
+            // outlines below.
+            e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+        }
+        if s.doc()?.revision == round || !(e.placed || e.symbols || e.intertwines || e.blends || e.repeats) {
+            break;
+        }
     }
     if object && e.envelope {
         let roots = selected_roots(s)?;
@@ -273,6 +351,37 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Expands the placed documents and symbol instances under the selection, `e` saying which it
+/// holds, then those their art holds, up to 8 rounds. Returns what the selection holds then.
+fn expand_placed_and_symbols(s: &mut Session, mut e: Expandable) -> Result<Expandable> {
+    for _ in 0..8 {
+        if !e.placed && !e.symbols {
+            break;
+        }
+        if e.placed {
+            let roots = selected_roots(s)?;
+            s.edit("Expand", |d, _| expand_placed_under(d, &roots))?;
+        }
+        let roots = selected_roots(s)?;
+        if Expandable::of(&s.doc()?.doc, &roots).symbols {
+            // An edit that expands no instance (each one past the object limit) is undone, and
+            // the instances stay as they are.
+            let mut expanded = None;
+            let r = s.edit("Expand", |d, _| {
+                let any = super::brushsym::expand_instances_under(d, &roots)?;
+                expanded = Some(any);
+                if any { Ok(()) } else { Err(EngineError::Other("Expand: nothing to expand".into())) }
+            });
+            match (r, expanded) {
+                (Err(_), Some(false)) => return Ok(Expandable::of(&s.doc()?.doc, &selected_roots(s)?)),
+                (r, _) => r?,
+            }
+        }
+        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    }
+    Ok(e)
 }
 
 fn drop_live(n: &mut Node) {

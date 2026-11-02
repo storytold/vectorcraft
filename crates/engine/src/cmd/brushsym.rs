@@ -35,7 +35,9 @@ use brushes::{
 };
 use dynamic::{symbol_instance_reset, symbol_instance_set_appearance};
 use symbols::selected_instances;
-pub(crate) use symbols::{instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol};
+pub(crate) use symbols::{
+    expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
+};
 use symbols::{
     symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_list, symbol_new, symbol_options, symbol_place, symbol_replace,
     symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
@@ -201,7 +203,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask → {ids}",
             has_selection,
             symbol_break_link
         ),
