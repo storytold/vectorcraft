@@ -17,7 +17,7 @@ use vectorcraft_doc::live::Hooks;
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, shapes};
 
-use crate::{Budget, GeomContext, apply_one, is_geometry, merged_params};
+use crate::{Budget, GeomContext, OutlineHook, apply_one, is_geometry, merged_params};
 
 /// Can object-level effects apply to `n` only through [`outline_art`] / an offscreen layer (it is
 /// neither a path nor a container)?
@@ -244,14 +244,27 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// `n` as plain art that geometry effects can reshape, without its transparency and object
 /// effects: type outlined ([`outline_text`]), live objects evaluated (type inside them outlined),
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
-/// the instance's transform. `None` for other kinds (images, paths, containers). A Repeat counts
-/// the Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
+/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them).
+/// `None` for other kinds (images, paths, containers), and for an instance whose art placed
+/// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
+/// `doc`'s symbols that its instances show toward its instance budget.
 pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    outline_art_with(doc, n, symbol_art, &outline_text, &SymbolNodes::default())
+}
+
+/// [`outline_art`] with live objects evaluated through `outline` ([`evaluated_with`]).
+fn outline_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes) -> Option<Node> {
     let mut art = match &n.kind {
         NodeKind::Text(_) => outline_text(n)?,
-        NodeKind::SymbolInstance { xf, .. } => {
-            let mut a = symbol_art?.clone();
-            a.transform(*xf, false);
+        NodeKind::SymbolInstance { symbol, xf } => {
+            let a = match doc {
+                Some(d) => d.place_symbol_art(symbol, symbol_art?, *xf)?,
+                None => {
+                    let mut a = symbol_art?.clone();
+                    a.transform(*xf, false);
+                    a
+                }
+            };
             Node::group(n.id, vec![Arc::new(a)])
         }
         // The object as the one piece the copies of its Transform effect are made from.
@@ -264,7 +277,7 @@ pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) 
             one.appearance.effects.clear();
             Node::group(n.id, vec![Arc::new(one)])
         }
-        _ if vectorcraft_doc::live::is_live(n) => evaluated(doc, n),
+        _ if vectorcraft_doc::live::is_live(n) => evaluated_with(doc, n, outline, nodes),
         _ => return None,
     };
     outline_nested_text(&mut art, false);
@@ -282,8 +295,93 @@ pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) 
 /// Repeats among them count the Repeats in the art of `doc`'s symbols that their instances show
 /// toward their instance budget ([`vectorcraft_doc::RepeatSpec::expand`]).
 pub(crate) fn evaluated(doc: Option<&Document>, n: &Node) -> Node {
-    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-    vectorcraft_doc::live::expand_deep_hooks(n, Hooks { outline: Some(hook), symbols: doc, ..Default::default() })
+    evaluated_with(doc, n, &outline_text, &SymbolNodes::default())
+}
+
+/// Most objects of symbol art that one compound shape or live Pathfinder operation gives its
+/// members in all ([`SymbolNodes`]): four for each segment the operation takes in
+/// ([`crate::group::PATHFINDER_MAX_SEGMENTS`]).
+pub const SYMBOL_ART_MAX_NODES: u64 = 4 * crate::group::PATHFINDER_MAX_SEGMENTS as u64;
+
+/// The objects of symbol art given to one compound shape or live Pathfinder operation so far,
+/// counted against [`SYMBOL_ART_MAX_NODES`]. Instances of symbols that hold several instances of
+/// others multiply at each level, which the depth limit does not stop.
+#[derive(Debug, Default)]
+pub(crate) struct SymbolNodes(std::cell::Cell<u64>);
+
+impl SymbolNodes {
+    /// Count `art`'s objects: `false` once they would pass [`SYMBOL_ART_MAX_NODES`], and from then
+    /// on for all art.
+    pub(crate) fn charge(&self, art: &Node) -> bool {
+        let total = self.0.get().saturating_add(art.count() as u64);
+        let fits = total <= SYMBOL_ART_MAX_NODES;
+        self.0.set(if fits { total } else { u64::MAX });
+        fits
+    }
+
+    /// Has some symbol art been left out for passing [`SYMBOL_ART_MAX_NODES`]?
+    pub(crate) fn spent(&self) -> bool {
+        self.0.get() > SYMBOL_ART_MAX_NODES
+    }
+}
+
+/// [`evaluated`] with type and symbol instances inside live objects given as their art by
+/// `outline`, and every symbol instance left in the result (a blend's steps, an instance in a
+/// plain group) replaced by its art from `outline`, with the instance's name, visibility and
+/// transparency. The live objects and symbol instances inside that art are given as their art in
+/// turn, except an instance of a symbol that holds an instance of itself, of a symbol nested
+/// more than [`vectorcraft_doc::depth::MAX_DEPTH`] deep, or whose art would take `nodes` past
+/// [`SYMBOL_ART_MAX_NODES`], which stays as it is. With [`outline_text`], symbol instances stay as
+/// they are.
+pub(crate) fn evaluated_with(doc: Option<&Document>, n: &Node, outline: OutlineHook, nodes: &SymbolNodes) -> Node {
+    resolved(doc, n, outline, nodes, &[])
+}
+
+/// `art`, the art `outline` gave an instance of the symbol named `symbol`, with the live objects
+/// and symbol instances inside it given as their art as [`evaluated_with`] does.
+pub(crate) fn symbol_art_with(art: &Node, outline: OutlineHook, nodes: &SymbolNodes, symbol: &str) -> Node {
+    resolved(None, art, outline, nodes, &[symbol.to_string()])
+}
+
+/// [`evaluated_with`] inside the art of the symbols named in `shown`, outermost first.
+fn resolved(doc: Option<&Document>, n: &Node, outline: OutlineHook, nodes: &SymbolNodes, shown: &[String]) -> Node {
+    let inner = |m: &Node| art_of(doc, m, outline, nodes, shown);
+    let mut art = vectorcraft_doc::live::expand_deep_hooks(n, Hooks { outline: Some(&inner), symbols: doc, ..Default::default() });
+    instances_as_art(doc, &mut art, outline, nodes, shown);
+    art
+}
+
+/// `n`'s art from `outline`, inside the art of the symbols named in `shown`. For a symbol instance
+/// it is the symbol's art with the live objects and instances inside it given as their art in turn
+/// ([`resolved`]); `None` for an instance of a symbol in `shown` (one that holds an instance of
+/// itself), for every instance once `shown` holds [`vectorcraft_doc::depth::MAX_DEPTH`] symbols,
+/// and for an instance whose symbol's art `nodes` cannot take ([`SymbolNodes::charge`]).
+fn art_of(doc: Option<&Document>, n: &Node, outline: OutlineHook, nodes: &SymbolNodes, shown: &[String]) -> Option<Node> {
+    let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return outline(n) };
+    if shown.len() >= vectorcraft_doc::depth::MAX_DEPTH || shown.contains(symbol) {
+        return None;
+    }
+    let art = outline(n).filter(|art| nodes.charge(art))?;
+    let mut inside = shown.to_vec();
+    inside.push(symbol.clone());
+    Some(resolved(doc, &art, outline, nodes, &inside))
+}
+
+/// Replace every symbol instance under `n` for which [`art_of`] gives art by that art. `shown`
+/// names the symbols whose art `n` is in, outermost first.
+fn instances_as_art(doc: Option<&Document>, n: &mut Node, outline: OutlineHook, nodes: &SymbolNodes, shown: &[String]) {
+    let Some(ch) = n.children_mut() else { return };
+    for c in ch.iter_mut() {
+        if matches!(c.kind, NodeKind::SymbolInstance { .. }) {
+            if let Some(mut o) = art_of(doc, c, outline, nodes, shown) {
+                o.name = c.name.clone();
+                (o.visible, o.opacity, o.blend, o.isolate) = (c.visible, c.opacity, c.blend, c.isolate);
+                *c = Arc::new(o);
+            }
+        } else if c.children().is_some() {
+            instances_as_art(doc, Arc::make_mut(c), outline, nodes, shown);
+        }
+    }
 }
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
@@ -348,6 +446,11 @@ pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Nod
 
 /// [`reshape`] without its checks (no geometry effects: just the art).
 pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    as_art_with(doc, n, symbol_art, &outline_text, &SymbolNodes::default())
+}
+
+/// [`as_art`] with live objects evaluated through `outline` ([`evaluated_with`]).
+pub(crate) fn as_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes) -> Option<Node> {
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
@@ -375,7 +478,7 @@ pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>
                 Node::group(n.id, rows(below).into_iter().chain([Arc::new(image)]).chain(rows(above)).collect())
             }
         }
-        _ => outline_art(doc, n, symbol_art)?,
+        _ => outline_art_with(doc, n, symbol_art, outline, nodes)?,
     };
     reshape_leaves(&mut art, &fx);
     transform_items(&mut art);
@@ -889,7 +992,13 @@ fn placed_count(n: &Node) -> usize {
 /// `n` with type anywhere inside it outlined and live objects evaluated, so geometry effects on
 /// it reach every member.
 pub(crate) fn outlined_members(doc: Option<&Document>, n: &Node) -> Node {
-    let mut art = evaluated(doc, n);
+    outlined_members_with(doc, n, &outline_text, &SymbolNodes::default())
+}
+
+/// [`outlined_members`] with live objects and symbol instances given as art through `outline`
+/// ([`evaluated_with`]).
+pub(crate) fn outlined_members_with(doc: Option<&Document>, n: &Node, outline: OutlineHook, nodes: &SymbolNodes) -> Node {
+    let mut art = evaluated_with(doc, n, outline, nodes);
     outline_nested_text(&mut art, false);
     art
 }

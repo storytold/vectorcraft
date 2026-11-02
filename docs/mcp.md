@@ -1568,9 +1568,10 @@ already walks Image Trace. Short agent entry points:
   `static`|`dynamic`),
   `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, ids?}`,
   `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?}` (`nineSlice` bool turns
-  9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size; rows
-  of `symbol.list` carry `nineSlice`: the guides or `null`; `type` is Symbol Type, `static` by default for the command
-  and `dynamic` by default in the Symbol Options dialog),
+  9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size, a
+  quarter each when none are given; rows of `symbol.list` carry `nineSlice`: the guides or `null`; a scaled instance of
+  a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; `type` is
+  Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`,
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
@@ -2422,9 +2423,11 @@ whatever the options are then.
 ```
 
 Compound shapes (the Pathfinder panel menu, and Alt-clicking a Shape Mode button): `object.compoundShape.make
-{mode?, ids?}` makes the two or more selected objects (paths, compound paths, groups, compound shapes, type) the
-members of one live compound shape, each in shape mode `mode` (`"add"`, the default, `"subtract"`, `"intersect"` or
-`"exclude"`). It draws, prints and exports as the area its members make from the backmost up, painted with its own
+{mode?, ids?}` makes the two or more selected objects (paths, compound paths, groups, compound shapes, type, blends,
+envelopes) the members of one live compound shape, each in shape mode `mode` (`"add"`, the default, `"subtract"`,
+`"intersect"` or `"exclude"`). It draws, prints and exports as the area its members make from the backmost up (a blend
+as its steps, an envelope as its distorted art, an object with a warp or another geometry effect as it draws, each
+updated when the member is edited), painted with its own
 appearance, which it takes from the topmost member not in Subtract (with every member subtracting, the backmost); a
 fill or stroke given to it or to a member paints the compound shape. The members stay editable (Direct Selection,
 the Layers panel, isolation mode). `object.compoundShape.setMode {mode, ids?}` sets the mode of the members the
