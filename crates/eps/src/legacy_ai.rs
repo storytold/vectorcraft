@@ -50,7 +50,8 @@
 //! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
 //! layer they stay where they are). Type that 8-bit text can't hold (characters outside
 //! Windows-1252, vertical type, ruby, inline graphics, gradient or pattern fills) is written as its
-//! outlines, and all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
+//! outlines, and so is type with rotated characters (a text object has no character rotation), and
+//! all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
 //! names and the title are written in Windows-1252 too, and a character outside it is written as
 //! `?`. Two spot colors or two gradients whose names become the same that way are numbered (`? 2`).
 //!
@@ -76,9 +77,9 @@ mod encoding;
 mod prolog;
 mod writer;
 
-#[cfg(test)]
-use encoding::writable;
 use encoding::{gradient_def, latin_string};
+#[cfg(test)]
+use encoding::{rotated, writable};
 pub(crate) use prolog::PROCSET;
 use prolog::{PROLOG, PS_HEADER, fonts};
 use writer::Writer;
@@ -94,7 +95,8 @@ const HEX_LINE: usize = 60;
 
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, character rotation, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";

@@ -80,10 +80,25 @@ pub(super) fn latin_string(name: &str) -> String {
     ps::bytes(&bytes)
 }
 
-/// Can type `t` be written as text: horizontal, without ruby (which a text object can't hold), its
+/// Can type `t` be written as text: 8-bit text can hold it ([`holds_as_text`]) and no character
+/// is rotated ([`rotated`])?
+pub(super) fn writable(t: &TextObject) -> bool {
+    holds_as_text(t) && !rotated(t)
+}
+
+/// Has type `t` visible characters with Character Rotation? A legacy `.ai` text object's character
+/// attributes have none that turns a character (§15), so such type is written as its outlines.
+pub(super) fn rotated(t: &TextObject) -> bool {
+    t.runs.iter().any(|r| {
+        let turn = r.style.rotation;
+        turn.is_finite() && turn.rem_euclid(360.0) != 0.0 && r.text.chars().any(|c| !c.is_whitespace())
+    })
+}
+
+/// Can 8-bit text hold type `t`: horizontal, without ruby (which a text object can't hold), its
 /// runs plain characters (no inline graphics) that 8-bit text can hold, filled and stroked with
 /// colours?
-pub(super) fn writable(t: &TextObject) -> bool {
+pub(super) fn holds_as_text(t: &TextObject) -> bool {
     let solid = |p: &Paint| matches!(p, Paint::Solid { .. } | Paint::None);
     !t.vertical
         && t.ruby.is_empty()
@@ -103,7 +118,6 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
             || s.strikethrough
             || s.small_caps.is_some()
             || s.position != CharPosition::Normal
-            || s.rotation != 0.0
             || !s.features.is_empty()
             || !s.font_axes.is_empty()
     };
