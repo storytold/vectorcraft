@@ -304,8 +304,8 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     if aligned(p) && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
         return Err(bad(C, "effects of objects whose appearances differ can't be moved together"));
     }
-    // Where the effect landed in the first object.
-    let mut landed = None;
+    // Where the effect landed in each object it moved in, in the order of `ids`.
+    let mut landed = vec![];
     let ids = s.edit(if copy { "Duplicate Effect" } else { "Move Effect" }, |d, _| {
         let mut done = vec![];
         for id in &roots {
@@ -317,7 +317,7 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
             let at = to.min(fx.len());
             fx.insert(at, e);
             check_revolve_count(n, C)?;
-            landed.get_or_insert((at, di));
+            landed.push((at, di));
             done.push(*id);
         }
         if done.is_empty() {
@@ -325,7 +325,10 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(done)
     })?;
-    let (index, item) = landed.unzip();
+    // The reply names the object whose row the destination is: the first selected object for the
+    // active item (which need not paint first), as `effect.apply` does; the first target for an
+    // explicit `toItem` or the object's effects.
+    let (index, item) = landed.get(dst.anchor(s, &ids)).copied().unzip();
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": item.flatten() }))
 }
 
