@@ -1648,7 +1648,7 @@ already walks Image Trace. Short agent entry points:
   locked, an import whose header would define a variable fails with "variables are locked".
   A `dataset.import` file that isn't UTF-8 is read as Windows-1252, unless it starts with the UTF-8 byte-order mark.
   A file that starts with a UTF-16 byte-order mark is read as UTF-16, and a file without one that holds NUL bytes is
-  refused.
+  refused. `csv` and `data` are read as the text they hold.
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
   Library…) replaces the document's variables and data sets with a variable library's in one undo step. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`

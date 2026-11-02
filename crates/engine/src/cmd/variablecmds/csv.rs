@@ -14,26 +14,27 @@ const MAX_CSV_ROWS: usize = 1_000;
 
 const MAX_CSV_COLS: usize = 256;
 
-/// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`.
-fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
-    let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
+/// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`, and whether they came
+/// as text (`data` or `csv`).
+fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<(Vec<u8>, bool)> {
+    let (bytes, text) = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
         // One byte past the cap is enough to refuse the file below.
-        (Some(path), ..) => read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?,
-        (None, Some(text), ..) => text.as_bytes().to_vec(),
-        (None, None, Some(b64), _) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
-        (None, None, None, Some(csv)) => csv.as_bytes().to_vec(),
+        (Some(path), ..) => (read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?, false),
+        (None, Some(text), ..) => (text.as_bytes().to_vec(), true),
+        (None, None, Some(b64), _) => (vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?, false),
+        (None, None, None, Some(csv)) => (csv.as_bytes().to_vec(), true),
         _ => return Err(bad(cmd, "give `path`, `data`, `dataBase64` or `csv`")),
     };
     if bytes.len() > MAX_CSV_BYTES {
         return Err(bad(cmd, format!("CSV is larger than {MAX_CSV_BYTES} bytes")));
     }
-    Ok(bytes)
+    Ok((bytes, text))
 }
 
-/// The text of a datasets CSV: UTF-16 after a UTF-16 byte-order mark, else UTF-8, with or
-/// without a byte-order mark, else Windows-1252. A file that starts with a byte-order mark must
-/// be valid in its encoding, and a file without one must not hold NUL bytes (UTF-16 without a
-/// byte-order mark).
+/// The text of a datasets CSV given as a file or as `dataBase64`: UTF-16 after a UTF-16
+/// byte-order mark, else UTF-8, with or without a byte-order mark, else Windows-1252. A file
+/// that starts with a byte-order mark must be valid in its encoding, and a file without one must
+/// not hold NUL bytes (UTF-16 without a byte-order mark).
 fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
     let utf16 = |rest: &[u8], le: bool| {
         let (units, odd) = rest.as_chunks::<2>();
@@ -279,8 +280,9 @@ fn header_variable(
 /// undo step.
 pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
-    let bytes = datasets_csv_bytes(p, C)?;
-    let text = datasets_csv_text(&bytes, C)?;
+    let (bytes, given_as_text) = datasets_csv_bytes(p, C)?;
+    // `data` and `csv` are already text, NUL characters included (`dataset.export` writes them).
+    let text = if given_as_text { String::from_utf8(bytes).map_err(|_| bad(C, "CSV is not UTF-8"))? } else { datasets_csv_text(&bytes, C)? };
     let rows = parse_datasets_csv(&text, C)?;
     let Some((_, header, _)) = rows.first() else {
         return Err(bad(C, "CSV is empty"));

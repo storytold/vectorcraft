@@ -1399,6 +1399,7 @@ fn datasets_csv_reads_windows_1252_files() {
 
 /// A CSV that starts with a UTF-16 byte-order mark is read as UTF-16, and
 /// one that isn't valid UTF-16 is refused. A file with NUL bytes and no byte-order mark is refused.
+/// A text value holding NUL imports back from the `csv` that `dataset.export` returns.
 #[test]
 fn datasets_csv_reads_utf16_files() {
     let mut s = session();
@@ -1423,6 +1424,11 @@ fn datasets_csv_reads_utf16_files() {
     let e = import(&mut s, &utf16(b"", "name,City\nE,x\n", true)).unwrap_err().to_string();
     assert!(e.contains("CSV holds NUL bytes"), "{e}");
     assert_eq!((value(&s, "C"), value(&s, "D"), value(&s, "E")), (None, None, None));
+    s.execute("dataset.new", &json!({"name": "F", "values": {"City": "a\u{0}b"}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["F"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!(value(&s, "F"), text_value("a\u{0}b"));
 }
 
 /// A data set of [`library`]: its name, and each variable's name with its paragraphs.
