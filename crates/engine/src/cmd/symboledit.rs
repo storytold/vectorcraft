@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use vectorcraft_doc::symbol_overrides::SymbolOverride;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection, SymbolEdit, SymbolRegistration};
 use vectorcraft_geom::{Affine, Point};
 
@@ -112,10 +113,19 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     // Editing another symbol (one from the Symbols panel, or through the API): the current edit
-    // ends first.
+    // ends first, once the new placement is known to be valid, so a refused switch keeps it open.
     if st.doc.symbol_edit.is_some() {
         if instance.is_some_and(|i| st.doc.symbol_edit.as_ref().is_some_and(|e| st.doc.ancestry(i).unwrap_or_default().contains(&e.layer))) {
             return Err(bad(C, "exit isolation mode first"));
+        }
+        let mut trial = Document::clone(&st.doc);
+        let mut sel = Selection::default();
+        begin(&mut trial, &mut sel, &name, xf, instance)?;
+        if trial.too_deep(Some(&st.doc)) {
+            return Err(EngineError::Other(crate::TOO_DEEP.into()));
+        }
+        if !crate::sanity::doc_sane(&trial, &sel) {
+            return Err(EngineError::Other("result would exceed the canvas (coordinates out of range)".into()));
         }
         leave(s, &json!({}))?;
     }
@@ -354,36 +364,107 @@ fn path_of(nodes: &[Arc<Node>], id: NodeId, depth: usize) -> Option<Vec<u32>> {
     None
 }
 
-/// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
-/// through an edit of the editing layer: `old` and `new` are the layer's objects before and after
-/// with whether the symbol's art is a group of them (else it is the one object). A change to an
-/// object the edit removed names no object afterwards.
-fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
+/// Appearance changes to objects of a symbol's art follow those objects through an edit of the
+/// editing layer: `old` and `new` are the layer's objects before and after with whether the
+/// symbol's art is a group of them (else it is the one object). A change to an object the edit
+/// removed is dropped.
+fn follow_paths(overrides: &mut Vec<SymbolOverride>, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
     let depth = vectorcraft_doc::symbol_overrides::MAX_PATH_DEPTH + 1;
-    for id in super::brushsym::instances_of(d, Some(name)) {
-        let Some(n) = d.node_mut(id) else { continue };
-        if n.extras().symbol_overrides.is_empty() {
-            continue;
+    overrides.retain_mut(|o| {
+        // The art's own group stays the art's root.
+        if old.1 && o.path.is_empty() {
+            return true;
         }
-        let mut e = n.extras_mut();
-        e.symbol_overrides.retain_mut(|o| {
-            // The art's own group stays the art's root.
-            if old.1 && o.path.is_empty() {
-                return true;
-            }
-            let on_layer: Vec<u32> = if old.1 { o.path.clone() } else { std::iter::once(0).chain(o.path.iter().copied()).collect() };
-            let moved = at_path(old.0, &on_layer).and_then(|obj| path_of(new.0, obj.id, depth)).and_then(|p| match new.1 {
-                true => Some(p),
-                false => p.split_first().filter(|(first, _)| **first == 0).map(|(_, rest)| rest.to_vec()),
-            });
-            match moved {
-                Some(p) => {
-                    o.path = p;
-                    true
-                }
-                None => false,
-            }
+        let on_layer: Vec<u32> = if old.1 { o.path.clone() } else { std::iter::once(0).chain(o.path.iter().copied()).collect() };
+        let moved = at_path(old.0, &on_layer).and_then(|obj| path_of(new.0, obj.id, depth)).and_then(|p| match new.1 {
+            true => Some(p),
+            false => p.split_first().filter(|(first, _)| **first == 0).map(|(_, rest)| rest.to_vec()),
         });
+        match moved {
+            Some(p) => {
+                o.path = p;
+                true
+            }
+            None => false,
+        }
+    });
+}
+
+/// Whether `n` or its subtree (opacity masks included) holds an instance of symbol `name` with
+/// appearance changes.
+fn holds_changed_instance(n: &Node, name: &str) -> bool {
+    let mut found = false;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        found |= matches!(&m.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name) && !m.extras().symbol_overrides.is_empty();
+    });
+    found
+}
+
+/// Apply `f` to the appearance changes of each instance of symbol `name` in `n` and its subtree
+/// (opacity masks included), copying only the shared nodes on the way to one.
+fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<SymbolOverride>)) {
+    if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name) && !n.extras().symbol_overrides.is_empty() {
+        f(&mut n.extras_mut().symbol_overrides);
+    }
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut())
+        && holds_changed_instance(&mask.art, name)
+    {
+        each_changed_instance(Arc::make_mut(&mut mask.art), name, f);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        if holds_changed_instance(c, name) {
+            each_changed_instance(Arc::make_mut(c), name, f);
+        }
+    }
+}
+
+/// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
+/// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes to
+/// objects the art still has. That covers the instances on the layers and in the art of the
+/// document's other symbols, graph designs, pattern tiles (the tiles pattern editing's Cancel puts
+/// back included) and brushes, opacity-mask art included. The editing layer holds no instance of
+/// the symbol, since [`sync`] refuses one.
+fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: (&[Arc<Node>], bool)) {
+    let art = d.symbols.iter().find(|s| s.name == name).filter(|s| s.dynamic).map(|s| s.art.clone());
+    let mut follow = |o: &mut Vec<SymbolOverride>| {
+        follow_paths(o, old, new);
+        match &art {
+            Some(art) => vectorcraft_doc::symbol_overrides::retain_parts(o, art),
+            None => o.clear(),
+        }
+    };
+    let symbols = d.symbols.iter_mut().filter(|s| s.name != name).map(|s| &mut s.art);
+    let trees = d.layers.iter_mut().chain(symbols).chain(d.graph_designs.iter_mut().map(|g| &mut g.art));
+    let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+    for root in trees.chain(patterns.flat_map(|p| &mut p.art)) {
+        if holds_changed_instance(root, name) {
+            each_changed_instance(Arc::make_mut(root), name, &mut follow);
+        }
+    }
+    // The default brushes hold no instances, so only a stored library can change. A stored entry
+    // whose art holds no changed instance, or that does not parse, is stored again as it was read;
+    // a changed one is merged into its entry, which keeps the fields the brush definition does not read.
+    let Some(stored) = d.unknown.get(vectorcraft_brush::DOC_KEY).and_then(Value::as_array).cloned() else { return };
+    let mut changed = false;
+    let lib: Vec<Value> = stored
+        .into_iter()
+        .map(|raw| {
+            let Ok(mut b) = vectorcraft_brush::Brush::from_json(raw.clone()) else { return raw };
+            if !b.art().into_iter().any(|n| holds_changed_instance(n, name)) {
+                return raw;
+            }
+            let base = serde_json::to_value(&b).unwrap_or_default();
+            for art in b.art_mut() {
+                if holds_changed_instance(art, name) {
+                    each_changed_instance(art, name, &mut follow);
+                }
+            }
+            changed = true;
+            super::swatch::merge_stored(raw, &base, serde_json::to_value(&b).unwrap_or_default())
+        })
+        .collect();
+    if changed {
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(lib));
     }
 }
 
@@ -436,7 +517,6 @@ pub(crate) fn sync(before: &Document, d: &mut Document) -> Result<()> {
     };
     d.symbols[index].art = Arc::new(new_art);
     follow_objects(d, &se.symbol, (&old, old_group), (&art, group));
-    super::brushsym::fit_instances_of(d, &se.symbol);
     if let Some(e) = d.symbol_edit.as_mut() {
         e.changed = true;
         e.group = group;

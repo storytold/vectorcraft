@@ -1569,10 +1569,11 @@ already walks Image Trace. Short agent entry points:
   of `symbol.list` carry `nineSlice`: the guides or `null`; `type` is Symbol Type, `static` by default for the command
   and `dynamic` by default in the Symbol Options dialog),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`,
-  `symbol.edit {id?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
+  `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
   `artboard`, the active one the app passes, or in a document without artboards on `viewCenter`, the view's center the
-  app passes; every instance follows each edit and stays linked), `symbol.exitEditing`
+  app passes; every instance follows each edit and stays linked; while another symbol is edited, that edit ends first,
+  and a call that fails leaves it open), `symbol.exitEditing`
   (leaves the mode; without an edit it adds no undo step), `symbol.duplicate`,
   `symbol.selectInstances {name}`, `symbol.delete {name | names, expandInstances?}` (`names` deletes several in one
   undo step). `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
@@ -2396,8 +2397,8 @@ and `layerRows`, the rows highlighted in the panel.
   Preview All Layers when the others are in Outline already), `layer.lockOthers` / `layer.unlockAll` (Alt-clicking an eye or a lock
   runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
   `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, not a
-  hidden or locked object or one in a hidden or locked group or layer, and not a guide path while Lock Guides is on) /
-  `object.exitIsolation`.
+  hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
+  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation`.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step; Cmd/Ctrl+Alt+L runs `ui.newLayer` for a new layer), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
