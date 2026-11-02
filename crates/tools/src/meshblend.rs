@@ -49,7 +49,7 @@ pub struct BlendTool {
     /// A blend was just made: the next click adds to it (the selected blend).
     chained: bool,
     /// `first` and `chained` when the button went down: a dropped press puts them back, unless
-    /// the press made a blend.
+    /// the press picked an object or made a blend.
     before_press: Option<(Option<Pick>, bool)>,
 }
 
@@ -109,7 +109,7 @@ impl Tool for BlendTool {
                         vec![]
                     }
                     (None, Some((top, start))) => {
-                        self.first = Some((top, start));
+                        (self.first, self.before_press) = (Some((top, start)), None);
                         vec![Action::Exec("select.set".into(), json!({"ids": [top.0]}))]
                     }
                     (Some((a, sa)), Some((b, sb))) if a != b && cx.doc.node(a).is_some() => {
@@ -162,8 +162,8 @@ impl Tool for BlendTool {
         vec![]
     }
     /// A dropped press puts back the object picked first and the blend being added to as they
-    /// were when the button went down, so the picks of earlier clicks stay and the press picks
-    /// nothing. A blend the press made stays made.
+    /// were when the button went down, so the picks of earlier clicks stay. An object the press
+    /// picked stays picked and selected, and a blend the press made stays made.
     fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
         if let Some((first, chained)) = self.before_press.take() {
             (self.first, self.chained) = (first, chained);
@@ -504,8 +504,9 @@ mod tests {
         assert!(esc(&mut BlendTool::default()).is_empty(), "nothing to drop");
     }
 
-    /// A dropped press (a long touch, a canceled touch) picks nothing, keeps the pick an earlier
-    /// click made, and keeps adding to the blend just made: the next click blends with them.
+    /// A dropped press (a long touch, a canceled touch) keeps the pick an earlier click made and
+    /// keeps adding to the blend just made: the next click blends with them. A dropped press
+    /// that picked an object keeps that pick, as the object stays selected.
     #[test]
     fn a_dropped_press_keeps_the_blend_tools_first_pick() {
         let (mut d, a) = doc_with_rect();
@@ -530,10 +531,10 @@ mod tests {
             assert!(t.pointer(c, &ev(PointerKind::Up, x, y)).is_empty());
         };
         let mut t = BlendTool::default();
-        dropped(&mut t, &c, 150.0, 150.0);
-        assert_eq!(t.first(&c), None, "a dropped first press picks nothing");
-        t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0)), vec![Action::Exec("select.set".into(), json!({"ids": [a.0]}))]);
+        assert!(t.drop_press(&c).is_empty());
         t.pointer(&c, &ev(PointerKind::Up, 150.0, 150.0));
+        assert_eq!(t.first(&c), Some((a, None)), "a dropped first press keeps the object it picked and selected");
         // A second press on a, and a press on empty canvas, each dropped.
         dropped(&mut t, &c, 151.0, 151.0);
         dropped(&mut t, &c, 450.0, 450.0);
