@@ -327,11 +327,6 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
             Tok::Word(w) => {
                 let entry = other_entry.take().flatten();
                 let op = std::str::from_utf8(w).unwrap_or_default();
-                if op == ","
-                    && let (Some(key), Some(f)) = (entry, filters.last_mut())
-                {
-                    f.kinds.insert(key, Kind::Other);
-                }
                 if op == "[" {
                     array = Some(vec![]);
                     continue;
