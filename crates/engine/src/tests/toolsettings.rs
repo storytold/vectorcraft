@@ -112,6 +112,33 @@ fn options_are_saved_with_the_preferences() {
     assert_eq!(t.prefs.tool_settings["polygon"]["sides"], json!(9));
 }
 
+/// Escape on a polygon or rounded rectangle drag puts back the side count or corner radius its
+/// arrows changed, in the saved options and the Corner Radius preference too.
+#[test]
+fn escape_on_a_shape_drag_saves_the_option_it_put_back() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let drag = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+        s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+        // Saves every option, the one the arrow changed included.
+        s.set_tool_option("length", &json!(50));
+    };
+    select(&mut s, "polygon");
+    drag(&mut s);
+    assert_eq!(s.prefs.tool_settings["polygon"]["sides"], json!(7));
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(s.prefs.tool_settings["polygon"]["sides"], json!(6));
+    select(&mut s, "roundedRectangle");
+    let radius = s.prefs.corner_radius;
+    drag(&mut s);
+    assert_eq!(s.prefs.corner_radius, radius + 1.0);
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(s.prefs.corner_radius, radius);
+}
+
 /// The Fidelity an Alt smoothing drag uses on a selected path.
 fn alt_smooth_fidelity(s: &mut Session) -> Option<f64> {
     use vectorcraft_tools::{Action, Mods, PointerEvent, PointerKind};
