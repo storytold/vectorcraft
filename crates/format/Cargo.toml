@@ -10,7 +10,8 @@ workspace = true
 
 [dependencies]
 vectorcraft-doc = { workspace = true }
-serde = { workspace = true }
+craft-vectorcraft-format = { workspace = true }
+serde ={ workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 flate2 = { workspace = true }

@@ -69,13 +69,12 @@ impl Exporter<'_> {
     /// gets [`Self::device_n_stops`]. `None` for gradients without a spot ink.
     fn spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         let ink = g.stops.iter().find_map(|s| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot)))?;
-        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
         let tints: Option<Vec<f32>> = g
             .stops
             .iter()
             .map(|s| match s.swatch.as_deref() {
                 Some(n) if n == ink => Some(s.tint),
-                None if paper(&s.color) => Some(0.0),
+                _ if self.paper_stop(s) => Some(0.0),
                 _ => None,
             })
             .collect();
@@ -106,7 +105,6 @@ impl Exporter<'_> {
     /// the gradient is then written in the colors of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         use krilla::color::device_n::{Color as DnColor, Colorant, DeviceNSpace, Process};
-        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
         let doc = self.doc;
         fn spot_of<'s>(doc: &vectorcraft_doc::Document, s: &'s vectorcraft_color::GradientStop) -> Option<&'s str> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot))
@@ -128,7 +126,7 @@ impl Exporter<'_> {
                     let i = spots.iter().position(|(m, _)| m == n)?;
                     v[4 + i] = s.tint;
                 }
-                None if s.swatch.is_none() && paper(&s.color) => {}
+                None if self.paper_stop(s) => {}
                 None => match self.page_color(&s.color) {
                     Color::Cmyk { c, m, y, k } => v[..4].copy_from_slice(&[c, m, y, k]),
                     Color::Gray { k } => v[3] = k,
@@ -348,25 +346,30 @@ impl Exporter<'_> {
         Some(krilla::paint::Pattern { stream: sb.finish(), transform: xf(at), width: pw as f32, height: ph as f32 }.into())
     }
 
-    /// The spot swatch whose tints are every stop of `g` that isn't paper white, unlinked; `None`
-    /// when no stop is linked to a spot swatch or a stop has another color.
+    /// Is stop `s` paper white: white, unlinked or linked to a swatch that isn't a spot color (a
+    /// white spot color is an ink of its own)? It adds no ink to a Separation or DeviceN shading.
+    fn paper_stop(&self, s: &vectorcraft_color::GradientStop) -> bool {
+        !s.swatch.as_deref().is_some_and(|n| self.doc.swatch(n).is_some_and(|w| w.spot)) && s.color.to_rgba8(1.0)[..3] == [255; 3]
+    }
+
+    /// The spot swatch whose tints are every stop of `g` that isn't paper white
+    /// ([`Self::paper_stop`]); `None` when no stop is linked to a spot swatch or a stop has
+    /// another color.
     fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
         let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
         let ink = g.stops.iter().find_map(spot)?;
-        let paper = |s: &vectorcraft_color::GradientStop| s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3];
-        g.stops.iter().all(|s| spot(s) == Some(ink) || paper(s)).then_some(ink)
+        g.stops.iter().all(|s| spot(s) == Some(ink) || self.paper_stop(s)).then_some(ink)
     }
 
     /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop
-    /// linked to a spot swatch, and is every other stop paper white, unlinked, or written in CMYK
-    /// or gray?
+    /// linked to a spot swatch, and is every other stop paper white ([`Self::paper_stop`]) or
+    /// written in CMYK or gray?
     fn device_n_inks_only(&self, g: &vectorcraft_color::Gradient) -> bool {
         let doc = self.doc;
         let cmyk_doc = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
         let spot = |s: &vectorcraft_color::GradientStop| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot));
         let inks = |s: &vectorcraft_color::GradientStop| {
-            (s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3])
-                || matches!(self.out.color(&s.color, self.intent, cmyk_doc, self.convert), Color::Cmyk { .. } | Color::Gray { .. })
+            self.paper_stop(s) || matches!(self.out.color(&s.color, self.intent, cmyk_doc, self.convert), Color::Cmyk { .. } | Color::Gray { .. })
         };
         g.stops.iter().any(spot) && g.stops.iter().all(|s| spot(s) || inks(s))
     }

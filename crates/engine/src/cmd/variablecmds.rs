@@ -18,7 +18,7 @@ use vectorcraft_doc::{DataSet, DataValue, NodeId, NodeKind, Variable, VariableKi
 
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
-use super::textedit::set_plain_text;
+use super::textedit::set_story_text;
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, links, str_param};
 
 mod csv;
@@ -160,6 +160,9 @@ fn rename(s: &mut Session, p: &Value) -> Result<Value> {
     let from = var_name(p, C)?;
     let to = named(p.get("newName").and_then(Value::as_str), "newName", C)?;
     let st = s.doc()?;
+    if st.doc.variables.variable(&from).is_none() {
+        return Err(bad(C, format!("no variable named `{from}`")));
+    }
     if st.doc.variables.variable(&to).is_some() {
         return Err(bad(C, format!("variable `{to}` already exists")));
     }
@@ -357,6 +360,9 @@ fn dataset_rename(s: &mut Session, p: &Value) -> Result<Value> {
     let from = var_name(p, C)?;
     let to = named(p.get("newName").and_then(Value::as_str), "newName", C)?;
     let st = s.doc()?;
+    if st.doc.variables.dataset(&from).is_none() {
+        return Err(bad(C, format!("no dataset named `{from}`")));
+    }
     if st.doc.variables.dataset(&to).is_some() {
         return Err(bad(C, format!("dataset `{to}` already exists")));
     }
@@ -487,16 +493,20 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
             };
             // Locked art, art in a locked layer or group, and text whose object is gone, can't be
             // rewritten: skipped and counted, like the rest. Hidden art is rewritten, in a hidden
-            // layer or group too, and stays hidden unless a visibility value shows it.
-            if !d.dataset_target(id) {
+            // layer or group too, and stays hidden unless a visibility value shows it. A text value
+            // rewrites the whole story of threaded text, so it skips when any frame of it is locked.
+            let target = if kind == VariableKind::Text { d.story_target(id) } else { d.dataset_target(id) };
+            if !target {
                 skipped += 1;
                 continue;
             }
             let done = match (kind, &value) {
                 // The Type tool's own whole-range replace, so a dataset's text is styled and
-                // laid out exactly as typing it would be.
-                (VariableKind::Text, DataValue::Text(text)) => set_plain_text(d, id, text).is_ok_and(|()| {
-                    typed.push(id);
+                // laid out exactly as typing it would be. A frame of threaded text has its whole
+                // story replaced, the value capture reads from it; the story's last frame is the
+                // one that overflows.
+                (VariableKind::Text, DataValue::Text(text)) => set_story_text(d, id, text).is_ok_and(|last| {
+                    typed.push(last);
                     true
                 }),
                 (VariableKind::Visibility, DataValue::Visible(show)) => d.node_mut(id).is_some_and(|n| {
@@ -641,7 +651,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Variables",
             ["Window", "Variables"],
             None,
-            "{locked?: bool} lock or unlock the variables (default: toggle); saved with the document; a change is one undo step. While locked, variable.define, variable.delete, variable.rename, variable.make…Dynamic and a variable.loadLibrary that would delete or define a variable are refused; binding, unbinding and the dataset commands still run → {locked}",
+            "{locked?: bool} lock or unlock the variables (default: toggle); saved with the document; a change is one undo step. While locked, variable.define, variable.delete, variable.rename, variable.make…Dynamic and a variable.loadLibrary that would delete or define a variable are refused; binding, unbinding and the dataset commands still run, except a dataset.import whose header would define a variable → {locked}",
             has_doc,
             lock
         ),
@@ -670,7 +680,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Capture Data Set",
             ["Window", "Variables"],
             None,
-            "{name?} record what the bound objects hold right now as a new dataset (Data Set 1…), and make it the active one",
+            "{name?} record what the bound objects hold right now as a new dataset (Data Set 1…), and make it the active one; a frame of threaded text holds its whole story, every frame's text in thread order",
             has_doc,
             dataset_capture
         ),
@@ -706,7 +716,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Data Set",
             ["Window", "Variables"],
             None,
-            "{name} apply a dataset in one undo step, deselecting every selected object left hidden or locked (the key object too) → {applied, skipped, overflow?: [id…] (area type and type on a path whose text it rewrote and that no longer fits; left out when all fits), warning? (when no object is bound to a variable that the dataset has a value for, so nothing was applied)}",
+            "{name} apply a dataset in one undo step, deselecting every selected object left hidden or locked (the key object too); a text value bound to a frame of threaded text replaces the whole story → {applied, skipped, overflow?: [id…] (area type and type on a path whose text it rewrote and that no longer fits, the story's last frame for threaded text; left out when all fits), warning? (when no object is bound to a variable that the dataset has a value for, so nothing was applied)}",
             has_doc,
             dataset_select
         ),

@@ -49,6 +49,8 @@ private editing data. VectorCraft:
   A PDF-compatible `.ai` opens on its PDF part's trim boxes (its artboards), the bleed boxes round them
   becoming the document's bleed, so art in the bleed shows outside the artboard, within the bleed guide (#1266).
   A PDF saved with its editing data (`AIPDFPrivateData`) opens the same way.
+  The swatches of a version 7 `.ai` palette, which carry no names, come in named by their spot color, gradient or
+  values.
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
 - **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the
@@ -63,7 +65,9 @@ private editing data. VectorCraft:
   `transparentImages: "flatten"|"omit"`). Type is written as editable text objects (point type, area type and type
   on a path, with their fonts' PostScript names, sizes, colours, alignment, indents, leading, tracking and
   scaling), which the reading app sets in those fonts; characters outside Windows-1252, vertical type, ruby, inline
-  graphics and gradient or pattern fills make that type outlines, and Text: Outlines (`outlineText: true`) writes
+  graphics and gradient or pattern fills make that type outlines, and so do rotated characters (Character Rotation,
+  which a version 7 text object can't hold: the outlines keep the rotation, and the type is no longer editable text
+  in the file), and Text: Outlines (`outlineText: true`) writes
   all type as outlines. The format can hide only layers: hidden objects go to a hidden layer of their own above
   their layer, are omitted, or are made visible (Hidden Objects, `hiddenObjects: "layer"|"omit"|"visible"`).
   Sublayers become groups; appearances, effects and brushes are expanded; object names are left out; layer

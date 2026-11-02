@@ -141,6 +141,35 @@ fn spot_gradients_export_as_separation_shadings() {
 }
 
 #[test]
+fn white_stops_linked_to_process_swatches_are_paper_in_spot_gradients() {
+    let (mut s, _) = setup();
+    run(&mut s, "swatch.new", json!({"name": "Paper", "color": "#ffffff", "global": true}));
+    let ink_to_paper = json!({"stops": [{"offset": 0, "swatch": "Ink", "tint": 80}, {"offset": 1, "swatch": "Paper"}]});
+    // As Ink → unlinked white: a Separation shading from 80 % to 0 %.
+    run(&mut s, "paint.editGradient", ink_to_paper.clone());
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Separation/Ink/DeviceCMYK"), "a Separation shading");
+    assert!(!pdf.contains("/DeviceN") && pdf.contains("/C0[0.8]/C1[0]"), "the shading's tints");
+    assert!(!warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
+    // A Perceptual one too.
+    run(&mut s, "paint.editGradient", with(ink_to_paper, json!({"method": "perceptual"})));
+    let (pdf, _) = pdf_of(&s);
+    assert!(!pdf.contains("/Subtype/Image") && !pdf.contains("/DeviceN") && pdf.contains("/Separation/Ink/DeviceCMYK"), "Perceptual");
+    // With process yellow, the linked white stop adds no ink: Yellow and Ink only.
+    let yellow = json!({"c": 0, "m": 0, "y": 0.6, "k": 0});
+    let three =
+        json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 0.5, "swatch": "Paper"}, {"offset": 1, "color": yellow}], "method": "classic"});
+    run(&mut s, "paint.editGradient", three);
+    let (pdf, _) = pdf_of(&s);
+    assert!(pdf.contains("/DeviceN[/Yellow/Ink]/DeviceCMYK") && pdf.contains("/C0[0 1]/C1[0 0]"), "Yellow and Ink");
+    // A white spot ink is an ink, not paper: a DeviceN shading of both spot inks.
+    run(&mut s, "swatch.new", json!({"name": "Opaque", "color": "#ffffff", "spot": true}));
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "swatch": "Opaque"}]}));
+    let (pdf, _) = pdf_of(&s);
+    assert!(pdf.contains("/DeviceN[/Ink/Opaque]/DeviceCMYK"), "a white spot ink keeps its plate");
+}
+
+#[test]
 fn spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
     let (mut s, _) = setup();
     // Ink → process yellow: a DeviceN shading of Yellow and Ink, with no warning.

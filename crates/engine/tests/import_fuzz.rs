@@ -2623,11 +2623,12 @@ fn ascii85(data: &[u8]) -> String {
 const PATTERN: &str = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 6 6\n%_0 A\n%_0 Ae\n%_u\n%_0 0 m\n%_0 6 L\n%_6 6 L\n%_6 0 L\n%_n\n%_0 0 0 1 K\n%_1 J 1 w\n%_3 3 m\n%_3 3 L\n%_S\n%_U\n%_9 () XW\nE\n%AI3_EndPattern\n";
 
 /// The swatches in editing data: process, spot (one the art doesn't use), global, a gradient that
-/// isn't defined and a pattern, a colour group, and versioned content read once.
-const PALETTE: &str = "%AI5_BeginPalette\n0 0 Pb\n%AI17_Begin_Content_if_version_gt:24 15\n1 1 1 1 ([Registration]) 0 Xs\n([Registration])\nPc\n\
+/// isn't defined and a pattern, a colour group, versioned content read once, and the None swatch
+/// and a swatch without a name, as version 7 files write them.
+const PALETTE: &str = "%AI5_BeginPalette\n0 0 Pb\nPn\nPc\n%AI17_Begin_Content_if_version_gt:24 15\n1 1 1 1 ([Registration]) 0 Xs\n([Registration])\nPc\n\
      0 0 0 1 k\n(Black)\nPc\n0.1 0.9 0.8 0 (Unused ink) 0 x\n(Unused ink)\nPc\n0 0 0 1 0 0 0 (Black global) 0 1 Xk\n(Black global)\nPc\n\
      Bb\n2 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(G)\nPc\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots)\nPc\n\
-     %AI17_Alternate_Content\n0 0 0 1 k\n(Black)\nPc\n%AI17_End_Versioned_Content\n1 (Greys) 1 Pg\n0 0 0 0.5 k\n(K50)\nPc\nPB\n%AI5_EndPalette\n";
+     %AI17_Alternate_Content\n0 0 0 1 k\n(Black)\nPc\n%AI17_End_Versioned_Content\n1 (Greys) 1 Pg\n0 0 0 0.5 k\n(K50)\nPc\n0.75 g\nPc\nPB\n%AI5_EndPalette\n";
 
 /// The editing data of a file with every sort of object the layers reader knows, and some it doesn't.
 fn editing_text() -> String {
@@ -2697,8 +2698,9 @@ fn the_editing_fixture_reads_its_palette() {
     let swatches: Vec<&str> = doc.swatches.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(swatches, ["[None]", "Black", "Unused ink", "Black global", "Dots"]);
     assert!(doc.swatch("Unused ink").is_some_and(|s| s.spot && s.global));
-    let groups: Vec<(&str, usize)> = doc.swatch_groups.iter().map(|g| (g.name.as_str(), g.swatches.len())).collect();
-    assert_eq!(groups, [("Greys", 1)]);
+    let groups: Vec<(&str, Vec<&str>)> =
+        doc.swatch_groups.iter().map(|g| (g.name.as_str(), g.swatches.iter().map(|s| s.name.as_str()).collect())).collect();
+    assert_eq!(groups, [("Greys", vec!["K50", "Gray K=25"])], "the swatch without a name is named by its values");
 }
 
 /// The fuzzed editing data, as it is, reads its CMYK image with its ink amounts and its alpha
