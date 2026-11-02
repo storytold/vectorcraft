@@ -5814,6 +5814,9 @@ breakText	Glyphs	Glyphen
 	Small to Large	Von klein nach groß
 	Large to Small	Von groß nach klein
 	Distribute Evenly	Gleichmäßig verteilen
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
 	Create Swatch Legend	Farbfeldlegende erstellen
 	Create Swatch Legend…	Farbfeldlegende erstellen…
 	HEX	HEX
