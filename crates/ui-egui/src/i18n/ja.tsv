@@ -4311,11 +4311,16 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown command `{0}`; did you mean `{1}`?	`{0}` は不明なコマンドです。`{1}` のことですか?
 @msg	`{what}` closes nothing	`{what}` に対応する開始部分がありません
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	複数のレイヤーにまたがるマスクは、覆う各レイヤーでクリップグループとして読み込まれます
 @msg	a graph's records don't end where they should: its art was read as it is	グラフのレコードが正しい位置で終わっていません: アートはそのまま読み込まれました
 @msg	`{w}` takes no operands	`{w}` はオペランドを取りません
 @msg	a wraparound group is inside a compound path	テキストの回り込みグループが複合パスの中にあります
 @msg	a path has too many points	ポイントが多すぎるパスがあります
 @msg	it ends inside a layer	レイヤーの途中で終わっています
+@msg	it ends inside a multi-layer mask	複数レイヤーにまたがるマスクの途中で終わっています
+@msg	a multi-layer mask's operators are out of order	複数レイヤーにまたがるマスクの演算子の順序が正しくありません
+@msg	a multi-layer mask needs one clipping path	複数レイヤーにまたがるマスクにはクリッピングパスが 1 つ必要です
+@msg	a group crosses a multi-layer mask	グループが複数レイヤーにまたがるマスクと交差しています
 @msg	it has art outside its layers	レイヤーの外にアートがあります
 @msg	it has more than {MAX_NODES} objects	オブジェクトが {MAX_NODES} 個を超えています
 @msg	it has no layers	レイヤーがありません

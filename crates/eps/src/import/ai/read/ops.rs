@@ -154,7 +154,7 @@ impl<'a> Reader<'a> {
                     self.graph = None;
                     self.warn(GRAPH_UNENDED);
                 }
-                self.end_layer()?
+                self.end_layer_in_mask()?
             }
             // Paths.
             "m" | "l" | "L" | "c" | "C" | "v" | "V" | "y" | "Y" => self.path_op(w, &vals)?,
@@ -162,6 +162,7 @@ impl<'a> Reader<'a> {
             // Ends a path that stays open.
             "H" => {}
             "W" => self.clip_next = true,
+            "Mb" | "Mv" | "Md" | "ME" | "MB" | "Mi" => self.multi_mask_op(w)?,
             // A text object's frame or path.
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" if self.in_text_path() => self.text_path(),
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" => self.paint(w, hidden, false)?,

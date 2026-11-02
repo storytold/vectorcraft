@@ -4607,11 +4607,16 @@ axis	Both	Entrambi
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	questo non è un logo a colori piatti ({_1}% delle sue aree piene corrisponde a pochi colori piatti), quindi la modalità Logo piatto trasformerebbe i suoi sfumati in macchie: usa la modalità Colore
 @msg	`{what}` closes nothing	`{what}` non chiude nulla
 @msg	`{what}` closes something it didn't open	`{what}` chiude qualcosa che non ha aperto
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	una maschera che copre più livelli viene importata come gruppo di ritaglio in ogni livello che copre
 @msg	a graph's records don't end where they should: its art was read as it is	i record di un grafico non finiscono dove dovrebbero: la sua grafica è stata letta così com’è
 @msg	`{w}` takes no operands	`{w}` non accetta operandi
 @msg	a wraparound group is inside a compound path	un gruppo di testo attorno si trova in un tracciato composto
 @msg	a path has too many points	un tracciato ha troppi punti
 @msg	it ends inside a layer	terminano all'interno di un livello
+@msg	it ends inside a multi-layer mask	terminano all'interno di una maschera multilivello
+@msg	a multi-layer mask's operators are out of order	gli operatori di una maschera multilivello non sono in ordine
+@msg	a multi-layer mask needs one clipping path	una maschera multilivello richiede un solo tracciato di ritaglio
+@msg	a group crosses a multi-layer mask	un gruppo attraversa una maschera multilivello
 @msg	it has art outside its layers	contengono grafica al di fuori dei loro livelli
 @msg	it has more than {MAX_NODES} objects	contengono più di {MAX_NODES} oggetti
 @msg	it has no layers	non hanno livelli
