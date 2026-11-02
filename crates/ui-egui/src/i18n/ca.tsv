@@ -5562,6 +5562,9 @@ digits	Malayalam	Malaiàlam
 @msg	the program runs, deletes or renames a file, which the reader can't do	el programa executa, suprimeix o reanomena un fitxer, cosa que el lector no pot fer
 @msg	the PSD file has an unknown colour mode ({m})	el fitxer PSD té un mode de color desconegut ({m})
 @msg	the PSD file is cut short	el fitxer PSD està truncat
+@msg	the Pixar file is cut short	el fitxer Pixar està truncat
+@msg	the Pixar file's header is damaged	la capçalera del fitxer Pixar està malmesa
+@msg	the Pixar file's image data is damaged	les dades d’imatge del fitxer Pixar estan malmeses
 @msg	the PSD file's header is damaged	la capçalera del fitxer PSD està malmesa
 @msg	the PSD file's image data can't be read: {e}	no es poden llegir les dades d’imatge del fitxer PSD: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	les dades d’imatge del fitxer PSD utilitzen una compressió desconeguda ({m})

@@ -4262,6 +4262,9 @@ axis	Both	Ambos
 @msg	the PCX file is cut short	o arquivo PCX está incompleto
 @msg	the PCX file's header is damaged	o cabeçalho do arquivo PCX está danificado
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	arquivos PCX com pixels de {bits} bits em {planes} planos não podem ser lidos
+@msg	the Pixar file is cut short	o arquivo Pixar está incompleto
+@msg	the Pixar file's header is damaged	o cabeçalho do arquivo Pixar está danificado
+@msg	the Pixar file's image data is damaged	os dados de imagem do arquivo Pixar estão danificados
 @msg	the JPEG 2000 file can't be read	não é possível ler o arquivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	o arquivo JPEG 2000 contém um espaço de cores ou conteúdo JPX sem suporte
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a imagem PSD é grande demais para ser lida ({_1} × {_2} pixels)

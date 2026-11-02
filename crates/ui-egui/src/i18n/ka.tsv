@@ -4408,6 +4408,9 @@ font-technology	Variable	ცვლადი
 @msg	the PCX file is cut short	PCX ფაილი შეკვეცილია
 @msg	the PCX file's header is damaged	PCX ფაილის სათაური დაზიანებულია
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} სიბრტყეში {bits}-ბიტიანი პიქსელების მქონე PCX ფაილების წაკითხვა ვერ ხერხდება
+@msg	the Pixar file is cut short	Pixar ფაილი შეკვეცილია
+@msg	the Pixar file's header is damaged	Pixar ფაილის სათაური დაზიანებულია
+@msg	the Pixar file's image data is damaged	Pixar ფაილის გამოსახულების მონაცემები დაზიანებულია
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ფაილის წაკითხვა შეუძლებელია
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ფაილს აქვს მხარდაუჭერელი ფერთა სივრცე ან JPX შიგთავსი
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)

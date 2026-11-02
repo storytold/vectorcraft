@@ -1796,6 +1796,74 @@ proptest! {
     }
 }
 
+/// Pixar picture files, 3 × 2 pixels: RGBA dumped in 8 bits, RGB dumped in 12 bits, RGBA encoded
+/// with every packet kind and a block end, and gray in 2 × 1 tiles with a null tile.
+fn pxr_samples() -> Vec<(&'static str, Vec<u8>)> {
+    let pxr = |tile: (u16, u16), format: u16, storage: u16, tiles: &[Option<Vec<u8>>]| {
+        let mut f = vec![0x80, 0xe8, 0, 0];
+        f.resize(416, 0);
+        for v in [2, 3, tile.1, tile.0, format, storage, 16, 1, 0, 0] {
+            f.extend(u16::to_le_bytes(v));
+        }
+        f.resize(512, 0);
+        let mut at = (512 + tiles.len() * 8).next_multiple_of(16);
+        let mut data: Vec<u8> = vec![];
+        for t in tiles {
+            match t {
+                Some(bytes) => {
+                    f.extend((at as u32).to_le_bytes());
+                    f.extend((bytes.len() as u32).to_le_bytes());
+                    data.extend(bytes);
+                    at += bytes.len();
+                }
+                None => f.extend([0; 8]),
+            }
+        }
+        f.resize((512 + tiles.len() * 8).next_multiple_of(16), 0);
+        f.extend(data);
+        f
+    };
+    let rgba: Vec<u8> = (0..24u8).map(|i| i.wrapping_mul(41)).collect();
+    let wide: Vec<u8> = (0..18u16).flat_map(|i| (i * 300).to_le_bytes()).collect();
+    let mut packets = vec![0x01, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0x00, 0x20, 0, 9, 9, 9, 9];
+    packets.extend([0x00, 0x00]);
+    packets.resize(32, 0);
+    packets.extend([0x00, 0x30, 200, 1, 2, 3, 0x01, 0x40, 100, 0, 4, 5, 6, 0, 7, 8, 9]);
+    vec![
+        ("a.pxr", pxr((3, 2), 15, 2, &[Some(rgba)])),
+        ("b.pxr", pxr((3, 2), 14, 3, &[Some(wide)])),
+        ("c.pxr", pxr((3, 2), 15, 0, &[Some(packets)])),
+        ("d.pxr", pxr((2, 1), 8, 2, &[Some(vec![1, 2]), Some(vec![3, 4]), None, Some(vec![5, 6])])),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated Pixar picture files (header fields, the tile pointer table, samples and packets)
+    /// never crash placing, opening or pasting them.
+    #[test]
+    fn mutated_pxr_files_place_without_panics(which in 0usize..4, cut in 0usize..640, edits in prop::collection::vec((400usize..640, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = pxr_samples().swap_remove(which);
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at) {
+                *x = b;
+            }
+        }
+        bytes.truncate(cut.max(4));
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+            let _ = no_panic(s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+}
+
 // ---------- SVG saved with hidden layers and editing data ----------
 
 proptest! {
