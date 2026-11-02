@@ -1315,15 +1315,17 @@ impl SelectionTool {
                 return out;
             }
             // A Shift-drag from a highlighted object of the Global Edit selects it and moves it
-            // with the selection. `cx` still holds the selection without it, so the snap targets
-            // are gathered at the next drag event.
-            if let Some((_, top)) = exclude {
-                out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
-            }
+            // with the selection: its snap targets are gathered for the selection with it.
+            self.moving = Some(match exclude {
+                Some((_, top)) => {
+                    out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
+                    let mut selection = cx.selection.clone();
+                    selection.add(top);
+                    MoveSnap::new(&ToolContext { selection: &selection, ..*cx })
+                }
+                None => MoveSnap::new(cx),
+            });
             out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
-            self.moving = exclude.is_none().then(|| MoveSnap::new(cx));
-        } else if self.moving.is_none() {
-            self.moving = Some(MoveSnap::new(cx));
         }
         let mut d = move_delta(start, p, m.shift, cx.constrain_angle);
         let unsnapped = d;
