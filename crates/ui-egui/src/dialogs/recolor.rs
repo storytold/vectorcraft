@@ -15,7 +15,11 @@
 //! saturation wheel with a marker per new colour (drag one; with linked handles they all turn and
 //! scale together), a brightness slider, the harmony rules, and the color sliders with their mode
 //! menu, whose Global Adjust shows Saturation, Brightness, Temperature and Luminosity (-100% to
-//! 100%, 0% changes nothing), which change every new color at once. The preset menu sets up a 1, 2 or 3
+//! 100%, 0% changes nothing), which change every new color at once. The buttons beside the wheel
+//! show the new colors on the smooth wheel, on a segmented wheel (solid patches of 24 hues by 5
+//! saturations; its markers move as freely) or as color bars (one per new color, in row order: click
+//! one to select it for the sliders, drag one to move its row, which changes no color); the dialog
+//! opens on the smooth wheel. The preset menu sets up a 1, 2 or 3
 //! colour job or a library. Opened on a colour group (Edit or Apply Color Group), OK also rewrites
 //! the group with the new colours (renamed by `groupName`); without art only the group changes.
 //! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
@@ -28,8 +32,8 @@
 //! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
 //! a gray and Tint for a spot color; `global`: Global Adjust, on the Edit tab), `globalAdjust`
 //! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
-//! `globalAdjust` in every slider mode). Changing `colors`, a preserve flag or `limitTo` reduces
-//! the rows again.
+//! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
+//! unset: `smooth`). Changing `colors`, a preserve flag or `limitTo` reduces the rows again.
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -65,6 +69,9 @@ const CMD: &str = "recolor.apply";
 const CURRENT_W: f32 = 250.0;
 /// Diameter of the Edit tab's colour wheel.
 const WHEEL: f32 = 220.0;
+/// Height of the Edit tab's color bars area (the wheel with its Brightness slider), and of a bar.
+const BARS_H: f32 = WHEEL + 31.0;
+const BAR_H: f32 = 22.0;
 /// Height of the rows table, and of either tab (so switching tabs doesn't resize the dialog).
 const TABLE_H: f32 = 182.0;
 const TAB_H: f32 = 400.0;
@@ -971,7 +978,29 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
     });
     ui.add_space(8.0);
     let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
-    let w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, base.and_then(|b| active.iter().position(|&i| i == b)));
+    let marked = base.and_then(|b| active.iter().position(|&i| i == b));
+    let display = d.str("display");
+    let mut w = widgets::WheelResponse::default();
+    ui.horizontal(|ui| {
+        // The display buttons, beside the wheel so the tab keeps its height.
+        ui.vertical(|ui| {
+            for (id, icon, tip) in [
+                ("smooth", "circle", tl!("Show smooth color wheel")),
+                ("segmented", "dc-polar-grid", tl!("Show segmented color wheel")),
+                ("bars", "dc-list-view", tl!("Show color bars")),
+            ] {
+                let on = display == id || (id == "smooth" && !matches!(display.as_str(), "segmented" | "bars"));
+                if widgets::icon_button(ui, icon, tip, on, 24.0).clicked() {
+                    d.fields.insert("display".into(), json!(id));
+                }
+            }
+        });
+        ui.vertical(|ui| match display.as_str() {
+            "segmented" => w = widgets::segmented_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
+            "bars" => changed |= color_bars(ui, d, rows, &active, base),
+            _ => w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
+        });
+    });
     if let Some(k) = w.pressed {
         d.fields.insert("__sel".into(), json!([active[k]]));
     }
@@ -1021,6 +1050,85 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
         });
     });
     changed
+}
+
+/// The Edit tab's color bars: a solid bar per row of `active` with its new color, in row order, the
+/// base row's framed, scrolling past the wheel's height. A click on a bar selects its row (the
+/// sliders under it edit that row's new color); a drag moves the bar's row to where the line under
+/// the pointer shows, keeping every new color. Returns true when the rows moved.
+fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize], base: Option<usize>) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let mut rects: Vec<Rect> = Vec::with_capacity(active.len());
+    let (mut dragging, mut released, mut dropped) = (None, None, None);
+    // The area is given its full height first: in the row beside the display buttons a scroll area
+    // alone is only as tall as the room the row has.
+    let area = vec2(ui.available_width(), BARS_H);
+    ui.allocate_ui_with_layout(area, egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_min_size(area);
+        egui::ScrollArea::vertical().id_salt("recolor-bars").max_height(BARS_H).show(ui, |ui| {
+            ui.set_min_height(BARS_H);
+            ui.set_width(ui.available_width());
+            if active.is_empty() {
+                ui.add_space(8.0);
+                widgets::dim_label(ui, tl!("No colors to recolor (preserved colors are left out)."));
+            }
+            for (n, &i) in active.iter().enumerate() {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width() - 4.0, BAR_H), Sense::click_and_drag());
+                chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
+                if Some(i) == base {
+                    ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+                }
+                let name = format!("{} {}", tl!("Color"), i + 1);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &name));
+                if resp.clicked() || resp.drag_started() {
+                    d.fields.insert("__sel".into(), json!([i]));
+                }
+                if resp.dragged() {
+                    dragging = Some(n);
+                }
+                if resp.drag_stopped() {
+                    released = Some(n);
+                }
+                rects.push(r);
+                resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default());
+            }
+            // The place a dragged bar goes: before the first bar whose middle is below the pointer.
+            let at = ui.input(|i| i.pointer.latest_pos()).map(|p| rects.iter().filter(|r| r.center().y < p.y).count());
+            if let (Some(n), Some(to)) = (dragging, at)
+                && to != n
+                && to != n + 1
+            {
+                let y = rects.get(to).map_or_else(|| rects.last().map_or(0.0, |r| r.bottom() + 1.5), |r| r.top() - 1.5);
+                let x = rects.first().map_or(ui.max_rect().x_range(), |r| r.x_range());
+                ui.painter().hline(x, y, egui::Stroke::new(2.0, t.accent));
+            }
+            dropped = released.zip(at);
+        });
+    });
+    let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return false };
+    d.fields.insert("__sel".into(), json!([moved]));
+    // The slider values held are those of a row index that may now hold another row.
+    d.fields.remove(COMPS);
+    true
+}
+
+/// Move the row of the `from`th active row (of `active`, ascending row indexes) to before the
+/// `to`th, or after the last for `active.len()`; the rows between shift by one. Returns the row's
+/// new index, or `None` when it stays where it is.
+fn move_bar(rows: &mut [Value], active: &[usize], from: usize, to: usize) -> Option<usize> {
+    let &src = active.get(from)?;
+    if to == from || to == from + 1 || to > active.len() {
+        return None;
+    }
+    if to > from {
+        let dst = active[to - 1];
+        rows[src..=dst].rotate_left(1);
+        Some(dst)
+    } else {
+        let dst = active[to];
+        rows[dst..=src].rotate_right(1);
+        Some(dst)
+    }
 }
 
 /// Give the rows `active` the colours of `rule` from the base colour `b` of row `base` (the base row
