@@ -48,6 +48,15 @@ impl<'a> Reader<'a> {
         self.open(Kind::Mask, hidden)
     }
 
+    /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
+    fn layer_end(&mut self) -> Result<(), String> {
+        if self.graph.as_ref().is_some_and(|g| g.frames >= self.frames.len()) {
+            self.graph = None;
+            self.warn(GRAPH_UNENDED);
+        }
+        self.end_layer_in_mask()
+    }
+
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
         if self.blend_record.is_some() {
             self.end_blend();
@@ -148,14 +157,7 @@ impl<'a> Reader<'a> {
                     a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
                 }
             }
-            "LB" => {
-                // A graph started in this layer that hasn't ended doesn't go on past it.
-                if self.graph.as_ref().is_some_and(|g| g.frames >= self.frames.len()) {
-                    self.graph = None;
-                    self.warn(GRAPH_UNENDED);
-                }
-                self.end_layer_in_mask()?
-            }
+            "LB" => self.layer_end()?,
             // Paths.
             "m" | "l" | "L" | "c" | "C" | "v" | "V" | "y" | "Y" => self.path_op(w, &vals)?,
             "h" => close(&mut self.path),
