@@ -300,6 +300,176 @@ mod native {
         }
     }
 
+    /// A version-12 document holding an open curve with an 8 px stroke whose pressure curve (`LDeP`)
+    /// is made of `records`.
+    fn pressure_document(records: Vec<Vec<u8>>) -> Vec<u8> {
+        pressure_documents(records, 1)
+    }
+
+    /// [`pressure_document`] with `copies` curves, all linking the first one's fill and stroke.
+    fn pressure_documents(records: Vec<Vec<u8>>, copies: u32) -> Vec<u8> {
+        let mut style = Some((
+            solid(24, rgba(0.0, 0.0, 0.0, 1.0)),
+            F::Def(
+                27,
+                vec![tag(b"LDsc")],
+                vec![
+                    (tag(b"LDeL"), F::Def(28, vec![tag(b"LSty")], vec![(tag(b"Wght"), F::F64(8.0))])),
+                    (tag(b"LDSc"), F::Bool(false)),
+                    (tag(b"LDeP"), F::Obj(tag(b"CrvD"), vec![(tag(b"Data"), F::Pos(vec![F::U32(0), F::Bool(false), F::Records(18, records)]))])),
+                ],
+            ),
+        ));
+        let lines = (0..copies)
+            .map(|i| {
+                let (fill, line) = style.take().unwrap_or((F::Ref(24), F::Ref(27)));
+                F::Def(
+                    if i == 0 { 20 } else { 1000 + i },
+                    vec![tag(b"PCrv"), tag(b"VNod"), tag(b"Node")],
+                    vec![
+                        (
+                            tag(b"Crvs"),
+                            F::Obj(
+                                tag(b"PCvD"),
+                                vec![(
+                                    tag(b"Data"),
+                                    F::Pos(vec![
+                                        F::U8(0),
+                                        F::U32(1),
+                                        F::Bool(false),
+                                        F::Records(18, vec![node(0.0, 0.0, 1, 0), node(100.0, 0.0, 1, 0)]),
+                                    ]),
+                                )],
+                            ),
+                        ),
+                        (tag(b"LIFl"), F::Shared(vec![fill])),
+                        (tag(b"LILn"), F::Shared(vec![line])),
+                    ],
+                )
+            })
+            .collect();
+        let spread = F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"SprB"), F::F64s(vec![0.0, 0.0, 200.0, 100.0])), (tag(b"Chld"), F::Shared(lines))]);
+        let doc = synth::stream(&[
+            (tag(b"UVCn"), F::Obj(tag(b"UVCn"), vec![(tag(b"UPPI"), F::F64(72.0))])),
+            (tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))])),
+        ]);
+        synth::container(&[("doc.dat", &doc, Method::Zstd)], Some(&png()))
+    }
+
+    /// The width profile of the only stroked path in `d`.
+    fn stroke_of(d: &vectorcraft_doc::Document) -> vectorcraft_doc::appearance::StrokeLayer {
+        let mut found = None;
+        d.walk(|n| {
+            if let Some(AppearanceItem::Stroke(k)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+                found = Some(k.clone());
+            }
+        });
+        found.unwrap_or_else(|| panic!("no stroke in {:?}", d.layers))
+    }
+
+    #[test]
+    fn a_pressure_curve_becomes_the_strokes_width_profile() {
+        // Thin at the start, full width from half way: anchor (0, 0), handles (0.25, 0.5) and
+        // (0.5, 1), anchor (0.5, 1), then straight on to anchor (1, 1).
+        let curve = vec![node(0.0, 0.0, 4, 0), node(0.25, 0.5, 0, 1), node(0.5, 1.0, 0, 2), node(0.5, 1.0, 4, 0), node(1.0, 1.0, 4, 0)];
+        let r = load("pressure.af", &pressure_document(curve)).unwrap();
+        assert!(!r.preview_only);
+        assert!(r.warnings.iter().all(|w| !w.contains("pressure")), "{:?}", r.warnings);
+        let k = stroke_of(&r.doc);
+        assert_eq!(k.width, 8.0);
+        let profile = k.profile.unwrap_or_else(|| panic!("the pressure curve is read: {:?}", r.warnings));
+        assert_eq!(profile.points.first(), Some(&(0.0, 0.0, 0.0)));
+        assert_eq!(profile.points.last(), Some(&(1.0, 1.0, 1.0)));
+        assert!(profile.points.windows(2).all(|w| w[0].0 <= w[1].0), "positions go forward: {:?}", profile.points);
+        let (left, right) = profile.at(0.25);
+        assert!(left > 0.25 && left < 1.0 && left == right, "{left} {right}");
+        assert_eq!(profile.at(0.75), (1.0, 1.0));
+
+        // Widths past the full weight are held at it.
+        let huge = vec![node(0.0, 0.0, 4, 0), node(0.5, 1e300, 4, 0), node(1.0, 0.0, 4, 0)];
+        let profile = stroke_of(&load("huge.af", &pressure_document(huge)).unwrap().doc).profile.unwrap();
+        assert!(profile.points.iter().all(|p| (0.0..=1.0).contains(&p.1)), "{:?}", profile.points);
+        assert_eq!(profile.at(0.5), (1.0, 1.0));
+
+        // Each segment is sampled inside too: anchors at full width whose handles dip to nothing
+        // still narrow the stroke, with 256 segments.
+        let mut dips = vec![node(0.0, 1.0, 4, 0)];
+        for i in 1..=256 {
+            let (a, b) = (f64::from(i - 1) / 256.0, f64::from(i) / 256.0);
+            dips.extend([node(a + (b - a) / 3.0, 0.0, 0, 1), node(b - (b - a) / 3.0, 0.0, 0, 2), node(b, 1.0, 4, 0)]);
+        }
+        let profile = stroke_of(&load("dips.af", &pressure_document(dips)).unwrap().doc).profile.unwrap();
+        assert!(profile.points.iter().any(|p| p.1 < 0.5), "{:?}", profile.points);
+
+        // A curve of more than 256 segments is left out, with a warning.
+        let long: Vec<Vec<u8>> = (0..=300).map(|i| node(f64::from(i) / 300.0, f64::from(i % 2), 4, 0)).collect();
+        let r = load("long.af", &pressure_document(long)).unwrap();
+        assert!(stroke_of(&r.doc).profile.is_none());
+        assert!(r.warnings.iter().any(|w| w.contains("pressure curve can't be read")), "{:?}", r.warnings);
+
+        // A pressure curve at full width all along leaves the stroke plain.
+        let flat = vec![node(0.0, 1.0, 4, 0), node(1.0, 1.0, 4, 0)];
+        let r = load("flat.af", &pressure_document(flat)).unwrap();
+        assert!(stroke_of(&r.doc).profile.is_none());
+        assert!(r.warnings.iter().all(|w| !w.contains("pressure")), "{:?}", r.warnings);
+    }
+
+    #[test]
+    fn a_dip_between_the_samples_of_a_long_pressure_curve_is_kept() {
+        // 256 segments at full width, except one whose handles sit at widths 0 and 2: its width is
+        // 1 at its middle and end but 0.71875 a quarter of the way along.
+        let mut curve = vec![node(0.0, 1.0, 4, 0)];
+        for i in 1..=256 {
+            let (a, b) = (f64::from(i - 1) / 256.0, f64::from(i) / 256.0);
+            let (h1, h2) = if i == 100 { (0.0, 2.0) } else { (1.0, 1.0) };
+            curve.extend([node(a + (b - a) / 3.0, h1, 0, 1), node(b - (b - a) / 3.0, h2, 0, 2), node(b, 1.0, 4, 0)]);
+        }
+        let profile = stroke_of(&load("dip.af", &pressure_document(curve)).unwrap().doc).profile.unwrap_or_else(|| panic!("the dip is kept"));
+        let narrowest = profile.points.iter().map(|p| p.1).fold(1.0, f64::min);
+        assert!((narrowest - 0.71).abs() < 0.02, "{narrowest}");
+    }
+
+    #[test]
+    fn a_pressure_curve_just_under_full_width_is_kept() {
+        let curve = vec![node(0.0, 0.9995, 4, 0), node(1.0, 0.9995, 4, 0)];
+        let profile = stroke_of(&load("near.af", &pressure_document(curve)).unwrap().doc).profile.unwrap_or_else(|| panic!("the curve is kept"));
+        assert_eq!(profile.at(0.5), (0.9995, 0.9995));
+    }
+
+    #[test]
+    fn pressure_curves_stay_within_the_points_of_one_document() {
+        // One 256-segment curve linked from 2100 strokes: more than a million points in all.
+        let mut curve = vec![node(0.0, 1.0, 4, 0)];
+        for i in 1..=256 {
+            let (a, b) = (f64::from(i - 1) / 256.0, f64::from(i) / 256.0);
+            curve.extend([node(a + (b - a) / 3.0, 0.0, 0, 1), node(b - (b - a) / 3.0, 0.0, 0, 2), node(b, 1.0, 4, 0)]);
+        }
+        let r = load("many.af", &pressure_documents(curve, 2100)).unwrap();
+        let mut profiles = Vec::new();
+        r.doc.walk(|n| {
+            if let Some(AppearanceItem::Stroke(k)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+                profiles.push(k.profile.as_ref().map_or(0, |p| p.points.len()));
+            }
+        });
+        assert_eq!(profiles.len(), 2100);
+        assert!(profiles.iter().sum::<usize>() <= 1 << 20, "{}", profiles.iter().sum::<usize>());
+        assert!(profiles.iter().filter(|n| **n > 0).count() > 1000);
+        assert!(profiles.contains(&0));
+        assert!(r.warnings.iter().any(|w| w.contains("pressure points one document may hold")), "{:?}", r.warnings);
+
+        // Curves at full width count too, so linking one from many strokes can't repeat its work
+        // without bound.
+        let flat: Vec<Vec<u8>> = (0..=768).map(|i| node(f64::from(i) / 768.0, 1.0, if i % 3 == 0 { 4 } else { 0 }, (i % 3) as u8)).collect();
+        let r = load("flat-many.af", &pressure_documents(flat, 2100)).unwrap();
+        assert!(r.warnings.iter().any(|w| w.contains("pressure points one document may hold")), "{:?}", r.warnings);
+
+        // So do curves that can't be read: 768 segments, more than a curve may have.
+        let long: Vec<Vec<u8>> = (0..=768).map(|i| node(f64::from(i) / 768.0, f64::from(i % 2), 4, 0)).collect();
+        let r = load("long-many.af", &pressure_documents(long, 2100)).unwrap();
+        assert!(r.warnings.iter().any(|w| w.contains("pressure curve can't be read")), "{:?}", r.warnings);
+        assert!(r.warnings.iter().any(|w| w.contains("pressure points one document may hold")), "{:?}", r.warnings);
+    }
+
     #[test]
     fn native_documents_save_reopen_export_place_and_template() {
         let bytes = document(Method::Zstd);
