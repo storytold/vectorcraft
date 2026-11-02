@@ -36,7 +36,7 @@ mod doc;
 pub(crate) mod document;
 pub(crate) mod docx;
 mod rtf;
-mod text;
+pub(super) mod text;
 
 use std::sync::Arc;
 
