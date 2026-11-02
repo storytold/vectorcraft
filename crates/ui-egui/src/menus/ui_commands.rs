@@ -706,7 +706,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.charStyleOptions.resetPanel",
         "Reset Panel",
         "",
-        "{} clear the settings of the section shown, Basic Character Formats or Advanced Character Formats, in the open Character Style Options or New Character Style dialog; available only on those sections",
+        "{} clear the settings of the section shown, Basic Character Formats, Advanced Character Formats, Character Color or OpenType Features, in the open Character Style Options or New Character Style dialog; available only on those sections",
     ),
     (
         "ui.newCharStyle",
