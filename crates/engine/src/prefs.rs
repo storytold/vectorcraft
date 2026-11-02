@@ -40,6 +40,8 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// While Zoom with Mouse Wheel is off, Cmd/Ctrl-wheel scrolls sideways instead of zooming.
+    pub ctrl_wheel_scrolls_sideways: bool,
     /// A horizontal drag on a numeric field or its label steps its value (#400).
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
@@ -340,6 +342,7 @@ impl Default for Prefs {
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            ctrl_wheel_scrolls_sideways: false,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             paste_offset: 10.0,

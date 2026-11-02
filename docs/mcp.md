@@ -3195,6 +3195,10 @@ desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps;
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.
 
+`ctrlWheelScrollsSideways` (off by default): on, Cmd/Ctrl-wheel scrolls the canvas sideways instead of zooming while
+`zoomWithMouseWheel` is off. Alt + Cmd/Ctrl-wheel and a pinch on a Mac trackpad, on a touch screen or in the web build
+still zoom about the pointer. The control channel's `ui.wheel` with `cmd: true` turns the wheel with Cmd/Ctrl held.
+
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
 `file.new` gives a new document that grid, and `document.open`, `file.newFromTemplate` and `file.revert` give it to

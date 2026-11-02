@@ -3519,6 +3519,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Seçimi Yakınlaştır
 	Zoom Tool	Yakınlaştırma Aracı
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + Tekerlek ile Yatay Kaydırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
 @plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı

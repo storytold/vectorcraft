@@ -3320,6 +3320,7 @@ mark-style	Japanese	日本式
 	Zoom Tool	ズームツール
 	Zoom to Selection	選択範囲にズーム
 	Zoom with Mouse Wheel	マウスホイールでズーム
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + ホイールで横スクロール
 	Scrub Numeric Fields by Dragging	ドラッグで数値フィールドを調整
 	[Default] is protected: New… starts an editable copy.	[Default] は変更できません。「新規…」で編集できる複製を作ります。
 	[Unnamed]	[名称未設定]

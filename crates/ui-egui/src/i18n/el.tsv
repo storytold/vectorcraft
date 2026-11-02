@@ -3946,6 +3946,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Zig Zag…	Ζιγκ-ζαγκ…
 	Zoom to Selection	Ζουμ στην επιλογή
 	Zoom with Mouse Wheel	Ζουμ με τον τροχό του ποντικιού
+	Scroll Sideways with Cmd/Ctrl + Wheel	Οριζόντια κύλιση με Cmd/Ctrl + τροχό του ποντικιού
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} αρχείο στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;
 @plural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία

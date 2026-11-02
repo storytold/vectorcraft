@@ -3196,6 +3196,7 @@ theme	Appearance	იერსახე
 	Yards	იარდები
 	Zoom to Selection	მონიშნულის მასშტაბირება
 	Zoom with Mouse Wheel	მაუსის ბორბლით მასშტაბირება
+	Scroll Sideways with Cmd/Ctrl + Wheel	ჰორიზონტალური გადაადგილება Cmd/Ctrl + ბორბლით
 	Scrub Numeric Fields by Dragging	რიცხვითი ველების შეცვლა გადათრევით
 	Linux Display Server	Linux-ის ეკრანის სერვერი
 	Print Preview	ნახვა ამობეჭდვამდე

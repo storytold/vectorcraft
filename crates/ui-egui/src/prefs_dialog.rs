@@ -278,6 +278,11 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
         first = false;
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         match sp.kind {
+            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+            // is off: dimmed while it is on.
+            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
+                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             // Units › Numbers Without Units Are Points only tells points from picas: dimmed
             // unless a unit is Picas.
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {

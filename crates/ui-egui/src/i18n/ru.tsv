@@ -3739,6 +3739,7 @@ digits	Malayalam	Малаялам
 	Zoom to Selection	Масштаб по выделению
 	Zoom Tool	Инструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабировать колесом мыши
+	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручивать по горизонтали колесом с Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}

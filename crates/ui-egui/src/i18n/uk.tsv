@@ -3737,6 +3737,7 @@ effect	Points	Точки
 	Zoom to Selection	Масштаб виділення
 	Zoom Tool	Інструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабувати колесом миші
+	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручувати по горизонталі колесом із Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}

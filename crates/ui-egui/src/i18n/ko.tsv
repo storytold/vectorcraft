@@ -3309,6 +3309,7 @@ mark-style	Japanese	일본식
 	Zoom Tool	확대/축소 도구
 	Zoom to Selection	선택 항목에 맞춰 확대/축소
 	Zoom with Mouse Wheel	마우스 휠로 확대/축소
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + 휠로 가로 스크롤
 	Scrub Numeric Fields by Dragging	드래그로 숫자 필드 조절
 	[Default] is protected: New… starts an editable copy.	[Default]는 보호되어 있습니다. 새로 만들기…를 누르면 편집 가능한 복사본이 만들어집니다.
 	[Unnamed]	[이름 없음]

@@ -3572,6 +3572,7 @@ theme	Appearance	Ulkoasu
 	Yards	Jaardit
 	Zoom to Selection	Zoomaa valintaan
 	Zoom with Mouse Wheel	Zoomaa hiiren rullalla
+	Scroll Sideways with Cmd/Ctrl + Wheel	Vieritä vaakasuunnassa Cmd/Ctrl + hiiren rullalla
 	Scrub Numeric Fields by Dragging	Muuta numerokenttiä vetämällä
 	Linux Display Server	Linuxin näyttöpalvelin
 	Print Preview	Tulostuksen esikatselu

@@ -140,6 +140,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scaleCorners", "General", "Options", "Scale Corners", bool),
     p!("scaleStrokes", "General", "Options", "Scale Strokes & Effects", bool),
     p!("zoomWithMouseWheel", "General", "Options", "Zoom with Mouse Wheel", bool),
+    p!("ctrlWheelScrollsSideways", "General", "Options", "Scroll Sideways with Cmd/Ctrl + Wheel", bool),
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     // Selection & Anchor Display

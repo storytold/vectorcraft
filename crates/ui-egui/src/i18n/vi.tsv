@@ -4100,6 +4100,7 @@ mark-style	Japanese	Kiểu Nhật
 	Zoom to Selection	Thu phóng đến vùng chọn
 	Zoom Tool	Công cụ thu phóng
 	Zoom with Mouse Wheel	Thu phóng bằng con lăn chuột
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cuộn ngang bằng Cmd/Ctrl + con lăn
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tệp trong {folder} {note}. Hiện thư mục gói?
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} thư mục hoặc tệp không thể đọc được
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {n} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn

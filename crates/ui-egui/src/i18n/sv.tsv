@@ -3630,6 +3630,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Zooma till markering
 	Zoom Tool	Zoomverktyg
 	Zoom with Mouse Wheel	Zooma med mushjulet
+	Scroll Sideways with Cmd/Ctrl + Wheel	Rulla horisontellt med Cmd/Ctrl + mushjulet
 	Scrub Numeric Fields by Dragging	Ändra numeriska fält genom att dra
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fil i {folder} {note}. Visa paketmappen?|{n} filer i {folder} {note}. Visa paketmappen?
 @plural	{n} linked file not found|{n} linked files not found	{n} länkad fil hittades inte|{n} länkade filer hittades inte

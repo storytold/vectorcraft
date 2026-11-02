@@ -3584,6 +3584,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Zoom to Selection	缩放到所选对象
 	Zoom Tool	缩放工具
 	Zoom with Mouse Wheel	使用鼠标滚轮缩放
+	Scroll Sideways with Cmd/Ctrl + Wheel	使用 Cmd/Ctrl + 滚轮水平滚动
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 个文件{note}。要显示打包文件夹吗？
 @plural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件

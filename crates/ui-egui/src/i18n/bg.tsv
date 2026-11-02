@@ -3630,6 +3630,7 @@ digits	Malayalam	Малаялам
 	Zoom to Selection	Приближаване до селекцията
 	Zoom Tool	Инструмент „Мащаб“
 	Zoom with Mouse Wheel	Мащабиране с колелцето на мишката
+	Scroll Sideways with Cmd/Ctrl + Wheel	Хоризонтално превъртане с Cmd/Ctrl + колелцето
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
 @plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени

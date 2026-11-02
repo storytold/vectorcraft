@@ -3700,6 +3700,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Zoom sur la sélection
 	Zoom Tool	Outil Zoom
 	Zoom with Mouse Wheel	Zoom avec la molette de la souris
+	Scroll Sideways with Cmd/Ctrl + Wheel	Défilement horizontal avec Cmd/Ctrl + molette
 	Scrub Numeric Fields by Dragging	Modifier les champs numériques en faisant glisser
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fichier dans {folder} {note}. Afficher le dossier de l’assemblage ?|{n} fichiers dans {folder} {note}. Afficher le dossier de l’assemblage ?
 @plural	{n} linked file not found|{n} linked files not found	{n} fichier lié introuvable|{n} fichiers liés introuvables
