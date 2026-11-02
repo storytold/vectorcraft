@@ -1003,7 +1003,8 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
         changed |= sliders(app, ui, d, rows);
     }
     // The new colours: click one to make it the base colour.
-    let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
+    // The chips' area is placed one item spacing below what is above it, so the spacing is part of the tab's height.
+    let min_height = (TAB_H - (ui.cursor().top() - top) - ui.spacing().item_spacing.y).max(0.0);
     super::modal::scrolled_rows(ui, "recolor-edit-colors", |ui| {
         // Keep the usual tab height when it fits; the empty space scrolls with the chips.
         ui.set_min_height(min_height);
