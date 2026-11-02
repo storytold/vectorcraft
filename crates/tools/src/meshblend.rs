@@ -161,6 +161,11 @@ impl Tool for BlendTool {
     fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.deactivate(cx)
     }
+    /// An edit, Undo or Redo made outside the tool drops the object picked first and stops adding to
+    /// the blend just made, so the next click picks a new first object.
+    fn history_moved(&mut self) {
+        (self.first, self.chained) = (None, false);
+    }
 }
 
 #[derive(Default)]

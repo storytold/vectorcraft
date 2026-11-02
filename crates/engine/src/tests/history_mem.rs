@@ -179,3 +179,44 @@ fn redo_during_an_interaction_keeps_the_history_and_the_document_in_step() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(first_x(&s), start);
 }
+
+/// `History::step` changes with every new step, Undo and Redo, also when an undo and a new edit
+/// leave as many steps as before, and with an edit merged into an undo group's step. It stays the
+/// same for a selection change.
+#[test]
+fn the_history_step_changes_with_each_step_undo_and_redo() {
+    let mut s = session_with_rects(2);
+    let step = |s: &Session| s.doc().unwrap().history.step();
+    let start = step(&s);
+    assert!(start.0 != 0 && start.1 == 0, "the Add step, and nothing to redo: {start:?}");
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    let moved = step(&s);
+    assert!(moved.0 != start.0 && moved.1 == 0, "{moved:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let undone = step(&s);
+    assert!(undone.0 == start.0 && undone.1 != 0, "{undone:?}");
+    s.execute("edit.redo", &json!({})).unwrap();
+    let redone = step(&s);
+    assert!(![start, moved, undone].contains(&redone) && redone.1 == 0, "{redone:?}");
+    // An undo and a new edit: as many undo steps as after the move, at a different step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("object.move", &json!({"dx": 0, "dy": 1})).unwrap();
+    let other = step(&s);
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert!(![start, moved, undone, redone].contains(&other), "{other:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), other, "a selection change is no step");
+    s.execute("select.all", &json!({})).unwrap();
+    s.begin_undo_group();
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    let (grouped, depth) = (step(&s), s.doc().unwrap().history.undo.len());
+    assert_ne!(grouped, other);
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth, "the second move is merged into the first");
+    let merged = step(&s);
+    assert!(merged != grouped && merged.1 == 0, "a merged edit moves the step: {merged:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), merged);
+    s.end_undo_group(false);
+}

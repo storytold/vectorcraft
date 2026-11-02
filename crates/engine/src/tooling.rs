@@ -348,6 +348,25 @@ impl Session {
         self.tool_panic.take().map_or(Ok(()), Err)
     }
 
+    /// The active document (its uid) and its [`crate::History::step`].
+    fn history_step(&self) -> Option<(u64, (u64, u64))> {
+        self.active().map(|d| (d.uid, d.history.step()))
+    }
+
+    /// Tell the active tool when the history moved, or another document became active, since it
+    /// last handled a pointer event or was last told ([`vectorcraft_tools::Tool::history_moved`]).
+    /// A lent selection tool is not told.
+    fn tell_tool_history_moved(&mut self) {
+        if self.lender.is_some() {
+            return;
+        }
+        let now = self.history_step();
+        if self.tool_step.is_some_and(|seen| Some(seen) != now) {
+            self.tool.history_moved();
+        }
+        self.tool_step = now;
+    }
+
     /// Feed a pointer event to the active tool. Returns requests for the UI.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
         self.last_view = view;
@@ -361,7 +380,9 @@ impl Session {
             return r;
         }
         self.leave_draw_inside(ev, view)?;
+        self.tell_tool_history_moved();
         let ev = &self.lend_selection_tool(ev);
+        let lent = self.lender.is_some();
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         let r = self.take_tool_panic().and_then(|()| {
             // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
@@ -370,6 +391,11 @@ impl Session {
             }
             self.apply_actions(acts)
         });
+        // The tool's own edits do not move the history for it. A selection tool that Cmd lends
+        // edits for the lender, which hears of the edit at its next event.
+        if !lent {
+            self.tool_step = self.history_step();
+        }
         if ev.kind == PointerKind::Up {
             self.give_back_tool(view)?;
         }
@@ -578,6 +604,8 @@ impl Session {
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
+        // The Blend tool's first pick is not marked after an edit that dropped it.
+        self.tell_tool_history_moved();
         let mut v = self.with_tool_cx(view, |t, cx| t.overlays(cx));
         // The Type tools draw the ports of selected type themselves.
         if !matches!(self.tool.id(), "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath") {
