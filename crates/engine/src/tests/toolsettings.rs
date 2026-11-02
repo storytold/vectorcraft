@@ -90,6 +90,25 @@ fn a_gesture_keeps_what_it_changed_and_a_document_switch_keeps_options() {
     assert_eq!(s.tool_options()["segments"], json!(14));
 }
 
+/// Escape on a grid drag puts back the dividers its arrows changed, in the saved options too,
+/// while an option set during the drag stays.
+#[test]
+fn escape_on_a_drag_saves_the_options_it_put_back() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    select(&mut s, "rectangularGrid");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    // Saves every option, the rows the arrow changed included.
+    s.set_tool_option("columns", &json!(8));
+    assert_eq!(s.prefs.tool_settings["rectangularGrid"]["rows"], json!(6));
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    let saved = &s.prefs.tool_settings["rectangularGrid"];
+    assert_eq!((saved["rows"].clone(), saved["columns"].clone()), (json!(5), json!(8)));
+}
+
 #[test]
 fn options_are_saved_with_the_preferences() {
     let mut s = session();

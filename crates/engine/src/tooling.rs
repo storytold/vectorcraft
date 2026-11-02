@@ -467,6 +467,11 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
+        // A key that cancels a gesture may put back options the gesture changed (Escape on an
+        // arc, spiral or grid drag): keep them.
+        if acts.contains(&Action::Cancel) {
+            self.keep_tool_settings();
+        }
         self.apply_actions(acts)
     }
 
