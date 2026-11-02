@@ -98,6 +98,9 @@ pub(super) struct ArtStyle {
     /// Shadow on the object: what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
+    /// It would be [`Self::simple`] but for a variable-width stroke: an object whose drawn look
+    /// is empty takes it with its profile.
+    pub uneven: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -652,14 +655,16 @@ fn style(filters: &[Filter]) -> ArtStyle {
     }
     st.plain = b.plain;
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
-    st.simple = st.plain
+    let simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
-        // A variable-width stroke curves between its width points, and `WidthProfile` is straight
-        // between them: the drawn look holds the outline as drawn.
-        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { profile: None, .. } | StyleItem::Gradient { .. }))
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
         && st.effects.iter().all(|e| matches!(e.id.as_str(), "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow"));
+    // A variable-width stroke curves between its width points, and `WidthProfile` is straight
+    // between them: the drawn look holds the outline as drawn.
+    let even = st.items.iter().all(|i| !matches!(i, StyleItem::Stroke { profile: Some(_), .. }));
+    (st.simple, st.uneven) = (simple && even, simple && !even);
     st
 }
 

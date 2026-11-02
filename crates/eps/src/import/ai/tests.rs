@@ -1917,6 +1917,24 @@ fn a_variable_width_stroke_comes_in_as_its_drawn_outline() {
 }
 
 #[test]
+fn a_variable_width_stroke_with_an_empty_look_comes_in_as_itself() {
+    // GUARDS: with no outline in its look to keep, the object was dropped.
+    let hidden_line = "0 5 m\n10 5 L\n".replace('\n', "\n%_");
+    let hidden_fill = format!("{}f\n", rect_path(0.0, 3.0, 10.0, 7.0)).replace('\n', "\n%_");
+    let lens = width_profile_style(&[(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
+    // An empty look, and ones whose group or compound path holds only a copy read from `%_` lines.
+    for look in ["u\nU\n".to_string(), format!("u\nu\n%_{hidden_fill}\nU\nU\n"), format!("u\n*u\n%_{hidden_fill}\n*U\nU\n")] {
+        let art_ = format!("{look}%_{hidden_line}S\n1 (Tapered) XW\n");
+        let r = read_ok(&format!("{lens}{}", layer(&art_)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{look:?}: {a:#?}") };
+        assert!(matches!(object.kind, NodeKind::Path { .. }), "{look:?}: {object:#?}");
+        assert_eq!(object.appearance.stroke().map(|s| (s.width, s.profile.is_some())), Some((4.0, true)), "{look:?}: {object:#?}");
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{look:?}: {:?}", r.warnings);
+    }
+}
+
+#[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
     let r = read_ok(&format!("%%BeginProlog\n%\n%%EndProlog\n{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)))));
