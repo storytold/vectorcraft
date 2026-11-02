@@ -42,6 +42,7 @@ pub(crate) use entry::{RgbInCmyk, leaving_out_undecodable};
 pub use entry::{export, export_with_report, page_areas};
 #[cfg(test)]
 use exporter::{MAX_COORD, writable, xf};
+pub use exporter::{MIN_RASTER_PPI, pdf_raster_ppi};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
 pub(crate) use writer::{Sheet, Writer};
@@ -117,6 +118,14 @@ pub(crate) struct Exporter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raster_ppi_has_a_150_floor() {
+        assert_eq!(pdf_raster_ppi(72.0), MIN_RASTER_PPI);
+        assert_eq!(pdf_raster_ppi(f64::NAN), MIN_RASTER_PPI);
+        // A higher document ppi still wins.
+        assert_eq!(pdf_raster_ppi(300.0), 300.0);
+    }
 
     #[test]
     fn writable_bounds_values_the_transform_and_values_through_it() {

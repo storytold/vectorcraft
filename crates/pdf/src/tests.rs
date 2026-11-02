@@ -1147,11 +1147,11 @@ fn dithered_gradient_fills_export_as_images_and_strokes_as_shadings() {
     let grad = |dither| Paint::Gradient(Box::new(GradientPaint::new(Gradient { dither, ..Default::default() })));
     let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
     let mut d = doc(200.0, 100.0);
-    d.raster_effects_ppi = 144.0;
+    d.raster_effects_ppi = 300.0;
     add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(grad(true), grad(true), 4.0)));
     let pdf = uncompressed(&d).replace(' ', "");
     assert!(pdf.contains("/Subtype/Image"), "the fill is an image");
-    assert!(pdf.contains("/Width200") && pdf.contains("/Height100"), "two pixels a point at 144 ppi");
+    assert!(pdf.contains("/Width417") && pdf.contains("/Height209"), "300 ppi, above the 150 ppi floor");
     assert!(pdf.contains("/ShadingType2"), "the stroke keeps its shading");
     let mut plain = doc(200.0, 100.0);
     add(&mut plain, Node::path(NodeId(0), shape, Appearance::basic(grad(false), Paint::None, 0.0)));
@@ -1171,11 +1171,11 @@ fn perceptual_gradients_export_as_images_and_classic_ones_as_shadings() {
     let p = grad(vectorcraft_color::GradientMethod::Perceptual);
     let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
     let mut d = doc(200.0, 100.0);
-    d.raster_effects_ppi = 144.0;
+    d.raster_effects_ppi = 300.0;
     add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(p.clone(), p.clone(), 4.0)));
     let pdf = uncompressed(&d).replace(' ', "");
     assert_eq!(pdf.matches("/Subtype/Image").count(), 2, "the fill and the stroke are images");
-    assert!(pdf.contains("/Width200") && pdf.contains("/Height100"), "two pixels a point at 144 ppi");
+    assert!(pdf.contains("/Width417") && pdf.contains("/Height209"), "300 ppi, above the 150 ppi floor");
     assert!(!pdf.contains("/ShadingType2"), "no shading");
     let mut along = Appearance::basic(Paint::None, p, 4.0);
     if let Some(AppearanceItem::Stroke(st)) = along.items.get_mut(1) {

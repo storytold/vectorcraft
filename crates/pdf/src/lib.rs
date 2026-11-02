@@ -72,7 +72,7 @@ mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{export, export_with_report, page_areas};
+pub use export::{MIN_RASTER_PPI, export, export_with_report, page_areas, pdf_raster_ppi};
 pub use file_info::{FileInfo, file_info};
 pub use import::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,

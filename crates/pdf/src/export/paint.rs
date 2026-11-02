@@ -1,4 +1,4 @@
-use super::exporter::{MAX_FIELD_PX, MAX_GRADIENT_PX, MAX_PATTERN_DEPTH, color, ctm, in_range, norm, q, to_path, writable, xf};
+use super::exporter::{MAX_FIELD_PX, MAX_GRADIENT_PX, MAX_PATTERN_DEPTH, color, ctm, in_range, norm, pdf_raster_ppi, q, to_path, writable, xf};
 use super::{
     Affine, Color, Exporter, GradientKind, LinearGradient, Paint, RadialGradient, Rect, SepColor, SeparationColorant, SeparationSpace, Shape, Size,
     SpreadMethod, Stop, Surface, Vec2, cmyk, krilla, rgb,
@@ -414,10 +414,11 @@ impl Exporter<'_> {
     }
 
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
-    /// raster effects resolution where it is drawn (`area` as the current transform sizes it, so
-    /// scaled type gets its pixels too): a freeform gradient's colour field (at most
-    /// [`MAX_FIELD_PX`] a side), or a linear or radial gradient (at most [`MAX_GRADIENT_PX`] a side),
-    /// with dither's noise when it paints a fill (`fill`).
+    /// raster effects resolution (with a [`MIN_RASTER_PPI`] floor) where it is drawn (`area` as the
+    /// current transform sizes it, so scaled type gets its pixels too): a freeform gradient's colour
+    /// field (at most [`MAX_FIELD_PX`] a side), or a linear or radial gradient (at most
+    /// [`MAX_GRADIENT_PX`] a side), with dither's noise when it paints a fill (`fill`). The side
+    /// limits take precedence over the requested resolution.
     pub(super) fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect, fill: bool) {
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
@@ -432,7 +433,7 @@ impl Exporter<'_> {
         self.warn_spot_image(g);
         let freeform = g.gradient.kind == GradientKind::Freeform;
         let max = if freeform { MAX_FIELD_PX } else { MAX_GRADIENT_PX };
-        let k = (self.doc.raster_effects_ppi / 72.0).min(max / long);
+        let k = (pdf_raster_ppi(self.doc.raster_effects_ppi) / 72.0).min(max / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, max) as u16;
         let (cols, rows) = (along(w), along(h));
         let rgba: Vec<u8> = if freeform {
