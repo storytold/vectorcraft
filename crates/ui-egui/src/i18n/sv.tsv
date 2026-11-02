@@ -4465,6 +4465,7 @@ axis	Both	Båda
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	det här är ingen logotyp i platta färger ({_1} % av dess enfärgade ytor matchar några få platta färger), så läget Platt logotyp skulle göra om dess gradienter till fläckar: använd läget Färg i stället
 @msg	`{what}` closes nothing	`{what}` stänger ingenting
 @msg	`{what}` closes something it didn't open	`{what}` stänger något som den inte öppnade
+@msg	a graph's records don't end where they should: its art was read as it is	ett diagrams poster slutar inte där de ska: dess grafik lästes som den är
 @msg	`{w}` takes no operands	`{w}` tar inga operander
 @msg	a wraparound group is inside a compound path	en textombrytningsgrupp ligger inuti en sammansatt bana
 @msg	a path has too many points	en bana har för många punkter

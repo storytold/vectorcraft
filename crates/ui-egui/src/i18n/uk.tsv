@@ -4591,6 +4591,7 @@ axis	Both	Обидві
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	це не логотип із плоских кольорів ({_1}% його суцільних областей збігається з кількома плоскими кольорами), тому режим «Плоский логотип» перетворив би градієнти на плями: використовуйте режим «Колір»
 @msg	`{what}` closes nothing	`{what}` нічого не закриває
 @msg	`{what}` closes something it didn't open	`{what}` закриває те, що не відкривав
+@msg	a graph's records don't end where they should: its art was read as it is	записи діаграми не закінчуються там, де мають: її графіку прочитано як є
 @msg	`{w}` takes no operands	`{w}` не приймає операндів
 @msg	a wraparound group is inside a compound path	група обтікання текстом розташована всередині складеного контуру
 @msg	a path has too many points	у контурі занадто багато точок

@@ -4774,6 +4774,7 @@ imageTrace	Outline	Ääriviiva
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	tämä ei ole tasavärinen logo ({_1} % sen yhtenäisistä alueista vastaa muutamaa tasaväriä), joten Tasavärilogo-tila muuttaisi sen liukuvärit laikuiksi: käytä sen sijaan Väri-tilaa
 @msg	`{what}` closes nothing	`{what}` ei sulje mitään
 @msg	`{what}` closes something it didn't open	`{what}` sulkee jotain, mitä se ei avannut
+@msg	a graph's records don't end where they should: its art was read as it is	kaavion tietueet eivät pääty siihen, mihin niiden pitäisi: sen piirros luettiin sellaisenaan
 @msg	`{w}` takes no operands	`{w}` ei ota operandeja
 @msg	a wraparound group is inside a compound path	tekstin rivitysryhmä on yhdistelmäpolun sisällä
 @msg	a path has too many points	polulla on liian monta pistettä

@@ -4557,6 +4557,7 @@ imageTrace	Outline	Körvonal
 @msg	`{to}` is not an available name	ez a név nem használható: `{to}`
 @msg	`{what}` closes nothing	`{what}` semmit sem zár le
 @msg	`{what}` closes something it didn't open	`{what}` olyat zár le, amit nem nyitott meg
+@msg	a graph's records don't end where they should: its art was read as it is	egy grafikon rekordjai nem ott érnek véget, ahol kellene: a grafikája úgy lett beolvasva, ahogy van
 @msg	`{w}` takes no operands	`{w}` nem fogad operandusokat
 @msg	a wraparound group is inside a compound path	egy szövegkörbefuttatási csoport összetett útvonalon belül van
 @msg	a bitmap is empty	egy bitkép üres
