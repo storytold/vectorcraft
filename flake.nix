@@ -86,6 +86,7 @@
           pname = "vectorcraft";
           version = version;
           src = ./.;
+          cargoBuildFlags = [ "-p" "vectorcraft" ];
           cargoLock = {
             lockFile = ./Cargo.lock;
             # Used purely because some libs don't have a hash in Cargo.lock
@@ -117,6 +118,16 @@
           env = pkgs.lib.optionalAttrs (craft-fonts != null) {
             CRAFT_FONTS_DIR = "${craft-fonts}";
           };
+          postInstall = if craft-fonts != null then ''
+            mkdir -p "$out/share/doc/vectorcraft"
+            shopt -s nullglob
+            for ofl in ${craft-fonts}/fonts/*/OFL.txt; do
+              [[ -f "$ofl" ]] || continue
+              family=$(basename "$(dirname "$ofl")")
+              install -Dm644 "$ofl" "$out/share/doc/vectorcraft/OFL-$family.txt"
+            done
+            shopt -u nullglob
+          '' else "";
           doCheck = false;
           meta = {
             license = with pkgs.lib.licenses; [ mit asl20 ofl ];
