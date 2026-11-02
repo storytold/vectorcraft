@@ -11,7 +11,7 @@ use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::select::{selectable_ids, walk_selectable};
+use super::select::{is_selectable, selectable_ids, walk_selectable};
 use super::{
     CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
     str_param,
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Link Block Series",
             ["Select", "Same"],
             None,
-            "{} select every frame of the threads of the selected type objects (and of the visible, unlocked type inside selected groups); type in no thread selects itself; frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer are left out → {count}",
+            "{} select every frame of the threads of the selected type objects (and of the type inside selected groups); type in no thread selects itself; type and frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer neither count as selected nor are selected → {count}",
             has_text_selection,
             same_link_block_series
         ),
@@ -322,8 +322,9 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
     finish_same(s, cmd, ids)
 }
 
-/// The type objects among the selected objects and inside them, in selection order, leaving out
-/// every hidden or locked object with what it holds.
+/// The type objects among the selected objects and inside them, in selection order, keeping only
+/// those [`walk_selectable`] visits: none that is hidden, locked, on a hidden, locked or template
+/// layer, or outside the isolated group.
 fn selected_text(s: &Session) -> Vec<NodeId> {
     fn inside(n: &Node, out: &mut Vec<NodeId>) {
         if !n.visible || n.locked {
@@ -338,8 +339,12 @@ fn selected_text(s: &Session) -> Vec<NodeId> {
     }
     let Some(st) = s.active() else { return vec![] };
     let mut out = vec![];
-    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        inside(n, &mut out);
+    for id in &st.selection.objects {
+        if is_selectable(&st.doc, st.isolation, *id)
+            && let Some(n) = st.doc.node(*id)
+        {
+            inside(n, &mut out);
+        }
     }
     out
 }

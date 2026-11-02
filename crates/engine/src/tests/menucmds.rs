@@ -1993,6 +1993,22 @@ fn select_same_link_block_series_selects_the_frames_of_a_thread() {
         assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err(), "{props}");
         assert_eq!(selected(&s), vec![g], "{props}");
     }
+    s.execute("layer.setProps", &json!({"id": d.0, "locked": false})).unwrap();
+    // A frame on a hidden layer, selected by id, is not type to start from.
+    let l1 = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.setProps", &json!({"id": l1.0, "visible": false})).unwrap();
+    sel(&mut s, &[a]);
+    assert!(!find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled);
+    assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
+    s.execute("layer.setProps", &json!({"id": l1.0, "visible": true})).unwrap();
+    // In an isolated group, only the frames inside it count and are selected.
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[d]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![d]);
+    sel(&mut s, &[a]);
+    assert!(!find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled);
+    assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
 }
 
 /// #1737: Select > Same reads type's fill and stroke from its characters (the first run), so type

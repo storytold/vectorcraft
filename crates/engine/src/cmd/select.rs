@@ -249,6 +249,25 @@ pub(crate) fn selectable_ids(d: &Document, iso: Option<NodeId>) -> BTreeSet<Node
     ids
 }
 
+/// Whether [`walk_selectable`] visits `id`, read from the objects that hold it instead of a walk of
+/// the document.
+pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, id: NodeId) -> bool {
+    let Some(a) = d.ancestry(id) else { return false };
+    if !a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked && !n.is_template())) {
+        return false;
+    }
+    match iso.and_then(|i| d.node(i)) {
+        // Inside the isolated container, or the single object isolated.
+        Some(c) => a.iter().position(|i| *i == c.id).is_some_and(|p| p + 1 < a.len() || !c.is_container()),
+        None => {
+            let locks = d.locked_artboards();
+            // The object Select All takes: the outermost one that is not a layer.
+            let top = a.iter().filter_map(|i| d.node(*i)).find(|n| !n.is_layer());
+            top.is_some_and(|t| locks.is_empty() || !locks.holds(t))
+        }
+    }
+}
+
 fn all(s: &mut Session, _: &Value) -> Result<Value> {
     // While the Type tool edits text, Select All takes all of that text and leaves the art
     // selection as it is (Illustrator: text cursor in a text object).
