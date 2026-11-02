@@ -477,7 +477,8 @@ impl Renderer {
         {
             self.live.evaluated += 1;
         }
-        let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
+        let hook = |c: &Node| crate::effects::outline_object(Some(doc), c);
+        let v: Expanded = match crate::effects::pathfinder_children(a, Some(&hook)) {
             Some(children) => Arc::new(children),
             None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };

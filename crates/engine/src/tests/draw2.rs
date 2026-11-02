@@ -1624,8 +1624,9 @@ fn pencil_refuses_a_fidelity_or_within_given_as_text() {
 }
 
 /// The drawing tools' commands refuse a point whose x or y is not a number, such as "10" or a point
-/// written as text, and a pen pressure given as text, instead of leaving the point out or drawing it
-/// at full pressure; the document stays as it was.
+/// written as text, and a pen pressure, tilt or rotation given as text or another value that is not
+/// a number, instead of leaving the point out or drawing it at full pressure; the document stays as
+/// it was.
 #[test]
 fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
     let mut s = session();
@@ -1644,9 +1645,23 @@ fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
             let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
             refuses_with(&mut s, cmd, &json!({"points": points}), "`pressure` must be a number, not \"0.5\"");
         }
+        // The pen's tilt and rotation the same way.
+        for (bad, want) in [
+            (json!([150, 150, 0.5, "30", 0]), "`tiltX` must be a number, not \"30\""),
+            (json!([150, 150, null, 0, true]), "`tiltY` must be a number, not true"),
+            (json!({"x": 150, "y": 150, "rotation": [90]}), "`rotation` must be a number, not [90]"),
+        ] {
+            let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
+            refuses_with(&mut s, cmd, &json!({"points": points}), want);
+        }
     }
     let pressed = json!({"points": [[100, 400], [150, 420, null], {"x": 200, "y": 400, "pressure": 0.5}], "keepSelected": false});
     s.execute("path.freehand", &pressed).unwrap();
+    let posed = json!({"points": [[100, 500, 0.5, 30, null, null], [150, 520, null, null, -20], {"x": 200, "y": 500, "rotation": 45}], "keepSelected": false});
+    s.execute("path.freehand", &posed).unwrap();
+    let sized = json!({"points": [[100, 700, 0.25, 30, 0, null], [150, 700, 0.75, null, null, 45], [200, 700, 1.0, 0, 0, 90]], "size": 10, "sizeMode": "pressure", "sizeVariation": 8});
+    s.execute("path.blob", &sized).unwrap();
+    s.execute("path.eraseRegion", &sized).unwrap();
 }
 
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,
@@ -4149,4 +4164,87 @@ fn shape_counts_that_are_not_whole_numbers_are_errors() {
         assert!(s.execute("shape.star", &json!({"cx": 1, "cy": 1, "radius1": 5, "points": bad})).is_err(), "{bad}");
         assert!(s.execute("shape.spiral", &json!({"cx": 1, "cy": 1, "radius": 5, "segments": bad})).is_err(), "{bad}");
     }
+}
+
+fn all_at(pts: &[Point], c: Point) -> bool {
+    !pts.is_empty() && pts.iter().all(|p| (p.x - c.x).abs() < 1e-6 && (p.y - c.y).abs() < 1e-6)
+}
+
+#[test]
+fn average_averages_anchors_in_selected_groups() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    let c = Point::new(150.0, 150.0);
+    assert!(all_at(&anchor_points(&s, a), c), "{:?}", anchor_points(&s, a));
+    assert!(all_at(&anchor_points(&s, b), c), "{:?}", anchor_points(&s, b));
+}
+
+#[test]
+fn average_averages_anchors_in_a_selected_compound_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let cp = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [cp.0]})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    let st = s.doc().unwrap();
+    let node = st.doc.node(cp).unwrap();
+    assert!(matches!(node.kind, NodeKind::Compound { .. }), "{}", node.kind_label());
+    let pts: Vec<Point> =
+        node.children().unwrap().iter().flat_map(|c| c.path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect::<Vec<_>>()).collect();
+    assert_eq!(pts.len(), 8, "{pts:?}");
+    assert!(all_at(&pts, Point::new(150.0, 150.0)), "{pts:?}");
+}
+
+#[test]
+fn average_with_nothing_selected_is_an_error() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert!(s.execute("path.average", &json!({"axis": "both"})).is_err());
+}
+
+#[test]
+fn average_leaves_sibling_geometry_unchanged_on_partial_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let orig_b = path(&s, b).clone();
+
+    // Select group, but add-select one anchor on descendant a
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+
+    // Average should not move b's anchors
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    assert_eq!(path(&s, b), orig_b);
+}
+
+#[test]
+fn average_skips_locked_descendants_in_group() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let orig_b = path(&s, b).clone();
+
+    // Lock descendant b
+    s.execute("object.lock", &json!({"ids": [b.0]})).unwrap();
+
+    // Select group and run average
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+
+    // b was locked so it remains unchanged; a is averaged on its own corners.
+    assert_eq!(path(&s, b), orig_b);
+    assert!(all_at(&anchor_points(&s, a), Point::new(50.0, 50.0)), "{:?}", anchor_points(&s, a));
 }

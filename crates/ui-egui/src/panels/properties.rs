@@ -272,15 +272,19 @@ fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Include Objects On Canvas"), o.include_canvas, true) {
         set(app, json!({ "includeCanvas": !o.include_canvas }));
     }
-    let count = global_edit_count(app, ui.ctx()).to_string();
-    dim_label(ui, &crate::i18n::fmt(tl!("Result(s): {count}"), &[("count", &count)]));
+    dim_label(ui, &global_edit_results(global_edit_count(app, ui.ctx())));
 }
 
-/// The cached Result(s) count: the (document, revision, options, one selected object) it was
+/// The options' line with how many objects Start Global Edit would take, in the interface language.
+pub(crate) fn global_edit_results(n: usize) -> String {
+    crate::i18n::tn(n as u64, "Result: {n}", "Results: {n}")
+}
+
+/// The cached Results count: the (document, revision, options, one selected object) it was
 /// found for, and the count.
 type GlobalEditCount = Option<((u64, u64, vectorcraft_engine::cmd::globaledit::Options, Option<u64>), usize)>;
 
-/// How many objects Start Global Edit would take now (the options' Result(s) line), cached per
+/// How many objects Start Global Edit would take now (the options' Results line), cached per
 /// document revision, options and selected object, as finding them walks the whole document.
 fn global_edit_count(app: &VectorcraftApp, ctx: &egui::Context) -> usize {
     let Some(st) = app.session.active() else { return 0 };

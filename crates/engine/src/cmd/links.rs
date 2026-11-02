@@ -335,7 +335,8 @@ pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFi
         .into_iter()
         .filter(|g| seen.insert(g.link.path.clone()))
         .map(|g| {
-            let own = |b: &&ImageBlob| !b.is_proxy() && fileio::format_for_name(g.link.name()).is_some_and(|f| f.mime == b.mime);
+            let named = fileio::format_for_name(g.link.name()).or_else(|| fileio::readable_format_for_name(g.link.name()));
+            let own = |b: &&ImageBlob| !b.is_proxy() && named.is_some_and(|f| f.mime == b.mime);
             let found = locate(&g.link, doc_path);
             let found_path = found.as_ref().map(|f| f.path.clone());
             let bytes = found.and_then(|mut f| f.read().ok()).or_else(|| d.images.get(&g.key).filter(own).map(|b| b.bytes.to_vec()));
@@ -382,9 +383,10 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) ->
         out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
     }
     let mut warnings = vec![];
-    if !previews.is_empty() {
-        warnings
-            .push(format!("{} linked image(s) output as their previews: their files can't be found or read (relink or update them)", previews.len()));
+    match previews.len() {
+        0 => {}
+        1 => warnings.push("1 linked image output as its preview: its file can't be found or read (relink or update it)".to_string()),
+        n => warnings.push(format!("{n} linked images output as their previews: their files can't be found or read (relink or update them)")),
     }
     (Cow::Owned(out), warnings)
 }
@@ -1123,7 +1125,7 @@ fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, b
 fn format_label(d: &Document, im: &ImageObject) -> &'static str {
     im.link
         .as_ref()
-        .and_then(|l| fileio::format_for_name(l.name()))
+        .and_then(|l| fileio::format_for_name(l.name()).or_else(|| fileio::readable_format_for_name(l.name())))
         .or_else(|| d.images.get(&im.key).and_then(|b| fileio::FORMATS.iter().find(|f| f.raster && f.mime == b.mime)))
         .map_or("Image", |f| f.label)
 }
