@@ -5138,6 +5138,9 @@ mark-style	Japanese	Jepang
 	Export Data Sets…	Ekspor himpunan data…
 	Load Variable Library…	Muat pustaka variabel…
 @msg	variables that aren't text were left out: {kinds}	variabel yang bukan teks dihilangkan: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	dokumen baru tidak akan membaca kembali variabel ini dengan jenisnya: {names}
+@msg	a new document refuses this file because of these variables: {names}	dokumen baru menolak file ini karena variabel berikut: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	header `{header}` untuk `{name}` akan terbaca sebagai variabel `{other}`: ganti nama salah satunya
 	Make Graph Dynamic	Jadikan grafik dinamis
 	Batch…	Batch…
 	Source Folder:	Folder sumber:

@@ -3474,6 +3474,9 @@ digits	Malayalam	马拉雅拉姆数字
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	数据集超过 {MAX_CSV_ROWS} 个：“导入数据集”最多读取 {MAX_CSV_ROWS} 个
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	变量超过 {MAX_CSV_COLS} 个：“导入数据集”最多读取 {MAX_CSV_COLS} 个
 @msg	variables that aren't text were left out: {kinds}	已省略非文本变量：{kinds}
+@msg	a new document won't read these variables back with their kind: {names}	新文档不会按原类型读回这些变量：{names}
+@msg	a new document refuses this file because of these variables: {names}	新文档会因这些变量而拒绝此文件：{names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` 的标题 `{header}` 会被读作变量 `{other}`：请重命名其中一个
 	List Variables	列出变量
 	Bind Variable	绑定变量
 	Unbind Variable	解除变量绑定
