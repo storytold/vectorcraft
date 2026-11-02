@@ -146,9 +146,6 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     }
     // An open Set Options or Batch dialog holds a set index: it closes when its set is deleted,
     // and otherwise follows its set down.
-    let holds_set = |d: &crate::state::Dialog| {
-        d.kind == crate::dialogs::action_batch::KIND || (d.kind == crate::dialogs::action_set_options::KIND && d.fields.contains_key("set"))
-    };
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| holds_set(d))
         && let Some(set) = d.fields.get("set").and_then(Value::as_u64).and_then(|s| usize::try_from(s).ok())
     {
@@ -168,6 +165,88 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     Ok(json!({ "deleted": sets.len() }))
 }
 
+/// Whether dialog `d` is a Set Options or Batch dialog that holds a set index in its `set` field.
+fn holds_set(d: &crate::state::Dialog) -> bool {
+    d.kind == crate::dialogs::action_batch::KIND || (d.kind == crate::dialogs::action_set_options::KIND && d.fields.contains_key("set"))
+}
+
+/// The command that duplicates an action or an action set ([`duplicate`]).
+pub const DUPLICATE: &str = "ui.actionSet.duplicate";
+
+/// The panel menu's Duplicate: copies the selected action, else the current set ([`DUPLICATE`]),
+/// and selects the copy.
+fn duplicate_selection(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    const SELECTED: &str = "actions-selected";
+    let Some(set) = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len()) else { return };
+    // A selected action counts only while its set is the current one, as the panel shows it.
+    let params = match pstate::<Option<(usize, usize)>>(ctx, SELECTED).filter(|&(s, _)| s == set) {
+        Some((s, a)) => json!({ "set": s, "action": a }),
+        None => json!({ "set": set }),
+    };
+    match app.run(DUPLICATE, params) {
+        Ok(r) => {
+            let copy = r["set"].as_u64().zip(r["action"].as_u64()).and_then(|(s, a)| Some((usize::try_from(s).ok()?, usize::try_from(a).ok()?)));
+            set_pstate::<Option<(usize, usize)>>(ctx, SELECTED, copy);
+        }
+        Err(e) => app.status(e),
+    }
+}
+
+/// `ui.actionSet.duplicate {set?: index, action?: index}`: copies the action at index `action`
+/// of set `set` into the same set, right after the original; without `action`, copies set `set`
+/// with all its actions to right after the original set (default: the current set). The copy is
+/// named after the original with " copy" added, and a copied set gets an id of its own
+/// ([`ActionSet::id`]). The copy is selected and its set is the current one. A recording and an
+/// open Set Options or Batch dialog keep to their own set and action. → {set, action?}
+pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    const SELECTED: &str = "actions-selected";
+    let len = app.ui.action_sets.len();
+    let index = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok());
+    let set = match p.get("set") {
+        None | Some(Value::Null) => app.ui.action_set.filter(|&s| s < len).ok_or("no action set is current")?,
+        Some(v) => index(v).filter(|&s| s < len).ok_or("no such action set")?,
+    };
+    let Some(src) = app.ui.action_sets.get_mut(set) else { return Err("no such action set".into()) };
+    let action = match p.get("action") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(index(v).filter(|&a| a < src.actions.len()).ok_or("no such action")?),
+    };
+    let (copy, result) = if let Some(a) = action {
+        let Some(mut copy) = src.actions.get(a).cloned() else { return Err("no such action".into()) };
+        copy.name = format!("{} copy", copy.name);
+        src.actions.insert(a + 1, copy);
+        // A Batch dialog open on a later action of the set follows it down.
+        if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == crate::dialogs::action_batch::KIND)
+            && d.fields.get("set").and_then(index) == Some(set)
+            && let Some(da) = d.fields.get("action").and_then(index).filter(|&da| da > a)
+        {
+            d.fields.insert("action".into(), json!(da + 1));
+        }
+        (Some((set, a + 1)), json!({ "set": set, "action": a + 1 }))
+    } else {
+        let copy = ActionSet::new(format!("{} copy", src.name), src.actions.clone());
+        app.ui.action_sets.insert(set + 1, copy);
+        if let Some((rec, ..)) = app.ui.recording.as_mut()
+            && *rec > set
+        {
+            *rec += 1;
+        }
+        if let Some(d) = app.ui.dialog.as_mut().filter(|d| holds_set(d))
+            && let Some(ds) = d.fields.get("set").and_then(index).filter(|&ds| ds > set)
+        {
+            d.fields.insert("set".into(), json!(ds + 1));
+        }
+        (None, json!({ "set": set + 1 }))
+    };
+    let current = copy.map_or(set + 1, |(s, _)| s);
+    app.ui.action_set = Some(current);
+    app.ui.action_sets_selected = vec![current];
+    if let Some(ctx) = app.ui_ctx.clone() {
+        set_pstate::<Option<(usize, usize)>>(&ctx, SELECTED, copy);
+    }
+    Ok(result)
+}
+
 /// The panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let selected: Option<(usize, usize)> = pstate(ui.ctx(), "actions-selected");
@@ -175,10 +254,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if widgets::menu_item(ui, tl!("New Set…"), true, false) {
         crate::dialogs::action_set_options::open_new(app);
     }
+    let current = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len());
+    if widgets::menu_item(ui, tl!("Duplicate"), current.is_some(), false) {
+        duplicate_selection(app, ui.ctx());
+    }
     if widgets::menu_item(ui, tl!("Delete"), has || !selected_sets(app).is_empty(), false) {
         delete_selection(app, ui.ctx());
     }
-    let current = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len());
     if widgets::menu_item(ui, tl!("Set Options…"), current.is_some(), false)
         && let Some(s) = current
     {
@@ -732,6 +814,97 @@ mod tests {
         app.run(DELETE_SETS, json!({"sets": [0]})).unwrap();
         let d = app.ui.dialog.as_ref().expect("the Batch dialog of a kept set stays open");
         assert_eq!((d.fields["set"].clone(), d.fields["action"].clone()), (json!(0), json!(1)), "it follows Mine to index 0");
+    }
+
+    /// A click on the panel menu's Duplicate.
+    fn menu_duplicate(ctx: &egui::Context, app: &mut VectorcraftApp) {
+        use super::super::tests_appearance::{click, frame_events};
+        let texts = frame_events(ctx, app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Duplicate").map(|(_, r)| *r).expect("Duplicate in the menu");
+        click(ctx, app, item.center(), menu);
+    }
+
+    fn action_names(app: &VectorcraftApp, set: usize) -> Vec<String> {
+        app.ui.action_sets[set].actions.iter().map(|a| a.name.clone()).collect()
+    }
+
+    /// The panel menu's Duplicate copies the selected action to right after it in its set, named
+    /// with " copy" added and with steps of its own, and selects the copy.
+    #[test]
+    fn the_panel_menus_duplicate_copies_the_selected_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Nudge").center(), show);
+        frame_events(&ctx, &mut app, vec![], show);
+        menu_duplicate(&ctx, &mut app);
+        assert_eq!(action_names(&app, 1), ["Nudge", "Nudge copy", "Nudge Again"], "the copy goes right after the original");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "no set is added");
+        assert_eq!(app.ui.action_sets[1].actions[1].steps, app.ui.action_sets[1].actions[0].steps);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 1)), "the copy is selected");
+        frame_events(&ctx, &mut app, vec![], show);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 1)), "and stays selected in the panel");
+        app.ui.action_sets[1].actions[1].steps[0].1 = json!({"dx": 5, "dy": 0});
+        assert_eq!(app.ui.action_sets[1].actions[0].steps[0].1, json!({"dx": 1, "dy": 0}), "the original's steps are its own");
+    }
+
+    /// The panel menu's Duplicate with a set selected copies the set and all its actions to right
+    /// after it, with an id of its own, makes the copy current, and the copy is saved with the sets.
+    #[test]
+    fn the_panel_menus_duplicate_copies_the_current_set() {
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        click_set(&ctx, &mut app, "Mine", egui::Modifiers::NONE);
+        menu_duplicate(&ctx, &mut app);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Mine copy", "Other"]);
+        assert_eq!(action_names(&app, 2), ["Nudge", "Nudge Again"], "every action is copied");
+        assert_ne!(app.ui.action_sets[2].id, app.ui.action_sets[1].id, "the copy has an id of its own");
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(2), vec![2]), "the copy is current");
+        app.ui.action_sets[2].actions[0].steps.clear();
+        assert_eq!(app.ui.action_sets[1].actions[0].steps.len(), 1, "the original's steps are its own");
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        let restored = serde_json::from_value::<crate::state::UiState>(saved).unwrap();
+        assert_eq!(restored.action_sets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Default Actions", "Mine", "Mine copy", "Other"]);
+    }
+
+    /// The panel menu's Duplicate does nothing while no action and no set is selected.
+    #[test]
+    fn the_panel_menus_duplicate_needs_a_selected_action_or_set() {
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        menu_duplicate(&ctx, &mut app);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"]);
+        assert_eq!(app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>(), [6, 2, 0]);
+        assert_eq!(app.ui.action_set, None);
+    }
+
+    /// `ui.actionSet.duplicate` copies an action or a set by index, the current set by default,
+    /// refuses indexes past the last set or action, and keeps a recording and an open Batch dialog
+    /// on their own set and action.
+    #[test]
+    fn the_duplicate_command_copies_by_index_and_keeps_recordings_and_dialogs_in_place() {
+        let mut app = app_with_sets();
+        assert_eq!(app.run(DUPLICATE, json!({})).unwrap_err(), "no action set is current");
+        assert_eq!(app.run(DUPLICATE, json!({"set": 3})).unwrap_err(), "no such action set");
+        assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 2})).unwrap_err(), "no such action");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "a refused index copies nothing");
+        crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
+        assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 0})).unwrap(), json!({"set": 1, "action": 1}));
+        assert_eq!(action_names(&app, 1), ["Nudge", "Nudge copy", "Nudge Again"]);
+        let d = app.ui.dialog.as_ref().expect("the Batch dialog stays open");
+        assert_eq!((d.fields["set"].clone(), d.fields["action"].clone()), (json!(1), json!(2)), "it follows Nudge Again");
+        app.ui.dialog = None;
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let start = app.session.journal.len();
+        app.session.journal.hold(Some(start));
+        app.ui.recording = Some((2, "Action 1".into(), start));
+        crate::dialogs::action_set_options::open(&mut app, 2);
+        app.ui.action_set = Some(0);
+        assert_eq!(app.run(DUPLICATE, json!({})).unwrap(), json!({"set": 1}), "the current set by default");
+        assert_eq!(set_names(&app), ["Default Actions", "Default Actions copy", "Mine", "Other"]);
+        assert_eq!(app.ui.recording.as_ref().map(|r| r.0), Some(3), "still recording into Other");
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["set"].clone()), Some(json!(3)), "Set Options still on Other");
     }
 
     /// A recording keeps its steps when a canceled undo group drops journal entries made before the
