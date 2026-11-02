@@ -5649,6 +5649,7 @@ axis	Y Axis	Y tengely
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
+	Leave Out of Global Edit	Kizárás a globális szerkesztésből
 	Match	Egyezés
 	On Artboards	Rajztáblákon
 	All Artboards	Minden rajztábla
@@ -5657,6 +5658,8 @@ axis	Y Axis	Y tengely
 @msg	select one object	jelöljön ki egy objektumot
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A globális szerkesztés útvonalakon, összetett útvonalakon, szimbólumpéldányokon és ezek csoportjain működik
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (az elforgatott vagy tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra
+@msg	Global Edit is off	A globális szerkesztés nincs bekapcsolva
+@msg	only an object of the Global Edit other than the one it started from can be left out	a globális szerkesztésből csak a kiindulási objektumtól eltérő objektum zárható ki
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all vagy egy tartomány, például 1, 3-5, nem {v}
 	Add to Symbols	Hozzáadás a szimbólumokhoz
 	Basic Shapes	Alapalakzatok

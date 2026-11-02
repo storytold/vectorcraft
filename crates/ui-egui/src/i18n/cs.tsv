@@ -5664,6 +5664,7 @@ axis	Y Axis	osa Y
 	Create New Set	Vytvořit novou sadu
 	Stop Global Edit	Ukončit globální úpravy
 	Global Edit Options	Možnosti globálních úprav
+	Leave Out of Global Edit	Vyřadit z globálních úprav
 	Match	Shoda
 	On Artboards	Na pracovních plochách
 	All Artboards	Všechny pracovní plochy
@@ -5672,6 +5673,8 @@ axis	Y Axis	osa Y
 @msg	select one object	vyberte jeden objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
+@msg	Global Edit is off	Globální úpravy nejsou zapnuté
+@msg	only an object of the Global Edit other than the one it started from can be left out	z globálních úprav lze vyřadit jen jiný objekt než ten, od kterého začaly
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all nebo rozsah, například 1, 3-5, ne {v}
 	Add to Symbols	Přidat do symbolů
 	Basic Shapes	Základní tvary

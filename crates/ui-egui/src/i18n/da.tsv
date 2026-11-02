@@ -5584,6 +5584,7 @@ axis	Y Axis	Y-akse
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
+	Leave Out of Global Edit	Udelad fra global redigering
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering virker på stier, sammensatte stier, symbolforekomster og grupper af dem
 	Match	Match
 	On Artboards	På tegneflader

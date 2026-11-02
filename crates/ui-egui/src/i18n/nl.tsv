@@ -5628,6 +5628,7 @@ axis	Y Axis	Y-as
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+	Leave Out of Global Edit	Uitsluiten van globale bewerking
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
 	On Artboards	Op tekengebieden

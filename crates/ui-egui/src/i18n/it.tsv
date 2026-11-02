@@ -5280,6 +5280,7 @@ axis	Y Axis	Asse Y
 	Create New Set	Crea nuovo set
 	Stop Global Edit	Interrompi modifica globale
 	Global Edit Options	Opzioni modifica globale
+	Leave Out of Global Edit	Escludi dalla modifica globale
 	Match	Corrispondenza
 	On Artboards	Sulle tavole da disegno
 	All Artboards	Tutte le tavole da disegno
@@ -5288,6 +5289,8 @@ axis	Y Axis	Asse Y
 @msg	select one object	selezionate un oggetto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modifica globale funziona su tracciati, tracciati composti, istanze di simboli e gruppi di essi
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nessun oggetto simile trovato (le copie ruotate o riflesse non vengono riconosciute); cambiate le opzioni di modifica globale e riprovate
+@msg	Global Edit is off	La modifica globale non è attiva
+@msg	only an object of the Global Edit other than the one it started from can be left out	si può escludere solo un oggetto della modifica globale diverso da quello da cui è partita
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervallo come 1, 3-5, non {v}
 	Add to Symbols	Aggiungi ai simboli
 	Basic Shapes	Forme di base

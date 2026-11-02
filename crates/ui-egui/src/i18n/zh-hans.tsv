@@ -5504,6 +5504,7 @@ axis	Y Axis	Y 轴
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
+	Leave Out of Global Edit	从全局编辑中排除
 	Match	匹配
 	On Artboards	在画板上
 	All Artboards	所有画板
@@ -5512,6 +5513,8 @@ axis	Y Axis	Y 轴
 @msg	select one object	请选择一个对象
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	全局编辑适用于路径、复合路径、符号实例及其编组
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（旋转或镜像的副本不会匹配）；请更改全局编辑选项后重试
+@msg	Global Edit is off	全局编辑未开启
+@msg	only an object of the Global Edit other than the one it started from can be left out	只能从全局编辑中排除起始对象以外的对象
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
 	Basic Shapes	基本形状

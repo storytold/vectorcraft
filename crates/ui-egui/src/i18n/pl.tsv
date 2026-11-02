@@ -5517,6 +5517,7 @@ axis	Y Axis	Oś Y
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej
+	Leave Out of Global Edit	Wyklucz z edycji globalnej
 	Match	Dopasowanie
 	On Artboards	Na obszarach kompozycji
 	All Artboards	Wszystkie obszary kompozycji
@@ -5525,6 +5526,8 @@ axis	Y Axis	Oś Y
 @msg	select one object	zaznacz jeden obiekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
+@msg	Global Edit is off	Edycja globalna jest wyłączona
+@msg	only an object of the Global Edit other than the one it started from can be left out	z edycji globalnej można wykluczyć tylko obiekt inny niż ten, od którego się zaczęła
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli
 	Basic Shapes	Kształty podstawowe

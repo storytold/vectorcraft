@@ -508,6 +508,7 @@ pub(crate) mod testutil {
             screen: None,
             plane_widget: Some(Default::default()),
             precise_cursors: false,
+            global_edit: &[],
         }
     }
 }
