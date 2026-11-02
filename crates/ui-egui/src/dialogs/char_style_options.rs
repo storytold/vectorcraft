@@ -189,7 +189,8 @@ fn bare(tag: &str) -> &str {
 }
 
 /// The OpenType Features fields for a style's `features`: each control is unset unless the list
-/// names one of its tags, on or off.
+/// names one of its tags, on or off. Figure is also unset when the list turns one of its tags on
+/// or off against every Figure menu entry, for example `pnum` alone.
 fn opentype_fields(features: Option<&Value>) -> Map<String, Value> {
     let tags: Vec<&str> = features.and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
     let names = |set: &[&str]| tags.iter().any(|t| set.contains(&bare(t)));
@@ -199,7 +200,11 @@ fn opentype_fields(features: Option<&Value>) -> Map<String, Value> {
         let last = tags.iter().rev().find(|t| bare(t) == *tag);
         fields.insert((*field).into(), last.map_or(Value::Null, |t| json!(!t.starts_with('-'))));
     }
-    let figure = names(&FIGURE_TAGS).then(|| FIGURE_VALUES.get(crate::panels::opentype::figure(&f))).flatten();
+    let last_on = |tag: &str| tags.iter().rev().find(|t| bare(t) == tag).map(|t| !t.starts_with('-'));
+    let figure = names(&FIGURE_TAGS)
+        .then(|| FIGURE_VALUES.get(crate::panels::opentype::figure(&f)))
+        .flatten()
+        .filter(|v| figure_tags(v).iter().all(|t| last_on(bare(t)).is_none_or(|on| on != t.starts_with('-'))));
     fields.insert("ot_figure".into(), figure.map_or(Value::Null, |v| json!(v)));
     let position =
         names(&crate::panels::opentype::POSITION_TAGS).then(|| crate::panels::opentype::position(&f).and_then(|i| POSITION_VALUES.get(i))).flatten();
@@ -1308,6 +1313,21 @@ mod tests {
         let mut d = dialog_for(json!({"features": ["dlig"]}));
         d.fields.insert("ot_dlig".into(), Value::Null);
         assert_eq!(edited_attrs(&d).unwrap(), Map::new());
+    }
+
+    #[test]
+    fn figure_tags_no_menu_entry_matches_leave_the_figure_unset() {
+        for features in [json!(["pnum"]), json!(["lnum"]), json!(["onum", "lnum"]), json!(["tnum", "pnum"])] {
+            let mut d = dialog_for(json!({ "features": features }));
+            assert!(d.fields["ot_figure"].is_null(), "{features}");
+            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({ "features": features })), "{features}");
+            d.fields.insert("ot_figure".into(), json!("default"));
+            assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["-tnum", "-onum", "-pnum", "-lnum"]), "{features}");
+        }
+        for (features, shown) in [(json!(["tnum"]), "tabularLining"), (json!(["-pnum"]), "default"), (json!(["pnum", "lnum"]), "proportionalLining")]
+        {
+            assert_eq!(dialog_for(json!({ "features": features })).str("ot_figure"), shown, "{features}");
+        }
     }
 
     #[test]
