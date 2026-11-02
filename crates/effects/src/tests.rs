@@ -906,9 +906,10 @@ fn round_corners_also_rounds_where_a_curve_meets_a_line() {
 }
 
 #[test]
-fn round_corners_keeps_straight_corners_as_they_were() {
-    // The D's straight corners are rounded as before, next to the new cuts: same anchors, same
-    // quarter-circle handles, and the path still starts at its first corner's rounding.
+fn round_corners_keeps_right_angles_as_they_were() {
+    // The D's straight right-angle corners are rounded as before the effect used Live Corners'
+    // cut: same anchors, same quarter-circle handles, and the path still starts at its first
+    // corner's rounding.
     use vectorcraft_geom::Anchor;
     let p = Point::new;
     let k = 8.0 * shapes::KAPPA;
@@ -918,6 +919,51 @@ fn round_corners_keeps_straight_corners_as_they_were() {
     assert_eq!(a[1], Anchor::with_handles(p(8.0, 0.0), p(8.0 - k, 0.0), p(8.0, 0.0)));
     // A path of straight corners only is rounded exactly as before.
     assert_eq!(stylize::round_corners(&square(), 10.0).subpaths[0].anchors.len(), 8);
+}
+
+#[test]
+fn round_corners_radius_is_how_far_the_cut_reaches_along_each_side() {
+    // An acute straight-sided corner gets a true circular arc too: the cut meets each side
+    // `radius` from the corner, as before, and the arc's own radius follows from the angle.
+    let p = Point::new;
+    let tri = PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(100.0, 20.0), p(0.0, 40.0)], true));
+    let out = run("stylize.roundCorners", json!({"radius": 10}), &tri);
+    assert_eq!(out.anchor_count(), 6);
+    let tip = p(100.0, 20.0);
+    let near_tip: Vec<f64> = out.subpaths[0].anchors.iter().map(|a| a.p.distance(tip)).filter(|d| *d < 20.0).collect();
+    assert_eq!(near_tip.len(), 2, "{near_tip:?}");
+    assert!(near_tip.iter().all(|d| close(*d, 10.0, 1e-6)), "{near_tip:?}");
+    // No corner is left: every cut meets both sides smoothly.
+    assert!(vectorcraft_geom::corners::path_corners(&out).is_empty(), "{out:?}");
+    // A NaN radius leaves the path as it is.
+    assert_eq!(stylize::round_corners(&tri, f64::NAN), tri);
+}
+
+#[test]
+fn round_corners_on_nearly_straight_corners_zero_sides_and_open_paths() {
+    let p = Point::new;
+    let has = |path: &PathData, q: Point| path.subpaths[0].anchors.iter().any(|a| a.p.distance(q) < 1e-9);
+    // 179.99°: still a corner, cut by a nearly flat arc that meets each side `radius` from it. A
+    // straight-on anchor (180°) is no corner and stays as it is.
+    let bend = 0.01_f64.to_radians();
+    let line = [p(0.0, 0.0), p(100.0, 0.0), p(200.0, 100.0 * bend.tan()), p(300.0, 2.0 * 100.0 * bend.tan())];
+    let out = stylize::round_corners(&PathData::single(SubPath::polyline(&line, false)), 10.0);
+    assert!(all_finite(&out), "{out:?}");
+    assert_eq!(out.anchor_count(), 5, "{out:?}");
+    assert!(has(&out, p(90.0, 0.0)) && !has(&out, line[1]) && has(&out, line[2]), "{out:?}");
+    // A zero-length side: the anchors on either end of it make no corner and stay sharp; the
+    // other corners are rounded.
+    let sq = [p(0.0, 0.0), p(100.0, 0.0), p(100.0, 0.0), p(100.0, 100.0), p(0.0, 100.0)];
+    let out = stylize::round_corners(&PathData::single(SubPath::polyline(&sq, true)), 10.0);
+    assert!(all_finite(&out), "{out:?}");
+    assert_eq!(out.anchor_count(), 2 + 3 * 2, "{out:?}");
+    assert!(has(&out, p(100.0, 0.0)), "{out:?}");
+    // An open path keeps its ends; a cut at the corner next to an end reaches further than
+    // halfway along that side, since the end isn't cut.
+    let l = PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 100.0)], false));
+    let a = &stylize::round_corners(&l, 8.0).subpaths[0].anchors;
+    assert_eq!((a.len(), a[0].p, a[3].p), (4, p(0.0, 0.0), p(10.0, 100.0)));
+    assert!(a[1].p.distance(p(2.0, 0.0)) < 1e-9 && a[2].p.distance(p(10.0, 8.0)) < 1e-9, "{a:?}");
 }
 
 #[test]
