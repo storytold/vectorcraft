@@ -984,6 +984,76 @@ fn delete_tab_after_the_last_stop_deletes_the_stop_the_ruler_shows_selected() {
     assert!(current(&app).unwrap().1.is_empty());
 }
 
+/// Position Panel Above Text on text narrower than a floating panel can be at the zoom: the panel
+/// comes out wider than asked, and its ruler draws the text at the zoom, running on past the text,
+/// so its marks stay over the text. A ruler wider than the narrowest panel, for other text or in
+/// another document fits the span to its width as before.
+#[test]
+fn above_text_keeps_the_zoom_on_a_ruler_wider_than_asked() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a	b", "area": {"width": 100, "height": 100}})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+    if let Some(v) = app.view_mut() {
+        v.zoom = 0.5;
+    }
+    let ctx = egui::Context::default();
+    let (node, _, span) = current(&app).unwrap();
+    place_above_text(&mut app, &ctx, &node, span);
+    // The panel asked for: a 50 pt ruler, less than the narrowest panel's.
+    let asked = app.ui.docking.clone().unwrap().floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap().rect[2];
+    assert!((asked - RULER_LEFT * 2.0 - 50.0).abs() < 0.01, "{asked}");
+    // Screen points per point of text on a ruler `width` wide, from its first two labels.
+    let scale = |app: &mut VectorcraftApp, width: f32| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 400.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let labels: Vec<(f64, f32)> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.job.sections.first().is_some_and(|s| s.format.font_id.size == 9.0) => {
+                    Some((t.galley.text().parse::<f64>().ok()?, t.pos.x))
+                }
+                _ => None,
+            })
+            .collect();
+        let [(0.0, a), (next, b), ..] = labels[..] else { panic!("ruler labels {labels:?}") };
+        (b - a) as f64 / next
+    };
+    let narrowest = crate::panel_docking::PANEL_MIN_WIDTH;
+    let fitted = (f64::from(narrowest) - 8.0) / span;
+    let at_zoom = scale(&mut app, narrowest);
+    assert!((at_zoom - 0.5).abs() < 1e-3, "{at_zoom}");
+    let other =
+        app.session.execute("text.create", &json!({"x": 300, "y": 200, "text": "c", "area": {"width": 100, "height": 100}})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [other]})).unwrap();
+    assert!((scale(&mut app, narrowest) - fitted).abs() < 1e-3, "other text fits its span to the ruler");
+    app.session.execute("select.set", &json!({"ids": [node.id.0]})).unwrap();
+    assert!((scale(&mut app, narrowest) - 0.5).abs() < 1e-3);
+    // At another zoom the ruler follows it.
+    if let Some(v) = app.view_mut() {
+        v.zoom = 2.0;
+    }
+    assert!((scale(&mut app, narrowest) - 2.0).abs() < 1e-3, "another zoom");
+    if let Some(v) = app.view_mut() {
+        v.zoom = 0.5;
+    }
+    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "d", "area": {"width": 100, "height": 100}})).unwrap();
+    if let Some(v) = app.view_mut() {
+        v.zoom = 0.5;
+    }
+    assert!((scale(&mut app, narrowest) - fitted).abs() < 1e-3, "another document");
+    assert!(app.session.set_active(0));
+    assert!((scale(&mut app, narrowest) - 0.5).abs() < 1e-3);
+    // The panel made wider than the narrowest floating window fits the span to its ruler again.
+    let docking = app.ui.docking.as_mut().unwrap();
+    docking.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap().rect[2] = 400.0;
+    let wide = scale(&mut app, 400.0);
+    assert!((wide - (400.0 - 8.0) / span).abs() < 1e-3, "{wide}");
+}
+
 /// Position Panel Above Text floats the panel over the text, its ruler's 0 on the frame's left
 /// edge and a stop's mark over the column it sets, at any zoom (#729).
 #[test]
