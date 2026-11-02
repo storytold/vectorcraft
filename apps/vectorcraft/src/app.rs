@@ -23,7 +23,12 @@ pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egu
     Some(std::sync::Arc::new(windows_stylus::raw_input_hook))
 }
 
-#[cfg(not(any(target_os = "macos", windows)))]
+#[cfg(target_os = "android")]
+pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egui::NativeInputHook> {
+    Some(std::sync::Arc::new(super::android_stylus::raw_input_hook))
+}
+
+#[cfg(not(any(target_os = "macos", windows, target_os = "android")))]
 pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egui::NativeInputHook> {
     None
 }
@@ -48,9 +53,11 @@ impl eframe::App for App {
         if self.app.services.native_menu.is_some() {
             mac_menu::raw_input_hook(raw);
         }
-        // A pen contact with the barrel button held presses the secondary button (Windows Ink).
+        // A pen contact with the barrel button held presses the secondary button.
         #[cfg(windows)]
         windows_stylus::raw_input_hook(raw);
+        #[cfg(target_os = "android")]
+        super::android_stylus::raw_input_hook(raw);
         file_access::unconfined(|| self.app.raw_input_hook(ctx, raw));
         // A mouse-up that never reached the window (#4326) is delivered once AppKit reports
         // that no mouse button is down.

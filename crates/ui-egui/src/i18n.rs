@@ -164,7 +164,7 @@ pub static LANGUAGES: [LangInfo; 27] = [
     // English as Japanese; every `es-*` locale (`es-ES`, `es-MX`, `es-AR`, `es-419` …) resolves here.
     LangInfo {
         code: "es",
-        name: "Español",
+        name: "Español (Latinoamérica)",
         source: include_str!("i18n/es.tsv"),
         plural: plural_one_other,
         complete_menus: true,
@@ -514,6 +514,10 @@ fn detect_system_lang() -> Lang {
     // `LocaleName`, e.g. `zh-TW`).
     #[cfg(target_os = "windows")]
     if let Some(l) = windows_locale().as_deref().and_then(lang_from_tag) {
+        return l;
+    }
+    #[cfg(target_os = "android")]
+    if let Some(l) = Lang::from_code("es") {
         return l;
     }
     Lang::EN

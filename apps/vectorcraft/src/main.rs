@@ -18,6 +18,7 @@
 //! keyboard isn't confined.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
+mod android_stylus;
 mod automation_args;
 mod caps_lock;
 mod clipboard;
@@ -545,3 +546,63 @@ fn no_spawns() -> std::sync::RwLockReadGuard<'static, ()> {
 
 #[cfg(all(test, feature = "wgpu"))]
 mod tests;
+
+#[cfg(target_os = "android")]
+#[allow(unsafe_code, improper_ctypes_definitions)]
+#[unsafe(no_mangle)]
+pub extern "C" fn android_main(app: winit::platform::android::activity::AndroidApp) {
+    // 1. Force Fullscreen window flags on NativeActivity so notification bar does not overlap
+    app.set_window_flags(
+        winit::platform::android::activity::WindowManagerFlags::FULLSCREEN
+            | winit::platform::android::activity::WindowManagerFlags::LAYOUT_IN_SCREEN
+            | winit::platform::android::activity::WindowManagerFlags::LAYOUT_NO_LIMITS,
+        winit::platform::android::activity::WindowManagerFlags::FORCE_NOT_FULLSCREEN,
+    );
+
+    // 2. Detect system locale
+    let config = app.config();
+    let mut locales = Vec::new();
+    if let Some(lang) = config.language() {
+        if let Some(country) = config.country() {
+            locales.push(format!("{}-{}", lang, country));
+        }
+        locales.push(lang);
+    }
+    if !locales.is_empty() {
+        vectorcraft_ui_egui::i18n::set_system_locales(&locales);
+    } else {
+        vectorcraft_ui_egui::i18n::set_system_locales(&["es-419", "es"]);
+    }
+    vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
+
+    let mut options = native_options(false);
+    options.android_app = Some(app);
+    let _ = eframe::run_native(
+        "VectorCraft",
+        options,
+        Box::new(|cc| {
+            VectorcraftApp::install_ime_reset_hooks(&cc.egui_ctx);
+            let mut session = Session::new();
+            prefs_dir::attach_profile_store(&mut session);
+            prefs_dir::attach_plugin_store(&mut session);
+            let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
+            app.set_startup_update_check(false);
+            let saved = read_prefs();
+            load_prefs(&mut app, saved);
+            app.services.native_input_hook = native_input_hook(&app);
+            let graphics_loss = GraphicsLoss::default();
+            let winit_window = cc.winit_window().cloned();
+            Ok(Box::new(App {
+                host_caps_lock: caps_lock::HostCapsLock::new(winit_window.as_deref()),
+                app,
+                graphics_loss,
+                graphics_lost: false,
+                frames: 0,
+                window_frame: None,
+                winit_window,
+                pending_maximize: false,
+                maximize_tries: 0,
+            }))
+        }),
+    );
+}
