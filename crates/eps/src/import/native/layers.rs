@@ -8,9 +8,17 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why, with the swatches of the
 /// editing copy's palette ([`use_palette`]) when it could be read, and with its layer tree, empty,
-/// below the page's layer when that could be read (#2033).
-pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Imported {
-    let Some(data) = editing_copy(ps) else { return visible };
+/// below the page's layer when that could be read (#2033). A program in the legacy format without
+/// layers (`illustrator`, see [`program_alone`]) is read with its art on one layer; when that
+/// can't be used, the file is `visible` as it was.
+pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool) -> Imported {
+    let Some(data) = editing_copy(ps) else {
+        let read = illustrator.then(|| one_layer(ps)).flatten().and_then(|p| build(&p, Some(&visible.document), Page::Art, false, trust, 1.0).ok());
+        return match read {
+            Some((document, warnings)) => with_page_notes(document, warnings, &visible),
+            None => visible,
+        };
+    };
     // The layer tree is kept from the structure read, for the page to come in on when the layers
     // can't be used.
     let (tree, result) = match data.as_deref() {
@@ -21,14 +29,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
         Err(why) => (vec![], Err(why.clone())),
     };
     match result {
-        Ok((document, mut warnings)) => {
-            for w in &visible.warnings {
-                if !warnings.contains(w) {
-                    warnings.push(w.clone());
-                }
-            }
-            Imported { document, warnings, preview: false }
-        }
+        Ok((document, warnings)) => with_page_notes(document, warnings, &visible),
         Err(why) => {
             let mut v = visible;
             if let Ok(data) = &data {
@@ -56,6 +57,17 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
             v
         }
     }
+}
+
+/// `document`, read from the editing copy with the notes `warnings`, followed by the notes of
+/// reading `visible` that it doesn't already have.
+fn with_page_notes(document: Document, mut warnings: Vec<String>, visible: &Imported) -> Imported {
+    for w in &visible.warnings {
+        if !warnings.contains(w) {
+            warnings.push(w.clone());
+        }
+    }
+    Imported { document, warnings, preview: false }
 }
 
 /// The layers in `nodes` with only their sublayers in them: names, order and options without the art.
@@ -243,7 +255,7 @@ pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool) -> Option<Re
     if has_layers(ps) {
         return Some(build(ps, None, Page::Art, false, false, 1.0));
     }
-    let program = one_layer(ps).filter(|_| illustrator)?;
+    let program = illustrator.then(|| one_layer(ps)).flatten()?;
     Some(build(&program, None, Page::Art, false, false, 1.0))
 }
 

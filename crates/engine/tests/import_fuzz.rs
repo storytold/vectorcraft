@@ -2070,10 +2070,11 @@ proptest! {
     /// Hostile PostScript programs: operators in any order with any operands, opened and placed;
     /// as files in the legacy Illustrator format too (the creator line is what turns on its
     /// documented `u` … `U` groups), the groups unbalanced, deep and among clips; in a layer, which
-    /// the editing data reader reads from the program too.
+    /// the editing data reader reads from the program too, or after a setup without a layer, which
+    /// it reads with the art on one layer.
     #[test]
     fn eps_hostile_programs_never_panic(tokens in prop::collection::vec(arb_ps_token(), 0..60), illustrator in any::<bool>(), layers in any::<bool>()) {
-        let head = if illustrator { "%%Creator: Adobe Illustrator(R) 8.0\n%%EndComments\n/u {} def /U {} def" } else { "%%EndComments" };
+        let head = if illustrator { "%%Creator: Adobe Illustrator(R) 8.0\n%%EndComments\n/u {} def /U {} def\n%%BeginSetup\n%%EndSetup" } else { "%%EndComments" };
         let (open, close) = if layers {
             ("/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def\n%AI5_BeginLayer\n1 1 1 1 0 0 -1 0 0 0 Lb\n(L) Ln\n", "\nLB\n%AI5_EndLayer--")
         } else {
@@ -3139,6 +3140,35 @@ proptest! {
     fn ps_form_ai_never_panics(cut in 0usize..1_200, edits in prop::collection::vec((0usize..1_200, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '[', ']', '%', 'u', 'U', 'L', 'b', 'B', 'i', 'A', 'K'])), 0..12)) {
         let text = mutate_text(NAMED_PROLOG_AI, cut, &edits);
         survive("mutated PostScript-form .ai", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
+    }
+}
+
+/// A `.ai` in the legacy format without layers (Illustrator 3) whose prolog is included: its
+/// program runs, and its art is read on one layer.
+const LAYERLESS_AI: &str = "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 200 100\n%AI3_Cropmarks: 0 0 200 100\n%%EndComments\n\
+    %%BeginProlog\n/m {moveto} def /L {lineto} def /f {closepath fill} def /S {stroke} def /A {pop} def /k {setcmykcolor} def /u {} def /U {} def\n\
+    %%EndProlog\n%%BeginSetup\n%%EndSetup\n1 A\n0 0 0 1 k\n10 10 m\n90 10 L\n90 90 L\nf\n0 A\nu\n110 10 m\n190 90 L\n150 90 L\nf\nU\n\
+    %%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n";
+
+/// The fixture, as it is, opens through the reader: its first path keeps its lock.
+#[test]
+fn the_layerless_fixture_opens_through_the_reader() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.ai", LAYERLESS_AI.as_bytes()).unwrap();
+    assert_eq!(l.doc.layers.len(), 1, "{:?}", l.warnings);
+    let art = l.doc.layers[0].children().unwrap();
+    assert_eq!(art.len(), 2, "{:?}", l.warnings);
+    assert!(art[0].locked && !art[1].locked);
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` in the legacy format without layers, damaged: read through the reader, as its page,
+    /// or refused.
+    #[test]
+    fn layerless_ai_never_panics(cut in 0usize..800, edits in prop::collection::vec((0usize..800, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '{', '}', '%', 'u', 'U', 'L', 'f', 'A', 'k'])), 0..12)) {
+        let text = mutate_text(LAYERLESS_AI, cut, &edits);
+        survive("mutated layerless .ai", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
     }
 }
 
