@@ -145,7 +145,6 @@
 	All Artwork Above	Όλα τα γραφικά στοιχεία παραπάνω
 	All Caps	Όλα κεφαλαία
 	All Categories	Όλες οι κατηγορίες
-	All colours are within the CMYK gamut	Όλα τα χρώματα βρίσκονται εντός της χρωματικής γκάμας CMYK
 	All on Active Artboard	Όλα στον ενεργό πίνακα σχεδίασης
 	All on Same Layers	Όλα στα ίδια επίπεδα
 	All printer's marks	Όλα τα σημάδια εκτύπωσης
@@ -4493,6 +4492,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Αντιγράφηκαν οι κανόνες CSS από {n} αντικείμενο|Αντιγράφηκαν οι κανόνες CSS από {n} αντικείμενα
 @msgplural	Downloaded {n} file|Downloaded {n} files	Έγινε λήψη {n} αρχείου|Έγινε λήψη {n} αρχείων
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Εξήχθη {n} αρχείο στον φάκελο {folder}|Εξήχθησαν {n} αρχεία στον φάκελο {folder}
+@msg	All colors are within the CMYK gamut	Όλα τα χρώματα βρίσκονται εντός της χρωματικής γκάμας CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} χρώμα βρίσκεται εκτός της χρωματικής γκάμας CMYK|{n} χρώματα βρίσκονται εκτός της χρωματικής γκάμας CMYK
 @msg	Unembedded to {_1}	Καταργήθηκε η ενσωμάτωση στο {_1}
 @msg	Reset {_1}	Επαναφορά {_1}
 @msg	Sent to {_1}	Στάλθηκε στο {_1}

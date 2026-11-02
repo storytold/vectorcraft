@@ -163,7 +163,6 @@
 	All Artwork Above	Весь рисунок выше
 	All Caps	Все прописные
 	All Categories	Все категории
-	All colours are within the CMYK gamut	Все цвета входят в цветовой охват CMYK
 	All on Active Artboard	Всё на активной монтажной области
 	All on Same Layers	Всё на тех же слоях
 	All printer's marks	Все типографские метки
@@ -4581,6 +4580,8 @@ axis	Both	Оба
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Скопирован CSS {n} объекта|Скопирован CSS {n} объектов|Скопирован CSS {n} объектов
 @msgplural	Downloaded {n} file|Downloaded {n} files	Скачан {n} файл|Скачано {n} файла|Скачано {n} файлов
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Экспортирован {n} файл в {folder}|Экспортировано {n} файла в {folder}|Экспортировано {n} файлов в {folder}
+@msg	All colors are within the CMYK gamut	Все цвета входят в цветовой охват CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} цвет выходит за пределы цветового охвата CMYK|{n} цвета выходят за пределы цветового охвата CMYK|{n} цветов выходят за пределы цветового охвата CMYK
 @msg	Unembedded to {_1}	Извлечено в {_1}
 @msg	Reset {_1}	Сброшено: {_1}
 @msg	Sent to {_1}	Отправлено в {_1}

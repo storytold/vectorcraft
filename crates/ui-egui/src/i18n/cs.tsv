@@ -1921,7 +1921,6 @@ digits	Malayalam	Malajálamské
 	Smart Guides (⌘U)	Chytrá vodítka (⌘U)
 	Snap Options	Možnosti přichytávání
 	Type:	Typ:
-	All colours are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
 	Assign:	Přiřadit:
 	Color Settings	Nastavení barev
 	Gamut Check	Kontrola gamutu
@@ -4851,6 +4850,8 @@ imageTrace	Outline	Obrys
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Zkopírováno CSS {n} objektu|Zkopírováno CSS {n} objektů|Zkopírováno CSS {n} objektů
 @msgplural	Downloaded {n} file|Downloaded {n} files	Stažen {n} soubor|Staženy {n} soubory|Staženo {n} souborů
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportován {n} soubor do {folder}|Exportovány {n} soubory do {folder}|Exportováno {n} souborů do {folder}
+@msg	All colors are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} barva je mimo gamut CMYK|{n} barvy jsou mimo gamut CMYK|{n} barev je mimo gamut CMYK
 @msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}

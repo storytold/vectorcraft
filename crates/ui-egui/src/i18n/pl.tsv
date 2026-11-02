@@ -1840,7 +1840,6 @@ digits	Malayalam	Malajalam
 	Smart Guides (⌘U)	Inteligentne linie pomocnicze (⌘U)
 	Snap Options	Opcje przyciągania
 	Type:	Typ:
-	All colours are within the CMYK gamut	Wszystkie kolory mieszczą się w gamucie CMYK
 	Assign:	Przypisz:
 	Color Settings	Ustawienia kolorów
 	Gamut Check	Sprawdzanie gamutu
@@ -4677,6 +4676,8 @@ imageTrace	Outline	Kontur
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Skopiowano CSS {n} obiektu|Skopiowano CSS {n} obiektów|Skopiowano CSS {n} obiektów
 @msgplural	Downloaded {n} file|Downloaded {n} files	Pobrano {n} plik|Pobrano {n} pliki|Pobrano {n} plików
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Wyeksportowano {n} plik do {folder}|Wyeksportowano {n} pliki do {folder}|Wyeksportowano {n} plików do {folder}
+@msg	All colors are within the CMYK gamut	Wszystkie kolory mieszczą się w gamucie CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} kolor nie mieści się w gamucie CMYK|{n} kolory nie mieszczą się w gamucie CMYK|{n} kolorów nie mieści się w gamucie CMYK
 @msg	Unembedded to {_1}	Wyodrębniono do {_1}
 @msg	Reset {_1}	Zresetowano {_1}
 @msg	Sent to {_1}	Wysłano do {_1}

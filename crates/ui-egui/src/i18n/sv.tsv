@@ -153,7 +153,6 @@
 	All Artwork Above	All grafik ovanför
 	All Caps	Versaler
 	All Categories	Alla kategorier
-	All colours are within the CMYK gamut	Alla färger ligger inom CMYK-färgomfånget
 	All on Active Artboard	Alla på aktiv rityta
 	All on Same Layers	Alla på samma lager
 	All printer's marks	Alla tryckmärken
@@ -4444,6 +4443,8 @@ axis	Both	Båda
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopierade CSS för {n} objekt|Kopierade CSS för {n} objekt
 @msgplural	Downloaded {n} file|Downloaded {n} files	Hämtade {n} fil|Hämtade {n} filer
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exporterade {n} fil till {folder}|Exporterade {n} filer till {folder}
+@msg	All colors are within the CMYK gamut	Alla färger ligger inom CMYK-färgomfånget
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} färg ligger utanför CMYK-färgomfånget|{n} färger ligger utanför CMYK-färgomfånget
 @msg	Unembedded to {_1}	Extraherad till {_1}
 @msg	Reset {_1}	Återställ {_1}
 @msg	Sent to {_1}	Skickat till {_1}

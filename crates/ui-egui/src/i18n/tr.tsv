@@ -150,7 +150,6 @@
 	All Artwork Above	Yukarıdaki Tüm Sanat Eserleri
 	All Caps	Tamamı Büyük Harf
 	All Categories	Tüm Kategoriler
-	All colours are within the CMYK gamut	Tüm renkler CMYK gamındadır
 	All on Active Artboard	Hepsi Aktif Çalışma Yüzeyinde
 	All on Same Layers	Hepsi Aynı Katmanlarda
 	All printer's marks	Tüm yazıcı işaretleri
@@ -4287,6 +4286,8 @@ axis	Both	Her İkisi
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	{n} nesnenin CSS'si kopyalandı
 @msgplural	Downloaded {n} file|Downloaded {n} files	{n} dosya indirildi
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} dosya {folder} klasörüne aktarıldı
+@msg	All colors are within the CMYK gamut	Tüm renkler CMYK gamındadır
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} renk CMYK gamının dışında
 @msg	Unembedded to {_1}	{_1}'ye gömülü değil
 @msg	Reset {_1}	{_1}'yi sıfırla
 @msg	Sent to {_1}	{_1}'ye gönderildi

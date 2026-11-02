@@ -166,7 +166,6 @@
 	All Artwork Above	Toute l’illustration au-dessus
 	All Caps	Tout en capitales
 	All Categories	Toutes les catégories
-	All colours are within the CMYK gamut	Toutes les couleurs sont dans la gamme CMJN
 	All on Active Artboard	Tout sur le plan de travail actif
 	All on Same Layers	Tout sur les mêmes calques
 	All printer's marks	Tous les repères d’impression
@@ -4535,6 +4534,8 @@ axis	Both	Les deux
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS de {n} objet copié|CSS de {n} objets copié
 @msgplural	Downloaded {n} file|Downloaded {n} files	{n} fichier téléchargé|{n} fichiers téléchargés
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} fichier exporté vers {folder}|{n} fichiers exportés vers {folder}
+@msg	All colors are within the CMYK gamut	Toutes les couleurs sont dans la gamme CMJN
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} couleur est hors de la gamme CMJN|{n} couleurs sont hors de la gamme CMJN
 @msg	Unembedded to {_1}	Incorporation annulée vers {_1}
 @msg	Reset {_1}	{_1} réinitialisé
 @msg	Sent to {_1}	Envoyé à {_1}

@@ -3383,7 +3383,6 @@ gradient-kind	Radial	円形
 	Align center	中央揃え
 	Align left	左揃え
 	Align right	右揃え
-	All colours are within the CMYK gamut	すべてのカラーが CMYK の色域内です
 	Alt	Alt
 	Amount	量
 	Area Type Options	エリア内文字オプション
@@ -4646,6 +4645,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	{n} 個のオブジェクトの CSS をコピーしました
 @msgplural	Downloaded {n} file|Downloaded {n} files	{n} 個のファイルをダウンロードしました
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} 個のファイルを {folder} に書き出しました
+@msg	All colors are within the CMYK gamut	すべてのカラーが CMYK の色域内です
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 個のカラーが CMYK の色域外です
 @msg	Unembedded to {_1}	埋め込みを解除して {_1} に保存しました
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません

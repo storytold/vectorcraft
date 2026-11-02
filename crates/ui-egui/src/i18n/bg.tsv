@@ -151,7 +151,6 @@
 	All Artwork Above	Всички графични елементи отгоре
 	All Caps	Всички главни букви
 	All Categories	Всички категории
-	All colours are within the CMYK gamut	Всички цветове са в CMYK цветовата гама
 	All on Active Artboard	Всички на активната работна област
 	All on Same Layers	Всички на същите слоеве
 	All printer's marks	Всички печатарски марки
@@ -4409,6 +4408,8 @@ axis	Both	И двете
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Копиран е CSS кодът на {n} обект|Копиран е CSS кодът на {n} обекта
 @msgplural	Downloaded {n} file|Downloaded {n} files	Изтеглен е {n} файл|Изтеглени са {n} файла
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортиран е {n} файл в {folder}|Експортирани са {n} файла в {folder}
+@msg	All colors are within the CMYK gamut	Всички цветове са в CMYK цветовата гама
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} цвят е извън CMYK цветовата гама|{n} цвята са извън CMYK цветовата гама
 @msg	Unembedded to {_1}	Извадено от вграждане в {_1}
 @msg	Reset {_1}	Нулирано: {_1}
 @msg	Sent to {_1}	Изпратено към {_1}

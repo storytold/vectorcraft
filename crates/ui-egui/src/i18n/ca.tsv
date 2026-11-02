@@ -249,7 +249,6 @@
 	All Artwork Above	Tot l’art superior
 	All Caps	Totes majúscules
 	All Categories	Totes les categories
-	All colours are within the CMYK gamut	Tots els colors són dins de la gamma CMYK
 	All in One Folder	Tot en una carpeta
 	All Layers	Totes les capes
 	All on Active Artboard	Tot al tauler actiu
@@ -5341,6 +5340,8 @@ digits	Malayalam	Malaiàlam
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	S’ha copiat el CSS de {n} objecte|S’ha copiat el CSS de {n} objectes
 @msgplural	Downloaded {n} file|Downloaded {n} files	S’ha baixat {n} fitxer|S’han baixat {n} fitxers
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	S’ha exportat {n} fitxer a {folder}|S’han exportat {n} fitxers a {folder}
+@msg	All colors are within the CMYK gamut	Tots els colors són dins de la gamma CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} color és fora de la gamma CMYK|{n} colors són fora de la gamma CMYK
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit

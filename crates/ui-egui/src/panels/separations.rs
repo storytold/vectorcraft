@@ -122,8 +122,7 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             match app.run("color.gamutCheck", json!({})) {
                 Ok(r) => {
                     let n = r["outOfGamut"].as_array().map_or(0, Vec::len);
-                    app.ui.status =
-                        if n == 0 { "All colours are within the CMYK gamut".into() } else { format!("{n} colour(s) are out of the CMYK gamut") };
+                    app.ui.status = gamut_check_status(n);
                 }
                 Err(e) => app.ui.status = e,
             }
@@ -139,6 +138,15 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 run(app, "edit.assignProfile", json!({ "cmyk": v }));
             }
         });
+    }
+}
+
+/// The status bar's line after Gamut Check finds `n` colors outside the CMYK gamut.
+pub(crate) fn gamut_check_status(n: usize) -> String {
+    if n == 0 {
+        "All colors are within the CMYK gamut".into()
+    } else {
+        crate::i18n::msg_n(n as u64, "{n} color is out of the CMYK gamut", "{n} colors are out of the CMYK gamut", &[])
     }
 }
 

@@ -1882,7 +1882,6 @@ digits	Malayalam	Malajalam
 	Smart Guides (⌘U)	Älykkäät apuviivat (⌘U)
 	Snap Options	Tartunta-asetukset
 	Type:	Tyyppi:
-	All colours are within the CMYK gamut	Kaikki värit ovat CMYK-väriavaruuden sisällä
 	Assign:	Määritä:
 	Color Settings	Väriasetukset
 	Gamut Check	Väriavaruuden tarkistus
@@ -4753,6 +4752,8 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopioitiin {n} objektin CSS|Kopioitiin {n} objektin CSS
 @msgplural	Downloaded {n} file|Downloaded {n} files	Ladattiin {n} tiedosto|Ladattiin {n} tiedostoa
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Vietiin {n} tiedosto kansioon {folder}|Vietiin {n} tiedostoa kansioon {folder}
+@msg	All colors are within the CMYK gamut	Kaikki värit ovat CMYK-väriavaruuden sisällä
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} väri on CMYK-väriavaruuden ulkopuolella|{n} väriä on CMYK-väriavaruuden ulkopuolella
 @msg	Unembedded to {_1}	Upotus purettiin kohteeseen {_1}
 @msg	Reset {_1}	Palautettiin oletukseksi {_1}
 @msg	Sent to {_1}	Lähetettiin kohteeseen {_1}
