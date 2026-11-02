@@ -5390,6 +5390,9 @@ imageTrace	Outline	კონტური
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup`-ს სჭირდება `mode: "color"`
 @msg	no color group `{name}` in the document (see swatch.list)	დოკუმენტში ფერების ჯგუფი `{name}` არ არის (იხ. swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	ბრტყელი ლოგოს რეჟიმში გამოსახულება ვექტორიზდა {_1} × {_2} პიქსელზე, საშუალოს გამოთვლით შემცირდა {_3} × {_4}-დან.
+@msg	byColor must be true or false	byColor უნდა იყოს true ან false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor ვერ დაყოფს ავტომატური დაჯგუფების ჯგუფებს: ვექტორიზება გააკეთეთ ავტომატური დაჯგუფების გარეშე
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor ვერ გადააჯგუფებს ტრასირებას აქტიური Pathfinder ეფექტით: გააფართოვეთ byColor-ის გარეშე
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` ბიბლიოთეკის პანელი არ არის (იხ. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` უნდა იყოს #rrggbb ფერი
 @msg	a key object sits on that point	ამ წერტილზე საკვანძო ობიექტი მდებარეობს

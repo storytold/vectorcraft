@@ -5904,6 +5904,9 @@ anchor	Points:	Punts:
 	CMYK Images	Imatges CMYK
 	Grayscale Images	Imatges en escala de grisos
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` ha de ser spotColors, colorEffects, rgbImages, cmykImages o grayImages
+@msg	byColor must be true or false	byColor ha de ser true o false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor no pot separar els grups de l'agrupació automàtica: traça sense l'agrupació automàtica
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor no pot tornar a agrupar un traçat amb un efecte Pathfinder actiu: expandeix-lo sense byColor
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Color dels punts de la il·lustració

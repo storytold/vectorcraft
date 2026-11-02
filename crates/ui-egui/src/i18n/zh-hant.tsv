@@ -2471,6 +2471,9 @@ file-filter	Templates	範本
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
 @msg	no color group `{name}` in the document (see swatch.list)	文件中沒有顏色群組 `{name}` (請參閱 swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	「扁平標誌」模式已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 平均縮小而來。
+@msg	byColor must be true or false	byColor 必須是 true 或 false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor 無法拆分自動群組產生的群組：請不使用自動群組來描圖
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor 無法重新編組帶有即時 Pathfinder 效果的描圖：請不使用 byColor 進行擴充
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「編輯原稿」只能開啟影像與文件檔案；「{name}」不屬於這兩類
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	只有 http、https 和 mailto URL 會在瀏覽器中開啟，「{url}」不會

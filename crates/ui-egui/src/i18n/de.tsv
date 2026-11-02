@@ -5122,6 +5122,9 @@ effect	Soft	Weich
 @msg	too many library panels were opened in this session	in dieser Sitzung wurden zu viele Bibliotheksbedienfelder geöffnet
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Das Bild hat {_1} × {_2} Pixel, mehr als {LARGE_TRACE_SIDE} auf einer Seite: Es wird nachgezeichnet, aber langsamer. Eine Vorgabe mit geringerer Detailtreue oder eine kleinere Kopie des Bildes geht schneller.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Das Bild wurde mit {_1} × {_2} Pixeln nachgezeichnet, verkleinert von {_3} × {_4} (höchstens {_5} Megapixel).
+@msg	byColor must be true or false	byColor muss true oder false sein
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor kann Gruppen aus Automatisch gruppieren nicht aufteilen: ohne Automatisch gruppieren nachzeichnen
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor kann eine Nachzeichnung mit einem aktiven Pathfinder-Effekt nicht neu gruppieren: ohne byColor umwandeln
 	Snapping	Einrasten
 	Snap to Tangent	An Tangente ausrichten
 	Snap to Perpendicular	An Senkrechter ausrichten

@@ -5459,6 +5459,9 @@ mark-style	Japanese	Japonesas
 @msg	too many library panels were opened in this session	foram abertos painéis de biblioteca demais nesta sessão
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A imagem tem {_1} × {_2} pixels, mais de {LARGE_TRACE_SIDE} em um lado: ela é traçada, mas mais devagar. Uma predefinição de menor fidelidade ou uma cópia menor da imagem traça mais rápido.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A imagem foi traçada em {_1} × {_2} pixels, reduzida de {_3} × {_4} (no máximo {_5} megapixels).
+@msg	byColor must be true or false	byColor deve ser true ou false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor não pode dividir os grupos de Agrupamento Automático: trace sem Agrupamento Automático
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor não pode reagrupar um traçado com um efeito Pathfinder ativo: expanda sem byColor
 	Snapping	Ajuste
 	Snap to Tangent	Ajustar à Tangente
 	Snap to Perpendicular	Ajustar à Perpendicular

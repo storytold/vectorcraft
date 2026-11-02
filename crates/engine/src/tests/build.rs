@@ -3059,6 +3059,316 @@ fn image_trace_release_and_expand() {
     assert!(s.execute("imageTrace.release", &json!({})).is_err());
 }
 
+/// Expand by color: each color's paths in a group of their own, named by the color, the groups
+/// stacked by the lowest path in each and the art drawn as before; Release to Layers then gives a
+/// sublayer for each color.
+#[test]
+#[allow(clippy::cognitive_complexity)] // Exercises several color and stacking cases in one trace fixture.
+fn image_trace_expand_by_color_groups_each_colors_paths() {
+    // A light field with a black ring and a red square on it.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 70.0).hypot(f64::from(y) + 0.5 - 75.0);
+        if (34.0..=40.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if (130..170).contains(&x) && (55..95).contains(&y) {
+            [200, 40, 50, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    });
+    let names = |n: &Node| n.children().unwrap().iter().map(|c| c.name.clone().unwrap_or_default()).collect::<Vec<_>>();
+    let hex = |n: &Node| n.appearance.fill_paint().color().unwrap().to_hex();
+    let shot = |s: &Session| {
+        let img = render_doc(s, false);
+        (0..200).flat_map(|x| (0..150).map(move |y| (x, y))).map(|(x, y)| img.pixel(x, y)).collect::<Vec<_>>()
+    };
+    for method in ["abutting", "overlapping"] {
+        let params = json!({"mode": "color", "palette": "limited", "colors": 3, "method": method});
+        let expand = |by_color: bool| {
+            let mut s = session();
+            add_image(&mut s, &art, Affine::IDENTITY);
+            let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params, "byColor": by_color})).unwrap();
+            let g = NodeId(r["id"].as_u64().unwrap());
+            (s, g)
+        };
+        let (flat, fg) = expand(false);
+        let (mut s, g) = expand(true);
+        let paths = node(&flat, fg).children().unwrap().clone();
+        // Without byColor (the default) the paths sit in the trace's group, with no group of their own.
+        assert!(paths.iter().all(|p| !matches!(p.kind, NodeKind::Group { .. })), "{method}");
+        let (default, dg) = {
+            let mut s = session();
+            add_image(&mut s, &art, Affine::IDENTITY);
+            let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
+            (s, NodeId(r["id"].as_u64().unwrap()))
+        };
+        assert!(*node(&default, dg).children().unwrap() == paths, "{method}: byColor is false when not given");
+        // The colors in the order they first come in, bottom to top.
+        let mut order: Vec<String> = vec![];
+        for p in &paths {
+            if !order.contains(&hex(p)) {
+                order.push(hex(p));
+            }
+        }
+        let mut sorted = order.clone();
+        sorted.sort();
+        assert_eq!(sorted, ["#000000", "#c82832", "#f0f0dc"], "{method}");
+        let n = node(&s, g);
+        assert_eq!(names(&n), order, "{method}");
+        // Each group holds its color's paths, and in turn they are the paths of the trace without
+        // byColor, in their order.
+        let groups = n.children().unwrap();
+        for c in groups {
+            assert!(matches!(c.kind, NodeKind::Group { .. }), "{method}");
+            assert!(c.children().unwrap().iter().all(|m| Some(hex(m)) == c.name), "{method}: {:?}", c.name);
+        }
+        let members: Vec<Arc<Node>> = groups.iter().flat_map(|c| c.children().unwrap().iter().cloned()).collect();
+        assert!(members == paths, "{method}");
+        assert!(shot(&s) == shot(&flat), "{method}: the art changed");
+        // Release to Layers: a sublayer for each color, in the same order.
+        let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
+        let subs = ids(&r);
+        assert_eq!(subs.len(), 3, "{method}");
+        for (sub, name) in subs.iter().zip(&order) {
+            let l = node(&s, *sub);
+            assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
+            assert_eq!(names(&l), std::slice::from_ref(name), "{method}");
+        }
+    }
+
+    // imageTrace.expand takes it too, as one undo step.
+    let mut s = session();
+    add_image(&mut s, &art, Affine::IDENTITY);
+    let params = json!({"mode": "color", "palette": "limited", "colors": 3});
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": params})).unwrap()["id"].as_u64().unwrap());
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let mut got = names(&node(&s, g));
+    got.sort();
+    assert_eq!(got, ["#000000", "#c82832", "#f0f0dc"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+
+    // A trace of one color gives one group holding every path.
+    let mut one = session();
+    let bar =
+        vectorcraft_trace::Raster::from_fn(80, 40, |x, y| if (10..70).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    add_image(&mut one, &bar, Affine::IDENTITY);
+    let r = one.execute("imageTrace.makeAndExpand", &json!({"params": {"ignoreWhite": true}, "byColor": true})).unwrap();
+    let og = node(&one, NodeId(r["id"].as_u64().unwrap()));
+    assert_eq!(names(&og), ["#000000"]);
+    let only = &og.children().unwrap()[0];
+    assert!(!only.children().unwrap().is_empty() && only.children().unwrap().iter().all(|m| hex(m) == "#000000"));
+
+    // Auto Grouping's groups are not split: refused, and the trace stays as it was.
+    let mut grouped = params.clone();
+    grouped["autoGrouping"] = json!(true);
+    let e = s.execute("imageTrace.makeAndExpand", &json!({"id": g.0, "params": grouped, "byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("Auto Grouping"), "{e}");
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "params": grouped})).unwrap()["id"].as_u64().unwrap());
+    let e = s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("Auto Grouping"), "{e}");
+    assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+    let e = s.execute("imageTrace.expand", &json!({"byColor": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("true or false"), "{e}");
+    // Refused too when Auto Grouping grouped nothing, as with side-by-side stripes.
+    let mut s = session();
+    let stripes = vectorcraft_trace::Raster::from_fn(60, 60, |x, _| match x / 20 {
+        0 => [200, 40, 40, 255],
+        1 => [40, 160, 60, 255],
+        _ => [40, 70, 200, 255],
+    });
+    add_image(&mut s, &stripes, Affine::IDENTITY);
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": grouped})).unwrap()["id"].as_u64().unwrap());
+    assert!(node(&s, g).children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })));
+    let e = s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("Auto Grouping"), "{e}");
+    assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+
+    // A color linked to a global swatch goes by the swatch's name, a tint with its percentage.
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#c82828", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#2846c8", "global": true})).unwrap();
+    let r = vectorcraft_trace::Raster::from_fn(60, 60, |x, y| match (x < 30, y < 30) {
+        (true, _) => [200, 40, 40, 255],
+        (false, true) => [40, 160, 60, 255],
+        (false, false) => [40, 70, 200, 255],
+    });
+    add_image(&mut s, &r, Affine::IDENTITY);
+    let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
+    let paths: Vec<(u64, String)> =
+        node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| (c.id.0, hex(c))).collect();
+    let mut colors: Vec<&str> = paths.iter().map(|(_, h)| h.as_str()).collect();
+    colors.sort();
+    colors.dedup();
+    assert_eq!(colors, ["#2846c8", "#28a03c", "#c82828"]);
+    // The red paths link to Ink and the blue ones to Sky at 50%; green stays a plain color.
+    let pick = |want: &str| paths.iter().filter(|(_, h)| h == want).map(|(id, _)| *id).collect::<Vec<_>>();
+    s.execute("paint.setFill", &json!({"ids": pick("#c82828"), "swatch": "Ink"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": pick("#2846c8"), "swatch": "Sky", "tint": 50})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let mut got = names(&node(&s, g));
+    got.sort();
+    assert_eq!(got, ["#28a03c", "Ink", "Sky 50%"]);
+    // A swatch named as another color's #rrggbb still gets a group of its own.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("swatch.edit", &json!({"name": "Ink", "newName": "#28a03c"})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let mut got = names(&node(&s, g));
+    got.sort();
+    assert_eq!(got, ["#28a03c", "#28a03c", "Sky 50%"]);
+
+    // Gradient fills share one group, and a stroked line goes by its stroke.
+    let ramp = vectorcraft_trace::Raster::from_fn(100, 60, |x, _| {
+        let t = (f64::from(x) + 0.5) / 100.0;
+        [(20.0 + 200.0 * t) as u8, 40, (220.0 - 180.0 * t) as u8, 255]
+    });
+    let line =
+        vectorcraft_trace::Raster::from_fn(100, 100, |x, y| if (10..90).contains(&x) && (49..52).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    for (art, params, want) in [
+        (ramp, json!({"preset": "6 Colors", "params": {"gradients": true}, "byColor": true}), "Gradients"),
+        (line, json!({"params": {"ignoreWhite": true, "strokes": true, "strokeWidth": 5}, "byColor": true}), "#000000"),
+    ] {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let res = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        assert_eq!(names(&node(&s, NodeId(res["id"].as_u64().unwrap()))), [want]);
+    }
+
+    // Flat Logo stacks its shapes biggest first without cutting holes under white: a black ring's
+    // outline, a white disc on it and a black dot on that. Black keeps a group below white and one
+    // above it, and the art draws as before, through Make and Expand and through Expand.
+    let target = vectorcraft_trace::Raster::from_fn(120, 120, |x, y| {
+        let r = (f64::from(x) + 0.5 - 60.0).hypot(f64::from(y) + 0.5 - 60.0);
+        if r < 15.0 || (30.0..50.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if r < 30.0 {
+            [255, 255, 255, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let logo = json!({"mode": "logo", "logoColors": ["#000000"]});
+    let traced = |by_color: bool, expand_after: bool| {
+        let mut s = session();
+        add_image(&mut s, &target, Affine::IDENTITY);
+        let g = if expand_after {
+            let g = s.execute("imageTrace.make", &json!({"params": logo})).unwrap()["id"].as_u64().unwrap();
+            s.execute("imageTrace.expand", &json!({"byColor": by_color})).unwrap();
+            g
+        } else {
+            s.execute("imageTrace.makeAndExpand", &json!({"params": logo, "byColor": by_color})).unwrap()["id"].as_u64().unwrap()
+        };
+        (s, NodeId(g))
+    };
+    for expand_after in [false, true] {
+        let (flat, fg) = traced(false, expand_after);
+        let (s, g) = traced(true, expand_after);
+        let paths = node(&flat, fg).children().unwrap().clone();
+        assert_eq!(paths.iter().map(|p| hex(p)).collect::<Vec<_>>(), ["#000000", "#ffffff", "#000000"]);
+        assert_eq!(names(&node(&s, g)), ["#000000", "#ffffff", "#000000"], "expand after: {expand_after}");
+        let members: Vec<Arc<Node>> = node(&s, g).children().unwrap().iter().flat_map(|c| c.children().unwrap().iter().cloned()).collect();
+        assert!(members == paths, "expand after: {expand_after}");
+        assert!(shot(&s) == shot(&flat), "expand after: {expand_after}: the art changed");
+    }
+
+    // An Abutting trace's top path, given the bottom path's color and moved onto the middle one (by
+    // a move or by a Transform effect), moved clear of it with a drop shadow cast onto it, or moved
+    // to share a pixel at its edge, before Expand, still draws on top of it.
+    let stripes = vectorcraft_trace::Raster::from_fn(90, 30, |x, _| match x / 30 {
+        0 => [200, 40, 40, 255],
+        1 => [40, 160, 60, 255],
+        _ => [40, 70, 200, 255],
+    });
+    let edited = |by_color: bool, how: &str| {
+        let mut s = session();
+        add_image(&mut s, &stripes, Affine::IDENTITY);
+        let limited = json!({"mode": "color", "palette": "limited", "colors": 3, "method": "abutting"});
+        let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
+        let paths: Vec<Arc<Node>> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).cloned().collect();
+        assert_eq!(paths.len(), 3);
+        let (first, middle, last) = (&paths[0], &paths[1], &paths[2]);
+        s.execute("paint.setFill", &json!({"ids": [last.id.0], "color": hex(first)})).unwrap();
+        let (to, from) = (middle.visual_bounds().unwrap(), last.visual_bounds().unwrap());
+        let (dx, dy) = (to.x0 - from.x0, to.y0 - from.y0);
+        match how {
+            "beside" => {
+                // The middle path and the moved top path end and start inside one pixel.
+                s.execute("object.move", &json!({"ids": [middle.id.0], "dx": -0.5, "dy": 0})).unwrap();
+                s.execute("object.move", &json!({"ids": [last.id.0], "dx": -0.3, "dy": 0})).unwrap()
+            }
+            "move" => s.execute("object.move", &json!({"ids": [last.id.0], "dx": dx, "dy": dy})).unwrap(),
+            "transform" => {
+                s.execute("effect.apply", &json!({"ids": [last.id.0], "effect": "distort.transform", "params": {"moveH": dx, "moveV": dy}})).unwrap()
+            }
+            _ => {
+                s.execute("object.move", &json!({"ids": [last.id.0], "dx": 40, "dy": 0})).unwrap();
+                s.execute("effect.apply", &json!({"ids": [last.id.0], "effect": "stylize.dropShadow", "params": {"x": -70, "y": 0, "blur": 0}}))
+                    .unwrap()
+            }
+        };
+        s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": by_color})).unwrap();
+        (s, g)
+    };
+    for how in ["move", "transform", "shadow", "beside"] {
+        let (flat, _) = edited(false, how);
+        let (s, g) = edited(true, how);
+        assert_eq!(names(&node(&s, g)).len(), 3, "{how}");
+        assert!(shot(&s) == shot(&flat), "{how}: the edited art changed");
+    }
+
+    // Two tints of one swatch that round to the same percentage are still two colors.
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#2846c8", "global": true})).unwrap();
+    add_image(&mut s, &stripes, Affine::IDENTITY);
+    let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
+    let paths: Vec<u64> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| c.id.0).collect();
+    assert_eq!(paths.len(), 3);
+    s.execute("paint.setFill", &json!({"ids": [paths[0]], "swatch": "Sky", "tint": 50.1})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [paths[1], paths[2]], "swatch": "Sky", "tint": 50.4})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let groups = node(&s, g).children().unwrap().clone();
+    assert_eq!(names(&node(&s, g)), ["Sky 50%", "Sky 50%"]);
+    assert_eq!(groups.iter().map(|c| c.children().unwrap().len()).collect::<Vec<_>>(), [1, 2]);
+}
+
+#[test]
+fn image_trace_expand_by_color_preserves_live_pathfinder_art() {
+    let mut s = session();
+    let art = vectorcraft_trace::Raster::from_fn(100, 60, |x, y| {
+        if (10..40).contains(&y) && ((10..35).contains(&x) || (65..90).contains(&x)) { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    });
+    add_image(&mut s, &art, Affine::IDENTITY);
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true}})).unwrap()["id"].as_u64().unwrap());
+    let paths: Vec<NodeId> = node(&s, g).children().unwrap().iter().filter(|c| c.path_data().is_some()).map(|c| c.id).collect();
+    assert_eq!(paths.len(), 2);
+    s.execute("select.set", &json!({"ids": [paths[1].0]})).unwrap();
+    s.execute("object.move", &json!({"dx": -45, "dy": 0})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "pathfinder.subtract"})).unwrap();
+    let before = render_doc(&s, false);
+    let before_pixels: Vec<_> = (0..100).flat_map(|x| (0..60).map(move |y| (x, y))).map(|(x, y)| before.pixel(x, y)).collect();
+    let original = node(&s, g);
+    let steps = s.doc().unwrap().history.undo.len();
+    let result = s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true}));
+    if let Err(e) = &result {
+        assert!(e.to_string().contains("Pathfinder"), "{e}");
+        assert_eq!(node(&s, g), original);
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    }
+    let after = render_doc(&s, false);
+    let after_pixels: Vec<_> = (0..100).flat_map(|x| (0..60).map(move |y| (x, y))).map(|(x, y)| after.pixel(x, y)).collect();
+    let changed = after_pixels.iter().zip(&before_pixels).filter(|(a, b)| a != b).count();
+    assert_eq!(changed, 0, "byColor changed {changed} live Pathfinder pixels: {result:?}");
+    assert!(result.is_err(), "byColor must refuse a live Pathfinder operand group");
+    let error = s.execute("imageTrace.makeAndExpand", &json!({"id": g.0, "params": {"ignoreWhite": true}, "byColor": true})).unwrap_err();
+    assert!(error.to_string().contains("Pathfinder"), "{error}");
+    assert_eq!(node(&s, g), original);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
 #[test]
 fn image_trace_make_and_expand_and_color_presets() {
     let mut s = session();

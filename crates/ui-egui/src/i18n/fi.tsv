@@ -5506,6 +5506,9 @@ mark-style	Japanese	Japanilainen
 @msg	too many library panels were opened in this session	tässä istunnossa on avattu liian monta kirjastopaneelia
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Kuva on {_1} × {_2} kuvapistettä, yhdeltä sivultaan yli {LARGE_TRACE_SIDE}: se jäljitetään, mutta hitaammin. Pienemmän tarkkuuden esiasetus tai kuvan pienempi kopio jäljittyy nopeammin.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Kuva jäljitettiin kokoon {_1} × {_2} kuvapistettä pienennettynä koosta {_3} × {_4} (enintään {_5} megapikseliä).
+@msg	byColor must be true or false	byColor-arvon on oltava true tai false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor ei voi jakaa Automaattisen ryhmittelyn ryhmiä: jäljitä ilman Automaattista ryhmittelyä
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor ei voi ryhmitellä uudelleen jäljitystä, jossa on aktiivinen Pathfinder-tehoste: laajenna ilman byColor-asetusta
 	Snapping	Tartunta
 	Snap to Tangent	Kohdista tangenttiin
 	Snap to Perpendicular	Kohdista kohtisuoraan

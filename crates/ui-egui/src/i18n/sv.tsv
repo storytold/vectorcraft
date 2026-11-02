@@ -5565,6 +5565,9 @@ swatch	Yellow Green	Gulgrön
 @msg	“{name}” is not a file	”{name}” är inte en fil
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Bilden är {_1} × {_2} pixlar, mer än {LARGE_TRACE_SIDE} på en sida: den vektoriseras, men långsammare. En förinställning med lägre återgivning eller en mindre kopia av bilden går snabbare.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Bilden vektoriserades vid {_1} × {_2} pixlar, nedskalad från {_3} × {_4} (högst {_5} megapixlar).
+@msg	byColor must be true or false	byColor måste vara true eller false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor kan inte dela upp grupper från Automatisk gruppering: vektorisera utan Automatisk gruppering
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor kan inte gruppera om en kalkering med en aktiv Pathfinder-effekt: expandera utan byColor
 	Snapping	Fäst
 	Snap to Tangent	Fäst mot tangent
 	Snap to Perpendicular	Fäst mot vinkelrät

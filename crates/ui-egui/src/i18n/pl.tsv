@@ -5396,6 +5396,9 @@ mark-style	Japanese	Japońskie
 @msg	too many library panels were opened in this session	w tej sesji otwarto zbyt wiele paneli bibliotek
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Obraz ma {_1} × {_2} pikseli, ponad {LARGE_TRACE_SIDE} na jednym boku: zostanie obrysowany, ale wolniej. Ustawienie wstępne o niższej wierności lub mniejsza kopia obrazu obrysuje się szybciej.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Obraz obrysowano w rozdzielczości {_1} × {_2} pikseli, po zmniejszeniu z {_3} × {_4} (najwyżej {_5} megapikseli).
+@msg	byColor must be true or false	byColor musi mieć wartość true lub false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor nie może podzielić grup Automatycznego grupowania: obrysuj bez Automatycznego grupowania
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor nie może ponownie zgrupować obrysu z aktywnym efektem Pathfinder: rozwiń bez byColor
 	Snapping	Przyciąganie
 	Snap to Tangent	Przyciągaj do stycznych
 	Snap to Perpendicular	Przyciągaj do prostopadłych

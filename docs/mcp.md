@@ -1680,6 +1680,17 @@ already walks Image Trace. Short agent entry points:
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
   settings, such as `colours`, is an error that names it and the nearest setting (`colors`), as for a command's own keys.
+  With `byColor: true`, `imageTrace.expand` and `imageTrace.makeAndExpand` put each color's paths in a group of their
+  own, named by the global swatch the color links to (a tint with its percentage, as `Sky 50%`) or as `#rrggbb`;
+  gradient fills share a group named `Gradients`. The groups stack in the order of the lowest path in each, and each
+  keeps its paths' order. For either Expand command, a path that would move under a path of another
+  color whose painted bounds, effects and shadows included, come within one document point of it starts another group
+  of its color instead of joining an earlier one. Paths whose painted bounds come within one document point of an
+  intervening color stay in separate groups to preserve their stacking order; at small view or raster-export scales,
+  regrouped paths farther apart can still share antialiased pixels, so edge pixels may differ. In a Flat Logo trace of a
+  black ring around a white disc around a black dot, black gets two groups. `layer.releaseToLayers` on the expanded group then
+  gives each group a sublayer. A trace made with `autoGrouping` is refused. Expanding by color also refuses a trace
+  with a live Pathfinder effect.
   `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
   the preferences: `params` over `preset`'s (default: the saved preset `name`, else Default), checked as `imageTrace.make`
   checks them; without `name` it is a new "Tracing Preset N", and `newName` renames a saved preset (the reply's
