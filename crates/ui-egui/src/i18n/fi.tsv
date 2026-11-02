@@ -2950,6 +2950,7 @@ digits	Malayalam	Malajalam
 	Total Width:	Kokonaisleveys:
 	Width Point Edit	Leveyspisteen muokkaus
 	Art	Kuvitus
+	Bearing	Suunta
 	Bristle	Harjas
 	Calligraphic	Kalligrafinen
 	Dots	Pisteet
@@ -2957,6 +2958,7 @@ digits	Malayalam	Malajalam
 	Pressure	Paine
 	Random	Satunnainen
 	Scatter	Sironta
+	Tilt	Kallistus
 	Color Burn	Värisävyn tummennus
 	Color Dodge	Värisävyn vaalennus
 	Darken	Tummenna

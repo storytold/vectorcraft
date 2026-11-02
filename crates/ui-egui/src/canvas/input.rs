@@ -1,7 +1,7 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
-    HoverContext, apply_requests, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id, drop_press, mods, on_canvas, pen_pressure,
-    tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
+    FrameMove, HoverContext, apply_requests, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id, drop_press, mods, move_pose, on_canvas,
+    pen_pose, pen_pressure, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
@@ -132,6 +132,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
+            pen: None,
         };
         dispatch(app, &ev, view);
     }
@@ -277,6 +278,7 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: pen_pressure(ui, app, true),
+            pen: pen_pose(app, &xf),
         };
         dispatch(app, &ev, view);
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
@@ -359,6 +361,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
                 mods: mods(m, space),
                 backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                 pressure: pen_pressure(ui, app, false),
+                pen: pen_pose(app, &xf),
             };
             dispatch(app, &ev, view);
             ui.data_mut(|dd| {
@@ -377,21 +380,19 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             // or the web, a finger) and a macOS pen's moves carry their own pressure; a
             // mouse's, a pen's on X11 among them, take the host's latest. Other tools get
             // the last position only, so a costly drag preview runs once a frame.
-            let moves = tool_frame_moves(ui, app);
+            let (moves, last_pose) = tool_frame_moves(ui, app);
             // A frame whose pointer ends where the last one did still moved in between.
             let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
             let mods_changed = tool_drag_mods_changed(ui, mods(m, space), backquote);
             if tool_drag_moved(ui, &xf, p, pointer) || mods_changed || !moves.is_empty() {
-                for (at, force) in moves {
-                    let pressure = force.unwrap_or_else(|| pen_pressure(ui, app, false));
-                    dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure }, view);
-                }
+                dispatch_frame_moves(app, ui, f, backquote, moves);
                 let ev = PointerEvent {
                     kind: PointerKind::Drag,
                     pos: xf.to_doc(p),
                     mods: mods(m, space),
                     backquote,
                     pressure: pen_pressure(ui, app, false),
+                    pen: move_pose(app, &xf, last_pose),
                 };
                 dispatch(app, &ev, view);
             }
@@ -403,6 +404,17 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
                 apply_requests(app, r);
             }
         }
+    }
+}
+
+/// A drag for each of this frame's moves before the pointer's position ([`tool_frame_moves`]), each
+/// with the pressure and the tilt and rotation the host's feed kept for that move, else the latest.
+fn dispatch_frame_moves(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, backquote: bool, moves: Vec<FrameMove>) {
+    let Pointing { m, space, xf, view, .. } = *f;
+    for (at, force, pose) in moves {
+        let pressure = force.unwrap_or_else(|| pen_pressure(ui, app, false));
+        let pen = move_pose(app, &xf, pose);
+        dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure, pen }, view);
     }
 }
 
@@ -452,18 +464,24 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             // A move that came in the release's own frame shapes the preview first: the
             // tools commit the last preview, which should be where the pointer let go
             // (#834). Only once the press has dragged, so a click's jitter stays a click
-            // (the Pen's corner anchor, no nudge with Direct Selection).
-            if let Some(last) = last_drag
-                && last != xf.to_doc(p)
-            {
-                let ev = PointerEvent {
-                    kind: PointerKind::Drag,
-                    pos: xf.to_doc(p),
-                    mods: mods(m, space),
-                    backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
-                    pressure: pen_pressure(ui, app, false),
-                };
-                dispatch(app, &ev, view);
+            // (the Pen's corner anchor, no nudge with Direct Selection). A tool that builds a
+            // stroke from the drag's samples gets the frame's other moves before it.
+            let (moves, last_pose) = tool_frame_moves(ui, app);
+            let pen = move_pose(app, &xf, last_pose);
+            if let Some(last) = last_drag {
+                let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
+                dispatch_frame_moves(app, ui, f, backquote, moves);
+                if last != xf.to_doc(p) {
+                    let ev = PointerEvent {
+                        kind: PointerKind::Drag,
+                        pos: xf.to_doc(p),
+                        mods: mods(m, space),
+                        backquote,
+                        pressure: pen_pressure(ui, app, false),
+                        pen,
+                    };
+                    dispatch(app, &ev, view);
+                }
             }
             let ev = PointerEvent {
                 kind: PointerKind::Up,
@@ -471,13 +489,14 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                 mods: mods(m, space),
                 backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                 pressure: pen_pressure(ui, app, false),
+                pen,
             };
             dispatch(app, &ev, view);
         }
         Drag::Art if on_canvas(ui, resp, p) => {
             // Came back to the canvas and released in one frame: finish the move here.
             egui::DragAndDrop::clear_payload(ui.ctx());
-            let pressure = pen_pressure(ui, app, false);
+            let (pressure, pen) = (pen_pressure(ui, app, false), pen_pose(app, &xf));
             let pos = xf.to_doc(p);
             dispatch(
                 app,
@@ -487,6 +506,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: mods(m, space),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure,
+                    pen,
                 },
                 view,
             );
@@ -498,6 +518,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: mods(m, space),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure,
+                    pen,
                 },
                 view,
             );
@@ -515,6 +536,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: Mods::default(),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure: 1.0,
+                    pen: None,
                 },
                 view,
             );
@@ -536,6 +558,7 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
+            pen: None,
         };
         let before = app.session.tool_id().to_string();
         dispatch(app, &ev, view);

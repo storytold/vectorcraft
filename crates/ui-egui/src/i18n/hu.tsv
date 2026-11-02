@@ -397,6 +397,7 @@ font-technology	Variable	Változó
 	Basic	Alap
 	Basic Latin	Alap latin
 	Batch	Kötegelt feldolgozás
+	Bearing	Irány
 	Begin Recording	Felvétel indítása
 	Begin Undo Group	Visszavonási csoport kezdete
 	Bend:	Hajlítás mértéke:
@@ -4081,6 +4082,7 @@ mark-style	Japanese	Japán
 	Tile Type:	Csempézés módja:
 	tile {number}	csempe {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	A csempék számozása vízszintesen, majd lefelé halad; az összes csempéhez hagyd üresen a tartományt.
+	Tilt	Dőlés
 	Tint	Tónus
 	Tints	Tónusok
 	Tints and Shades	Tónusok és árnyalatok

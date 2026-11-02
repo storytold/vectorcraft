@@ -10,8 +10,11 @@
 //! Smart Guides ([`DrawSnap`]: an anchor, a path, in line with the art), hovering too; the points
 //! between follow the hand. The Paintbrush records the pen pressure of each point (a stroke a pen
 //! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes, and
-//! so do the Blob Brush and the Eraser while their Size varies with Pressure. The other tools
-//! collect the drag polyline (shown as an overlay) and run one command on release. With Shift held, the Blob Brush's points stay on the horizontal or
+//! the pen's tilt and barrel rotation where the pen reads them (`[x, y, pressure, tiltX, tiltY,
+//! rotation]` points, `null` for what a point lacks) for brushes that vary with them. The Blob
+//! Brush and Eraser also record pressure when their Size varies with Pressure. The other tools
+//! collect the drag polyline (shown as an overlay) and run one command on release. With Shift
+//! held, the Blob Brush's points stay on the horizontal or
 //! vertical line through the press point. Alt held at the press, or before the Blob Brush's drag
 //! has moved, switches the Blob Brush to the Smooth tool: the drag smooths the selected paths.
 //! Alt held at a Paintbrush press with a selected path also smooths; Alt pressed after its stroke
@@ -26,7 +29,7 @@ use vectorcraft_geom::{Affine, Point};
 
 use super::{FEEDBACK, blob_area, blob_tip, eraser_area, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// How far from its drag the Smooth tool smooths, in screen pixels. Alt smoothing with the
 /// Pencil, Paintbrush or Blob Brush uses the same radius.
@@ -48,6 +51,8 @@ pub struct GestureTool {
     /// The pen pressure of each of `points` (the Paintbrush, and the Blob Brush and the Eraser
     /// with `size_pressure`).
     pressures: Vec<f32>,
+    /// The pen's tilt and rotation at each of `points` (the Paintbrush only).
+    poses: Vec<Option<PenPose>>,
     active: bool,
     began: bool,
     /// A release where the pointer last dragged to would close the stroke because it ends near
@@ -169,6 +174,7 @@ impl GestureTool {
             previewed: 0,
             points: vec![],
             pressures: vec![],
+            poses: vec![],
             active: false,
             began: false,
             near_start: false,
@@ -242,11 +248,14 @@ impl GestureTool {
         self.id != "pencil" || self.live_preview
     }
 
-    /// Add a stroke sample.
-    fn push(&mut self, p: Point, pressure: f32) {
+    /// Add a stroke sample, with the pen's pressure, tilt and rotation of the event `ev` there.
+    fn push(&mut self, p: Point, ev: &PointerEvent) {
         self.points.push(p);
         if self.id == "paintbrush" || (self.varies_size() && self.size_pressure) {
-            self.pressures.push(pressure);
+            self.pressures.push(ev.pressure);
+        }
+        if self.id == "paintbrush" {
+            self.poses.push(ev.pen.map(PenPose::sanitized));
         }
     }
 
@@ -328,6 +337,7 @@ impl GestureTool {
         self.moved = false;
         self.points.clear();
         self.pressures.clear();
+        self.poses.clear();
         self.previewed = 0;
         self.shift_line = None;
     }
@@ -345,11 +355,24 @@ impl GestureTool {
         (self.varies_size() && self.size_pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
     }
 
-    /// The stroke's points, each `[x, y, pressure]` when a pen pressed less than fully anywhere
-    /// along it (a mouse always presses fully).
+    /// The stroke's points: `[x, y, pressure, tiltX, tiltY, rotation]` when a pen read its tilt or
+    /// rotation anywhere along it (`null` for what a point lacks, and for the pressure of a stroke
+    /// pressed fully all along), else `[x, y, pressure]` when a pen pressed less than fully
+    /// anywhere (a mouse always presses fully), else `[x, y]`.
     fn stroke_json(&self) -> Value {
-        if self.pressures.len() == self.points.len() && self.pressures.iter().any(|p| *p < 1.0) {
-            Value::Array(self.points.iter().zip(&self.pressures).map(|(p, f)| json!([p.x, p.y, (f64::from(*f) * 1000.0).round() / 1000.0])).collect())
+        let n = self.points.len();
+        let pressed = self.pressures.len() == n && self.pressures.iter().any(|p| *p < 1.0);
+        let posed = self.poses.len() == n && self.poses.iter().flatten().any(|q| q.tilt.is_some() || q.rotation.is_some());
+        let round = |v: f32, k: f64| (f64::from(v) * k).round() / k;
+        if posed {
+            let points = self.points.iter().zip(&self.pressures).zip(&self.poses).map(|((p, f), q)| {
+                let q = q.unwrap_or_default();
+                let (tilt, rotation) = (q.tilt.map(|t| t.map(|v| round(v, 100.0))), q.rotation.map(|r| round(r, 100.0)));
+                json!([p.x, p.y, pressed.then(|| round(*f, 1000.0)), tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation])
+            });
+            Value::Array(points.collect())
+        } else if pressed {
+            Value::Array(self.points.iter().zip(&self.pressures).map(|(p, f)| json!([p.x, p.y, round(*f, 1000.0)])).collect())
         } else {
             points_json(&self.points)
         }
@@ -569,7 +592,7 @@ impl Tool for GestureTool {
                 };
                 self.clear();
                 self.pressed = p;
-                self.push(start, ev.pressure);
+                self.push(start, ev);
                 vec![]
             }
             PointerKind::Drag => {
@@ -614,7 +637,7 @@ impl Tool for GestureTool {
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     return vec![];
                 }
-                self.push(p, ev.pressure);
+                self.push(p, ev);
                 self.near_start = self.release_closes_near_start(cx, end);
                 if !self.draws_path() || self.smoothing {
                     return vec![];
@@ -658,12 +681,12 @@ impl Tool for GestureTool {
                 if self.straight {
                     self.points.truncate(1);
                     if !self.back_at_press(cx, ev.pos, end) {
-                        self.push(end, ev.pressure);
+                        self.push(end, ev);
                     } else {
                         cancel = self.began;
                     }
                 } else if self.points.last().is_some_and(|l| l.distance(p) >= cx.tol(1.0)) {
-                    self.push(end, ev.pressure);
+                    self.push(end, ev);
                 } else if self.snaps()
                     && !self.smoothing
                     && self.points.len() > 1

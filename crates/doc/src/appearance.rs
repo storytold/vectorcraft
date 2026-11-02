@@ -10,10 +10,12 @@ mod stroke_style;
 
 pub(crate) use layers::HEAD_REACH;
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
-pub use profile::{PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
+pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
 pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 
 /// One entry of the appearance stack.
+// A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum AppearanceItem {
@@ -126,11 +128,15 @@ impl Appearance {
     pub fn stroke_mut(&mut self) -> Option<&mut StrokeLayer> {
         self.items.iter_mut().rev().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None })
     }
-    /// This appearance for other art: the pen pressure its strokes were drawn with stays with them.
+    /// This appearance for other art: the pen pressure, tilt, bearing and rotation its strokes
+    /// were drawn with stay with them.
     pub fn without_pressure(mut self) -> Self {
         for it in &mut self.items {
             if let AppearanceItem::Stroke(s) = it {
                 s.pressure = None;
+                s.tilt = None;
+                s.bearing = None;
+                s.rotation = None;
             }
         }
         self

@@ -2016,6 +2016,8 @@ font-technology	Variable	Variables
 	Roundness:	Arrondi :
 	Fixed	Fixe
 	Pressure	Pression
+	Tilt	Inclinaison
+	Bearing	Orientation
 	Shape:	Forme :
 	Bristle Length:	Longueur des soies :
 	Bristle Density:	Densité des soies :

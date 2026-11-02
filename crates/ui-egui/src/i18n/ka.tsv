@@ -2580,6 +2580,7 @@ digits	Malayalam	მალაიალამური
 	Total Width:	სრული სიგანე:
 	Width Point Edit	სიგანის წერტილის რედაქტირება
 	Art	ნახატი
+	Bearing	აზიმუტი
 	Bristle	ჯაგრისი
 	Calligraphic	კალიგრაფიული
 	Dots	წერტილები
@@ -2587,6 +2588,7 @@ digits	Malayalam	მალაიალამური
 	Pressure	დაწოლა
 	Random	შემთხვევითი
 	Scatter	გაბნევა
+	Tilt	დახრა
 	Color Burn	ფერით ჩამუქება
 	Color Dodge	ფერით გაღიავება
 	Darken	ჩამუქება

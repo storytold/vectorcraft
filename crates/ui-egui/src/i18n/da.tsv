@@ -2767,6 +2767,7 @@ digits	Malayalam	Malayalam
 	Total Width:	Samlet bredde:
 	Width Point Edit	Redigér breddepunkt
 	Art	Kunst
+	Bearing	Retning
 	Bristle	Borst
 	Calligraphic	Kalligrafisk
 	Dots	Prikker
@@ -2774,6 +2775,7 @@ digits	Malayalam	Malayalam
 	Pressure	Tryk
 	Random	Tilfældig
 	Scatter	Spredning
+	Tilt	Hældning
 	Color Burn	Farvebrænding
 	Color Dodge	Farveudtynding
 	Darken	Mørkere

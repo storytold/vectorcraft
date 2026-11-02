@@ -159,6 +159,24 @@ impl Calligraphic {
     pub fn uses_pressure(&self) -> bool {
         self.modes().contains(&Variation::Pressure)
     }
+    /// Does the pen (its pressure, tilt, bearing or rotation) change the nib?
+    pub fn uses_pen(&self) -> bool {
+        self.modes().iter().any(|m| m.follows_pen())
+    }
+    /// Value `i` (0 angle, 1 roundness, 2 size) moved by `by`: the angle turns round past ±180°,
+    /// roundness and size stay within their [`Self::RANGES`]. A result that is not a number is
+    /// `value`, kept within its range.
+    pub fn moved(i: usize, value: f64, by: f64) -> f64 {
+        let (lo, hi) = Self::RANGES.get(i).copied().unwrap_or((f64::MIN, f64::MAX));
+        let x = value + by;
+        if !x.is_finite() {
+            value.clamp(lo, hi)
+        } else if i == 0 {
+            vectorcraft_geom::normalize_deg(x)
+        } else {
+            x.clamp(lo, hi)
+        }
+    }
 }
 
 /// How a Calligraphic brush's angle, roundness or size varies (Brush Options). Saved by name: new
@@ -174,16 +192,29 @@ pub enum Variation {
     /// From the value less the variation at the lightest pen pressure to the value plus the
     /// variation at the heaviest.
     Pressure,
+    /// From the value less the variation with the pen lying flat to the value plus the variation
+    /// with it upright.
+    Tilt,
+    /// The value plus the variation times the pen's bearing over 180°: the bearing is which way the
+    /// pen leans, counter-clockwise on the page from leaning to the right (0°) round to ±180°.
+    Bearing,
+    /// The value plus the variation times the pen barrel's rotation over 180°, counter-clockwise
+    /// from where the pen reports 0° round to ±180°.
+    Rotation,
 }
 
 impl Variation {
-    pub const ALL: [Variation; 3] = [Variation::Fixed, Variation::Random, Variation::Pressure];
+    pub const ALL: [Variation; 6] =
+        [Variation::Fixed, Variation::Random, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation];
     /// The name brush definitions use.
     pub fn id(self) -> &'static str {
         match self {
             Variation::Fixed => "fixed",
             Variation::Random => "random",
             Variation::Pressure => "pressure",
+            Variation::Tilt => "tilt",
+            Variation::Bearing => "bearing",
+            Variation::Rotation => "rotation",
         }
     }
     pub fn label(self) -> &'static str {
@@ -191,10 +222,62 @@ impl Variation {
             Variation::Fixed => "Fixed",
             Variation::Random => "Random",
             Variation::Pressure => "Pressure",
+            Variation::Tilt => "Tilt",
+            Variation::Bearing => "Bearing",
+            Variation::Rotation => "Rotation",
         }
     }
     pub fn parse(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|v| v.id() == id)
+    }
+    /// Does the value follow something the pen records along a stroke (Pressure, Tilt, Bearing,
+    /// Rotation)?
+    pub fn follows_pen(self) -> bool {
+        matches!(self, Variation::Pressure | Variation::Tilt | Variation::Bearing | Variation::Rotation)
+    }
+}
+
+/// What the pen recorded at one point of a stroke, each as the 0..1 that [`Variation`]'s pen modes
+/// read: 0 gives the value less the variation (a Scatter brush's first value), 1 the value plus it
+/// (the second value), and ½ the value itself, as a stroke without that recording does.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PenAt {
+    /// The pressure, lightest 0.
+    pressure: f64,
+    /// 1 upright, 0 lying flat.
+    tilt: f64,
+    /// ½ plus the bearing over 360°.
+    bearing: f64,
+    /// ½ plus the counter-clockwise barrel rotation over 360°.
+    rotation: f64,
+}
+
+impl PenAt {
+    /// Every input at `c`.
+    pub(crate) fn uniform(c: f64) -> Self {
+        Self { pressure: c, tilt: c, bearing: c, rotation: c }
+    }
+    /// What `stroke` recorded at `f` (the fraction of its path's length).
+    pub(crate) fn of(stroke: &StrokeLayer, f: f64) -> Self {
+        let mid = vectorcraft_doc::PressureProfile::MID;
+        let turn = |p: Option<&vectorcraft_doc::AngleProfile>| 0.5 + p.map_or(0.0, |p| p.at(f)) / 360.0;
+        Self {
+            pressure: stroke.pressure.as_ref().map_or(mid, |p| p.at(f)),
+            tilt: 1.0 - stroke.tilt.as_ref().map_or(mid, |p| p.at(f)),
+            bearing: turn(stroke.bearing.as_ref()),
+            rotation: turn(stroke.rotation.as_ref()),
+        }
+    }
+    /// The 0..1 a value on `mode` takes, or `None` for a mode that doesn't follow the pen.
+    pub(crate) fn control(&self, mode: Variation) -> Option<f64> {
+        let c = match mode {
+            Variation::Fixed | Variation::Random => return None,
+            Variation::Pressure => self.pressure,
+            Variation::Tilt => self.tilt,
+            Variation::Bearing => self.bearing,
+            Variation::Rotation => self.rotation,
+        };
+        Some(if c.is_finite() { c.clamp(0.0, 1.0) } else { 0.5 })
     }
 }
 
@@ -216,8 +299,10 @@ pub struct Scatter {
     pub colorization: Colorization,
     /// How size, spacing, scatter and rotation vary between their two values: Fixed takes the
     /// first, Random any value between them, Pressure the first at the lightest pen pressure and
-    /// the second at the heaviest. `None` (brushes saved before there were modes): Random where
-    /// the two differ, else Fixed — see [`Scatter::modes`].
+    /// the second at the heaviest, Tilt the first with the pen lying flat and the second upright,
+    /// Bearing and Rotation the first at −180° and the second at 180° (half way at 0°). `None`
+    /// (brushes saved before there were modes): Random where the two differ, else Fixed (see
+    /// [`Scatter::modes`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modes: Option<[Variation; 4]>,
 }
@@ -719,7 +804,7 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
         BrushKind::Art(a) => warp::art(a, bp, w, stroke.pressure.as_ref()),
-        BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke.pressure.as_ref(), &brush.name),
+        BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke, &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),
     };
     let colorization = brush.kind.colorization();

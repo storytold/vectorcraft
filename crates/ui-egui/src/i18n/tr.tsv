@@ -1846,6 +1846,8 @@ font-technology	Variable	Değişken
 	Roundness:	Yuvarlaklık:
 	Fixed	Sabit
 	Pressure	Basınç
+	Tilt	Eğim
+	Bearing	Yön
 	Shape:	Şekil:
 	Bristle Length:	Kıl Uzunluğu:
 	Bristle Density:	Kıl Yoğunluğu:

@@ -58,7 +58,7 @@ mod input;
 
 pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
-pub use input::{Action, Mods, PointerEvent, PointerKind, ToolKey};
+pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]

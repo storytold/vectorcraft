@@ -8,11 +8,11 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
-use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation, tolerance};
+use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, PenAt, Scatter, Variation, tolerance};
 
 /// Longest mapped segment (points in document space).
 const MAX_SEG: f64 = 1.5;
@@ -536,18 +536,19 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
 }
 
 /// One of a scatter brush's values for the next copy: Fixed takes the first of `(a, b)`, Random a
-/// value between them, Pressure the first at pen pressure 0 and the second at 1. Every value
-/// draws, so a copy's random values stay the same whatever the other modes.
-fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pressure: f64) -> f64 {
+/// value between them, and a mode that follows the pen the first where `pen` reads 0 for it and
+/// the second where it reads 1. Every value draws, so a copy's random values stay the same
+/// whatever the other modes.
+fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
     let r = rng.range(a, b);
-    match mode {
-        Variation::Fixed => a,
-        Variation::Random => r,
-        Variation::Pressure => a + (b - a) * pressure.clamp(0.0, 1.0),
+    match pen.control(mode) {
+        Some(c) => a + (b - a) * c,
+        None if mode == Variation::Random => r,
+        None => a,
     }
 }
 
-pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>, name: &str) -> Vec<Node> {
+pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
     let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
     let mut rng = Rng::new(seed_of(bp, name));
@@ -558,8 +559,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             break;
         }
         let l = t.len();
-        // The pen pressure at arc length `at` (half way without a recorded one).
-        let pressure_at = |at: f64| pressure.map_or(PressureProfile::MID, |p| p.at(if l > 1e-9 { at / l } else { 0.0 }));
+        // What the pen recorded at arc length `at` (the values themselves without a recording).
+        let pen_at = |at: f64| PenAt::of(stroke, if l > 1e-9 { at / l } else { 0.0 });
         let mut s: Option<f64> = None;
         let mut guard = 0;
         loop {
@@ -567,8 +568,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             if guard > 20000 {
                 break;
             }
-            // Size and spacing place the next copy, so they take the pressure at the last one.
-            let p = pressure_at(s.unwrap_or(0.0));
+            // Size and spacing place the next copy, so they take the pen at the last one.
+            let p = pen_at(s.unwrap_or(0.0));
             let size = vary(&mut rng, sc.size, size_mode, p).max(1.0) / 100.0 * weight;
             let spacing = vary(&mut rng, sc.spacing, spacing_mode, p).max(1.0) / 100.0;
             let step = aw * size * spacing;
@@ -580,7 +581,7 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
                 break;
             }
             s = Some(pos);
-            let p = pressure_at(pos);
+            let p = pen_at(pos);
             let off = vary(&mut rng, sc.scatter, scatter_mode, p) / 100.0 * ah * size;
             let rot = vary(&mut rng, sc.rotation, rotation_mode, p).to_radians();
             let (p, tg) = t.frame(pos);

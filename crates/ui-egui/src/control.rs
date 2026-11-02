@@ -519,7 +519,8 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         };
         let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
         let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-        let pos = if e.get("space").and_then(Value::as_str) == Some("screen") {
+        let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+        let pos = if screen {
             match xf {
                 Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
                 None => return err("no canvas yet"),
@@ -528,8 +529,13 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
             vectorcraft_geom::Point::new(x, y)
         };
         let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        // A tilt given in screen axes leans the same way on the page as on the screen.
+        let pen = PointerEvent::json_pen(e).map(|q| match xf {
+            Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
+            _ => q,
+        });
         let backquote = e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
-        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e) }, view);
+        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);
         let hold = PointerEvent::json_hold(e);
         if hold > 0.0 {
             let r = app.session.tool_tick(hold, view);

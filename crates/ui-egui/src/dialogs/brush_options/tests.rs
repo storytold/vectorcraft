@@ -41,6 +41,31 @@ fn calligraphic_options_show_each_value_with_its_variation_and_ok_applies_them()
     assert_eq!((d.str("angleMode"), d.f64("sizeVariation", 0.0)), ("random".into(), 4.0));
 }
 
+/// #764: Calligraphic and Scatter Brush Options show Tilt, Bearing and Rotation, and OK sets
+/// them.
+#[test]
+fn brush_options_set_tilt_bearing_and_rotation() {
+    let mut app = app();
+    app.run("ui.brushOptions", json!({"name": "6 pt. Flat"})).unwrap();
+    set(&mut app, json!({"angleMode": "bearing", "roundnessMode": "tilt", "sizeMode": "rotation"}));
+    let text = shown(&mut app);
+    for label in ["Bearing", "Tilt", "Rotation"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    super::super::confirm(&mut app).unwrap();
+    let def = app.run("brush.get", json!({"name": "6 pt. Flat"})).unwrap();
+    assert_eq!(def["modes"], json!(["bearing", "tilt", "rotation"]));
+    app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+    set(&mut app, json!({"sizeMode": "tilt", "spacingMode": "bearing", "scatterMode": "rotation", "rotationMode": "bearing"}));
+    let text = shown(&mut app);
+    for label in ["Tilt", "Bearing"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    super::super::confirm(&mut app).unwrap();
+    let def = app.run("brush.get", json!({"name": "Confetti"})).unwrap();
+    assert_eq!(def["modes"], json!(["tilt", "bearing", "rotation", "bearing"]));
+}
+
 #[test]
 fn a_taken_name_keeps_the_dialog_open() {
     let mut app = app();

@@ -208,6 +208,7 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
             mods: mods(ui.input(|i| i.modifiers), false),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
+            pen: None,
         };
         if let Err(e) = app.session.ruler_guide(vertical, &ev, on_canvas, app.view_info()) {
             app.status(e.to_string());

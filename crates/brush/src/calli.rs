@@ -5,16 +5,16 @@
 //! support point in direction `d` is `(a²(u·d)u + b²(v·d)v) / √(a²(u·d)² + b²(v·d)²)`, so the
 //! stroke's local width across direction `n` is `2·√(a²(u·n)² + b²(v·n)²)`.
 //!
-//! A Calligraphic brush with Pressure variation changes its nib along the stroke with the pen
-//! pressure recorded on it (`StrokeLayer::pressure`): the sweep is sampled densely and each
-//! sample takes the nib for the pressure there.
+//! A Calligraphic brush with Pressure, Tilt, Bearing or Rotation variation changes its nib along
+//! the stroke with what the pen recorded on it (`StrokeLayer::pressure`, `tilt`, `bearing` and
+//! `rotation`): the sweep is sampled densely and each sample takes the nib for the pen there.
 
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Node, PressureProfile, StrokeLayer};
+use vectorcraft_doc::{Node, StrokeLayer};
 use vectorcraft_geom::{BezPath, PathData, Point, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
-use crate::{Bristle, BristleShape, Calligraphic, Variation, filled, tolerance};
+use crate::{Bristle, BristleShape, Calligraphic, PenAt, Variation, filled, tolerance};
 
 /// The most pieces a varying nib cuts one segment of a subpath into, and about how many samples
 /// it takes along a whole subpath.
@@ -127,18 +127,16 @@ fn randomized(c: &Calligraphic, rng: &mut Rng) -> [f64; 3] {
     [angle, round.clamp(1.0, 100.0), size.max(0.05)]
 }
 
-/// The nib's angle, roundness and size at pen pressure `p` (0..1): each Pressure value goes from
-/// the brush's value less its variation (lightest) to the value plus the variation (heaviest),
-/// kept within its range; the others are `base`'s.
-fn pressured(c: &Calligraphic, base: [f64; 3], p: f64) -> [f64; 3] {
+/// The nib's angle, roundness and size where the pen recorded `pen`: each value on a mode that
+/// follows the pen goes from the brush's value less its variation (where the pen reads 0 for it)
+/// to the value plus the variation (where it reads 1), the angle turning round past ±180° and the
+/// others kept within their ranges; the other values are `base`'s.
+fn pressured(c: &Calligraphic, base: [f64; 3], pen: PenAt) -> [f64; 3] {
     let values = [c.angle, c.roundness, c.size];
     let mut out = base;
     for (i, (v, mode)) in out.iter_mut().zip(c.modes()).enumerate() {
-        let (Some(&value), Some(&var), Some(&(lo, hi))) = (values.get(i), c.variation.get(i), Calligraphic::RANGES.get(i)) else { continue };
-        if mode == Variation::Pressure {
-            let x = value + var * (2.0 * p.clamp(0.0, 1.0) - 1.0);
-            *v = if x.is_finite() { x.clamp(lo, hi) } else { value.clamp(lo, hi) };
-        }
+        let (Some(&value), Some(&var), Some(p)) = (values.get(i), c.variation.get(i), pen.control(mode)) else { continue };
+        *v = Calligraphic::moved(i, value, var * (2.0 * p - 1.0));
     }
     let [angle, round, size] = out;
     [angle, round.clamp(1.0, 100.0), size.max(0.05)]
@@ -147,14 +145,13 @@ fn pressured(c: &Calligraphic, base: [f64; 3], p: f64) -> [f64; 3] {
 pub(crate) fn calligraphic(c: &Calligraphic, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let mut rng = Rng::new(seed_of(bp, name));
     let base = randomized(c, &mut rng);
-    let subs: Vec<SubPath> = if c.uses_pressure() {
-        let pressure = stroke.pressure.as_ref();
+    let subs: Vec<SubPath> = if c.uses_pen() {
         let nib = |f: f64| {
-            let [angle, round, size] = pressured(c, base, pressure.map_or(PressureProfile::MID, |p| p.at(f)));
+            let [angle, round, size] = pressured(c, base, PenAt::of(stroke, f));
             Nib::new(angle, round / 100.0, size * weight)
         };
-        // Flattened for the largest nib the pressure gives.
-        let size = pressured(c, base, 0.0)[2].max(pressured(c, base, 1.0)[2]) * weight;
+        // Flattened for the largest nib the pen gives.
+        let size = pressured(c, base, PenAt::uniform(0.0))[2].max(pressured(c, base, PenAt::uniform(1.0))[2]) * weight;
         tracks(bp, tolerance(size)).iter().flat_map(|t| sweep(t, &nib, Some((t.len() / MAX_STEPS).max(0.25)))).collect()
     } else {
         let [angle, round, size] = base;

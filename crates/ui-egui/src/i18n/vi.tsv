@@ -319,6 +319,7 @@ font-technology	Variable	Biến thiên
 	Baseline Shift	Dịch chuyển đường cơ sở
 	Basic Latin	Latin cơ bản
 	Batch	Hàng loạt
+	Bearing	Hướng
 	Begin Recording	Bắt đầu ghi
 	Begin Undo Group	Bắt đầu nhóm hoàn tác
 	Bend:	Uốn cong:
@@ -3783,6 +3784,7 @@ mark-style	Japanese	Kiểu Nhật
 	Tile Type:	Loại ô:
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
+	Tilt	Độ nghiêng
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng

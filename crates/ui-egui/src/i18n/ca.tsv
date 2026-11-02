@@ -435,6 +435,7 @@
 	Basic Shapes	Formes bàsiques
 	Batch	Lot
 	Batch…	Lot…
+	Bearing	Orientació
 	Before Last:	Abans de l’últim:
 	Begin Recording	Comença a enregistrar
 	Begin Undo Group	Inicia el grup de desfets
@@ -4277,6 +4278,7 @@ digits	Malayalam	Malaiàlam
 	Tile Type:	Tipus de mosaic:
 	tile {number}	mosaic {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Els mosaics es numeren d’esquerra a dreta i, després, de dalt a baix; deixa l’interval buit per a tots els mosaics.
+	Tilt	Inclinació
 	Time (hhmmss)	Hora (hhmmss)
 	Tint	To
 	Tint Reduction	Reducció de to

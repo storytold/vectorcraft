@@ -7,7 +7,7 @@ use serde_json::json;
 use vectorcraft_doc::text::TextKind;
 use vectorcraft_doc::{Node, NodeKind, SymbolBoxes, Unit};
 use vectorcraft_geom::{Affine, BezPath, PathEl, Point, Rect};
-use vectorcraft_tools::{Cursor, Mods, Overlay, PointerEvent, PointerKind};
+use vectorcraft_tools::{Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind};
 
 use crate::opening;
 use crate::state::View;
@@ -38,7 +38,7 @@ pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
 pub use drag::{apply_requests, dispatch, mods};
-pub(crate) use drag::{end_document_drag, release_art_in_window, release_over_panel};
+pub(crate) use drag::{end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
 #[cfg(test)]
 use drag::{frame_moves, tool_drag_doc_id, tool_drag_moved, tool_frame_moves, tool_press_doc_id};
 pub use fill::Fill;

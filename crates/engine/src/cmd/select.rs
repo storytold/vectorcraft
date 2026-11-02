@@ -740,6 +740,8 @@ fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 /// An appearance attribute Select > Same > Appearance Attribute matches.
+// An appearance item takes up to 328 bytes and an effect 64; one search holds a single attribute.
+#[allow(clippy::large_enum_variant)]
 enum Attribute {
     Item(vectorcraft_doc::AppearanceItem),
     Effect(vectorcraft_doc::Effect),

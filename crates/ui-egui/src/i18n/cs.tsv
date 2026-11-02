@@ -3008,6 +3008,7 @@ digits	Malayalam	Malajálamské
 
 # Command labels and other interface strings
 	Art	Obrazový
+	Bearing	Azimut
 	Bristle	Štětinový
 	Calligraphic	Kaligrafický
 	Dots	Body
@@ -3015,6 +3016,7 @@ digits	Malayalam	Malajálamské
 	Pressure	Tlak
 	Random	Náhodný
 	Scatter	Rozptylový
+	Tilt	Náklon
 	Color Burn	Ztmavit barvy
 	Color Dodge	Zesvětlit barvy
 	Darken	Ztmavit
