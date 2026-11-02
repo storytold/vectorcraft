@@ -372,9 +372,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     match failed.first() {
         Some(f) => {
             let (name, reason) = (f["name"].as_str().unwrap_or_default(), f["error"].as_str().unwrap_or_default());
-            app.status(format!("Relinked {n} image(s); {name} couldn't be relinked: {reason}"));
+            app.status(crate::i18n::msg_n(
+                n as u64,
+                "Relinked {n} image; {name} couldn't be relinked: {reason}",
+                "Relinked {n} images; {name} couldn't be relinked: {reason}",
+                &[("name", name), ("reason", reason)],
+            ));
         }
-        None if n > 0 => app.status(format!("Relinked {n} image(s)")),
+        None if n > 0 => app.status(crate::panels::links::relinked_status(n)),
         None => {}
     }
     if d.bool("back") {

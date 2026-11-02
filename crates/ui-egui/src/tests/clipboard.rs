@@ -176,3 +176,104 @@ fn the_layers_panel_menu_toggles_paste_remembers_layers() {
     assert!(app.session.active().unwrap().doc.paste_remembers_layers);
     assert!(item(&frame(&mut app, vec![])).0.starts_with('✓'), "checked");
 }
+
+static TEST_CLIP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+fn copying_text_carries_formatting_across_documents() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // Document 1
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id1 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Styled Text", "size": 36, "color": "#ff0000"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id1, "start": 0, "end": 6}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+
+    // Document 2
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id2 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Other", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id2, "start": 5, "end": 5}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    let t2 = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id2)).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t2) = &t2.kind else { panic!() };
+    assert_eq!(t2.plain_text(), "OtherStyled");
+    let pasted_run = &t2.runs[1];
+    assert_eq!(pasted_run.style.size, 36.0, "pasted text keeps 36 pt size in document 2");
+    assert_eq!(
+        pasted_run.style.fill,
+        vectorcraft_doc::color::Paint::solid(vectorcraft_doc::color::Color::rgb8(255, 0, 0)),
+        "pasted text keeps red fill"
+    );
+}
+
+#[test]
+fn paste_without_formatting_takes_surrounding_style() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id1 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Big Red", "size": 48, "color": "#ff0000"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id1, "start": 0, "end": 7}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+
+    // Paste without formatting into another document with 10 pt text
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id2 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Small: ", "size": 10, "color": "#000000"}))["id"].as_u64().unwrap();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id2, "start": 7, "end": 7}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.pasteWithoutFormatting");
+    let t2 = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id2)).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t2) = &t2.kind else { panic!() };
+    assert_eq!(t2.plain_text(), "Small: Big Red");
+    assert!(t2.runs.iter().all(|r| r.style.size == 10.0), "all runs take 10 pt size: {:?}", t2.runs);
+}
+
+/// https://helpx.adobe.com/illustrator/using/format-text.html
+#[test]
+fn copying_single_character_carries_formatting_across_documents() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id1 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "X", "size": 36, "color": "#ff0000"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id1, "start": 0, "end": 1}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+
+    // Document 2
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id2 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "A", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id2, "start": 1, "end": 1}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    let t2 = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id2)).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t2) = &t2.kind else { panic!() };
+    assert_eq!(t2.plain_text(), "AX");
+    assert_eq!(t2.runs[1].style.size, 36.0, "single character pasted carries styled size");
+}
+
+#[test]
+fn copying_text_and_pasting_on_canvas_in_another_document() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let id1 = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Hello", "size": 28, "color": "#00ff00"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": id1, "start": 0, "end": 5}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+
+    // Document 2: paste onto canvas with selection tool
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    app.run("edit.paste", json!({})).unwrap();
+    let pasted_nodes = objects(&app);
+    assert_eq!(pasted_nodes.len(), 1);
+    let node = app.session.doc().unwrap().doc.node(pasted_nodes[0]).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!("not text") };
+    assert_eq!(t.plain_text(), "Hello");
+    assert_eq!(t.runs[0].style.size, 28.0);
+}

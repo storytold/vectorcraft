@@ -1,5 +1,5 @@
 use super::nodes::MAX_DEPTH;
-use super::*;
+use super::{Kind, af};
 
 /// What copying a subtree takes: its nodes, characters and table cells (`work`), and its pixels.
 #[derive(Clone, Copy, Debug, Default)]

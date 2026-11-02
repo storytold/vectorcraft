@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
+};
 
 impl Session {
     /// `spec`'s `enabled` with `ids` selected instead of the selection, which is then put back.
@@ -119,7 +121,10 @@ impl Session {
         }
         if self.depth == 0 {
             self.journal_in_undo_groups(doc, &grouped, journal);
-            self.after_command();
+            self.after_command(Some(id));
+        } else if matches!(id, "edit.undo" | "edit.redo") {
+            // A step of `command.batch`: the tool hears of it as it does of the command alone.
+            self.notify_text_tool(id);
         }
         Ok(r)
     }
@@ -194,27 +199,30 @@ impl Session {
         r
     }
 
-    /// A top-level command: a panic (a bug) becomes [`EngineError::Internal`] and the active
-    /// document goes back to how it was before the command, instead of crashing the frontend.
+    /// A top-level command: a panic (a bug) becomes [`EngineError::Internal`] and every open
+    /// document goes back to how it was before the command (its art, selection, interaction and
+    /// undo history), and the same document stays active, instead of crashing the frontend.
     pub(crate) fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
-        let snapshot = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone()));
-        let active = self.active;
+        let snapshot: Vec<_> =
+            self.docs.iter().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), d.history.clone())).collect();
+        let active = self.active().map(|d| d.uid);
         let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
             Err(msg) => {
                 self.depth = 0;
                 self.journal_note.clear();
-                if let Some((uid, doc, selection, interaction)) = snapshot
-                    && let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)
-                {
+                for (uid, doc, selection, interaction, history) in snapshot {
+                    // A document the command closed stays closed.
+                    let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid) else { continue };
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
+                    st.history = history;
                     cmd::globaledit::follow_history(st);
                     st.revision += 1;
                 }
-                if active.is_some_and(|i| i < self.docs.len()) {
-                    self.active = active;
+                if let Some(i) = active.and_then(|uid| self.docs.iter().position(|d| d.uid == uid)) {
+                    self.active = Some(i);
                 }
                 Err(EngineError::Internal { cmd: id.to_string(), msg })
             }

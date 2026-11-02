@@ -18,7 +18,7 @@ use vectorcraft_geom::{Affine, BezPath, Line, ParamCurve, PathSeg, Point, Rect, 
 use vectorcraft_text::{FontDb, layout as layout_text};
 
 use crate::bbox::Handle;
-use crate::{Overlay, ScreenFrame, ToolContext};
+use crate::{GlyphSnap, Overlay, ScreenFrame, ToolContext};
 
 mod snap;
 mod targets;

@@ -2,7 +2,7 @@ use super::color::{Live, pointer_phase};
 use super::dropdowns::combo;
 use super::labels::dim_label;
 use super::numeric::{range_field, slider};
-use super::*;
+use super::{BlendMode, Rect, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, id_with, vec2};
 
 /// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
 /// [`BlendMode::group`] starts.

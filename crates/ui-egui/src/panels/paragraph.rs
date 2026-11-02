@@ -50,6 +50,25 @@ pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, St
     Ok(Value::Null)
 }
 
+/// `type.lineComposer` (Cmd+Alt+Shift+C): the Single-line Composer for the paragraphs the panel
+/// acts on when they all use the Every-line Composer, else the Every-line Composer. Returns the
+/// composer set.
+pub(crate) fn toggle_composer(app: &mut VectorcraftApp) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    let id = if shared_composer(app) == Some(Composer::EveryLine) { "singleLine" } else { "everyLine" };
+    format(app, json!({ "composer": id }));
+    Ok(json!(id))
+}
+
+/// `type.hyphenate` (Cmd+Alt+Shift+H): what the Hyphenate checkbox does, on the paragraphs the
+/// panel acts on. Returns whether they now hyphenate.
+pub(crate) fn toggle_hyphenate(app: &mut VectorcraftApp) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    let on = shared_hyphenate(app) != Some(true);
+    format(app, json!({ "hyphenate": on }));
+    Ok(json!(on))
+}
+
 fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     run_on_paragraphs(app, cmd, p).ok();
 }

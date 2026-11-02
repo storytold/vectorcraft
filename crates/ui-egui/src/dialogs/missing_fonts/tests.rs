@@ -55,6 +55,11 @@ fn open(app: &mut VectorcraftApp, path: &Path) {
     crate::io::open_path(app, &path.to_string_lossy()).unwrap();
 }
 
+/// How long a test waits for the dialog's search to end. The wait only ends a test whose search
+/// never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
 fn kind(app: &VectorcraftApp) -> Option<&str> {
     app.ui.dialog.as_ref().map(|d| d.kind.as_str())
 }
@@ -101,7 +106,7 @@ fn the_documents_fonts_folder_is_offered_and_searched_off_the_ui_thread() {
     let r = super::super::confirm(&mut app).unwrap();
     assert!(matches!(r["state"].as_str(), Some("searching" | "done")), "{r}");
     assert_eq!(kind(&app), Some(KIND), "the dialog stays open while it searches");
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while app.ui.dialog.as_ref().is_some_and(|d| d.str("state") == "searching") && Instant::now() < until {
         frame(&mut app);
         std::thread::sleep(Duration::from_millis(5));
@@ -323,13 +328,36 @@ fn files_go_with_their_fonts_by_name() {
     assert_eq!((d.str("state"), &d.fields["chosen"]), ("done".to_string(), &json!([])));
 }
 
+/// A folder search's counts use the forms the language's plural rule picks for each count.
+#[test]
+fn search_counts_use_each_count_form() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut progress_text = |code: &str, n: u64| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        let d = Dialog::new(KIND, json!({"state": "done", "searched": {"folders": n, "files": n}, "unreadable": n}));
+        let text = crate::tests_labels::painted_text(&mut app, |_, ui| progress(ui, &d));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        text
+    };
+    let text = progress_text("en", 1);
+    assert!(text.contains("1 folder and 1 file searched") && text.contains("1 folder or file couldn't be read"), "{text}");
+    for (n, searched, unreadable) in [
+        (1, "Prohledáno: 1 složka, 1 soubor", "Nepodařilo se přečíst 1 složku nebo soubor"),
+        (2, "Prohledáno: 2 složky, 2 soubory", "Nepodařilo se přečíst 2 složky nebo soubory"),
+        (5, "Prohledáno: 5 složek, 5 souborů", "Nepodařilo se přečíst 5 složek nebo souborů"),
+    ] {
+        let text = progress_text("cs", n);
+        assert!(text.contains(searched) && text.contains(unreadable), "{n}: {text}");
+    }
+}
+
 #[test]
 fn the_web_says_how_many_fonts_are_missing() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
     after_open_for(&mut app, &json!({}), true);
-    assert_eq!(app.ui.status, "1 font(s) aren't available here: their text shows in another font");
+    assert_eq!(app.ui.status, "1 font isn't available here: its text shows in another font");
     assert!(app.ui.pending_fonts.is_empty());
     // The open's notes stay on show.
     app.ui.status = "Opened with 1 note(s): fonts".into();

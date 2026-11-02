@@ -131,15 +131,13 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
 #[test]
 fn an_image_that_couldnt_be_decoded_is_named_in_the_status() {
     let (mut app, written, _) = app();
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
-    let mut cut = vec![];
+    // A PNG whose header reads but whose pixel data is cut short.
+    let mut png = vec![];
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut cut), image::ImageFormat::Png)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let idat = cut.windows(4).position(|w| w == b"IDAT").unwrap();
-    cut.truncate(idat + 8);
     // The image is placed on the first artboard.
-    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&cut), "at": [60, 50]})).unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [60, 50]}));
     app.run("ui.savePdfDialog", json!({"path": "/tmp/cut.pdf"})).unwrap();
     super::super::confirm(&mut app).unwrap();
     assert_eq!(app.ui.status, "Saved /tmp/cut.pdf with 1 note(s): an image couldn't be decoded and is missing from the picture");

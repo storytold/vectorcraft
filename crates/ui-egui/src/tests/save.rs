@@ -303,3 +303,22 @@ fn native_saves_stream_into_the_file() {
     assert_eq!(*streamed.lock().unwrap(), [native]);
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn file_save_writes_opened_eps_back_without_another_save_as_dialog() {
+    let d = dir("eps-original-format");
+    let path = d.join("Artwork.eps").to_string_lossy().to_string();
+    std::fs::write(&path, b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 100\n0 0 1 setrgbcolor 30 20 40 30 rectfill\nshowpage\n%%EOF\n").unwrap();
+    let mut app = app();
+    app.run("document.open", json!({"path":path})).unwrap();
+    rect(&mut app);
+    app.run("file.save", json!({})).unwrap();
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none(), "ordinary EPS Save does not require another format dialog");
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(vectorcraft_eps::sections(&bytes).unwrap().0.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    assert!(vectorcraft_eps::native(&bytes).is_some());
+    assert_eq!(app.session.active().unwrap().format, "eps");
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
+    std::fs::remove_dir_all(d).unwrap();
+}

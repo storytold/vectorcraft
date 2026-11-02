@@ -10,7 +10,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, TextKind, TextObject, Te
 
 use super::edit::selected_roots;
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, checked_id, cmd, finite_numbers, has_doc, has_multi, has_selection, ok, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

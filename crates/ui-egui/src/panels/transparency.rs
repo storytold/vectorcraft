@@ -143,7 +143,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.vertical(|ui| {
             let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
-            let enabled = mask.is_some() || (has && editing.is_none());
+            // Make Mask is off in isolation mode and pattern editing mode for one object, which it would take into mask editing.
+            let enabled = mask.is_some() || (has && editing.is_none() && crate::menus::enabled(app, "transparency.makeOpacityMask"));
             let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
             if r.on_disabled_hover_text(tl!("Select the art (and, on top of it, the mask object)")).clicked() {
                 let id = if mask.is_some() { "transparency.releaseOpacityMask" } else { "transparency.makeOpacityMask" };
@@ -196,7 +197,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing = app.session.active().is_some_and(|d| d.doc.mask_edit.is_some());
     let (_, n) = state(app, ui.ctx());
     let mask = n.as_ref().and_then(|n| n.extras().mask.as_deref());
-    for (label, id, enabled) in mask_items(mask, n.is_some() && !editing) {
+    let can_make = n.is_some() && !editing && crate::menus::enabled(app, "transparency.makeOpacityMask");
+    for (label, id, enabled) in mask_items(mask, can_make) {
         if menu_item(ui, tl!(label), enabled, false) {
             app.run(id, json!({})).ok();
         }

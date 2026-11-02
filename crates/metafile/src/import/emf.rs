@@ -166,24 +166,154 @@ pub(super) fn play(bytes: &[u8]) -> Result<Imported, String> {
     Ok(p.finish())
 }
 
+/// PolyBezier, Polygon, Polyline, PolyBezierTo, PolylineTo and their 16-bit forms.
+fn rec_poly(p: &mut Player, kind: u32, r: &mut Reader) -> Option<()> {
+    let wide = kind < 85;
+    r.skip(16)?;
+    let n = r.u32()?;
+    let pts = points(r, n, wide)?;
+    match if wide { kind } else { kind - 83 } {
+        2 => p.poly(&pts, false, true),
+        3 => p.poly(&pts, true, false),
+        4 => p.poly(&pts, false, false),
+        5 => p.poly_to(&pts, true),
+        _ => p.poly_to(&pts, false),
+    }
+    Some(())
+}
+
+/// CreatePen (38).
+fn rec_create_pen(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let ih = r.u32()?;
+    let style = r.u32()?;
+    let width = f64::from(r.i32()?);
+    r.skip(4)?;
+    p.create_at(ih, Obj::Pen(PenObj { style, width, color: color(r)?, entries: vec![] }));
+    Some(())
+}
+
+/// ExtCreatePen (95).
+fn rec_ext_create_pen(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let ih = r.u32()?;
+    r.skip(16)?;
+    let style = r.u32()?;
+    let width = f64::from(r.u32()?);
+    let brush = r.u32()?;
+    let c = color(r)?;
+    r.skip(4)?;
+    let n = (r.u32()? as usize).min(64);
+    let entries: Vec<f64> = (0..n).map_while(|_| r.u32()).map(f64::from).collect();
+    // A pen painted with the null brush draws nothing.
+    let style = if brush == 1 { super::PS_NULL } else { style };
+    p.create_at(ih, Obj::Pen(PenObj { style, width, color: c, entries }));
+    Some(())
+}
+
+/// GdiComment (70): EMF+ records ride in comments starting "EMF+".
+fn rec_comment(p: &mut Player, r: &mut Reader) -> Option<()> {
+    r.skip(4)?;
+    p.emf_plus |= r.u32()? == 0x2B46_4D45;
+    Some(())
+}
+
+/// ExtSelectClipRgn (75).
+fn rec_clip_region(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let cb = r.u32()?;
+    let mode = r.u32()?;
+    let data = r.bytes(cb as usize)?;
+    let mut d = Reader::new(data);
+    let rects = if cb >= 32 {
+        d.skip(8)?;
+        let n = d.u32()? as usize;
+        d.skip(20)?;
+        if n > MAX_POINTS || d.rest().len() < n * 16 {
+            return None;
+        }
+        (0..n).map(|_| rect(&mut d)).collect::<Option<Vec<_>>>()?
+    } else {
+        vec![]
+    };
+    p.clip_region(&rects, mode);
+    Some(())
+}
+
+/// The rectangle at `(x, y)` of size `(w, h)`.
+fn at_size(x: i32, y: i32, w: i32, h: i32) -> Rect {
+    Rect::new(f64::from(x), f64::from(y), f64::from(x) + f64::from(w), f64::from(y) + f64::from(h))
+}
+
+/// BitBlt (76) and StretchBlt (77).
+fn rec_blt(p: &mut Player, kind: u32, rec: &[u8], r: &mut Reader) -> Option<()> {
+    r.skip(16)?;
+    let dest = (r.i32()?, r.i32()?, r.i32()?, r.i32()?);
+    let rop = r.u32()?;
+    let (xs, ys) = (r.i32()?, r.i32()?);
+    r.skip(24 + 4 + 4)?;
+    let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
+    let (ws, hs) = if kind == 77 { (r.i32()?, r.i32()?) } else { (dest.2, dest.3) };
+    let d = at_size(dest.0, dest.1, dest.2, dest.3);
+    if cb_bmi == 0 {
+        p.pattern_blit(d, rop);
+    } else {
+        let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore, &mut p.pixels_left);
+        let src = source(xs, ys, ws, hs, &img, false);
+        p.image(img, src, d, rop, 1.0);
+    }
+    Some(())
+}
+
+/// StretchDIBits (81).
+fn rec_stretch_dibits(p: &mut Player, rec: &[u8], r: &mut Reader) -> Option<()> {
+    r.skip(16)?;
+    let (xd, yd, xs, ys, ws, hs) = (r.i32()?, r.i32()?, r.i32()?, r.i32()?, r.i32()?, r.i32()?);
+    let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
+    r.skip(4)?;
+    let rop = r.u32()?;
+    let (wd, hd) = (r.i32()?, r.i32()?);
+    let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore, &mut p.pixels_left);
+    let src = source(xs, ys, ws, hs, &img, bottom_up(rec, off_bmi));
+    p.image(img, src, at_size(xd, yd, wd, hd), rop, 1.0);
+    Some(())
+}
+
+/// AlphaBlend (114).
+fn rec_alpha_blend(p: &mut Player, rec: &[u8], r: &mut Reader) -> Option<()> {
+    r.skip(16)?;
+    let (xd, yd, wd, hd) = (r.i32()?, r.i32()?, r.i32()?, r.i32()?);
+    let blend = r.bytes(4)?;
+    let (constant, per_pixel) = (blend.get(2).copied().unwrap_or(255), blend.get(3).is_some_and(|f| *f & 1 != 0));
+    let (xs, ys) = (r.i32()?, r.i32()?);
+    r.skip(24 + 4 + 4)?;
+    let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
+    let (ws, hs) = (r.i32()?, r.i32()?);
+    let alpha = if per_pixel { Alpha::Premultiplied } else { Alpha::Ignore };
+    let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, alpha, &mut p.pixels_left);
+    let src = source(xs, ys, ws, hs, &img, false);
+    p.image(img, src, at_size(xd, yd, wd, hd), crate::import::SRCCOPY, f64::from(constant) / 255.0);
+    Some(())
+}
+
+/// ExtTextOutA (83) and ExtTextOutW (84).
+fn rec_text(p: &mut Player, kind: u32, rec: &[u8], r: &mut Reader) -> Option<()> {
+    r.skip(16 + 4 + 8)?;
+    let at = point32(r)?;
+    let n = r.u32()? as usize;
+    let off = r.u32()?;
+    let s = if kind == 84 {
+        let raw = slice(rec, off, u32::try_from(n.checked_mul(2)?).ok()?)?;
+        String::from_utf16_lossy(&raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect::<Vec<_>>())
+    } else {
+        slice(rec, off, u32::try_from(n).ok()?)?.iter().map(|b| char::from(*b)).collect()
+    };
+    p.text(at, &s);
+    Some(())
+}
+
 /// Play one record (`rec`: all of it, with its type and size). `None`: unknown or damaged.
 fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
     let mut r = Reader::new(rec.get(8..)?);
     match kind {
-        // PolyBezier, Polygon, Polyline, PolyBezierTo, PolylineTo and their 16-bit forms.
-        2..=6 | 85..=89 => {
-            let wide = kind < 85;
-            r.skip(16)?;
-            let n = r.u32()?;
-            let pts = points(&mut r, n, wide)?;
-            match if wide { kind } else { kind - 83 } {
-                2 => p.poly(&pts, false, true),
-                3 => p.poly(&pts, true, false),
-                4 => p.poly(&pts, false, false),
-                5 => p.poly_to(&pts, true),
-                _ => p.poly_to(&pts, false),
-            }
-        }
+        2..=6 | 85..=89 => rec_poly(p, kind, &mut r)?,
         7 | 90 => p.poly_poly(&polys(&mut r, kind == 7)?, false),
         8 | 91 => p.poly_poly(&polys(&mut r, kind == 8)?, true),
         9 => p.set_window_ext(f64::from(r.i32()?), f64::from(r.i32()?)),
@@ -209,13 +339,7 @@ fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
             p.world(x, r.u32()?);
         }
         37 => p.select(r.u32()?),
-        38 => {
-            let ih = r.u32()?;
-            let style = r.u32()?;
-            let width = f64::from(r.i32()?);
-            r.skip(4)?;
-            p.create_at(ih, Obj::Pen(PenObj { style, width, color: color(&mut r)?, entries: vec![] }));
-        }
+        38 => rec_create_pen(p, &mut r)?,
         39 => {
             let ih = r.u32()?;
             let style = r.u32()?;
@@ -249,107 +373,18 @@ fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
         64 => p.paint_path(false, true),
         67 => p.clip_path(r.u32()?),
         68 => p.abort_path(),
-        70 => {
-            // EMF+ records ride in comments starting "EMF+".
-            r.skip(4)?;
-            if r.u32()? == 0x2B46_4D45 {
-                p.emf_plus = true;
-            }
-        }
-        75 => {
-            let cb = r.u32()?;
-            let mode = r.u32()?;
-            let data = r.bytes(cb as usize)?;
-            let mut d = Reader::new(data);
-            let rects = if cb >= 32 {
-                d.skip(8)?;
-                let n = d.u32()? as usize;
-                d.skip(20)?;
-                if n > MAX_POINTS || d.rest().len() < n * 16 {
-                    return None;
-                }
-                (0..n).map(|_| rect(&mut d)).collect::<Option<Vec<_>>>()?
-            } else {
-                vec![]
-            };
-            p.clip_region(&rects, mode);
-        }
-        76 | 77 => {
-            r.skip(16)?;
-            let dest = (r.i32()?, r.i32()?, r.i32()?, r.i32()?);
-            let rop = r.u32()?;
-            let (xs, ys) = (r.i32()?, r.i32()?);
-            r.skip(24 + 4 + 4)?;
-            let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
-            let (ws, hs) = if kind == 77 { (r.i32()?, r.i32()?) } else { (dest.2, dest.3) };
-            let d = Rect::new(f64::from(dest.0), f64::from(dest.1), f64::from(dest.0) + f64::from(dest.2), f64::from(dest.1) + f64::from(dest.3));
-            if cb_bmi == 0 {
-                p.pattern_blit(d, rop);
-            } else {
-                let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore, &mut p.pixels_left);
-                let src = source(xs, ys, ws, hs, &img, false);
-                p.image(img, src, d, rop, 1.0);
-            }
-        }
-        81 => {
-            r.skip(16)?;
-            let (xd, yd, xs, ys, ws, hs) = (r.i32()?, r.i32()?, r.i32()?, r.i32()?, r.i32()?, r.i32()?);
-            let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
-            r.skip(4)?;
-            let rop = r.u32()?;
-            let (wd, hd) = (r.i32()?, r.i32()?);
-            let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore, &mut p.pixels_left);
-            let src = source(xs, ys, ws, hs, &img, bottom_up(rec, off_bmi));
-            let d = Rect::new(f64::from(xd), f64::from(yd), f64::from(xd) + f64::from(wd), f64::from(yd) + f64::from(hd));
-            p.image(img, src, d, rop, 1.0);
-        }
+        70 => rec_comment(p, &mut r)?,
+        75 => rec_clip_region(p, &mut r)?,
+        76 | 77 => rec_blt(p, kind, rec, &mut r)?,
+        81 => rec_stretch_dibits(p, rec, &mut r)?,
         82 => {
             let ih = r.u32()?;
             p.create_at(ih, Obj::Font(font(&mut r)?));
         }
-        83 | 84 => {
-            r.skip(16 + 4 + 8)?;
-            let at = point32(&mut r)?;
-            let n = r.u32()? as usize;
-            let off = r.u32()?;
-            let s = if kind == 84 {
-                let raw = slice(rec, off, u32::try_from(n.checked_mul(2)?).ok()?)?;
-                String::from_utf16_lossy(&raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect::<Vec<_>>())
-            } else {
-                slice(rec, off, u32::try_from(n).ok()?)?.iter().map(|b| char::from(*b)).collect()
-            };
-            p.text(at, &s);
-        }
+        83 | 84 => rec_text(p, kind, rec, &mut r)?,
         93 | 94 => p.create_at(r.u32()?, Obj::Brush(BrushObj::Pattern)),
-        95 => {
-            let ih = r.u32()?;
-            r.skip(16)?;
-            let style = r.u32()?;
-            let width = f64::from(r.u32()?);
-            let brush = r.u32()?;
-            let c = color(&mut r)?;
-            r.skip(4)?;
-            let n = (r.u32()? as usize).min(64);
-            let entries: Vec<f64> = (0..n).map_while(|_| r.u32()).map(f64::from).collect();
-            // A pen painted with the null brush draws nothing.
-            let style = if brush == 1 { super::PS_NULL } else { style };
-            p.create_at(ih, Obj::Pen(PenObj { style, width, color: c, entries }));
-        }
-        114 => {
-            r.skip(16)?;
-            let (xd, yd, wd, hd) = (r.i32()?, r.i32()?, r.i32()?, r.i32()?);
-            let blend = r.bytes(4)?;
-            let (constant, per_pixel) = (blend.get(2).copied().unwrap_or(255), blend.get(3).is_some_and(|f| *f & 1 != 0));
-            let (xs, ys) = (r.i32()?, r.i32()?);
-            r.skip(24 + 4 + 4)?;
-            let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
-            let (ws, hs) = (r.i32()?, r.i32()?);
-            let alpha = if per_pixel { Alpha::Premultiplied } else { Alpha::Ignore };
-            let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, alpha, &mut p.pixels_left);
-            let src = source(xs, ys, ws, hs, &img, false);
-            let d = Rect::new(f64::from(xd), f64::from(yd), f64::from(xd) + f64::from(wd), f64::from(yd) + f64::from(hd));
-            p.image(img, src, d, crate::import::SRCCOPY, f64::from(constant) / 255.0);
-        }
+        95 => rec_ext_create_pen(p, &mut r)?,
+        114 => rec_alpha_blend(p, rec, &mut r)?,
         k if IGNORED.contains(&k) => {}
         _ => return None,
     }

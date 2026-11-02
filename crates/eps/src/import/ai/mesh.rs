@@ -1,5 +1,5 @@
 //! Gradient meshes: `/Mesh X!`, then on `%_` lines `value /key X#` entries — the colour space
-//! (`/CS`), and per patch its place (`/P [row col]`) and four corners (`/N`, from the corner nearest
+//! (`/CS`, see [`Space`]), and per patch its place (`/P [row col]`) and four corners (`/N`, from the corner nearest
 //! the origin round to the one beside it), ended by `/E` — and `/End X!`.
 //!
 //! A corner is `[colour… opacity x y` then the handle towards the next corner, a weight, the handle
@@ -18,14 +18,16 @@ use vectorcraft_doc::live::{GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, MeshPoi
 
 use super::obj::V;
 
-/// The most patches read from one mesh.
-const MAX_PATCHES: usize = 4096;
+/// The most patches read from one mesh (files users sent have up to 97 × 72).
+const MAX_PATCHES: usize = 16_384;
 /// The most points kept from one mesh: a patch with anchors on its edges is cut into cells, up to
 /// 34 × 34 points, so the patch cap alone doesn't bound them.
 const MAX_POINTS: usize = MAX_PATCHES * 16;
 
 /// The largest grid `/Size` read as one mesh, a side.
-const MAX_SIDE: usize = 64;
+const MAX_SIDE: usize = 128;
+/// The most inks of an `/NChannel` colour space read.
+const MAX_INKS: usize = 32;
 /// The most rows or columns a mesh stitched from its patches may have once the lines through the
 /// anchors on its patches' edges are added.
 const MAX_LINES: usize = 256;
@@ -49,9 +51,109 @@ pub(super) enum NotOne {
     Unjoined,
 }
 
+/// A mesh's colour space (`/CS`). The files write one only where it changes, before the corner
+/// it applies to, even within a patch; a mesh starts grey. Besides the device spaces it may be a
+/// named colour, `[c m y k /DeviceCMYK (name) /Process]` (or `/Spot`), or several process or spot
+/// inks, `[[ink] [ink] … n /NChannel]` (each ink `[c m y k /DeviceCMYK (name) /Separation]`). A
+/// corner gives a named colour's tint (1 is the full colour), or each ink's in order.
+#[derive(Debug, Clone, Default, PartialEq)]
+enum Space {
+    #[default]
+    Gray,
+    Rgb,
+    Cmyk,
+    /// The inks' full colours.
+    Inks(Vec<Color>),
+    /// One this doesn't read: its corners are unread.
+    Other,
+}
+
+impl Space {
+    fn read(value: Option<&V>) -> Space {
+        match value {
+            Some(v @ (V::Name(_) | V::Str(_))) => match v.text().as_deref() {
+                Some("DeviceGray") => Space::Gray,
+                Some("DeviceRGB") => Space::Rgb,
+                Some("DeviceCMYK") => Space::Cmyk,
+                _ => Space::Other,
+            },
+            Some(V::Arr(a)) => match a.last().and_then(V::text).as_deref() {
+                Some("Process" | "Spot") => ink(a).map_or(Space::Other, |c| Space::Inks(vec![c])),
+                Some("NChannel") => {
+                    let inks: Vec<&Vec<V>> = a.iter().filter_map(|v| if let V::Arr(i) = v { Some(i) } else { None }).collect();
+                    let count = a.len().checked_sub(2).and_then(|i| a.get(i)).and_then(V::num);
+                    let read: Option<Vec<Color>> = inks.iter().map(|i| ink(i)).collect();
+                    match read {
+                        Some(read) if !read.is_empty() && read.len() <= MAX_INKS && count == Some(read.len() as f64) => Space::Inks(read),
+                        _ => Space::Other,
+                    }
+                }
+                _ => Space::Other,
+            },
+            _ => Space::Other,
+        }
+    }
+
+    /// The colour components a corner gives.
+    fn components(&self) -> Option<usize> {
+        match self {
+            Space::Gray => Some(1),
+            Space::Rgb => Some(3),
+            Space::Cmyk => Some(4),
+            Space::Inks(inks) => Some(inks.len()),
+            Space::Other => None,
+        }
+    }
+
+    fn color(&self, c: &[f64]) -> Option<Color> {
+        let u = |i: usize| c.get(i).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0) as f32);
+        Some(match self {
+            Space::Gray => Color::gray(1.0 - u(0)?),
+            Space::Rgb => Color::rgb(u(0)?, u(1)?, u(2)?),
+            Space::Cmyk => Color::cmyk(u(0)?, u(1)?, u(2)?, u(3)?),
+            Space::Inks(inks) => match inks.as_slice() {
+                [one] => one.tinted(u(0)?),
+                // Several inks overprint: their CMYK at their tints, added up.
+                many => {
+                    let mut sum = [0.0f32; 4];
+                    for (i, ink) in many.iter().enumerate() {
+                        let Color::Cmyk { c, m, y, k } = *ink else { return None };
+                        let t = u(i)?;
+                        for (s, v) in sum.iter_mut().zip([c, m, y, k]) {
+                            *s += v * t;
+                        }
+                    }
+                    let [c, m, y, k] = sum.map(|v| v.min(1.0));
+                    Color::cmyk(c, m, y, k)
+                }
+            },
+            Space::Other => return None,
+        })
+    }
+}
+
+/// A named colour or ink's full colour: `[c m y k /DeviceCMYK (name) /kind]` or `[r g b /DeviceRGB …]`.
+fn ink(a: &[V]) -> Option<Color> {
+    let at = a.iter().position(|v| matches!(v, V::Name(_)))?;
+    let nums: Vec<f32> = a.get(..at)?.iter().map(|v| v.num().filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0) as f32)).collect::<Option<_>>()?;
+    match (a.get(at).and_then(V::text).as_deref(), nums.as_slice()) {
+        (Some("DeviceCMYK"), &[c, m, y, k]) => Some(Color::cmyk(c, m, y, k)),
+        (Some("DeviceRGB"), &[r, g, b]) => Some(Color::rgb(r, g, b)),
+        _ => None,
+    }
+}
+
+/// A corner as read: its colour in the colour space it was given in, and the numbers after it
+/// (opacity, unless the file is older, then the point and its handles).
+#[derive(Debug, Clone)]
+struct RawCorner {
+    color: Option<Color>,
+    rest: Vec<f64>,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct MeshReader {
-    space: String,
+    space: Space,
     /// `/Type` (`Cartesian` in the files read).
     kind: Option<String>,
     /// `/Size [a b]`: the grid's patches along the first and the second index of `/P`.
@@ -60,7 +162,7 @@ pub(super) struct MeshReader {
     at: Option<(i64, i64)>,
     /// The patches read, in order, for [`Self::one_mesh`].
     cells: Vec<Cell>,
-    corners: Vec<Vec<f64>>,
+    corners: Vec<RawCorner>,
     /// The patch's anchors between its corners (`/A`, `/S`): the edge, and a point and its two handles.
     anchors: Vec<(usize, [f64; 6])>,
     pub patches: Vec<GradientMesh>,
@@ -77,14 +179,20 @@ impl MeshReader {
         let key = vals.get(at).and_then(V::text).unwrap_or_default();
         let value = at.checked_sub(1).and_then(|i| vals.get(i));
         match key.as_str() {
-            "CS" => self.space = value.and_then(V::text).unwrap_or_default(),
+            "CS" => self.space = Space::read(value),
             "Type" => self.kind = value.and_then(V::text),
             "Size" => self.size = pair(value),
             "P" => self.at = pair(value),
             "N" => {
                 if let Some(V::Arr(a)) = value {
                     if self.corners.len() < 4 {
-                        self.corners.push(a.iter().filter_map(V::num).take(64).collect());
+                        // A corner holding anything but numbers is unread: skipping it would shift
+                        // the numbers after it into the colour or the opacity.
+                        let n: Vec<f64> = a.iter().take(64).map(V::num).collect::<Option<_>>().unwrap_or_default();
+                        let comps = self.space.components();
+                        let color = comps.and_then(|k| self.space.color(n.get(..k)?));
+                        let rest = comps.and_then(|k| n.get(k..)).map(<[f64]>::to_vec).unwrap_or_default();
+                        self.corners.push(RawCorner { color, rest });
                     } else {
                         self.unread = true;
                     }
@@ -124,50 +232,35 @@ impl MeshReader {
         }
     }
 
-    fn color(&self, c: &[f64]) -> Option<Color> {
-        let u = |i: usize| c.get(i).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0) as f32);
-        Some(match (self.space.as_str(), c.len()) {
-            ("DeviceRGB", 3) => Color::rgb(u(0)?, u(1)?, u(2)?),
-            ("DeviceCMYK", 4) => Color::cmyk(u(0)?, u(1)?, u(2)?, u(3)?),
-            ("DeviceGray", 1) => Color::gray(1.0 - u(0)?),
-            _ => return None,
-        })
-    }
-
     /// The four corners of a patch, in the document.
-    fn read_corners(&self, corners: &[Vec<f64>], to_doc: Affine) -> Option<[Corner; 4]> {
+    fn read_corners(&self, corners: &[RawCorner], to_doc: Affine) -> Option<[Corner; 4]> {
         let [n0, n1, n2, n3] = corners else { return None };
         // (anchor, towards the next corner, towards the previous one, colour, opacity)
-        let read = |n: &Vec<f64>| -> Option<(Point, Vec2, Vec2, Color, f32)> {
+        let read = |n: &RawCorner| -> Option<(Point, Vec2, Vec2, Color, f32)> {
             // Older editing streams omit opacity; the colour space determines the number
             // of colour components, so a coordinate must never be mistaken for opacity.
-            let comps = match self.space.as_str() {
-                "DeviceRGB" => 3,
-                "DeviceCMYK" => 4,
-                "DeviceGray" => 1,
-                _ => return None,
-            };
-            let (opacity, geometry) = match n.get(comps..)? {
+            let (opacity, geometry) = match n.rest.as_slice() {
                 geometry if geometry.len() == 8 => (1.0, geometry),
                 [opacity, geometry @ ..] if geometry.len() == 8 => (*opacity, geometry),
                 _ => return None,
             };
             let &[x, y, nx, ny, nw, px, py, pw] = geometry else { return None };
-            // Non-unit rational weights need a different surface representation.
-            if nw != 1.0 || pw != 1.0 {
+            // Weights are 1, or 0 on some corners, which draw as the same cubic edges (checked
+            // against the files' pages). Others would need a rational surface.
+            if ![nw, pw].iter().all(|w| *w == 1.0 || *w == 0.0) {
                 return None;
             }
             if ![opacity, x, y, nx, ny, px, py].iter().all(|v| v.is_finite()) {
                 return None;
             }
             let at = to_doc * Point::new(x, y);
-            let color = self.color(n.get(..comps)?)?;
+            let color = n.color?;
             Some((at, to_doc * Point::new(nx, ny) - at, to_doc * Point::new(px, py) - at, color, opacity.clamp(0.0, 1.0) as f32))
         };
         Some([read(n0)?, read(n1)?, read(n2)?, read(n3)?])
     }
 
-    fn patch(&self, corners: &[Vec<f64>], anchors: &[(usize, [f64; 6])], to_doc: Affine) -> Option<GradientMesh> {
+    fn patch(&self, corners: &[RawCorner], anchors: &[(usize, [f64; 6])], to_doc: Affine) -> Option<GradientMesh> {
         let [a, b, c, d] = self.read_corners(corners, to_doc)?;
         if !anchors.is_empty() {
             return Some(coons([a, b, c, d], anchors, None));
@@ -490,7 +583,7 @@ mod tests {
     /// anchor, with the anchor's handles along the edge.
     #[test]
     fn an_edge_anchor_cuts_its_patch_there() {
-        let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
+        let mut reader = MeshReader::default();
         let corner = |x: f64, y: f64, next: (f64, f64), prev: (f64, f64)| {
             vec![V::Arr([0.0, 1.0, x, y, next.0, next.1, 1.0, prev.0, prev.1, 1.0].map(V::Num).to_vec()), V::Name("N".into())]
         };
@@ -515,7 +608,7 @@ mod tests {
     /// first corner run along its edge, as the patch above a shared edge lists them.
     #[test]
     fn anchors_keyed_s_on_a_first_edge_run_along_it() {
-        let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
+        let mut reader = MeshReader::default();
         let corner = |x: f64, y: f64, next: (f64, f64), prev: (f64, f64)| {
             vec![V::Arr([0.0, 1.0, x, y, next.0, next.1, 1.0, prev.0, prev.1, 1.0].map(V::Num).to_vec()), V::Name("N".into())]
         };
@@ -539,25 +632,44 @@ mod tests {
         assert!((first.handles[H_DOWN] - Vec2::new(0.0, 1.0)).hypot() < 1e-9, "{:?}", first.handles);
     }
 
+    /// A corner's handle weights are 1, or 0 on some corners, which draw as the same patch; any
+    /// other weight leaves the patch unread.
+    #[test]
+    fn corners_with_handle_weights_of_zero_are_read() {
+        let read = |nw: f64, pw: f64| {
+            let mut reader = MeshReader::default();
+            patch(&mut reader, &[0.5, 1.0, 0.0, 0.0, 0.0, 0.3, nw, 0.3, 0.0, pw]);
+            reader
+        };
+        for (nw, pw) in [(0.0, 0.0), (0.0, 1.0), (1.0, 0.0)] {
+            let reader = read(nw, pw);
+            assert!(!reader.unread, "{nw} {pw}");
+            let p = &reader.patches[0].points[0];
+            assert_eq!((p.handles[H_DOWN], p.handles[H_RIGHT]), (Vec2::new(0.0, 0.3), Vec2::new(0.3, 0.0)));
+        }
+        let reader = read(0.5, 1.0);
+        assert!(reader.unread && reader.patches.is_empty());
+    }
+
     #[test]
     fn hostile_meshes_are_capped_and_checked() {
-        let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
+        let mut reader = MeshReader::default();
         for _ in 0..=MAX_PATCHES {
             patch(&mut reader, &[0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
         }
         assert!(reader.unread && reader.patches.len() == MAX_PATCHES);
         // Patches cut into cells count by their points.
-        let mut reader = MeshReader { space: "DeviceGray".into(), points: MAX_POINTS - 3, ..MeshReader::default() };
+        let mut reader = MeshReader { points: MAX_POINTS - 3, ..MeshReader::default() };
         patch(&mut reader, &[0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
         assert!(reader.unread && reader.patches.is_empty());
         // NaN passes `clamp`: a non-finite opacity or colour leaves the patch unread.
         for bad in [[0.5, f64::NAN], [f64::INFINITY, 1.0]] {
-            let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
+            let mut reader = MeshReader::default();
             patch(&mut reader, &[bad[0], bad[1], 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
             assert!(reader.unread && reader.patches.is_empty(), "{bad:?}");
         }
         // More corners than a patch has.
-        let mut reader = MeshReader { space: "DeviceGray".into(), ..MeshReader::default() };
+        let mut reader = MeshReader::default();
         for _ in 0..1000 {
             reader.entry(&corner(&[0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]), Affine::IDENTITY);
         }
@@ -725,5 +837,121 @@ mod tests {
             c.corners[0].0 = Point::new(10.0, 1.0);
         }
         assert_eq!(r.one_mesh().unwrap_err(), NotOne::Unjoined);
+    }
+
+    fn nums(v: &[f64]) -> V {
+        V::Arr(v.iter().map(|x| V::Num(*x)).collect())
+    }
+
+    /// One unit-square patch: each corner's colour components, then (as version 1 meshes write,
+    /// without opacity) its point and handles at the point; `before[i]`: entries before corner `i`.
+    fn square(reader: &mut MeshReader, colors: [&[f64]; 4], before: [Vec<(V, &str)>; 4]) {
+        let at = [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)];
+        for ((color, (x, y)), entries) in colors.into_iter().zip(at).zip(before) {
+            for (value, key) in entries {
+                reader.entry(&[value, V::Name(key.into())], Affine::IDENTITY);
+            }
+            let corner: Vec<f64> = color.iter().copied().chain([x, y, x, y, 1.0, x, y, 1.0]).collect();
+            reader.entry(&[nums(&corner), V::Name("N".into())], Affine::IDENTITY);
+        }
+        reader.entry(&[V::Num(0.0), V::Name("E".into())], Affine::IDENTITY);
+    }
+
+    fn assert_color(got: Color, want: Color) {
+        let (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) = (got, want) else {
+            return assert_eq!(got, want);
+        };
+        assert!([c - c2, m - m2, y - y2, k - k2].iter().all(|d| d.abs() < 1e-6), "{got:?} != {want:?}");
+    }
+
+    /// The files write `/CS` only where the colour space changes, before the corner it applies to,
+    /// even within a patch, and a mesh starts grey: a corner before any `/CS` is one grey
+    /// component, and one after a `/CS` takes that space. (Patch points: first corner, fourth,
+    /// second, third.)
+    #[test]
+    fn corners_take_the_colour_space_last_set_before_them() {
+        let cs = |n: &str| vec![(V::Name(n.into()), "CS")];
+        let mut reader = MeshReader::default();
+        square(&mut reader, [&[0.25], &[1.0, 0.0, 0.0], &[0.75], &[0.0, 0.0, 1.0]], [vec![], cs("DeviceRGB"), cs("DeviceGray"), cs("DeviceRGB")]);
+        assert!(!reader.unread);
+        let colors: Vec<Color> = reader.patches[0].points.iter().map(|p| p.color).collect();
+        assert_eq!(colors, [Color::gray(0.75), Color::rgb(0.0, 0.0, 1.0), Color::rgb(1.0, 0.0, 0.0), Color::gray(0.25)]);
+        // A mesh with no `/CS` at all is grey.
+        let mut reader = MeshReader::default();
+        square(&mut reader, [&[0.0], &[1.0], &[1.0], &[0.0]], Default::default());
+        assert!(!reader.unread && reader.patches[0].points[0].color == Color::gray(1.0));
+    }
+
+    /// A named colour (`[c m y k /DeviceCMYK (name) /Process]`) paints at each corner's tint, 1 its
+    /// full colour; `/NChannel` inks overprint at their tints. Ones that don't add up stay unread.
+    #[test]
+    fn named_colours_and_inks_paint_at_their_tints() {
+        let ink = |c: [f64; 4], name: &str, kind: &str| {
+            let mut v: Vec<V> = c.iter().map(|x| V::Num(*x)).collect();
+            v.extend([V::Name("DeviceCMYK".into()), V::Str(name.as_bytes().to_vec()), V::Name(kind.into())]);
+            V::Arr(v)
+        };
+        let rose = ink([0.1, 0.6, 0.4, 0.2], "Rose", "Process");
+        let mut reader = MeshReader::default();
+        // Version 2 corners: tint, then opacity.
+        square(&mut reader, [&[1.0, 1.0], &[0.5, 1.0], &[1.0, 1.0], &[1.0, 1.0]], [vec![(rose, "CS")], vec![], vec![], vec![]]);
+        assert!(!reader.unread);
+        let points = &reader.patches[0].points;
+        assert_color(points[0].color, Color::cmyk(0.1, 0.6, 0.4, 0.2));
+        assert_color(points[2].color, Color::cmyk(0.05, 0.3, 0.2, 0.1));
+
+        let channels = |n: f64| {
+            V::Arr(vec![
+                ink([0.0, 0.0, 1.0, 0.0], "Yellow", "Separation"),
+                ink([0.0, 1.0, 0.0, 0.0], "Magenta", "Separation"),
+                V::Num(n),
+                V::Name("NChannel".into()),
+            ])
+        };
+        let mut reader = MeshReader::default();
+        square(&mut reader, [&[0.25, 1.0], &[0.0, 0.0], &[1.0, 1.0], &[0.0, 0.0]], [vec![(channels(2.0), "CS")], vec![], vec![], vec![]]);
+        assert!(!reader.unread);
+        assert_color(reader.patches[0].points[0].color, Color::cmyk(0.0, 1.0, 0.25, 0.0));
+        assert_color(reader.patches[0].points[3].color, Color::cmyk(0.0, 1.0, 1.0, 0.0));
+
+        // An ink count that doesn't match its inks, or an ink in a space not read.
+        let lab = V::Arr(vec![V::Num(50.0), V::Num(0.0), V::Num(0.0), V::Name("Lab".into()), V::Str(b"Grey".to_vec()), V::Name("Spot".into())]);
+        for space in [channels(3.0), lab] {
+            let mut reader = MeshReader::default();
+            square(&mut reader, [&[1.0, 1.0]; 4], [vec![(space, "CS")], vec![], vec![], vec![]]);
+            assert!(reader.unread && reader.patches.is_empty());
+        }
+    }
+
+    /// A corner holding anything but numbers is unread: skipping it would shift the numbers after
+    /// it into its colour and opacity (two inks' tints `0.25 /bad 0.5`, read as `0.25 0.5` and no
+    /// opacity).
+    #[test]
+    fn a_corner_with_something_other_than_numbers_is_unread() {
+        let ink = |c: [f64; 4], name: &str| {
+            let mut v: Vec<V> = c.iter().map(|x| V::Num(*x)).collect();
+            v.extend([V::Name("DeviceCMYK".into()), V::Str(name.as_bytes().to_vec()), V::Name("Separation".into())]);
+            V::Arr(v)
+        };
+        let channels =
+            V::Arr(vec![ink([0.0, 0.0, 1.0, 0.0], "Yellow"), ink([0.0, 1.0, 0.0, 0.0], "Magenta"), V::Num(2.0), V::Name("NChannel".into())]);
+        let mut reader = MeshReader::default();
+        reader.entry(&[channels, V::Name("CS".into())], Affine::IDENTITY);
+        for (x, y) in [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)] {
+            let mut corner = vec![V::Num(0.25), V::Name("bad".into()), V::Num(0.5)];
+            corner.extend([x, y, x, y, 1.0, x, y, 1.0].map(V::Num));
+            reader.entry(&[V::Arr(corner), V::Name("N".into())], Affine::IDENTITY);
+        }
+        reader.entry(&[V::Num(0.0), V::Name("E".into())], Affine::IDENTITY);
+        assert!(reader.unread && reader.patches.is_empty(), "{:?}", reader.patches);
+    }
+
+    /// Meshes as large as files users sent (97 × 72 patches) are read, as one mesh.
+    #[test]
+    fn a_large_grid_is_read_as_one_mesh() {
+        let r = Grid::new(97, 72).read([97.0, 72.0]);
+        assert!(!r.unread);
+        let mesh = r.one_mesh().unwrap();
+        assert_eq!((mesh.rows.min(mesh.cols), mesh.rows.max(mesh.cols)), (72, 97));
     }
 }

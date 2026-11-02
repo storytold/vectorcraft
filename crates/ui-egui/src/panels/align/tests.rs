@@ -692,3 +692,30 @@ fn distribute_buttons_space_the_anchor_points_of_one_path() {
     let xs: Vec<f64> = node.path_data().unwrap().anchors().map(|(_, _, a)| a.p.x).collect();
     assert_eq!(xs, [10.0, 55.0, 100.0], "{}", app.ui.status);
 }
+
+/// #4231: the panel menu's Align to Glyph Bounds is a submenu (no longer dimmed) whose Point Text
+/// and Area Text each toggle their own preference and show a check while it is on.
+#[test]
+fn align_to_glyph_bounds_toggles_point_and_area_text() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert!(frame_events(&ctx, &mut app, vec![], menu).iter().any(|(t, _)| t.trim() == "Align to Glyph Bounds"));
+    let checked = |app: &mut VectorcraftApp| {
+        let texts = frame_events(&ctx, app, vec![], glyph_bounds_items);
+        texts.iter().filter_map(|(t, _)| t.strip_prefix("✓ ")).map(str::to_string).collect::<Vec<_>>()
+    };
+    let choose = |app: &mut VectorcraftApp, label: &str| {
+        let texts = frame_events(&ctx, app, vec![], glyph_bounds_items);
+        let r = texts.iter().find(|(t, _)| t.trim_start_matches('✓').trim() == label).unwrap_or_else(|| panic!("{label} in {texts:?}")).1;
+        click(&ctx, app, r.center(), glyph_bounds_items);
+    };
+    let prefs = |app: &VectorcraftApp| (app.session.prefs.align_glyph_bounds_point, app.session.prefs.align_glyph_bounds_area);
+    assert!(checked(&mut app).is_empty(), "both off by default");
+    choose(&mut app, "Point Text");
+    assert_eq!((prefs(&app), checked(&mut app)), ((true, false), vec!["Point Text".to_string()]));
+    choose(&mut app, "Area Text");
+    assert_eq!((prefs(&app), checked(&mut app)), ((true, true), vec!["Point Text".to_string(), "Area Text".to_string()]));
+    choose(&mut app, "Point Text");
+    assert_eq!((prefs(&app), checked(&mut app)), ((false, true), vec!["Area Text".to_string()]));
+}

@@ -73,6 +73,17 @@ fn ids_are_selected_first() {
         s.execute("select.none", &json!({})).unwrap();
         vec![c]
     };
+    let shape = |s: &mut Session, ids: &[u64]| {
+        s.execute("select.set", &json!({"ids": &ids[..2]})).unwrap();
+        let c = s.execute("object.compoundShape.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        c
+    };
+    let shaped = |s: &mut Session, ids: &[u64]| vec![shape(s, ids)];
+    let member = |s: &mut Session, ids: &[u64]| {
+        shape(s, ids);
+        vec![ids[1]]
+    };
     let one = |_: &mut Session, ids: &[u64]| vec![ids[1]];
     let cases: Vec<(&str, Value, Setup<'_>)> = vec![
         ("object.group", json!({}), &none),
@@ -81,6 +92,10 @@ fn ids_are_selected_first() {
         ("object.clippingMask.release", json!({}), &clipped),
         ("object.compoundPath.make", json!({}), &none),
         ("object.compoundPath.release", json!({}), &compound),
+        ("object.compoundShape.make", json!({"mode": "intersect"}), &none),
+        ("object.compoundShape.setMode", json!({"mode": "subtract"}), &member),
+        ("object.compoundShape.release", json!({}), &shaped),
+        ("object.compoundShape.expand", json!({}), &shaped),
         ("object.arrange.bringToFront", json!({}), &one),
         ("object.arrange.bringForward", json!({}), &one),
         ("object.arrange.sendBackward", json!({}), &one),

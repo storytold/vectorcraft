@@ -37,7 +37,13 @@ const IMAGE_PARTLY: &str = "partly transparent image pixels are written over whi
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 const LARGE_IMAGE: &str = "an image that is too large for EPS was left out";
-const SPOT_GRADIENTS: &str = "gradients of spot colours are written in process colours";
+const SPOT_GRADIENTS_RGB: &str = "gradients mixing a spot color with RGB or Lab colors are written without the spot ink";
+const SPOT_GRADIENTS_L2: &str =
+    "gradients mixing a spot color with other inks are written in process colors at PostScript Level 2 (Level 3 keeps the spot inks)";
+const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
+const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
+/// The most colorants a DeviceN color space may have (PostScript's limit).
+const MAX_DEVICE_N: usize = 32;
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
 const TOO_LARGE: &str = "the artwork is too large for EPS: what follows 256 MB of PostScript was left out";
 /// The most PostScript the page body may grow to: symbols and patterns that hold one another
@@ -78,6 +84,29 @@ impl Space {
     }
 }
 
+/// The color space a gradient's stops are written in: a process space, or one defined in the
+/// setup (a spot color's Separation space or a DeviceN space of spot and process inks) by name,
+/// with its number of components.
+#[derive(Clone, Debug, PartialEq)]
+enum GradientSpace {
+    Process(Space),
+    Inks(String, usize),
+}
+
+impl GradientSpace {
+    fn n(&self) -> usize {
+        match self {
+            GradientSpace::Process(s) => s.n(),
+            GradientSpace::Inks(_, n) => *n,
+        }
+    }
+}
+
+/// A gradient's stops as written: offsets from 0 to 1 and the components in its space.
+type Stops = Vec<(f64, Vec<f32>)>;
+/// A gradient's stops before their offsets are put in order and run from 0 to 1.
+type RawStops = Vec<(f32, Vec<f32>)>;
+
 /// A colour as written: in a process space (its first [`Space::n`] components) or a tint of a
 /// spot colour space defined in the setup.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -115,10 +144,14 @@ pub(crate) struct Scene<'a> {
     setup: String,
     /// Spot colour spaces defined in the setup (`VCsp<i>`): swatch name and CMYK equivalent.
     spots: Vec<(String, [f32; 4])>,
+    /// DeviceN color spaces defined in the setup (`VCdn<i>`), as their definitions.
+    device_n: Vec<String>,
     warnings: Vec<String>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Image keys → what draws them (`None`: left out).
     images: HashMap<String, Option<Arc<String>>>,
+    /// The source key and solid paint together identify a colorized encoding.
+    colorized_images: HashMap<(String, String), Option<Arc<String>>>,
     /// Symbols and brush art being written inside one another.
     nest: u32,
 }
@@ -134,9 +167,11 @@ impl<'a> Scene<'a> {
             body: String::new(),
             setup: String::new(),
             spots: vec![],
+            device_n: vec![],
             warnings: vec![],
             brushes: None,
             images: HashMap::new(),
+            colorized_images: HashMap::new(),
             nest: 0,
         }
     }
@@ -297,12 +332,20 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(&im.key, self.doc.image_blob(im), im.width, im.height, im.xf),
+            NodeKind::Image(im) => {
+                let blob = self.doc.image_blob(im);
+                match n.extras().colorize.as_deref() {
+                    Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
+                        self.colorized_image(&im.key, blob, im.width, im.height, im.xf, p);
+                    }
+                    _ => self.image(&im.key, blob, im.width, im.height, im.xf),
+                }
+            }
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
                 {
-                    let mut art = (*sym.art).clone();
+                    let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
                     art.transform(*xf, false);
                     self.nest += 1;
                     self.node(&art, true);
@@ -648,14 +691,189 @@ impl<'a> Scene<'a> {
 
     /// The colour space a gradient's stops are written in, and its stops in it from offset 0 to 1
     /// (midpoints as stops of their own).
-    fn gradient_stops(&mut self, g: &vectorcraft_color::Gradient) -> (Space, Vec<(f64, [f32; 4])>) {
+    fn gradient_stops(&mut self, g: &vectorcraft_color::Gradient) -> (GradientSpace, Stops) {
         if g.stops.iter().any(|s| s.opacity < 1.0) {
             self.warn(TRANSPARENCY);
         }
-        let doc = self.doc;
-        if g.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
-            self.warn(SPOT_GRADIENTS);
+        let (space, raw) = match self.ink_stops(g) {
+            Some(inks) => inks,
+            None => {
+                let (space, raw) = self.process_stops(g);
+                (GradientSpace::Process(space), raw)
+            }
+        };
+        let mut out: Stops = vec![];
+        let mut last = 0.0f64;
+        for (o, c) in raw {
+            let o = if o.is_finite() { f64::from(o).clamp(last, 1.0) } else { last };
+            last = o;
+            out.push((o, c));
         }
+        match (out.first().cloned(), out.last().cloned()) {
+            (Some(first), Some(end)) => {
+                if first.0 > 0.0 {
+                    out.insert(0, (0.0, first.1));
+                }
+                if end.0 < 1.0 {
+                    out.push((1.0, end.1));
+                }
+            }
+            _ => out = vec![(0.0, vec![0.0; space.n()]), (1.0, vec![0.0; space.n()])],
+        }
+        (space, out)
+    }
+
+    /// The stops of a gradient with a spot ink as tints of its inks: a Separation space when every
+    /// stop is a tint of one spot ink or paper white, else (at Level 3) a DeviceN space of the
+    /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
+    /// them. Paper white adds no ink and a gray stop is black ink. An off-center midpoint is a stop
+    /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
+    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method;
+    /// it is then written in process colors.
+    fn ink_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<(GradientSpace, RawStops)> {
+        let doc = self.doc;
+        let spot_of = |s: &vectorcraft_color::GradientStop| -> Option<String> {
+            s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot)).map(str::to_string)
+        };
+        // The spot inks, collected up to one more than a DeviceN space can hold.
+        let mut names: Vec<String> = vec![];
+        for s in &g.stops {
+            if let Some(n) = spot_of(s)
+                && !names.contains(&n)
+            {
+                names.push(n);
+                if names.len() > MAX_DEVICE_N {
+                    break;
+                }
+            }
+        }
+        if names.is_empty() {
+            return None;
+        }
+        if !g.method.is_classic() {
+            self.warn(SPOT_GRADIENTS_PERCEPTUAL);
+            return None;
+        }
+        if names.len() > MAX_DEVICE_N {
+            self.warn(SPOT_GRADIENTS_SHARED);
+            return None;
+        }
+        // Paper white exactly: any ink at all, however little, is kept.
+        let paper = |c: &Color| match *c {
+            Color::Gray { k } => k <= 0.0,
+            Color::Cmyk { c, m, y, k } => [c, m, y, k].iter().all(|&v| v <= 0.0),
+            Color::Rgb { r, g, b } => [r, g, b].iter().all(|&v| v >= 1.0),
+            Color::Lab { l, a, b } => l >= 100.0 && a == 0.0 && b == 0.0,
+        };
+        // Each stop's ink coverage: the four process inks, then one tint per spot ink.
+        let mut inks: Vec<Vec<f32>> = Vec::with_capacity(g.stops.len());
+        for s in &g.stops {
+            let mut v = vec![0.0; 4 + names.len()];
+            match spot_of(s) {
+                Some(n) => {
+                    if let Some(i) = names.iter().position(|m| *m == n) {
+                        v[4 + i] = unit(s.tint);
+                    }
+                }
+                None if paper(&s.color) => {}
+                None => match self.process(&s.color) {
+                    Ink::Process(Space::Cmyk, c) => v[..4].copy_from_slice(&c),
+                    Ink::Process(Space::Gray, [lightness, ..]) => v[3] = unit(1.0 - lightness),
+                    _ => {
+                        self.warn(SPOT_GRADIENTS_RGB);
+                        return None;
+                    }
+                },
+            }
+            inks.push(v);
+        }
+        let process: Vec<usize> = (0..4).filter(|&i| inks.iter().any(|v| v[i] > 0.0)).collect();
+        let space = if let ([name], true) = (names.as_slice(), process.is_empty()) {
+            let Some(i) = self.spot_space(name) else {
+                self.warn(SPOT_GRADIENTS_SHARED);
+                return None;
+            };
+            GradientSpace::Inks(format!("VCsp{i}"), 1)
+        } else if self.o.level != Level::Three {
+            self.warn(SPOT_GRADIENTS_L2);
+            return None;
+        } else {
+            let Some(space) = self.device_n_space(&process, &names) else {
+                self.warn(SPOT_GRADIENTS_SHARED);
+                return None;
+            };
+            space
+        };
+        let pick = |v: &[f32]| -> Vec<f32> { process.iter().map(|&i| v[i]).chain(v[4..].iter().copied()).collect() };
+        let mut out = vec![];
+        for (i, s) in g.stops.iter().enumerate() {
+            out.push((s.offset, pick(&inks[i])));
+            if let (Some(n), Some(next)) = (g.stops.get(i + 1), inks.get(i + 1))
+                && (s.midpoint - 0.5).abs() > 1e-3
+            {
+                let half: Vec<f32> = inks[i].iter().zip(next).map(|(a, b)| (a + b) / 2.0).collect();
+                out.push((s.offset + (n.offset - s.offset) * s.midpoint, pick(&half)));
+            }
+        }
+        Some((space, out))
+    }
+
+    /// A DeviceN color space of process inks `process` (indices into CMYK) and spot inks `names`,
+    /// defined in the setup the first time, each spot ink with the CMYK equivalent its Separation
+    /// space has. `None` when a spot ink has no Separation space, two colorants share a name, a
+    /// spot ink has the name of a process ink, `All` or `None`, or there are more than
+    /// [`MAX_DEVICE_N`] colorants.
+    fn device_n_space(&mut self, process: &[usize], names: &[String]) -> Option<GradientSpace> {
+        const PROCESS: [&str; 4] = ["Cyan", "Magenta", "Yellow", "Black"];
+        if process.len() + names.len() > MAX_DEVICE_N {
+            return None;
+        }
+        let mut colorants: Vec<&str> = process.iter().map(|&i| PROCESS[i]).collect();
+        let mut weights: Vec<[f32; 4]> = process.iter().map(|&i| [0, 1, 2, 3].map(|j| if i == j { 1.0 } else { 0.0 })).collect();
+        for (i, name) in names.iter().enumerate() {
+            if PROCESS.contains(&name.as_str()) || name == "All" || name == "None" || names[..i].contains(name) {
+                return None;
+            }
+        }
+        for name in names {
+            colorants.push(name);
+            let i = self.spot_space(name)?;
+            weights.push(self.spots.get(i)?.1);
+        }
+        let mut def = String::from("[/DeviceN [");
+        for (i, c) in colorants.iter().enumerate() {
+            if i < process.len() {
+                let _ = write!(def, "/{c} ");
+            } else {
+                let _ = write!(def, "{} cvn ", ps::string(c));
+            }
+        }
+        // The tint transform: the components into an array, then each CMYK ink the sum of the
+        // components times their amounts of it.
+        let n = weights.len();
+        let _ = write!(def, "] /DeviceCMYK {{{n} array astore");
+        for j in 0..4 {
+            def.push_str(" 0");
+            for (i, w) in weights.iter().enumerate().filter(|(_, w)| w[j] > 0.0) {
+                let _ = write!(def, " {} index {i} get {} mul add", j + 1, ps::num(f64::from(w[j])));
+            }
+        }
+        def.push_str(" 5 -1 roll pop}]");
+        let i = match self.device_n.iter().position(|d| *d == def) {
+            Some(i) => i,
+            None => {
+                let i = self.device_n.len();
+                let _ = writeln!(self.setup, "/VCdn{i} {def} def");
+                self.device_n.push(def);
+                i
+            }
+        };
+        Some(GradientSpace::Inks(format!("VCdn{i}"), n))
+    }
+
+    /// The process color space a gradient's stops are written in, and its stops in it (midpoints
+    /// as stops of their own).
+    fn process_stops(&mut self, g: &vectorcraft_color::Gradient) -> (Space, RawStops) {
         let stops = g.expanded_stops();
         let space = if self.cmyk || stops.iter().any(|(_, c, _)| matches!(c, Color::Cmyk { .. })) {
             Space::Cmyk
@@ -675,24 +893,7 @@ impl<'a> Scene<'a> {
                 }
             }
         };
-        let mut out: Vec<(f64, [f32; 4])> = vec![];
-        let mut last = 0.0f64;
-        for (o, c, _) in &stops {
-            let o = if o.is_finite() { f64::from(*o).clamp(last, 1.0) } else { last };
-            last = o;
-            out.push((o, comps(c)));
-        }
-        match (out.first().copied(), out.last().copied()) {
-            (Some(first), Some(end)) => {
-                if first.0 > 0.0 {
-                    out.insert(0, (0.0, first.1));
-                }
-                if end.0 < 1.0 {
-                    out.push((1.0, end.1));
-                }
-            }
-            _ => out = vec![(0.0, [0.0; 4]), (1.0, [0.0; 4])],
-        }
+        let out = stops.iter().map(|(o, c, _)| (*o, comps(c)[..space.n()].to_vec())).collect();
         (space, out)
     }
 
@@ -703,11 +904,12 @@ impl<'a> Scene<'a> {
         let (space, stops) = self.gradient_stops(&g.gradient);
         if !stops.windows(2).any(|w| w[1].0 > w[0].0) {
             if let Some((_, c)) = stops.first() {
-                self.set_comps(space, *c);
+                self.set_comps(&space, c);
                 self.rect_fill(area);
             }
             return;
         }
+        let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
         match g.gradient.kind {
             GradientKind::Radial => {
@@ -739,9 +941,9 @@ impl<'a> Scene<'a> {
     }
 
     /// A Level 3 smooth shading of `kind` (2 axial, 3 radial) at `coords`, extended both ways.
-    fn shading(&mut self, kind: u8, space: Space, coords: &[f64], stops: &[(f64, [f32; 4])]) {
+    fn shading(&mut self, kind: u8, space: &GradientSpace, coords: &[f64], stops: &[(f64, Vec<f32>)]) {
         let n = space.n();
-        let comps = |c: &[f32; 4]| -> String {
+        let comps = |c: &[f32]| -> String {
             let mut s = String::from("[");
             push_nums(&mut s, &c.iter().take(n).map(|v| f64::from(*v)).collect::<Vec<_>>());
             s.pop();
@@ -749,7 +951,7 @@ impl<'a> Scene<'a> {
             s
         };
         let segments: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
-        let interp = |w: &&[(f64, [f32; 4])]| format!("<< /FunctionType 2 /Domain [0 1] /C0 {} /C1 {} /N 1 >>", comps(&w[0].1), comps(&w[1].1));
+        let interp = |w: &&[(f64, Vec<f32>)]| format!("<< /FunctionType 2 /Domain [0 1] /C0 {} /C1 {} /N 1 >>", comps(&w[0].1), comps(&w[1].1));
         let function = match segments.as_slice() {
             [one] => interp(one),
             many => {
@@ -767,27 +969,44 @@ impl<'a> Scene<'a> {
                 f
             }
         };
-        let _ = write!(self.body, "<< /ShadingType {kind} /ColorSpace {} /Coords [", space.name());
+        let name = match space {
+            GradientSpace::Process(s) => s.name(),
+            GradientSpace::Inks(name, _) => name,
+        };
+        let _ = write!(self.body, "<< /ShadingType {kind} /ColorSpace {name} /Coords [");
         push_nums(&mut self.body, coords);
         let _ = writeln!(self.body, "] /Extend [true true]\n/Function {function} >> shfill");
     }
 
     /// The bands of each stretch between stops: how many, for colours `a` to `b` over `length`
     /// points (one per colour level, none thinner than [`MIN_BAND`]).
-    fn bands(a: &[f32; 4], b: &[f32; 4], length: f64, segments: usize) -> usize {
+    fn bands(a: &[f32], b: &[f32], length: f64, segments: usize) -> usize {
         let delta = a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0f32, f32::max);
         let by_color = (f64::from(delta) * 255.0).ceil().max(1.0) as usize;
         let by_size = (length / MIN_BAND).ceil().max(1.0) as usize;
         by_color.min(by_size).min(MAX_STEPS / segments.max(1)).max(1)
     }
 
-    fn set_comps(&mut self, space: Space, c: [f32; 4]) {
-        self.set_ink(Ink::Process(space, c));
+    fn set_comps(&mut self, space: &GradientSpace, c: &[f32]) {
+        match space {
+            GradientSpace::Process(s) => {
+                let mut v = [0.0; 4];
+                for (x, y) in v.iter_mut().zip(c) {
+                    *x = *y;
+                }
+                self.set_ink(Ink::Process(*s, v));
+            }
+            GradientSpace::Inks(name, _) => {
+                let _ = write!(self.body, "{name} setcolorspace ");
+                push_nums(&mut self.body, &c.iter().map(|v| f64::from(*v)).collect::<Vec<_>>());
+                self.line("setcolor");
+            }
+        }
     }
 
     /// A linear gradient from `s` to `e` as bands across it, covering `area`: each band painted
     /// from where it starts to the far end, so the next one leaves no seam.
-    fn linear_steps(&mut self, s: Point, e: Point, area: Rect, space: Space, stops: &[(f64, [f32; 4])]) {
+    fn linear_steps(&mut self, s: Point, e: Point, area: Rect, space: &GradientSpace, stops: &[(f64, Vec<f32>)]) {
         let d = e - s;
         let len = d.hypot();
         // Gradient space: x along the gradient (0 to 1), y across it in points.
@@ -801,21 +1020,21 @@ impl<'a> Scene<'a> {
             sc.line("rectfill");
         };
         if let Some((_, c)) = stops.first() {
-            self.set_comps(space, *c);
+            self.set_comps(space, c);
             band(self, t0);
         }
         let segments: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
         for w in &segments {
-            let ((oa, ca), (ob, cb)) = (w[0], w[1]);
-            let n = Self::bands(&ca, &cb, (ob - oa) * len, segments.len());
+            let ((oa, ca), (ob, cb)) = (&w[0], &w[1]);
+            let n = Self::bands(ca, cb, (ob - oa) * len, segments.len());
             for k in 0..n {
                 let at = oa + (ob - oa) * k as f64 / n as f64;
-                self.set_comps(space, mix(&ca, &cb, (k as f32 + 0.5) / n as f32));
+                self.set_comps(space, &mix(ca, cb, (k as f32 + 0.5) / n as f32));
                 band(self, at);
             }
         }
         if let Some((_, c)) = stops.last() {
-            self.set_comps(space, *c);
+            self.set_comps(space, c);
             band(self, 1.0);
         }
         self.line("Q");
@@ -823,18 +1042,18 @@ impl<'a> Scene<'a> {
 
     /// A radial gradient from focal point `f` to the circle of radius `r` around `c` as discs,
     /// largest first, over the last colour across `area` (all in the gradient's own space).
-    fn radial_steps(&mut self, f: Point, c: Point, r: f64, area: Rect, space: Space, stops: &[(f64, [f32; 4])]) {
+    fn radial_steps(&mut self, f: Point, c: Point, r: f64, area: Rect, space: &GradientSpace, stops: &[(f64, Vec<f32>)]) {
         if let Some((_, last)) = stops.last() {
-            self.set_comps(space, *last);
+            self.set_comps(space, last);
             self.rect_fill(area);
         }
         let segments: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
         for w in segments.iter().rev() {
-            let ((oa, ca), (ob, cb)) = (w[0], w[1]);
-            let n = Self::bands(&ca, &cb, (ob - oa) * r, segments.len());
+            let ((oa, ca), (ob, cb)) = (&w[0], &w[1]);
+            let n = Self::bands(ca, cb, (ob - oa) * r, segments.len());
             for k in (0..n).rev() {
                 let t = oa + (ob - oa) * (k + 1) as f64 / n as f64;
-                self.set_comps(space, mix(&ca, &cb, (k as f32 + 0.5) / n as f32));
+                self.set_comps(space, &mix(ca, cb, (k as f32 + 0.5) / n as f32));
                 let at = f + (c - f) * t;
                 push_nums(&mut self.body, &[at.x, at.y, r * t]);
                 self.line("0 360 newpath arc fill");
@@ -884,6 +1103,149 @@ impl<'a> Scene<'a> {
         if let Some(e) = encoded {
             self.place_image(&e, place);
         }
+    }
+
+    /// Gray coverage in the selected process or Separation ink. Binary coverage is a stencil;
+    /// continuous coverage leaves zero pixels untouched at Level 3 and writes them as paper at Level 2.
+    fn colorized_image(&mut self, key: &str, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, paint: &Paint) {
+        let place = xf * Affine::scale_non_uniform(f64::from(width.max(1)), f64::from(height.max(1)));
+        if !invertible(place) {
+            return;
+        }
+        let cache = (key.to_string(), format!("{paint:?}"));
+        let encoded = match self.colorized_images.get(&cache) {
+            Some(e) => e.clone(),
+            None => {
+                let e = self.encode_colorized(blob, paint).map(Arc::new);
+                self.colorized_images.insert(cache, e.clone());
+                e
+            }
+        };
+        if let Some(e) = encoded {
+            self.place_image(&e, place);
+        }
+    }
+
+    fn encode_colorized(&mut self, blob: Option<&ImageBlob>, paint: &Paint) -> Option<String> {
+        let Some((w, h, coverage)) = blob.and_then(ImageBlob::coverage) else {
+            self.warn(UNDECODED);
+            return None;
+        };
+        if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
+            self.warn(LARGE_IMAGE);
+            return None;
+        }
+        let Paint::Solid { color, swatch, tint } = paint else { return None };
+        let ink = self.solid(color, swatch.as_deref(), *tint);
+        let binary = coverage.iter().all(|&v| v == 0 || v == 255);
+        let clear = coverage.contains(&0);
+        if coverage.iter().any(|&v| v > 0 && v < 255) {
+            self.warn(IMAGE_PARTLY);
+        }
+        let keyed = !binary && clear && self.o.level == Level::Three;
+        if !binary && clear && !keyed {
+            self.warn(IMAGE_ALPHA_L2);
+        }
+        // Zero tint is uncommon for covered spot pixels; process uses the same rare key as
+        // ordinary images. Nudge a covered collision so only clear pixels match the mask.
+        let key = match ink {
+            Ink::Spot { .. } => [0, 0, 0, 0],
+            Ink::Process(Space::Gray, ..) => [0, 0, 0, 0],
+            Ink::Process(..) => [255, 0, 255, 0],
+        };
+        let mut data = Vec::new();
+        if binary {
+            let stride = (w as usize).div_ceil(8);
+            data.resize(stride.saturating_mul(h as usize), 0);
+            for (i, &v) in coverage.iter().enumerate() {
+                if v == 255
+                    && let Some(byte) = data.get_mut((i / w as usize) * stride + (i % w as usize) / 8)
+                {
+                    *byte |= 0x80 >> (i % w as usize % 8);
+                }
+            }
+        } else {
+            for &v in &coverage {
+                if v == 0 && keyed {
+                    let n = match ink {
+                        Ink::Spot { .. } => 1,
+                        Ink::Process(space, ..) => space.n(),
+                    };
+                    data.extend(key.iter().take(n));
+                    continue;
+                }
+                let a = f32::from(v) / 255.0;
+                match ink {
+                    Ink::Spot { tint, .. } => {
+                        let mut sample = (255.0 * tint * a).round() as u8;
+                        if keyed && sample == key[0] {
+                            sample = 1;
+                        }
+                        data.push(sample);
+                    }
+                    Ink::Process(space, components) => {
+                        let paper = if space == Space::Cmyk { 0.0 } else { 1.0 };
+                        let n = space.n();
+                        let mut samples = [0; 4];
+                        for (sample, &component) in samples.iter_mut().zip(components.iter()).take(n) {
+                            *sample = (255.0 * (paper + (component - paper) * a)).round() as u8;
+                        }
+                        if keyed && samples.iter().take(n).eq(key.iter().take(n)) {
+                            samples[if n > 1 { 1 } else { 0 }] = 1;
+                        }
+                        data.extend(samples.iter().take(n));
+                    }
+                }
+            }
+        }
+        let (filter, encoded) = match self.o.level {
+            Level::Three => ("/FlateDecode", ps::deflate(&data)),
+            Level::Two => {
+                let mut rl = Vec::new();
+                ps::packbits(&data, &mut rl);
+                rl.push(128);
+                ("/RunLengthDecode", rl)
+            }
+        };
+        let mut out = String::new();
+        if binary {
+            // imagemask takes its current ink from the graphics state.
+            out.push_str(&self.ink_code(ink));
+        } else {
+            match ink {
+                Ink::Spot { space, .. } => {
+                    let _ = writeln!(out, "VCsp{space} setcolorspace");
+                }
+                Ink::Process(space, ..) => {
+                    let _ = writeln!(out, "{} setcolorspace", space.name());
+                }
+            }
+        }
+        let n = match ink {
+            Ink::Spot { .. } => 1,
+            Ink::Process(space, ..) => space.n(),
+        };
+        let decode = if binary { "1 0".to_string() } else { "0 1 ".repeat(n).trim_end().to_string() };
+        let _ = write!(
+            out,
+            "{{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent {} /Decode [{decode}] /ImageMatrix [{w} 0 0 {h} 0 0]",
+            if keyed { 4 } else { 1 },
+            if binary { 1 } else { 8 },
+        );
+        if keyed {
+            let mask: Vec<String> = key.iter().take(n).map(|v| format!("{v} {v}")).collect();
+            let _ = write!(out, " /MaskColor [{}]", mask.join(" "));
+        }
+        let _ = writeln!(out, "\n/DataSource VCsrc {filter} filter >> {}\nVCsrc flushfile }} exec", if binary { "imagemask" } else { "image" });
+        out.push_str(&ps::ascii85(&encoded));
+        Some(out)
+    }
+
+    /// Ink-setting operators in the cached stencil body, built with the same path as solid fills.
+    fn ink_code(&mut self, ink: Ink) -> String {
+        let body = std::mem::take(&mut self.body);
+        self.set_ink(ink);
+        std::mem::replace(&mut self.body, body)
     }
 
     /// Image `blob` as RGBA pixels; `None` (with a warning) when it can't be written.
@@ -991,6 +1353,6 @@ impl<'a> Scene<'a> {
 }
 
 /// `a` to `b` at `t`.
-fn mix(a: &[f32; 4], b: &[f32; 4], t: f32) -> [f32; 4] {
-    [0, 1, 2, 3].map(|i| a[i] + (b[i] - a[i]) * t)
+fn mix(a: &[f32], b: &[f32], t: f32) -> Vec<f32> {
+    a.iter().zip(b).map(|(x, y)| x + (y - x) * t).collect()
 }

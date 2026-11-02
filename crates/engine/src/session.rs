@@ -5,7 +5,10 @@ use super::history::NamedStep;
 use super::interaction::{BatchSteps, Interaction, LastTransform, UndoGroup, UndoScope};
 use super::prefs::{DrawMode, Prefs};
 use super::sanity::{TOO_DEEP, deselect_hidden, doc_sane, objects_in_range};
-use super::*;
+use super::{
+    Arc, Clipboard, Color, CommandInfo, CommandSpec, Document, GradientPaint, Journal, NodeId, NodeKind, PaintDefaults, Selection, Session, Value,
+    ViewInfo, cmd, command_specs, file_access, find_command, guard,
+};
 
 mod documents;
 mod edit;

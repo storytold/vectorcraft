@@ -281,7 +281,11 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let brush = vectorcraft_brush::Brush { name: "Cards".into(), kind: vectorcraft_brush::BrushKind::Scatter(scatter) };
     vectorcraft_brush::store(&mut brushed, &[brush]);
     assert_eq!(placed_area(&brushed, &only_a), Changed::Everything);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Card".into(), art: Arc::new(placed_node(65, "area-a", 40.0, 20.0, Affine::IDENTITY)) });
+    d.symbols.push(vectorcraft_doc::Symbol {
+        dynamic: false,
+        name: "Card".into(),
+        art: Arc::new(placed_node(65, "area-a", 40.0, 20.0, Affine::IDENTITY)),
+    });
     assert_eq!(placed_area(&d, &only_a), Changed::Everything);
 }
 

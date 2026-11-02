@@ -4,7 +4,7 @@ use serde_json::Value;
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
 
-use crate::util::*;
+use crate::util::{catmull_rom, fit_piece, flag, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points};
 
 fn diag(b: Rect) -> f64 {
     b.width().hypot(b.height()).max(1e-6)

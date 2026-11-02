@@ -3,7 +3,10 @@ use super::common::{
     spacing_param, starts_param, wrap,
 };
 use super::mesh::index_param;
-use super::*;
+use super::{
+    Affine, Anchor, Appearance, Arc, Beside, BlendDefaults, BlendOrientation, BlendSpacing, BlendSpec, Document, EngineError, Node, NodeId, NodeKind,
+    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, id_param, json, live, number_or, ok, str_param, switch_or,
+};
 
 /// The first blend among `roots`.
 fn first_blend(d: &Document, roots: &[NodeId]) -> Option<Node> {

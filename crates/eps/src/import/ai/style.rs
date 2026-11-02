@@ -82,6 +82,12 @@ const WARPS: [&str; 15] = [
     "warp.twist",
 ];
 
+/// The warp style (`arc`, `arcLower`, …) numbered `n` in `DeformStyle`.
+pub(super) fn warp_style(n: i64) -> Option<&'static str> {
+    let id = WARPS.get(usize::try_from(n.checked_sub(1)?).ok()?)?;
+    id.strip_prefix("warp.")
+}
+
 /// A plain style's paint, as the object comes in.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct ArtStyle {

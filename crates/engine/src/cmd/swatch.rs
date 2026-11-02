@@ -3,11 +3,14 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
-use vectorcraft_doc::swatches::{LinkFn, color_name, node_colors};
+use vectorcraft_doc::swatches::{LinkFn, color_name, map_node_solid_paints, node_colors};
 use vectorcraft_doc::{Document, NodeId};
 
 use super::paint::paint_from;
-use super::*;
+use super::{
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or,
+    unique_name,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -249,12 +252,15 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let mut unlink =
         |_: &mut Color, link: &mut Option<String>, _: &mut f32| link.as_ref().is_some_and(|l| global.contains(l)) && link.take().is_some();
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let unlinked = s.edit("Delete Swatch", |d, _| {
         d.swatch_groups.retain(|g| !names.contains(&g.name));
         for n in &names {
             d.remove_swatch(n);
         }
-        Ok(d.map_solid_paints(&mut unlink))
+        let unlinked = map_swatch_links(d, &mut unlink);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(unlinked)
     })?;
     map_default_paints(s, &mut unlink);
     Ok(json!({"deleted": names, "unlinked": unlinked}))
@@ -526,6 +532,130 @@ pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) {
     }
 }
 
+/// Apply a swatch-link rewrite to the document ([`Document::map_solid_paints`]) and to the art of
+/// the brushes in its library, which is stored again only when a brush's paint changed. A Hue Shift
+/// key that was the color of a recolored paint takes the paint's new color. Returns the number of
+/// changed paints. Stored entries are stored again as they were read, except that a brush whose
+/// paint changed is merged into its entry ([`merge_stored`]), so fields the brush definition does
+/// not read are kept at every level.
+pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
+    use vectorcraft_brush::{Brush, BrushKind, Colorization};
+    let mut n = d.map_solid_paints(f);
+    // Each stored entry, its brush when it parses, the brush as written before the edit (only
+    // when its paint changed), and whether its paint changed.
+    let mut lib: Vec<(Value, Option<Brush>, Value, bool)> = match d.unknown.get(vectorcraft_brush::DOC_KEY) {
+        Some(v) => v.as_array().into_iter().flatten().map(|e| (e.clone(), Brush::from_json(e.clone()).ok(), Value::Null, false)).collect(),
+        None => {
+            vectorcraft_brush::library(d).into_iter().map(|b| (serde_json::to_value(&b).unwrap_or_default(), Some(b), Value::Null, false)).collect()
+        }
+    };
+    let mut in_brushes = 0;
+    for (_, b, base, changed) in lib.iter_mut() {
+        let Some(b) = b else { continue };
+        let before_edit = serde_json::to_value(&*b).unwrap_or_default();
+        let key = match b.kind.colorization() {
+            Colorization::HueShift { key } => Some(key),
+            _ => None,
+        };
+        let before = key.map(|_| art_paint_colors(b.art()));
+        let in_brush = b.art_mut().into_iter().map(|art| map_node_solid_paints(art, f)).sum::<usize>();
+        *changed = in_brush > 0;
+        if *changed {
+            *base = before_edit;
+        }
+        in_brushes += in_brush;
+        let (Some(key), Some(before)) = (key, before) else { continue };
+        // Colors are compared by hex value, as `art_colors` (Brush Options' key colors) lists them.
+        let same = |a: &Color, b: &Color| a.to_hex() == b.to_hex();
+        let after = art_paint_colors(b.art());
+        // The key moves when the art's fills and strokes (not opacity masks) had the key color and
+        // none has it now, to the first new color of a paint that had it.
+        let moved = before.iter().any(|c| same(c, &key)) && !after.iter().any(|c| same(c, &key));
+        let new_key = before.iter().zip(&after).find(|(o, _)| same(o, &key)).map(|(_, n)| *n);
+        if let Some(key) = new_key.filter(|_| moved) {
+            let c = match &mut b.kind {
+                BrushKind::Art(a) => &mut a.colorization,
+                BrushKind::Scatter(s) => &mut s.colorization,
+                BrushKind::Pattern(p) => &mut p.colorization,
+                BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => continue,
+            };
+            *c = Colorization::HueShift { key };
+        }
+    }
+    if in_brushes > 0 {
+        let lib = lib
+            .into_iter()
+            .map(|(raw, b, base, changed)| match b.filter(|_| changed) {
+                Some(b) => merge_stored(raw, &base, serde_json::to_value(b).unwrap_or_default()),
+                None => raw,
+            })
+            .collect();
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(lib));
+        n += in_brushes;
+    }
+    n
+}
+
+/// `new` (a definition as written after an edit) with the parts of `raw` (its stored entry) that
+/// `base` (the definition as read from `raw` and written before the edit) does not hold. An object
+/// keeps the fields of `raw` that `base` leaves out, and drops the fields that `base` holds and
+/// `new` leaves out. An array takes the length of `new`, each element merged with the element at
+/// the same index in `raw`.
+fn merge_stored(raw: Value, base: &Value, new: Value) -> Value {
+    match (raw, new) {
+        (Value::Object(mut raw), Value::Object(new)) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in new {
+                let v = match raw.remove(&k) {
+                    Some(r) => merge_stored(r, base.get(k.as_str()).unwrap_or(&Value::Null), v),
+                    None => v,
+                };
+                out.insert(k, v);
+            }
+            out.extend(raw.into_iter().filter(|(k, _)| base.get(k.as_str()).is_none()));
+            Value::Object(out)
+        }
+        (Value::Array(raw), Value::Array(new)) => {
+            let mut raw = raw.into_iter();
+            let merged = new.into_iter().enumerate().map(|(i, v)| match raw.next() {
+                Some(r) => merge_stored(r, base.get(i).unwrap_or(&Value::Null), v),
+                None => v,
+            });
+            Value::Array(merged.collect())
+        }
+        (_, new) => new,
+    }
+}
+
+/// The solid colors of the fills and strokes under `nodes` (type runs' fills and strokes included,
+/// opacity masks left out), in tree order and with repeats, the paints [`vectorcraft_brush::art_colors`]
+/// counts.
+fn art_paint_colors(nodes: Vec<&vectorcraft_doc::Node>) -> Vec<Color> {
+    fn walk(n: &vectorcraft_doc::Node, out: &mut Vec<Color>) {
+        for it in &n.appearance.items {
+            let (visible, paint) = match it {
+                vectorcraft_doc::AppearanceItem::Fill(f) => (f.visible, &f.paint),
+                vectorcraft_doc::AppearanceItem::Stroke(s) => (s.visible, &s.paint),
+            };
+            out.extend(paint.color().filter(|_| visible));
+        }
+        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
+            for r in &t.runs {
+                let stroke = (r.style.stroke_width > 0.0).then_some(&r.style.stroke);
+                out.extend([Some(&r.style.fill), stroke].into_iter().flatten().filter_map(Paint::color));
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, out);
+        }
+    }
+    let mut out = vec![];
+    for n in nodes {
+        walk(n, &mut out);
+    }
+    out
+}
+
 fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.edit";
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?.to_string();
@@ -576,6 +706,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let global = spot || bool_or(p, "global", sw.global);
     let to = name_param(p, "newName").filter(|n| *n != name).map_or_else(|| name.clone(), |n| d.free_swatch_name(&n));
     let relink = Relink { from: name.clone(), to: to.clone(), color: color.filter(|_| global).map(|c| d.linked_color(c, spot)), keep: global };
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Swatch Options", |d, _| {
         let w = d.swatch_mut(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
         w.name = to.clone();
@@ -589,7 +720,9 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        Ok(d.map_solid_paints(&mut |c, l, t| relink.apply(c, l, t)))
+        let relinked = map_swatch_links(d, &mut |c, l, t| relink.apply(c, l, t));
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(relinked)
     })?;
     relink.defaults(s);
     Ok(json!({"name": to, "relinked": relinked}))
@@ -740,11 +873,14 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         *l = link.clone();
         true
     };
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Merge Swatches", |d, _| {
         for n in merged {
             d.remove_swatch(n);
         }
-        Ok(d.map_solid_paints(&mut relink))
+        let relinked = map_swatch_links(d, &mut relink);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(relinked)
     })?;
     map_default_paints(s, &mut relink);
     Ok(json!({"name": keep, "merged": merged, "relinked": relinked}))
@@ -800,7 +936,7 @@ fn swatch_spot_options(s: &mut Session, p: &Value) -> Result<Value> {
             .filter(|w| w.spot && matches!(w.paint, Paint::Solid { color: Color::Lab { .. }, swatch: None, .. }))
             .filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?)))
             .collect();
-        let relinked = d.map_solid_paints(&mut follow_bases(&bases));
+        let relinked = map_swatch_links(d, &mut follow_bases(&bases));
         Ok((relinked, bases))
     })?;
     map_default_paints(s, &mut follow_bases(&bases));
@@ -853,6 +989,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
     {
         return Err(bad(cmd, format!("`{}` can't be edited or removed", w.name)));
     }
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let mut relinks = vec![];
     let mut swatches = std::mem::take(&mut d.swatch_groups[gi].swatches);
     for gone in swatches.split_off(colors.len().min(swatches.len())) {
@@ -877,7 +1014,8 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
     let g = &mut d.swatch_groups[gi];
     (g.name, g.swatches) = (name.clone(), swatches);
     let names = g.swatches.iter().map(|w| w.name.clone()).collect();
-    let relinked = if relinks.is_empty() { 0 } else { d.map_solid_paints(&mut |c, l, t| relinks.iter().any(|r| r.apply(c, l, t))) };
+    let relinked = if relinks.is_empty() { 0 } else { map_swatch_links(d, &mut |c, l, t| relinks.iter().any(|r| r.apply(c, l, t))) };
+    super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
     Ok(GroupEdit { name, swatches: names, relinks, relinked })
 }
 

@@ -43,7 +43,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob};
 
 use super::fileio::{self, SAVE_FORMATS, SaveJob, SaveMode, SavePlan};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, str_param};
 use crate::DocState;
 
 /// Documents with more objects than this are complex: with Preferences → Turn off Data Recovery

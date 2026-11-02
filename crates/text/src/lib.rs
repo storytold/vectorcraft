@@ -43,11 +43,11 @@ pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
-use kurbo::{Affine, BezPath, Point, Rect, Vec2};
+use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
-pub use vectorcraft_doc::{AreaFit, FirstBaseline, VerticalAlign};
+pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
 
 /// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
 pub use vectorcraft_doc::Composer;
@@ -56,7 +56,7 @@ pub use vectorcraft_doc::Composer;
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LayoutOptions {
-    /// Area type rows and columns (text flows down each column, then across). Layout clamps each
+    /// Area type rows and columns (text fills them in [`LayoutOptions::flow`] order). Layout clamps each
     /// count to 1..=[`vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS`].
     pub rows: usize,
     pub columns: usize,
@@ -69,6 +69,8 @@ pub struct LayoutOptions {
     pub first_baseline_min: f64,
     /// Vertical alignment of the lines in each row/column (Area Type Options "Align").
     pub vertical_align: VerticalAlign,
+    /// Area Type Options "Text Flow": by columns (down each column, then across) or by rows.
+    pub flow: TextFlow,
     /// Area type only: Shrink Text to Fit scales overflowing text down at layout time (see
     /// [`TextLayout::fit_scale`]); the other fits are the engine's business and lay out as `None`.
     pub fit: AreaFit,
@@ -87,6 +89,7 @@ impl Default for LayoutOptions {
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
             vertical_align: VerticalAlign::Top,
+            flow: TextFlow::Columns,
             fit: AreaFit::None,
             composer: None,
             features: OtFeatures::default(),
@@ -136,6 +139,12 @@ pub struct PositionedGlyph {
     /// the path ([`GlyphBend`]) so it meets its neighbours, and `xf` is only the straight glyph
     /// nearest it (for the caret, hit testing and tools). `None`: the glyph is drawn through `xf`.
     pub bend: Option<GlyphBend>,
+    /// Font units → font units: `xf * unturned` places the glyph as it would be placed without
+    /// its Character Rotation. The identity for a glyph without one.
+    pub unturned: Affine,
+    /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
+    /// position on the baseline moved by its baseline shift.
+    pub pivot: Point,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -337,6 +346,21 @@ impl TextLayout {
             (self.physical_point(Point::new(l.x0, y)), self.physical_point(Point::new(l.x1, y)))
         };
         self.lines.iter().filter(|l| l.x1 > l.x0).map(line).collect()
+    }
+    /// The ink of the type in text space: its glyphs (and ruby) as drawn, colour glyphs, images and
+    /// inline graphics included, without the lines' em boxes that [`Self::bounds`] also covers.
+    /// What Align to Glyph Bounds aligns. `None` when nothing draws (only spaces, or no text).
+    pub fn ink_bounds(&self) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| g.outline.bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| xf.transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| g.xf.transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        // Ruby is covered by its line's ascent, but its ink can overhang sideways past the line.
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(i.bounds));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
     }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {

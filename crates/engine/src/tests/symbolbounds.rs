@@ -115,7 +115,7 @@ fn set_bounds_with_use_preview_bounds_keeps_the_strokes_in_the_symbol_at_their_w
     let mut d = Document::new(200.0, 120.0);
     let stroked = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 2.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 8.0, 8.0)), stroked);
-    d.symbols.push(Symbol { name: "Box".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: Arc::new(art) });
     let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((50.0, 50.0)) });
     *instance.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
     let (layer, id) = (d.layers[0].id, instance.id);
@@ -136,7 +136,7 @@ fn set_bounds_with_use_preview_bounds_keeps_the_strokes_in_the_symbol_at_their_w
     let mut round = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
     round.stroke_mut().unwrap().join = vectorcraft_doc::LineJoin::Round;
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 8.0, 8.0)), round);
-    d.symbols.push(Symbol { name: "Ring".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Ring".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Ring".into(), xf: Affine::translate((50.0, 50.0)) });
     let (layer, id) = (d.layers[0].id, instance.id);
     d.insert(Some(layer), 0, instance).unwrap();
@@ -164,7 +164,7 @@ fn set_bounds_sizes_an_instance_and_a_path_whose_strokes_differ() {
         Node::path(d.alloc_id(), shapes::rectangle(Rect::new(at, at, at + 10.0, at + 10.0)), stroked)
     };
     let art = square(&mut d, 0.0, 10.0);
-    d.symbols.push(Symbol { name: "Thick".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Thick".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Thick".into(), xf: Affine::translate((50.0, 50.0)) });
     let path = square(&mut d, 50.0, 2.0);
     let (layer, ids) = (d.layers[0].id, [instance.id, path.id]);
@@ -202,7 +202,7 @@ fn set_bounds_measures_the_objects_in_an_instances_art_one_by_one() {
             *art.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
             *instance.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
         }
-        d.symbols.push(Symbol { name: "Mixed".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Mixed".into(), art: Arc::new(art) });
         let mut roots = vec![if grouped { Node::group(d.alloc_id(), vec![Arc::new(instance)]) } else { instance }];
         if plain {
             let filled = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
@@ -271,7 +271,7 @@ fn set_bounds_measures_an_instance_as_one_object_past_4096_objects_in_its_art() 
             art.push(Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 1.0, y + 1.0)), square)));
         }
         let art = Node::group(d.alloc_id(), art);
-        d.symbols.push(Symbol { name: "Many".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Many".into(), art: Arc::new(art) });
         let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Many".into(), xf: Affine::translate((0.0, 100.0)) });
         let (layer, id) = (d.layers[0].id, instance.id);
         d.insert(Some(layer), 0, instance).unwrap();
@@ -293,7 +293,7 @@ fn set_bounds_measures_a_turned_instance_by_the_box_around_its_turned_art_box() 
     let mut d = Document::new(400.0, 400.0);
     let filled = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
     let circle = Node::path(d.alloc_id(), shapes::ellipse(Rect::new(-10.0, -10.0, 10.0, 10.0)), filled);
-    d.symbols.push(Symbol { name: "Disc".into(), art: Arc::new(circle) });
+    d.symbols.push(Symbol { dynamic: false, name: "Disc".into(), art: Arc::new(circle) });
     let xf = Affine::translate((100.0, 100.0)) * Affine::rotate(30f64.to_radians());
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Disc".into(), xf });
     let (layer, id) = (d.layers[0].id, instance.id);
@@ -327,7 +327,7 @@ fn far_on_artboard_2() -> (Session, NodeId) {
     let mut d = Document::new(800.0, 600.0);
     let rect = shapes::rectangle(Rect::new(1100.0, 50.0, 1140.0, 70.0));
     let art = Node::path(d.alloc_id(), rect, Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
-    d.symbols.push(Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (layer, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((100.0, 100.0)) })).unwrap();
     let mut s = Session::new();
@@ -437,7 +437,7 @@ fn an_artboards_svg_keeps_an_instance_whose_brush_art_is_on_it() {
     let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
     stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
     let line = Node::path(d.alloc_id(), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
-    d.symbols.push(Symbol { name: "Nib".into(), art: Arc::new(line) });
+    d.symbols.push(Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(line) });
     let (layer, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-5.0, 0.0)) })).unwrap();
     let mut s = Session::new();
@@ -462,7 +462,7 @@ fn an_artboards_svg_keeps_an_instance_whose_shadow_is_on_it() {
         } else {
             instance.appearance.effects.push(shadow);
         }
-        d.symbols.push(Symbol { name: "Dot".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
         let layer = d.layers[0].id;
         d.insert(Some(layer), 0, instance).unwrap();
         let mut s = Session::new();

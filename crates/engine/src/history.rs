@@ -1,4 +1,4 @@
-use super::*;
+use super::{Arc, Document, Selection};
 
 /// One undo step.
 #[derive(Clone, Debug)]

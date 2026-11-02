@@ -17,7 +17,10 @@ use vectorcraft_tools::draw2::{eraser_area, eraser_tip};
 use super::create::{add_look, insert_look};
 use super::newart::NewArt;
 use super::pathops::{Beside, remove_each};
-use super::*;
+use super::{
+    CommandSpec, Result, Session, bad, check_numbers, cmd, f64_or, has_anchors, has_doc, has_selection, id_param, index, number_or, ok, str_param,
+    switch_or,
+};
 use crate::EngineError;
 
 mod anchors;

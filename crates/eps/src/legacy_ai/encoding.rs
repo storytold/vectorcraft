@@ -1,5 +1,8 @@
 use super::writer::Writer;
-use super::*;
+use super::{
+    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Color, Gradient, GradientKind, Paint, ParaStyle, PathEffect, StrokeLayer, TextKind,
+    TextObject, Write, latin, ps, stroke,
+};
 
 /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd`, `[`, the stops
 /// (`colorSpec colorStyle midPoint rampPoint %_Bs`, each with its midpoint to the next stop), `BD`,

@@ -8,7 +8,7 @@ use vectorcraft_pdf::PrintSettings;
 
 use super::fileio::pdf::changed;
 use super::print::settings_over;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, str_param, unique_name};
 
 /// The built-in preset's name.
 pub const DEFAULT_PRESET: &str = "[Default]";

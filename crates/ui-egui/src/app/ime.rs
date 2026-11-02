@@ -1,4 +1,4 @@
-use super::*;
+use super::VectorcraftApp;
 use crate::ime;
 
 impl VectorcraftApp {

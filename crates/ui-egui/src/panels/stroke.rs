@@ -127,10 +127,11 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
     (!mixed.weight).then(|| st.map_or(app.session.paint.stroke_width, |s| s.width))
 }
 
-/// The weight spinner (Stroke panel, Control bar): Units > Stroke, presets, blank when mixed.
+/// The weight spinner (Stroke panel, Control bar, Properties panel): Units > Stroke, presets, blank
+/// when mixed. A plain step stops at each preset: 0.52 pt goes down to 0.5 pt, not to 0 pt.
 pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weight: Option<f64>, width: f32) {
     let unit = app.session.stroke_unit();
-    if let Some(w) = widgets::spin_field_named(ui, id, Some(tl!("Weight:")), weight, unit, width, 1.0, 0.0, &weight_presets(unit)) {
+    if let Some(w) = widgets::spin_field_stops_named(ui, id, Some(tl!("Weight:")), weight, unit, width, 1.0, 0.0, &weight_presets(unit)) {
         set(app, json!({"weight": w}));
     }
 }
@@ -742,7 +743,8 @@ mod tests {
         };
         // The weight and the limit.
         let stroke = |app: &VectorcraftApp| current_stroke(app).map(|s| [s.width, s.miter_limit]).unwrap();
-        for (shown, after, which, low) in [("1 pt", "0 pt", 0, 0.0), ("2 x", "1 x", 1, 1.0)] {
+        // A weight steps through the presets below 1 pt: one step above 0 pt is 0.25 pt.
+        for (shown, after, which, low, back) in [("1 pt", "0 pt", 0, 0.0, "0.25 pt"), ("2 x", "1 x", 1, 1.0, "2 x")] {
             let texts = frame(&mut app, vec![]);
             let at = texts.iter().find(|(t, _)| t == shown).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {shown:?} in {texts:?}"));
             let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
@@ -766,7 +768,104 @@ mod tests {
             let key = |key| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
             frame(&mut app, vec![key(egui::Key::ArrowDown), key(egui::Key::ArrowUp)]);
             let texts = frame(&mut app, vec![]);
-            assert!(texts.iter().any(|(t, _)| t == shown), "{after}, down and up → {shown}: {texts:?}");
+            assert!(texts.iter().any(|(t, _)| t == back), "{after}, down and up → {back}: {texts:?}");
+        }
+    }
+
+    /// ↑/↓ in the Weight field go from a weight between the listed weights to the next listed
+    /// weight in their direction, typed with a decimal comma too: 0,52 pt went down to 0 pt and the
+    /// stroke was removed. From 1 pt and up a step is still a whole point.
+    #[test]
+    fn the_arrows_step_a_weight_to_the_next_listed_weight() {
+        use egui::{Event, Key, Modifiers, PointerButton, Pos2};
+        use vectorcraft_engine::Session;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 80})).unwrap();
+        app.run("stroke.set", json!({"weight": 1})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            time += 0.05;
+            let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 600.0)));
+            let raw = egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+                .into_iter()
+                .filter_map(|s| match s.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let texts = frame(&mut app, vec![]);
+        let at = texts.iter().find(|(t, _)| t == "1 pt").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no 1 pt in {texts:?}"));
+        let key = |key| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        let click = |pos| {
+            let button = |pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+            [vec![Event::PointerMoved(pos), button(true)], vec![button(false)], vec![]]
+        };
+        let away = Pos2::new(290.0, 590.0);
+        // (Units > Stroke, points per unit, typed, arrow, the weight after in that unit). A preset
+        // with more places than a step keeps them: 0.0156 in goes down to 0.0078 in.
+        for (units, per_unit, typed, arrow, after) in [
+            ("points", 1.0, "0,52", Key::ArrowDown, 0.5),
+            ("points", 1.0, "0,51", Key::ArrowDown, 0.5),
+            ("points", 1.0, "0,4", Key::ArrowDown, 0.25),
+            ("points", 1.0, "0,52", Key::ArrowUp, 0.75),
+            ("points", 1.0, "0,1", Key::ArrowUp, 0.25),
+            ("points", 1.0, "0,75", Key::ArrowDown, 0.5),
+            ("points", 1.0, "0,5", Key::ArrowDown, 0.25),
+            ("points", 1.0, "1", Key::ArrowDown, 0.75),
+            ("points", 1.0, "1", Key::ArrowUp, 2.0),
+            ("points", 1.0, "1,5", Key::ArrowDown, 1.0),
+            ("points", 1.0, "14", Key::ArrowDown, 13.0),
+            ("points", 1.0, "14,5", Key::ArrowUp, 15.0),
+            ("inches", 72.0, "0,02", Key::ArrowDown, 0.0156),
+            ("inches", 72.0, "0,0156", Key::ArrowDown, 0.0078),
+            ("inches", 72.0, "0,016", Key::ArrowDown, 0.0156),
+        ] {
+            app.session.prefs.units_stroke = units.into();
+            for events in click(at) {
+                frame(&mut app, events);
+            }
+            frame(&mut app, vec![Event::Text(typed.into()), key(Key::Enter)]);
+            for events in click(away) {
+                frame(&mut app, events);
+            }
+            let typed_weight = typed.replace(',', ".").parse::<f64>().unwrap();
+            assert!((current_stroke(&app).unwrap().width - typed_weight * per_unit).abs() < 1e-9, "typed {typed}");
+            for events in click(at) {
+                frame(&mut app, events);
+            }
+            frame(&mut app, vec![key(arrow)]);
+            frame(&mut app, vec![]);
+            let w = current_stroke(&app).unwrap().width / per_unit;
+            assert!((w - after).abs() < 1e-9, "{typed} {units} and {arrow:?}: {w}");
+            for events in click(away) {
+                frame(&mut app, events);
+            }
+        }
+        // In picas the field shows 2 pt as 0.167 p; the next press goes on to 1 pt.
+        app.session.prefs.units_stroke = "picas".into();
+        for events in click(at) {
+            frame(&mut app, events);
+        }
+        frame(&mut app, vec![Event::Text("0p3".into()), key(Key::Enter)]);
+        for events in click(away) {
+            frame(&mut app, events);
+        }
+        assert_eq!(current_stroke(&app).unwrap().width, 3.0, "typed 0p3");
+        for events in click(at) {
+            frame(&mut app, events);
+        }
+        for (arrow, after) in [(Key::ArrowDown, 2.0), (Key::ArrowDown, 1.0), (Key::ArrowUp, 2.0), (Key::ArrowUp, 3.0)] {
+            frame(&mut app, vec![key(arrow)]);
+            frame(&mut app, vec![]);
+            let w = current_stroke(&app).unwrap().width;
+            assert!((w - after).abs() < 1e-9, "picas, {arrow:?} → {after} pt: {w}");
         }
     }
 }

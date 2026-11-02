@@ -184,3 +184,97 @@ fn page_knockout_looks_the_same_when_another_object_blends() {
         assert!(close(a, b), "the group's middle over {below:?}: {a:?} alone, {b:?} with the Multiply square");
     }
 }
+
+#[test]
+fn opaque_knockout_fills_keep_pixels_without_per_element_backdrop_rasters() {
+    // Fractional curved edges and holes exercise coverage, not just opaque interiors. A disabled
+    // mask is visually neutral and keeps the general knockout path as an oracle, without adding
+    // another compositing layer or rounding step to each fill.
+    for precise in [false, true] {
+        for (anti_alias, supersample) in [(AntiAlias::Art, false), (AntiAlias::Art, true), (AntiAlias::None, false)] {
+            for copy_backdrop in [false, true] {
+                let make = |reference: bool| {
+                    let mut d = Document::new(80.0, 60.0);
+                    let mut members = Vec::new();
+                    for i in 0..12 {
+                        let outer = shapes::ellipse(Rect::new(2.3 + f64::from(i), 3.7, 65.4, 53.2));
+                        let inner = shapes::ellipse(Rect::new(20.2, 20.8, 40.6, 38.1));
+                        let child = Node::path(d.alloc_id(), inner, Appearance::default());
+                        let first = Node::path(d.alloc_id(), outer, Appearance::default());
+                        let mut n = if i % 2 == 0 {
+                            Node::new(d.alloc_id(), NodeKind::Compound { children: vec![Arc::new(first), Arc::new(child)], rule: FillRule::EvenOdd })
+                        } else {
+                            first
+                        };
+                        n.appearance = Appearance::basic(Paint::solid(Color::rgb(i as f32 / 12.0, 0.3, 0.7)), Paint::None, 0.0).into();
+                        if reference {
+                            let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 80.0, 60.0)), Appearance::default());
+                            let mut mask = vectorcraft_doc::OpacityMask::new(art, false);
+                            mask.disabled = true;
+                            n.extras_mut().mask = Some(Box::new(mask));
+                        }
+                        members.push(Arc::new(n));
+                    }
+                    if copy_backdrop {
+                        let mut blend = half(&mut d, 70.0, (0.5, 0.5, 0.5));
+                        blend.blend = Blend::Multiply;
+                        members.push(Arc::new(blend));
+                    }
+                    let mut g = Node::group(d.alloc_id(), members);
+                    g.knockout = Knockout::On;
+                    g.opacity = 0.5;
+                    d.insert(Some(d.layers[0].id), 0, g).unwrap();
+                    d
+                };
+                let opts = RenderOptions { background: Some([190, 210, 230, 255]), precise, anti_alias, supersample, ..Default::default() };
+                let draw = |reference| {
+                    crate::group::PIXELS_DRAWN.with(|n| n.set(0));
+                    let mut r = Renderer::new();
+                    r.threads = 0;
+                    let img = r.render(&make(reference), 80, 60, Affine::IDENTITY, &opts);
+                    let pixels = crate::group::PIXELS_DRAWN.with(|n| n.get());
+                    (img, pixels, r.stats.drawn)
+                };
+                let (fast, fast_pixels, fast_draws) = draw(false);
+                let (reference, reference_pixels, reference_draws) = draw(true);
+                assert!(fast.pixels == reference.pixels, "precise={precise}, aa={anti_alias:?}, supersample={supersample}, backdrop={copy_backdrop}");
+                if anti_alias == AntiAlias::None || supersample {
+                    assert!(fast_draws < reference_draws, "opaque elements should draw once");
+                    if copy_backdrop {
+                        assert!(fast_pixels < reference_pixels, "opaque elements should not rasterize a backdrop per element");
+                    }
+                } else {
+                    assert_eq!(fast_draws, reference_draws, "analytical AA must keep its rounding");
+                    assert_eq!(fast_pixels, reference_pixels);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn translucent_knockout_objects_and_fills_keep_their_compositing() {
+    for fill_opacity in [false, true] {
+        let d = doc(Knockout::On, |_, g| {
+            if fill_opacity {
+                for n in g.children_mut().unwrap() {
+                    let n = Arc::make_mut(n);
+                    n.opacity = 1.0;
+                    for item in &mut n.appearance.items {
+                        if let vectorcraft_doc::AppearanceItem::Fill(fill) = item {
+                            fill.opacity = 0.5;
+                        }
+                    }
+                }
+            }
+        });
+        let opts = RenderOptions { anti_alias: AntiAlias::None, background: Some([255; 4]), ..Default::default() };
+        let mut renderer = Renderer::new();
+        let r = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        // Object opacity is ignored by its knockout shape; a fill's own opacity is retained.
+        let want = if fill_opacity { BLUE_OVER_RED } else { BLUE_OVER_WHITE };
+        assert!(close(r.pixel(50, 50), want), "fill opacity={fill_opacity}: {:?}", r.pixel(50, 50));
+        let nodes = d.layers.iter().map(|n| n.count()).sum::<usize>();
+        assert!(renderer.stats.drawn > nodes, "translucent elements keep the separate knockout passes");
+    }
+}

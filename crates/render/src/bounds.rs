@@ -1,4 +1,4 @@
-use super::*;
+use super::{BezPath, Document, FillRule, Node, NodeKind, Rect, SymbolBoxes, brush_fx, fx};
 
 /// Bounds of everything `n` paints, as the renderer culls it: its members, strokes, brush art and
 /// geometry effects, and the shadows and glows of it and its members. Symbol instances are
