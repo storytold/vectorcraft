@@ -6,7 +6,7 @@ use serde_json::json;
 use vectorcraft_doc::Unit;
 use vectorcraft_tools::{Mods, Overlay, PointerEvent, PointerKind};
 
-use crate::cmd::prefscmds::{PREF_SPECS, PrefKind, UNITS};
+use crate::cmd::prefscmds::{EAST_ASIAN_UNITS, PREF_SPECS, PrefKind, UNITS};
 use crate::units::Measure;
 use crate::*;
 
@@ -131,4 +131,58 @@ fn distance_params_take_a_unit() {
     let NodeKind::Text(t) = &n.kind else { panic!("not text") };
     let st = t.first_style();
     assert_eq!((st.size, st.leading, st.tracking), (36.0, Some(72.0), 20.0));
+}
+
+#[test]
+fn east_asian_type_unit_is_a_preference_that_offers_q_and_ha() {
+    let want: Vec<(&str, &str)> = Unit::EAST_ASIAN.iter().map(|u| (u.key(), u.label())).collect();
+    assert_eq!(EAST_ASIAN_UNITS, want.as_slice());
+    let mut s = session();
+    assert_eq!(s.east_asian_type_unit(), Unit::Points, "points until chosen");
+    for u in Unit::EAST_ASIAN {
+        s.execute("prefs.set", &json!({"key": "unitsAsianType", "value": u.key()})).unwrap();
+        assert_eq!(s.east_asian_type_unit(), u);
+        assert_eq!(s.unit(Measure::AsianType), u);
+        assert_eq!(s.type_unit(), Unit::Points, "Type is its own preference");
+    }
+    // By label, in any case.
+    s.execute("prefs.set", &json!({"key": "unitsAsianType", "value": "ha"})).unwrap();
+    assert_eq!(s.prefs.units_asian_type, "ha");
+    s.execute("prefs.set", &json!({"key": "unitsAsianType", "value": "Q"})).unwrap();
+    assert_eq!(s.prefs.units_asian_type, "q");
+    // No other Units preference offers them.
+    for key in ["unitsGeneral", "unitsStroke", "unitsType"] {
+        for v in ["q", "Q", "ha", "Ha"] {
+            assert!(s.execute("prefs.set", &json!({"key": key, "value": v})).is_err(), "{key} = {v}");
+        }
+    }
+    assert_eq!((Measure::AsianType.name(), Measure::AsianType.pref_key()), ("asianType", "unitsAsianType"));
+    let list = s.execute("prefs.list", &json!({})).unwrap();
+    let row = list.as_array().unwrap().iter().find(|r| r["key"] == "unitsAsianType").unwrap().clone();
+    assert_eq!(row["options"].as_array().unwrap().iter().rev().take(2).collect::<Vec<_>>(), [&json!("ha"), &json!("q")]);
+}
+
+#[test]
+fn east_asian_type_unit_leaves_the_document_in_points() {
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "日本語"})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({ "ids": [id] })).unwrap();
+    s.execute("text.setStyle", &json!({"size": 12, "leading": 15})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    s.execute("prefs.set", &json!({"key": "unitsAsianType", "value": "q"})).unwrap();
+    let after = &s.doc().unwrap().doc;
+    assert_eq!(units(&s), Unit::Points);
+    assert_eq!(after.units, before.units);
+    let size = |d: &vectorcraft_doc::Document| match &d.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+        NodeKind::Text(t) => (t.first_style().size, t.first_style().leading),
+        _ => panic!("not text"),
+    };
+    assert_eq!(size(after), size(&before));
+    assert_eq!(size(after), (12.0, Some(15.0)));
+    // Typed in Q or Ha, the value is stored in points.
+    s.execute("text.setStyle", &json!({"size": "17 Q", "leading": "20 H"})).unwrap();
+    let (sz, lead) = size(&s.doc().unwrap().doc);
+    assert!((sz - Unit::Q.to_pt(17.0)).abs() < 1e-9, "{sz}");
+    assert!((lead.unwrap() - Unit::Ha.to_pt(20.0)).abs() < 1e-9, "{lead:?}");
+    assert!((sz - 17.0 * 72.0 / 101.6).abs() < 1e-9);
 }

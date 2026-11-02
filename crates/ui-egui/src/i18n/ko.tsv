@@ -5748,3 +5748,6 @@ breakText	Glyphs	글리프
 	Small to Large	작은 것부터
 	Large to Small	큰 것부터
 	Distribute Evenly	균등 분포
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha

@@ -3,9 +3,10 @@
 //! General (rulers, positions, sizes, dialog distances, canvas readouts) is the active document's
 //! units, so they travel with the file: Document Setup (`document.setUnits`) changes them, and
 //! Preferences ▸ Units ▸ General changes them too and is also the units new documents start in (and
-//! the unit shown while no document is open). Stroke (weights, dashes) and Type (sizes, leading,
-//! baseline shift) are application preferences. Typed values with a unit ("5 mm", "12 pt") work in
-//! any unit.
+//! the unit shown while no document is open). Stroke (weights, dashes), Type (sizes, leading,
+//! baseline shift) and East Asian Type (the only
+//! preference that offers Q and Ha, and no field reads it yet) are application preferences. Typed values with a unit
+//! ("5 mm", "12 pt", "13 Q") work in any unit.
 
 use vectorcraft_doc::Unit;
 
@@ -17,6 +18,7 @@ pub enum Measure {
     General,
     Stroke,
     Type,
+    AsianType,
 }
 
 impl Measure {
@@ -26,6 +28,7 @@ impl Measure {
             Measure::General => "general",
             Measure::Stroke => "stroke",
             Measure::Type => "type",
+            Measure::AsianType => "asianType",
         }
     }
 
@@ -35,6 +38,7 @@ impl Measure {
             Measure::General => "unitsGeneral",
             Measure::Stroke => "unitsStroke",
             Measure::Type => "unitsType",
+            Measure::AsianType => "unitsAsianType",
         }
     }
 }
@@ -51,6 +55,7 @@ impl Session {
             Measure::General => self.active().map_or_else(|| self.default_units(), |d| d.doc.units),
             Measure::Stroke => pref_unit(&self.prefs.units_stroke),
             Measure::Type => pref_unit(&self.prefs.units_type),
+            Measure::AsianType => Unit::named_east_asian(&self.prefs.units_asian_type).unwrap_or_default(),
         }
     }
 
@@ -62,6 +67,11 @@ impl Session {
     /// Units ▸ Type: the unit type sizes, leading and baseline shift show in.
     pub fn type_unit(&self) -> Unit {
         self.unit(Measure::Type)
+    }
+
+    /// Units ▸ East Asian Type: no field shows in it yet.
+    pub fn east_asian_type_unit(&self) -> Unit {
+        self.unit(Measure::AsianType)
     }
 
     /// Preferences ▸ Units ▸ General: the units new documents start in.

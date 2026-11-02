@@ -6080,3 +6080,6 @@ shape	Open	Otvoren
 	Small to Large	Od manjeg prema većem
 	Large to Small	Od većeg prema manjem
 	Distribute Evenly	Rasporedi ravnomjerno
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha

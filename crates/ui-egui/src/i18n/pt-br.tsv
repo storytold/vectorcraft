@@ -6239,3 +6239,6 @@ swatch	Yellow Green	Verde-amarelado
 	Small to Large	Do menor para o maior
 	Large to Small	Do maior para o menor
 	Distribute Evenly	Distribuir uniformemente
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
