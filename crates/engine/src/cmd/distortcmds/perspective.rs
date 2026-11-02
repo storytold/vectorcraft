@@ -52,8 +52,8 @@ pub(super) fn grid_set(s: &mut Session, p: &Value) -> Result<Value> {
             old.adopt_stored_attachments(d);
             for (id, plane, depth) in persp::attached_roots(d) {
                 let h = old.homography_at(plane, depth).and_then(|h| h.inverse()).zip(g.homography_at(plane, depth));
-                let (hi, h) = h.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
-                let m = h.then_after(&hi);
+                let m = h.and_then(|(hi, h)| h.checked_then_after(&hi));
+                let m = m.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
                 warp_checked(d, id, &m)?;
             }
         }
@@ -98,17 +98,15 @@ pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     }
 }
 
-/// Map `n` with `f`, failing if any point would leave the plane's visible side.
 /// Map `n` with `h` (type and symbols in perspective keep their art and are drawn through it),
-/// failing if any point would leave the plane's visible side.
+/// failing if any point would leave the plane's visible side or a projection would not be finite.
 fn warp_checked(d: &mut Document, id: NodeId, h: &Homography) -> Result<()> {
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
     let mut pts = vec![];
     collect_points(n, &mut pts);
-    if pts.iter().any(|q| h.apply(*q).is_none()) {
+    if pts.iter().any(|q| h.apply(*q).is_none()) || !project_node(n, h) {
         return Err(EngineError::Other("the object would cross the horizon of the perspective plane".into()));
     }
-    project_node(n, h);
     Ok(())
 }
 
@@ -284,12 +282,42 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let fallback = plane_param(&grid_of(&s.doc()?.doc), p, C).ok();
     let (perp, copy) = (switch_or(p, "perpendicular", false, C)?, switch_or(p, "copy", false, C)?);
+    let constrain = switch_or(p, "constrain", false, C)?;
     // `snap_fix` uses Snap to Grid's setting for a `snap` that is not true or false.
     check_switches(p, &["snap"], C)?;
     // Snap to Grid: a correction for the objects on the first one's plane and depth.
-    let fix = if perp { None } else { crate::cmd::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, to)) };
-    let snapped = move |pl: Plane, depth: f64, dv: vectorcraft_geom::Vec2| {
-        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| f.2)
+    let snap_to = if constrain && !perp {
+        let doc = &s.doc()?.doc;
+        let g = grid_of(doc);
+        g.plane_bounds(doc, &ids)
+            .and_then(|(plane, depth, _)| {
+                let h = g.homography_at(plane, depth)?;
+                let start = h.inverse()?.apply(from)?;
+                let delta = g.plane_delta(plane, depth, from, to)?;
+                h.apply(start + vectorcraft_tools::distort::perspective::constrain_move_delta(delta).1)
+            })
+            .unwrap_or(to)
+    } else {
+        to
+    };
+    let fix = if perp { None } else { crate::cmd::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, snap_to)) };
+    let snapped = move |pl: Plane, depth: f64, raw: vectorcraft_geom::Vec2| {
+        let (direction, dv) =
+            if constrain { vectorcraft_tools::distort::perspective::constrain_move_delta(raw) } else { (vectorcraft_geom::Vec2::ZERO, raw) };
+        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| {
+            if !constrain {
+                return f.2;
+            }
+            if direction.x.abs() < 1e-12 {
+                return vectorcraft_geom::Vec2::new(0.0, f.2.y);
+            }
+            if direction.y.abs() < 1e-12 {
+                return vectorcraft_geom::Vec2::new(f.2.x, 0.0);
+            }
+            let (correction, axis) =
+                if f.2.x == 0.0 || (f.2.y != 0.0 && f.2.y.abs() < f.2.x.abs()) { (f.2.y, direction.y) } else { (f.2.x, direction.x) };
+            direction * (correction / axis)
+        })
     };
     // In-plane: the plane-space offset under the pointer; perpendicular: the depth it reaches.
     let step = |g: &PerspectiveGrid, pl: Plane, depth: f64| -> Result<(Homography, f64)> {
@@ -569,11 +597,14 @@ pub(super) fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
         let NodeKind::Text(t) = &mut n.kind else { return Err(EngineError::Other("select type in perspective".into())) };
         // Shown flat where it is drawn: the type moves there and the projection moves the other
         // way, so the picture stays.
-        let (Some(flat), Some(drawn)) = (t.bounds(), t.bounds().and_then(|b| h.map_rect_bbox(b))) else { return Ok(()) };
+        let Some(flat) = t.bounds() else { return Ok(()) };
+        let cross = || EngineError::Other("the object would cross the horizon of the perspective plane".into());
+        let drawn = h.map_rect_bbox(flat).ok_or_else(cross)?;
         let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
+        let moved = h.checked_then_after(&Homography::from_affine(shift.inverse())).ok_or_else(cross)?;
         t.transform(shift);
         if let Some(rec) = n.extras_if_any().and_then(|e| e.perspective.as_deref_mut()) {
-            rec.projection = Some(h.then_after(&Homography::from_affine(shift.inverse())).to_array());
+            rec.projection = Some(moved.to_array());
             rec.editing = true;
         }
         Ok(())

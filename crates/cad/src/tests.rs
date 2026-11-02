@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Dash, Document, ImageBlob, ImageObject, Node, NodeKind, TextObject, Unit};
-use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, ParamCurve, PathData, Point, Rect, Shape, shapes};
 
 use crate::*;
 
@@ -125,6 +125,71 @@ fn every_version_declares_its_acadver_and_is_well_formed() {
     assert_eq!(DxfVersion::from_id("2019"), None);
 }
 
+/// The structure strict readers (Autodesk Fusion, #3085) need: the required sections and table
+/// entries, handles that every reference resolves to, and LAYOUT objects with only the group codes
+/// the DXF Reference defines for PLOTSETTINGS and LAYOUT (AutoCAD DXF Reference, OBJECTS section:
+/// https://help.autodesk.com/view/OARX/2018/ENU/?guid=GUID-1113675E-AB07-4567-BD47-B7FBE7290D1C).
+#[test]
+fn r2000_and_later_files_have_the_structure_cad_apps_require() {
+    use std::collections::HashSet;
+    // Common object codes, then AcDbPlotSettings, then AcDbLayout (76 is the shade plot mode in
+    // the first and the UCS type in the second).
+    let layout_codes: HashSet<i32> = [0, 5, 102, 330, 360, 100]
+        .into_iter()
+        .chain([1, 2, 4, 6, 7, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 140, 141, 142, 143, 70, 72, 73, 74, 75, 76, 77, 78, 147, 148, 149, 333])
+        .chain([71, 10, 20, 11, 21, 12, 22, 32, 14, 24, 34, 15, 25, 35, 146, 13, 23, 33, 16, 26, 36, 17, 27, 37, 331, 345, 346])
+        .collect();
+    let d = shapes_doc();
+    for v in DxfVersion::ALL.into_iter().filter(|v| *v >= DxfVersion::R2000) {
+        let out = export(&d, &DxfOptions { version: v, ..opts(&d) }).unwrap();
+        let p = pairs(&out.bytes);
+        for name in ["HEADER", "CLASSES", "TABLES", "BLOCKS", "ENTITIES", "OBJECTS"] {
+            assert!(p.windows(2).any(|w| w[0] == (0, "SECTION".into()) && w[1] == (2, name.into())), "{v:?}: {name} section");
+        }
+        let tables = section(&p, "TABLES");
+        let names = |k: &str| -> Vec<String> { tables.iter().filter(|o| kind(o) == k).filter_map(|o| get(o, 2).map(str::to_string)).collect() };
+        for (k, want) in [
+            ("LTYPE", "ByBlock"),
+            ("LTYPE", "ByLayer"),
+            ("LTYPE", "Continuous"),
+            ("LAYER", "0"),
+            ("STYLE", "Standard"),
+            ("APPID", "ACAD"),
+            ("DIMSTYLE", "Standard"),
+            ("BLOCK_RECORD", "*Model_Space"),
+            ("BLOCK_RECORD", "*Paper_Space"),
+        ] {
+            assert!(names(k).iter().any(|n| n == want), "{v:?}: {k} {want}");
+        }
+        // Every object after the header has a handle below $HANDSEED, and every reference to
+        // another object (owner 330, soft/hard pointers 340/350/390) names one of them.
+        let body = &p[p.iter().position(|x| *x == (0, "ENDSEC".into())).unwrap()..];
+        let handles: HashSet<u32> = body.iter().filter(|x| x.0 == 5 || x.0 == 105).map(|x| u32::from_str_radix(&x.1, 16).unwrap()).collect();
+        let seed = u32::from_str_radix(&header(&p, "$HANDSEED").unwrap(), 16).unwrap();
+        assert!(handles.iter().all(|h| *h < seed), "{v:?}: handles below the seed");
+        for (code, value) in body.iter().filter(|x| matches!(x.0, 330 | 340 | 350 | 390)) {
+            let h = u32::from_str_radix(value, 16).unwrap();
+            assert!(h == 0 || handles.contains(&h), "{v:?}: group {code} points at missing handle {value}");
+        }
+        let objects = section(&p, "OBJECTS");
+        let layouts: Vec<&Pairs> = objects.iter().filter(|o| kind(o) == "LAYOUT").collect();
+        assert_eq!(layouts.len(), 2, "{v:?}: Model and Layout1");
+        for l in &layouts {
+            let bad: Vec<i32> = l.iter().map(|x| x.0).filter(|c| !layout_codes.contains(c)).collect();
+            assert!(bad.is_empty(), "{v:?}: LAYOUT has group codes the DXF Reference doesn't define: {bad:?}");
+            // The paper image origin is 148 (x) and 149 (y).
+            assert!(get(l, 148).is_some() && get(l, 149).is_some(), "{v:?}: paper image origin");
+            // Flag 1024 marks the model space layout, and only it.
+            let name = l.iter().skip_while(|x| x.1 != "AcDbLayout").find(|x| x.0 == 1).map(|x| x.1.as_str());
+            let flags: i64 = get(l, 70).unwrap().parse().unwrap();
+            assert_eq!(flags & 1024 != 0, name == Some("Model"), "{v:?}: model type flag of {name:?}");
+        }
+        // The plot style placeholder carries only the common object codes.
+        let holder = objects.iter().find(|o| kind(o) == "ACDBPLACEHOLDER").expect("placeholder");
+        assert!(holder.iter().all(|x| matches!(x.0, 0 | 5 | 102 | 330)), "{v:?}: placeholder {holder:?}");
+    }
+}
+
 #[test]
 fn r12_viewport_has_no_duplicate_group_codes() {
     let d = shapes_doc();
@@ -208,10 +273,168 @@ fn circles_and_circular_arcs_are_native_dxf_entities() {
         assert_eq!((all(&e[1], 10), all(&e[1], 20), all(&e[1], 40)), (vec![120.0], vec![50.0], vec![30.0]), "{version:?}");
         assert_eq!((all(&e[1], 50), all(&e[1], 51)), (vec![0.0], vec![90.0]), "{version:?}");
     }
+}
 
-    // An actual ellipse is not close enough to a circle and remains a spline.
-    let ellipse = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
-    assert_eq!(kinds(&export(&ellipse, &opts(&ellipse)).unwrap()), ["SPLINE"]);
+/// The path `p` with `xf` applied.
+fn transformed(p: &PathData, xf: Affine) -> PathData {
+    PathData::from_bezpath(&(xf * p.to_bezpath()))
+}
+
+fn close_to(a: &[f64], b: &[f64], tol: f64) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() <= tol)
+}
+
+#[test]
+fn ellipses_and_unevenly_scaled_circles_are_native_ellipses() {
+    let circle = shapes::ellipse(Rect::new(20.0, 20.0, 80.0, 80.0));
+    let d = doc_with(|d| {
+        let stroke = || Paint::solid(Color::BLACK);
+        vec![
+            // 80 × 40 pt about (60, 40): DXF center (60, 60), major axis (40, 0), ratio 0.5.
+            path(d, shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Paint::None, stroke(), 1.0),
+            // A 60 pt circle scaled 150% across about (50, 50): 90 × 60 pt, ratio 2/3.
+            path(
+                d,
+                transformed(&circle, Affine::translate((50.0, 50.0)) * Affine::scale_non_uniform(1.5, 1.0) * Affine::translate((-50.0, -50.0))),
+                Paint::None,
+                stroke(),
+                1.0,
+            ),
+            // The first ellipse turned 30° about its center, filled: the outline is the ellipse too.
+            path(
+                d,
+                transformed(&shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Affine::rotate_about(30f64.to_radians(), Point::new(60.0, 40.0))),
+                Paint::solid(Color::BLACK),
+                Paint::None,
+                0.0,
+            ),
+        ]
+    });
+    for version in DxfVersion::ALL.into_iter().filter(|version| *version >= DxfVersion::R13) {
+        let out = export(&d, &DxfOptions { version, ..opts(&d) }).unwrap();
+        let e = entities(&out);
+        assert_eq!(e.iter().map(|x| kind(x)).collect::<Vec<_>>(), ["ELLIPSE", "ELLIPSE", "ELLIPSE", "HATCH"], "{version:?}");
+        let ellipse = |x: &Pairs| (all(x, 10), all(x, 20), all(x, 11), all(x, 21), all(x, 40), all(x, 41), all(x, 42));
+        let (cx, cy, mx, my, ratio, start, end) = ellipse(&e[0]);
+        assert_eq!((cx, cy, mx, my, ratio), (vec![60.0], vec![60.0], vec![40.0], vec![0.0], vec![0.5]), "{version:?}");
+        assert!(close_to(&start, &[0.0], 1e-9) && close_to(&end, &[std::f64::consts::TAU], 1e-12), "{version:?}: a whole turn");
+        let (cx, cy, mx, my, ratio, ..) = ellipse(&e[1]);
+        assert!(close_to(&[cx, cy, mx, my, ratio].concat(), &[50.0, 50.0, 45.0, 0.0, 2.0 / 3.0], 1e-6), "{version:?}: {:?}", e[1]);
+        // Turned 30° counterclockwise on screen, so clockwise with DXF's y up.
+        let (cx, cy, mx, my, ratio, ..) = ellipse(&e[2]);
+        let (cos, sin) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+        assert!(close_to(&[cx, cy, mx, my, ratio].concat(), &[60.0, 60.0, 40.0 * cos, -40.0 * sin, 0.5], 1e-6), "{version:?}: {:?}", e[2]);
+        assert!(e[0].contains(&(100, "AcDbEllipse".into())), "{version:?}");
+    }
+    // R12 has no ELLIPSE: the curves are flattened polylines.
+    let r12 = kinds(&export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap());
+    assert!(!r12.iter().any(|k| k == "ELLIPSE") && r12.iter().any(|k| k == "POLYLINE"), "{r12:?}");
+    // A thin ellipse keeps its ratio in full (six decimals would write 0.000002).
+    let thin = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(0.0, 50.0, 200.0, 50.0003)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    let e = entities(&export(&thin, &opts(&thin)).unwrap());
+    assert_eq!(kind(&e[0]), "ELLIPSE");
+    assert!(close_to(&all(&e[0], 40), &[1.5e-6], 1e-10), "{:?}", e[0]);
+}
+
+#[test]
+fn exported_ellipses_read_back_as_the_same_ellipse() {
+    let xf = Affine::rotate_about(30f64.to_radians(), Point::new(60.0, 40.0));
+    let d = doc_with(|d| {
+        vec![path(d, transformed(&shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), xf), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+    let out = export(&d, &opts(&d)).unwrap();
+    assert_eq!(kinds(&out), ["ELLIPSE"]);
+    let o = ImportOptions { unit: Some(Unit::Points), scale: Some(1.0), center: false, ..ImportOptions::default() };
+    let back = import(&out.bytes, &o).unwrap().document;
+    let mut paths = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { path, .. } = &n.kind {
+            paths.push(path.to_bezpath());
+        }
+    });
+    assert_eq!(paths.len(), 1);
+    assert!(paths[0].elements().last().is_some_and(|el| matches!(el, kurbo::PathEl::ClosePath)), "the ellipse reads back closed");
+    // Every point of the curve read back lies on the 80 × 40 pt ellipse turned 30°, once both are centered.
+    let bp = &paths[0];
+    let found = bp.bounding_box().center();
+    let inverse = xf.inverse();
+    let original = Point::new(60.0, 40.0);
+    for seg in bp.segments() {
+        for i in 0..=16 {
+            let p = seg.eval(f64::from(i) / 16.0) - found.to_vec2() + original.to_vec2();
+            let q = inverse * p;
+            let r = ((q.x - 60.0) / 40.0).hypot((q.y - 40.0) / 20.0);
+            assert!((r - 1.0).abs() < 1e-3, "{p:?} is off the ellipse ({r})");
+        }
+    }
+}
+
+#[test]
+fn closed_four_cubic_shapes_that_are_not_writable_ellipses_stay_splines() {
+    // A rounded square: four cubics through the ellipse's anchors with longer handles.
+    let (c, r, k) = (Point::new(50.0, 50.0), 30.0, 30.0 * 0.8);
+    let mut squircle = vectorcraft_geom::BezPath::new();
+    squircle.move_to(Point::new(c.x + r, c.y));
+    squircle.curve_to(Point::new(c.x + r, c.y - k), Point::new(c.x + k, c.y - r), Point::new(c.x, c.y - r));
+    squircle.curve_to(Point::new(c.x - k, c.y - r), Point::new(c.x - r, c.y - k), Point::new(c.x - r, c.y));
+    squircle.curve_to(Point::new(c.x - r, c.y + k), Point::new(c.x - k, c.y + r), Point::new(c.x, c.y + r));
+    squircle.curve_to(Point::new(c.x + k, c.y + r), Point::new(c.x + r, c.y + k), Point::new(c.x + r, c.y));
+    squircle.close_path();
+    // An egg: one half wider than the other.
+    let egg = shapes::ellipse(Rect::new(110.0, 20.0, 190.0, 60.0)).to_bezpath();
+    let mut els: Vec<kurbo::PathEl> = egg.elements().to_vec();
+    if let Some(kurbo::PathEl::CurveTo(a, b, _)) = els.get_mut(1) {
+        a.x -= 10.0;
+        b.x -= 10.0;
+    }
+    let d = doc_with(|d| {
+        vec![
+            path(d, PathData::from_bezpath(&squircle), Paint::None, Paint::solid(Color::BLACK), 1.0),
+            path(d, PathData::from_bezpath(&kurbo::BezPath::from_vec(els)), Paint::None, Paint::solid(Color::BLACK), 1.0),
+            // An ellipse thinner than the smallest ratio DXF readers take (5e-7 against 1e-6).
+            path(d, shapes::ellipse(Rect::new(0.0, 90.0, 200.0, 90.0001)), Paint::None, Paint::solid(Color::BLACK), 1.0),
+        ]
+    });
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE", "SPLINE", "SPLINE"]);
+}
+
+#[test]
+fn a_lone_straight_segment_is_a_line() {
+    let segment = |closed: bool, extra: Option<Point>| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        b.move_to(Point::new(20.0, 30.0));
+        b.line_to(Point::new(120.0, 70.0));
+        if let Some(p) = extra {
+            b.line_to(p);
+        }
+        if closed {
+            b.close_path();
+        }
+        PathData::from_bezpath(&b)
+    };
+    let d = doc_with(|d| vec![path(d, segment(false, None), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    for version in DxfVersion::ALL.into_iter().filter(|v| v.r2000()) {
+        let e = entities(&export(&d, &DxfOptions { version, ..opts(&d) }).unwrap());
+        assert_eq!(e.iter().map(|x| kind(x)).collect::<Vec<_>>(), ["LINE"], "{version:?}");
+        assert_eq!(e[0].iter().rfind(|p| p.0 == 100).map(|p| p.1.as_str()), Some("AcDbLine"), "{version:?}");
+        assert_eq!((all(&e[0], 10), all(&e[0], 20)), (vec![20.0], vec![70.0]), "{version:?}: y up from the artboard's bottom");
+        assert_eq!((all(&e[0], 11), all(&e[0], 21)), (vec![120.0], vec![30.0]), "{version:?}");
+    }
+
+    // Without a width (R12 writes a fill as its outline), R12 writes a LINE too; a stroke weight
+    // before 2000 keeps its polyline width.
+    let filled = doc_with(|d| vec![path(d, segment(false, None), Paint::solid(Color::BLACK), Paint::None, 0.0)]);
+    let r12 = |d: &Document| kinds(&export(d, &DxfOptions { version: DxfVersion::R12, ..opts(d) }).unwrap());
+    assert_eq!(r12(&filled), ["LINE"]);
+    assert_eq!(r12(&d), ["POLYLINE", "VERTEX", "VERTEX", "SEQEND"]);
+    let r14 = entities(&export(&d, &DxfOptions { version: DxfVersion::R14, ..opts(&d) }).unwrap());
+    assert_eq!((kind(&r14[0]), get(&r14[0], 43)), ("LWPOLYLINE", Some("1")));
+
+    // A closed segment and two segments stay polylines.
+    for p in [segment(true, None), segment(false, Some(Point::new(150.0, 20.0)))] {
+        let d = doc_with(|d| vec![path(d, p, Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+        assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["LWPOLYLINE"]);
+    }
 }
 
 #[test]
@@ -453,14 +676,44 @@ fn dashes_become_linetypes_and_opacity_transparency() {
 
 #[test]
 fn alter_paths_writes_strokes_as_filled_outlines() {
-    let d = shapes_doc();
-    let out = export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap();
-    // Each fill and stroke: its outlines, then its hatch.
     let fill = ["LWPOLYLINE", "HATCH"];
     let rect_stroke = ["LWPOLYLINE", "LWPOLYLINE", "HATCH"];
+    // Strokes a lineweight draws stay lines: the rectangle, the circle and an open arc.
+    let mut d = shapes_doc();
+    let c = Point::new(150.0, 95.0);
+    let k = 20.0 * shapes::KAPPA;
+    let mut arc = vectorcraft_geom::BezPath::new();
+    arc.move_to(Point::new(c.x + 20.0, c.y));
+    arc.curve_to(Point::new(c.x + 20.0, c.y - k), Point::new(c.x + k, c.y - 20.0), Point::new(c.x, c.y - 20.0));
+    let arc = path(&mut d, PathData::from_bezpath(&arc), Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), usize::MAX, arc).unwrap();
+    let out = export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&out), [&fill[..], &["LWPOLYLINE", "CIRCLE", "ARC"]].concat());
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    // R12 polylines carry any width, so its strokes stay lines too.
+    let r12 = export(&d, &DxfOptions { alter_paths: true, version: DxfVersion::R12, ..opts(&d) }).unwrap();
+    assert!(!kinds(&r12).iter().any(|k| k == "HATCH"));
+    assert!(entities(&r12).iter().any(|e| kind(e) == "POLYLINE" && get(e, 40) == Some("2")));
+    // R13 and R14 have no lineweights: every stroke becomes its outline, then its hatch.
+    let d = shapes_doc();
+    let out = export(&d, &DxfOptions { alter_paths: true, version: DxfVersion::R14, ..opts(&d) }).unwrap();
     assert_eq!(kinds(&out), [&fill[..], &rect_stroke, &["CIRCLE", "CIRCLE", "HATCH"]].concat());
     // The rectangle's stroke: an outer and an inner boundary.
     assert_eq!(get(&entities(&out)[4], 91), Some("2"));
+    // A stroke wider than the widest lineweight (2.11 mm) is outlined at its true width.
+    let wide = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 8.0)]);
+    let out = export(&wide, &DxfOptions { alter_paths: true, ..opts(&wide) }).unwrap();
+    assert_eq!(kinds(&out), rect_stroke);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let lines = export(&wide, &opts(&wide)).unwrap();
+    assert_eq!(kinds(&lines), ["LWPOLYLINE"]);
+    assert!(lines.warnings.iter().any(|w| w.contains("2.11 mm")));
+    // To the hundredth of a millimetre: 6 pt (2.117 mm) is outlined, 5.98 pt (2.110 mm) is a line.
+    for (width, expected) in [(6.0, &rect_stroke[..]), (5.98, &["LWPOLYLINE"][..])] {
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), width)]);
+        assert_eq!(kinds(&export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap()), expected, "{width} pt");
+    }
     // Preserve Appearance outlines only the strokes a line can't draw.
     let mut d = shapes_doc();
     let rect = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
@@ -471,6 +724,65 @@ fn alter_paths_writes_strokes_as_filled_outlines() {
     let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
     assert_eq!(kinds(&editable), ["LWPOLYLINE", "HATCH", "LWPOLYLINE", "CIRCLE"]);
     assert!(editable.warnings.iter().any(|w| w.contains("stroke alignment")));
+    // With Maximize Editability, Alter Paths outlines that stroke and keeps the circle a line.
+    let altered = export(&d, &DxfOptions { preserve: Preserve::Editability, alter_paths: true, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&altered), [&fill[..], &rect_stroke, &["CIRCLE"]].concat());
+    assert!(altered.warnings.is_empty(), "{:?}", altered.warnings);
+}
+
+#[test]
+fn dashes_that_start_part_way_into_their_pattern_are_outlined() {
+    let dashed = |offset: f64| {
+        doc_with(|d| {
+            let mut n = path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0);
+            if let Some(st) = n.appearance.stroke_mut() {
+                st.dash = Some(Dash { pattern: vec![6.0, 3.0, 2.0], offset, align_corners: false });
+            }
+            vec![n]
+        })
+    };
+    // A linetype starts at the start of its pattern: an offset of a whole period (the odd
+    // pattern twice) keeps the line, any other offset needs the dashes' outlines and a hatch.
+    for (offset, outlined) in [(0.0, false), (22.0, false), (4.0, true), (11.0, true)] {
+        let d = dashed(offset);
+        let k = kinds(&export(&d, &opts(&d)).unwrap());
+        if outlined {
+            assert!(k.len() > 2 && k.last().is_some_and(|k| k == "HATCH"), "offset {offset}: {k:?}");
+        } else {
+            assert_eq!(k, ["LWPOLYLINE"], "offset {offset}");
+        }
+        let altered = kinds(&export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap());
+        assert_eq!(altered, k, "offset {offset}, Alter Paths");
+    }
+    // Maximize Editability keeps the line and its linetype.
+    let d = dashed(4.0);
+    let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&editable), ["LWPOLYLINE"]);
+    assert_eq!(get(&entities(&editable)[0], 6), Some("DASHED1"));
+}
+
+#[test]
+fn dashed_polylines_continue_their_pattern_around_corners() {
+    let rect = |dash: Option<Dash>| {
+        doc_with(|d| {
+            let mut n = path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0);
+            if let Some(st) = n.appearance.stroke_mut() {
+                st.dash = dash.clone();
+            }
+            vec![n]
+        })
+    };
+    let flags = |out: &DxfOutput| entities(out).first().and_then(|e| get(e, 70).map(str::to_string));
+    // Group 70 bit 128 makes the linetype run on through the vertices instead of restarting
+    // at each one; a solid polyline keeps only its closed bit.
+    let dashed = rect(Some(Dash { pattern: vec![6.0, 3.0], offset: 0.0, align_corners: false }));
+    for o in [opts(&dashed), DxfOptions { alter_paths: true, ..opts(&dashed) }, DxfOptions { preserve: Preserve::Editability, ..opts(&dashed) }] {
+        assert_eq!(flags(&export(&dashed, &o).unwrap()).as_deref(), Some("129"));
+    }
+    let r12 = export(&dashed, &DxfOptions { version: DxfVersion::R12, ..opts(&dashed) }).unwrap();
+    assert_eq!((kinds(&r12).first().map(String::as_str), flags(&r12).as_deref()), (Some("POLYLINE"), Some("129")));
+    let solid = rect(None);
+    assert_eq!(flags(&export(&solid, &opts(&solid)).unwrap()).as_deref(), Some("1"));
 }
 
 fn text_doc(text: &str, size: f64) -> Document {
@@ -594,6 +906,23 @@ fn text_outside_ascii_is_escaped_before_2007() {
     assert_eq!(text(DxfVersion::R2018), "Größe");
 }
 
+/// Type whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is 20 pt type, whose TEXT height is 14.
+#[test]
+fn a_font_height_reference_is_written_as_the_size_drawn() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut d = text_doc("Plan A", 14.0);
+    let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.font_family = HEIGHT_FAMILY.into();
+        t.runs[0].style.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    }
+    let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    let e = entities(&editable);
+    assert!((all(&e[0], 40)[0] - 14.0).abs() < 1e-6, "{:?}", all(&e[0], 40));
+}
+
 #[test]
 fn images_link_png_or_jpeg_files() {
     let mut png = vec![];
@@ -674,7 +1003,7 @@ fn crop_keeps_an_instance_whose_art_reaches_the_region() {
     // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
     let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 50.0, 140.0, 90.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let o = DxfOptions { crop: true, ..opts(&d) };
     assert!(!kinds(&export(&d, &o).unwrap()).is_empty());
 }

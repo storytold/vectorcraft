@@ -27,6 +27,12 @@ pub struct Prefs {
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
     pub use_preview_bounds: bool,
+    /// Align panel menu › Align to Glyph Bounds › Point Text: Align and Distribute measure point
+    /// type by the ink of its glyphs instead of its em box.
+    pub align_glyph_bounds_point: bool,
+    /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
+    /// its frame.
+    pub align_glyph_bounds_area: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -156,9 +162,10 @@ pub struct Prefs {
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
-    /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
-    /// XWayland on a Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it
-    /// through XWayland only when a pen is attached (#2028). Read when the app starts.
+    /// Linux: `automatic` opens the window on the session's display server, or through XWayland on
+    /// a Wayland session when a pen is attached (#4967); `x11` opens it through XWayland on a
+    /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
+    /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
@@ -197,6 +204,9 @@ pub struct Prefs {
     /// Pathfinder panel › Pathfinder Options (`object.pathfinder.options`; a preference group, see
     /// [`cmd::prefscmds::PREF_GROUPS`]).
     pub pathfinder: PathfinderOptions,
+    /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
+    /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub glyph_snap: vectorcraft_tools::GlyphSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -207,6 +217,11 @@ pub struct Prefs {
     /// `imageTrace.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub trace_presets: Vec<cmd::TracePreset>,
+    /// Gradient panel › Presets: the user's saved gradients (the built-in presets aren't stored).
+    /// A local library, not a Preferences dialog field: resetting the preferences keeps it;
+    /// `gradient.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gradient_presets: Vec<cmd::GradientPreset>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -317,6 +332,8 @@ impl Default for Prefs {
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
+            align_glyph_bounds_point: false,
+            align_glyph_bounds_area: false,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
@@ -434,8 +451,10 @@ impl Default for Prefs {
             },
             eyedropper: Default::default(),
             pathfinder: Default::default(),
+            glyph_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
+            gradient_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,

@@ -362,9 +362,7 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
                 }
                 // A fixed subtraction before blur maps to Darkness; proportional intermediate
                 // color filters must not be reinterpreted as a different-looking effect.
-                [V::Shade { sd, linear, dx, dy, keep, subtract, opacity }, V::Graphic]
-                    if (!*linear || *keep == 0.0) && (*keep == 0.0 || *keep == 1.0) =>
-                {
+                [V::Shade { sd, linear, dx, dy, keep, subtract, opacity }, V::Graphic] if *keep == 0.0 || !*linear && *keep == 1.0 => {
                     let v = along(*dx, *dy);
                     let (darkness, opacity) = (num(if *keep == 0.0 { 100.0 } else { *subtract as f64 * 100.0 }), num(*opacity as f64 * 100.0));
                     let p = json!({ "x": num(v.x), "y": num(v.y), "blur": blur(*sd), "shade": "darkness", "darkness": darkness, "opacity": opacity, "mode": mode });

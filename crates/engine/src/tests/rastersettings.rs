@@ -409,3 +409,49 @@ fn a_gradient_exports_at_the_resolution_the_file_opens_with() {
         assert_eq!(sizes, [(10, 10)], "saved as {saved}");
     }
 }
+
+/// Rasterize in a CMYK document's colour model makes a CMYK image of the art's inks (#4882): the
+/// image says CMYK, CMYK colours keep their numbers, a CMYK export keeps them, and a transparent
+/// background becomes the image's opacity mask.
+#[test]
+fn rasterize_to_cmyk_makes_a_cmyk_image() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": "cmyk"})).unwrap();
+    let r = id(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+    s.execute("paint.setFill", &json!({"color": {"c": 0.2, "m": 0.4, "y": 0.6, "k": 0.1}, "ids": [r.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true, "ids": [r.0]})).unwrap();
+    let want = [51u8, 102, 153, 26];
+    let near = |p: &[u8]| p.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 1);
+    let rasterize = |s: &mut Session, background: &str| {
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        let p = json!({"ppi": 72, "colorModel": "cmyk", "background": background, "addAround": 5});
+        let img = id(&s.execute("object.rasterize", &p).unwrap());
+        assert_eq!(s.execute("image.info", &json!({"id": img.0})).unwrap()["colorMode"], "CMYK");
+        let d = &s.doc().unwrap().doc;
+        let n = d.node(img).unwrap().clone();
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        let inks = d.images[&im.key].cmyk().expect("a CMYK image");
+        assert_eq!((inks.width, inks.height), (50, 50));
+        let at = |x: u32, y: u32| inks.data[((y * 50 + x) * 4) as usize..][..4].to_vec();
+        assert!(near(&at(25, 25)), "the fill's inks: {:?}", at(25, 25));
+        assert_eq!(at(1, 1), [0; 4], "no ink around the art");
+        n
+    };
+    let opaque = rasterize(&mut s, "white");
+    assert!(opaque.extras().mask.is_none(), "opaque: no mask");
+    // A CMYK TIFF export keeps the image's inks.
+    let tiff = s.execute("document.export", &json!({"format": "tiff", "colorModel": "cmyk", "ppi": 72})).unwrap();
+    let tiff = vectorcraft_format::base64_decode(tiff["dataBase64"].as_str().unwrap()).unwrap();
+    let inks = vectorcraft_doc::ImageBlob::new("image/tiff", tiff).cmyk().expect("a CMYK TIFF");
+    let at = ((30 * inks.width + 30) * 4) as usize;
+    assert!(near(&inks.data[at..at + 4]), "exported: {:?}", &inks.data[at..at + 4]);
+    // Transparent: the art's coverage is the image's opacity mask.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let masked = rasterize(&mut s, "transparent");
+    let mask = masked.extras().mask.as_deref().expect("an opacity mask").clone();
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Image(m) = &mask.art.kind else { panic!("the mask is an image") };
+    let alpha = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_luma8();
+    assert_eq!((alpha.get_pixel(1, 1).0, alpha.get_pixel(25, 25).0), ([0], [255]));
+    assert!(mask.clip);
+}

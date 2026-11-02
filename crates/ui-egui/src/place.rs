@@ -615,7 +615,7 @@ fn link_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool)
     }
     if widgets::menu_item(ui, tl!("Update Link"), linked, false) {
         let msg = match app.run("links.update", json!({ "ids": [id] })) {
-            Ok(v) => format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)),
+            Ok(v) => crate::panels::links::updated_status(v["updated"].as_array().map_or(0, Vec::len)),
             Err(e) => e,
         };
         app.status(msg);

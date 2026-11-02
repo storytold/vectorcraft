@@ -134,10 +134,12 @@ pub(super) fn effect_menu() -> Vec<Item> {
     let order = [
         "3D and Materials",
         "Color Adjustments",
+        "Color Effects",
         "Convert to Shape",
         "Crop Marks",
         "Distort & Transform",
         "Path",
+        "Path Effects",
         "Pathfinder",
         "Rasterize…",
         "Stylize",

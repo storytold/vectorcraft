@@ -112,7 +112,7 @@ impl Tool for TypeTool {
         self.clicks = (None, 0);
         // Pasting what we copied keeps its formatting (unless pasted text is kept plain).
         let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        if !committing && s.len() > 1 && s == clip && !cx.paste_plain_text {
+        if !committing && !s.is_empty() && s == clip && !cx.paste_plain_text {
             let runs = self.clipboard.clone();
             return self.replace(cx, "", Some(runs));
         }
@@ -145,7 +145,7 @@ impl Tool for TypeTool {
             return false;
         }
         let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        !(self.preedit.is_none() && normalized.len() > 1 && normalized == clip && !cx.paste_plain_text)
+        self.preedit.is_some() || normalized.is_empty() || normalized != clip || cx.paste_plain_text
     }
     /// Whether the typing session still describes the edited document; a session ended by an outside
     /// command reports false until a replacement commit starts a new one.
@@ -175,7 +175,7 @@ impl Tool for TypeTool {
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
-        if let Some(out) = self.step_attribute(key, mods, a, b) {
+        if let Some(out) = self.step_attribute(key, mods, a, b, t.vertical) {
             return out;
         }
         let word = mods.cmd || mods.alt;
@@ -508,7 +508,7 @@ impl Tool for TypeTool {
             // Transient selection transferred between Type and Eyedropper; never a saved setting.
             "textSelection" => {
                 if let (Some(id), Some(a), Some(b)) = (
-                    v.get("editing").and_then(Value::as_u64),
+                    v.get("editing").or_else(|| v.get("id")).and_then(Value::as_u64),
                     v.get("anchor").or_else(|| v.get("start")).and_then(Value::as_u64),
                     v.get("caret").or_else(|| v.get("end")).and_then(Value::as_u64),
                 ) && let (Ok(a), Ok(b)) = (usize::try_from(a), usize::try_from(b))

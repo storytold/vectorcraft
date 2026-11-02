@@ -56,7 +56,9 @@ impl Renderer {
     /// placed again when the fonts change.
     pub(super) fn placed_art(&mut self, art: &Arc<Node>, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> (Arc<Node>, bool) {
         let kept_kind = matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || vectorcraft_doc::live::is_live(art);
-        if !kept_kind || fx::has_object_fx(art) {
+        // An instance with appearance changes of its own isn't kept: the key doesn't tell them apart.
+        let overridden = inst.is_some_and(|i| !i.extras().symbol_overrides.is_empty());
+        if !kept_kind || overridden || fx::has_object_fx(art) {
             return (place(art, xf, scale_strokes, inst), false);
         }
         let stain = stain_bits(inst.and_then(vectorcraft_brush::stain));
@@ -246,6 +248,10 @@ impl Renderer {
     fn draw_glyph_image(&mut self, ctx: &mut RenderContext, f: &Frame, image: &vectorcraft_text::GlyphImage, xf: Affine) {
         let Some((key, pm)) = blob_pixmap(&image.blob, true) else { return };
         let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
+        let (key, pm) = match f.plates {
+            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true),
+            None => (key, pm),
+        };
         let unit = f.view * xf * Affine::scale_non_uniform(image.width as f64, image.height as f64);
         let pm = image_mip(&key, pm, unit);
         let sx = image.width as f64 / pm.width().max(1) as f64;

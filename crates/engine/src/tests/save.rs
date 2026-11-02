@@ -562,3 +562,25 @@ fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() 
     assert_eq!(native.artboards, s.doc().unwrap().doc.artboards);
     assert_eq!(native.layers, s.doc().unwrap().doc.layers);
 }
+
+/// #4646: a new document's units and ruler guides survive Save, Close and Open in every format
+/// that carries the whole document (an SVG keeps them only with Preserve Editing).
+#[test]
+fn units_and_ruler_guides_survive_save_and_reopen() {
+    let d = dir("units-guides");
+    for ext in ["vectorcraft", "pdf", "ai", "eps"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100, "units": "Millimeters"})).unwrap();
+        s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+        s.execute("guide.add", &json!({"vertical": false, "pos": 30})).unwrap();
+        rect(&mut s);
+        let p = path(&d, &format!("a.{ext}"));
+        s.execute("document.save", &json!({"path": p})).unwrap();
+        s.execute("file.close", &json!({})).unwrap();
+        s.execute("document.open", &json!({"path": p})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        let guides: Vec<_> = doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        assert_eq!((doc.units, guides), (vectorcraft_doc::Unit::Millimeters, vec![(true, 50.0), (false, 30.0)]), "{ext}");
+    }
+    let _ = std::fs::remove_dir_all(d);
+}

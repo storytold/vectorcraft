@@ -35,8 +35,8 @@ pub struct Artboard {
     pub video_ruler_pixel_aspect_ratio: f64,
     /// Background color (Properties › Artboards › Fill, Artboard Options). The canvas draws the
     /// artboard's paper in it, multiplied with the Simulate Colored Paper color while that is on;
-    /// without one the paper is white, or the Simulate Colored Paper color. Exports and print leave
-    /// it out.
+    /// without one the paper is white, or the Simulate Colored Paper color. Exports and print draw
+    /// it behind the art ([`super::Document::with_artboard_fills`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<vectorcraft_color::Color>,
 }
@@ -74,6 +74,37 @@ impl Artboard {
     pub fn video_safe_areas(&self) -> [Rect; 2] {
         let r = self.rect;
         VIDEO_SAFE_INSETS.map(|k| r.inflate(-k * r.width(), -k * r.height()))
+    }
+}
+
+impl super::Document {
+    /// A copy for output with the background colors ([`Artboard::color`]) of the artboards at
+    /// `indices` drawn behind all the art: each a rectangle of its artboard filled with its color
+    /// (in the color's own model), on a layer of their own (Artboard Fill) below the
+    /// others. `None` when none of them has a color.
+    pub fn with_artboard_fills(&self, indices: impl IntoIterator<Item = usize>) -> Option<Self> {
+        let fills: Vec<(Rect, vectorcraft_color::Color)> = indices
+            .into_iter()
+            .filter_map(|i| {
+                let a = self.artboards.get(i)?;
+                Some((a.rect, a.color?))
+            })
+            .collect();
+        if fills.is_empty() {
+            return None;
+        }
+        let mut d = self.clone();
+        let mut layer = Node::layer(d.alloc_id(), "Artboard Fill", super::LayerColor::Preset(0));
+        let paths: Vec<Arc<Node>> = fills
+            .into_iter()
+            .map(|(r, c)| {
+                let look = super::Appearance::basic(vectorcraft_color::Paint::solid(c), vectorcraft_color::Paint::None, 0.0);
+                Arc::new(Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(r), look))
+            })
+            .collect();
+        *layer.children_mut()? = paths;
+        d.layers.insert(0, Arc::new(layer));
+        Some(d)
     }
 }
 

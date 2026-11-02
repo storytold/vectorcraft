@@ -53,6 +53,15 @@ impl WidthProfile {
         // Two swells between narrow necks.
         ProfilePreset { id: "wave", label: "Wave", points: &[(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)] },
     ];
+    /// The widest the stroke gets, as a multiple of its weight: the largest total of the left and
+    /// right factors at any of the points (between them the profile is straight), 1 for a profile
+    /// without points.
+    pub fn widest(&self) -> f64 {
+        if self.points.is_empty() {
+            return 1.0;
+        }
+        self.points.iter().map(|&(_, l, r)| (l.max(0.0) + r.max(0.0)) / 2.0).fold(0.0, f64::max)
+    }
     /// The built-in profile with this id.
     pub fn preset(id: &str) -> Option<Self> {
         Self::PRESETS.iter().find(|p| p.id == id).map(|p| Self { points: p.points.to_vec() })

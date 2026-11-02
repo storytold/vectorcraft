@@ -88,15 +88,16 @@ pub(crate) fn select_row(app: &mut VectorcraftApp, ctx: &egui::Context, sel: Sel
     }
     let owner = app.session.active().and_then(|d| d.selection.subjects().first().copied());
     set_pstate(ctx, "ap-sel", (owner, sel));
-    set_pstate(ctx, "ap-multi", (owner, sel.item().into_iter().collect::<Vec<usize>>()));
+    set_pstate(ctx, "ap-multi", (owner, sel.item().into_iter().collect::<Vec<usize>>(), sel.item()));
 }
 
 /// The selected fill/stroke rows of `n` (paint order, ascending): the active row plus those
-/// Cmd/Shift-clicked with it.
+/// Cmd/Shift-clicked with it. When the active row has changed since (Add New Fill makes the new
+/// fill active), only the active row.
 fn selected_items(ctx: &egui::Context, n: Option<&Node>, sel: Sel) -> Vec<usize> {
     let (Some(n), Sel::Item(active)) = (n, sel) else { return vec![] };
-    let (owner, mut set): (Option<NodeId>, Vec<usize>) = pstate(ctx, "ap-multi");
-    if owner != Some(n.id) || !set.contains(&active) {
+    let (owner, mut set, at): (Option<NodeId>, Vec<usize>, Option<usize>) = pstate(ctx, "ap-multi");
+    if owner != Some(n.id) || at != Some(active) || !set.contains(&active) {
         return vec![active];
     }
     set.retain(|i| *i < n.appearance.items.len());
@@ -130,7 +131,7 @@ fn click_item(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel,
         }
     };
     select_row(app, ctx, Sel::Item(active));
-    set_pstate(ctx, "ap-multi", (Some(n.id), set));
+    set_pstate(ctx, "ap-multi", (Some(n.id), set, Some(active)));
 }
 
 /// An effect as the fx menu lists it: (id, label without the ellipsis, Effect-menu path).

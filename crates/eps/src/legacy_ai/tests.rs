@@ -1017,6 +1017,39 @@ fn variable_font_settings_are_warned_as_left_out() {
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
 }
 
+/// Type whose font size measures the cap height is written at the em size it is drawn at, with
+/// no warning: 14 pt measuring a 0.7 em cap height reads back as 20 pt type.
+#[test]
+fn a_font_height_reference_is_written_as_the_size_drawn() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut doc = typed();
+    let id = texts(&doc)[0].0.id;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        let st = &mut t.runs[0].style;
+        (st.font_family, st.size) = (HEIGHT_FAMILY.into(), 14.0);
+        st.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    }
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES || w == TYPE), "{:?}", out.warnings);
+    let imported = crate::import(&out.bytes).unwrap();
+    let size = texts(&imported.document)[0].1.runs[0].style.size;
+    assert!((size - 20.0).abs() < 1e-6, "{size}");
+}
+
+/// Characters with Auto leading are written with their paragraph's Auto Leading share of the
+/// size: 18 pt type in paragraphs at 150% is written with 27 pt leading.
+#[test]
+fn auto_leading_is_written_at_the_paragraphs_share() {
+    let mut doc = typed();
+    let id = texts(&doc)[0].0.id;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.edit_paras(None, |p| p.justification.auto_leading = 150.0);
+    }
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    assert!(text.contains("\n27 0 Tl\n"), "{text}");
+}
+
 /// A legacy `.ai` paragraph has no list: type with a bulleted or numbered list is written as its
 /// text, with the warning that the bullets and numbers are left out.
 #[test]
@@ -1115,6 +1148,72 @@ fn type_8_bit_text_cant_hold_and_type_asked_for_as_outlines_are_outlines() {
     let text = String::from_utf8(out.bytes).unwrap();
     assert!(!text.contains(" To\n") && !text.contains("%%DocumentFonts"), "{text}");
     assert!(!out.warnings.iter().any(|w| w == TYPE), "{:?}", out.warnings);
+}
+
+/// A legacy `.ai` text object has no character rotation: point type and area type with a rotated
+/// character between ordinary ones (turned either way, shifted off the baseline and scaled) are
+/// written as their outlines, with the warning, and read back as paths where the laid-out glyphs
+/// are, the rotated character turned. A full turn writes text.
+#[test]
+fn type_with_rotated_characters_is_outlines_that_keep_the_rotation() {
+    use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
+    let typed = |turn: f64, area: bool| {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "HE", style(30.0, red()));
+        let turned = CharStyle { rotation: turn, baseline_shift: 4.0, h_scale: 120.0, v_scale: 80.0, ..style(30.0, red()) };
+        t.runs.push(TextRun::new("L", turned));
+        t.runs.push(TextRun::new("TH", style(30.0, red())));
+        if area {
+            t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)) };
+            t.xf = Affine::translate((20.0, 40.0));
+        }
+        t
+    };
+    // Each run's laid-out glyphs' box, in the document.
+    let boxes = |t: &TextObject| -> Vec<kurbo::Rect> {
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        (0..t.runs.len())
+            .map(|i| {
+                let mut bp = kurbo::BezPath::new();
+                for g in lay.glyphs.iter().filter(|g| g.run == i) {
+                    bp.extend(g.outline.iter());
+                }
+                bp.apply_affine(t.xf);
+                bp.bounding_box()
+            })
+            .collect()
+    };
+    let near = |a: kurbo::Rect, b: kurbo::Rect| (a.x0 - b.x0).abs().max((a.y0 - b.y0).abs()).max((a.x1 - b.x1).abs()).max((a.y1 - b.y1).abs());
+    for (turn, area) in [(30.0, false), (-45.0, true)] {
+        let t = typed(turn, area);
+        assert!(rotated(&t));
+        let want = boxes(&t);
+        let unturned = boxes(&typed(0.0, area));
+        assert!(near(want[1], unturned[1]) > 1.0, "the turn moves the glyph: {:?} {:?}", want[1], unturned[1]);
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == ROTATED_TYPE), "{:?}", out.warnings);
+        assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+        assert!(!String::from_utf8_lossy(&out.bytes).contains(" To\n"), "not a text object");
+        let back = crate::import(&out.bytes).unwrap().document;
+        assert!(texts(&back).is_empty(), "no type reads back");
+        let parts = children(&children(&back.layers[0])[0]);
+        assert_eq!(parts.len(), 3, "one compound path for each run");
+        for (i, part) in parts.iter().enumerate() {
+            let b = part.visual_bounds().unwrap();
+            assert!(near(b, want[i]) < 0.05, "run {i} at {turn}°: {b:?}, laid out at {:?}", want[i]);
+        }
+    }
+    // A full turn draws the character upright: text.
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(typed(360.0, false))));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    assert!(String::from_utf8_lossy(&out.bytes).contains(" To\n"), "a text object");
+    assert!(!out.warnings.iter().any(|w| w == ROTATED_TYPE), "{:?}", out.warnings);
 }
 
 /// Ruby (furigana), which a text object can't hold, makes type 8-bit text could hold outlines,

@@ -250,7 +250,7 @@ fn pdf_artboards_continue_in_the_save_pdf_dialog() {
 /// format, each file holding that artboard's art (the ellipse is on artboard 1).
 #[test]
 fn export_as_writes_only_the_chosen_artboard_in_every_format() {
-    for (format, ellipse) in [("svg", "<path"), ("dxf", "HATCH"), ("pdf", ""), ("png", "")] {
+    for (format, ellipse) in [("svg", "<ellipse"), ("dxf", "HATCH"), ("pdf", ""), ("png", "")] {
         for (range, on) in [("1", true), ("3", false)] {
             let (mut app, written) = app(3);
             app.run("file.exportAs", json!({"format": format})).unwrap();

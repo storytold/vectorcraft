@@ -229,13 +229,14 @@ fn item_paint_mut(it: &mut AppearanceItem) -> &mut Paint {
     }
 }
 
-/// The paints a node holds itself (not its children): appearance items, then text runs.
+/// The paints a node holds itself (not its children): appearance items, then text runs, then an
+/// image's colorize paint.
 pub fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     let runs = match &n.kind {
         NodeKind::Text(t) => t.runs.as_slice(),
         _ => &[],
     };
-    n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke]))
+    n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])).chain(n.extras().colorize.as_deref())
 }
 
 /// Mutable [`node_paints`], in the same order.
@@ -244,7 +245,8 @@ pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
         NodeKind::Text(t) => t.runs.as_mut_slice(),
         _ => &mut [],
     };
-    n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke]))
+    let colorize = n.extras.0.as_deref_mut().and_then(|e| e.colorize.as_deref_mut());
+    n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke])).chain(colorize)
 }
 
 /// `n` with `f` applied to its subtree's linkable colours, or `None` when nothing changed (then

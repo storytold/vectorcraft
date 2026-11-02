@@ -156,6 +156,47 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     }
 }
 
+/// The row of the spine of blend `item` (#4820): a path mark and `<Path>`, the selection square
+/// while the blend is selected. A click selects the blend, whose spine Direct Selection then edits
+/// on the canvas; Shift or Cmd adds it to (or takes it from) the selection. The spine of a hidden
+/// or locked blend can't be selected.
+fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let (t, h) = (&view.t, view.h);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    let blend = item.node.id;
+    let selected = view.sel.contains(&blend);
+    let editable = (view.doc.editable())(blend);
+    if editable && resp.hovered() {
+        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
+    }
+    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
+    let mut x = r.left() + 2.0 * COLUMN + 2.0;
+    colour_bar(ui, &item.node, r, x, item.colour);
+    x += 6.0 + item.depth as f32 * INDENT + 16.0;
+    // The path mark: a short diagonal between two anchor dots.
+    let (a, b) = (egui::pos2(x + 2.0, r.center().y + 5.0), egui::pos2(x + 14.0, r.center().y - 5.0));
+    ui.painter().line_segment([a, b], Stroke::new(1.5, t.accent));
+    for p in [a, b] {
+        ui.painter().rect_filled(egui::Rect::from_center_size(p, vec2(3.0, 3.0)), 0.0, t.accent);
+    }
+    x += 22.0;
+    let name = format!("<{}>", tl!("Path"));
+    let color = if item.dim { t.text_dim } else { t.text };
+    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), color);
+    let col_x = r.right() - 43.5;
+    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
+    if selected {
+        let q = egui::Rect::from_center_size(egui::pos2(r.right() - SQUARE_X, r.center().y), vec2(7.0, 7.0));
+        ui.painter().rect_filled(q, 0.0, item.colour);
+        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
+    }
+    if editable && resp.clicked() {
+        let m = ui.input(|i| i.modifiers);
+        let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
+        out.actions.push((action.into(), json!({"ids": [blend.0]})));
+    }
+}
+
 /// Guide rows `guides` dragged over row `r` (`resp`) of layer `layer`: the row lights up, and the
 /// release puts them on that layer (`guide.setLayer`, one undo step).
 fn guide_drop(ui: &Ui, view: &View, guides: &[usize], layer: NodeId, r: egui::Rect, resp: &egui::Response, out: &mut Out) {
@@ -205,6 +246,9 @@ fn disclosure(ui: &Ui, view: &View, n: &Node, (r, x): (egui::Rect, f32), open: b
 pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     if let Some(i) = item.guide {
         return guide_row(ui, view, item, i, out);
+    }
+    if item.spine {
+        return spine_row(ui, view, item, out);
     }
     let n = &*item.node;
     let (depth, clip_path, has_children, open, color) = (item.depth, item.clip_path, item.opens, item.open, item.colour);

@@ -60,6 +60,25 @@ fn canvas_color_choices_paint_the_pasteboard() {
     assert!(app.run("prefs.set", serde_json::json!({"key": "canvasColor", "value": "pink"})).is_err());
 }
 
+/// #4837: the saved Color Scheme, Accent and Canvas Color are the ones the first frame shows, not
+/// the defaults the first UI pass installs.
+#[test]
+fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
+    let mut app = app();
+    for (key, value) in [("uiColorScheme", "classic"), ("uiAccent", "pink"), ("canvasColor", "white")] {
+        app.run("prefs.set", json!({"key": key, "value": value})).unwrap();
+    }
+    let ctx = egui::Context::default();
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.logic(ui.ctx()));
+        out.textures_delta.clear();
+        let (t, classic) = (Tokens::get(&ctx), Tokens::for_scheme(Scheme::Classic, app.ui.brightness, Accent::Pink));
+        assert_eq!((t.accent, t.app_bar, t.panel), (classic.accent, classic.app_bar, classic.panel));
+        assert_eq!(t.pasteboard, egui::Color32::WHITE);
+        assert_eq!(ctx.global_style().visuals.hyperlink_color, classic.accent);
+    }
+}
+
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }

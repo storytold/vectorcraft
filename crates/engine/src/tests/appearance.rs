@@ -288,6 +288,74 @@ fn add_fill_and_stroke_copy_the_top_ones() {
     assert_eq!(node(&s, id).appearance.items.len(), 3);
 }
 
+/// With a fill row active, Add New Fill puts a copy of that row right above it and makes the copy
+/// the active row; the rows above it stay where they are.
+#[test]
+fn add_fill_copies_the_active_fill_row_right_above_it() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#0000ff"})); // [red, Stroke, blue]
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let steps = s.doc().unwrap().history.undo.len();
+    run(&mut s, "appearance.addFill", json!({}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "stroke", "fill"]);
+    let hex = |i: usize| fill_paint(&n, i).color().unwrap().to_hex();
+    assert_eq!((hex(0), hex(1), hex(3)), ("#ff0000".to_string(), "#ff0000".to_string(), "#0000ff".to_string()));
+    assert_eq!(s.appearance_item(), Some(1), "the new fill is the active row");
+    // The next edit goes to the new fill.
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    let n = node(&s, id);
+    assert_eq!((fill_paint(&n, 0).color().unwrap().to_hex(), fill_paint(&n, 1).color().unwrap().to_hex()), ("#ff0000".into(), "#00ff00".into()));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 2);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).appearance.items.len(), 3);
+    // An active stroke row, or ids, leave the new fill on top.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1}));
+    run(&mut s, "appearance.addFill", json!({}));
+    assert_eq!(node(&s, id).appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "stroke", "fill", "fill"]);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    assert_eq!(fill_paint(&node(&s, id), 4).color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.appearance_item(), Some(0));
+}
+
+/// In a mixed selection the active fill row goes above itself in the first object; an object that
+/// doesn't share that row gets a copy of its top fill on top, as without an active row.
+#[test]
+fn add_fill_above_an_unshared_active_row_tops_the_other_objects() {
+    let mut s = session();
+    let (a, b) = mixed_circles(&mut s, true); // a [yellow, Stroke], b [red, green, Stroke]
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({}));
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert_eq!(na.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "stroke"]);
+    assert_eq!(fill_paint(&na, 1).color().unwrap().to_hex(), "#ffff00");
+    assert_eq!(nb.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "stroke", "fill"]);
+    assert_eq!(fill_paint(&nb, 3).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(s.appearance_item(), Some(1));
+}
+
+/// The active row is a row of the first selected object, also when that object paints above the
+/// others.
+#[test]
+fn add_fill_goes_above_the_active_row_of_the_first_selected_object() {
+    let mut s = session();
+    let (a, b) = mixed_circles(&mut s, true); // a [yellow, Stroke], b [red, green, Stroke]
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1})); // b's green fill
+    run(&mut s, "appearance.addFill", json!({}));
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert_eq!(nb.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "fill", "stroke"]);
+    assert_eq!(fill_paint(&nb, 2).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(na.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "stroke", "fill"]);
+    assert_eq!(fill_paint(&na, 2).color().unwrap().to_hex(), "#ffff00");
+    assert_eq!(s.appearance_item(), Some(2));
+}
+
 #[test]
 fn set_item_and_remove_item() {
     let mut s = session();
@@ -330,6 +398,140 @@ fn clear_and_reduce_to_basic() {
     assert_eq!((n.opacity, n.blend), (1.0, BlendMode::Normal));
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(node(&s, id).opacity, 0.4);
+}
+
+/// Reduce to Basic Appearance keeps the Appearance panel's active fill or stroke row instead of the
+/// topmost one of its kind, in each selected object with the same stack. With `ids` it keeps the
+/// topmost ones.
+#[test]
+fn reduce_to_basic_keeps_the_active_row() {
+    let mut s = session();
+    let a = rect(&mut s, 50.0);
+    let b = rect(&mut s, 200.0);
+    let c = rect(&mut s, 300.0);
+    let stack = |s: &mut Session| {
+        run(s, "appearance.addFill", json!({}));
+        run(s, "appearance.addStroke", json!({})); // [Fill, Stroke, Fill, Stroke]
+        run(s, "appearance.setItem", json!({"index": 0, "color": "#00ff00"}));
+        run(s, "appearance.setItem", json!({"index": 2, "color": "#ff0000"}));
+        run(s, "appearance.setItem", json!({"index": 1, "weight": 7}));
+    };
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    stack(&mut s);
+    // The lower, green fill row is active: both objects keep it and their top stroke.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    for id in [a, b] {
+        let n = node(&s, id);
+        assert!(n.appearance.is_basic(), "{:?}", n.appearance);
+        assert_eq!(fill_paint(&n, 0).color().unwrap().to_hex(), "#00ff00");
+        assert_eq!(stroke(&n, 1).width, 1.0);
+    }
+    // The lower stroke row is active: it stays, with the top fill.
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1}));
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    let n = node(&s, a);
+    assert_eq!(fill_paint(&n, 0).color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(stroke(&n, 1).width, 7.0);
+    // Given ids, the topmost fill and stroke stay.
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    stack(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.reduceToBasic", json!({"ids": [c.0]}));
+    let n = node(&s, c);
+    assert_eq!(fill_paint(&n, 0).color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(stroke(&n, 1).width, 1.0);
+}
+
+/// The active row is a row of the first selected object even when that object paints above the
+/// others; another object without an equal row keeps its topmost fill.
+#[test]
+fn reduce_to_basic_keeps_the_active_row_of_the_first_selected_object() {
+    let mut s = session();
+    let a = rect(&mut s, 50.0);
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#0000ff"})); // [Fill, Stroke, Fill blue]
+    let b = rect(&mut s, 200.0);
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "color": "#00ff00"}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#ff0000"})); // [Fill green, Stroke, Fill red]
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    assert_eq!(fill_paint(&node(&s, b), 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(fill_paint(&node(&s, a), 0).color().unwrap().to_hex(), "#0000ff");
+}
+
+/// b `[Fill red, Fill white, Stroke]` above a `[Fill white, Stroke]`, selected b first: b's rows 1
+/// and 2 equal a's rows 0 and 1.
+fn reversed_pair(s: &mut Session) -> (NodeId, NodeId) {
+    let a = rect(s, 50.0);
+    let b = rect(s, 200.0);
+    run(s, "appearance.addFill", json!({}));
+    run(s, "appearance.moveItem", json!({"from": 2, "to": 0}));
+    run(s, "appearance.setItem", json!({"index": 0, "color": "#ff0000"}));
+    run(s, "select.set", json!({"ids": [b.0, a.0]}));
+    (a, b)
+}
+
+/// The active row is a row of the first selected object also for paint, stroke and effect edits
+/// when that object paints above the others.
+#[test]
+fn edits_change_the_active_row_of_the_first_selected_object() {
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0})); // b's red fill
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert_eq!(fill_paint(&nb, 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(*fill_paint(&nb, 1), Paint::solid(Color::WHITE));
+    // a shares no red row, so its fill row 0 changes, as for an active row the objects don't share.
+    assert_eq!(fill_paint(&na, 0).color().unwrap().to_hex(), "#00ff00");
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    let nb = node(&s, b);
+    assert_eq!((nb.appearance.items[0].effects().len(), nb.appearance.items[1].effects().len()), (1, 0));
+
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1})); // b's white fill, a's row 0
+    run(&mut s, "paint.editGradient", json!({"kind": "radial"}));
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert!(matches!(fill_paint(&nb, 1), Paint::Gradient(_)), "b's white fill takes the gradient");
+    assert!(matches!(fill_paint(&na, 0), Paint::Gradient(_)), "so does a's equal fill");
+    assert_eq!(fill_paint(&nb, 0).color().unwrap().to_hex(), "#ff0000");
+    assert!(!matches!(stroke(&nb, 2).paint, Paint::Gradient(_)) && !matches!(stroke(&na, 1).paint, Paint::Gradient(_)));
+    // The effect goes on the equal rows, and the reply names the active row of b.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 2})); // b's stroke, a's row 1
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    assert_eq!(r["item"], 2);
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert_eq!((stroke(&nb, 2).effects.len(), stroke(&na, 1).effects.len()), (1, 1));
+    // With nothing selected an aligned item is an error, not a crash.
+    run(&mut s, "select.set", json!({"ids": []}));
+    let e = s.execute("effect.remove", &json!({"index": 0, "item": 0, "aligned": true})).unwrap_err().to_string();
+    assert!(!e.contains("internal error"), "{e}");
+}
+
+/// `effect.apply`'s reply names the new effect by its index in the object whose row `item` is,
+/// also when the objects painted after it already have effects there.
+#[test]
+fn apply_reports_the_index_in_the_object_whose_row_it_names() {
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    let c = rect(&mut s, 350.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    // b's red fill row is not shared, so each object's row 0 takes the effect: c's second one.
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0, c.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    assert_eq!(node(&s, c).appearance.items[0].effects().len(), 2);
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "b's row 0 holds one effect");
+    // An explicit item is a row of the first target, a, which paints below c.
+    run(&mut s, "select.set", json!({"ids": [c.0, a.0]}));
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    assert_eq!(node(&s, c).appearance.items[0].effects().len(), 3);
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(1)), "a's row 0 holds two effects");
 }
 
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.

@@ -376,7 +376,7 @@ fn symbols_and_effects_export_import_export_is_stable() {
         shapes::ellipse(Rect::new(0.0, 0.0, 20.0, 20.0)),
         Appearance::basic(Paint::solid(Color::rgb8(200, 30, 30)), Paint::None, 0.0),
     );
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(dot) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
     let l = d.layers[0].id;
     for x in [10.0, 60.0] {
         let id = d.alloc_id();

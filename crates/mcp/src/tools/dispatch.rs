@@ -141,6 +141,9 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if let Some(m) = a.get("mods") {
                 p["mods"] = m.clone();
             }
+            if let Some(backquote) = a.get("backquote") {
+                p["backquote"] = backquote.clone();
+            }
             j(b.call("ui.pointer", p)?)
         }
         "draw_path" => j(draw_path(b, a)?),

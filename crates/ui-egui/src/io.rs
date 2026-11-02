@@ -18,7 +18,7 @@ mod open;
 mod save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
-pub(crate) use export::{export_files, file_url, open_in_app, reveal_path, run_to_file, save_command_output_named};
+pub(crate) use export::{export_files, exported_with_notes, file_url, open_in_app, reveal_path, run_to_file, save_command_output_named};
 #[cfg(test)]
 pub(crate) use open::open_file;
 pub(crate) use open::opened;

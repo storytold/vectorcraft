@@ -11,6 +11,7 @@ use vectorcraft_pdf::{PrintLayers, PrintOptions, PrintPreview, PrintSettings};
 
 use super::fileio::pdf::{merge, pdf_error};
 use super::fileio::{extension, write_or_return};
+use super::flatten::has_transparent_tile_images;
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
 
 const SETUP: &str = "print.setup";
@@ -40,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print",
             [],
             Some("Cmd+P"),
-            "{preset?: name (as print.setup's: its settings instead of the document's; the saved settings stay), settings?: {…settings of print.setup} (over the document's or the preset's), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list), acknowledgeLoss?: bool (with path: write over the file the document was read from although reading it left things out), forPrinter?: bool (the PDF goes to a print queue: a page whose paper is turned to landscape is written upright, the art turned a quarter anticlockwise, as a printer driver turns a landscape job; macOS prints a landscape page as it is, cut off on upright paper; paper wide in Portrait and transverse pages stay as they are)} print the document, one page per sheet of paper (per tile, per ink, per copy) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
+            "{preset?: name (as print.setup's: its settings instead of the document's; the saved settings stay), settings?: {…settings of print.setup} (over the document's or the preset's), includeArtboardFill?: true (each artboard's background color prints behind its art; false leaves it out), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list), acknowledgeLoss?: bool (with path: write over the file the document was read from although reading it left things out), forPrinter?: bool (the PDF goes to a print queue: a page whose paper is turned to landscape is written upright, the art turned a quarter anticlockwise, as a printer driver turns a landscape job; macOS prints a landscape page as it is, cut off on upright paper; paper wide in Portrait and transverse pages stay as they are)} print the document, one page per sheet of paper (per tile, per ink, per copy) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
             has_doc,
             print
         ),
@@ -175,10 +176,18 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Placed documents print their files' art.
     let (full, _) = super::place::document::full_documents(doc);
-    let doc = &*full;
+    // The artboards' background colors print behind the art.
+    let filled = super::fileio::with_artboard_fills(&full, p, 0..full.artboards.len()).map_err(|e| bad(PRINT, e))?;
+    let doc = &*filled;
     // Raster effects print as images at the document's raster effects resolution.
     let flat = super::rasterfx::flatten_raster_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);
+    let bitmap = set.advanced.print_as_bitmap && set.output.mode == vectorcraft_pdf::OutputMode::Composite;
+    // The flattener expands pattern fills whose tile images need flattening, in the layers that print.
+    let tile_images = postscript
+        && !bitmap
+        && super::printadvanced::flattener(PRINT, &set, &s.prefs.flattener_presets)?
+            .is_some_and(|o| has_transparent_tile_images(&vectorcraft_pdf::printed_document(doc, &set), &o));
     // Print as Bitmap and the flattener preset (Advanced) render and flatten it first.
     let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets, s.prefs.black_output == "rich")?;
     let path = str_param(p, "path");
@@ -201,8 +210,7 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         None => Level::default(),
     };
     let mut warnings = vec![];
-    let bitmap = set.advanced.print_as_bitmap && set.output.mode == vectorcraft_pdf::OutputMode::Composite;
-    if !bitmap && doc.layers.iter().any(|l| l.shows_transparency()) {
+    if !bitmap && (tile_images || doc.layers.iter().any(|l| l.shows_transparency())) {
         warnings.push("transparency is flattened into opaque art and images (PostScript has none): see flattenerPreset".to_string());
     }
     if !set.color.profile.trim().is_empty() && set.output.mode == vectorcraft_pdf::OutputMode::Composite {

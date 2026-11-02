@@ -26,7 +26,7 @@ use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PatternDef};
 
 use super::brush_options::{clamped, mode_key, stroke_preview};
 use crate::VectorcraftApp;
@@ -43,6 +43,55 @@ const DIRECTIONS: [Direction; 4] = [Direction::LeftToRight, Direction::RightToLe
 /// Pattern brush tiles: (field of the definition, slot), in the dialog's order.
 const TILES: [(&str, &str); 5] =
     [("outer_corner", "outerCorner"), ("side", "side"), ("inner_corner", "innerCorner"), ("start", "start"), ("end", "end")];
+
+fn tile_key(field: &str) -> String {
+    match field {
+        "outer_corner" => "outerCornerTile".into(),
+        "inner_corner" => "innerCornerTile".into(),
+        _ => format!("{field}Tile"),
+    }
+}
+
+pub(super) fn pattern_names(d: &Dialog) -> Vec<String> {
+    d.fields
+        .get("__patterns")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.get("name").and_then(Value::as_str).map(str::to_string))
+        .collect()
+}
+
+fn pattern_choice(d: &Dialog, choice: &str) -> Option<String> {
+    let name = choice.strip_prefix("pattern:").unwrap_or(choice);
+    let reserved = choice == "none" || choice == "original" || CornerSource::parse(choice).is_some();
+    (!reserved && pattern_names(d).iter().any(|candidate| candidate == name)).then(|| name.to_string())
+}
+
+pub(super) fn original_available(d: &Dialog, field: &str) -> bool {
+    let choice = d.str(&tile_key(field));
+    let drawn = if field.ends_with("corner") { corner_art_field(d.fields.get("__def"), field) } else { Some(field) };
+    drawn.is_some() && pattern_choice(d, &choice).is_none()
+}
+
+pub(super) fn reconcile_pattern_choices(f: &mut Map<String, Value>) {
+    let names: Vec<String> = f
+        .get("__patterns")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.get("name").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let def = f.get("__def").cloned().unwrap_or_default();
+    for (art, _) in TILES {
+        let swatch = def.get(format!("{art}_swatch")).and_then(Value::as_str);
+        if let Some(name) = swatch.filter(|name| names.iter().any(|n| n == name)) {
+            f.insert(tile_key(art), json!(format!("pattern:{name}")));
+        } else if !art.ends_with("corner") {
+            f.insert(tile_key(art), json!(if def.get(art).is_some_and(|v| !v.is_null()) { "original" } else { "none" }));
+        }
+    }
+}
 
 /// Pattern brush corner tiles: (dialog field, art field of the definition, source field, art field
 /// of the other kind of corner).
@@ -63,20 +112,20 @@ fn corner_art_field<'a>(def: Option<&Value>, field: &'a str) -> Option<&'a str> 
     }
 }
 
-/// The dialog field that records that corner tile `key`'s menu was set.
+/// The dialog field that records that tile `key`'s menu was set.
 fn corner_set_key(key: &str) -> String {
     format!("__{key}Set")
 }
 
-/// Sets corner tile `key` to `choice` from its menu.
+/// Sets tile `key` to `choice` from its menu.
 pub(super) fn choose_corner(d: &mut Dialog, key: &str, choice: &str) {
     d.fields.insert(key.into(), json!(choice));
     note_set(d, key);
 }
 
-/// Records that field `field` was set, from its menu or `ui.dialog.set`, when it is a corner tile.
+/// Records that a tile field was set from its menu or `ui.dialog.set`.
 pub(super) fn note_set(d: &mut Dialog, field: &str) {
-    if CORNER_TILES.iter().any(|(key, ..)| *key == field) {
+    if CORNER_TILES.iter().any(|(key, ..)| *key == field) || TILES.iter().any(|(art, _)| tile_key(art) == field) {
         d.fields.insert(corner_set_key(field), json!(true));
     }
 }
@@ -259,18 +308,34 @@ pub(super) fn params(d: &Dialog) -> Value {
             let def = d.fields.get("__def");
             for (key, art, source, other) in CORNER_TILES {
                 let choice = d.str(key);
+                if let Some(name) = pattern_choice(d, &choice) {
+                    if d.bool(&corner_set_key(key)) {
+                        p[format!("{art}_tile")] = json!({"pattern": name});
+                    }
+                    continue;
+                }
                 let unset = |f: &str| def.and_then(|d| d.get(f)).is_none_or(Value::is_null);
                 if choice == CornerSource::None.id() && !d.bool(&corner_set_key(key)) && unset(source) && corner_art_field(def, art).is_none() {
                     continue;
                 }
                 if let Some(s) = CornerSource::parse(&choice) {
-                    p[art] = Value::Null;
-                    p[source] = json!(s.id());
+                    p[format!("{art}_tile")] = json!(s.id());
                 } else if choice == "original"
                     && let Some(from) = corner_art_field(def, art).filter(|f| *f != art)
                     && CORNER_TILES.iter().find(|(_, a, _, _)| *a == other).is_some_and(|(k, ..)| d.str(k) != "original")
                 {
                     p[art] = def.and_then(|d| d.get(from)).cloned().unwrap_or_default();
+                    p[format!("{art}_frame")] = def.and_then(|d| d.get(format!("{from}_frame"))).cloned().unwrap_or(Value::Null);
+                }
+                if choice == "original" && d.bool(&corner_set_key(key)) {
+                    p[format!("{art}_tile")] = json!("original");
+                }
+            }
+            for art in ["side", "start", "end"] {
+                let key = tile_key(art);
+                if d.bool(&corner_set_key(&key)) {
+                    let choice = d.str(&key);
+                    p[format!("{art}_tile")] = pattern_choice(d, &choice).map_or_else(|| json!(choice), |name| json!({"pattern": name}));
                 }
             }
             p
@@ -301,6 +366,35 @@ pub(super) fn edited_def(d: &Dialog) -> Value {
     let mut def = d.fields.get("__def").cloned().unwrap_or_default();
     if let (Some(o), Value::Object(p)) = (def.as_object_mut(), params(d)) {
         o.extend(p);
+    }
+    if d.str("__type") == "pattern" {
+        for (art, _) in TILES {
+            let key = tile_key(art);
+            if !d.bool(&corner_set_key(&key)) {
+                continue;
+            }
+            let choice = d.str(&key);
+            if choice == "none" || (art.ends_with("corner") && CornerSource::parse(&choice).is_some()) {
+                def[art] = Value::Null;
+                def[format!("{art}_frame")] = Value::Null;
+                def[format!("{art}_swatch")] = Value::Null;
+                if art.ends_with("corner") {
+                    def[if art == "outer_corner" { "outer_source" } else { "inner_source" }] = json!(choice);
+                }
+            } else if choice == "original" {
+                def[format!("{art}_swatch")] = Value::Null;
+            } else if let Some(name) = pattern_choice(d, &choice)
+                && let Some(pattern) = d.fields.get("__patterns").and_then(Value::as_array).and_then(|a| a.iter().find(|p| p["name"] == name))
+                && let Ok(pattern) = serde_json::from_value::<PatternDef>(pattern.clone())
+            {
+                def[art] = serde_json::to_value(Node::new(NodeId(0), NodeKind::Group { children: pattern.art, clip: false })).unwrap_or_default();
+                def[format!("{art}_frame")] = json!(pattern.tile);
+                def[format!("{art}_swatch")] = json!(name);
+                if art.ends_with("corner") {
+                    def[if art == "outer_corner" { "outer_source" } else { "inner_source" }] = Value::Null;
+                }
+            }
+        }
     }
     def
 }
@@ -447,12 +541,12 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     radios(ui, d, "fit", &fits);
 }
 
-/// What a corner tile can be: (choice, label). Original (the corner art the brush draws there) is
-/// offered only when the brush draws corner art there.
+/// Built-in corner choices. Original is disabled when the slot has no retained art or a listed
+/// swatch was selected.
 fn corner_choices() -> [(&'static str, &'static str); 6] {
     [
-        ("original", tl!("Original")),
         (CornerSource::None.id(), tl!("None")),
+        ("original", tl!("Original")),
         (CornerSource::AutoCentered.id(), tl!("Auto-Centered")),
         (CornerSource::AutoBetween.id(), tl!("Auto-Between")),
         (CornerSource::AutoSliced.id(), tl!("Auto-Sliced")),
@@ -460,31 +554,47 @@ fn corner_choices() -> [(&'static str, &'static str); 6] {
     ]
 }
 
-/// The pattern's five tiles, each with its art (or None when the brush has no such tile). Below
-/// each corner tile, a menu sets it to the brush's art, None or a tile made from the side tile.
+pub(super) fn tile_choices(d: &Dialog, corner: bool) -> Vec<(String, String)> {
+    let mut choices: Vec<(String, String)> = if corner {
+        corner_choices().into_iter().map(|(id, label)| (id.into(), label.into())).collect()
+    } else {
+        vec![("none".into(), tl!("None").into()), ("original".into(), tl!("Original").into())]
+    };
+    choices.extend(pattern_names(d).into_iter().map(|name| (format!("pattern:{name}"), name)));
+    choices
+}
+
+/// The pattern's five tiles, each with its art (or None when the brush has no such tile). A menu
+/// below each preview selects retained art, no art, or a document pattern; corners also offer
+/// generated choices.
 fn tiles(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let names = [tl!("Outer Corner Tile"), tl!("Side Tile"), tl!("Inner Corner Tile"), tl!("Start Tile"), tl!("End Tile")];
-    let keys = d.fields.get("__tiles").cloned();
+    let preview_def = edited_def(d);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        for ((field, slot), name) in TILES.into_iter().zip(names) {
+        for ((field, _slot), name) in TILES.into_iter().zip(names) {
             let corner = CORNER_TILES.iter().find(|(_, art, _, _)| *art == field).map(|(key, ..)| *key);
             // The art the tile draws with: its own, or a corner's that falls back on the other's.
-            let drawn = if corner.is_some() { corner_art_field(d.fields.get("__def"), field) } else { Some(field) };
-            let drawn_slot = drawn.and_then(|f| TILES.iter().find(|(tf, _)| *tf == f)).map_or(slot, |(_, s)| *s);
-            let choices: Vec<(&str, &str)> = corner_choices().into_iter().filter(|(c, _)| drawn.is_some() || *c != "original").collect();
-            let choice = corner.map(|key| d.str(key));
+            let drawn = if corner.is_some() { corner_art_field(Some(&preview_def), field) } else { Some(field) };
+            let choice = d.str(&tile_key(field));
+            let original_enabled = original_available(d, field);
+            let choices = tile_choices(d, corner.is_some());
             // The label of the corner's choice when it shows no art.
-            let shown = choice.as_deref().filter(|c| *c != "original");
-            let label = shown.and_then(|c| choices.iter().find(|(id, _)| *id == c)).map_or(tl!("None"), |(_, l)| *l);
+            let shown = (choice != "original" && pattern_choice(d, &choice).is_none()).then_some(choice.as_str());
+            let label = shown.and_then(|c| choices.iter().find(|(id, _)| id == c)).map_or(tl!("None"), |(_, l)| l.as_str());
             ui.vertical(|ui| {
                 let (r, resp) = ui.allocate_exact_size(vec2(76.0, 44.0), Sense::hover());
                 ui.painter().rect_filled(r, 0.0, Color32::WHITE);
-                let key = keys.as_ref().filter(|_| shown.is_none()).and_then(|k| k.get(drawn_slot)).and_then(Value::as_str);
-                let tex = key.and_then(|key| {
+                let art_value = drawn.and_then(|f| preview_def.get(f)).filter(|_| shown.is_none());
+                let key = art_value.map(|art| {
+                    let mut h = std::collections::hash_map::DefaultHasher::new();
+                    art.to_string().hash(&mut h);
+                    format!("brush-tile:{:x}", h.finish())
+                });
+                let tex = key.as_deref().and_then(|key| {
                     widgets::doc_preview(ui, key, r.size(), |w, h| {
-                        let art: Node = serde_json::from_value(d.fields.get("__def")?.get(drawn?)?.clone()).ok()?;
+                        let art: Node = serde_json::from_value(art_value?.clone()).ok()?;
                         tile_doc(&art, w, h)
                     })
                 });
@@ -499,14 +609,26 @@ fn tiles(ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
                 resp.on_hover_text(name);
                 ui.add_sized(vec2(76.0, 14.0), egui::Label::new(egui::RichText::new(name).size(10.5).color(t.text_dim)).truncate());
-                if let (Some(key), Some(cur)) = (corner, &choice) {
-                    let current = choices.iter().find(|(id, _)| id == cur).map_or(tl!("None"), |(_, l)| *l);
-                    let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
-                    if let Some((id, _)) =
-                        widgets::dropdown_named(ui, ("brush-pattern-corner", key), Some(name), current, &labels, 76.0).and_then(|i| choices.get(i))
-                    {
-                        choose_corner(d, key, id);
-                    }
+                let current = choices.iter().find(|(id, _)| id == &choice).map_or(tl!("None"), |(_, l)| l.as_str());
+                if let Some(id) = widgets::combo_named(ui, ("brush-pattern-tile", field), Some(name), current, 76.0, |ui| {
+                    choices.iter().enumerate().find_map(|(i, (id, label))| {
+                        ui.add_enabled(id != "original" || original_enabled, egui::Button::selectable(id == &choice, label.as_str()))
+                            .clicked()
+                            .then_some(i)
+                    })
+                })
+                .and_then(|i| choices.get(i).map(|(id, _)| id.clone()))
+                {
+                    let key = corner.unwrap_or_else(|| {
+                        if field == "side" {
+                            "sideTile"
+                        } else if field == "start" {
+                            "startTile"
+                        } else {
+                            "endTile"
+                        }
+                    });
+                    choose_corner(d, key, &id);
                 }
             });
         }

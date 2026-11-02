@@ -38,6 +38,9 @@ pub struct PointerEvent {
     pub pos: Point,
     #[serde(default)]
     pub mods: Mods,
+    /// Whether backquote is held for this event.
+    #[serde(default)]
+    pub backquote: bool,
     #[serde(default = "one")]
     pub pressure: f32,
 }
@@ -48,7 +51,7 @@ fn one() -> f32 {
 
 impl PointerEvent {
     pub fn new(kind: PointerKind, x: f64, y: f64) -> Self {
-        Self { kind, pos: Point::new(x, y), mods: Mods::default(), pressure: 1.0 }
+        Self { kind, pos: Point::new(x, y), mods: Mods::default(), backquote: false, pressure: 1.0 }
     }
     pub fn with_mods(mut self, m: Mods) -> Self {
         self.mods = m;
@@ -62,6 +65,21 @@ impl PointerEvent {
     /// (0..60000; default 0): the time [`Tool::tick`] gets.
     pub fn json_hold(e: &Value) -> f64 {
         e.get("holdMs").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(0.0, |ms| ms.clamp(0.0, 60_000.0) / 1000.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backquote_json_defaults_false_and_decodes_true() {
+        let event = PointerEvent::new(PointerKind::Down, 10.0, 20.0);
+        let mut value = serde_json::to_value(event).unwrap();
+        value.as_object_mut().unwrap().remove("backquote");
+        assert!(!serde_json::from_value::<PointerEvent>(value.clone()).unwrap().backquote);
+        value["backquote"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<PointerEvent>(value).unwrap().backquote);
     }
 }
 

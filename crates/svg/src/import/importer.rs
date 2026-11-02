@@ -186,7 +186,7 @@ impl Importer {
                 let name = unique_name(self.name_of(&sym), |n| self.doc.symbols.iter().any(|s| s.name == n));
                 let reuse = Reuse::of(&self.doc, &art);
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
-                self.doc.symbols.push(vectorcraft_doc::Symbol { name: name.clone(), art: Arc::new(art) });
+                self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
                 self.symbols.insert(sym, made);
                 if !whole || !reuse.allows(xf) {
                     return None;
@@ -652,10 +652,16 @@ impl Importer {
             if link.is_some() && !missing { blob.with_proxy() } else { blob }
         });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
-        self.named(
+        let mut node = self.named(
             i.id(),
             NodeKind::Image(Box::new(ImageObject { key, width: pw, height: ph, xf, link, placement: Default::default(), pixels: None })),
-        )
+        )?;
+
+        if i.rendering_mode() == usvg::ImageRendering::Pixelated {
+            node.extras_mut().pixelated = true;
+        }
+
+        Some(node)
     }
 
     /// An SVG shown as an image (a data URL or a linked file) → its art, `acc` mapping its size.

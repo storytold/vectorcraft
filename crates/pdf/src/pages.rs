@@ -1,7 +1,7 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
 use craft_pdf::syntax::page::Page;
@@ -193,9 +193,16 @@ fn stream_kind(pdf: &Pdf, id: ObjectIdentifier, dict: &Dict<'_>) -> String {
     }
     let is = |m: Option<MaybeRef<Object<'_>>>| matches!(m, Some(MaybeRef::Ref(r)) if ObjectIdentifier::from(r) == id);
     let pages = pdf.pages();
+    // `Contents` is a stream or an array of them, the array in the page or an object of its own.
+    // Each object is read once however many pages share it, so a file can't make this quadratic.
+    let mut read = HashSet::new();
     let content = pages.iter().any(|page| match page.raw().get_raw::<Object<'_>>(b"Contents") {
         Some(MaybeRef::NotRef(Object::Array(a))) => items(&a).any(|m| is(Some(m))),
-        other => is(other),
+        Some(MaybeRef::Ref(r)) => {
+            let at = ObjectIdentifier::from(r);
+            read.insert(at) && page.raw().get::<Array<'_>>(b"Contents").map_or(at == id, |a| items(&a).any(|m| is(Some(m))))
+        }
+        _ => false,
     });
     if content {
         return "a page's content in it".to_string();

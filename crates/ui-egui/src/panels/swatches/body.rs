@@ -159,6 +159,7 @@ pub(super) fn focus_swatch(app: &VectorcraftApp, ui: &Ui, active: Option<&str>) 
     let reselected = last_art.as_ref().is_some_and(|l| *l != art);
     if reselected {
         set_pstate(ui.ctx(), "swatch-selected", Vec::<String>::new());
+        set_pstate(ui.ctx(), "swatch-anchor", String::new());
     }
     let changed = reselected || last_art.is_none() || last_swatch.as_deref() != active;
     set_pstate(ui.ctx(), "swatch-focus", (Some(art), active.map(str::to_string)));

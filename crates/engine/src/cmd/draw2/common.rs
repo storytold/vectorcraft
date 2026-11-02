@@ -1,7 +1,8 @@
 use super::{
     Appearance, Arc, Beside, Cap, Color, Document, EngineError, FillRule, Join, Node, NodeId, NodeKind, Paint, PathData, Point, PressureProfile,
-    Rect, Result, Selection, Session, SubPath, Value, Vec2, bad, index, json, po,
+    Rect, Result, Selection, Session, SubPath, Value, Vec2, bad, index, json, number_or, po,
 };
+use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
 
 // ---------- helpers ----------
 
@@ -62,6 +63,36 @@ pub(super) fn stroke_pressure(samples: &[(Point, Option<f64>)]) -> Option<Pressu
         })
         .collect();
     PressureProfile::from_samples(along.into_iter().map(|(s, p)| (if at > 1e-9 { s / at } else { 0.0 }, p)))
+}
+
+/// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`, with
+/// `sizeVariation` in points): the stroke's pen pressure along it and the variation, `None` for
+/// Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the size.
+pub(super) fn size_pressure(p: &Value, samples: &[(Point, Option<f64>)], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+    match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
+        None | Some(Ok("fixed")) => Ok(None),
+        Some(Ok("pressure")) => {
+            let variation = number_or(p, "sizeVariation", 0.0, cmd)?;
+            if !(variation.is_finite() && variation >= 0.0) {
+                return Err(bad(cmd, "sizeVariation must be 0 or more"));
+            }
+            Ok(stroke_pressure(samples).filter(|_| variation > 0.0).map(|prof| (prof, variation)))
+        }
+        Some(Ok(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not `{other}`"))),
+        Some(Err(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not {other}"))),
+    }
+}
+
+/// The area a stroke along `spine` covers with Size set to Pressure: as wide at each point as
+/// [`vectorcraft_tools::draw2::pressure_size`] gives for the pressure `prof` records there, with
+/// round ends and joins, its overlaps united into one outline.
+pub(super) fn pressure_region(spine: &PathData, size: f64, variation: f64, prof: &PressureProfile) -> Result<PathData> {
+    let widest = size + variation;
+    let width = |t: f64| vectorcraft_tools::draw2::pressure_size(size, variation, prof.at(t)) / widest;
+    let profile = WidthProfile { points: prof.points.iter().map(|&(t, _)| (t, width(t), width(t))).collect() };
+    let round = StrokeLayer { cap: LineCap::Round, join: LineJoin::Round, ..StrokeLayer::new(Paint::None, widest) };
+    let outline = PathData::from_bezpath(&vectorcraft_render::width_outline(&spine.to_bezpath(), widest, &profile, &round, 0.05));
+    po::try_unite_all(&[(&outline, FillRule::NonZero)]).map_err(|e| EngineError::Other(e.to_string()))
 }
 
 /// The length of a subpath.

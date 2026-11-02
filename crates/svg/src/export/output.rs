@@ -418,9 +418,102 @@ impl Writer<'_> {
         s
     }
 
+    /// `p` written with `m` as the SVG basic shape it exactly is, as the reference app's SVG
+    /// export writes simple shapes (#4652): an axis-aligned `<rect>`, `<circle>` or `<ellipse>`,
+    /// a `<line>`, or a `<polygon>`/`<polyline>` of straight segments. The element name and its
+    /// geometry attributes, at the written precision; `None` keeps `<path>`. `<rect>` and
+    /// `<ellipse>` start their outline elsewhere than the path, so with a `dashed` stroke a
+    /// rectangle is a `<polygon>` and an ellipse stays `<path>`.
+    /// Sources: an Illustrator ellipse is an `ellipse` tag unless an anchor is added
+    /// (<https://community.adobe.com/t5/illustrator-discussions/trouble-exporting-shape-with-points-to-svg/td-p/10720325>);
+    /// rectangles export as `<rect>` and `<polygon>`
+    /// (<https://community.adobe.com/t5/illustrator-discussions/force-svg-export-using-all-lt-rect-gt/td-p/11282378>);
+    /// a triangle without curves exports as a polygon (<https://hackaday.io/project/170755/log/175565>).
+    pub(super) fn basic_shape(&self, p: &PathData, m: Affine, dashed: bool) -> Option<(&'static str, String)> {
+        let [sp] = p.subpaths.as_slice() else { return None };
+        if !(0..sp.segment_count()).all(|i| sp.segment_is_line(i)) {
+            return self.ellipse_shape(sp, m).filter(|_| !dashed);
+        }
+        let pts: Vec<Point> = sp.anchors.iter().map(|a| m * a.p).collect();
+        if sp.closed && !dashed && pts.len() == 4 {
+            // The corners as written, so the rectangle's numbers are the path's own.
+            let snap = |v: f64| self.num(v).parse::<f64>().unwrap_or(v);
+            let corners: Vec<Point> = pts.iter().map(|q| Point::new(snap(q.x), snap(q.y))).collect();
+            if let Some(r) = axis_rect(&corners) {
+                let (x, y, w, h) = (self.num(r.x0), self.num(r.y0), self.num(r.width()), self.num(r.height()));
+                return Some(("rect", format!(" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"")));
+            }
+        }
+        let points = |tag: &'static str| {
+            let mut s = String::from(" points=\"");
+            for (i, q) in pts.iter().enumerate() {
+                if i > 0 {
+                    s.push(' ');
+                }
+                crate::push_num(&mut s, q.x, self.opts.decimals);
+                s.push(',');
+                crate::push_num(&mut s, q.y, self.opts.decimals);
+            }
+            s.push('"');
+            Some((tag, s))
+        };
+        match (sp.closed, pts.as_slice()) {
+            (false, [a, b]) => {
+                let (x1, y1, x2, y2) = (self.num(a.x), self.num(a.y), self.num(b.x), self.num(b.y));
+                // A line of zero length as written keeps `<path>`: renderers disagree on its caps.
+                ((&x1, &y1) != (&x2, &y2)).then(|| ("line", format!(" x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\"")))
+            }
+            (false, [_, _, _, ..]) => points("polyline"),
+            (true, [_, _, _, ..]) => points("polygon"),
+            _ => None,
+        }
+    }
+
+    /// A closed 4-anchor subpath that is an axis-aligned ellipse drawn the standard way (each
+    /// quarter a cubic with handles [`KAPPA`] of the radii long), within the written precision:
+    /// `<circle>` when its radii are written the same, else `<ellipse>`.
+    fn ellipse_shape(&self, sp: &SubPath, m: Affine) -> Option<(&'static str, String)> {
+        let tol = 10f64.powi(-i32::from(self.opts.decimals));
+        let (anchors, closed) = (sp.anchors.as_slice(), sp.closed);
+        let [a0, a1, a2, a3] = anchors else { return None };
+        let [p0, p1, p2, p3] = [a0.p, a1.p, a2.p, a3.p].map(|p| m * p);
+        let c = p0.midpoint(p2);
+        let near = |a: f64, b: f64| (a - b).abs() <= tol;
+        // Opposite anchors share the centre: one pair on the horizontal axis, the other on the vertical.
+        let (rx, ry) = if near(p0.y, c.y) && near(p1.x, c.x) {
+            ((p0.x - c.x).abs(), (p1.y - c.y).abs())
+        } else if near(p0.x, c.x) && near(p1.y, c.y) {
+            ((p1.x - c.x).abs(), (p0.y - c.y).abs())
+        } else {
+            return None;
+        };
+        let quarters = anchors.iter().zip(anchors.iter().cycle().skip(1)).all(|(a, b)| {
+            let (pa, pb) = (m * a.p, m * b.p);
+            (m * a.h_out).distance(pa + (pb - c) * KAPPA) <= tol && (m * b.h_in).distance(pb + (pa - c) * KAPPA) <= tol
+        });
+        if !closed || c.distance(p1.midpoint(p3)) > tol || rx <= tol || ry <= tol || !quarters {
+            return None;
+        }
+        let (cx, cy, rx, ry) = (self.num(c.x), self.num(c.y), self.num(rx), self.num(ry));
+        Some(if rx == ry {
+            ("circle", format!(" cx=\"{cx}\" cy=\"{cy}\" r=\"{rx}\""))
+        } else {
+            ("ellipse", format!(" cx=\"{cx}\" cy=\"{cy}\" rx=\"{rx}\" ry=\"{ry}\""))
+        })
+    }
+
     pub(super) fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
         }
     }
+}
+
+/// The rectangle whose corners `q` are, in order either way round, with its edges alternately
+/// horizontal and vertical and none of zero length (`<rect>` doesn't draw an empty one).
+fn axis_rect(q: &[Point]) -> Option<Rect> {
+    let [a, b, c, d] = *q else { return None };
+    let h = |p: Point, q: Point| p.y == q.y && p.x != q.x;
+    let v = |p: Point, q: Point| p.x == q.x && p.y != q.y;
+    ((h(a, b) && v(b, c) && h(c, d) && v(d, a)) || (v(a, b) && h(b, c) && v(c, d) && h(d, a))).then(|| Rect::from_points(a, c))
 }

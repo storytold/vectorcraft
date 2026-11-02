@@ -218,6 +218,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     vec![
                         c("Join", "path.join"),
                         c("Average…", "path.average"),
+                        c("Average & Join…", "path.averageJoin"),
                         Sep,
                         c("Outline Stroke", "object.path.outlineStroke"),
                         c("Offset Path…", "object.path.offsetPath"),
@@ -366,7 +367,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub("Plug-ins", crate::dialogs::plugin::object_menu()),
+                sub("Plug-ins", [crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat()),
             ],
         ),
         (

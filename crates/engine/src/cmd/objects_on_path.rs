@@ -5,8 +5,9 @@
 //! bottom. Called without a path (Object › Objects on Path › Attach) it chooses the Objects on Path
 //! tool, whose click on a path attaches the selected objects to that path. The objects go along the
 //! path column by column from left to right, top to bottom in each column, spread evenly from its
-//! first anchor and turned to follow it. `object.objectsOnPath.options` sets the group's Pivot and
-//! Rotate, and `object.objectsOnPath.expand` makes it a plain group.
+//! first anchor and turned to follow it. Pivot and Rotate come from the command's params, otherwise
+//! from the tool's options (Objects on Path Tool Options). `object.objectsOnPath.options` sets the
+//! group's Pivot and Rotate, and `object.objectsOnPath.expand` makes it a plain group.
 //!
 //! After every edit, [`refresh`] puts the objects of each Objects on Path group that changed back
 //! on its path: editing the path moves them, an object moved on its own goes back to its place,
@@ -38,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Attach",
             ["Object", "Objects on Path"],
             None,
-            "{path?: id of the path to attach to (without it: choose the Objects on Path tool, whose click on a path attaches the selection to it), ids?: the objects to attach (default: the selection; the path is left out of it), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; default 4, the center), rotate?: degrees counter-clockwise from upright on the path (default 0)} put the objects and the path in an Objects on Path group: the path at the bottom, the objects spread evenly along it from its first anchor (the last one at the end of an open path) in their order on the canvas, column by column from left to right and top to bottom in each column, each turned to follow the path; editing the path moves them → {id}",
+            "{path?: id of the path to attach to (without it: choose the Objects on Path tool, whose click on a path attaches the selection to it), ids?: the objects to attach (default: the selection; the path is left out of it), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; default: the Objects on Path tool's Pivot, 4, the center, until its options change it), rotate?: degrees counter-clockwise from upright on the path (default: the tool's Rotate, 0 until its options change it)} put the objects and the path in an Objects on Path group: the path at the bottom, the objects spread evenly along it from its first anchor (the last one at the end of an open path) in their order on the canvas, column by column from left to right and top to bottom in each column, each turned to follow the path; editing the path moves them → {id}",
             has_selection,
             attach
         ),
@@ -200,7 +201,11 @@ fn attach(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "tool": TOOL }));
     };
     let path = checked_id(s, path, C)?;
-    let (pivot, rotate) = pivot_rotate(p, C, CENTER, 0.0)?;
+    // Without them in `p`, the tool's options (Objects on Path Tool Options) give Pivot and Rotate.
+    let saved = s.tool_options_of(TOOL);
+    let tool_pivot = saved.get("pivot").and_then(Value::as_u64).filter(|n| *n <= 8).map_or(CENTER, |n| n as u8);
+    let tool_rotate = saved.get("rotate").and_then(Value::as_f64).filter(|r| r.is_finite()).map_or(0.0, |r| r.clamp(-360.0, 360.0));
+    let (pivot, rotate) = pivot_rotate(p, C, tool_pivot, tool_rotate)?;
     let roots = match p.get("ids") {
         Some(_) => roots_of(&s.doc()?.doc, checked_ids_param(s, p, "ids", C)?),
         None => selected_roots(s)?,

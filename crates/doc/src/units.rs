@@ -161,7 +161,10 @@ impl Unit {
     /// A point value as the canvas measurement labels show it: two decimals and the suffix
     /// (`12.50 mm`).
     pub fn readout(self, pt: f64) -> String {
-        format!("{:.2} {}", self.from_pt(pt), self.suffix())
+        let s = format!("{:.2}", self.from_pt(pt));
+        // A small negative value rounds to `-0.00`; show it as `0.00`.
+        let s = if s == "-0.00" { "0.00" } else { &s };
+        format!("{} {}", s, self.suffix())
     }
 }
 

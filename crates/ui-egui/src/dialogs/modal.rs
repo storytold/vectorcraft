@@ -21,7 +21,8 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
     let dim = backdrop();
     egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
         // Modal, but the canvas isn't dimmed so previews stay readable (as in the reference app).
-        ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
+        // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
+        ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
     });
     let shown = egui::Window::new(title)
         .id(id)
@@ -57,7 +58,8 @@ pub(crate) fn drag_band(ui: &mut egui::Ui, bottom: f32) {
     // Last frame's rectangle: none while the window measures itself the first time it shows.
     let Some(outer) = ui.ctx().memory(|m| m.area_rect(id)) else { return };
     let band = Rect::from_x_y_ranges(outer.x_range(), outer.top()..=bottom.max(outer.top()));
-    let r = ui.interact(band, handle(id), egui::Sense::drag());
+    // Not focusable (`Sense::drag()` is): Tab goes through the dialog's controls, not the band.
+    let r = ui.interact(band, handle(id), egui::Sense::DRAG);
     if r.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     } else if r.hovered() {
@@ -66,7 +68,7 @@ pub(crate) fn drag_band(ui: &mut egui::Ui, bottom: f32) {
 }
 
 /// The drag handle of window `id`.
-fn handle(id: Id) -> Id {
+pub(super) fn handle(id: Id) -> Id {
     id.with("modal-drag")
 }
 

@@ -161,7 +161,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
     let changed = match vectorcraft_plugins::effect::installed(&id) {
         Some(plugin) => form::schema_fields(app, ui, d, plugin.manifest()),
-        None if vectorcraft_effects::is_adjustment(&id) => adjust_fields(ui, d),
+        // The Color Effects add-on's take the plain form of their parameters.
+        None if vectorcraft_effects::is_adjustment(&id) && !vectorcraft_effects::addons::color::is_color_effect(&id) => adjust_fields(ui, d),
+        None if id == vectorcraft_effects::addons::halftone::HALFTONE => {
+            super::halftone::screen_fields(ui, d);
+            values_changed(d)
+        }
+        None if id == vectorcraft_effects::addons::duotone::DUOTONE => {
+            super::duotone::fields(app, ui, d);
+            values_changed(d)
+        }
         None if id == GLASS => glass_fields(app, ui, d, GLASS),
         None if id == TEXTURIZER => glass_fields(app, ui, d, TEXTURIZER),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
@@ -320,7 +329,7 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("stylize.dropShadow", "shade") => Some(SHADES),
         ("path.offsetPath", "joins") => Some(&[("Miter", "miter"), ("Round", "round"), ("Bevel", "bevel")]),
         ("distort.roughen" | "distort.zigZag", "points") => Some(&[("Smooth", "smooth"), ("Corner", "corner")]),
-        _ => None,
+        _ => crate::addons::pathtools::effect_choices(effect, key),
     }
 }
 
@@ -449,7 +458,10 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.fields.contains_key("points") {
         ui.horizontal(|ui| {
             ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
-            curve_graph(ui, d);
+            let mut pts = vectorcraft_effects::curve_points(d.fields.get("points"));
+            if curve_graph(ui, &mut pts, 255.0) {
+                d.fields.insert("points".into(), json!(points_text(&pts, 255.0)));
+            }
         });
     }
     for (key, label, width) in [("points", tl!("Points"), 220.0), ("color", tl!("Color"), 120.0)] {
@@ -709,15 +721,15 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
     values_changed(d)
 }
 
-/// Curves' graph of its `points` (input across, output up, 0..255): drag a point to move it
-/// between its neighbours, press on the graph away from the points to add one there, drag one
-/// off the graph to remove it (two always stay).
-fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
+/// A curve's graph of its points `pts` (0..1 each; input across, output up), as Curves and
+/// Duotone's tones edit them on a scale of 0..`max`: drag a point to move it between its
+/// neighbours, press on the graph away from the points to add one there, drag one off the graph
+/// to remove it (two always stay). Returns whether the points changed.
+pub(super) fn curve_graph(ui: &mut egui::Ui, pts: &mut Vec<(f32, f32)>, max: f32) -> bool {
     const SIZE: f32 = 200.0;
     /// How near (screen points) a press must be to take a point.
     const GRAB: f32 = 8.0;
     let t = Tokens::get(ui.ctx());
-    let mut pts = vectorcraft_effects::curve_points(d.fields.get("points"));
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(SIZE, SIZE), egui::Sense::click_and_drag());
     let screen = |(x, y): (f32, f32)| egui::pos2(rect.left() + x * SIZE, rect.bottom() - y * SIZE);
     let unit = |p: egui::Pos2| (((p.x - rect.left()) / SIZE).clamp(0.0, 1.0), ((rect.bottom() - p.y) / SIZE).clamp(0.0, 1.0));
@@ -747,7 +759,7 @@ fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
             pts.remove(i.min(pts.len() - 1));
             grabbed = None;
         } else {
-            let step = 1.0 / 255.0;
+            let step = 1.0 / max;
             let lo = if i == 0 { 0.0 } else { pts.get(i - 1).map_or(0.0, |a| a.0 + step) };
             let hi = pts.get(i + 1).map_or(1.0, |a| a.0 - step);
             let (x, y) = unit(p);
@@ -771,17 +783,19 @@ fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
         painter.line_segment([screen((0.0, f)), screen((1.0, f))], faint);
     }
     painter.line_segment([screen((0.0, 0.0)), screen((1.0, 1.0))], faint);
-    let curve: Vec<egui::Pos2> = (0..=64).map(|k| k as f32 / 64.0).map(|x| screen((x, vectorcraft_effects::curve_at(&pts, x)))).collect();
+    let curve: Vec<egui::Pos2> = (0..=64).map(|k| k as f32 / 64.0).map(|x| screen((x, vectorcraft_effects::curve_at(pts.as_slice(), x)))).collect();
     painter.add(egui::Shape::line(curve, egui::Stroke::new(1.5, t.text)));
     for (i, q) in pts.iter().enumerate() {
         let fill = if Some(i) == grabbed { t.accent } else { t.panel };
         painter.circle(screen(*q), 4.0, fill, egui::Stroke::new(1.5, t.text));
     }
     painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    if changed {
-        let text: Vec<String> = pts.iter().map(|(x, y)| format!("{},{}", (x * 255.0).round(), (y * 255.0).round())).collect();
-        d.fields.insert("points".into(), json!(text.join(" ")));
-    }
+    changed
+}
+
+/// Curve points `pts` (0..1) as the `"x,y x,y …"` text of a curve on a scale of 0..`max`.
+pub(super) fn points_text(pts: &[(f32, f32)], max: f32) -> String {
+    pts.iter().map(|(x, y)| format!("{},{}", (x * max).round(), (y * max).round())).collect::<Vec<_>>().join(" ")
 }
 
 /// What OK runs: `effect.setParams` on the edited effect (`__index`), else `effect.apply` of the

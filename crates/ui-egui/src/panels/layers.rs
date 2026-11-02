@@ -397,7 +397,7 @@ fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, quer
     }
     let mut rows = vec![];
     push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, doc), &mut rows);
-    rows.iter().any(|r| r.node.id == id && r.guide.is_none())
+    rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 
 /// The active document's uid and its last selected object, the one Locate Object locates.

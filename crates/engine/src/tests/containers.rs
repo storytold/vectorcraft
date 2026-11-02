@@ -70,6 +70,28 @@ fn a_group_fill_paints_both_members_and_the_contents_slot_moves() {
 }
 
 #[test]
+fn ungroup_leaves_the_groups_opacity_with_the_group() {
+    let mut s = session();
+    let red = id_of(&run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 40})));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let blue = id_of(&run(&mut s, "shape.rectangle", json!({"x": 100, "y": 20, "width": 60, "height": 40})));
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+    run(&mut s, "object.setProps", json!({"ids": [blue.0], "opacity": 40}));
+    run(&mut s, "select.set", json!({"ids": [red.0, blue.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "object.setProps", json!({"ids": [g.0], "opacity": 50}));
+    run(&mut s, "object.ungroup", json!({}));
+    // Each member keeps its own opacity: the red square is opaque again and the blue one stays at 40%.
+    assert!((node(&s, red).opacity - 1.0).abs() < 1e-6, "{}", node(&s, red).opacity);
+    assert!((node(&s, blue).opacity - 0.4).abs() < 1e-6, "{}", node(&s, blue).opacity);
+    assert_eq!(pixel(&s, 40, 40), RED);
+    // One undo step brings the group back at 50%.
+    run(&mut s, "edit.undo", json!({}));
+    assert!((node(&s, g).opacity - 0.5).abs() < 1e-6);
+    assert!((node(&s, red).opacity - 1.0).abs() < 1e-6);
+}
+
+#[test]
 fn appearance_commands_target_the_object_or_its_contents() {
     let mut s = session();
     let (g, [a, b]) = group(&mut s);
@@ -336,7 +358,7 @@ fn type_in_a_group_with_a_geometry_effect_exports_and_expands_with_its_look() {
     run(&mut s, "select.set", json!({"ids": [t.0]}));
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
-    assert_eq!(hidden.matches("<path").count() + 1, shown.matches("<path").count(), "{hidden}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&hidden) + 1, vectorcraft_testkit::svg_shapes(&shown), "{hidden}");
     // Expand Appearance keeps the type's opacity and visibility on its outlines.
     run(&mut s, "select.set", json!({"ids": [g.0]}));
     run(&mut s, "effect.expandAppearance", json!({}));
@@ -355,5 +377,5 @@ fn hidden_type_with_a_geometry_effect_is_left_out_of_svg_export() {
     run(&mut s, "select.set", json!({"ids": [t.0]}));
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
-    assert_eq!((shown.matches("<path").count(), hidden.matches("<path").count()), (1, 0), "{hidden}");
+    assert_eq!((vectorcraft_testkit::svg_shapes(&shown), vectorcraft_testkit::svg_shapes(&hidden)), (1, 0), "{hidden}");
 }

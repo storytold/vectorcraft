@@ -12,8 +12,16 @@ pub(crate) fn lookup(key: &images::ImageKey, touch: bool) -> Option<Arc<Pixmap>>
 pub(crate) fn blob_key(blob: &vectorcraft_doc::ImageBlob) -> (images::ImageKey, Option<Arc<ink::InkLut>>, Option<(u16, u16)>) {
     let id = images::blob_id(blob);
     let lut = id.cmyk.then(ink::display_lut);
-    let key =
-        images::ImageKey { content: id.content, adjust: None, grey: false, ink: Ink::Display, luts: (lut.as_ref().map_or(0, |l| l.1), 0), mip: 0 };
+    let key = images::ImageKey {
+        content: id.content,
+        adjust: None,
+        grey: false,
+        tint: None,
+        ink: Ink::Display,
+        luts: (lut.as_ref().map_or(0, |l| l.1), 0),
+        plates: 0,
+        mip: 0,
+    };
     (key, lut.map(|l| l.0), id.size)
 }
 

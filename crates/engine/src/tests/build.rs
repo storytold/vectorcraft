@@ -2702,6 +2702,88 @@ fn live_paint_bucket_tool_fills_face() {
 }
 
 #[test]
+fn live_paint_bucket_alt_sample_paints_next_face_without_changing_selection() {
+    let mut s = session();
+    let g = live(&mut s);
+    let src = rect(&mut s, 300.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 12})).unwrap();
+    let dst = rect(&mut s, 500.0, 0.0, 50.0, 50.0);
+    s.execute("paint.default", &json!({})).unwrap();
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone());
+    let face_before = vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(125.0, 50.0)).unwrap().appearance.fill_paint();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0).with_mods(Mods { alt: true, ..Default::default() }), v).unwrap();
+    assert_eq!(s.paint.fill.color(), Some(Color::rgb8(255, 0, 0)));
+    assert_eq!(s.paint.stroke.color(), Some(Color::rgb8(0, 0, 255)));
+    assert_eq!(s.paint.stroke_width, 12.0);
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone()), before);
+    assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::WHITE));
+    assert_eq!(node(&s, src).appearance.fill_paint().color(), Some(Color::rgb8(255, 0, 0)));
+    assert_eq!(vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(125.0, 50.0)).unwrap().appearance.fill_paint(), face_before);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 50.0), v).unwrap();
+    assert_eq!(
+        vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(125.0, 50.0)).unwrap().appearance.fill_paint().color(),
+        Some(Color::rgb8(255, 0, 0))
+    );
+}
+
+#[test]
+fn live_paint_bucket_alt_image_samples_fill_and_clears_stroke() {
+    let mut s = session();
+    let img = image::RgbaImage::from_raw(1, 1, vec![0, 255, 0, 255]).unwrap();
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png));
+        let id = d.alloc_id();
+        let im = ImageObject {
+            key: "px".into(),
+            width: 1,
+            height: 1,
+            xf: Affine::translate((300.0, 0.0)) * Affine::scale(100.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+    let dst = rect(&mut s, 500.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0).with_mods(Mods { alt: true, ..Default::default() }), v).unwrap();
+    assert_eq!(s.paint.fill.color(), Some(Color::rgb8(0, 255, 0)));
+    assert!(s.paint.stroke.is_none());
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone()), before);
+    assert_eq!(node(&s, dst).appearance.stroke_paint().color(), Some(Color::rgb8(0, 0, 255)));
+}
+
+#[test]
+fn live_paint_bucket_alt_shift_gradient_samples_active_stroke_only() {
+    let mut s = session();
+    let src = rect(&mut s, 300.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}})).unwrap();
+    let dst = rect(&mut s, 500.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setStroke", &json!({"color": "#ffffff"})).unwrap();
+    let fill = s.paint.fill.clone();
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0).with_mods(Mods { alt: true, shift: true, ..Default::default() }), v).unwrap();
+    let sampled = s.paint.stroke.color().unwrap().to_rgb();
+    assert!(sampled[0] > 0.0 && sampled[2] > 0.0 && sampled[1] < 0.01, "{sampled:?}");
+    assert_eq!(s.paint.fill, fill);
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone()), before);
+    assert_eq!(node(&s, dst).appearance.stroke_paint().color(), Some(Color::WHITE));
+    assert!(matches!(node(&s, src).appearance.fill_paint(), Paint::Gradient(_)));
+}
+
+#[test]
 fn live_paint_selection_marquee_selects_what_it_touches() {
     let mut s = session();
     let g = live(&mut s);
@@ -3110,6 +3192,64 @@ fn image_trace_make_places_paths_over_the_image() {
     assert_eq!(paths[0].appearance.fill_paint(), Paint::solid(Color::rgb8(0, 0, 0)));
 }
 
+/// #3098: a trace made away from the command (off the UI thread) and handed in makes the command's
+/// own edit, as one undo step; Cancel stops it; once its image has changed it no longer applies.
+#[test]
+fn a_trace_run_hands_its_trace_to_the_command() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut direct = session();
+    image_doc(&mut direct);
+    let want = direct.execute("imageTrace.make", &p).unwrap();
+    let mut s = session();
+    let img = image_doc(&mut s);
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert_eq!((run.command(), run.params()["id"].as_u64(), run.image_size()), ("imageTrace.make", Some(img.0), (100, 100)));
+    let total = std::sync::atomic::AtomicU64::new(0);
+    let traced = run
+        .run(&|_, t| {
+            total.fetch_max(t, std::sync::atomic::Ordering::Relaxed);
+            true
+        })
+        .unwrap();
+    assert!(total.into_inner() > 0, "the layers are counted");
+    assert!(run.current(&s));
+    traced.hand_in(&mut s);
+    let got = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "taken");
+    assert_eq!(got, want);
+    let g = NodeId(got["id"].as_u64().unwrap());
+    assert_eq!(node(&s, g), node(&direct, g));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "one undo step");
+
+    assert!(matches!(run.run(&|_, _| false), Err(EngineError::Cancelled)));
+    assert!(matches!(cmd::TraceRun::prepare(&s, "imageTrace.release", &p), Err(EngineError::Other(_))));
+    // The image moved meanwhile: the run no longer applies, and the command traces it anew.
+    let traced = run.run(&|_, _| true).unwrap();
+    s.execute("object.move", &json!({"ids": [img.0], "dx": 10, "dy": 0})).unwrap();
+    assert!(!run.current(&s));
+    traced.hand_in(&mut s);
+    let moved = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "dropped");
+    let bb = outline(&traced_paths(&node(&s, NodeId(moved["id"].as_u64().unwrap())))[0]).0.bounds().unwrap();
+    assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
+}
+
+/// A Document Library trace made away from its command no longer applies once the library's
+/// colours change: the settings' JSON leaves them out (#4605 review).
+#[test]
+fn a_trace_run_needs_the_library_colours_it_traced_with() {
+    let mut s = session();
+    image_doc(&mut s);
+    let p = json!({"preset": "6 Colors", "params": {"palette": "documentLibrary"}});
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert!(run.current(&s));
+    let swatch = |w: &&vectorcraft_color::Swatch| matches!(w.paint, Paint::Solid { .. }) && !w.name.starts_with('[');
+    let name = s.doc().unwrap().doc.swatches_iter().find(swatch).map(|w| w.name.clone()).unwrap();
+    s.execute("swatch.edit", &json!({"name": name, "color": "#123456"})).unwrap();
+    assert!(!run.current(&s), "{name} changed");
+}
+
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
 /// circle as its traced path; without the option it is a plain path.
 #[test]
@@ -3433,7 +3573,7 @@ fn image_trace_document_library_uses_a_color_group() {
 }
 
 #[test]
-fn image_trace_document_library_links_fills_to_global_swatches() {
+fn image_trace_document_library_fills_are_unlinked() {
     let mut s = session();
     // A global color, a tint of another global color and a process color.
     s.execute("swatch.new", &json!({"name": "Ink", "color": "#c82828", "global": true})).unwrap();
@@ -3453,7 +3593,7 @@ fn image_trace_document_library_links_fills_to_global_swatches() {
     });
     let img = add_image(&mut s, &r, Affine::IDENTITY);
     let params = json!({"mode": "color", "palette": "documentLibrary", "library": "document", "colors": 3});
-    // Each fill as (its color, the swatch it links to, its tint), one per color.
+    // Each fill as (its color, its swatch link, its tint), one per color.
     let fills = |s: &Session, id: &Value| {
         let mut v: Vec<(String, Option<String>, f32)> = node(s, NodeId(id.as_u64().unwrap()))
             .children()
@@ -3475,27 +3615,26 @@ fn image_trace_document_library_links_fills_to_global_swatches() {
     let res = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
     let got = fills(&s, &res["id"]);
     assert_eq!(got.len(), 3, "{got:?}");
-    assert!(got.contains(&fill("#c82828", Some("Ink"), 1.0)), "{got:?}");
-    assert!(got.contains(&fill(&tint, Some("Sky"), 0.5)), "{got:?}");
+    assert!(got.contains(&fill("#c82828", None, 1.0)), "{got:?}");
+    assert!(got.contains(&fill(&tint, None, 1.0)), "{got:?}");
     assert!(got.contains(&fill("#28a03c", None, 1.0)), "{got:?}");
-    // Editing the global swatches recolors the trace: the tint at its own tint.
+    // Editing the global swatches leaves the traced colors unchanged.
     s.execute("swatch.edit", &json!({"name": "Ink", "color": "#ff8800"})).unwrap();
     s.execute("swatch.edit", &json!({"name": "Sky", "color": "#000000"})).unwrap();
-    let tint = hex_of(&mut s, "Sky 50%");
     let got = fills(&s, &res["id"]);
-    assert!(got.contains(&fill("#ff8800", Some("Ink"), 1.0)), "{got:?}");
-    assert!(got.contains(&fill(&tint, Some("Sky"), 0.5)), "{got:?}");
+    assert!(got.contains(&fill("#c82828", None, 1.0)), "{got:?}");
+    assert!(got.contains(&fill(&tint, None, 1.0)), "{got:?}");
     assert!(got.contains(&fill("#28a03c", None, 1.0)), "{got:?}");
     for _ in 0..3 {
         s.execute("edit.undo", &json!({})).unwrap();
     }
-    // A color group's global swatches link too.
+    // A color group's global swatches also fill without links.
     s.execute("swatch.newGroup", &json!({"name": "Brand", "swatches": ["Ink", "Leaf"]})).unwrap();
     let mut group = params.clone();
     group["colorGroup"] = json!("Brand");
     let res = s.execute("imageTrace.makeAndExpand", &json!({"id": img.0, "params": group})).unwrap();
     let got = fills(&s, &res["id"]);
-    assert!(got.contains(&fill("#c82828", Some("Ink"), 1.0)) && got.contains(&fill("#28a03c", None, 1.0)), "{got:?}");
+    assert!(got.contains(&fill("#c82828", None, 1.0)) && got.contains(&fill("#28a03c", None, 1.0)), "{got:?}");
     s.execute("edit.undo", &json!({})).unwrap();
     // A swatch library's colors stay unlinked.
     let mut web = params.clone();
@@ -3503,6 +3642,71 @@ fn image_trace_document_library_links_fills_to_global_swatches() {
     let res = s.execute("imageTrace.makeAndExpand", &json!({"id": img.0, "params": web})).unwrap();
     let got = fills(&s, &res["id"]);
     assert!(!got.is_empty() && got.iter().all(|f| f.1.is_none()), "{got:?}");
+}
+
+#[test]
+fn image_trace_document_library_same_color_stays_unlinked_in_swatch_order() {
+    let mut s = session();
+    // A process swatch, then two global swatches, all of one color.
+    s.execute("swatch.new", &json!({"name": "Red", "color": "#c82828"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#c82828", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Ink 2", "color": "#c82828", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Leaf", "color": "#28a03c"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#2846c8", "global": true})).unwrap();
+    let [tr, tg, tb, _] = s.doc().unwrap().doc.tint_paint("Sky", 0.5).unwrap().color().unwrap().to_rgba8(1.0);
+    let tint_hex = format!("#{tr:02x}{tg:02x}{tb:02x}");
+    s.execute("swatch.new", &json!({"name": "Mist", "color": tint_hex})).unwrap();
+    s.execute("swatch.new", &json!({"swatch": "Sky", "tint": 50})).unwrap();
+    let r = vectorcraft_trace::Raster::from_fn(60, 60, |x, _| match x {
+        0..20 => [200, 40, 40, 255],
+        20..40 => [40, 160, 60, 255],
+        _ => [tr, tg, tb, 255],
+    });
+    add_image(&mut s, &r, Affine::IDENTITY);
+    let params = json!({"mode": "color", "palette": "documentLibrary", "library": "document", "colors": 8});
+    let res = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
+    let g = node(&s, NodeId(res["id"].as_u64().unwrap()));
+    let got: Vec<Paint> = g.children().unwrap().iter().map(|n| n.appearance.fill_paint()).collect();
+    let red = Color::rgb8(200, 40, 40);
+    let reds: Vec<&Paint> = got.iter().filter(|p| p.color().map(|c| c.to_rgba8(1.0)) == Some(red.to_rgba8(1.0))).collect();
+    assert!(!reds.is_empty(), "{got:?}");
+    assert!(reds.iter().all(|p| matches!(p, Paint::Solid { swatch: None, .. })), "{got:?}");
+    let tints: Vec<&Paint> = got.iter().filter(|p| p.color().map(|c| c.to_rgba8(1.0)) == Some([tr, tg, tb, 255])).collect();
+    assert!(!tints.is_empty(), "{got:?}");
+    assert!(tints.iter().all(|p| matches!(p, Paint::Solid { swatch: None, .. })), "{got:?}");
+    // Editing the global swatch leaves the trace unchanged.
+    s.execute("swatch.edit", &json!({"name": "Ink", "color": "#ff8800"})).unwrap();
+    let g = node(&s, NodeId(res["id"].as_u64().unwrap()));
+    let orange = Color::rgb8(255, 136, 0).to_rgba8(1.0);
+    assert!(!g.children().unwrap().iter().any(|n| n.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) == Some(orange)));
+    assert_eq!(g.children().unwrap().iter().map(|n| n.appearance.fill_paint()).collect::<Vec<_>>(), got);
+}
+
+#[test]
+fn image_trace_document_library_same_color_is_unlinked_in_both_swatch_orders() {
+    let trace_fill = |global_first: bool| {
+        let mut s = session();
+        for global in [global_first, !global_first] {
+            s.execute("swatch.new", &json!({"name": if global { "Ink" } else { "Red" }, "color": "#c82828", "global": global})).unwrap();
+        }
+        let r = vectorcraft_trace::Raster::from_fn(60, 60, |_, _| [200, 40, 40, 255]);
+        add_image(&mut s, &r, Affine::IDENTITY);
+        let res = s
+            .execute(
+                "imageTrace.makeAndExpand",
+                &json!({"params": {"mode": "color", "palette": "documentLibrary", "library": "document", "colors": 2}}),
+            )
+            .unwrap();
+        let g = node(&s, NodeId(res["id"].as_u64().unwrap()));
+        let fills: Vec<Paint> = g.children().unwrap().iter().map(|n| n.appearance.fill_paint()).collect();
+        assert!(!fills.is_empty());
+        assert!(fills.iter().all(|p| matches!(p, Paint::Solid { swatch: None, .. })), "{fills:?}");
+        fills
+    };
+    let process_first = trace_fill(false);
+    let global_first = trace_fill(true);
+    assert_eq!(process_first, global_first);
+    assert!(process_first.iter().all(|p| p.color() == Some(Color::rgb8(200, 40, 40))));
 }
 
 #[test]
@@ -3545,7 +3749,7 @@ fn image_trace_document_library_matches_a_lab_spot_by_its_cmyk_equivalent() {
     let res = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
     let g = node(&s, NodeId(res["id"].as_u64().unwrap()));
     let got: Vec<Paint> = g.children().unwrap().iter().map(|n| n.appearance.fill_paint()).collect();
-    let spot = Paint::Solid { color: shown, swatch: Some("Lab Ink".into()), tint: 1.0 };
+    let spot = Paint::solid(shown);
     assert!(got.contains(&spot), "{got:?}");
     assert!(!got.iter().any(|p| p.color() == Some(process)), "{got:?}");
 }

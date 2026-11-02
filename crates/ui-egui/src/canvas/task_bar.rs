@@ -33,6 +33,7 @@ fn picked_artboards_bounds(app: &VectorcraftApp) -> Option<Rect> {
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
 /// With the Artboard tool it sits under the selected artboards and offers Resize (Artboard
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
+/// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
@@ -67,6 +68,17 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         && first.as_ref().is_some_and(|f| {
             f.name.as_deref() == Some("Image Trace") && f.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
         });
+    // A basic shape (a live rectangle, rounded rectangle, ellipse or polygon) selected whole with the
+    // Selection tool: its properties take the place of Lock, as in the reference app
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+    use vectorcraft_doc::LiveShape;
+    let shape = first.clone().filter(|f| {
+        n == 1
+            && st.selection.anchors.is_empty()
+            && app.session.tool_id() == "selection"
+            && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
+                if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
+    });
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
     if on_artboards {
@@ -93,6 +105,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
         // These run the same commands as the Control bar's anchor buttons.
         let anchors = !st.selection.anchors.is_empty();
+        // With the Direct Selection tool, a path selected whole offers its anchor points' actions
+        // too, as the reference app's bar does for any path that tool selects (same page), and Edit
+        // Path, which only switches to that tool, is left out (#4469).
+        let direct = app.session.tool_id() == "directSelection";
         if anchors {
             items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors", none()));
             items.push((tl!("Connect"), "dc-join", "path.join", none()));
@@ -122,7 +138,9 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                 items.push((tl!("Isolate"), "square-dashed", "object.isolate", none()));
             }
         } else if is_compound {
-            items.push(edit_path());
+            if !direct {
+                items.push(edit_path());
+            }
             items.push((tl!("Release Compound Path"), "ungroup", "object.compoundPath.release", none()));
         } else if let Some(kind) = text {
             items.push((tl!("Create Outlines"), "type", "type.createOutlines", none()));
@@ -134,6 +152,15 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             }
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
+        } else if !anchors && direct {
+            // Corner and Smooth convert every anchor of a path selected whole; Remove and Cut
+            // need anchors picked out, so they wait for them.
+            if open_path {
+                items.push((tl!("Connect"), "dc-join", "path.join", none()));
+            }
+            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Simplify"), "spline", "object.path.simplify", none()));
         } else if !anchors {
             if open_path {
                 items.push((tl!("Join"), "dc-join", "path.join", none()));
@@ -213,7 +240,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             run = Some((*cmd, params.clone()));
                         }
                     }
-                    // The selected objects' Fill, Stroke, Recolor Artwork and Lock, left out with the Artboard tool.
+                    // The selected objects' Fill, Stroke, Recolor Artwork and Lock (a basic shape's
+                    // properties instead), left out with the Artboard tool.
                     if !on_artboards {
                         let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
                         let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
@@ -236,10 +264,22 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 30.0).clicked() {
                             run = Some(("ui.recolorDialog", json!({})));
                         }
-                        // The Lock button is off in isolation mode, as Object › Lock › Selection is.
-                        let lockable = crate::menus::enabled(app, "object.lock");
-                        if widgets::icon_button_enabled(ui, "lock", tl!("Lock (⌘2)"), false, lockable, 30.0).clicked() {
-                            run = Some(("object.lock", json!({})));
+                        if let Some(shape) = &shape
+                            && let NodeKind::Path { live: Some(live), .. } = &shape.kind
+                        {
+                            // The shape's properties in a popover that stays open while its fields and
+                            // its Corner dropdown are used.
+                            let props = widgets::icon_button(ui, "shapes", tl!("Shape Properties"), false, 30.0);
+                            widgets::popover(&props, props.clicked(), |ui| {
+                                ui.set_min_width(250.0);
+                                crate::panels::transform::live_shape_rows(app, ui, shape, live, "task-bar-shape", true);
+                            });
+                        } else {
+                            // The Lock button is off in isolation mode, as Object › Lock › Selection is.
+                            let lockable = crate::menus::enabled(app, "object.lock");
+                            if widgets::icon_button_enabled(ui, "lock", tl!("Lock (⌘2)"), false, lockable, 30.0).clicked() {
+                                run = Some(("object.lock", json!({})));
+                            }
                         }
                     }
                     let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 30.0);

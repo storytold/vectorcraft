@@ -1,7 +1,7 @@
 use super::drag::{drag_id, drop_press};
 use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
-/// Fit the view (View → Fit Artboard / Fit All / Actual Size).
+/// Fit the view (View → Fit Artboard / Fit All / Actual Size, Arrange Tools › Zoom to Selection).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(rect) = app.canvas_rect else {
         if let Some(v) = app.view_mut() {
@@ -15,6 +15,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         "view.fitAll" => {
             st.doc.art_bounds().map(|a| st.doc.artboards.iter().fold(a, |r, ab| r.union(ab.rect))).or(st.doc.artboards.first().map(|a| a.rect))
         }
+        crate::addons::arrange::ZOOM => st.doc.bounds_of(&st.selection.objects, true),
         // The navigator's artboard (the first if it has gone).
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };

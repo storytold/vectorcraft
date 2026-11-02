@@ -52,6 +52,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || crate::has_solid(n)
         || has_adjustment(n)
         || has_crop_marks(n)
+        || crate::addons::halftone::has_halftone(n)
         || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
@@ -104,6 +105,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if let Some(m) = crop_marks_art(n) {
         return Some(bake_pieces(d, m));
     }
+    // Vector Halftone: the object as its dots.
+    if let Some(m) = crate::addons::halftone::halftone_art(d, n) {
+        return Some(bake_pieces(d, m));
+    }
     if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
         let m = evaluate_container(Some(d), &m).unwrap_or(m);
         return Some(bake_pieces(d, m));
@@ -117,10 +122,12 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             return Some(bake_pieces(d, m));
         }
         let symbol = match &n.kind {
-            NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
+            NodeKind::SymbolInstance { symbol, .. } => {
+                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n))
+            }
             _ => None,
         };
-        let m = reshape(Some(d), n, symbol.as_deref())?;
+        let m = reshape(Some(d), n, symbol.as_ref())?;
         return Some(bake_node(d, &m).unwrap_or(m));
     }
     // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its

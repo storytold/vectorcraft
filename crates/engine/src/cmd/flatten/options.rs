@@ -2,7 +2,7 @@ use super::analysis::draws_image;
 use super::apply::{apply, kept_work, plan};
 use super::presets::{FlattenerPreset, saved_preset};
 use super::report::target_roots;
-use super::{BTreeSet, Deserialize, EngineError, Node, Result, Serialize, Session, Value, bad, json, str_param};
+use super::{BTreeSet, Deserialize, Document, EngineError, Node, NodeKind, Paint, Result, Serialize, Session, Value, bad, json, str_param};
 
 /// Object → Flatten Transparency settings: a preset's, adjusted by the command's params.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,6 +34,10 @@ pub struct FlattenOptions {
     /// amounts). `None` for ordinary flattening. Not a preset option.
     #[serde(skip)]
     pub no_transparency: Option<BTreeSet<String>>,
+    /// The file writes a colorized image in its colorize paint (EPS), so a colorize paint by
+    /// itself doesn't count as transparency. Not a preset option.
+    #[serde(skip)]
+    pub keeps_colorize: bool,
 }
 
 impl Default for FlattenOptions {
@@ -81,6 +85,7 @@ impl FlattenOptions {
             preserve_alpha: false,
             preserve_overprints: true,
             no_transparency: None,
+            keeps_colorize: false,
         }
     }
 
@@ -136,6 +141,21 @@ impl FlattenOptions {
             return Err("resolutions must be between 1 and 2400 ppi".into());
         }
         Ok(o)
+    }
+
+    /// Whether `n`, art of `d`, shows transparency these options flatten
+    /// ([`Node::shows_transparency`], colorized images as [`Self::counts_colorize`] says).
+    pub(crate) fn shows_transparency(&self, d: &Document, n: &Node) -> bool {
+        n.shows_transparency_with(&|c| self.counts_colorize(d, c))
+    }
+
+    /// Whether colorized image `n`, art of `d`, counts as transparency by itself. With
+    /// [`Self::keeps_colorize`], an image colorized with a solid paint whose pixels are grayscale
+    /// or 1-bit doesn't: the EPS writer draws it in that paint.
+    pub(crate) fn counts_colorize(&self, d: &Document, n: &Node) -> bool {
+        let NodeKind::Image(im) = &n.kind else { return true };
+        let solid = matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }));
+        !self.keeps_colorize || !solid || d.image_blob(im).is_some_and(|b| b.gray_source().is_none())
     }
 
     /// `n` shows an image whose see-through pixels count as transparency.

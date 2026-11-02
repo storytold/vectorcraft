@@ -114,19 +114,45 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.status(e);
         }
     } else if let Some(i) = activate {
-        app.ui.home = None;
-        let changed = app.session.active_index() != Some(i);
-        if app.session.set_active(i)
-            && changed
-            && app.session.tool_id() == "artboard"
-            && let Some(n) = app.session.active().map(|d| d.doc.artboards.len())
-        {
-            // A document switch recreates the tool; restore the displayed board as its target.
-            // Clicking the current tab keeps its existing multiselection and tool options.
-            let selected = crate::panels::artboards::selected(app, n);
-            crate::panels::artboards::select(app, selected);
-        }
+        show_document(app, i);
     }
+}
+
+/// Makes document `i` the current one, as a click on its tab does: the Home screen closes, and
+/// with the Artboard tool the artboard the document shows becomes the tool's target.
+fn show_document(app: &mut VectorcraftApp, i: usize) {
+    app.ui.home = None;
+    let changed = app.session.active_index() != Some(i);
+    if app.session.set_active(i)
+        && changed
+        && app.session.tool_id() == "artboard"
+        && let Some(n) = app.session.active().map(|d| d.doc.artboards.len())
+    {
+        // A document switch recreates the tool; restore the displayed board as its target.
+        // Clicking the current tab keeps its existing multiselection and tool options.
+        let selected = crate::panels::artboards::selected(app, n);
+        crate::panels::artboards::select(app, selected);
+    }
+}
+
+/// `window.nextDocument` (`forward`) and `window.previousDocument`: makes the open document after
+/// the current one in tab order (before it) the current one, as a click on its tab does. After the
+/// last document comes the first, and before the first document comes the last. On the Home
+/// screen, where no tab is the current one, the next document is the first and the previous
+/// document is the last. Returns `{index}`.
+pub fn step_document(app: &mut VectorcraftApp, forward: bool) -> Result<serde_json::Value, String> {
+    let n = app.session.documents().len();
+    if n == 0 {
+        return Err("no document open".into());
+    }
+    let i = match (app.session.active_index().filter(|_| app.ui.home.is_none()), forward) {
+        (Some(a), true) => (a + 1) % n,
+        (Some(a), false) => (a + n - 1) % n,
+        (None, true) => 0,
+        (None, false) => n - 1,
+    };
+    show_document(app, i);
+    Ok(json!({ "index": i }))
 }
 
 /// The isolation mode breadcrumb bar. It is drawn over the top of `area` (the canvas), after the
@@ -152,7 +178,8 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
             crumbs.push(Crumb { id: None, is_layer: false, name: pn.clone() });
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
-        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::click_and_drag());
+        // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
+        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());

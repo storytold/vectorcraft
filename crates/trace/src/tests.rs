@@ -586,6 +586,28 @@ fn a_trace_past_its_anchor_budget_is_refused() {
     assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
 }
 
+/// #3098: a watched trace says how far it has got, layer by layer, and stops when told to.
+#[test]
+fn a_watched_trace_counts_its_layers_and_stops_when_told() {
+    let img = stripes(120, 8);
+    let p = TraceParams { mode: Mode::Color, colors: 16, noise: 1, ..TraceParams::default() };
+    let seen = std::sync::Mutex::new(vec![]);
+    let watched = trace_watched(&img, &p, usize::MAX, &|done, total| {
+        seen.lock().unwrap().push((done, total));
+        true
+    });
+    assert_eq!(watched.unwrap(), trace(&img, &p), "watching changes nothing");
+    let seen = seen.into_inner().unwrap();
+    let total = seen.last().unwrap().1;
+    assert!(total > 1, "{seen:?}");
+    let mut layers: Vec<u64> = seen.iter().filter(|s| s.1 == total && s.0 > 0).map(|s| s.0).collect();
+    layers.sort_unstable();
+    assert_eq!(layers, (1..=total).collect::<Vec<_>>(), "each layer once: {seen:?}");
+    // Stopped before the layers, and after the first.
+    assert!(matches!(trace_watched(&img, &p, usize::MAX, &|_, _| false), Err(TraceError::Cancelled)));
+    assert!(matches!(trace_watched(&img, &p, usize::MAX, &|done, _| done == 0), Err(TraceError::Cancelled)));
+}
+
 /// Layers traced in parallel come out in the same order every time: bottom (largest) first.
 #[test]
 fn parallel_layers_keep_their_order() {

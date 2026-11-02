@@ -263,7 +263,7 @@ fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
     let preset = preset.unwrap_or_default().to_string();
     let n = rows.len();
     let mut d = Dialog::new(EXPORT_FOR_SCREENS, json!({ "formats": &rows, "preset": preset, "__settings": "" }));
-    screen_formats(ui, &mut d);
+    screen_formats(ui, &mut d, None);
     let (shown, picked) = (d.str("__settings"), d.str("preset"));
     let formats = d.fields.remove("formats").unwrap_or(Value::Null);
     let change = if !shown.is_empty() {

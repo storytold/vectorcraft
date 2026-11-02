@@ -42,6 +42,20 @@ pub fn is_length(id: &str, key: &str, relative: bool) -> bool {
     catalog_index().get(id).is_some_and(|info| info.lengths.keys(relative).any(|k| k == key))
 }
 
+/// The range in points that distance parameter `key` of effect `id` is kept within, as its
+/// parameter documentation gives it (`{maxRadius: pt 4..127 (8), …}`); `None` when it gives none.
+pub fn length_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    let doc = catalog_index().get(id)?.params;
+    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        rest.strip_prefix(": pt ").or_else(|| rest.strip_prefix("?: pt "))
+    })?;
+    let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
+    let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
+    (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi)
+}
+
 /// The distance parameters of effect `id` (none for unknown effects).
 fn lengths_of(id: &str) -> Lengths {
     let always = |always| Lengths { always, absolute: &[] };
@@ -777,6 +791,9 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             v.push(g(id, label, PATHFINDER, "{} (groups and layers: live Pathfinder over the members)", json!({})));
         }
     }
+    v.extend(crate::addons::color::catalog());
+    v.extend(crate::addons::halftone::catalog());
+    v.extend(crate::addons::path::catalog());
     v.push(g(TRAP, "Trap…", PATHFINDER, trap::EFFECT_PARAMS_DOC, trap::effect_defaults()));
     v.push(g(
         CROP_MARKS,

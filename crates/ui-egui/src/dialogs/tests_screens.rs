@@ -63,7 +63,9 @@ fn opens_on_defaults_and_draws_every_view() {
     assert_eq!((field(&app, "select"), field(&app, "range"), field(&app, "boards")), (json!("all"), json!("1-3"), json!([true, true, true])));
     assert_eq!(field(&app, "formats"), json!([{"format": "png", "scale": "1x", "suffix": ""}]));
     assert_eq!(field(&app, "folder"), json!(fileio::export_folder().unwrap_or_default()), "the Desktop, else home");
-    assert_eq!((field(&app, "openLocation"), field(&app, "subfolders"), field(&app, "preset")), (json!(true), json!(false), json!("")));
+    assert_eq!((field(&app, "openLocation"), field(&app, "subfolders"), field(&app, "preset")), (json!(true), json!(true), json!("")));
+    assert_eq!((field(&app, "subfolderBy"), field(&app, "pdfs"), field(&app, "view")), (json!("scale"), json!("multiple"), json!("grid")));
+    assert_eq!((field(&app, "includeBleed"), field(&app, "includeArtboardFill")), (json!(false), json!(true)));
     let settings = field(&app, "settings");
     for f in ["png", "png8", "jpg", "webp", "gif", "tiff", "svg", "pdf"] {
         assert!(settings[f].is_object(), "{f} has settings");
@@ -113,7 +115,7 @@ fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
     let click = |app: &mut VectorcraftApp, i: usize, shift: bool| {
         let mods = Mods { shift, ..Default::default() };
         for kind in [PointerKind::Down, PointerKind::Up] {
-            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, pressure: 1.0 }, view);
+            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, backquote: false, pressure: 1.0 }, view);
         }
     };
     // A click on artboard 2 and a Shift-click on artboard 3 select those two. The dialog opens with
@@ -128,7 +130,8 @@ fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
     frame(&mut app);
     assert_eq!(field(&app, "boards"), json!([false, true, true, false]), "drawing the dialog keeps them");
     let r = confirm(&mut app).unwrap();
-    assert_eq!(r["files"], json!(["Artboard-2.png", "Artboard-3.png"]));
+    // Create Sub-folders is on by default, a folder per scale.
+    assert_eq!(r["files"], json!(["1x/Artboard-2.png", "1x/Artboard-3.png"]));
     assert_eq!(log.borrow().len(), 1, "one zip");
     // With every artboard selected it opens on All.
     click(&mut app, 0, true);
@@ -385,7 +388,7 @@ fn an_export_made_at_once_waits_for_one_in_the_background() {
     release.join().unwrap();
     let file = format!("{folder}/Artboard-1.svg");
     assert_eq!((written(&files), r["files"].clone()), (vec![file.clone()], json!([file])));
-    assert_eq!(app.ui.status, format!("Exported 1 file(s) to {folder}"));
+    assert_eq!(app.ui.status, format!("Exported 1 file to {folder}"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -433,7 +436,7 @@ fn the_web_downloads_one_zip_or_the_file() {
         assert_eq!(name, "Untitled-1.zip");
         assert_eq!(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap(), zip);
     }
-    assert_eq!(r["files"], json!(["Artboard-1.png", "Artboard-1@2x.jpg", "Artboard-2.png", "Artboard-2@2x.jpg"]));
+    assert_eq!(r["files"], json!(["1x/Artboard-1.png", "2x/Artboard-1@2x.jpg", "1x/Artboard-2.png", "2x/Artboard-2@2x.jpg"]));
     // One file downloads as itself, with the format's settings.
     log.borrow_mut().clear();
     open(&mut app);
@@ -446,6 +449,30 @@ fn the_web_downloads_one_zip_or_the_file() {
     assert_eq!(log.len(), 1);
     assert_eq!(log[0].0, "Artboard-1.png");
     assert_eq!(image::load_from_memory(&log[0].1).unwrap().to_rgba8().get_pixel(1, 1).0, [0, 0, 0, 255], "the PNG settings' background");
+}
+
+/// Include Artboard Fill: checked, the file shows the artboard's background color behind the art
+/// (on transparency too); unchecked, it doesn't, and the dialog reopens unchecked.
+#[test]
+fn include_artboard_fill_reaches_the_files_and_is_remembered() {
+    let (mut app, log) = app(1, true);
+    app.run("artboard.setProps", json!({"index": 0, "color": "#ff0000"})).unwrap();
+    for include in [true, false] {
+        log.borrow_mut().clear();
+        open(&mut app);
+        assert_eq!(field(&app, "includeArtboardFill"), json!(true), "on until unchecked");
+        set(&mut app, "includeArtboardFill", json!(include));
+        set(&mut app, "settings", json!({"png": {"background": "transparent"}}));
+        frame(&mut app);
+        confirm(&mut app).unwrap();
+        let px = image::load_from_memory(&log.borrow()[0].1).unwrap().to_rgba8().get_pixel(58, 38).0;
+        assert_eq!(px, if include { [255, 0, 0, 255] } else { [0, 0, 0, 0] }, "include {include}");
+        if include {
+            continue;
+        }
+        open(&mut app);
+        assert_eq!(field(&app, "includeArtboardFill"), json!(false), "remembered");
+    }
 }
 
 #[test]
@@ -462,7 +489,7 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut desktop, log) = app(1, false);
     desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
-    assert_eq!(desktop.ui.status, format!("Exported 2 file(s) to {folder}"));
+    assert_eq!(desktop.ui.status, format!("Exported 2 files to {folder}"));
     place(&mut desktop);
     desktop.run("file.exportForScreens", json!({"folder": folder, "formats": rows, "openLocation": true})).unwrap();
     assert_eq!(desktop.ui.status, format!("Saved {folder} {NOTE}"));
@@ -602,7 +629,7 @@ fn screen_format_gear(out: &egui::FullOutput, width: f32) -> egui::Pos2 {
         }
     }
     let label = out.shapes.iter().find_map(|s| label(&s.shape)).expect("painted Formats row");
-    // The existing 24 pt gear is right-aligned in the 350 pt dialog or 236 pt panel.
+    // The existing 24 pt gear is right-aligned in the dialog's 370 pt column or the 236 pt panel.
     egui::pos2(label.left() + width - 12.0, label.center().y)
 }
 
@@ -635,7 +662,7 @@ fn saved_tiff_alias_gear(alias: &str, asset_panel: bool) {
     };
     draw(&mut h, &mut app, vec![]);
     let out = draw(&mut h, &mut app, vec![]);
-    let gear = screen_format_gear(&out, if asset_panel { 236.0 } else { 350.0 });
+    let gear = screen_format_gear(&out, if asset_panel { 236.0 } else { 370.0 });
     draw(&mut h, &mut app, vec![egui::Event::PointerMoved(gear)]);
     for pressed in [true, false] {
         draw(
@@ -707,11 +734,12 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
     // Begin with an existing PNG row; TIFF must be chosen from the actual popup.
     set(&mut app, "formats", json!([{"format": "png", "scale": "2x", "suffix": "@2x"}]));
     set(&mut app, "prefix", json!("proof-"));
+    set(&mut app, "subfolders", json!(false));
     let mut h = ScreensFrame::new();
     h.choose(&mut app, "PNG", "TIFF");
     assert_eq!(field(&app, "formats"), json!([{"format": "tiff", "scale": "2x", "suffix": "@2x"}]));
     // Leave only the first of two boards checked.
-    h.click_label(&mut app, "Artboard 2");
+    h.click_label(&mut app, "2  Artboard 2");
     assert_eq!(field(&app, "boards"), json!([true, false]));
     assert_eq!(field(&app, "range"), json!("1"));
 
@@ -766,168 +794,115 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
 /// name, a prefix with characters Windows does not allow, a range, a Windows device name as an item
 /// folder, the rows' folders and sizes, Create Sub-folders, a vector row's size suffix, the counter
 /// typed as text, and the Layers and Selection tabs.
+/// The dialog is laid out as Illustrator's: two tabs (Artboards, Assets), Clear Selection and the
+/// prefix under the thumbnails, Create Sub-folders by scale or format, Export PDFs As, the iOS and
+/// Android rows, and how many items and files the export takes; no naming, layer or selection
+/// pages, presets bar or folders list.
 #[test]
-fn the_example_names_the_first_file_the_export_writes() {
+fn the_dialog_is_laid_out_as_illustrators() {
     let (mut app, _) = app(3, false);
-    app.run("artboard.setProps", json!({"index": 2, "name": "CON"})).unwrap();
-    app.run("select.all", json!({})).unwrap();
-    let dir = temp_folder("example");
-    let folder = dir.to_string_lossy().to_string();
-    let png = json!([{"format": "png", "scale": "1x", "suffix": ""}]);
-    let cases: Vec<Vec<(&str, Value)>> = vec![
-        vec![],
-        vec![("prefix", json!("a?b"))],
-        vec![("select", json!("range")), ("range", json!("2-3"))],
-        vec![("select", json!("range")), ("range", json!("3")), ("folders", json!("item"))],
-        vec![("folders", json!("rows")), ("formats", json!([{"format": "png", "scale": "144ppi", "suffix": ""}]))],
-        vec![("subfolders", json!(true))],
-        vec![("folders", json!("rows")), ("formats", json!([{"format": "png", "scale": "2x", "suffix": "@2x", "folder": "retina"}]))],
-        vec![("formats", json!([{"format": "svg", "scale": "2x", "suffix": "@2x"}]))],
-        vec![("name", json!("<scale>-####")), ("counterStart", json!("7")), ("formats", json!([{"format": "png", "scale": "144ppi", "suffix": ""}]))],
-        vec![("tab", json!("layers"))],
-        vec![("tab", json!("selection")), ("selectionMode", json!("each"))],
-    ];
-    let mut wrong = vec![];
-    for case in cases {
-        let _ = std::fs::remove_dir_all(&dir);
-        open(&mut app);
-        let defaults = [
-            ("folder", json!(folder)),
-            ("tab", json!("artboards")),
-            ("select", json!("all")),
-            ("prefix", json!("")),
-            ("name", json!("")),
-            ("counterStart", json!(1)),
-            ("folders", json!("none")),
-            ("subfolders", json!(false)),
-            ("formats", png.clone()),
-        ];
-        for (k, v) in defaults.into_iter().chain(case.iter().cloned()) {
-            set(&mut app, k, v);
-        }
-        frame(&mut app);
-        let example = export_for_screens::example_name(&app, app.ui.dialog.as_ref().unwrap());
-        let r = confirm(&mut app).unwrap();
-        let first = r["files"][0].as_str().and_then(|f| f.strip_prefix(&format!("{folder}/"))).unwrap_or_default().to_string();
-        if example != first {
-            wrong.push(format!("{case:?}: example {example:?}, written {first:?}"));
-        }
+    open(&mut app);
+    let text = crate::tests_labels::shapes_text(&ScreensFrame::new().settle(&mut app));
+    for label in [
+        "Artboards",
+        "Assets",
+        "Select:",
+        "Full Document",
+        "Include Bleed",
+        "Include Artboard Fill",
+        "Export to:",
+        "Open Location after Export",
+        "Create Sub-folders",
+        "Scale",
+        "Format",
+        "Export PDFs As:",
+        "Single File",
+        "Multiple Files",
+        "Formats:",
+        "iOS",
+        "Android",
+        "+ Add Scale",
+        "Clear Selection",
+        "Prefix:",
+        "Selected: 3, Total number of files to export: 3",
+    ] {
+        assert!(text.lines().any(|l| l.trim() == label), "{label} missing:\n{text}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
-    assert!(wrong.is_empty(), "{wrong:#?}");
+    for gone in ["Layers", "Selection", "Export Preset:", "File Name:", "Folders:", "Start at:"] {
+        assert!(!text.lines().any(|l| l.trim() == gone), "{gone} shown:\n{text}");
+    }
 }
 
-/// The Example line shows before a folder is chosen and is left out while the settings choose
-/// nothing to export (the Assets tab with no asset checked); Start at shows the counter the export
-/// uses when it was set as text.
+/// iOS and Android set the rows those platforms use (in sub-folders); Clear Selection unchecks
+/// every artboard, so nothing is exported until one is checked again.
 #[test]
-fn the_example_needs_no_folder_and_start_at_shows_the_counter_used() {
-    let (mut app, _) = app(1, false);
+fn ios_android_and_clear_selection() {
+    let (mut app, _) = app(2, false);
     open(&mut app);
-    for (k, v) in [("folder", json!("")), ("name", json!("####")), ("counterStart", json!("7"))] {
+    set(&mut app, "subfolders", json!(false));
+    let mut h = ScreensFrame::new();
+    h.click_label(&mut app, "iOS");
+    let scales: Vec<Value> = field(&app, "formats").as_array().unwrap().iter().map(|r| r["scale"].clone()).collect();
+    assert_eq!((field(&app, "preset"), field(&app, "subfolders")), (json!("mobile"), json!(true)));
+    assert_eq!(scales, [json!("1x"), json!("2x"), json!("3x")]);
+    h.click_label(&mut app, "Android");
+    assert_eq!((field(&app, "preset"), field(&app, "formats").as_array().unwrap().len()), (json!("density"), 6));
+    h.click_label(&mut app, "Clear Selection");
+    assert_eq!((field(&app, "boards"), field(&app, "select")), (json!([false, false]), json!("range")));
+    let text = crate::tests_labels::shapes_text(&h.settle(&mut app));
+    assert!(text.contains("Selected: 0, Total number of files to export: 0"), "{text}");
+    set(&mut app, "folder", json!(temp_folder("cleared").to_string_lossy()));
+    assert!(confirm(&mut app).is_err(), "nothing to export");
+}
+
+/// Create Sub-folders sorts the files into a folder per scale or per format; Export PDFs As ›
+/// Single file writes the chosen artboards as one PDF named after the document.
+#[test]
+fn sub_folders_and_single_file_pdfs() {
+    let (mut app, _) = app(3, false);
+    let dir = temp_folder("subfolders");
+    let _ = std::fs::remove_dir_all(&dir);
+    let folder = dir.to_string_lossy().to_string();
+    let title = app.session.active().unwrap().doc.title.clone();
+    let rows = json!([
+        {"format": "png", "scale": "1x", "suffix": ""},
+        {"format": "png", "scale": "2x", "suffix": "@2x"},
+        {"format": "pdf", "scale": "1x", "suffix": ""}
+    ]);
+    let files = |app: &mut VectorcraftApp, extra: &[(&str, Value)]| -> Vec<String> {
+        open(app);
+        let base = [("folder", json!(folder)), ("select", json!("range")), ("range", json!("1-2")), ("formats", rows.clone())];
+        for (k, v) in base.into_iter().chain(extra.iter().cloned()) {
+            set(app, k, v);
+        }
+        frame(app);
+        let r = confirm(app).unwrap();
+        r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().strip_prefix(&format!("{folder}/")).unwrap().to_string()).collect()
+    };
+    let by_scale = files(&mut app, &[("subfolders", json!(true)), ("subfolderBy", json!("scale"))]);
+    assert_eq!(&by_scale[..2], ["1x/Artboard-1.png", "2x/Artboard-1@2x.png"]);
+    let by_format = files(&mut app, &[("subfolders", json!(true)), ("subfolderBy", json!("format")), ("pdfs", json!("single"))]);
+    let pdf = format!("pdf/{title}.pdf");
+    assert_eq!(by_format, ["png/Artboard-1.png", "png/Artboard-1@2x.png", pdf.as_str(), "png/Artboard-2.png", "png/Artboard-2@2x.png"]);
+    let flat = files(&mut app, &[("subfolders", json!(false)), ("pdfs", json!("multiple"))]);
+    assert_eq!(flat.len(), 6);
+    assert!(flat.contains(&"Artboard-2.pdf".to_string()), "{flat:?}");
+    // The status line counts the files Single file writes.
+    open(&mut app);
+    for (k, v) in [("select", json!("range")), ("range", json!("1-2")), ("formats", rows.clone()), ("pdfs", json!("single"))] {
         set(&mut app, k, v);
     }
-    let mut h = ScreensFrame::new();
-    let text = crate::tests_labels::shapes_text(&h.settle(&mut app));
-    assert!(text.lines().any(|l| l == "Example: 0007.png"), "{text}");
-    assert!(text.lines().any(|l| l.trim() == "7"), "{text}");
-    set(&mut app, "tab", json!("assets"));
-    let text = crate::tests_labels::shapes_text(&h.settle(&mut app));
-    assert!(!text.contains("Example:"), "{text}");
-}
-
-/// Batch exporting (#1935): a file name pattern and a folder per format, the Layers and Selection
-/// tabs, and export presets applied and saved from the dialog.
-#[test]
-fn batch_naming_folders_layers_selection_and_presets() {
-    let (mut app, _) = app(3, false);
-    let dir = temp_folder("batch");
-    let _ = std::fs::remove_dir_all(&dir);
-    let folder = dir.to_string_lossy().to_string();
-    open(&mut app);
-    assert_eq!(field(&app, "folders"), json!("none"));
-    // Every tab draws; the OK button says what is exported.
-    for (tab, ok) in [("layers", "Export Layer"), ("selection", "Export Selection"), ("assets", "Export Asset"), ("artboards", "Export Artboard")] {
-        set(&mut app, "tab", json!(tab));
-        frame(&mut app);
-        assert_eq!((spec(export_for_screens::KIND).ok_label.unwrap())(&app), ok);
-    }
-    // Artboards 1–2 as SVG and print PDF, named by pattern, a folder per format.
-    set(&mut app, "folder", json!(folder));
-    set(&mut app, "select", json!("range"));
-    set(&mut app, "range", json!("1-2"));
-    set(&mut app, "name", json!("ACME-<name>-##"));
-    set(&mut app, "folders", json!("format"));
-    set(
-        &mut app,
-        "formats",
-        json!([{"format": "svg", "scale": "1x", "suffix": ""}, {"format": "pdf", "scale": "1x", "suffix": "-print", "marks": {"trim": true}}]),
-    );
-    frame(&mut app);
-    {
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(export_for_screens::example_name(&app, d), "svg/ACME-Artboard 1-01.svg");
-    }
-    let r = confirm(&mut app).unwrap();
-    let files: Vec<String> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
-    assert_eq!(
-        files,
-        [
-            format!("{folder}/svg/ACME-Artboard 1-01.svg"),
-            format!("{folder}/pdf/ACME-Artboard 1-01-print.pdf"),
-            format!("{folder}/svg/ACME-Artboard 2-02.svg"),
-            format!("{folder}/pdf/ACME-Artboard 2-02-print.pdf")
-        ]
-    );
-    // It reopens on the pattern and the folders.
-    open(&mut app);
-    assert_eq!((field(&app, "name"), field(&app, "folders")), (json!("ACME-<name>-##"), json!("format")));
-
-    // The Layers tab: one file of a layer's art.
-    let layer = app.session.active().unwrap().doc.layers[0].id.0;
-    set(&mut app, "folder", json!(folder));
-    set(&mut app, "tab", json!("layers"));
-    set(&mut app, "layers", json!([layer]));
-    set(&mut app, "name", json!(""));
-    set(&mut app, "folders", json!("none"));
-    set(&mut app, "formats", json!([{"format": "png", "scale": "1x", "suffix": ""}]));
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["files"][0], json!(format!("{folder}/Layer-1.png")));
-
-    // The Selection tab: nothing selected keeps the dialog open; a file per selected object.
-    open(&mut app);
-    app.run("select.none", json!({})).unwrap();
-    set(&mut app, "folder", json!(folder));
-    set(&mut app, "tab", json!("selection"));
-    frame(&mut app);
-    assert!(confirm(&mut app).is_err());
-    app.run("select.all", json!({})).unwrap();
-    set(&mut app, "selectionMode", json!("each"));
-    set(&mut app, "name", json!("piece-#"));
-    set(&mut app, "formats", json!([{"format": "svg", "scale": "1x", "suffix": ""}]));
-    frame(&mut app);
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["files"][0], json!(format!("{folder}/piece-1.svg")));
-
-    // Presets: the Logo Package sets the formats, naming and folders; the dialog saves its own.
-    open(&mut app);
+    let text = crate::tests_labels::shapes_text(&ScreensFrame::new().settle(&mut app));
+    assert!(text.contains("Selected: 2, Total number of files to export: 5"), "{text}");
+    // A format preset sets the rows, their settings and the sub-folders, not a prefix it lacks.
+    set(&mut app, "prefix", json!("x-"));
     let presets = field(&app, "__exportPresets");
     let logo = presets.as_array().unwrap().iter().find(|p| p["name"] == "Logo Package").unwrap().clone();
     export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &logo);
     assert_eq!(field(&app, "formats").as_array().unwrap().len(), 5);
     assert_eq!(
-        (field(&app, "folders"), field(&app, "name"), field(&app, "exportPreset")),
-        (json!("format"), json!("<filename>-<name>"), json!("Logo Package"))
+        (field(&app, "subfolders"), field(&app, "subfolderBy"), field(&app, "exportPreset")),
+        (json!(true), json!("format"), json!("Logo Package"))
     );
-    frame(&mut app);
-    set(&mut app, "folder", json!(folder));
-    set(&mut app, "__savePreset", json!("Client Pack"));
-    frame(&mut app);
-    let saved = app
-        .run("document.exportPresets.save", json!({"name": "Client Pack", "settings": {"formats": field(&app, "formats"), "folders": "item"}}))
-        .unwrap();
-    assert_eq!(saved["name"], "Client Pack");
-    let list = export_for_screens::export_presets(&mut app);
-    assert!(list.as_array().unwrap().iter().any(|p| p["name"] == "Client Pack" && p["builtIn"] == false));
     let _ = std::fs::remove_dir_all(&dir);
 }

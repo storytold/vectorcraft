@@ -20,6 +20,8 @@
 //! - An RTF file becomes area type with its character and paragraph formatting ([`rtf`]).
 //! - A Word document (`.docx`) becomes area type with the character and paragraph formatting its
 //!   styles and direct formatting give ([`docx`]).
+//! - A Word 97-2003 document (`.doc`) becomes area type the same way, its main text read from its
+//!   compound file, with a warning for each kind of content left out ([`doc`]).
 //! - A VectorCraft document placed from a file with Link (the default) becomes a placed document:
 //!   one locked object showing the artboard `page`, linked to the file and read again when it
 //!   changes ([`document`]); without Link, an editable copy of its art.
@@ -30,6 +32,7 @@
 //! `place` tool) with several files, which emits one `file.place` per click or drag.
 
 pub(crate) mod adopt;
+mod doc;
 pub(crate) mod document;
 pub(crate) mod docx;
 mod rtf;
@@ -168,6 +171,15 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
             return Err(bad(cmd, format!("`{name}` has no text to place")));
         }
         return Ok(Loaded { name, format: &docx::FORMAT, art: Art::Text(story), natural: TEXT_FRAME, warnings: vec![], link: None, board: None });
+    }
+    // A Word 97-2003 document is recognized by its name or by its compound file's WordDocument
+    // stream.
+    if doc::is_doc(src.name, &src.bytes) {
+        let (story, warnings) = doc::import(&src.bytes, cmd)?;
+        if story.plain_text().trim().is_empty() {
+            return Err(bad(cmd, format!("`{name}` has no text to place")));
+        }
+        return Ok(Loaded { name, format: &doc::FORMAT, art: Art::Text(story), natural: TEXT_FRAME, warnings, link: None, board: None });
     }
     let format = fileio::detect(src.name, &src.bytes)
         .ok_or_else(|| bad(cmd, format!("can't place `{name}`: not a format VectorCraft reads (see document.formats)")))?;

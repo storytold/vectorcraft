@@ -368,5 +368,6 @@ fn ruby_glyph(g: &PositionedGlyph, m: Affine, run: usize, byte: usize, line: usi
         colour: None,
         bend: None,
         unturned: Affine::IDENTITY,
+        pivot: m * g.origin,
     }
 }

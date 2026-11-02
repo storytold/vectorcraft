@@ -48,16 +48,28 @@ impl TextGeom {
     /// The boxes of the glyphs of `t` (the text this geometry is of) that optional OpenType features
     /// chose (Preferences › Highlight Alternate Glyphs): candidates the text's required shaping
     /// alone doesn't give ([`required_shaping`]). Arabic letters joining, Indic conjuncts and the
-    /// lam-alef ligature are what the script needs, not alternates. Measured once.
+    /// lam-alef ligature are what the script needs, not alternates. A font may file the lam-alef
+    /// ligature under `liga`, which required shaping turns off, so a lam-alef cluster
+    /// ([`is_lam_alef`]) is also compared with its shaping with `liga` left on: an optional feature
+    /// that changes its glyph beyond that (a stylistic alternate…) is still highlighted. Measured
+    /// once.
     pub(crate) fn alternate_glyphs(&self, t: &TextObject) -> &BezPath {
         self.alternate_glyphs.get_or_init(|| {
             let mut out = BezPath::new();
             if self.alternate_candidates.is_empty() {
                 return out;
             }
-            let required = required_shaping(t);
+            let required = required_shaping(t, &["-liga", "-calt"]);
+            let plain = t.plain_text();
+            let in_lam_alef = |c: &AlternateCandidate| plain.get(c.byte..c.byte.saturating_add(c.len)).is_some_and(is_lam_alef);
+            // Laid out only when the text has a lam-alef candidate.
+            let with_liga = self.alternate_candidates.iter().any(in_lam_alef).then(|| required_shaping(t, &["-calt"]));
+            let gives = |map: &std::collections::HashMap<(usize, usize), Vec<(u32, u32)>>, c: &AlternateCandidate| {
+                map.get(&(c.byte, c.len)).is_some_and(|glyphs| glyphs.contains(&(c.font_id, c.gid)))
+            };
             for c in &self.alternate_candidates {
-                if !required.get(&(c.byte, c.len)).is_some_and(|glyphs| glyphs.contains(&(c.font_id, c.gid))) {
+                let lam_alef_ligature = || in_lam_alef(c) && with_liga.as_ref().is_some_and(|m| gives(m, c));
+                if !gives(&required, c) && !lam_alef_ligature() {
                     out.extend(c.cell.iter());
                 }
             }
@@ -84,6 +96,19 @@ pub(crate) fn is_opentype_alternate(nominal_gid: u32, shaped_gid: u32, cluster_c
     shaped_gid != 0 && (cluster_chars > 1 || shaped_gid != nominal_gid)
 }
 
+/// Whether `cluster` is a lam followed by an alef (plain, with madda, or with hamza above or below),
+/// with any combining marks (Unicode general category M: the Arabic harakat, Quranic marks and
+/// those of Arabic Extended-A, -B and -C) between or after them: the lam-alef ligature, which the
+/// Unicode Standard's Arabic chapter treats as obligatory, not a stylistic choice. Fonts made
+/// before `rlig` was common put it in `liga`, which [`required_shaping`] turns off, so
+/// [`TextGeom::alternate_glyphs`] also accepts its glyph from shaping with `liga` on.
+pub(crate) fn is_lam_alef(cluster: &str) -> bool {
+    use unicode_general_category::{GeneralCategory as G, get_general_category};
+    let is_mark = |c: &char| matches!(get_general_category(*c), G::NonspacingMark | G::SpacingMark | G::EnclosingMark);
+    let mut letters = cluster.chars().filter(|c| !is_mark(c));
+    matches!((letters.next(), letters.next(), letters.next()), (Some('\u{0644}'), Some('\u{0622}' | '\u{0623}' | '\u{0625}' | '\u{0627}'), None))
+}
+
 /// A glyph [`is_opentype_alternate`] marks, in its cluster of the text (`byte`, `len`), with its
 /// box.
 #[derive(Debug)]
@@ -96,14 +121,16 @@ pub(crate) struct AlternateCandidate {
 }
 
 /// The glyphs `t` is shaped to by required shaping alone, by cluster (`byte`, `len`) → `(font,
-/// glyph)`: laid out again with every optional feature off (standard and contextual ligatures and
-/// alternates, and the features its characters turn on: stylistic sets, swashes, discretionary
-/// ligatures, figure styles…). What is left is what the script needs: `ccmp`, `locl`, `rlig`,
-/// Arabic's `init`, `medi`, `fina` and `isol`, the Indic and other complex scripts' required sets.
-fn required_shaping(t: &TextObject) -> std::collections::HashMap<(usize, usize), Vec<(u32, u32)>> {
+/// glyph)`: laid out again with every optional feature off (with `features` `-liga` and `-calt`:
+/// standard and contextual ligatures and alternates, and the features its characters turn on:
+/// stylistic sets, swashes, discretionary ligatures, figure styles…). What is left is what the
+/// script needs: `ccmp`, `locl`, `rlig`, Arabic's `init`, `medi`, `fina` and `isol`, the Indic
+/// and other complex scripts' required sets. With `features` `-calt` alone, standard ligatures
+/// stay on (an older font's lam-alef).
+fn required_shaping(t: &TextObject, features: &[&str]) -> std::collections::HashMap<(usize, usize), Vec<(u32, u32)>> {
     let mut plain = t.clone();
     for run in &mut plain.runs {
-        run.style.features = vec!["-liga".into(), "-calt".into()];
+        run.style.features = features.iter().map(|f| (*f).into()).collect();
     }
     let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &plain);
     let mut glyphs: std::collections::HashMap<(usize, usize), Vec<(u32, u32)>> = std::collections::HashMap::new();

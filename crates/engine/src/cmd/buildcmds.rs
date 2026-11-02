@@ -41,7 +41,7 @@ pub use live_paint::live_paint_gaps;
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
 use shape_builder::{sb_merge, sb_regions};
 pub(crate) use trace::TracePresetChanges;
-pub use trace::{TracePreset, TracePresetChange};
+pub use trace::{TracePreset, TracePresetChange, TraceRun, Traced};
 use trace::{trace_expand, trace_make, trace_presets_delete, trace_presets_save, trace_release, trace_set_view};
 
 /// Name of an Image Trace group.

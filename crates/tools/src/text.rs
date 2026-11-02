@@ -202,12 +202,12 @@ pub struct TypeTool {
 }
 
 impl TypeTool {
-    pub(super) fn step_attribute(&mut self, key: ToolKey, mods: Mods, a: usize, b: usize) -> Option<Vec<Action>> {
+    pub(super) fn step_attribute(&mut self, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
         if !mods.alt {
             return None;
         }
         let id = self.editing?;
-        let (attribute, by) = plain::step_key(key, mods.shift, a == b)?;
+        let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
         let mut out = self.commit();
         let by = if mods.cmd { by * 5.0 } else { by };
         out.push(Action::Exec("type.step".into(), json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})));

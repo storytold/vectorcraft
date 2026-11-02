@@ -1,34 +1,32 @@
-//! File → Export → Export for Screens: the Artboards tab (All, a range or Full Document, Include
-//! Bleed, thumbnails with checkboxes) and the Assets tab (the Asset Export panel's assets, with
-//! checkboxes), the destination (folder picker, Open Location after Export, Create Sub-folders;
-//! the web downloads instead), the format rows (scale as `2x`, `100w`, `100h` or `72ppi`, suffix,
-//! format), the presets, Format Settings (the gear) and the prefix. It opens on the settings the
-//! document last exported with, except that while the Artboard tool is in use the artboards it has
-//! selected are the ones chosen; the format rows are the Asset Export panel's too ([`formats`]).
+//! File → Export → Export for Screens, laid out as Illustrator's: on the left the Artboards and
+//! Assets tabs (thumbnails with checkboxes, in a grid or a list), Clear Selection and the prefix;
+//! on the right Select (All, a range or Full Document, Include Bleed, Include Artboard Fill), the destination (folder
+//! picker, Open Location after Export, Create Sub-folders by scale or by format; the web downloads
+//! instead), Export PDFs As (one file of every artboard or a file each), and the format rows (scale
+//! as `2x`, `100w`, `100h` or `72ppi`, suffix, format) with the iOS and Android rows, the format
+//! presets (the ☰ menu) and Format Settings (the gear); below, how many items are selected and
+//! how many files the export writes. It opens on the settings the document last exported with,
+//! except that while the Artboard tool is in use the artboards it has selected are the ones chosen;
+//! the format rows are the Asset Export panel's too ([`formats`]). On the desktop with Background
+//! Export on, the files are encoded and written on the background thread
+//! ([`crate::background`]) after the dialog closes.
 //!
-//! The Layers tab exports each checked layer's art alone, and the Selection tab the selected art as
-//! one file or a file per object. A file name pattern (`name`: `<filename>`, `<name>`, `####`,
-//! `YYYYMMDD`…, see `document.exportForScreens`) names every file alike, with a live example, and
-//! the files go into one folder, or a folder per row, format, item, or item and format
-//! (`folders`). Export presets (built-in and saved) set the formats, naming and folders at once.
-//! On the desktop with Background Export on, the files are encoded and written on the background
-//! thread ([`crate::background`]) after the dialog closes.
+//! `document.exportForScreens` does more than the dialog shows (layers, the selection, file name
+//! patterns, a folder per item): those are for scripts and MCP.
 //!
-//! Fields (`ui.dialog.set`): `tab` (artboards|assets|layers|selection), `select` (all|range|full), `range`,
+//! Fields (`ui.dialog.set`): `tab` (artboards|assets), `select` (all|range|full), `range`,
 //! `boards` ([bool] per artboard), `assets` ([asset id] checked on the Assets tab), `includeBleed`,
-//! `folder`, `openLocation`, `subfolders`, `prefix`, `preset` (""|mobile|density: where the rows
-//! came from), `formats` (rows of `document.exportForScreens`, `scale` as text), `settings`
-//! ({png|png8|jpg|webp|gif|tiff|svg|pdf: {…}}), `layers` ([layer id] checked on the Layers tab),
-//! `selectionMode` (one|each), `name` (the pattern), `counterStart`, `folders`
-//! (none|rows|format|item|itemFormat), `exportPreset` (the preset applied last, "" for none);
+//! `includeArtboardFill`,
+//! `folder`, `openLocation`, `subfolders`, `subfolderBy` (scale|format), `pdfs` (single|multiple),
+//! `prefix`, `preset` (""|mobile|density: where the rows came from), `formats` (rows of
+//! `document.exportForScreens`, `scale` as text), `settings` ({png|png8|jpg|webp|gif|tiff|svg|pdf:
+//! {…}}), `view` (grid|list), `exportPreset` (the format preset applied last, "" for none);
 //! `__settings` names the format whose Format Settings show ("" when closed), `__savePreset` is the
 //! name being typed to save a preset (absent when not saving).
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, SCREEN_PRESETS, ScreenSize, pdf};
-
-use vectorcraft_doc::{ExportAsset, NodeId};
+use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, ScreenSize, pdf};
 
 use super::{DialogSpec, form, png_options, svg_options};
 use crate::state::Dialog;
@@ -43,11 +41,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok_label: Some(|app| match (io::is_web(app), app.ui.dialog.as_ref().map(|d| d.str("tab")).as_deref()) {
         (true, _) => "Download",
         (false, Some("assets")) => "Export Asset",
-        (false, Some("layers")) => "Export Layer",
-        (false, Some("selection")) => "Export Selection",
         (false, _) => "Export Artboard",
     }),
-    min_width: 660.0,
+    min_width: 720.0,
     ..DialogSpec::FORM
 };
 
@@ -80,32 +76,13 @@ fn print_marks() -> Value {
     json!({"trim": true, "registration": true, "colorBars": true, "pageInfo": true})
 }
 
-/// Where the files go: (`folders` value, label).
-const FOLDERS: [(&str, &str); 5] = [
-    ("none", "All in One Folder"),
-    ("rows", "By Size or Row"),
-    ("format", "By Format"),
-    ("item", "By Artboard or Item"),
-    ("itemFormat", "By Item, Then Format"),
-];
-const FOLDER_LABELS: [&str; 5] = ["All in One Folder", "By Size or Row", "By Format", "By Artboard or Item", "By Item, Then Format"];
-
-/// The tokens Insert adds to the file name pattern: (label, token).
-const TOKENS: [(&str, &str); 8] = [
-    ("Document Name", "<filename>"),
-    ("Artboard or Item Name", "<name>"),
-    ("Number (####)", "####"),
-    ("Date (YYYYMMDD)", "YYYYMMDD"),
-    ("Date (YYYY-MM-DD)", "YYYY-MM-DD"),
-    ("Time (hhmmss)", "<time>"),
-    ("Format", "<format>"),
-    ("Scale", "<scale>"),
-];
-const TOKEN_LABELS: [&str; 8] =
-    ["Document Name", "Artboard or Item Name", "Number (####)", "Date (YYYYMMDD)", "Date (YYYY-MM-DD)", "Time (hhmmss)", "Format", "Scale"];
-
 /// The tabs: (`tab` value, label).
-const TABS: [&str; 4] = ["artboards", "assets", "layers", "selection"];
+const TABS: [&str; 2] = ["artboards", "assets"];
+
+/// The left pane's width and the height of its thumbnails' area; the right pane's width.
+const LEFT_W: f32 = 300.0;
+const PANE_H: f32 = 360.0;
+const RIGHT_W: f32 = 370.0;
 
 /// The formats Format Settings has options for: (format, label).
 const SETTINGS: [(&str, &str); 8] =
@@ -144,8 +121,9 @@ pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
 }
 
 /// Open the dialog on the settings the active document last exported with (else one PNG row at
-/// 1x, into the Desktop), every asset checked. While the Artboard tool is in use, the artboards it
-/// has selected (the rows the Artboards panel highlights) are the ones chosen instead.
+/// 1x, into the Desktop, with Create Sub-folders on), every asset checked. While the Artboard tool
+/// is in use, the artboards it has selected (the rows the Artboards panel highlights) are the ones
+/// chosen instead.
 pub fn open(app: &mut VectorcraftApp) {
     let (n, saved, assets) = app
         .session
@@ -172,12 +150,14 @@ pub fn open(app: &mut VectorcraftApp) {
         settings.insert(id.into(), Value::Object(saved_options(app, &saved, id)));
     }
     let folder = get("folder").and_then(Value::as_str).filter(|f| !f.is_empty()).map(str::to_string).or_else(fileio::export_folder);
-    // Where files go: the saved choice, else a folder per row as Create Sub-folders did.
-    let folders = get("folders")
-        .and_then(Value::as_str)
-        .filter(|f| FOLDERS.iter().any(|(id, _)| id == f))
-        .map_or_else(|| if flag("subfolders", preset.is_some()) { "rows" } else { "none" }.to_string(), str::to_string);
-    let layers: Vec<u64> = app.session.active().map(|st| st.doc.layers.iter().map(|l| l.id.0).collect()).unwrap_or_default();
+    // Create Sub-folders is on until an export turns it off; a folder per format is the saved
+    // `folders: "format"`, any other sorting a folder per scale.
+    let folders = get("folders").and_then(Value::as_str);
+    let subfolders = match folders {
+        Some("none") => false,
+        Some(_) => true,
+        None => flag("subfolders", saved.is_empty() || preset.is_some()),
+    };
     let fields = json!({
         "tab": "artboards",
         "select": select,
@@ -185,20 +165,19 @@ pub fn open(app: &mut VectorcraftApp) {
         "boards": boards,
         "assets": assets,
         "includeBleed": flag("includeBleed", false),
+        "includeArtboardFill": flag("includeArtboardFill", true),
         "folder": folder.unwrap_or_default(),
         "openLocation": flag("openLocation", true),
-        "subfolders": flag("subfolders", preset.is_some()),
+        "subfolders": subfolders,
+        "subfolderBy": if folders == Some("format") { "format" } else { "scale" },
+        "pdfs": if get("pdfs").and_then(Value::as_str) == Some("single") { "single" } else { "multiple" },
         "prefix": get("prefix").and_then(Value::as_str).unwrap_or_default(),
         "preset": preset.unwrap_or_default(),
         "formats": rows,
         "settings": settings,
+        "view": "grid",
         "__settings": "",
         "__presets": pdf::presets(&app.session),
-        "layers": layers,
-        "selectionMode": get("selection").and_then(Value::as_str).filter(|m| *m == "each").unwrap_or("one"),
-        "name": get("name").and_then(Value::as_str).unwrap_or_default(),
-        "counterStart": get("counterStart").and_then(Value::as_u64).unwrap_or(1),
-        "folders": folders,
         "exportPreset": "",
         "__exportPresets": export_presets(app),
     });
@@ -281,24 +260,6 @@ pub(super) fn export_presets(app: &mut VectorcraftApp) -> Value {
     app.run("document.exportPresets.list", json!({})).ok().and_then(|r| r.get("presets").cloned()).unwrap_or_else(|| json!([]))
 }
 
-/// The art of layer `id` (sublayers unfolded), back to front: what its file holds.
-fn layer_art(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut Vec<NodeId>) {
-    let Some(n) = doc.node(id) else { return };
-    if n.is_layer() {
-        for c in n.children().into_iter().flatten() {
-            layer_art(doc, c.id, out);
-        }
-    } else {
-        out.push(id);
-    }
-}
-
-/// The checked layers that are still in the document, in stacking order.
-fn checked_layers(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
-    let on: Vec<u64> = d.fields.get("layers").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
-    app.session.active().map(|st| st.doc.layers.iter().map(|l| l.id.0).filter(|id| on.contains(id)).collect()).unwrap_or_default()
-}
-
 /// The `document.exportForScreens` params the dialog describes (the web: no folder, one ZIP for
 /// several files).
 fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -316,24 +277,24 @@ fn params(app: &VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     Ok(Value::Object(p))
 }
 
-/// The counter's first value: the Start at field (a number, or text typed through `ui.dialog.set`).
-fn counter_start(d: &Dialog) -> u64 {
-    d.fields.get("counterStart").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|t| t.trim().parse().ok()))).unwrap_or(1)
-}
-
 /// The params of [`params`] without the destination (what is exported, at which sizes, and how the
 /// files are named and sorted), and how many files that is.
 fn settings_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Value>, usize), String> {
+    let (p, files, _) = selection_params(app, d)?;
+    Ok((p, files))
+}
+
+/// [`settings_params`] and how many artboards or assets are chosen.
+fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Value>, usize, usize), String> {
     let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
     let rows = d.fields.get("formats").and_then(Value::as_array).cloned().unwrap_or_default();
     if rows.is_empty() {
         return Err("add a format to export".into());
     }
     let mut p = Map::new();
-    // What each row writes a file of: the checked assets, layers, the selection, else the
-    // artboards.
-    let tab = d.str("tab");
-    let pieces = if tab == "assets" {
+    // What each row writes a file of: the checked assets, else the artboards.
+    let artboards = d.str("tab") != "assets";
+    let pieces = if !artboards {
         let checked = checked_assets(app, d);
         if checked.is_empty() {
             return Err("check an asset to export".into());
@@ -341,22 +302,6 @@ fn settings_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Valu
         let count = checked.len();
         p.insert("assets".into(), json!(checked));
         count
-    } else if tab == "layers" {
-        let checked = checked_layers(app, d);
-        if checked.is_empty() {
-            return Err("check a layer to export".into());
-        }
-        let count = checked.len();
-        p.insert("layers".into(), json!(checked));
-        count
-    } else if tab == "selection" {
-        let selected = app.session.active().map_or(0, |st| st.selection.objects.len());
-        if selected == 0 {
-            return Err("select the art to export first".into());
-        }
-        let each = d.str("selectionMode") == "each";
-        p.insert("selection".into(), json!(if each { "each" } else { "one" }));
-        if each { selected } else { 1 }
     } else {
         match d.str("select").as_str() {
             "full" => {
@@ -367,34 +312,34 @@ fn settings_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Valu
                 let range = d.str("range");
                 // A bad range keeps the dialog open.
                 let chosen = ArtboardPick { range: Some(range.clone()), ..Default::default() }.resolve(n)?.unwrap_or_default();
+                if chosen.is_empty() {
+                    return Err("check an artboard to export".into());
+                }
                 p.insert("range".into(), json!(range));
                 chosen.len()
             }
             _ => n,
         }
     };
-    let files = pieces * rows.len();
+    // Export PDFs As › Single file: every chosen artboard in one PDF per PDF row.
+    let single = artboards && pieces > 1 && d.str("select") != "full" && d.str("pdfs") == "single";
+    let pdf_rows = rows.iter().filter(|r| r["format"].as_str().and_then(fileio::format).is_some_and(|f| f.id == "pdf")).count();
+    let files = if single { (rows.len() - pdf_rows) * pieces + pdf_rows } else { rows.len() * pieces };
     p.insert("includeBleed".into(), json!(d.bool("includeBleed")));
-    let folders = d.str("folders");
-    let folders = match (FOLDERS.iter().any(|(id, _)| *id == folders), d.bool("subfolders")) {
-        // Create Sub-folders (as the Asset Export panel and older scripts set it) is a folder per
-        // row while Folders is still All in One Folder.
-        (true, true) if folders == "none" => "rows".to_string(),
-        (true, _) => folders,
-        (false, sub) => if sub { "rows" } else { "none" }.to_string(),
+    p.insert("includeArtboardFill".into(), json!(d.bool("includeArtboardFill")));
+    let folders = match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
+        (false, _) => "none",
+        (true, "format") => "format",
+        (true, _) => "rows",
     };
-    // Create Sub-folders, as the Asset Export panel (which shares these settings) still names it.
+    // Create Sub-folders, as the Asset Export panel (which shares these settings) names it.
     p.insert("subfolders".into(), json!(folders == "rows"));
     p.insert("folders".into(), json!(folders));
+    p.insert("pdfs".into(), json!(if single { "single" } else { "multiple" }));
     p.insert("prefix".into(), json!(d.str("prefix")));
-    let name = d.str("name");
-    if !name.trim().is_empty() {
-        p.insert("name".into(), json!(name.trim()));
-    }
-    p.insert("counterStart".into(), json!(counter_start(d)));
     p.insert("formats".into(), Value::Array(rows));
     p.insert("settings".into(), d.fields.get("settings").cloned().unwrap_or(json!({})));
-    Ok((p, files))
+    Ok((p, files, pieces))
 }
 
 /// Export; the dialog stays open when the export fails.
@@ -410,120 +355,212 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let tab = TABS.iter().position(|k| *k == d.str("tab")).unwrap_or(0);
-    if let Some(i) = widgets::tab_bar(ui, &[tl!("Artboards"), tl!("Assets"), tl!("Layers"), tl!("Selection")], tab) {
-        d.fields.insert("tab".into(), json!(TABS.get(i).copied().unwrap_or("artboards")));
-    }
-    ui.add_space(8.0);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(270.0);
-            match tab {
-                1 => assets(app, ui, d),
-                2 => layers(app, ui, d),
-                3 => selection(app, ui, d),
-                _ => artboards(app, ui, d),
+            ui.set_width(LEFT_W);
+            if let Some(i) = widgets::tab_bar(ui, &[tl!("Artboards"), tl!("Assets")], tab) {
+                d.fields.insert("tab".into(), json!(TABS.get(i).copied().unwrap_or("artboards")));
             }
+            ui.add_space(6.0);
+            let list = d.str("view") == "list";
+            let (pane, _) = ui.allocate_exact_size(egui::vec2(LEFT_W, PANE_H), egui::Sense::hover());
+            ui.painter().rect_filled(pane, 2.0, t.panel_darker);
+            ui.painter().rect_stroke(pane, 2.0, egui::Stroke::new(1.0, t.divider), egui::StrokeKind::Inside);
+            let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(pane.shrink(8.0)).layout(egui::Layout::top_down(egui::Align::Min)));
+            match tab {
+                1 => assets(app, &mut inner, d, list),
+                _ => artboard_tiles(app, &mut inner, d, list),
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                for (view, icon, tip) in [("grid", "layout-grid", tl!("Grid View")), ("list", "dc-list-view", tl!("List View"))] {
+                    if widgets::icon_button(ui, icon, tip, d.str("view") == view || (view == "grid" && !list && d.str("view") != "list"), 22.0)
+                        .clicked()
+                    {
+                        d.fields.insert("view".into(), json!(view));
+                    }
+                }
+                ui.add_space(6.0);
+                if ui.small_button(tl!("Clear Selection")).clicked() {
+                    clear_selection(app, d, tab);
+                }
+                widgets::dim_label(ui, tl!("Prefix:"));
+                form::text(ui, d, "prefix", (ui.available_width() - 4.0).max(60.0));
+            });
         });
-        let (sep, _) = ui.allocate_exact_size(egui::vec2(17.0, 380.0), egui::Sense::hover());
+        let (sep, _) = ui.allocate_exact_size(egui::vec2(17.0, PANE_H + 60.0), egui::Sense::hover());
         ui.painter().line_segment([sep.center_top(), sep.center_bottom()], egui::Stroke::new(1.0, t.divider));
         ui.vertical(|ui| {
-            ui.set_width(350.0);
+            ui.set_width(RIGHT_W);
             let shown = d.str("__settings");
             if SETTINGS.iter().any(|(id, _)| *id == shown) {
                 format_settings(ui, d, &shown);
             } else {
-                presets(app, ui, d);
-                ui.add_space(8.0);
+                if tab == 0 {
+                    select_options(app, ui, d);
+                    ui.add_space(8.0);
+                }
                 destination(app, ui, d);
+                ui.add_space(6.0);
+                pdf_mode(ui, d, tab == 0);
                 ui.add_space(10.0);
-                formats(ui, d);
-                ui.add_space(8.0);
-                naming(app, ui, d);
+                formats(ui, d, Some(&mut |ui: &mut egui::Ui, d: &mut Dialog| preset_menu(app, ui, d)));
+                save_preset_row(app, ui, d);
             }
         });
     });
+    ui.add_space(8.0);
+    let (picked, files) = counts(app, d);
+    let status =
+        crate::i18n::fmt(tl!("Selected: {n}, Total number of files to export: {m}"), &[("n", &picked.to_string()), ("m", &files.to_string())]);
+    widgets::dim_label(ui, &status);
     false
+}
+
+/// How many artboards or assets are chosen and how many files the export writes (0 while the
+/// settings choose nothing to export).
+fn counts(app: &VectorcraftApp, d: &Dialog) -> (usize, usize) {
+    match selection_params(app, d) {
+        Ok((_, files, pieces)) => (pieces, files),
+        Err(_) => (if d.str("tab") == "assets" { checked_assets(app, d).len() } else { 0 }, 0),
+    }
+}
+
+/// Clear Selection: no artboard (or, on the Assets tab, no asset) is checked.
+fn clear_selection(app: &VectorcraftApp, d: &mut Dialog, tab: usize) {
+    if tab == 1 {
+        d.fields.insert("assets".into(), json!([]));
+    } else {
+        let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+        d.fields.insert("boards".into(), json!(vec![false; n]));
+        set_select(d, "range");
+        d.fields.insert("range".into(), json!(""));
+    }
 }
 
 fn set_select(d: &mut Dialog, select: &str) {
     d.fields.insert("select".into(), json!(select));
 }
 
-/// Select (All, Range, Full Document), Include Bleed, and the artboards' thumbnails and checkboxes.
-fn artboards(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+/// The checked artboards, one per artboard (all checked when the field is short).
+fn boards(app: &VectorcraftApp, d: &Dialog) -> Vec<bool> {
     let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
     let mut boards: Vec<bool> =
         d.fields.get("boards").and_then(Value::as_array).map(|a| a.iter().map(|b| b.as_bool().unwrap_or(false)).collect()).unwrap_or_default();
     boards.resize(n, true);
-    let before = boards.clone();
+    boards
+}
+
+/// Select: All or a Range (which checks the artboards it names), Include Bleed, Include Artboard
+/// Fill and Full Document.
+fn select_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
     let select = d.str("select");
     widgets::dim_label(ui, tl!("Select:"));
     ui.horizontal(|ui| {
         if widgets::radio(ui, tl!("All"), select == "all", true) {
             set_select(d, "all");
-            boards.iter_mut().for_each(|b| *b = true);
+            d.fields.insert("boards".into(), json!(vec![true; n]));
+            d.fields.insert("range".into(), json!(range_text(&vec![true; n])));
         }
         if widgets::radio(ui, tl!("Range:"), select == "range", true) {
             set_select(d, "range");
         }
         ui.add_enabled_ui(select == "range", |ui| {
-            if form::text_named(ui, d, "range", tl!("Range:"), 90.0)
+            if form::text_named(ui, d, "range", tl!("Range:"), 150.0)
                 && let Ok(Some(chosen)) = (ArtboardPick { range: Some(d.str("range")), ..Default::default() }).resolve(n)
             {
-                boards = (0..n).map(|i| chosen.contains(&i)).collect();
+                d.fields.insert("boards".into(), json!((0..n).map(|i| chosen.contains(&i)).collect::<Vec<_>>()));
             }
         });
     });
-    if widgets::radio(ui, tl!("Full Document"), select == "full", true) {
+    ui.horizontal(|ui| {
+        form::check(ui, d, "includeBleed", tl!("Include Bleed"));
+        form::check(ui, d, "includeArtboardFill", tl!("Include Artboard Fill"));
+    });
+    if widgets::radio(ui, tl!("Full Document"), d.str("select") == "full", true) {
         set_select(d, "full");
     }
-    ui.add_space(4.0);
-    form::check(ui, d, "includeBleed", tl!("Include Bleed"));
-    ui.add_space(6.0);
-    let typed = boards != before;
-    let checked = boards.clone();
+}
+
+/// The artboards' thumbnails, each with its checkbox, number and name, in a grid or a list;
+/// checking them picks them as the range (all of them: All). Dimmed with Full Document.
+fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
+    let mut boards = boards(app, d);
+    let before = boards.clone();
+    let names: Vec<String> = app.session.active().map(|s| s.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
     ui.add_enabled_ui(d.str("select") != "full", |ui| {
-        ui.horizontal(|ui| {
-            if ui.small_button(tl!("Select All")).clicked() {
-                boards.iter_mut().for_each(|b| *b = true);
+        tiles(ui, "efs-artboards", names.len(), list, |ui, i, r| {
+            match artboard_thumb(app, ui.ctx(), i) {
+                Some(tex) => {
+                    let sz = tex.size_vec2();
+                    let s = (r.width() / sz.x).min(r.height() / sz.y).min(1.0);
+                    let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+                    ui.painter().image(tex.id(), egui::Rect::from_center_size(r.center(), sz * s), uv, egui::Color32::WHITE);
+                }
+                None => {
+                    ui.painter().rect_filled(r, 2.0, egui::Color32::WHITE);
+                }
             }
-            if ui.small_button(tl!("Clear")).clicked() {
-                boards.iter_mut().for_each(|b| *b = false);
-            }
-        });
-        let names: Vec<String> = app.session.active().map(|s| s.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
-        egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
-            for (i, name) in names.iter().enumerate() {
-                ui.horizontal(|ui| {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 46.0), egui::Sense::hover());
-                    match artboard_thumb(app, ui.ctx(), i) {
-                        Some(tex) => {
-                            let sz = tex.size_vec2();
-                            let s = (46.0 / sz.x.max(sz.y)).min(1.0);
-                            let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                            ui.painter().image(tex.id(), egui::Rect::from_center_size(r.center(), sz * s), uv, egui::Color32::WHITE);
-                        }
-                        None => {
-                            ui.painter().rect_filled(r, 2.0, egui::Color32::WHITE);
-                        }
-                    }
-                    if let Some(b) = boards.get_mut(i)
-                        && crate::widgets::check_name(ui, name, *b)
-                    {
-                        *b ^= true;
-                    }
-                });
+            let name = names.get(i).cloned().unwrap_or_default();
+            (format!("{}  {name}", i + 1), name, boards.get(i).copied().unwrap_or(false))
+        })
+        .into_iter()
+        .for_each(|i| {
+            if let Some(b) = boards.get_mut(i) {
+                *b ^= true;
             }
         });
     });
-    // Checking artboards picks them as the range (all of them: All); a typed range keeps its text.
-    if boards != checked {
+    if boards != before {
         set_select(d, if boards.iter().all(|b| *b) { "all" } else { "range" });
         d.fields.insert("range".into(), json!(range_text(&boards)));
-    }
-    if typed || boards != checked {
         d.fields.insert("boards".into(), json!(boards));
     }
+}
+
+/// `count` thumbnails in a grid (or, with `list`, a list) that scrolls: `paint` draws thumbnail `i`
+/// into its rect and gives its caption, its checkbox's name and whether it is checked → the
+/// thumbnails whose checkbox (or picture) was clicked.
+fn tiles(
+    ui: &mut egui::Ui,
+    id: &str,
+    count: usize,
+    list: bool,
+    mut paint: impl FnMut(&mut egui::Ui, usize, egui::Rect) -> (String, String, bool),
+) -> Vec<usize> {
+    let t = Tokens::get(ui.ctx());
+    let mut toggled = vec![];
+    let side = if list { 40.0 } else { 84.0 };
+    let width = ui.available_width();
+    let columns = if list { 1 } else { ((width + 10.0) / (side + 10.0)).floor().max(1.0) as usize };
+    egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, false]).show(ui, |ui| {
+        for start in (0..count).step_by(columns) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                for i in start..(start + columns).min(count) {
+                    let cell = if list { egui::vec2(width - 16.0, side) } else { egui::vec2(side, side + 18.0) };
+                    let (r, resp) = ui.allocate_exact_size(cell, egui::Sense::click());
+                    let pic = egui::Rect::from_min_size(r.min, egui::vec2(side, side));
+                    let (caption, name, checked) = paint(ui, i, pic.shrink(3.0));
+                    let stroke = if checked { egui::Stroke::new(2.0, t.accent) } else { egui::Stroke::new(1.0, t.divider) };
+                    ui.painter().rect_stroke(pic, 2.0, stroke, egui::StrokeKind::Inside);
+                    let label_at = if list { egui::pos2(pic.right() + 8.0, pic.center().y) } else { egui::pos2(pic.left(), pic.bottom() + 9.0) };
+                    let galley =
+                        ui.painter().layout(caption, egui::FontId::proportional(11.0), t.text, if list { cell.x - side - 12.0 } else { side });
+                    ui.painter().galley(egui::pos2(label_at.x, label_at.y - galley.size().y / 2.0), galley, t.text);
+                    // The checkbox sits on the thumbnail's lower left corner, as Illustrator's.
+                    let bx = egui::Rect::from_min_size(egui::pos2(pic.left() + 4.0, pic.bottom() - 18.0), egui::vec2(14.0, 14.0));
+                    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bx));
+                    if widgets::check_box(&mut child, &name, checked, true) || resp.clicked() {
+                        toggled.push(i);
+                    }
+                }
+            });
+            ui.add_space(6.0);
+        }
+    });
+    toggled
 }
 
 /// The checked assets that are still in the document, in panel order.
@@ -532,8 +569,8 @@ fn checked_assets(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
     app.session.active().map(|st| st.doc.assets.iter().map(|a| a.id).filter(|id| on.contains(id)).collect()).unwrap_or_default()
 }
 
-/// The Assets tab: each asset's thumbnail and checkbox, Select All and Clear.
-fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+/// The Assets tab: each asset's thumbnail with its checkbox and name, in a grid or a list.
+fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let Some(st) = app.session.active() else { return };
     if st.doc.assets.is_empty() {
         ui.add_space(24.0);
@@ -542,39 +579,30 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     let mut on = checked_assets(app, d);
     let before = on.clone();
-    ui.horizontal(|ui| {
-        if ui.small_button(tl!("Select All")).clicked() {
-            on = st.doc.assets.iter().map(|a| a.id).collect();
-        }
-        if ui.small_button(tl!("Clear")).clicked() {
-            on.clear();
-        }
-    });
-    // Asked for until the row is in view: the dialog's first frame only measures it.
+    // Asked for until its row is in view: the dialog's first frame only measures it.
     let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| st.doc.assets.iter().any(|a| a.id == *id));
     let mut in_view = scroll_to.is_none();
-    egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
-        for a in &st.doc.assets {
-            let row = ui.horizontal(|ui| {
-                let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 46.0), egui::Sense::hover());
-                crate::panels::asset_export::paint_thumb(ui, st, a, r);
-                let checked = on.contains(&a.id);
-                if crate::widgets::check_name(ui, &a.name, checked) {
-                    on.retain(|id| *id != a.id);
-                    if !checked {
-                        on.push(a.id);
-                    }
-                }
-            });
-            if scroll_to == Some(a.id) {
-                if ui.clip_rect().contains_rect(row.response.rect) {
-                    in_view = true;
-                } else {
-                    row.response.scroll_to_me(Some(egui::Align::Center));
-                }
+    let clicked = tiles(ui, "efs-assets", st.doc.assets.len(), list, |ui, i, r| {
+        let Some(a) = st.doc.assets.get(i) else { return (String::new(), String::new(), false) };
+        crate::panels::asset_export::paint_thumb(ui, st, a, r);
+        if scroll_to == Some(a.id) {
+            if ui.clip_rect().contains_rect(r) {
+                in_view = true;
+            } else {
+                ui.scroll_to_rect(r, Some(egui::Align::Center));
             }
         }
+        (a.name.clone(), a.name.clone(), on.contains(&a.id))
     });
+    for i in clicked {
+        if let Some(a) = st.doc.assets.get(i) {
+            if on.contains(&a.id) {
+                on.retain(|id| *id != a.id);
+            } else {
+                on.push(a.id);
+            }
+        }
+    }
     if in_view {
         d.fields.remove("__scrollTo");
     }
@@ -583,8 +611,8 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
-/// Export to: the folder (typed or picked), Open Location after Export and Create Sub-folders; the
-/// web downloads instead.
+/// Export to: the folder (typed or picked), Open Location after Export, and Create Sub-folders,
+/// a folder per scale or per format; the web downloads instead.
 fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     widgets::dim_label(ui, tl!("Export to:"));
     if io::is_web(app) {
@@ -592,78 +620,111 @@ fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     } else {
         let pick = app.services.pick_folder.is_some();
         ui.horizontal(|ui| {
-            form::text(ui, d, "folder", if pick { 300.0 } else { 334.0 });
+            form::text(ui, d, "folder", if pick { RIGHT_W - 40.0 } else { RIGHT_W - 6.0 });
             if pick && widgets::icon_button(ui, "folder-open", tl!("Choose a folder"), false, 26.0).clicked() {
                 crate::picks::folder_field(app, d, "folder");
             }
         });
         form::check(ui, d, "openLocation", tl!("Open Location after Export"));
     }
+    form::check(ui, d, "subfolders", tl!("Create Sub-folders"));
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Folders:"));
-        let current = d.str("folders");
-        let at = FOLDERS.iter().position(|(id, _)| *id == current).unwrap_or(0);
-        if let Some((id, _)) = widgets::dropdown(ui, "efs-folders", FOLDER_LABELS[at], &FOLDER_LABELS, 190.0).and_then(|i| FOLDERS.get(i)) {
-            d.fields.insert("folders".into(), json!(id));
-            d.fields.insert("subfolders".into(), json!(*id == "rows"));
+        ui.add_space(22.0);
+        let on = d.bool("subfolders");
+        let by = d.str("subfolderBy");
+        if widgets::radio(ui, tl!("Scale"), by != "format", on) {
+            d.fields.insert("subfolderBy".into(), json!("scale"));
+        }
+        if widgets::radio(ui, tl!("Format"), by == "format", on) {
+            d.fields.insert("subfolderBy".into(), json!("format"));
         }
     });
 }
 
-/// Export Preset: apply a built-in or saved preset (its formats, settings, naming and folders),
-/// save the dialog's settings as one (Save…, then a name), or delete a saved one.
-fn presets(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+/// Export PDFs As: one file of every chosen artboard, or a file each; only for artboards (not
+/// Full Document) with a PDF row.
+fn pdf_mode(ui: &mut egui::Ui, d: &mut Dialog, artboards: bool) {
+    let pdf = d
+        .fields
+        .get("formats")
+        .and_then(Value::as_array)
+        .is_some_and(|rows| rows.iter().any(|r| r["format"].as_str().and_then(fileio::format).is_some_and(|f| f.id == "pdf")));
+    let on = artboards && pdf && d.str("select") != "full";
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(on, |ui| widgets::dim_label(ui, tl!("Export PDFs As:")));
+        let single = d.str("pdfs") == "single";
+        if widgets::radio(ui, tl!("Single File"), single, on) {
+            d.fields.insert("pdfs".into(), json!("single"));
+        }
+        if widgets::radio(ui, tl!("Multiple Files"), !single, on) {
+            d.fields.insert("pdfs".into(), json!("multiple"));
+        }
+    });
+}
+
+/// The format presets (the ☰ by iOS and Android): apply a built-in or saved one (its rows, their
+/// settings, the prefix and the sub-folders), save the dialog's rows as one, or delete the saved
+/// one applied last.
+fn preset_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let list: Vec<Value> = d.fields.get("__exportPresets").and_then(Value::as_array).cloned().unwrap_or_default();
-    let names: Vec<&str> = list.iter().filter_map(|p| p["name"].as_str()).collect();
     let current = d.str("exportPreset");
     let saved = list.iter().any(|p| p["name"] == current && p["builtIn"] == false);
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Export Preset:"));
-        let labels: Vec<&str> = std::iter::once("Custom").chain(names.iter().copied()).collect();
-        let at = names.iter().position(|n| *n == current).map_or(0, |i| i + 1);
-        if let Some(i) = widgets::dropdown(ui, "efs-export-preset", labels[at], &labels, 150.0)
-            && let Some(preset) = i.checked_sub(1).and_then(|i| list.get(i))
-        {
-            apply_preset(d, preset);
-        }
-        if widgets::icon_button(ui, "save", tl!("Save Preset…"), false, 24.0).clicked() {
-            let name = if saved { current.clone() } else { String::new() };
-            d.fields.insert("__savePreset".into(), json!(name));
-        }
-        ui.add_enabled_ui(saved, |ui| {
-            if widgets::icon_button(ui, "trash-2", tl!("Delete Preset"), false, 24.0).clicked()
-                && app.run("document.exportPresets.delete", json!({"name": current})).is_ok()
-            {
-                d.fields.insert("exportPreset".into(), json!(""));
-                d.fields.insert("__exportPresets".into(), export_presets(app));
+    let resp = widgets::icon_button(ui, "menu", tl!("Format Presets"), false, 24.0);
+    let clicked = resp.clicked();
+    let _ = widgets::popover(&resp, clicked, |ui| {
+        for p in &list {
+            let name = p["name"].as_str().unwrap_or_default();
+            if widgets::menu_item_name(ui, name, true, name == current) {
+                apply_preset(d, p);
+                ui.close();
             }
-        });
+        }
+        ui.separator();
+        if widgets::menu_item(ui, tl!("Save Preset…"), true, false) {
+            d.fields.insert("__savePreset".into(), json!(if saved { current.clone() } else { String::new() }));
+            ui.close();
+        }
+        if widgets::menu_item(ui, tl!("Delete Preset"), saved, false) && app.run("document.exportPresets.delete", json!({"name": current})).is_ok() {
+            d.fields.insert("exportPreset".into(), json!(""));
+            d.fields.insert("__exportPresets".into(), export_presets(app));
+            ui.close();
+        }
     });
-    if d.fields.contains_key("__savePreset") {
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, tl!("Name:"));
-            form::text(ui, d, "__savePreset", 150.0);
-            let name = d.str("__savePreset").trim().to_string();
-            if ui.add_enabled(!name.is_empty(), egui::Button::new(tl!("Save"))).clicked() {
-                let settings = params(app, d).unwrap_or_else(|_| json!({"formats": d.fields.get("formats").cloned().unwrap_or(json!([]))}));
-                match app.run("document.exportPresets.save", json!({"name": name, "settings": settings})) {
-                    Ok(_) => {
-                        d.fields.remove("__savePreset");
-                        d.fields.insert("exportPreset".into(), json!(name));
-                        d.fields.insert("__exportPresets".into(), export_presets(app));
-                    }
-                    Err(e) => app.ui.status = e,
-                }
-            }
-            if ui.small_button(tl!("Cancel")).clicked() {
-                d.fields.remove("__savePreset");
-            }
-        });
-    }
 }
 
-/// Set the dialog to preset `preset` (`{name, settings}`): its formats, settings, naming and
-/// folders; what it doesn't name keeps the dialog's value.
+/// The row that names a format preset being saved (Save Preset… in the ☰ menu).
+fn save_preset_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    if !d.fields.contains_key("__savePreset") {
+        return;
+    }
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Name:"));
+        form::text(ui, d, "__savePreset", 150.0);
+        let name = d.str("__savePreset").trim().to_string();
+        if ui.add_enabled(!name.is_empty(), egui::Button::new(tl!("Save"))).clicked() {
+            let settings = json!({
+                "formats": d.fields.get("formats").cloned().unwrap_or(json!([])),
+                "settings": d.fields.get("settings").cloned().unwrap_or(json!({})),
+                "prefix": d.str("prefix"),
+                "folders": if !d.bool("subfolders") { "none" } else if d.str("subfolderBy") == "format" { "format" } else { "rows" },
+            });
+            match app.run("document.exportPresets.save", json!({"name": name, "settings": settings})) {
+                Ok(_) => {
+                    d.fields.remove("__savePreset");
+                    d.fields.insert("exportPreset".into(), json!(name));
+                    d.fields.insert("__exportPresets".into(), export_presets(app));
+                }
+                Err(e) => app.ui.status = e,
+            }
+        }
+        if ui.small_button(tl!("Cancel")).clicked() {
+            d.fields.remove("__savePreset");
+        }
+    });
+}
+
+/// Set the dialog to format preset `preset` (`{name, settings}`): its rows, their settings, the
+/// prefix and the sub-folders; what it doesn't name keeps the dialog's value.
 pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
     let st = &preset["settings"];
     if let Some(rows) = st["formats"].as_array() {
@@ -680,127 +741,31 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
     }
     let folders = st["folders"].as_str().or_else(|| st["subfolders"].as_bool().map(|b| if b { "rows" } else { "none" }));
     if let Some(f) = folders {
-        d.fields.insert("folders".into(), json!(f));
-        d.fields.insert("subfolders".into(), json!(f == "rows"));
+        d.fields.insert("subfolders".into(), json!(f != "none"));
+        d.fields.insert("subfolderBy".into(), json!(if f == "format" { "format" } else { "scale" }));
     }
-    for k in ["name", "prefix"] {
-        d.fields.insert(k.into(), json!(st[k].as_str().unwrap_or_default()));
+    if let Some(prefix) = st["prefix"].as_str() {
+        d.fields.insert("prefix".into(), json!(prefix));
     }
-    d.fields.insert("counterStart".into(), json!(st["counterStart"].as_u64().unwrap_or(1)));
-    if let Some(b) = st["includeBleed"].as_bool() {
-        d.fields.insert("includeBleed".into(), json!(b));
-    }
-    if let Some(f) = st["folder"].as_str().filter(|f| !f.is_empty()) {
-        d.fields.insert("folder".into(), json!(f));
+    for key in ["includeBleed", "includeArtboardFill"] {
+        if let Some(b) = st[key].as_bool() {
+            d.fields.insert(key.into(), json!(b));
+        }
     }
     d.fields.insert("exportPreset".into(), json!(preset["name"]));
 }
 
-/// File Name: the pattern (with Insert for its tokens), the counter's start, the prefix and an
-/// example of the first file's name.
-fn naming(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("File Name:"));
-        // A pattern typed by hand is no longer the preset's.
-        if form::text(ui, d, "name", 170.0) {
-            d.fields.insert("exportPreset".into(), json!(""));
-        }
-        if let Some((_, token)) =
-            widgets::dropdown_named(ui, "efs-name-token", Some(tl!("Insert")), tl!("Insert"), &TOKEN_LABELS, 90.0).and_then(|i| TOKENS.get(i))
-        {
-            let name = d.str("name");
-            d.fields.insert("name".into(), json!(format!("{name}{token}")));
-        }
-    });
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Prefix:"));
-        form::text(ui, d, "prefix", 110.0);
-        widgets::dim_label(ui, tl!("Start at:"));
-        if let Some(v) = widgets::range_field(ui, "efs-counter-start", counter_start(d) as f64, 0.0..=999_999.0, "", 0, 64.0) {
-            d.fields.insert("counterStart".into(), json!(v.round().max(0.0) as u64));
-        }
-    });
-    let example = example_name(app, d);
-    if !example.is_empty() {
-        widgets::dim_label(ui, &crate::i18n::fmt(tl!("Example: {name}"), &[("name", &example)]));
-    }
-}
+/// What the dialog adds by the iOS and Android buttons: its format presets.
+pub(crate) type FormatMenu<'a> = &'a mut dyn FnMut(&mut egui::Ui, &mut Dialog);
 
-/// The first file the export writes, relative to the export folder, as `document.exportForScreens`
-/// names it ([`fileio::screen_first_file`]); empty while the dialog's settings choose nothing to
-/// export (no format, nothing checked or selected, a bad range).
-pub(super) fn example_name(app: &VectorcraftApp, d: &Dialog) -> String {
-    settings_params(app, d).ok().and_then(|(p, _)| fileio::screen_first_file(&app.session, &Value::Object(p)).ok()).unwrap_or_default()
-}
+/// The iOS and Android rows (the engine's `mobile` and `density` presets) and their labels.
+const PLATFORMS: [(&str, &str); 2] = [("mobile", "iOS"), ("density", "Android")];
 
-/// The Layers tab: each top-level layer's thumbnail and checkbox (a file of its art alone),
-/// Select All and Clear.
-fn layers(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let Some(st) = app.session.active() else { return };
-    let mut on = checked_layers(app, d);
-    let before = on.clone();
-    ui.horizontal(|ui| {
-        if ui.small_button(tl!("Select All")).clicked() {
-            on = st.doc.layers.iter().map(|l| l.id.0).collect();
-        }
-        if ui.small_button(tl!("Clear")).clicked() {
-            on.clear();
-        }
-    });
-    egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
-        for l in &st.doc.layers {
-            ui.horizontal(|ui| {
-                let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 46.0), egui::Sense::hover());
-                let mut art = vec![];
-                layer_art(&st.doc, l.id, &mut art);
-                // An id of its own for the thumbnail cache, away from the assets' ids.
-                let a = ExportAsset { id: u64::MAX - l.id.0, name: l.display_name(), nodes: art };
-                crate::panels::asset_export::paint_thumb(ui, st, &a, r);
-                let checked = on.contains(&l.id.0);
-                if crate::widgets::check_name(ui, &l.display_name(), checked) {
-                    on.retain(|id| *id != l.id.0);
-                    if !checked {
-                        on.push(l.id.0);
-                    }
-                }
-            });
-        }
-    });
-    if on != before {
-        d.fields.insert("layers".into(), json!(on));
-    }
-}
-
-/// The Selection tab: what is selected (a thumbnail and the count), as one file or a file per
-/// object.
-fn selection(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let Some(st) = app.session.active() else { return };
-    let ids = st.selection.objects.clone();
-    if ids.is_empty() {
-        ui.add_space(24.0);
-        widgets::dim_label(ui, tl!("Nothing is selected. Select the art to export, then open this tab again."));
-        return;
-    }
-    let (r, _) = ui.allocate_exact_size(egui::vec2(120.0, 120.0), egui::Sense::hover());
-    // The selection changes without a new revision: its ids name its thumbnail.
-    let key = ids.iter().fold(0x005e_1ec7_u64, |h, id| h.rotate_left(7) ^ id.0);
-    let a = ExportAsset { id: u64::MAX / 2 + (key % (u64::MAX / 4)), name: "Selection".into(), nodes: ids.clone() };
-    crate::panels::asset_export::paint_thumb(ui, st, &a, r);
-    let count = ids.len().to_string();
-    widgets::dim_label(ui, &crate::i18n::fmt(tl!("{n} objects selected"), &[("n", &count)]));
-    ui.add_space(6.0);
-    let mode = d.str("selectionMode");
-    if widgets::radio(ui, tl!("One File of the Selection"), mode != "each", true) {
-        d.fields.insert("selectionMode".into(), json!("one"));
-    }
-    if widgets::radio(ui, tl!("A File per Object"), mode == "each", true) {
-        d.fields.insert("selectionMode".into(), json!("each"));
-    }
-}
-
-/// The preset, the Format Settings gear (which sets `__settings`), the format rows (scale, suffix,
-/// format) and Add Scale, as wide as `ui` allows: the dialog's and the Asset Export panel's rows.
-pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
+/// Formats: the iOS and Android buttons (each sets the rows that platform uses), `menu` (the
+/// dialog's format presets), the Format Settings gear (which sets `__settings`), the format rows
+/// (scale, suffix, format) and Add Scale, as wide as `ui` allows: the dialog's and the Asset
+/// Export panel's rows.
+pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog, mut menu: Option<FormatMenu<'_>>) {
     let mut rows: Vec<Value> = d.fields.get("formats").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut edited = false;
     ui.horizontal(|ui| {
@@ -816,19 +781,21 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
                     .filter(|f| SETTINGS.iter().any(|(id, _)| id == f));
                 d.fields.insert("__settings".into(), json!(first.unwrap_or("png")));
             }
-            let preset = d.str("preset");
-            let labels: Vec<&str> = std::iter::once("Custom").chain(SCREEN_PRESETS.iter().map(|(_, l)| *l)).collect();
-            let at = SCREEN_PRESETS.iter().position(|(id, _)| *id == preset).map_or(0, |i| i + 1);
-            if let Some(i) =
-                widgets::dropdown_named(ui, "efs-preset", Some(tl!("Preset:")), labels[at], &labels, (ui.available_width() - 8.0).clamp(90.0, 180.0))
-            {
-                let id = i.checked_sub(1).and_then(|i| SCREEN_PRESETS.get(i)).map_or("", |(id, _)| *id);
-                if let Some(preset_rows) = fileio::screen_preset_rows(id) {
+            if let Some(menu) = menu.as_mut() {
+                menu(ui, d);
+            }
+            // Right to left: Android, then iOS before it.
+            for (id, label) in PLATFORMS.iter().rev() {
+                let on = d.str("preset") == *id;
+                if ui.add(egui::Button::new(egui::RichText::new(tl!(label)).size(12.0)).selected(on).frame(on)).clicked()
+                    && let Some(preset_rows) = fileio::screen_preset_rows(id)
+                {
                     rows = preset_rows;
                     d.fields.insert("subfolders".into(), json!(true));
+                    d.fields.insert("subfolderBy".into(), json!("scale"));
                     d.fields.insert("formats".into(), json!(rows));
+                    d.fields.insert("preset".into(), json!(id));
                 }
-                d.fields.insert("preset".into(), json!(id));
             }
         });
     });

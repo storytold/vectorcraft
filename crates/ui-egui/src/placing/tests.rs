@@ -355,7 +355,7 @@ fn a_replace_during_a_merge_on_another_thread_swaps_the_merged_object() {
     app.run("object.group", json!({})).unwrap();
     app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
     let view = app.view_info();
-    let at = |kind, x| PointerEvent { kind, pos: vectorcraft_geom::Point::new(x, 10.0), mods: Mods::default(), pressure: 1.0 };
+    let at = |kind, x| PointerEvent { kind, pos: vectorcraft_geom::Point::new(x, 10.0), mods: Mods::default(), pressure: 1.0, backquote: false };
     crate::canvas::dispatch(&mut app, &at(PointerKind::Move, 5.0), view);
     app.session.tool_poll(view, true).unwrap();
     // A drag across the row merges every square into one object, the one Replace swaps.
