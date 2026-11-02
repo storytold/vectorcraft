@@ -54,7 +54,7 @@ impl Homography {
     /// magnitude in the map's `w` row, so the answer is the same at any scale of the map), or when
     /// it does not map to a finite page point. The point is mapped through [`Self::upscaled`].
     pub fn apply(&self, p: Point) -> Option<Point> {
-        let m = self.upscaled();
+        let m = self.upscaled(p);
         let x = m[0][0] * p.x + m[0][1] * p.y + m[0][2];
         let y = m[1][0] * p.x + m[1][1] * p.y + m[1][2];
         let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
@@ -66,12 +66,15 @@ impl Homography {
         q.is_finite().then_some(q)
     }
 
-    /// The entries, multiplied by the power of two that brings the largest magnitude to at least
-    /// 1/2 and below 1 when every entry is below 1/2 in magnitude (an exact step that keeps a map
-    /// at a tiny scale from losing precision to subnormal products), and unchanged otherwise.
-    fn upscaled(&self) -> [[f64; 3]; 3] {
+    /// The entries for mapping `p`, multiplied by a power of two of at least 1 (an exact step that
+    /// keeps a map at a tiny scale from losing precision to subnormal products). When every entry
+    /// is below 1/2 in magnitude, the power brings the largest to at least 1/2 and below 1, divided
+    /// by the power of two of `p`'s larger coordinate magnitude when that is 1 or more, so that no
+    /// product of an entry and a coordinate reaches 1. Otherwise the entries are unchanged.
+    fn upscaled(&self, p: Point) -> [[f64; 3]; 3] {
         let largest = self.0.iter().flatten().fold(0.0_f64, |k, v| k.max(v.abs()));
-        let e = frexp(largest).1.min(0);
+        let e_p = frexp(p.x.abs().max(p.y.abs())).1.max(0);
+        let e = (frexp(largest).1.min(0) + e_p).min(0);
         self.0.map(|row| row.map(|v| ldexp(v, -e)))
     }
 
@@ -261,7 +264,7 @@ impl Homography {
     /// The affine map that matches `self` to first order at `p` (its derivative there), `None`
     /// beyond the horizon or when the derivative is not finite.
     pub fn affine_at(&self, p: Point) -> Option<Affine> {
-        let m = self.upscaled();
+        let m = self.upscaled(p);
         let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
         let q = self.apply(p)?;
         // d(x/w) = (dx − (x/w)·dw) / w, and the same for y.
@@ -582,6 +585,17 @@ mod tests {
         for (u, v) in a.as_coeffs().iter().zip(b.as_coeffs()) {
             assert!((u - v).abs() <= 1e-12 * v.abs().max(1.0), "{a:?} {b:?}");
         }
+    }
+
+    #[test]
+    fn a_map_at_a_small_scale_maps_a_far_point() {
+        // Every product of an entry and a coordinate is finite, but the entries brought to 1/2 or
+        // more would overflow against this point.
+        let h = Homography([[1e-6, 1e-6, 0.0], [0.0, 1e-6, 0.0], [1e-6, 0.0, 1e-6]]);
+        let p = Point::new(1.75e308, 1.75e308);
+        let q = h.apply(p).unwrap_or_else(|| panic!("{p:?}"));
+        assert!((q.x - 2.0).abs() <= 1e-12 && (q.y - 1.0).abs() <= 1e-12, "{q:?}");
+        assert!(h.affine_at(p).is_some());
     }
 
     #[test]
