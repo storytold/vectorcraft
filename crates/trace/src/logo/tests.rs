@@ -62,6 +62,9 @@ fn render(w: u32, h: u32, blur: f64, shade: impl Fn(f64, f64) -> Option<[u8; 3]>
 
 const RED: [u8; 3] = [210, 40, 50];
 const BLUE: [u8; 3] = [40, 80, 200];
+const LIGHT: [u8; 3] = [240, 240, 220];
+const SKY: [u8; 3] = [40, 120, 240];
+const WHITE: [u8; 3] = [255, 255, 255];
 
 fn logo_params() -> TraceParams {
     TraceParams {
@@ -203,6 +206,99 @@ fn the_named_palette_is_used_exactly_and_a_bad_one_is_an_error() {
     assert_eq!(res.paths[0].color, [0xd2, 0x28, 0x32]);
     let bad = TraceParams { logo_colors: vec!["red".into()], ..logo_params() };
     assert!(matches!(trace_within(&img, &bad, 1000), Err(TraceError::BadPalette(s)) if s == "red"));
+}
+
+/// The color of the topmost path at `p` (paths are listed bottom first).
+fn top_color(res: &TraceResult, p: Point) -> Option<[u8; 3]> {
+    res.paths.iter().rev().find(|t| t.path.to_bezpath().winding(p) != 0).map(|t| t.color)
+}
+
+#[test]
+fn logo_white_off_traces_only_the_named_colors() {
+    // A light disc in a black ring, a blue square on it, and two white spots.
+    let img = render(120, 120, 0.7, |x, y| {
+        let d = (x - 60.0).hypot(y - 60.0);
+        if (x - 32.0).hypot(y - 40.0) <= 6.0 || (x - 78.0).hypot(y - 86.0) <= 6.0 {
+            Some(WHITE)
+        } else if (45.0..=75.0).contains(&x) && (45.0..=75.0).contains(&y) {
+            Some(SKY)
+        } else if d <= 46.0 {
+            Some(LIGHT)
+        } else if d <= 50.0 {
+            Some([0, 0, 0])
+        } else {
+            None
+        }
+    });
+    let named = TraceParams { logo_colors: vec!["#000000".into(), "#F0F0DC".into(), "#2878F0".into()], ..logo_params() };
+    // By default white is a fourth color.
+    let res = trace(&img, &named);
+    assert_eq!(res.palette.len(), 4, "{:?}", res.palette);
+    assert_eq!(top_color(&res, Point::new(32.0, 40.0)), Some(WHITE));
+    // Without it, the three named colors only: the white spots take the light color.
+    let res = trace(&img, &TraceParams { logo_white: false, ..named.clone() });
+    assert_eq!(res.palette.len(), 3, "{:?}", res.palette);
+    assert!(!res.palette.contains(&WHITE));
+    for p in [Point::new(32.0, 40.0), Point::new(78.0, 86.0), Point::new(20.0, 60.0)] {
+        assert_eq!(top_color(&res, p), Some(LIGHT), "at {p:?}");
+    }
+    assert_eq!(top_color(&res, Point::new(60.0, 60.0)), Some(SKY));
+    assert_eq!(top_color(&res, Point::new(60.0, 12.0)), Some([0, 0, 0]));
+    assert!(!covered(&res, Point::new(5.0, 5.0)));
+    // Ignore White still leaves the white spots out.
+    let res = trace(&img, &TraceParams { logo_white: false, ignore_white: true, ..named.clone() });
+    for p in [Point::new(32.0, 40.0), Point::new(78.0, 86.0)] {
+        assert!(!covered(&res, p), "at {p:?}");
+    }
+    assert_eq!(top_color(&res, Point::new(20.0, 60.0)), Some(LIGHT));
+}
+
+#[test]
+fn logo_white_off_keeps_a_named_white_and_knockouts_as_holes() {
+    let disc = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(WHITE));
+    let only_white = TraceParams { logo_colors: vec!["#ffffff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&disc, &only_white);
+    assert_eq!(res.paths.len(), 1);
+    assert_eq!(res.paths[0].color, WHITE);
+    // An enclosed transparent area stays a hole: there is no white to paint it with.
+    let ring = render(64, 64, 0.7, |x, y| (12.0..=25.0).contains(&(x - 32.0).hypot(y - 32.0)).then_some(BLUE));
+    let res = trace(&ring, &TraceParams { logo_colors: vec!["#2850c8".into()], logo_white: false, ..logo_params() });
+    assert_eq!(res.paths.len(), 1);
+    assert_eq!(res.paths[0].path.subpaths.len(), 2, "outer outline and a hole");
+    assert!(!covered(&res, Point::new(32.0, 32.0)), "the hole must be empty");
+    assert!(covered(&res, Point::new(32.0, 32.0 + 18.0)), "the ring itself is filled");
+}
+
+#[test]
+fn logo_white_off_gives_each_white_the_nearest_named_color() {
+    // Red and blue are equally far from white: the white disc takes the first one named.
+    let disc = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(WHITE));
+    let params = TraceParams { logo_colors: vec!["#ff0000".into(), "#0000ff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&disc, &params);
+    assert_eq!(top_color(&res, Point::new(32.0, 32.0)), Some([255, 0, 0]));
+    assert!(!covered(&res, Point::new(5.0, 5.0)));
+    // Each white takes the named color nearest it, so two named whites both stay.
+    const OFF: [u8; 3] = [245, 245, 245];
+    let two = render(96, 64, 0.7, |x, y| {
+        if (x - 24.0).hypot(y - 32.0) <= 16.0 {
+            Some(OFF)
+        } else if (x - 72.0).hypot(y - 32.0) <= 16.0 {
+            Some(WHITE)
+        } else {
+            None
+        }
+    });
+    let params = TraceParams { logo_colors: vec!["#f5f5f5".into(), "#ffffff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&two, &params);
+    assert_eq!(top_color(&res, Point::new(24.0, 32.0)), Some(OFF));
+    assert_eq!(top_color(&res, Point::new(72.0, 32.0)), Some(WHITE));
+    // A white square on blue keeps its edges where they are when it turns red.
+    let square = render(100, 100, 0.7, |x, y| Some(if (30.0..70.0).contains(&x) && (30.0..70.0).contains(&y) { WHITE } else { [0, 0, 255] }));
+    let res = trace(&square, &TraceParams { logo_colors: vec!["#ff0000".into(), "#0000ff".into()], logo_white: false, ..logo_params() });
+    for (inside, outside) in [(30.3, 29.7), (69.7, 70.3)] {
+        assert_eq!(top_color(&res, Point::new(inside, 50.0)), Some([255, 0, 0]), "at x {inside}");
+        assert_eq!(top_color(&res, Point::new(outside, 50.0)), Some([0, 0, 255]), "at x {outside}");
+    }
 }
 
 #[test]

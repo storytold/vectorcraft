@@ -3664,6 +3664,43 @@ fn image_trace_flat_logo_refuses_a_gradient_and_a_bad_palette() {
 }
 
 #[test]
+fn image_trace_flat_logo_can_trace_only_the_named_colors() {
+    // A light disc in a black ring, a blue square on it, and a white spot.
+    let art = vectorcraft_trace::Raster::from_fn(120, 120, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let d = (fx - 60.0).hypot(fy - 60.0);
+        if (fx - 32.0).hypot(fy - 40.0) <= 6.0 {
+            [255, 255, 255, 255]
+        } else if (45..75).contains(&x) && (45..75).contains(&y) {
+            [40, 120, 240, 255]
+        } else if d <= 46.0 {
+            [240, 240, 220, 255]
+        } else if d <= 50.0 {
+            [0, 0, 0, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let fills = |logo_white: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let params = json!({"params": {"mode": "logo", "logoColors": ["#000000", "#F0F0DC", "#2878F0"], "logoWhite": logo_white}});
+        let r = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        let g = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let mut hex: Vec<String> = g.children().unwrap().iter().filter_map(|n| n.appearance.fill_paint().color()).map(|c| c.to_hex()).collect();
+        hex.sort();
+        hex.dedup();
+        (r["colors"].clone(), hex)
+    };
+    let (colors, hex) = fills(true);
+    assert_eq!(colors, 4);
+    assert!(hex.contains(&"#ffffff".to_string()), "{hex:?}");
+    let (colors, hex) = fills(false);
+    assert_eq!(colors, 3);
+    assert_eq!(hex, ["#000000", "#2878f0", "#f0f0dc"]);
+}
+
+#[test]
 fn image_trace_object_remembers_its_settings() {
     let mut s = session();
     image_doc(&mut s);
