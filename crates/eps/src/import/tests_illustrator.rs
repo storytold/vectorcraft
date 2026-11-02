@@ -220,6 +220,47 @@ fn a_legacy_file_with_its_prolog_comes_in_through_its_layers() {
     assert_eq!(page.document.layers[0].name.as_deref(), Some("Layer 1"));
 }
 
+/// A file in the legacy format without layers (Illustrator 3) whose prolog is included: its prolog,
+/// a setup, and `art`.
+fn layerless(art: &str) -> Vec<u8> {
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%%EndComments\n\
+         %%BeginProlog\n/m {{moveto}} def /L {{lineto}} def /f {{closepath fill}} def /A {{pop}} def /k {{setcmykcolor}} def\n\
+         %%EndProlog\n%%BeginSetup\n%%EndSetup\n{art}\n%%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n"
+    )
+    .into_bytes()
+}
+
+/// A file in the legacy format without layers whose prolog is included runs as its page, and comes
+/// in through its art on one layer when that looks like the page: what only the format keeps (here
+/// a lock) stays.
+#[test]
+fn a_legacy_file_without_layers_comes_in_through_its_art_on_one_layer() {
+    let file = layerless(&format!("1 A\n0 0 0 1 k\n{}", tri(10)));
+    let r = import(&file).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let d = &r.document;
+    assert_eq!(d.layers.len(), 1);
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(tree(art), "p");
+    assert!(art[0].locked, "the lock is kept");
+    // Without the editing data, it is its page, which has no locks.
+    let page = crate::import::import_with(&file, false).unwrap();
+    assert!(!page.document.layers[0].children().unwrap()[0].locked);
+}
+
+/// When its art can't be read as the format (here a procedure of its own draws it), the file comes
+/// in as its page, as before, without a note.
+#[test]
+fn a_legacy_file_without_layers_whose_art_cannot_be_read_comes_in_as_its_page() {
+    let file = layerless("/x {20 20 moveto 80 20 lineto 80 80 lineto closepath fill} def x");
+    let r = import(&file).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let page = crate::import::import_with(&file, false).unwrap();
+    assert_eq!(tree(r.document.layers[0].children().unwrap()), tree(page.document.layers[0].children().unwrap()));
+    assert_eq!(r.document.layers[0].children().unwrap()[0].visual_bounds(), page.document.layers[0].children().unwrap()[0].visual_bounds());
+}
+
 /// A version 7 palette writes no swatch names (the AI7 spec's §11 example): its swatches come in
 /// named by their paint, in its order, in place of the defaults.
 #[test]
