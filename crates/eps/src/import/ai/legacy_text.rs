@@ -1,6 +1,7 @@
 //! Type in the legacy format (version 7 specification §15): text objects `type To` … `TO`, their
 //! text path (`a b c d tx ty startPt Tp`, an area's frame or the path type runs along, `TP`), the
-//! modal character and paragraph attributes (`Tr Tf Ts Tz Tt TA Tl Ta Ti`), the paint style, and
+//! modal character and paragraph attributes (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's
+//! letter and word spacing `TC TW`, hanging punctuation `Tq` and hyphenation `Th`), the paint style, and
 //! the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends a paragraph). Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! file's `TE` encoding, else as Windows-1252; a re-encoded font `/_name` is the font its
@@ -78,8 +79,23 @@ impl TypeState {
     }
 }
 
-fn num(vals: &[V], i: usize) -> Option<f64> {
-    vals.iter().filter_map(V::num).nth(i).filter(|v| v.is_finite())
+/// An operator's `N` operands, the last `N` values before it, when each is a finite number.
+fn nums<const N: usize>(vals: &[V]) -> Option<[f64; N]> {
+    let operands = vals.get(vals.len().checked_sub(N)?..)?;
+    let mut out = [0.0; N];
+    for (o, v) in out.iter_mut().zip(operands) {
+        *o = v.num().filter(|n| n.is_finite())?;
+    }
+    Some(out)
+}
+
+/// A flag operand: 0 or 1.
+fn flag(v: f64) -> Option<bool> {
+    match v {
+        0.0 => Some(false),
+        1.0 => Some(true),
+        _ => None,
+    }
 }
 
 impl Reader<'_> {
@@ -110,23 +126,28 @@ impl Reader<'_> {
     /// `type To`: a text object begins.
     pub(super) fn begin_text(&mut self, vals: &[V], hidden: bool) {
         self.end_path_quietly();
-        let kind = num(vals, 0).map_or(0, |k| k as i64);
+        let kind = nums::<1>(vals).map_or(0, |[k]| k as i64);
         self.text = Some(LegacyText { kind, gs: self.gs.clone(), hidden, ..LegacyText::default() });
     }
 
     /// `a b c d tx ty startPt Tp`: the text path begins.
     pub(super) fn begin_text_path(&mut self, vals: &[V]) {
         self.end_path_quietly();
-        let n: Vec<f64> = vals.iter().filter_map(V::num).collect();
         let Some(t) = self.text.as_mut() else { return };
-        if let Some(m) = n.get(..6).and_then(|m| <[f64; 6]>::try_from(m).ok()) {
+        // Seven operands, or the matrix alone.
+        let (m, start) = match vals.len() {
+            7 => (vals.get(..6).and_then(nums::<6>), vals.get(6).and_then(V::num)),
+            6 => (nums::<6>(vals), None),
+            _ => (None, None),
+        };
+        if let Some(m) = m {
             let m = Affine::new(m);
             let det = m.determinant();
-            if m.as_coeffs().iter().all(|v| v.is_finite()) && det.is_finite() && det.abs() > 1e-12 {
+            if det.is_finite() && det.abs() > 1e-12 {
                 t.matrix = Some(m);
             }
         }
-        t.start = n.get(6).copied().filter(|s| s.is_finite() && *s >= 0.0).unwrap_or(0.0);
+        t.start = start.filter(|s| s.is_finite() && *s >= 0.0).unwrap_or(0.0);
         t.in_path = true;
     }
 
@@ -150,56 +171,122 @@ impl Reader<'_> {
         }
     }
 
-    /// A character or paragraph attribute.
+    /// A character or paragraph attribute. An attribute whose operands are missing, are not
+    /// numbers, or are flags other than 0 and 1 stays as it was.
     pub(super) fn text_attr(&mut self, w: &str, vals: &[V]) {
         let st = &mut self.type_state;
-        let n0 = num(vals, 0);
+        let n0 = nums::<1>(vals).map(|[v]| v);
         match w {
-            "Tr" => st.render = n0.map_or(0, |v| v as i64),
+            "Tr" => {
+                if let Some(v) = n0 {
+                    st.render = v as i64;
+                }
+            }
             "Tf" => {
-                if let Some(name) = vals.iter().find_map(|v| if let V::Name(n) = v { Some(n.clone()) } else { None }) {
-                    let name = st
-                        .fonts
-                        .iter()
-                        .find(|(new, _)| *new == name)
-                        .map_or_else(|| name.trim_start_matches('_').to_string(), |(_, old)| old.clone());
+                // `/name size Tf`, or `/name size ascent descent Tf`.
+                let Some(at) = vals.iter().position(|v| matches!(v, V::Name(_))) else { return };
+                if let Some(V::Name(name)) = vals.get(at) {
+                    let name =
+                        st.fonts.iter().find(|(new, _)| new == name).map_or_else(|| name.trim_start_matches('_').to_string(), |(_, old)| old.clone());
                     let (family, style) = super::super::super::text::family_style(&name);
                     st.style.font_family = family;
                     st.style.font_style = style;
                     st.style.font_version = None;
                 }
-                if let Some(size) = num(vals, 0).filter(|s| *s > 0.0) {
+                if let Some(size) = vals.get(at + 1).and_then(V::num).filter(|s| s.is_finite() && *s > 0.0) {
                     st.style.size = size.min(MAX_SIZE);
                 }
             }
-            "Ts" => st.style.baseline_shift = n0.unwrap_or(0.0).clamp(-MAX_SIZE, MAX_SIZE),
-            "Tz" => {
-                let scale = |v: f64| v.clamp(1.0, 10_000.0);
-                st.style.h_scale = n0.map_or(100.0, scale);
-                st.style.v_scale = num(vals, 1).map_or(100.0, scale);
+            "Ts" => {
+                if let Some(v) = n0 {
+                    st.style.baseline_shift = v.clamp(-MAX_SIZE, MAX_SIZE);
+                }
             }
-            "Tt" => st.style.tracking = n0.unwrap_or(0.0).clamp(-10_000.0, 10_000.0),
-            "TA" => st.style.kerning = if n0 == Some(0.0) { Some(0.0) } else { None },
+            "Tz" => {
+                // `parallelScale perpendicularScale Tz`; before version 7, `scale Tz`.
+                let scale = |v: f64| v.clamp(1.0, 10_000.0);
+                let scales = match vals.len() {
+                    2 => nums::<2>(vals),
+                    1 => n0.map(|h| [h, 100.0]),
+                    _ => None,
+                };
+                if let Some([h, v]) = scales {
+                    (st.style.h_scale, st.style.v_scale) = (scale(h), scale(v));
+                }
+            }
+            "Tt" => {
+                if let Some(v) = n0 {
+                    st.style.tracking = v.clamp(-10_000.0, 10_000.0);
+                }
+            }
+            "TA" => {
+                if let Some(auto) = n0.and_then(flag) {
+                    st.style.kerning = if auto { None } else { Some(0.0) };
+                }
+            }
             "Tl" => {
-                if let Some(l) = n0 {
+                // `leading paragraphLeading Tl`; before version 7, `leading Tl`.
+                let leading = match vals.len() {
+                    2 => nums::<2>(vals),
+                    1 => n0.map(|l| [l, 0.0]),
+                    _ => None,
+                };
+                if let Some([l, before]) = leading {
                     let l = l.clamp(0.0, MAX_SIZE);
                     // The automatic leading, 120% of the size, stays automatic.
                     st.style.leading = if (l - st.style.size * 1.2).abs() < 1e-3 { None } else { Some(l) };
+                    st.para.space_before = before.clamp(-MAX_SIZE, MAX_SIZE);
                 }
-                st.para.space_before = num(vals, 1).unwrap_or(0.0).clamp(-MAX_SIZE, MAX_SIZE);
             }
             "Ta" => {
-                st.para.justify = match n0.map(|v| v as i64) {
-                    Some(1) => Justify::Center,
-                    Some(2) => Justify::Right,
-                    Some(3) => Justify::JustifyLeft,
-                    Some(4) => Justify::JustifyAll,
-                    _ => Justify::Left,
+                let justify = match n0 {
+                    Some(0.0) => Some(Justify::Left),
+                    Some(1.0) => Some(Justify::Center),
+                    Some(2.0) => Some(Justify::Right),
+                    Some(3.0) => Some(Justify::JustifyLeft),
+                    Some(4.0) => Some(Justify::JustifyAll),
+                    _ => None,
+                };
+                if let Some(j) = justify {
+                    st.para.justify = j;
                 }
             }
             "Ti" => {
-                let indent = |i: usize| num(vals, i).unwrap_or(0.0).clamp(-MAX_SIZE, MAX_SIZE);
-                (st.para.first_line_indent, st.para.left_indent, st.para.right_indent) = (indent(0), indent(1), indent(2));
+                if let Some(i) = nums::<3>(vals) {
+                    let [first, left, right] = i.map(|v| v.clamp(-MAX_SIZE, MAX_SIZE));
+                    (st.para.first_line_indent, st.para.left_indent, st.para.right_indent) = (first, left, right);
+                }
+            }
+            // `min opt max TC` (letter spacing) and `min opt max TW` (word spacing), in percent of
+            // a space's width, as the paragraph's Justification options take them.
+            "TC" | "TW" => {
+                if let Some(v) = nums::<3>(vals) {
+                    let j = &mut st.para.justification;
+                    if w == "TC" {
+                        j.letter_spacing = v;
+                    } else {
+                        j.word_spacing = v;
+                    }
+                    j.keep_in_range();
+                }
+            }
+            // `hangingQuotes Tq`.
+            "Tq" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.para.roman_hanging = on;
+                }
+            }
+            // `hyphenate limitHyphLines minLeadHyphen minTailHyphen maxHyphLines Th`, kept to the
+            // ranges `text.setFormat` takes.
+            "Th" => {
+                let Some([on, limit, lead, tail, max]) = nums::<5>(vals) else { return };
+                let (Some(on), Some(limit)) = (flag(on), flag(limit)) else { return };
+                let letters = |v: f64, lo: f64, hi: f64| v.round().clamp(lo, hi) as u32;
+                st.para.hyphenate = on;
+                let h = &mut st.para.hyphenation;
+                h.after_first = letters(lead, 1.0, 15.0);
+                h.before_last = letters(tail, 1.0, 15.0);
+                h.hyphen_limit = if limit { letters(max, 0.0, 25.0) } else { 0 };
             }
             _ => {}
         }
@@ -222,9 +309,12 @@ impl Reader<'_> {
             t.pending_break = true;
             return;
         }
-        if st.chars >= MAX_CHARS {
+        // As many characters as the file's allowance has left.
+        let room = MAX_CHARS.saturating_sub(st.chars);
+        if room == 0 {
             return;
         }
+        let decoded: String = decoded.chars().take(room).collect();
         st.chars += decoded.chars().count();
         let gs = &self.gs;
         let mut style = st.style.clone();
