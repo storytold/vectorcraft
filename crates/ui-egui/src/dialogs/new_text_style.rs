@@ -53,16 +53,12 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if !para(d) {
         ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                for (id, title) in [("general", tl!("General")), ("basic", tl!("Basic Character Formats"))] {
-                    if ui.selectable_label(d.str("section") == id, title).clicked() {
-                        d.fields.insert("section".into(), json!(id));
-                    }
-                }
-            });
+            super::char_style_options::section_list(ui, d);
             ui.separator();
             if d.str("section") == "basic" {
                 super::char_style_options::basic_body(ui, d);
+            } else if d.str("section") == "advanced" {
+                super::char_style_options::advanced_body(ui, d);
             } else {
                 ui.vertical(|ui| {
                     grid(ui, |ui| {
@@ -78,11 +74,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 });
             }
         });
-        ui.add_enabled_ui(d.str("section") == "basic", |ui| {
-            if ui.button(tl!("Reset Panel")).clicked() {
-                super::char_style_options::reset_basic(d);
-            }
-        });
+        super::char_style_options::reset_button(ui, d);
         return false;
     }
     grid(ui, |ui| {

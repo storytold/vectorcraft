@@ -4,6 +4,7 @@
 mod arrange;
 mod cleanup;
 mod color;
+mod document;
 mod pathtools;
 mod pen;
 
@@ -14,6 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
     let mut v = arrange::specs();
     v.extend(cleanup::specs());
     v.extend(color::specs());
+    v.extend(document::specs());
     v.extend(pathtools::specs());
     v.extend(pen::specs());
     v

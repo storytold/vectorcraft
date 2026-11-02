@@ -410,7 +410,7 @@ mod tests {
     /// Symbol `name` holding `art` in a group.
     fn symbol(d: &mut Document, name: &str, art: Vec<Node>) {
         let group = Node::group(d.alloc_id(), art.into_iter().map(Arc::new).collect());
-        d.symbols.push(Symbol { name: name.into(), art: Arc::new(group) });
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(group) });
     }
 
     #[test]

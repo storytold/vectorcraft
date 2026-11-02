@@ -247,6 +247,37 @@ impl FontDb {
         Some(self.instance(&face, &st.font_axes))
     }
 
+    /// The em size characters of style `st` are set at, in `vertical` type or not: its size, or
+    /// with a font height reference other than the em box ([`vectorcraft_doc::FontHeightReference`])
+    /// the size at which its face ([`Self::style_face`]) has that height
+    /// ([`FontFace::font_height`]). The size itself when the face has no such height.
+    pub fn em_size(&self, st: &vectorcraft_doc::CharStyle, vertical: bool) -> f64 {
+        let reference = st.font_height_reference;
+        if reference == vectorcraft_doc::FontHeightReference::EmBox {
+            return st.size;
+        }
+        self.style_face(st).and_then(|f| f.font_height(reference, vertical)).map_or(st.size, |h| st.size / h)
+    }
+
+    /// `t` as layout sets it: each run takes its [`Self::em_size`] and the em box as its font
+    /// height reference; an inline graphic keeps its size. Explicit leading and baseline shift
+    /// stay in points; Auto leading, tracking and kerning follow the em size. `t` itself when every
+    /// run measures the em box.
+    pub fn font_heights_resolved<'a>(&self, t: &'a vectorcraft_doc::TextObject) -> std::borrow::Cow<'a, vectorcraft_doc::TextObject> {
+        use vectorcraft_doc::FontHeightReference;
+        if t.runs.iter().all(|r| r.style.font_height_reference == FontHeightReference::EmBox) {
+            return std::borrow::Cow::Borrowed(t);
+        }
+        let mut out = t.clone();
+        for r in &mut out.runs {
+            if r.inline.is_none() {
+                r.style.size = self.em_size(&r.style, t.vertical);
+            }
+            r.style.font_height_reference = FontHeightReference::EmBox;
+        }
+        std::borrow::Cow::Owned(out)
+    }
+
     /// `face` with the axis settings `axes` (by tag, in the axes' own units) in place of its own,
     /// each clamped to its axis's range: its outlines, metrics and advances taken there, and its
     /// file embedded instanced there. Tags the font has no axis for are left out. `face` itself

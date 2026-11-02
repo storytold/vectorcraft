@@ -284,6 +284,10 @@ fn overflow_warning(cmd: &str, doc: &Document, p: &Value) -> Result<Option<Strin
 /// native document with its save options, whose pages may be left blank).
 pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl FnOnce() -> Result<Vec<u8>>) -> Result<(Vec<u8>, Vec<String>)> {
     let mut opts = options(cmd, doc, p)?;
+    // The pages' background colors, behind the art (the editing data keeps them as colors).
+    let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
+    let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
+    let doc = &*filled;
     if opts.settings.thumbnails {
         opts.thumbnails = thumbnails(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     }

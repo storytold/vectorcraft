@@ -31,6 +31,16 @@ mod view;
 pub use fonts::MAX_RECENT_FONTS;
 
 impl VectorcraftApp {
+    /// Takes the host's Caps Lock state, which gives the drawing tools the crosshair while it is on
+    /// without changing the saved Use Precise Cursors preference.
+    pub fn set_caps_lock(&mut self, on: bool) {
+        if self.session.caps_lock != on
+            && let Err(err) = self.run("view.capsLock", json!({ "on": on }))
+        {
+            log::error!("Could not update Caps Lock cursor state: {err}");
+        }
+    }
+
     /// The app around `session`, reaching the platform through `services` (file pickers, the
     /// clipboard, files and the like). It starts cataloguing the installed fonts at once, gives
     /// Data Recovery the host's store and makes a view for each open document.
@@ -74,6 +84,7 @@ impl VectorcraftApp {
                 view_moved: None,
                 hover_cursor: None,
                 presented: None,
+                panes: Default::default(),
             },
             perf: Perf::default(),
             dock_rt: Default::default(),
@@ -139,6 +150,7 @@ impl VectorcraftApp {
             ime_caret_rect: None,
             ime_discard: false,
             prefs_changed: false,
+            asset_export_presets: Value::Null,
             touch_screen: false,
             scrub_group: false,
             scrub_scope: None,
@@ -414,14 +426,17 @@ impl VectorcraftApp {
         }
     }
 
-    /// The canvas panel's body: the document tabs, the canvas and the isolation bar over it.
+    /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
+    /// Window › Arrange › Tile is on) and the isolation bar over it.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
-        canvas::show(self, ui);
+        if !canvas::tiled_area(self, ui) {
+            canvas::show(self, ui);
+        }
         // Over the canvas inside the rulers, so the rulers and scroll bars stay uncovered.
         if self.ui.screen_mode < 3
             && !menus::home_showing(self)
@@ -487,6 +502,10 @@ impl VectorcraftApp {
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             toolbar::show(self, ui);
+        } else if self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
+            // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New
+            // Toolbar too.
+            toolbar::show_custom(self, ui.ctx());
         }
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.

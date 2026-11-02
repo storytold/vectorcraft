@@ -122,10 +122,12 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             return Some(bake_pieces(d, m));
         }
         let symbol = match &n.kind {
-            NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
+            NodeKind::SymbolInstance { symbol, .. } => {
+                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n))
+            }
             _ => None,
         };
-        let m = reshape(Some(d), n, symbol.as_deref())?;
+        let m = reshape(Some(d), n, symbol.as_ref())?;
         return Some(bake_node(d, &m).unwrap_or(m));
     }
     // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its

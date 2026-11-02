@@ -125,9 +125,11 @@ pub enum Cursor {
     /// the path. Also while a stroke is drawn back near its start, where releasing the mouse button
     /// closes the path. A crosshair with a ring.
     PaintbrushClose,
-    /// The Blob Brush tool.
+    /// The Blob Brush tool: a dot at the brush's centre, the tool drawing the tip's outline round
+    /// it on the canvas.
     BlobBrush,
-    /// The Eraser tool.
+    /// The Eraser tool: a dot at the tip's centre, the tool drawing the tip's outline round it on
+    /// the canvas.
     Eraser,
     /// The Smooth tool.
     Smooth,
@@ -163,6 +165,14 @@ pub enum Cursor {
     SymbolStyler,
     /// The vertical type tools: a turned I-beam.
     TypeVertical,
+    /// A type tool over a closed path's outline: a click sets area type inside it.
+    TypeArea,
+    /// ...the vertical type tools.
+    TypeAreaVertical,
+    /// A type tool over a path's outline: a click sets type along it.
+    TypeOnPath,
+    /// ...the vertical type tools.
+    TypeOnPathVertical,
     /// The Scissors over a path segment (a click splits the path there)...
     Scissors,
     /// ...or away from every segment (a click does nothing).
@@ -305,8 +315,6 @@ impl Cursor {
             | Cursor::MagicWand
             | Cursor::Pencil
             | Cursor::Paintbrush
-            | Cursor::BlobBrush
-            | Cursor::Eraser
             | Cursor::Smooth
             | Cursor::PathEraser
             | Cursor::Join

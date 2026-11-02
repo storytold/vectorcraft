@@ -380,13 +380,13 @@ fn an_object_has_the_art_of_at_most_4096_symbol_instances_drawn() {
     let mut filled = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
     filled.effects.push(Effect { id: "path.offsetPath".into(), params: json!({"offset": 1}), visible: true });
     let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), filled);
-    d.symbols.push(Symbol { name: "S0".into(), art: Arc::new(square) });
+    d.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(square) });
     for k in 1..=12 {
         let mut instance =
             |dx: f64| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("S{}", k - 1), xf: Affine::translate((dx, 0.0)) }));
         let pair = vec![instance(0.0), instance(20.0 * f64::from(1 << (k - 1)))];
         let art = Node::group(d.alloc_id(), pair);
-        d.symbols.push(Symbol { name: format!("S{k}"), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: format!("S{k}"), art: Arc::new(art) });
     }
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S12".into(), xf: Affine::IDENTITY });
     let (layer, id) = (d.layers[0].id, instance.id);

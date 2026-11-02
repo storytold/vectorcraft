@@ -355,7 +355,7 @@ mod tests {
         let chip = Point::new(150.0, 150.0 + 10.0 / view.zoom);
         crate::canvas::dispatch(
             &mut app,
-            &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), backquote: false, pressure: 1.0 },
+            &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), backquote: false, pressure: 1.0, pen: None },
             view,
         );
         let d = app.ui.dialog.clone().expect("the popover opened");
@@ -459,7 +459,7 @@ mod tests {
         let view = app.view_info();
         crate::canvas::dispatch(
             &mut app,
-            &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), backquote: false, pressure: 1.0 },
+            &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), backquote: false, pressure: 1.0, pen: None },
             view,
         );
         let d = app.ui.dialog.clone().expect("the popover opened");

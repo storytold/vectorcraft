@@ -21,7 +21,8 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
     let dim = backdrop();
     egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
         // Modal, but the canvas isn't dimmed so previews stay readable (as in the reference app).
-        ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
+        // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
+        ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
     });
     let shown = egui::Window::new(title)
         .id(id)

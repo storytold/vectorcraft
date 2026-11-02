@@ -87,6 +87,58 @@ fn set_range_style_splits_runs() {
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0, "size": -1})).is_err());
 }
 
+/// `featureChanges` turns features on and off on top of each run's own and keeps the rest, in
+/// `text.setStyle` and `text.setRangeStyle`, in one undo step; an unknown tag is an error.
+#[test]
+fn feature_changes_keep_each_runs_other_features() {
+    let mut s = session();
+    let id = text(&mut s, "1/23");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "features": ["numr", "smcp"]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "features": ["swsh"]})).unwrap();
+    let features = |s: &Session| obj(s, id).runs.iter().map(|r| r.style.features.clone()).collect::<Vec<_>>();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setStyle", &json!({"featureChanges": ["dnom", "-numr"]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(features(&s), [vec!["smcp", "dnom"], vec!["swsh", "dnom"], vec!["dnom"]]);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 2, "featureChanges": ["dnom", "-liga", "-dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "-liga"], vec!["swsh", "-liga"], vec!["dnom"]], "the last change of a feature counts");
+    for cmd in ["text.setStyle", "text.setRangeStyle"] {
+        for tag in ["zzzz", "--liga", "+-dnom"] {
+            let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": [tag]})).unwrap_err().to_string();
+            assert!(e.contains(&format!("`{tag}`")), "{cmd}: {e}");
+        }
+        for bad in [json!(["numr", 12]), json!([12]), json!("numr")] {
+            let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": bad})).unwrap_err().to_string();
+            assert!(e.contains("featureChanges must be a list of tags"), "{cmd} {bad}: {e}");
+        }
+        let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": vec!["numr"; 257]})).unwrap_err().to_string();
+        assert!(e.contains("at most 256"), "{cmd}: {e}");
+    }
+    assert_eq!(features(&s), [vec!["smcp", "-liga"], vec!["swsh", "-liga"], vec!["dnom"]], "the refused commands change nothing");
+    // Tags of features the change does not name stay as they were: one the list does not know
+    // (kept from an opened file) and an explicit `liga`, which keeps tracked type ligated.
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.features = vec!["zzzz".into(), "liga".into(), "dnom".into()];
+    }
+    s.execute("text.setStyle", &json!({"featureChanges": ["numr", "-dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "-liga", "numr"], vec!["swsh", "-liga", "numr"], vec!["zzzz", "liga", "numr"]]);
+    // Ligatures turned on are written as `liga`, so tracked type keeps them.
+    s.execute("text.setStyle", &json!({"featureChanges": ["+liga"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "numr", "liga"], vec!["swsh", "numr", "liga"], vec!["zzzz", "numr", "liga"]]);
+    // A list longer than shaping reads keeps the tags shaping uses, and the new tag is read too:
+    // `-onum` overrides `onum`, unknown tags do nothing, and `ordn` lies past the entries read.
+    let max = vectorcraft_text::MAX_STYLE_FEATURES;
+    let mut long = vec!["onum".to_string(), "-onum".into()];
+    long.extend(std::iter::repeat_n("zzzz".to_string(), max - 3));
+    long.extend(["swsh".to_string(), "ordn".into()]);
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.features = long;
+    }
+    s.execute("text.setStyle", &json!({"featureChanges": ["dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "numr", "liga", "dnom"], vec!["swsh", "numr", "liga", "dnom"], vec!["-onum", "swsh", "dnom"]]);
+}
+
 #[test]
 fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let mut s = session();
@@ -95,10 +147,10 @@ fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let result = s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
     assert_eq!(result["kerning"], "optical");
     assert!(obj(&s, id).runs[0].style.optical_kerning);
-    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    assert_eq!(obj(&s, id).runs[0].style.kerning, None, "choosing Optical clears the manual value");
     s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "kerning": 0})).unwrap();
     let styled = obj(&s, id);
-    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![Some(70.0), Some(0.0), Some(70.0)]);
+    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![None, Some(0.0), None]);
     assert!(styled.runs.iter().all(|r| r.style.optical_kerning));
     let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
     let opened = vectorcraft_format::load(&bytes).unwrap();
@@ -108,14 +160,18 @@ fn optical_command_manual_pair_undo_redo_and_native_reopen() {
         styled.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>()
     );
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.kerning.is_none()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0), "undoing Optical brings the manual value back");
+    assert!(!obj(&s, id).runs[0].style.optical_kerning);
+    s.execute("edit.redo", &json!({})).unwrap();
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).runs[1].style.kerning, Some(0.0));
     assert!(obj(&s, id).runs.iter().all(|r| r.style.optical_kerning));
 }
 
 #[test]
-fn optical_set_format_keeps_existing_pair_override() {
+fn optical_set_format_clears_existing_pair_override() {
     let mut s = session();
     let id = text(&mut s, "III");
     s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 40})).unwrap();
@@ -123,7 +179,7 @@ fn optical_set_format_keeps_existing_pair_override() {
     assert_eq!(result["kerning"], "optical");
     let t = obj(&s, id);
     assert!(t.runs.iter().all(|r| r.style.optical_kerning));
-    assert_eq!(t.runs[0].style.kerning, Some(40.0));
+    assert!(t.runs.iter().all(|r| r.style.kerning.is_none()), "choosing Optical clears the manual value");
 }
 
 #[test]
@@ -325,6 +381,16 @@ fn type_commands_refuse_a_number_or_boolean_given_as_text() {
             ("text.setRangeStyle", json!({"id": id.0, "allCaps": 1}), "allCaps"),
             ("text.setRangeStyle", json!({"id": id.0, "noBreak": "true"}), "noBreak"),
             ("text.setRangeStyle", json!({"id": id.0, "size": 30, "tateChuYoko": 1}), "tateChuYoko"),
+            ("text.setFormat", json!({"ids": [id.0], "underline": "true"}), "underline"),
+            ("text.setFormat", json!({"ids": [id.0], "strikethrough": 1}), "strikethrough"),
+            ("text.setFormat", json!({"ids": [id.0], "allCaps": "false"}), "allCaps"),
+            ("text.setFormat", json!({"ids": [id.0], "proportionalMetrics": 1}), "proportionalMetrics"),
+            ("text.setFormat", json!({"ids": [id.0], "tateChuYoko": "true"}), "tateChuYoko"),
+            ("text.setFormat", json!({"ids": [id.0], "standardVerticalRoman": "true"}), "standardVerticalRoman"),
+            ("text.setFormat", json!({"ids": [id.0], "rotation": 10, "noBreak": 1}), "noBreak"),
+            ("text.setFormat", json!({"ids": [id.0], "hyphenate": "false"}), "hyphenate"),
+            ("text.setFormat", json!({"ids": [id.0], "hyphenateCapitalized": 0}), "hyphenateCapitalized"),
+            ("text.setFormat", json!({"ids": [id.0], "romanHangingPunctuation": "true"}), "romanHangingPunctuation"),
             ("text.getRange", json!({"id": id.0, "effective": "true"}), "effective"),
             ("type.opticalMarginAlignment", json!({"on": "true"}), "on"),
             ("type.systemLayout", json!({"on": "true"}), "on"),
@@ -338,12 +404,13 @@ fn type_commands_refuse_a_number_or_boolean_given_as_text() {
     assert!(wrong.is_empty(), "not refused: {wrong:#?}");
     let style = json!({"id": id.0, "size": 30, "underline": true, "tracking": null, "start": null, "noBreak": true});
     s.execute("text.setRangeStyle", &style).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id.0], "strikethrough": true, "hyphenate": null})).unwrap();
     s.execute("type.size.increase", &json!({"by": null})).unwrap();
     s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap();
     s.execute("type.ruby", &json!({"text": "a", "size": null, "overhang": false})).unwrap();
     let t = obj(&s, id);
     let st = &t.runs[0].style;
-    assert!(st.underline && st.no_break && t.optical_margin && st.size > 30.0, "{st:?}");
+    assert!(st.underline && st.strikethrough && st.no_break && t.optical_margin && st.size > 30.0, "{st:?}");
     assert!(!t.ruby.is_empty() && t.ruby.iter().all(|r| !r.overhang && r.size_percent == 50.0), "{:?}", t.ruby);
 }
 
@@ -507,7 +574,7 @@ fn touch_type_moves_one_character_in_centered_and_right_aligned_lines() {
     }
 }
 
-/// `dy` moves a rotated character that many document points along its own up axis, also in type
+/// `dy` moves a rotated character that many document points up from its line, also in type
 /// scaled unevenly.
 #[test]
 fn touch_type_raises_a_rotated_character_in_unevenly_scaled_type() {
@@ -518,9 +585,66 @@ fn touch_type_raises_a_rotated_character_in_unevenly_scaled_type() {
     let before = glyph_pens(&s, id);
     s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 10})).unwrap();
     let (x, y) = moved_by(&before, &glyph_pens(&s, id), 1);
-    assert!(((x * x + y * y).sqrt() - 10.0).abs() < 1e-6, "({x}, {y})");
+    assert!(near((x, y), (0.0, -10.0)), "({x}, {y})");
 }
 
+/// A character rotated near or at a quarter turn moves across its line and along it: in "ABCD"
+/// with the B at 85, 90 and 95 degrees, `dx` 10 and `dy` 4 move the B 10 pt right and 4 pt up and
+/// leave the C and D where they are, through baseline shift and kerning only, with Auto and
+/// Optical kerning and in type scaled unevenly. Undo, redo and the native format keep the place.
+#[test]
+fn touch_type_moves_a_character_turned_near_a_quarter_turn_across_its_line() {
+    for rotation in [85.0, 90.0, 95.0, -90.0] {
+        for (kerning, scaled) in [("auto", false), ("optical", false), ("auto", true)] {
+            let case = format!("{rotation}°, {kerning}, scaled {scaled}");
+            let mut s = session();
+            let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "ABCD", "size": 40})).unwrap()["id"].as_u64().unwrap());
+            s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": kerning})).unwrap();
+            if scaled {
+                s.execute("object.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 0.5, 0, 0]})).unwrap();
+            }
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "rotation": rotation})).unwrap();
+            let before = glyph_pens(&s, id);
+            let runs_before = obj(&s, id).runs;
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dx": 10, "dy": 4})).unwrap();
+            let after = glyph_pens(&s, id);
+            assert!(near(moved_by(&before, &after, 1), (10.0, -4.0)), "{case}: {:?}", moved_by(&before, &after, 1));
+            for byte in [0, 2, 3] {
+                assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{case}, byte {byte}: {:?}", moved_by(&before, &after, byte));
+            }
+            // Only kerning and baseline shift change.
+            let t = obj(&s, id);
+            let style = |byte: usize| vectorcraft_text::edit::slice_runs(&t.runs, byte, byte + 1)[0].style.clone();
+            let plain = |mut st: CharStyle| {
+                st.kerning = None;
+                st.baseline_shift = 0.0;
+                st
+            };
+            for byte in 0..4 {
+                let was = vectorcraft_text::edit::slice_runs(&runs_before, byte, byte + 1)[0].style.clone();
+                assert_eq!(plain(style(byte)), plain(was), "{case}, byte {byte}");
+            }
+            let shift = style(1).baseline_shift;
+            assert!(shift > 0.0, "{case}: {shift}");
+            // A drag straight across the line is baseline shift alone.
+            let before = glyph_pens(&s, id);
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": -6})).unwrap();
+            assert!(near(moved_by(&before, &glyph_pens(&s, id), 1), (0.0, 6.0)), "{case}: {:?}", moved_by(&before, &glyph_pens(&s, id), 1));
+            s.execute("edit.undo", &json!({})).unwrap();
+            let moved = glyph_pens(&s, id);
+            assert!(near(moved_by(&after, &moved, 1), (0.0, 0.0)), "{case}: undone");
+            s.execute("edit.redo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            // The native format keeps both attributes and the place they give.
+            let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+            let NodeKind::Text(reopened) = &back.node(id).unwrap().kind else { panic!("not text") };
+            assert_eq!(reopened.runs, obj(&s, id).runs, "{case}");
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), reopened);
+            let pens: Vec<(usize, Point)> = lay.glyphs.iter().map(|g| (g.byte, reopened.xf * (g.xf * Point::ZERO))).collect();
+            assert!(near(moved_by(&moved, &pens, 1), (0.0, 0.0)), "{case}: reopened");
+        }
+    }
+}
 /// `dy` moves a character that many document points in type scaled up 2000 times, where baseline
 /// shift is limited to 0.648 pt of text space.
 #[test]

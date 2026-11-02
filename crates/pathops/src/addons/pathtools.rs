@@ -3,9 +3,11 @@
 //! ([`add_anchors`], [`smooth_anchors`], [`split_at_anchors`]), the readouts the Measure & Inspect
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]), the places
 //! where paths cross ([`crossings`]), anchors slid along their path ([`slide`]), touching edges
-//! merged ([`shared_edge`]) and the Parametric Shape Tool's shapes ([`shapes`]).
+//! merged ([`shared_edge`]), paths divided into dashes ([`divide_dashes`]) and the Parametric Shape
+//! Tool's shapes ([`shapes`]).
 
 mod crossings;
+mod dashes;
 mod extend;
 pub mod shapes;
 mod shared_edge;
@@ -19,6 +21,7 @@ use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Ve
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 pub use crossings::{MAX_CROSSING_SEGMENTS, crossings, insert_at};
+pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};
 pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,

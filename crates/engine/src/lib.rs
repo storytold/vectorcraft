@@ -48,6 +48,8 @@ pub struct Session {
     docs: Vec<DocState>,
     active: Option<usize>,
     pub prefs: Prefs,
+    /// Whether Caps Lock is on, as the desktop host reports it; never saved with the preferences.
+    pub caps_lock: bool,
     /// Fill/stroke for new art (the toolbar proxy).
     pub paint: PaintDefaults,
     /// Which proxy is in front (true = Fill, false = Stroke) — the X key toggles.
@@ -161,6 +163,9 @@ pub struct Session {
     /// While [`Session::place_queue_read`] runs `file.place.queue`: the files read for it, which
     /// the command loads the place cursor with instead of reading them; `None` otherwise.
     pub(crate) queue_hand_off: Option<cmd::place::QueueRead>,
+    /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
+    /// which the command loads instead of reading `dataBase64`; `None` otherwise.
+    pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,

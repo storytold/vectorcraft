@@ -133,10 +133,17 @@ fn tab_skips_the_band_that_moves_a_dialog() {
         settle(&ctx, &mut app);
         let band = modal::handle(id);
         assert!(ctx.read_response(band).is_some(), "{name}: the band is drawn");
+        let window = ctx.memory(|m| m.area_rect(id)).unwrap_or_else(|| panic!("{name}: the window is drawn"));
         let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 30, |events| {
             frame(&ctx, &mut app, events);
         });
-        assert!(!stops.is_empty(), "{name}: Tab reaches the dialog's controls");
+        let inside = |s: &egui::Id| ctx.read_response(*s).is_some_and(|r| r.rect.is_positive() && window.contains_rect(r.rect));
+        assert!(stops.iter().any(inside), "{name}: Tab reaches a control in the dialog: {stops:?}");
+        let backdrop: Vec<egui::Id> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().filter(|(l, _)| **l == modal::backdrop()).flat_map(|(_, w)| w.iter()).map(|w| w.id).collect()
+        });
+        assert!(!backdrop.is_empty(), "{name}: the backdrop is drawn");
+        assert!(!stops.iter().any(|id| backdrop.contains(id)), "{name}: Tab stops on the backdrop: {stops:?}");
         assert!(!stops.contains(&band), "{name}: {stops:?}");
     }
 }
@@ -566,6 +573,39 @@ fn smooth_slider_previews_auto_smooth_and_keeps_the_result() {
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
     assert_ne!(app.session.doc().unwrap().doc, before);
+}
+
+/// Tab goes through the controls of the Simplify and Smooth sliders' strip and does not stop on the
+/// backdrop that takes a click outside it. After tabbing, Escape closes the strip from the keyboard
+/// and puts the paths back.
+#[test]
+fn tab_skips_the_backdrop_of_the_simplify_and_smooth_sliders() {
+    for (menu, kind) in [("object.path.simplify", simplify_slider::KIND), ("object.path.smooth", smooth_slider::KIND)] {
+        let (ctx, mut app) = (ctx(), app_with_dense_path());
+        let before = app.session.doc().unwrap().doc.clone();
+        crate::menus::invoke(&mut app, menu, json!({}));
+        settle(&ctx, &mut app);
+        let strip = rect_of(&ctx, egui::Id::unique(("dialog", kind)));
+        let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 30, |events| {
+            frame(&ctx, &mut app, events);
+        });
+        let inside = |s: &egui::Id| ctx.read_response(*s).is_some_and(|r| r.rect.is_positive() && strip.contains_rect(r.rect));
+        assert!(stops.iter().any(inside), "{kind}: Tab reaches a control in the strip: {stops:?}");
+        let backdrop: Vec<egui::Id> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().filter(|(l, _)| **l == modal::backdrop()).flat_map(|(_, w)| w.iter()).map(|w| w.id).collect()
+        });
+        assert!(!backdrop.is_empty(), "{kind}: the backdrop is drawn");
+        assert!(!stops.iter().any(|id| backdrop.contains(id)), "{kind}: Tab stops on the backdrop: {stops:?}");
+        let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events: vec![escape], ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        assert!(app.ui.dialog.is_none() && !app.session.in_interaction(), "{kind}: Escape closes the strip");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{kind}: Escape puts the paths back");
+    }
 }
 
 /// More Options opens the Simplify dialog at the slider's tolerance. With "Open this dialog with

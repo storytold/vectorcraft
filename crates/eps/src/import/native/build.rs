@@ -15,6 +15,10 @@ pub(super) enum Page {
     Artboard,
 }
 
+/// How art moved from a page to its place in the layers' document transforms: its pattern tiles
+/// move with it.
+pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
 pub(super) struct Frame<'a> {
@@ -26,6 +30,8 @@ pub(super) struct Frame<'a> {
     /// The page holds all the art that prints (an EPS's page is its art's box, unless it was
     /// saved as its artboard): the layers print nothing outside it.
     pub(super) whole: bool,
+    /// The PDF page areas and their moves into the editing document.
+    pub(super) pages: Vec<(Rect, Affine)>,
 }
 
 /// The document of the editing copy `data`, with the text (and strokes round it) of `visible`, the
@@ -47,6 +53,28 @@ pub(super) fn build(
     build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
 }
 
+/// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
+/// (width and height, either way round) points large in units of `unit` points: the document is
+/// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
+/// those units and not in points, as [`build_from`] decides with a page.
+pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
+    let structure = ai::read(data, false)?;
+    let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
+    let art = structure.bbox.map(|[a, b, c, d]| structure.to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
+    let (w, h) = page;
+    let fits = |r: Option<Rect>, k: f64| {
+        r.is_some_and(|r| [(w, h), (h, w)].iter().any(|(a, b)| (r.width() - a / k).abs() <= 0.5 && (r.height() - b / k).abs() <= 0.5))
+    };
+    let in_units = |r: Option<Rect>| unit.is_finite() && unit > 1.0 && fits(r, unit) && !fits(r, 1.0);
+    let scale = in_units(board) || (!fits(board, 1.0) && in_units(art));
+    let (mut doc, notes) = build_from(structure, data, None, Page::Artboard, false, false, 1.0)?;
+    if scale {
+        // The graphic styles here are all the file's, drawn in its units too.
+        scale_document(&mut doc, unit, true);
+    }
+    Ok((doc, notes))
+}
+
 /// [`build`] from `structure`, the editing copy `data` already read.
 pub(super) fn build_from(
     structure: Structure,
@@ -57,7 +85,22 @@ pub(super) fn build_from(
     trust: bool,
     unit: f64,
 ) -> Result<(Document, Vec<String>), String> {
-    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, restyled, placed_elsewhere, warnings } = structure;
+    let Structure {
+        mut doc,
+        to_doc,
+        bbox,
+        artboard,
+        template,
+        hidden_unread,
+        unread,
+        unread_elsewhere,
+        slot_names,
+        restyled,
+        placed_elsewhere,
+        envelopes_drawn,
+        styles_read,
+        warnings,
+    } = structure;
     // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
     // scaled down to those units, and the document read from it is scaled up by `unit`.
     let board = artboard.map(|a| to_doc.transform_rect_bbox(a));
@@ -67,7 +110,7 @@ pub(super) fn build_from(
     let units = |v: &Document| in_units(board, v, unit) || (!same_size(board, v) && in_units(art, v, unit));
     let small = visible.filter(|v| matches!(page, Page::Artboard) && units(v)).map(|v| {
         let mut v = v.clone();
-        scale_document(&mut v, 1.0 / unit);
+        scale_document(&mut v, 1.0 / unit, false);
         v
     });
     let visible = small.as_ref().or(visible);
@@ -132,6 +175,15 @@ pub(super) fn build_from(
         // goes where the layers have that artboard.
         let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
         let boards = page_boards(&doc.artboards, first, &pages);
+        let page_moves: Vec<(Rect, Affine)> = pages
+            .iter()
+            .enumerate()
+            .map(|(i, page)| {
+                let move_to_doc =
+                    boards.and_then(|boards| boards.get(i)).map(|board| Affine::translate(board.rect.origin() - page.origin())).unwrap_or(shift);
+                (*page, move_to_doc)
+            })
+            .collect();
         // The page with most of an object, the first for what is on none.
         let page_of = |object: &[Arc<Node>]| {
             extent(object).and_then(|r| {
@@ -152,7 +204,7 @@ pub(super) fn build_from(
                 None => shift,
             };
             for n in object.iter_mut() {
-                Arc::make_mut(n).transform(shift, false);
+                Arc::make_mut(n).transform(shift, PAGE_MOVE);
             }
         }
         // An EPS saved as its artboard has the art outside it left out of its page.
@@ -166,8 +218,9 @@ pub(super) fn build_from(
             if let Some(a) = doc.artboards.first_mut() {
                 a.rect = rect;
             }
+            drop_guides_off_boards(&mut doc);
         }
-        frame = Some(Frame { page: visible, page_rect, rect, whole });
+        frame = Some(Frame { page: visible, page_rect, rect, whole, pages: page_moves });
     }
     let mut infos = vec![];
     collect_slots(&doc.layers, true, &mut infos);
@@ -180,6 +233,9 @@ pub(super) fn build_from(
     if outlined && infos.iter().any(|i| i.shown) {
         return Err("its type is to come in as outlines, which only its page has".into());
     }
+    // The page's type inside an unread object's box comes in with the page's art that replaces the
+    // object (see [`replace_unread`]), not in a text object.
+    let unread_type = take_unread_type(&doc, frame.as_ref(), &unread, &unread_elsewhere, &mut shown);
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
@@ -214,13 +270,29 @@ pub(super) fn build_from(
     let mut made = vec![];
     fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made, &mut vec![]);
     doc.layers = layers;
-    // A story in several frames is threaded type: its frames in order (the first holds the story).
     made.sort();
+    let threaded_frames: BTreeSet<NodeId> =
+        made.chunk_by(|a, b| a.0 == b.0).filter(|thread| thread.len() > 1).flatten().map(|(_, _, id)| *id).collect();
+    if !unread.is_empty() {
+        let Some(frame) = frame.as_ref() else { return Err(unread_error(&unread)) };
+        let mut copied = BTreeSet::new();
+        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &threaded_frames, &mut copied)?;
+        // With the text objects filled, the page art chosen can differ from the first try's: the
+        // page's type set aside for it, and no other, must be in it.
+        let all_copied = |o: &Vec<Arc<Node>>| !o.is_empty() && o.iter().all(|n| copied.contains(&n.id));
+        if !unread_type.iter().all(all_copied) || shown.iter().any(all_copied) {
+            return Err("the page's type in an unread object's box isn't in its page art".into());
+        }
+        notes.push(format!("{}: they came in as the page's art", kinds.join(", ")));
+    }
+    // A story in several frames is threaded type: its frames in order (the first holds the story).
     for thread in made.chunk_by(|a, b| a.0 == b.0) {
         if thread.len() > 1 {
             doc.text_threads.push(thread.iter().map(|(_, _, id)| *id).collect());
         }
     }
+    // Area type flows around the wrap objects above it before it is compared with the page.
+    resolve_text_wrap(&mut doc)?;
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -269,10 +341,10 @@ pub(super) fn build_from(
                         doc = other;
                         notes.extend(unseen_note(unseen).into_iter().chain(note));
                     }
-                    _ if trust => {
-                        notes.extend(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]))
+                    _ => {
+                        let more = drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow)?;
+                        notes.extend(more);
                     }
-                    _ => return Err(why),
                 },
             }
         }
@@ -280,9 +352,446 @@ pub(super) fn build_from(
     }
     doc.limit_depth_noting(&mut notes);
     if small.is_some() {
-        scale_document(&mut doc, unit);
+        scale_document(&mut doc, unit, styles_read);
+        relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
+const MAX_WRAP_WORK: usize = 2_000_000;
+
+/// [`relayout_wrapped`], or an error when the wrap shapes would hold more than [`MAX_WRAP_WORK`]
+/// anchors.
+fn resolve_text_wrap(doc: &mut Document) -> Result<(), String> {
+    if has_wraps(doc) && vectorcraft_doc::text::wrap_work(doc) > MAX_WRAP_WORK {
+        return Err("it has too many text objects".into());
+    }
+    relayout_wrapped(doc);
+    Ok(())
+}
+
+/// Does an object of `doc` have text wrap options, or a text object wrap shapes?
+fn has_wraps(doc: &Document) -> bool {
+    let mut wraps = false;
+    doc.walk(|n| wraps |= n.extras().wrap.is_some() || matches!(&n.kind, NodeKind::Text(t) if !t.wrap.is_empty()));
+    wraps
+}
+
+/// Resolve the wrap shapes of the area type in `doc` that has wrap objects above it (see
+/// [`vectorcraft_doc::text::resolve_wrap`]); the type whose shapes changed is laid out again.
+/// Nothing is resolved when the shapes would hold more than [`MAX_WRAP_WORK`] anchors (such a
+/// file isn't read from its layers: see [`resolve_text_wrap`]).
+fn relayout_wrapped(doc: &mut Document) {
+    if !has_wraps(doc) || vectorcraft_doc::text::wrap_work(doc) > MAX_WRAP_WORK {
+        return;
+    }
+    for id in vectorcraft_doc::text::resolve_wrap(None, doc) {
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
+        }
+    }
+}
+
+/// A visible page node, with its source order and subtree range.
+struct PageArt {
+    node: Arc<Node>,
+    bounds: Rect,
+    page: usize,
+    end: usize,
+    stateful_ancestor: bool,
+}
+
+const ART_MARGIN: f64 = 1.0;
+
+fn inside(art: Rect, bounds: Rect) -> bool {
+    art.x0 >= bounds.x0 - ART_MARGIN && art.y0 >= bounds.y0 - ART_MARGIN && art.x1 <= bounds.x1 + ART_MARGIN && art.y1 <= bounds.y1 + ART_MARGIN
+}
+
+/// Pick the page holding the most of a box. The first page wins a tie.
+fn page_for(bounds: Rect, pages: &[Rect]) -> usize {
+    let mut best = (0, 0.0);
+    for (i, page) in pages.iter().enumerate() {
+        let area = page.intersect(bounds).area().max(0.0);
+        if area > best.1 {
+            best = (i, area);
+        }
+    }
+    best.0
+}
+
+fn collect_live(node: &Node, unread: &BTreeSet<NodeId>, live: &mut Vec<Rect>) {
+    if !node.visible || unread.contains(&node.id) {
+        return;
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_live(child, unread, live);
+        }
+    } else if let Some(bounds) = node.visual_bounds() {
+        live.push(bounds);
+    }
+}
+
+fn page_node_has_drawing_state(node: &Node) -> bool {
+    node.clips()
+        || matches!(node.kind, NodeKind::Path { clipping: true, .. })
+        || node.opacity < 1.0
+        || node.blend != super::BlendMode::Normal
+        || node.isolate
+        || node.knockout != vectorcraft_doc::Knockout::Neutral
+        || node.extras().mask.is_some()
+        || !node.appearance.items.is_empty()
+        || !node.appearance.effects.is_empty()
+}
+
+fn index_page(node: &Arc<Node>, pages: &[Rect], moves: &[Affine], art: &mut Vec<PageArt>, stateful_ancestor: bool) {
+    if !node.visible {
+        return;
+    }
+    let start = art.len();
+    let mut indexed = false;
+    if let Some(bounds) = node.visual_bounds() {
+        let page = page_for(bounds, pages);
+        if let Some(shift) = moves.get(page) {
+            art.push(PageArt { node: Arc::clone(node), bounds: shift.transform_rect_bbox(bounds), page, end: start + 1, stateful_ancestor });
+            indexed = true;
+        }
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            index_page(child, pages, moves, art, stateful_ancestor || page_node_has_drawing_state(node));
+        }
+    }
+    let end = art.len();
+    if indexed && let Some(entry) = art.get_mut(start) {
+        entry.end = end;
+    }
+}
+
+/// Node IDs belong to the importing document, not to the pattern's drawing.
+fn same_pattern_art(existing: &vectorcraft_doc::PatternDef, source: &vectorcraft_doc::PatternDef) -> bool {
+    fn clear_ids(node: &mut Node) {
+        node.id = NodeId(0);
+        if let Some(children) = node.children_mut() {
+            for child in children {
+                clear_ids(Arc::make_mut(child));
+            }
+        }
+        if let Some(mask) = &mut node.extras_mut().mask {
+            clear_ids(Arc::make_mut(&mut mask.art));
+        }
+    }
+
+    let mut a = existing.clone();
+    let mut b = source.clone();
+    for pattern in [&mut a, &mut b] {
+        for node in &mut pattern.art {
+            clear_ids(Arc::make_mut(node));
+        }
+    }
+    a == b
+}
+
+/// Bring document resources used by page art across before reassigning its node IDs.
+fn copy_page_resources(doc: &mut Document, page: &Document, nodes: &[&Node]) -> Result<(), String> {
+    fn collect(node: &Node, images: &mut BTreeSet<String>, patterns: &mut BTreeSet<String>, swatches: &mut BTreeSet<String>) {
+        if let NodeKind::Image(im) = &node.kind {
+            images.insert(im.key.clone());
+        }
+        for item in &node.appearance.items {
+            match item.paint() {
+                vectorcraft_color::Paint::Solid { swatch: Some(name), .. } => {
+                    swatches.insert(name.clone());
+                }
+                vectorcraft_color::Paint::Gradient(gradient) => {
+                    if let Some(name) = &gradient.swatch {
+                        swatches.insert(name.clone());
+                    }
+                    for stop in &gradient.gradient.stops {
+                        if let Some(name) = &stop.swatch {
+                            swatches.insert(name.clone());
+                        }
+                    }
+                }
+                vectorcraft_color::Paint::Pattern { pattern, .. } => {
+                    patterns.insert(pattern.clone());
+                }
+                _ => {}
+            }
+        }
+        if let Some(mask) = &node.extras().mask {
+            collect(&mask.art, images, patterns, swatches);
+        }
+        for child in node.children().into_iter().flatten() {
+            collect(child, images, patterns, swatches);
+        }
+    }
+
+    let (mut images, mut patterns, mut swatches) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
+    for node in nodes {
+        collect(node, &mut images, &mut patterns, &mut swatches);
+    }
+    let mut copied = BTreeSet::new();
+    while let Some(name) = patterns.pop_first() {
+        if !copied.insert(name.clone()) {
+            continue;
+        }
+        let Some(source) = page.pattern(&name) else { return Err(format!("page art is missing pattern {name}")) };
+        if let Some(existing) = doc.pattern(&name) {
+            if !same_pattern_art(existing, source) {
+                return Err(format!("page art conflicts with pattern {name}"));
+            }
+        } else {
+            for node in &source.art {
+                collect(node, &mut images, &mut patterns, &mut swatches);
+            }
+            let mut pattern = source.clone();
+            pattern.art = pattern.art.iter().map(|node| Arc::new(reid_page_art(doc, node))).collect();
+            doc.patterns.push(pattern);
+        }
+    }
+    for key in images {
+        let Some(blob) = page.images.get(&key) else { return Err(format!("page art is missing image data for {key}")) };
+        if doc.images.get(&key).is_some_and(|existing| existing.bytes != blob.bytes) {
+            return Err(format!("page art conflicts with image data for {key}"));
+        }
+        doc.images.entry(key).or_insert_with(|| blob.clone());
+    }
+    for name in swatches {
+        let Some(source) = page.swatch(&name) else { return Err(format!("page art is missing swatch {name}")) };
+        if let Some(existing) = doc.swatch(&name) {
+            if existing != source {
+                return Err(format!("page art conflicts with swatch {name}"));
+            }
+        } else {
+            doc.swatches.push(source.clone());
+        }
+    }
+    Ok(())
+}
+
+/// The PDF importer keeps group transparency on a group, or folds it into its only child.
+/// If the editing object's state cannot be located in that art, use the PDF page as a whole.
+/// Every selected page object must carry the state, on itself or down a chain of only children.
+fn page_carries_state(editing: &Node, page: &[&Node]) -> bool {
+    fn carried(node: &Node, matches: &dyn Fn(&Node) -> bool) -> bool {
+        matches(node)
+            || match node.children().map(Vec::as_slice) {
+                Some([only]) => carried(only, matches),
+                _ => false,
+            }
+    }
+    let has = |matches: &dyn Fn(&Node) -> bool| !page.is_empty() && page.iter().all(|node| carried(node, matches));
+    let opacity = editing.opacity >= 0.999 || has(&|node: &Node| (node.opacity - editing.opacity).abs() < 0.001);
+    let blend = editing.blend == super::BlendMode::Normal || has(&|node: &Node| node.blend == editing.blend);
+    let isolate = !editing.isolate || has(&|node: &Node| node.isolate);
+    let knockout = matches!(editing.knockout, vectorcraft_doc::Knockout::Neutral | vectorcraft_doc::Knockout::Off)
+        || has(&|node: &Node| node.knockout == editing.knockout);
+    let appearance = !matches!(editing.kind, NodeKind::Group { .. }) || *editing.appearance == vectorcraft_doc::Appearance::default();
+    opacity && blend && isolate && knockout && appearance
+}
+
+/// The error for unread objects with no page art to use: what isn't read, as the reader names it.
+fn unread_error(unread: &[(NodeId, Vec<String>)]) -> String {
+    let kinds: BTreeSet<&str> = unread.iter().flat_map(|(_, kinds)| kinds.iter().map(String::as_str)).collect();
+    let (ops, other): (Vec<&str>, Vec<&str>) = kinds.into_iter().partition(|k| k.starts_with('`'));
+    let mut list: BTreeSet<String> = other.into_iter().map(String::from).collect();
+    if !ops.is_empty() {
+        list.insert(format!("operators VectorCraft doesn't know ({})", ops.join(", ")));
+    }
+    let list: Vec<&str> = list.iter().map(String::as_str).collect();
+    format!("it has {}, which VectorCraft doesn't read from it yet", ai::join_and(&list))
+}
+
+/// The page's text objects in `shown` that the page objects replacing `doc`'s unread objects hold
+/// (see [`replace_unread`], tried on a copy of `doc` before its text objects are filled), taken out
+/// of `shown`.
+fn take_unread_type(
+    doc: &Document,
+    frame: Option<&Frame<'_>>,
+    unread: &[(NodeId, Vec<String>)],
+    elsewhere: &[(NodeId, Rect)],
+    shown: &mut Vec<Vec<Arc<Node>>>,
+) -> Vec<Vec<Arc<Node>>> {
+    let Some(frame) = frame.filter(|_| !unread.is_empty() && !shown.is_empty()) else { return vec![] };
+    let mut copied = BTreeSet::new();
+    if replace_unread(&mut doc.clone(), frame, unread, elsewhere, &BTreeSet::new(), &mut copied).is_err() {
+        return vec![];
+    }
+    let (taken, kept) = std::mem::take(shown).into_iter().partition(|o| !o.is_empty() && o.iter().all(|n| copied.contains(&n.id)));
+    *shown = kept;
+    taken
+}
+
+/// Replace each unread top-level object with painted page objects inside its readable bounds.
+/// `copied` gets the ids of the page's nodes copied.
+fn replace_unread(
+    doc: &mut Document,
+    frame: &Frame<'_>,
+    unread: &[(NodeId, Vec<String>)],
+    elsewhere: &[(NodeId, Rect)],
+    threaded_frames: &BTreeSet<NodeId>,
+    copied: &mut BTreeSet<NodeId>,
+) -> Result<Vec<String>, String> {
+    fn holds_threaded_frame(node: &Node, frames: &BTreeSet<NodeId>) -> bool {
+        frames.contains(&node.id) || node.children().is_some_and(|children| children.iter().any(|child| holds_threaded_frame(child, frames)))
+    }
+    fn subtree(node: &Node, ids: &mut BTreeSet<NodeId>) {
+        ids.insert(node.id);
+        for child in node.children().into_iter().flatten() {
+            subtree(child, ids);
+        }
+    }
+
+    let unread_ids: BTreeSet<NodeId> = unread.iter().map(|(id, _)| *id).collect();
+    let mut live = Vec::new();
+    for layer in &doc.layers {
+        collect_live(layer, &unread_ids, &mut live);
+    }
+    live.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+
+    let source_pages: Vec<Rect> = frame.pages.iter().map(|(page, _)| *page).collect();
+    let moves: Vec<Affine> = frame.pages.iter().map(|(_, shift)| *shift).collect();
+    let destination_pages: Vec<Rect> = frame.pages.iter().map(|(page, shift)| shift.transform_rect_bbox(*page)).collect();
+    let mut art = Vec::new();
+    for layer in &frame.page.layers {
+        if layer.visible
+            && let Some(children) = layer.children()
+        {
+            for child in children {
+                index_page(child, &source_pages, &moves, &mut art, false);
+            }
+        }
+    }
+    let mut by_x: Vec<usize> = (0..art.len()).collect();
+    by_x.sort_by(|a, b| art[*a].bounds.x0.total_cmp(&art[*b].bounds.x0));
+    let mut claimed = std::collections::BTreeMap::<usize, usize>::new();
+    let mut counts = std::collections::BTreeMap::<String, usize>::new();
+    for (id, kinds) in unread {
+        let Some((bounds, name, visible, locked, editing)) =
+            doc.node(*id).and_then(|n| n.visual_bounds().map(|b| (b, n.name.clone(), n.visible, n.locked, n.clone())))
+        else {
+            return Err("an unread object has no readable bounds".into());
+        };
+        if !bounds.area().is_finite() || bounds.area() <= 0.0 {
+            return Err("an unread object has no readable bounds".into());
+        }
+        let mut selected = Vec::new();
+        let mut page = 0;
+        let mut first_rejection = None;
+        'candidate: for candidate in std::iter::once(bounds).chain(elsewhere.iter().filter(|(other, _)| *other == *id).map(|(_, b)| *b)) {
+            let live_start = live.partition_point(|b| b.x0 < candidate.x0 - ART_MARGIN);
+            let live_end = live.partition_point(|b| b.x0 <= candidate.x1 + ART_MARGIN);
+            if live[live_start..live_end].iter().any(|art| inside(*art, candidate)) {
+                first_rejection.get_or_insert("an unread object's bounds also contain live art");
+                continue;
+            }
+            // Each page has its own copy of art across artboards: one page's art can't stand in for it.
+            if destination_pages.iter().filter(|page| page.intersect(candidate).area() > 0.0).count() > 1 {
+                first_rejection.get_or_insert("an unread object lies on more than one artboard");
+                continue;
+            }
+            let candidate_page = page_for(candidate, &destination_pages);
+            // An artboard that has no page (a PDF part saved with some of the artboards) has no art
+            // on the page for the object's part on it.
+            if let Some(page) = destination_pages.get(candidate_page)
+                && doc.artboards.iter().map(|a| a.rect.intersect(candidate)).any(|part| part.area() > page.intersect(part).area().max(0.0))
+            {
+                first_rejection.get_or_insert("an unread object lies on an artboard that has no page");
+                continue;
+            }
+            let start = by_x.partition_point(|i| art[*i].bounds.x0 < candidate.x0 - ART_MARGIN);
+            let end = by_x.partition_point(|i| art[*i].bounds.x0 <= candidate.x1 + ART_MARGIN);
+            let mut candidates: Vec<usize> =
+                by_x[start..end].iter().copied().filter(|i| art[*i].page == candidate_page && inside(art[*i].bounds, candidate)).collect();
+            candidates.sort_unstable();
+            let mut covered_until = 0;
+            let mut candidate_selected = Vec::new();
+            for i in candidates {
+                if i < covered_until || matches!(art[i].node.kind, NodeKind::Path { clipping: true, .. }) {
+                    continue;
+                }
+                if art[i].stateful_ancestor {
+                    first_rejection.get_or_insert("an unread object's page art depends on a clipping or appearance ancestor");
+                    continue 'candidate;
+                }
+                covered_until = art[i].end;
+                candidate_selected.push(i);
+            }
+            if !candidate_selected.is_empty()
+                && !page_carries_state(&editing, &candidate_selected.iter().map(|&i| art[i].node.as_ref()).collect::<Vec<_>>())
+            {
+                first_rejection.get_or_insert("an unread object's appearance is not identifiable in the page art");
+                continue;
+            }
+            if candidate_selected.iter().any(|&i| claimed.range(..art[i].end).next_back().is_some_and(|(_, end)| *end > i)) {
+                first_rejection.get_or_insert("one page object matches more than one unread object");
+                continue;
+            }
+            if !candidate_selected.is_empty() {
+                selected = candidate_selected;
+                page = candidate_page;
+                break;
+            }
+        }
+        if selected.is_empty() {
+            return Err(first_rejection.unwrap_or("an unread object's page art wasn't found in its bounds").into());
+        }
+        if holds_threaded_frame(&editing, threaded_frames) {
+            return Err("an unread object holds a frame of threaded type".into());
+        }
+        copy_page_resources(doc, frame.page, &selected.iter().map(|&i| art[i].node.as_ref()).collect::<Vec<_>>())?;
+        let mut found = Vec::new();
+        for &i in &selected {
+            let mut copy = Node::clone(&art[i].node);
+            if let Some(shift) = moves.get(page) {
+                copy.transform(*shift, PAGE_MOVE);
+            }
+            found.push(Arc::new(reid_page_art(doc, &copy)));
+            claimed.insert(i, art[i].end);
+            subtree(&art[i].node, copied);
+        }
+        let mut replacement = Node::group(*id, found);
+        replacement.name = name;
+        replacement.visible = visible;
+        replacement.locked = locked;
+        let Some(target) = doc.node_mut(*id) else { return Err("an unread object is missing from its layer".into()) };
+        *target = replacement;
+        for kind in kinds {
+            *counts.entry(kind.clone()).or_default() += 1;
+        }
+    }
+    Ok(counts.into_iter().map(|(kind, count)| format!("{kind} ({count})")).collect())
+}
+
+/// Copy page drawing IDs, including mask art outside the ordinary child tree.
+fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
+    let mut copy = doc.reid(source);
+    if let Some(mask) = &mut copy.extras_mut().mask {
+        mask.art = Arc::new(reid_page_art(doc, &mask.art));
+    }
+    if let Some(children) = copy.children_mut() {
+        for child in children {
+            let node = reid_page_art_masks(doc, child);
+            *child = Arc::new(node);
+        }
+    }
+    copy
+}
+
+fn reid_page_art_masks(doc: &mut Document, source: &Node) -> Node {
+    let mut copy = source.clone();
+    if let Some(mask) = &mut copy.extras_mut().mask {
+        mask.art = Arc::new(reid_page_art(doc, &mask.art));
+    }
+    if let Some(children) = copy.children_mut() {
+        for child in children {
+            *child = Arc::new(reid_page_art_masks(doc, child));
+        }
+    }
+    copy
 }
 
 /// What goes into each of `infos`' slots, and whether the type is all made from the file's text
@@ -313,20 +822,66 @@ fn slot_content(
     Ok((plan(infos, stories, made, template, to_doc, pages, notes), false))
 }
 
+/// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
+/// notes to add when `doc` with each live envelope `drawn` lists replaced by the drawn art it took
+/// the place of (see [`ai::Structure::envelopes_drawn`]) draws as the page, `doc` then being that;
+/// else, with `trust`, the notes for `doc` as it is. An error, `why`, otherwise. The envelope note
+/// is added unless `notes` has it.
+#[allow(clippy::too_many_arguments)]
+fn drawn_or_trusted(
+    frame: &Frame<'_>,
+    view: &mut PageView,
+    doc: &mut Document,
+    drawn: &[(NodeId, Node)],
+    notes: &[String],
+    unseen: usize,
+    trust: bool,
+    why: String,
+    reflow: bool,
+) -> Result<Vec<String>, String> {
+    let unseen_note = |n: usize| (n > 0).then(|| format!("{n} {UNSEEN_TEXT}"));
+    let mut put_back = doc.clone();
+    let mut any = false;
+    for (id, art) in drawn {
+        if let Some(n) = put_back.node_mut(*id) {
+            *n = art.clone();
+            any = true;
+        }
+    }
+    if any {
+        let more = prune_unseen(frame, view, &mut put_back, reflow);
+        if let Ok(note) = compare(frame, view, &put_back, reflow) {
+            *doc = put_back;
+            let envelope = (!notes.iter().any(|n| n == ai::ENVELOPE_DRAWN)).then(|| ai::ENVELOPE_DRAWN.to_string());
+            return Ok(envelope.into_iter().chain(unseen_note(unseen + more)).chain(note).collect());
+        }
+    }
+    if trust {
+        return Ok(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]).collect());
+    }
+    Err(why)
+}
+
 /// `doc` with the placed files `placed` lists at their other placement (see
 /// [`ai::Structure::placed_elsewhere`]): each image's transform followed by its move. `None` when
-/// none is listed.
+/// no listed image survives replacement.
 fn elsewhere(doc: &Document, placed: &[(NodeId, Affine)]) -> Option<Document> {
     if placed.is_empty() {
         return None;
     }
     let mut doc = doc.clone();
+    let mut moved = false;
     for (id, shift) in placed {
         if let Some(NodeKind::Image(im)) = doc.node_mut(*id).map(|n| &mut n.kind) {
             im.xf *= *shift;
+            moved = true;
         }
     }
-    Some(doc)
+    // Area type wrapped around a moved image flows around it where it now is.
+    if moved {
+        relayout_wrapped(&mut doc);
+    }
+    moved.then_some(doc)
 }
 
 /// The page's type that needs no text object of the layers, taken out of `shown` and `hidden` (the
@@ -490,16 +1045,50 @@ fn page_boards<'a>(boards: &'a [vectorcraft_doc::Artboard], first: usize, pages:
     ((first > 0 || pages.len() == boards.len()) && shown.iter().zip(pages).all(same)).then_some(shown)
 }
 
-/// Draw `doc`'s layers and artboards `k` times as large, from the origin, with their strokes,
-/// effects and pattern tiles.
-fn scale_document(doc: &mut Document, k: f64) {
+/// Drops the guides of artboards `doc` no longer has: an artboard guide goes with its artboard.
+fn drop_guides_off_boards(doc: &mut Document) {
+    let kept: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
+    doc.guides.retain(|g| g.artboard.is_none_or(|id| kept.contains(&id)));
+}
+
+/// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
+/// strokes, effects and pattern tiles, and with `styles` the strokes and effects of its graphic
+/// styles.
+fn scale_document(doc: &mut Document, k: f64, styles: bool) {
     let a = Affine::scale(k);
     let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
     for layer in &mut doc.layers {
-        Arc::make_mut(layer).transform(a, scaling);
+        let layer = Arc::make_mut(layer);
+        layer.transform(a, scaling);
+        scale_wrap_offsets(layer, k);
     }
     for board in &mut doc.artboards {
         board.rect = a.transform_rect_bbox(board.rect);
+    }
+    for guide in &mut doc.guides {
+        guide.pos *= k;
+    }
+    if styles {
+        for g in doc.graphic_styles.iter_mut() {
+            g.appearance.scale_strokes(k);
+            g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+        }
+    }
+}
+
+/// The text wrap offsets of `n` and what it holds, times `k` (within the -1000 to 1000 points
+/// they may be).
+fn scale_wrap_offsets(n: &mut Node, k: f64) {
+    if let Some(w) = n.extras_if_any().and_then(|e| e.wrap.as_mut()) {
+        let v = w.offset * k;
+        if !v.is_nan() {
+            w.offset = v.clamp(-1000.0, 1000.0);
+        }
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            scale_wrap_offsets(Arc::make_mut(c), k);
+        }
     }
 }
 
@@ -583,6 +1172,8 @@ pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Doc
     let mut with = view.colour_difference(doc, rect);
     let mut removed = 0;
     for (id, bounds) in found {
+        // A removal before it can have let its area type flow differently.
+        let bounds = if removed > 0 { doc.node(id).and_then(|n| n.visual_bounds()) } else { bounds };
         if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
             continue;
         }
@@ -590,12 +1181,425 @@ pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Doc
         if !take_out(&mut without.layers, id, true) {
             continue;
         }
+        // Area type that wrapped around the text object flows without it.
+        relayout_wrapped(&mut without);
         let d = view.colour_difference(&without, rect);
         if d - with <= UNSEEN_MARGIN {
             take_out(&mut doc.layers, id, false);
+            relayout_wrapped(doc);
             with = d;
             removed += 1;
         }
     }
     removed
+}
+
+#[cfg(test)]
+mod candidate_tests {
+    use super::*;
+
+    use vectorcraft_doc::{ImageBlob, ImageObject};
+
+    /// Layers read in the units of a page scaled up to points take their wrap offsets with their art,
+    /// within ±1000 points.
+    #[test]
+    fn scaling_the_document_scales_its_wrap_offsets() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut ids = vec![];
+        for (x, offset) in [(0.0, 6.0), (20.0, 200.0), (40.0, -150.0)] {
+            let id = doc.alloc_id();
+            let mut n = Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Default::default());
+            n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset, invert: true });
+            doc.insert(Some(doc.layers[0].id), 0, n).unwrap();
+            ids.push(id);
+        }
+        scale_document(&mut doc, 10.0, false);
+        let offsets: Vec<_> = ids.iter().map(|id| doc.node(*id).and_then(|n| n.extras().wrap)).collect();
+        let wrap = |offset| Some(vectorcraft_doc::TextWrap { offset, invert: true });
+        assert_eq!(offsets, [wrap(60.0), wrap(1000.0), wrap(-1000.0)]);
+    }
+
+    /// Area type in `doc`'s first layer at `index`, in the frame `r`.
+    fn insert_area(doc: &mut Document, index: usize, r: Rect) -> NodeId {
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Wrapped", Default::default());
+        t.kind = vectorcraft_doc::TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(r) };
+        let id = doc.alloc_id();
+        doc.insert(Some(doc.layers[0].id), index, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap()
+    }
+
+    /// A wrap object on top of `doc`'s first layer: a closed path of `anchors` anchors in `r`.
+    fn insert_wrap(doc: &mut Document, r: Rect, anchors: usize) -> NodeId {
+        let mut bp = kurbo::BezPath::new();
+        bp.move_to((r.x0, r.y0));
+        for i in 1..anchors {
+            let t = i as f64 / anchors as f64;
+            bp.line_to((r.x0 + r.width() * t, if i % 2 == 0 { r.y0 } else { r.y1 }));
+        }
+        bp.close_path();
+        let id = doc.alloc_id();
+        let mut n = Node::path(id, PathData::from_bezpath(&bp), Default::default());
+        n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+        let top = doc.layers[0].children().map_or(0, Vec::len);
+        doc.insert(Some(doc.layers[0].id), top, n).unwrap()
+    }
+
+    fn wrap_shapes(doc: &Document, id: NodeId) -> usize {
+        match doc.node(id).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.wrap.len(),
+            _ => panic!("area type"),
+        }
+    }
+
+    /// A file whose wrap shapes would copy more than `MAX_WRAP_WORK` anchors isn't read from its
+    /// layers; one below that is.
+    #[test]
+    fn wrap_shapes_of_too_many_text_objects_are_refused() {
+        for (texts, ok) in [(150, true), (250, false)] {
+            let mut doc = Document::new(100.0, 100.0);
+            let ids: Vec<NodeId> = (0..texts).map(|_| insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0))).collect();
+            insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 10_000);
+            assert!(vectorcraft_doc::text::wrap_work(&doc) >= texts * 10_000);
+            assert_eq!(resolve_text_wrap(&mut doc).is_ok(), ok, "{texts} text objects");
+            // Nor is anything copied on the way, as the placed files' other placement does.
+            relayout_wrapped(&mut doc);
+            assert!(ids.iter().all(|id| wrap_shapes(&doc, *id) == usize::from(ok)), "{texts} text objects");
+        }
+    }
+
+    /// Area type that wrapped around an object taken out of the layers flows without it.
+    #[test]
+    fn wrap_shapes_go_with_their_wrap_object() {
+        let mut doc = Document::new(100.0, 100.0);
+        let text = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0));
+        let wrap = insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 4);
+        resolve_text_wrap(&mut doc).unwrap();
+        assert_eq!(wrap_shapes(&doc, text), 1);
+        doc.remove(wrap).unwrap();
+        relayout_wrapped(&mut doc);
+        assert_eq!(wrap_shapes(&doc, text), 0);
+    }
+
+    /// Area type wrapped around a placed image flows around it at the image's other placement.
+    #[test]
+    fn wrap_shapes_follow_an_image_to_its_other_placement() {
+        let mut doc = Document::new(100.0, 100.0);
+        let text = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0));
+        let image = doc.alloc_id();
+        let mut n = Node::new(
+            image,
+            NodeKind::Image(Box::new(ImageObject {
+                key: "k".into(),
+                width: 10,
+                height: 10,
+                xf: Affine::translate(Vec2::new(10.0, 10.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+        doc.insert(Some(doc.layers[0].id), 1, n).unwrap();
+        resolve_text_wrap(&mut doc).unwrap();
+        let x0 = |d: &Document| match d.node(text).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.wrap.first().and_then(|w| w.path.bounds()).map(|b| b.x0),
+            _ => None,
+        };
+        assert_eq!(x0(&doc), Some(10.0));
+        let moved = elsewhere(&doc, &[(image, Affine::translate(Vec2::new(50.0, 0.0)))]).unwrap();
+        assert_eq!(x0(&moved), Some(60.0));
+    }
+
+    /// A page image with a different proxy keeps its editing layer and original blob.
+    #[test]
+    fn page_image_with_different_proxy_keeps_editing_layer() {
+        let mut doc = Document::new(100.0, 100.0);
+        let placeholder_id = doc.alloc_id();
+        let placeholder = Node::path(placeholder_id, vectorcraft_geom::shapes::rectangle(Rect::new(50.0, 50.0, 54.0, 54.0)), Default::default());
+        doc.insert(Some(doc.layers[0].id), 0, placeholder).unwrap();
+
+        let mut page = Document::new(100.0, 100.0);
+        let mut editing_blob = ImageBlob::new("image/png", vec![1, 2, 3]);
+        editing_blob.proxy = Some(Arc::new(vec![4, 5, 6]));
+        let page_blob = ImageBlob::new("image/png", vec![1, 2, 3]);
+        let key = editing_blob.content_key();
+        assert_eq!(key, page_blob.content_key());
+        doc.images.insert(key.clone(), editing_blob.clone());
+        page.images.insert(key.clone(), page_blob);
+        let image = Node::new(
+            page.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject {
+                key: key.clone(),
+                width: 4,
+                height: 4,
+                xf: Affine::translate(Vec2::new(50.0, 50.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        page.insert(Some(page.layers[0].id), 0, image).unwrap();
+
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let kinds = replace_unread(
+            &mut doc,
+            &frame,
+            &[(placeholder_id, vec!["placed files".into()])],
+            &[(placeholder_id, Rect::new(50.0, 50.0, 54.0, 54.0))],
+            &BTreeSet::new(),
+            &mut BTreeSet::new(),
+        )
+        .unwrap();
+        assert_eq!(kinds, ["placed files (1)"]);
+        let replacement = doc.node(placeholder_id).unwrap();
+        let [image] = replacement.children().unwrap().as_slice() else { panic!("{replacement:?}") };
+        assert!(matches!(image.kind, NodeKind::Image(_)));
+        assert_eq!(doc.images.get(&key), Some(&editing_blob));
+    }
+
+    /// An unread object across two artboards isn't replaced by the art of one page only.
+    #[test]
+    fn unread_object_across_two_pages_is_not_replaced() {
+        let mut doc = Document::new(200.0, 100.0);
+        let id = doc.alloc_id();
+        doc.insert(
+            Some(doc.layers[0].id),
+            0,
+            Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(90.0, 10.0, 110.0, 20.0)), Default::default()),
+        )
+        .unwrap();
+        let mut page = Document::new(200.0, 100.0);
+        for bounds in [Rect::new(91.0, 11.0, 99.0, 19.0), Rect::new(101.0, 11.0, 109.0, 19.0)] {
+            let art = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(bounds),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
+        }
+        let (first, second) = (Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 200.0, 100.0));
+        let frame =
+            Frame { page: &page, page_rect: first, rect: first, whole: false, pages: vec![(first, Affine::IDENTITY), (second, Affine::IDENTITY)] };
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
+        assert_eq!(result.unwrap_err(), "an unread object lies on more than one artboard");
+    }
+
+    /// An unread object reaching an artboard that has no page isn't replaced by the page's part of it.
+    #[test]
+    fn unread_object_on_an_artboard_without_a_page_is_not_replaced() {
+        let mut doc = Document::new(100.0, 100.0);
+        doc.artboards.push(vectorcraft_doc::Artboard { id: 2, rect: Rect::new(100.0, 0.0, 200.0, 100.0), ..doc.artboards[0].clone() });
+        let id = doc.alloc_id();
+        doc.insert(
+            Some(doc.layers[0].id),
+            0,
+            Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(90.0, 10.0, 110.0, 20.0)), Default::default()),
+        )
+        .unwrap();
+        let mut page = Document::new(100.0, 100.0);
+        let art = Node::path(
+            page.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(Rect::new(91.0, 11.0, 99.0, 19.0)),
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+        );
+        page.insert(Some(page.layers[0].id), 0, art).unwrap();
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
+        assert_eq!(result.unwrap_err(), "an unread object lies on an artboard that has no page");
+
+        // Half a point onto it is still on it.
+        let narrow = Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(90.0, 10.0, 100.5, 20.0)), Default::default());
+        *doc.node_mut(id).unwrap() = narrow;
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
+        assert_eq!(result.unwrap_err(), "an unread object lies on an artboard that has no page");
+    }
+
+    /// A nested placeholder's corner cannot replace its readable sibling.
+    #[test]
+    fn nested_placeholder_corner_cannot_replace_readable_sibling() {
+        let mut doc = Document::new(100.0, 100.0);
+        let group_id = doc.alloc_id();
+        let placeholder = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), Default::default());
+        let placeholder_id = placeholder.id;
+        let sibling = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(70.0, 70.0, 74.0, 74.0)), Default::default());
+        let sibling_id = sibling.id;
+        let group = Node::group(group_id, vec![Arc::new(placeholder), Arc::new(sibling)]);
+        doc.insert(Some(doc.layers[0].id), 0, group).unwrap();
+
+        let mut page = Document::new(100.0, 100.0);
+        let art = Node::path(
+            page.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(Rect::new(81.0, 81.0, 89.0, 89.0)),
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+        );
+        page.insert(Some(page.layers[0].id), 0, art).unwrap();
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let result = replace_unread(
+            &mut doc,
+            &frame,
+            &[(group_id, vec!["placed files".into()])],
+            &[(placeholder_id, Rect::new(80.0, 80.0, 90.0, 90.0))],
+            &BTreeSet::new(),
+            &mut BTreeSet::new(),
+        );
+        assert_eq!(result.unwrap_err(), "an unread object's page art wasn't found in its bounds");
+        let group = doc.node(group_id).unwrap();
+        assert!(group.children().unwrap().iter().any(|child| child.id == sibling_id));
+    }
+
+    /// An alternative box may carry opacity missing from the first box.
+    #[test]
+    fn alternative_box_can_carry_opacity_when_first_box_cannot() {
+        let mut doc = Document::new(100.0, 100.0);
+        let id = doc.alloc_id();
+        let mut editing = Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), Default::default());
+        editing.opacity = 0.5;
+        doc.insert(Some(doc.layers[0].id), 0, editing).unwrap();
+
+        let mut page = Document::new(100.0, 100.0);
+        for (bounds, opacity) in [(Rect::new(11.0, 11.0, 19.0, 19.0), 1.0), (Rect::new(51.0, 51.0, 59.0, 59.0), 0.5)] {
+            let mut art = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(bounds),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            art.opacity = opacity;
+            page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
+        }
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let kinds = replace_unread(
+            &mut doc,
+            &frame,
+            &[(id, vec!["placed files".into()])],
+            &[(id, Rect::new(50.0, 50.0, 60.0, 60.0))],
+            &BTreeSet::new(),
+            &mut BTreeSet::new(),
+        )
+        .unwrap();
+        assert_eq!(kinds, ["placed files (1)"]);
+        let replacement = doc.node(id).unwrap();
+        let [art] = replacement.children().unwrap().as_slice() else { panic!("{replacement:?}") };
+        assert_eq!(art.opacity, 0.5);
+        assert_eq!(art.geometric_bounds(), Some(Rect::new(51.0, 51.0, 59.0, 59.0)));
+    }
+
+    /// Opacity on one of two page objects in the box is not the unread object's opacity.
+    #[test]
+    fn opacity_on_one_of_two_page_objects_is_not_identifiable() {
+        let mut doc = Document::new(100.0, 100.0);
+        let id = doc.alloc_id();
+        let mut editing = Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Default::default());
+        editing.opacity = 0.5;
+        doc.insert(Some(doc.layers[0].id), 0, editing).unwrap();
+
+        let mut page = Document::new(100.0, 100.0);
+        for (bounds, opacity) in [(Rect::new(11.0, 11.0, 19.0, 19.0), 0.5), (Rect::new(21.0, 21.0, 39.0, 39.0), 1.0)] {
+            let mut art = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(bounds),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            art.opacity = opacity;
+            page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
+        }
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
+        assert_eq!(result.unwrap_err(), "an unread object's appearance is not identifiable in the page art");
+    }
+
+    /// A claimed first box lets a second unread object use its own corner box.
+    #[test]
+    fn second_unread_object_tries_corner_after_first_box_is_claimed() {
+        let mut doc = Document::new(100.0, 100.0);
+        let first = doc.alloc_id();
+        let second = doc.alloc_id();
+        for (id, bounds) in [(first, Rect::new(10.0, 10.0, 20.0, 20.0)), (second, Rect::new(12.0, 12.0, 22.0, 22.0))] {
+            let node = Node::path(id, vectorcraft_geom::shapes::rectangle(bounds), Default::default());
+            doc.insert(Some(doc.layers[0].id), doc.layers[0].children().unwrap().len(), node).unwrap();
+        }
+
+        let mut page = Document::new(100.0, 100.0);
+        for bounds in [Rect::new(14.0, 14.0, 16.0, 16.0), Rect::new(51.0, 51.0, 59.0, 59.0)] {
+            let art = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(bounds),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
+        }
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let unread = [(first, vec!["placed files".into()]), (second, vec!["placed files".into()])];
+        let mut one_box_doc = doc.clone();
+        let kinds = replace_unread(&mut doc, &frame, &unread, &[(second, Rect::new(50.0, 50.0, 60.0, 60.0))], &BTreeSet::new(), &mut BTreeSet::new())
+            .unwrap();
+        assert_eq!(kinds, ["placed files (2)"]);
+        let first_art = doc.node(first).unwrap().children().unwrap()[0].geometric_bounds();
+        let second_art = doc.node(second).unwrap().children().unwrap()[0].geometric_bounds();
+        assert_eq!(first_art, Some(Rect::new(14.0, 14.0, 16.0, 16.0)));
+        assert_eq!(second_art, Some(Rect::new(51.0, 51.0, 59.0, 59.0)));
+        assert_eq!(
+            replace_unread(&mut one_box_doc, &frame, &unread, &[], &BTreeSet::new(), &mut BTreeSet::new()).unwrap_err(),
+            "one page object matches more than one unread object"
+        );
+    }
+
+    /// Only the page's type in the page art that replaces an unread object is taken out of the
+    /// page's type for the text objects: type in the object's other box, which isn't used, stays.
+    #[test]
+    fn only_page_type_in_the_chosen_box_is_taken_for_an_unread_object() {
+        let mut doc = Document::new(100.0, 100.0);
+        let id = doc.alloc_id();
+        doc.insert(
+            Some(doc.layers[0].id),
+            0,
+            Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), Default::default()),
+        )
+        .unwrap();
+        let mut page = Document::new(100.0, 100.0);
+        let mut nodes = vec![];
+        for bounds in [Rect::new(12.0, 12.0, 18.0, 18.0), Rect::new(52.0, 52.0, 58.0, 58.0)] {
+            let art = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(bounds),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            nodes.push(Arc::new(art.clone()));
+            page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
+        }
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let unread = [(id, vec!["placed files".into()])];
+        let mut shown: Vec<Vec<Arc<Node>>> = nodes.iter().map(|n| vec![Arc::clone(n)]).collect();
+        let taken = take_unread_type(&doc, Some(&frame), &unread, &[(id, Rect::new(50.0, 50.0, 60.0, 60.0))], &mut shown);
+        assert_eq!(taken.iter().flatten().map(|n| n.id).collect::<Vec<_>>(), [nodes[0].id]);
+        assert_eq!(shown.iter().flatten().map(|n| n.id).collect::<Vec<_>>(), [nodes[1].id]);
+        let mut copied = BTreeSet::new();
+        replace_unread(&mut doc, &frame, &unread, &[], &BTreeSet::new(), &mut copied).unwrap();
+        assert!(copied.contains(&nodes[0].id) && !copied.contains(&nodes[1].id));
+    }
 }

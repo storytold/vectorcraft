@@ -202,3 +202,27 @@ fn lab_spots_export_with_a_lab_alternate() {
     assert!(text.contains("/Separation/Lab#20Ink/DeviceCMYK") && !text.contains("/Lab<<"));
     assert_xref_valid(&pdf);
 }
+
+#[test]
+fn lab_spots_in_device_n_gradients_keep_one_alternate() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut s, _) = lab_ink();
+    let g = NodeId(run(&mut s, "shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 30}))["id"].as_u64().unwrap());
+    run(
+        &mut s,
+        "paint.setFill",
+        json!({"ids": [g.0], "gradient": {"stops": [{"offset": 0, "swatch": "Lab Ink"}, {"offset": 1, "color": {"c": 0, "m": 0, "y": 0.6, "k": 0}}]}}),
+    );
+    let pdf = pdf_bytes(&s);
+    let text = String::from_utf8_lossy(&pdf);
+    // One Separation space for the ink, with the Lab alternate: the flat fill paints in it, and the
+    // gradient's DeviceN space names it as the ink's colorant.
+    assert_eq!(text.matches("[/Separation/Lab#20Ink").count(), 1, "one Separation space for the ink");
+    assert!(!text.contains("/Separation/Lab#20Ink/DeviceCMYK"), "no CMYK Separation space for the ink");
+    let at = text.find("[/Separation/Lab#20Ink[/Lab<<").expect("the ink's Lab Separation space");
+    let obj = text[..at].trim_end().strip_suffix("obj").and_then(|h| h.trim_end().rsplit('\n').next()).expect("the space's object header");
+    let id = obj.split_whitespace().next().expect("the space's object number");
+    assert!(text.contains("/DeviceN[/Yellow/Lab#20Ink]"), "a DeviceN shading of Yellow and the ink");
+    assert!(text.contains(&format!("/Colorants<</Lab#20Ink {id} 0 R>>")), "the DeviceN space's colorant is the ink's Lab Separation space");
+    assert_xref_valid(&pdf);
+}

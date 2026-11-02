@@ -382,9 +382,10 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) ->
         out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
     }
     let mut warnings = vec![];
-    if !previews.is_empty() {
-        warnings
-            .push(format!("{} linked image(s) output as their previews: their files can't be found or read (relink or update them)", previews.len()));
+    match previews.len() {
+        0 => {}
+        1 => warnings.push("1 linked image output as its preview: its file can't be found or read (relink or update it)".to_string()),
+        n => warnings.push(format!("{n} linked images output as their previews: their files can't be found or read (relink or update them)")),
     }
     (Cow::Owned(out), warnings)
 }

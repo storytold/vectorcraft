@@ -300,6 +300,9 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     if pages.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
+    // The artboards' background colors, behind the art (the editing data keeps them as colors).
+    let filled = super::export::with_artboard_fills(doc, p, pages.iter().filter_map(|(b, ..)| *b)).map_err(|e| bad(C, e))?;
+    let doc = &*filled;
     let regions: Vec<Rect> = pages.iter().map(|(_, region, _)| *region).collect();
     let expanded = expand_transparent_tile_images(doc, &set.flatten)?;
     let source = expanded.as_ref().unwrap_or(doc);

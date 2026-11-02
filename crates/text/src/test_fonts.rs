@@ -254,6 +254,86 @@ pub fn vertical_font(vorg: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`height_font`] with its heights.
+pub const HEIGHT_FAMILY: &str = "Heighttest Sans";
+
+/// The family of [`height_font`] without them.
+pub const HEIGHTLESS_FAMILY: &str = "Heightlesstest Sans";
+
+/// The cap height and x height [`height_font`] gives, in font units (1,000 to the em).
+pub const HEIGHT_CAP: i16 = 700;
+pub const HEIGHT_X: i16 = 500;
+
+/// The height (and the width across a vertical line) of [`height_font`]'s ideographic character
+/// face, in ems.
+pub const HEIGHT_ICF: f64 = 0.9;
+
+/// The family of [`height_outside_font`].
+pub const HEIGHT_OUTSIDE_FAMILY: &str = "Heightoutsidetest Sans";
+
+/// The cap height and x height [`height_outside_font`] gives, in font units (1,000 to the em):
+/// 2.5 em and 0.05 em, outside the 0.1 to 2 ems a font size measures.
+pub const HEIGHT_OUTSIDE_CAP: i16 = 2500;
+pub const HEIGHT_OUTSIDE_X: i16 = 50;
+
+/// The bundled Source Sans 3 Regular as family [`HEIGHT_FAMILY`], with the cap height
+/// [`HEIGHT_CAP`] and x height [`HEIGHT_X`] in its OS/2 table and a `BASE` table whose Han
+/// baselines put the ideographic character face [`HEIGHT_ICF`] em high inside the em box (`ideo`
+/// -120, `idtp` 880, `icfb` -70, `icft` 830). Without `heights`: family [`HEIGHTLESS_FAMILY`],
+/// with a version 1 OS/2 table, which holds neither height, and no `BASE` table. `None` when it
+/// can't be built.
+pub fn height_font(heights: bool) -> Option<Vec<u8>> {
+    if heights { heights_font(HEIGHT_FAMILY, Some((HEIGHT_X, HEIGHT_CAP)), true) } else { heights_font(HEIGHTLESS_FAMILY, None, false) }
+}
+
+/// The bundled Source Sans 3 Regular as family [`HEIGHT_OUTSIDE_FAMILY`], with the cap height
+/// [`HEIGHT_OUTSIDE_CAP`] and x height [`HEIGHT_OUTSIDE_X`] in its OS/2 table and no `BASE`
+/// table. `None` when it can't be built.
+pub fn height_outside_font() -> Option<Vec<u8>> {
+    heights_font(HEIGHT_OUTSIDE_FAMILY, Some((HEIGHT_OUTSIDE_X, HEIGHT_OUTSIDE_CAP)), false)
+}
+
+/// The bundled Source Sans 3 Regular as `family`: with the x height and cap height `heights` in
+/// its OS/2 table, else a version 1 OS/2 table, which holds neither; with `base`, the `BASE`
+/// table of [`height_font`].
+fn heights_font(family: &str, heights: Option<(i16, i16)>, base: bool) -> Option<Vec<u8>> {
+    use write_fonts::tables::base::{Axis, Base, BaseCoord, BaseScript, BaseScriptList, BaseScriptRecord, BaseTagList, BaseValues};
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    if base {
+        let tags = BaseTagList::new([b"icfb", b"icft", b"ideo", b"idtp"].map(Tag::new).to_vec());
+        let values = BaseValues::new(2, [-70, 830, -120, 880].map(BaseCoord::format_1).to_vec());
+        let hani = BaseScriptRecord::new(Tag::new(b"hani"), BaseScript::new(Some(values), None, vec![]));
+        let axis = Axis::new(Some(tags), BaseScriptList::new(vec![hani]));
+        builder.add_table(&Base::new(Some(axis), None)).ok()?;
+    }
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if builder.contains(tag) {
+            continue;
+        }
+        let mut data = font.table_data(r.tag())?.as_bytes().to_vec();
+        if tag == Tag::new(b"OS/2") {
+            if let Some((x, cap)) = heights {
+                // sxHeight and sCapHeight, at bytes 86 and 88 of a version 2 or later table.
+                data.get_mut(86..90)?.copy_from_slice(&[x.to_be_bytes(), cap.to_be_bytes()].concat());
+            } else {
+                // Version 1 ends before sxHeight.
+                data.truncate(86);
+                data.get_mut(0..2)?.copy_from_slice(&1_u16.to_be_bytes());
+            }
+        }
+        builder.add_raw(tag, data);
+    }
+    Some(builder.build())
+}
+
 /// The family of [`vertical_punctuation_font`].
 pub const VERTICAL_PUNCTUATION_FAMILY: &str = "Punctuationtest Sans";
 

@@ -32,8 +32,13 @@ impl TextObject {
         style.size *= scale.points;
         style.leading = style.leading.map(|v| v * scale.points);
         style.baseline_shift *= scale.points;
+        style.tcy_up_down *= scale.points;
+        style.tcy_left_right *= scale.points;
         style.h_scale *= scale.horizontal;
-        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.h_scale].iter().all(|v| v.is_finite()) {
+        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.tcy_up_down, style.tcy_left_right, style.h_scale]
+            .iter()
+            .all(|v| v.is_finite())
+        {
             return None;
         }
         Some(style)

@@ -78,6 +78,14 @@ const PERCEPTUAL_TOLERANCE: f32 = 0.4 / 255.0;
 /// Most times each half of a Perceptual gradient's segment (either side of its midpoint) is
 /// halved to keep within [`PERCEPTUAL_TOLERANCE`].
 const PERCEPTUAL_DEPTH: u32 = 10;
+/// How many times [`Gradient::ink_tints`] halves the range of tints it searches: to within
+/// 1/65536 of a tint, finer than the 1/255 steps PDF writes.
+const TINT_STEPS: u32 = 16;
+/// The least OKLab lightness by which an ink at 100% must differ from paper white for
+/// [`Gradient::ink_tints`] to tell its tints apart by lightness.
+const MIN_INK_LIGHTNESS_SPAN: f64 = 1.0 / 255.0;
+/// Most stops on a gradient's curve that [`Gradient::ink_tints`] finds tints for.
+const MAX_INK_TINTS: usize = 4096;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
 /// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
@@ -98,6 +106,30 @@ fn perceptual_steps(a: &Color, b: &Color, (v0, v1): (f32, f32), depth: u32, out:
         out.push(m);
         perceptual_steps(a, b, (m, v1), depth + 1, out);
     }
+}
+
+/// The mix positions (`v`, 0..1) of the stops a Perceptual gradient's curve has between stops `a`
+/// and `b`, in order: [`perceptual_steps`] on either side of the midpoint, and the midpoint (½).
+fn perceptual_mixes(a: &GradientStop, b: &GradientStop) -> Vec<f32> {
+    let mut vs = Vec::new();
+    perceptual_steps(&a.color, &b.color, (0.0, 0.5), 1, &mut vs);
+    vs.push(0.5);
+    perceptual_steps(&a.color, &b.color, (0.5, 1.0), 1, &mut vs);
+    vs
+}
+
+/// The offset of mix position `v` between stops `a` and `b`, placed through `a`'s midpoint
+/// (`v` = ½ at the midpoint) as [`Gradient::sample`] maps it.
+fn curve_offset(a: &GradientStop, b: &GradientStop, v: f32) -> f32 {
+    let m = a.midpoint.clamp(0.01, 0.99);
+    let u = if v == 0.5 {
+        a.midpoint
+    } else if v < 0.5 {
+        2.0 * v * m
+    } else {
+        m + (v - 0.5) * 2.0 * (1.0 - m)
+    };
+    a.offset + (b.offset - a.offset) * u
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -262,27 +294,93 @@ impl Gradient {
             // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the
             // midpoint (v = ½) among them, placed through the midpoint as [`Self::sample`] maps them.
             let perceptual = next.filter(|_| !self.method.is_classic()).map(|n| {
-                let mut vs = Vec::new();
-                perceptual_steps(&s.color, &n.color, (0.0, 0.5), 1, &mut vs);
-                vs.push(0.5);
-                perceptual_steps(&s.color, &n.color, (0.5, 1.0), 1, &mut vs);
-                let m = s.midpoint.clamp(0.01, 0.99);
-                vs.into_iter().map(move |v| {
+                perceptual_mixes(s, n).into_iter().map(move |v| {
                     let mid = v == 0.5;
-                    let u = if mid {
-                        s.midpoint
-                    } else if v < 0.5 {
-                        2.0 * v * m
-                    } else {
-                        m + (v - 0.5) * 2.0 * (1.0 - m)
-                    };
-                    let t = s.offset + (n.offset - s.offset) * u;
+                    let t = curve_offset(s, n, v);
                     let o = s.opacity + (n.opacity - s.opacity) * v;
                     (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint))
                 })
             });
             std::iter::once((s.offset, s.color, s.opacity, None)).chain(classic).chain(perceptual.into_iter().flatten())
         })
+    }
+    /// A gradient of tints of one ink `ink` (its color at 100%; paper white is 0% of it) as
+    /// (offset, tint, opacity) at each of [`Self::expanded_stops`]: the tint (0..1) whose OKLab
+    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings. Mixed
+    /// linearly between them, the tints follow a Perceptual gradient's curve. `None` when the
+    /// ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of paper white's (a white or nearly
+    /// white ink), so lightness does not tell its tints apart, and when the curve has more than
+    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_tints(&self, ink: &Color) -> Option<Vec<(f32, f32, f32)>> {
+        use crate::libraries::srgb_to_oklab;
+        let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+        if lightness(&ink.tinted(0.0)) - lightness(ink) < MIN_INK_LIGHTNESS_SPAN {
+            return None;
+        }
+        let curve: Vec<_> = self.expanded().take(MAX_INK_TINTS + 1).collect();
+        if curve.len() > MAX_INK_TINTS {
+            return None;
+        }
+        let tint = |c: &Color| {
+            let want = lightness(c);
+            let (mut lo, mut hi) = (0.0f32, 1.0f32);
+            for _ in 0..TINT_STEPS {
+                let mid = (lo + hi) / 2.0;
+                if lightness(&ink.tinted(mid)) > want {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        Some(curve.into_iter().map(|(t, c, o, _)| (t, tint(&c), o)).collect())
+    }
+    /// Does the gradient's curve ([`Self::expanded`]) have at most [`MAX_INK_TINTS`] stops, so
+    /// [`Self::ink_tints`] finds tints for it?
+    pub fn fits_ink_tints(&self) -> bool {
+        self.expanded().nth(MAX_INK_TINTS).is_none()
+    }
+    /// A Perceptual gradient's curve ([`Self::expanded_stops`]) as mixes of its stops' inks:
+    /// (offset, `i`, weight, opacity) at each stop on it, where the inks there are those of stop
+    /// `i` and stop `i + 1` mixed linearly at the weight (0..1; 0 on the gradient's own stops).
+    /// The weight is the one at which the two stops' colors mixed in display RGB have the OKLab
+    /// lightness of the color on the curve there, found to [`TINT_STEPS`] halvings, or the mix
+    /// position itself when the two colors' lightness differs by less than
+    /// [`MIN_INK_LIGHTNESS_SPAN`]. `None` for a Classic gradient, and when the curve has more than
+    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_mixes(&self) -> Option<Vec<(f32, usize, f32, f32)>> {
+        use crate::libraries::srgb_to_oklab;
+        if self.method.is_classic() || !self.fits_ink_tints() {
+            return None;
+        }
+        let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+        let mut out = Vec::new();
+        for (i, s) in self.stops.iter().enumerate() {
+            out.push((s.offset, i, 0.0, s.opacity));
+            let Some(n) = self.stops.get(i + 1) else { continue };
+            let (l0, l1) = (lightness(&s.color), lightness(&n.color));
+            for v in perceptual_mixes(s, n) {
+                let weight = if (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN {
+                    v
+                } else {
+                    let want = lightness(&self.method.mix(&s.color, &n.color, v));
+                    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+                    for _ in 0..TINT_STEPS {
+                        let mid = (lo + hi) / 2.0;
+                        // The mix at `mid` has not yet gone from stop `i`'s lightness to the wanted one.
+                        if (lightness(&GradientMethod::Classic.mix(&s.color, &n.color, mid)) - want) * (l1 - l0) < 0.0 {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    (lo + hi) / 2.0
+                };
+                out.push((curve_offset(s, n, v), i, weight, s.opacity + (n.opacity - s.opacity) * v));
+            }
+        }
+        Some(out)
     }
     /// The same ramp the other way round: the stops in reverse order at mirrored offsets, each
     /// segment's midpoint mirrored with it.
