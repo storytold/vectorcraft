@@ -120,7 +120,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Makes document `i` the current one, as a click on its tab does: the Home screen closes, and
 /// with the Artboard tool the artboard the document shows becomes the tool's target.
-fn show_document(app: &mut VectorcraftApp, i: usize) {
+pub(crate) fn show_document(app: &mut VectorcraftApp, i: usize) {
     app.ui.home = None;
     let changed = app.session.active_index() != Some(i);
     if app.session.set_active(i)

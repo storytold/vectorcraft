@@ -84,6 +84,7 @@ impl VectorcraftApp {
                 view_moved: None,
                 hover_cursor: None,
                 presented: None,
+                panes: Default::default(),
             },
             perf: Perf::default(),
             dock_rt: Default::default(),
@@ -424,14 +425,17 @@ impl VectorcraftApp {
         }
     }
 
-    /// The canvas panel's body: the document tabs, the canvas and the isolation bar over it.
+    /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
+    /// Window › Arrange › Tile is on) and the isolation bar over it.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
-        canvas::show(self, ui);
+        if !canvas::tiled_area(self, ui) {
+            canvas::show(self, ui);
+        }
         // Over the canvas inside the rulers, so the rulers and scroll bars stay uncovered.
         if self.ui.screen_mode < 3
             && !menus::home_showing(self)

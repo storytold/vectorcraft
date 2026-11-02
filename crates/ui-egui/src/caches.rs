@@ -58,6 +58,8 @@ pub struct CanvasCache {
     /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
     /// again when the rect changes (the window going full screen).
     pub presented: Option<egui::Rect>,
+    /// Window › Arrange › Tile: the renders the panes of the other documents draw.
+    pub panes: canvas::Panes,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
