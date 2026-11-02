@@ -493,10 +493,15 @@ pub(crate) fn check_settings(s: &Session, p: &Value) -> Result<()> {
 /// `name` the way a case-insensitive file system compares names: lower-cased, then each character
 /// upper-cased where its upper case is one character. Names with the same lower case give the
 /// same key, and so do `ΟΣ`, `ος` and `οσ` (`ΟΣ`); `ᾈ` and `ᾀ` give `ᾀ`, and `ß` stays `ß`.
+/// Dotless `ı` stays `ı`, as NTFS and Unicode case folding outside Turkic languages keep it apart
+/// from `i` and `I`.
 fn fold(name: &str) -> String {
     name.to_lowercase()
         .chars()
         .map(|c| {
+            if c == 'ı' {
+                return c;
+            }
             let mut upper = c.to_uppercase();
             match (upper.next(), upper.next()) {
                 (Some(u), None) => u,

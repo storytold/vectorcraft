@@ -586,6 +586,22 @@ fn names_that_differ_only_in_greek_sigmas_are_numbered() {
     assert_eq!(names(&r), ["İ.svg", "i\u{307}-2.svg"]);
 }
 
+/// Dotless `ı` and dotted `İ` are letters of their own, as on NTFS and in Unicode case folding
+/// outside Turkic languages: names and folders spelled with them keep their own files, while `i`
+/// and `I` still match.
+#[test]
+fn dotless_and_dotted_i_are_not_plain_i() {
+    let mut s = session(4);
+    for (index, name) in ["i", "ı", "İ", "I"].into_iter().enumerate() {
+        s.execute("artboard.setProps", &json!({"index": index, "name": name})).unwrap();
+    }
+    let r = export(&mut s, json!({"name": "<name>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["i.svg", "ı.svg", "İ.svg", "I-2.svg"]);
+    let rows = json!([{"format": "svg", "folder": "i"}, {"format": "svg", "folder": "ı"}, {"format": "svg", "folder": "İ"}, {"format": "svg", "folder": "I"}]);
+    let r = export(&mut s, json!({"range": "1", "subfolders": true, "formats": rows}));
+    assert_eq!(names(&r), ["i/i.svg", "ı/i.svg", "İ/i.svg"]);
+}
+
 /// A fresh folder for one test, emptied first and removed when dropped (also when an assertion
 /// fails).
 #[cfg(not(target_arch = "wasm32"))]
