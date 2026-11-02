@@ -709,6 +709,40 @@ fn updating_keeps_a_value_the_art_does_not_report() {
     }
 }
 
+/// With every bound object locked, Update keeps the whole row and adds no undo step, and
+/// Capture says the bound objects report no value rather than asking for a binding.
+#[test]
+fn updating_with_every_bound_object_locked_keeps_the_row() {
+    let mut s = session();
+    let t = text(&mut s, "First");
+    s.execute("variable.define", &json!({"name": "Label", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Label", "ids": [t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Row", "values": {"Label": "Second"}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Row"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [t.0], "locked": true})).unwrap();
+
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    for params in [json!({}), json!({"all": true})] {
+        let v = s.execute("dataset.update", &params).unwrap();
+        assert_eq!((v["values"].clone(), v["left"].clone()), (json!(0), json!(["Label"])), "{params}: {v}");
+        let sets = s.execute("dataset.list", &json!({})).unwrap();
+        assert_eq!(sets["datasets"][0]["values"], json!({"Label": {"text": "Second"}}), "{params}: {sets}");
+    }
+    assert_eq!(steps(&s), before, "an update that writes nothing is not a step");
+
+    let e = s.execute("dataset.capture", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("no bound object reports a value"), "{e}");
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["datasets"].as_array().unwrap().len(), 1);
+
+    // With nothing bound at all, both still ask for a binding.
+    s.execute("variable.unbind", &json!({"ids": [t.0]})).unwrap();
+    for cmd in ["dataset.update", "dataset.capture"] {
+        let e = s.execute(cmd, &json!({})).unwrap_err().to_string();
+        assert!(e.contains("bind something to a variable first"), "{cmd}: {e}");
+    }
+}
+
 /// A variable defined after a row was captured stays out of that row on Update, and joins it
 /// with `all: true`.
 #[test]
