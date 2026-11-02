@@ -2383,6 +2383,10 @@ file-filter	Templates	範本
 @msg	the PSD file is cut short	PSD 檔案不完整
 @msg	the PSD file's header is damaged	PSD 檔頭已損毀
 @msg	the PSD file's image data can't be read: {e}	無法讀取 PSD 檔案的影像資料：{e}
+@msg	the JPEG XL file is cut short	JPEG XL 檔案不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器過大，無法讀取
+@msg	CMYK JPEG XL images can't be read	無法讀取 CMYK 模式的 JPEG XL 影像
+@msg	the JPEG XL file can't be read: {e}	無法讀取 JPEG XL 檔案：{e}
 @msg	Imported library {name}	已匯入資料庫 {name}
 @msg	invalid restored panel group	還原的面板群組無效
 @msg	Invalid panel layout; restored the default dock	面板配置無效；已還原預設停駐區

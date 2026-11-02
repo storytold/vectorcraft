@@ -4382,6 +4382,10 @@ font-technology	Variable	ცვლადი
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია
 @msg	the PSD file's image data can't be read: {e}	PSD ფაილის გამოსახულების მონაცემების წაკითხვა ვერ ხერხდება: {e}
+@msg	the JPEG XL file is cut short	JPEG XL ფაილი შეკვეცილია
+@msg	the JPEG XL container is too large to read	JPEG XL კონტეინერი წასაკითხად ზედმეტად დიდია
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL გამოსახულებების წაკითხვა ვერ ხერხდება
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ფაილის წაკითხვა ვერ ხერხდება: {e}
 @msg	Imported library {name}	შემოტანილია ბიბლიოთეკა {name}
 @msg	Invalid panel layout; restored the default dock	პანელების განლაგება არასწორია; აღდგენილია ნაგულისხმევი დოკი
 @msg	action is required	action აუცილებელია

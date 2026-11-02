@@ -104,6 +104,16 @@ gif = { version = "0.14", default-features = false, features = ["std", "raii_no_
 # decoders, read directly (the image crate converts CMYK to RGB).
 tiff = "0.11"
 zune-jpeg = "0.5"
+# JPEG XL decoder (pure Rust, MIT OR Apache-2.0): File › Open and Place read `.jxl` images. It is
+# built without its default `rayon` feature and decodes on one thread.
+jxl-oxide = { version = "0.12.6", default-features = false }
+# jxl-oxide's color conversions, run on colors after their alpha is divided out.
+jxl-color = "0.11.0"
+# jxl-oxide's buffer allocation error, told apart from other decoding errors.
+jxl-grid = "0.6.2"
+# Tests: a lossless JPEG XL encoder (pure Rust, MIT OR Apache-2.0 OR Zlib) for the `.jxl` test files.
+zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
+zune-core = "0.5"
 
 # ui
 egui = "0.37"

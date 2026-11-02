@@ -4708,6 +4708,10 @@ axis	Both	Entrambi
 @msg	the PSD file is cut short	il file PSD è troncato
 @msg	the PSD file's header is damaged	l'intestazione del file PSD è danneggiata
 @msg	the PSD file's image data can't be read: {e}	i dati immagine del file PSD non possono essere letti: {e}
+@msg	the JPEG XL file is cut short	il file JPEG XL è troncato
+@msg	the JPEG XL container is too large to read	il contenitore JPEG XL è troppo grande per essere letto
+@msg	CMYK JPEG XL images can't be read	le immagini JPEG XL in CMYK non possono essere lette
+@msg	the JPEG XL file can't be read: {e}	il file JPEG XL non può essere letto: {e}
 	Video	Video
 	De-Interlace…	Deinterlaccia…
 	De-Interlace	Deinterlaccia

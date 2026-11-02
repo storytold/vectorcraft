@@ -4627,6 +4627,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PSD file is cut short	το αρχείο PSD είναι περικομμένο
 @msg	the PSD file's header is damaged	η κεφαλίδα του αρχείου PSD είναι κατεστραμμένη
 @msg	the PSD file's image data can't be read: {e}	τα δεδομένα εικόνας PSD δεν μπορούν να διαβαστούν: {e}
+@msg	the JPEG XL file is cut short	το αρχείο JPEG XL είναι περικομμένο
+@msg	the JPEG XL container is too large to read	το κοντέινερ JPEG XL είναι πολύ μεγάλο για ανάγνωση
+@msg	CMYK JPEG XL images can't be read	οι εικόνες JPEG XL σε CMYK δεν διαβάζονται
+@msg	the JPEG XL file can't be read: {e}	το αρχείο JPEG XL δεν μπορεί να διαβαστεί: {e}
 	Create New Fields by	Δημιουργία νέων πεδίων κατά
 @msg	Imported library {name}	Εισήχθη η βιβλιοθήκη {name}
 	RGB:	RGB:

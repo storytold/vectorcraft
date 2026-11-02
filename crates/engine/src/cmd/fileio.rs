@@ -30,6 +30,7 @@ mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
+pub mod jxlread;
 mod legacy_ai;
 mod load;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
@@ -192,6 +193,8 @@ mod tests_pdfoutput;
 #[cfg(test)]
 mod tests_tiffbmp;
 
+#[cfg(test)]
+mod tests_jxlread;
 #[cfg(test)]
 mod tests_pdfx;
 #[cfg(test)]

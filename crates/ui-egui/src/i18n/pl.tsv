@@ -4773,6 +4773,10 @@ imageTrace	Outline	Kontur
 @msg	the PSD file is cut short	plik PSD jest ucięty
 @msg	the PSD file's header is damaged	nagłówek pliku PSD jest uszkodzony
 @msg	the PSD file's image data can't be read: {e}	nie można odczytać danych obrazu pliku PSD: {e}
+@msg	the JPEG XL file is cut short	plik JPEG XL jest ucięty
+@msg	the JPEG XL container is too large to read	kontener JPEG XL jest zbyt duży, aby go odczytać
+@msg	CMYK JPEG XL images can't be read	nie można odczytać obrazów JPEG XL w trybie CMYK
+@msg	the JPEG XL file can't be read: {e}	nie można odczytać pliku JPEG XL: {e}
 @msg	Imported library {name}	Zaimportowano bibliotekę {name}
 @msg	Invalid panel layout; restored the default dock	Nieprawidłowy układ paneli; przywrócono domyślny dok
 @msg	action is required	wymagane jest action

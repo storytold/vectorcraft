@@ -4705,6 +4705,10 @@ axis	Both	Оба
 @msg	the PSD file is cut short	файл PSD обрезан
 @msg	the PSD file's header is damaged	заголовок файла PSD повреждён
 @msg	the PSD file's image data can't be read: {e}	не удаётся прочитать данные изображения файла PSD: {e}
+@msg	the JPEG XL file is cut short	файл JPEG XL обрезан
+@msg	the JPEG XL container is too large to read	контейнер JPEG XL слишком велик для чтения
+@msg	CMYK JPEG XL images can't be read	изображения JPEG XL в режиме CMYK не читаются
+@msg	the JPEG XL file can't be read: {e}	не удаётся прочитать файл JPEG XL: {e}
 	Video	Видео
 	De-Interlace…	Устранение чересстрочности…
 	De-Interlace	Устранение чересстрочности

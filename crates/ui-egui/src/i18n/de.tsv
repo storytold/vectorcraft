@@ -4684,6 +4684,10 @@ theme	Appearance	Erscheinungsbild
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
+@msg	the JPEG XL file is cut short	die JPEG-XL-Datei ist unvollständig
+@msg	the JPEG XL container is too large to read	der JPEG-XL-Container ist zu groß zum Lesen
+@msg	CMYK JPEG XL images can't be read	JPEG-XL-Bilder im CMYK-Modus können nicht gelesen werden
+@msg	the JPEG XL file can't be read: {e}	die JPEG-XL-Datei kann nicht gelesen werden: {e}
 	Value Axis	Werteachse
 	On Left Side	Links
 	On Right Side	Rechts

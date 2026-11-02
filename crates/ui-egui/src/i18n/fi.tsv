@@ -4849,6 +4849,10 @@ imageTrace	Outline	Ääriviiva
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut
 @msg	the PSD file's header is damaged	tämän PSD-tiedoston otsake on vaurioitunut
 @msg	the PSD file's image data can't be read: {e}	tämän PSD-tiedoston kuvadataa ei voi lukea: {e}
+@msg	the JPEG XL file is cut short	tämä JPEG XL -tiedosto on katkennut
+@msg	the JPEG XL container is too large to read	JPEG XL -säiliö on liian suuri luettavaksi
+@msg	CMYK JPEG XL images can't be read	CMYK-tilassa olevia JPEG XL -kuvia ei voi lukea
+@msg	the JPEG XL file can't be read: {e}	tätä JPEG XL -tiedostoa ei voi lukea: {e}
 @msg	Imported library {name}	Tuotiin kirjasto {name}
 @msg	Invalid panel layout; restored the default dock	Virheellinen paneeliasettelu; oletustelakka palautettiin
 @msg	action is required	action vaaditaan

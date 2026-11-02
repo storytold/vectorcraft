@@ -4692,6 +4692,10 @@ axis	Both	Обидві
 @msg	the PSD file is cut short	файл PSD обрізаний
 @msg	the PSD file's header is damaged	заголовок файлу PSD пошкоджено
 @msg	the PSD file's image data can't be read: {e}	не вдається прочитати дані зображення файлу PSD: {e}
+@msg	the JPEG XL file is cut short	файл JPEG XL обрізаний
+@msg	the JPEG XL container is too large to read	контейнер JPEG XL завеликий для читання
+@msg	CMYK JPEG XL images can't be read	зображення JPEG XL у режимі CMYK не читаються
+@msg	the JPEG XL file can't be read: {e}	не вдається прочитати файл JPEG XL: {e}
 	Video	Відео
 	De-Interlace…	Усунення черезрядковості…
 	De-Interlace	Усунення черезрядковості

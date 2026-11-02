@@ -6011,6 +6011,10 @@ breakText	Glyphs	Glifs
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` ha de ser lines, paragraphs, words o glyphs, no {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` ha de ser "line" o "paragraph", no {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` ha de ser "left", "center" o "right", no {other}
+@msg	the JPEG XL file is cut short	el fitxer JPEG XL està truncat
+@msg	the JPEG XL container is too large to read	el contenidor JPEG XL és massa gran per llegir-lo
+@msg	CMYK JPEG XL images can't be read	les imatges JPEG XL en CMYK no es poden llegir
+@msg	the JPEG XL file can't be read: {e}	no es pot llegir el fitxer JPEG XL: {e}
 	File + Number	Fitxer + número
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades

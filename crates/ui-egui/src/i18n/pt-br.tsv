@@ -4209,6 +4209,10 @@ axis	Both	Ambos
 @msg	the PSD file is cut short	o arquivo PSD está incompleto
 @msg	the PSD file's header is damaged	o cabeçalho do arquivo PSD está danificado
 @msg	the PSD file's image data can't be read: {e}	os dados de imagem do arquivo PSD não podem ser lidos: {e}
+@msg	the JPEG XL file is cut short	o arquivo JPEG XL está incompleto
+@msg	the JPEG XL container is too large to read	o contêiner JPEG XL é grande demais para ser lido
+@msg	CMYK JPEG XL images can't be read	imagens JPEG XL em CMYK não podem ser lidas
+@msg	the JPEG XL file can't be read: {e}	o arquivo JPEG XL não pode ser lido: {e}
 @msg	Imported library {name}	Biblioteca {name} importada
 	Define a variable first	Defina uma variável primeiro
 	Text	Texto

@@ -4422,6 +4422,10 @@ axis	Both	Her İkisi
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı
 @msg	the PSD file's image data can't be read: {e}	PSD dosyasının görüntü verileri okunamıyor: {e}
+@msg	the JPEG XL file is cut short	JPEG XL dosyası kısa kesildi
+@msg	the JPEG XL container is too large to read	JPEG XL kapsayıcısı okunamayacak kadar büyük
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL görüntüleri okunamıyor
+@msg	the JPEG XL file can't be read: {e}	JPEG XL dosyası okunamıyor: {e}
 	Video	video
 	De-Interlace…	Taramasızlaştırma…
 	De-Interlace	Taramasızlaştırma

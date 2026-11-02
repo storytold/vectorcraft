@@ -4751,6 +4751,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PSD file is cut short	PSD ファイルが途中で切れています
 @msg	the PSD file's header is damaged	PSD ファイルのヘッダーが破損しています
 @msg	the PSD file's image data can't be read: {e}	PSD ファイルの画像データを読み込めません：{e}
+@msg	the JPEG XL file is cut short	JPEG XL ファイルが途中で切れています
+@msg	the JPEG XL container is too large to read	JPEG XL コンテナが大きすぎて読み込めません
+@msg	CMYK JPEG XL images can't be read	CMYK の JPEG XL 画像は読み込めません
+@msg	the JPEG XL file can't be read: {e}	JPEG XL ファイルを読み込めません：{e}
 	Video	ビデオ
 	De-Interlace…	インターレース解除…
 	De-Interlace	インターレース解除

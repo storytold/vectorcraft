@@ -4845,6 +4845,10 @@ theme	Appearance	Giao diện
 @msg	the PSD file is cut short	tệp PSD bị cắt ngắn
 @msg	the PSD file's header is damaged	tiêu đề tệp PSD bị hỏng
 @msg	the PSD file's image data can't be read: {e}	dữ liệu ảnh tệp PSD không thể đọc được: {e}
+@msg	the JPEG XL file is cut short	tệp JPEG XL bị cắt ngắn
+@msg	the JPEG XL container is too large to read	vùng chứa JPEG XL quá lớn để đọc
+@msg	CMYK JPEG XL images can't be read	ảnh JPEG XL hệ màu CMYK không thể đọc được
+@msg	the JPEG XL file can't be read: {e}	tệp JPEG XL không thể đọc được: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	dữ liệu ảnh tệp PSD dùng nén không xác định ({m})
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng

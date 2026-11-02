@@ -5240,6 +5240,10 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	the JPEG XL file is cut short	JPEG XL 文件不完整
+@msg	the JPEG XL container is too large to read	JPEG XL 容器过大，无法读取
+@msg	CMYK JPEG XL images can't be read	无法读取 CMYK 模式的 JPEG XL 图像
+@msg	the JPEG XL file can't be read: {e}	无法读取 JPEG XL 文件：{e}
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的图像以缩小的尺寸显示
 	Fill and Stroke Controls	填色和描边控件
 	Coloring Controls	颜色控件

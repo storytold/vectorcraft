@@ -17,7 +17,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
-| Formats opened or placed | ~30 | 28 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, Pixar, PS |
+| Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, Pixar, PS |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (no Illustrator editing data) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
@@ -106,6 +106,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | PSB | open | yes (merged image) | no | |
 | PNG / JPEG / GIF / BMP / TIFF / Targa | open, place, export | yes (Targa: `.tga`, `.vda`, `.icb` and `.vst`, raw or run-length encoded, with a 16-bit file's one-bit alpha) | yes; TIFF is also selectable in Export for Screens and Asset Export with its existing options | Targa: `tests_tiffbmp.rs`, `tests/links.rs`; TIFF: grayscale with an alpha channel or other extra channels reads (#1466 in part), and so do files that store each channel as its own plane (PlanarConfiguration 2), CMYK ones with their ink amounts, and 1-bit files compressed with CCITT Group 3 (Compression 2 and 3, one- and two-dimensional rows); the ICC profiles embedded in JPEG and TIFF have 4-byte aligned tags (#1584); PNG export marks its colours as sRGB (`embedIcc`, an `sRGB` chunk; no ICC profile is embedded, #2221) |
 | WebP | export (Export for Screens) | yes | yes (lossless only; lossy written lossless with a warning) | |
+| JPEG XL `.jxl` | — | yes (first frame; 16-bit and floating-point samples as 8 bits, alpha kept; CMYK refused) | no | decoded with jxl-oxide; the size is checked from the header before decoding; container Exif resolution sizes opened and placed images; tests in `crates/engine/src/cmd/fileio/tests_jxlread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | HEIC / HEIF | open, place | no | no | |
 | PCX | open, place | yes (1 bit in the header palette's first two colors, black and white without them; 1 bit in two to four planes and 4 bits with up to 16 colors; 2 bits in the CGA colors the header's CGA palette settings pick; 8 bits with the 256-color palette, gray without one; 24-bit color in three planes) | no | the header's HDpi and VDpi size the image; a file of another depth or plane count, cut short or past the pixel allowance is refused with a message; tests in `crates/engine/src/cmd/fileio/tests_pcxread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | JPEG 2000 | open, place | yes (JP2 and raw codestream images; multiple codestreams and JPX composition or layers are refused) | no | `.jpf`, `.jpx`, `.jp2`, `.j2k`, `.j2c`, `.jpc`; resolution uses the last valid `resc` or `resd` value on each axis, or 72 ppi; bounded decoding; `tests_jp2read.rs` |

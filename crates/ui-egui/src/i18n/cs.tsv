@@ -4947,6 +4947,10 @@ imageTrace	Outline	Obrys
 @msg	the PSD file is cut short	soubor PSD je useknutý
 @msg	the PSD file's header is damaged	hlavička souboru PSD je poškozená
 @msg	the PSD file's image data can't be read: {e}	obrazová data souboru PSD nelze přečíst: {e}
+@msg	the JPEG XL file is cut short	soubor JPEG XL je useknutý
+@msg	the JPEG XL container is too large to read	kontejner JPEG XL je příliš velký pro načtení
+@msg	CMYK JPEG XL images can't be read	obrázky JPEG XL v režimu CMYK nelze přečíst
+@msg	the JPEG XL file can't be read: {e}	soubor JPEG XL nelze přečíst: {e}
 @msg	Imported library {name}	Importována knihovna {name}
 @msg	Invalid panel layout; restored the default dock	Neplatné rozložení panelů; obnoveno výchozí ukotvení
 @msg	action is required	action je povinné

@@ -5186,6 +5186,10 @@ imageTrace	Outline	Körvonal
 @msg	the PSD file is cut short	a PSD-fájl csonka
 @msg	the PSD file's header is damaged	a PSD-fájl fejléce sérült
 @msg	the PSD file's image data can't be read: {e}	a PSD-fájl képadatai nem olvashatók: {e}
+@msg	the JPEG XL file is cut short	a JPEG XL-fájl csonka
+@msg	the JPEG XL container is too large to read	a JPEG XL-konténer túl nagy az olvasáshoz
+@msg	CMYK JPEG XL images can't be read	CMYK módú JPEG XL-képek nem olvashatók
+@msg	the JPEG XL file can't be read: {e}	a JPEG XL-fájl nem olvasható: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	a PSD-fájl képadatai ismeretlen tömörítést használnak ({m})
 @msg	the PCX file is cut short	a PCX-fájl csonka
 @msg	the PCX file's header is damaged	a PCX-fájl fejléce sérült

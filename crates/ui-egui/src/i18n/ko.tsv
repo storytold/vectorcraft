@@ -4678,6 +4678,10 @@ theme	Appearance	외관
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
 @msg	the PSD file's header is damaged	PSD 파일의 헤더가 손상되었습니다
 @msg	the PSD file's image data can't be read: {e}	PSD 파일의 이미지 데이터를 읽을 수 없습니다: {e}
+@msg	the JPEG XL file is cut short	JPEG XL 파일이 잘려 있습니다
+@msg	the JPEG XL container is too large to read	JPEG XL 컨테이너가 너무 커서 읽을 수 없습니다
+@msg	CMYK JPEG XL images can't be read	CMYK JPEG XL 이미지는 읽을 수 없습니다
+@msg	the JPEG XL file can't be read: {e}	JPEG XL 파일을 읽을 수 없습니다: {e}
 	Video	비디오
 	De-Interlace…	디인터레이스…
 	De-Interlace	디인터레이스

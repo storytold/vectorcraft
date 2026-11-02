@@ -4584,6 +4584,10 @@ axis	Both	Båda
 @msg	the PSD file is cut short	PSD-filen är avkortad
 @msg	the PSD file's header is damaged	PSD-filens huvud är skadat
 @msg	the PSD file's image data can't be read: {e}	PSD-filens bilddata kan inte läsas: {e}
+@msg	the JPEG XL file is cut short	JPEG XL-filen är avkortad
+@msg	the JPEG XL container is too large to read	JPEG XL-behållaren är för stor för att läsas
+@msg	CMYK JPEG XL images can't be read	JPEG XL-bilder i CMYK kan inte läsas
+@msg	the JPEG XL file can't be read: {e}	JPEG XL-filen kan inte läsas: {e}
 	Video	Video
 	De-Interlace…	Avfläta…
 	De-Interlace	Avfläta
