@@ -1,6 +1,6 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, line_width};
+use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, Place, line_width};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
     Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
@@ -55,6 +55,22 @@ impl<'a> Reader<'a> {
             self.warn(GRAPH_UNENDED);
         }
         self.end_layer_in_mask()
+    }
+
+    /// A placed file's `` ` ``: its matrix, box and path; a second one, or operands of another
+    /// shape, leave it unreadable.
+    fn place_tick(&mut self, vals: &[V], hidden: bool) {
+        let unseen = hidden || self.gs.hidden || !self.shown();
+        let p = self.place.get_or_insert_with(|| Place { hidden: unseen, ..Place::default() });
+        if p.ticked {
+            p.broken = true;
+        } else {
+            p.ticked = true;
+            match tick(vals) {
+                Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
+                None => p.broken = true,
+            }
+        }
     }
 
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
@@ -288,16 +304,10 @@ impl<'a> Reader<'a> {
                 }
             }
             // Placed files.
-            "`" if self.place.is_some() => {
-                let matrix = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None });
-                let path = vals.iter().rev().find_map(V::text).unwrap_or_default();
-                if let Some(p) = self.place.as_mut() {
-                    p.matrix = matrix.and_then(|m| <[f64; 6]>::try_from(m).ok()).map(Affine::new);
-                    p.bounds =
-                        Self::nums(&vals).get(..4).and_then(|b| <[f64; 4]>::try_from(b).ok()).map(|[x0, y0, x1, y1]| Rect::new(x0, y0, x1, y1));
-                    p.path = path;
-                }
-            }
+            // `[a b c d tx ty] llx lly urx ury (path) `` ` ``, three more numbers before the path in
+            // newer files: the version 7 form has no `%AI5_BeginPlace` before it. Before the art,
+            // the setup's procedures run.
+            "`" if self.place.is_some() || !self.frames.is_empty() => self.place_tick(&vals, hidden),
             "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
             "To" => self.begin_text(&vals, hidden),
@@ -689,6 +699,20 @@ struct StylePaints<'a> {
     gradients: &'a HashMap<String, Gradient>,
     patterns: &'a HashMap<String, Rect>,
     space: Affine,
+}
+
+/// A placed file's `` ` `` operands → its matrix, its box and its path: an array of six numbers, four
+/// numbers, three more or none, and a string. `None` for any other shape or a number that isn't
+/// finite.
+fn tick(vals: &[V]) -> Option<(Affine, Rect, String)> {
+    let [V::Arr(m), rest @ .., V::Str(path)] = vals else { return None };
+    let m = <[f64; 6]>::try_from(m.iter().map(V::num).collect::<Option<Vec<f64>>>()?).ok()?;
+    let nums: Vec<f64> = rest.iter().map(V::num).collect::<Option<_>>()?;
+    let [x0, y0, x1, y1] = match nums.as_slice() {
+        [x0, y0, x1, y1] | [x0, y0, x1, y1, _, _, _] => [*x0, *y0, *x1, *y1],
+        _ => return None,
+    };
+    m.iter().chain(&nums).all(|v| v.is_finite()).then(|| (Affine::new(m), Rect::new(x0, y0, x1, y1), obj::text(path)))
 }
 
 /// The gradients and patterns `look` paints with, placed as it draws them, by their swatch's name
