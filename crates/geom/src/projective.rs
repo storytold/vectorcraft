@@ -72,32 +72,38 @@ impl Homography {
             + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
     }
 
-    /// Whether the map is invertible: [`Self::scaled_det`] gives a determinant, or, when the
-    /// determinant is not finite, [`Self::inverse`] gives one.
+    /// Whether the map is invertible: [`Self::has_significant_det`], or, when the determinant is
+    /// not finite, [`Self::inverse`] gives one.
     fn is_invertible(&self) -> bool {
         if self.det().is_finite() {
-            return self.scaled_det().is_some();
+            return self.has_significant_det();
         }
         self.inverse().is_some()
     }
 
-    /// [`Self::scaled`] and its determinant; `None` when the magnitude of that determinant is at
-    /// most 1e-15 times that of the largest of the six products it sums (a test that gives the
-    /// same answer at any scale of the map).
-    fn scaled_det(&self) -> Option<(Self, f64)> {
-        let s = self.scaled()?;
-        let m = &s.0;
-        let terms = [
-            m[0][0] * m[1][1] * m[2][2],
-            m[0][0] * m[1][2] * m[2][1],
-            m[0][1] * m[1][0] * m[2][2],
-            m[0][1] * m[1][2] * m[2][0],
-            m[0][2] * m[1][0] * m[2][1],
-            m[0][2] * m[1][1] * m[2][0],
-        ];
+    /// Whether every entry is finite and the determinant's magnitude is more than 1e-15 times that
+    /// of the largest of the six products it sums (a test that gives the same answer at any scale
+    /// of the map). Each product is formed as a mantissa product and an exponent sum, and all six
+    /// are divided by the power of two of the largest before they are summed, so the largest is at
+    /// least 1/8 and below 1 and none of them overflows.
+    fn has_significant_det(&self) -> bool {
+        if !self.is_finite() {
+            return false;
+        }
+        let f = self.0.map(|row| row.map(frexp));
+        // The columns each of the six products takes from rows 0, 1 and 2, and its sign.
+        let cols = [(0, 1, 2, 1.0), (0, 2, 1, -1.0), (1, 0, 2, -1.0), (1, 2, 0, 1.0), (2, 0, 1, 1.0), (2, 1, 0, -1.0)];
+        let terms = cols.map(|(a, b, c, sign)| {
+            let (a, b, c) = (f[0][a], f[1][b], f[2][c]);
+            (sign * a.0 * b.0 * c.0, a.1 + b.1 + c.1)
+        });
+        let Some(e) = terms.iter().filter(|(m, _)| *m != 0.0).map(|(_, e)| *e).max() else {
+            return false;
+        };
+        let terms = terms.map(|(m, x)| ldexp(m, x - e));
         let largest = terms.iter().fold(0.0_f64, |k, v| k.max(v.abs()));
-        let d = s.det();
-        (d.abs() > 1e-15 * largest).then_some((s, d))
+        let d: f64 = terms.iter().sum();
+        d.abs() > 1e-15 * largest
     }
 
     /// The same map with every entry divided by one power of two, chosen so that the largest of the
@@ -120,14 +126,17 @@ impl Homography {
         Some(Self(self.0.map(|row| row.map(|v| ldexp(v, -e)))))
     }
 
-    /// Inverse; `None` when [`Self::scaled_det`] counts the map as not invertible or its inverse
-    /// has an entry that is not finite. When the determinant is not finite or is below the normal
-    /// range, this is the inverse of [`Self::scaled`] (the exact inverse multiplied by one power of
-    /// two, which is the same map).
+    /// Inverse; `None` when [`Self::has_significant_det`] counts the map as not invertible or its
+    /// inverse has an entry that is not finite. When the determinant is not finite or is below the
+    /// normal range, this is the inverse of [`Self::scaled`] (the exact inverse multiplied by one
+    /// power of two, which is the same map).
     pub fn inverse(&self) -> Option<Self> {
-        let (s, sd) = self.scaled_det()?;
+        if !self.has_significant_det() {
+            return None;
+        }
         let d = self.det();
-        let (h, d) = if d.is_finite() && d.abs() >= f64::MIN_POSITIVE { (*self, d) } else { (s, sd) };
+        let h = if d.is_finite() && d.abs() >= f64::MIN_POSITIVE { *self } else { self.scaled()? };
+        let d = h.det();
         let m = &h.0;
         let c = |r0: usize, c0: usize, r1: usize, c1: usize| m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0];
         let adj = [
@@ -442,6 +451,18 @@ mod tests {
             let sf = times(flat, f);
             assert!(!sf.is_invertible(), "{f}");
             assert_eq!(sf.inverse(), None, "{f}");
+        }
+        // Entries of very different sizes: the determinant is about 1e-7 and every entry of the
+        // inverse is finite, though one power of two that brings the products near 1 takes the
+        // first entry past the largest finite number.
+        let uneven = Homography([[1e307, 0.0, 0.0], [0.0, 1e-157, 0.0], [0.0, 0.0, 1e-157]]);
+        assert!(uneven.det().is_finite());
+        assert_eq!(Homography::from_array(uneven.to_array()), Some(uneven));
+        let inv = uneven.inverse().unwrap();
+        for p in [Point::new(1e-300, 2.0), Point::new(-3e-299, -0.5)] {
+            let q = uneven.apply(p).unwrap();
+            let back = inv.apply(q).unwrap();
+            assert!((back.x - p.x).abs() <= 1e-9 * p.x.abs() && (back.y - p.y).abs() <= 1e-9 * p.y.abs(), "{p:?} {back:?}");
         }
     }
 
