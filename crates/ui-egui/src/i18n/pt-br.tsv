@@ -4148,6 +4148,7 @@ axis	Both	Ambos
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	este não é um logotipo de cores chapadas ({_1}% de suas áreas sólidas correspondem a poucas cores chapadas), então o modo Logotipo plano transformaria seus gradientes em manchas: use o modo Cor
 @msg	`{what}` closes nothing	`{what}` não fecha nada
 @msg	`{what}` closes something it didn't open	`{what}` fecha algo que não abriu
+@msg	a graph's records don't end where they should: its art was read as it is	os registros de um gráfico não terminam onde deveriam: sua arte foi lida como está
 @msg	`{w}` takes no operands	`{w}` não aceita operandos
 @msg	a wraparound group is inside a compound path	um grupo de quebra de texto está dentro de um traçado composto
 @msg	a path has too many points	um traçado tem pontos demais
@@ -4162,6 +4163,7 @@ axis	Both	Ambos
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objetos com vários preenchimentos ou traços, efeitos ou pincéis entraram com a aparência desenhada ({_1}): sua aparência ainda não é editável
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	o gradiente “{name}” não está definido no arquivo: uma cor sólida o substitui
 @msg	an image VectorCraft can't read was left out	uma imagem que o VectorCraft não consegue ler foi omitida
+@msg	graphs come in as plain art, without their data or settings	os gráficos são importados como arte comum, sem seus dados nem configurações
 @msg	an image whose data is cut short was left out	uma imagem com dados incompletos foi omitida
 @msg	its editing data doesn't say where its art is	seus dados de edição não indicam onde está a arte
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este arquivo foi salvo sem compatibilidade com PDF e seus dados de edição não podem ser lidos ({why})

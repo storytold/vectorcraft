@@ -4774,6 +4774,7 @@ imageTrace	Outline	Ääriviiva
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	tämä ei ole tasavärinen logo ({_1} % sen yhtenäisistä alueista vastaa muutamaa tasaväriä), joten Tasavärilogo-tila muuttaisi sen liukuvärit laikuiksi: käytä sen sijaan Väri-tilaa
 @msg	`{what}` closes nothing	`{what}` ei sulje mitään
 @msg	`{what}` closes something it didn't open	`{what}` sulkee jotain, mitä se ei avannut
+@msg	a graph's records don't end where they should: its art was read as it is	kaavion tietueet eivät pääty siihen, mihin niiden pitäisi: sen piirros luettiin sellaisenaan
 @msg	`{w}` takes no operands	`{w}` ei ota operandeja
 @msg	a wraparound group is inside a compound path	tekstin rivitysryhmä on yhdistelmäpolun sisällä
 @msg	a path has too many points	polulla on liian monta pistettä
@@ -4788,6 +4789,7 @@ imageTrace	Outline	Ääriviiva
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
 @msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
+@msg	graphs come in as plain art, without their data or settings	kaaviot tuodaan tavallisena grafiikkana ilman niiden tietoja ja asetuksia
 @msg	an image whose data is cut short was left out	kuva, jonka data on katkennut, jätettiin pois
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkitetyt kuvat näyttävät tiedostoon tallennetun matalan tarkkuuden esikatselun, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	aluetekstin kehykset, jotka olivat liian matalia yhdelle riville niiden fontilla, korotettiin ({_1}): muuten niiden teksti ei näkyisi

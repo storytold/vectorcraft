@@ -4036,6 +4036,7 @@ imageTrace	Outline	轮廓
 @msg	unknown command `{0}`; did you mean `{1}`?	未知命令 `{0}`；您是否想输入 `{1}`？
 @msg	`{what}` closes nothing	`{what}` 没有可结束的内容
 @msg	`{what}` closes something it didn't open	`{what}` 结束了并非由它开始的内容
+@msg	a graph's records don't end where they should: its art was read as it is	图表的记录没有在应有的位置结束：其图稿按原样读取
 @msg	`{w}` takes no operands	`{w}` 不接受操作数
 @msg	a wraparound group is inside a compound path	文本绕排组位于复合路径内
 @msg	a path has too many points	某条路径的点过多
@@ -4048,6 +4049,7 @@ imageTrace	Outline	轮廓
 @msg	its objects are nested too deeply	其对象嵌套过深
 @msg	its section ending with `%{end}` doesn't end	其以 `%{end}` 结束的部分没有结束
 @msg	an image VectorCraft can't read was left out	已略去 VectorCraft 无法读取的图像
+@msg	graphs come in as plain art, without their data or settings	图表作为普通图稿导入，不保留其数据和设置
 @msg	an image whose data is cut short was left out	已略去数据不完整的图像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑

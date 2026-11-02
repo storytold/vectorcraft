@@ -4591,6 +4591,7 @@ axis	Both	Обидві
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	це не логотип із плоских кольорів ({_1}% його суцільних областей збігається з кількома плоскими кольорами), тому режим «Плоский логотип» перетворив би градієнти на плями: використовуйте режим «Колір»
 @msg	`{what}` closes nothing	`{what}` нічого не закриває
 @msg	`{what}` closes something it didn't open	`{what}` закриває те, що не відкривав
+@msg	a graph's records don't end where they should: its art was read as it is	записи діаграми не закінчуються там, де мають: її графіку прочитано як є
 @msg	`{w}` takes no operands	`{w}` не приймає операндів
 @msg	a wraparound group is inside a compound path	група обтікання текстом розташована всередині складеного контуру
 @msg	a path has too many points	у контурі занадто багато точок
@@ -4605,6 +4606,7 @@ axis	Both	Обидві
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	об’єкти з кількома заливками або обведеннями, ефектами або пензлями імпортовані в намальованому вигляді ({_1}): їх оформлення поки що не можна редагувати
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градієнт «{name}» не визначено у файлі: замість нього використовується суцільний колір
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
+@msg	graphs come in as plain art, without their data or settings	діаграми імпортуються як звичайна графіка, без їхніх даних і налаштувань
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в області в рамках, занизьких для рядка шрифту, яким він показується, отримав вищі рамки ({_1}): інакше його не було б видно

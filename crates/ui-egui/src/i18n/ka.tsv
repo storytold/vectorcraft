@@ -4305,6 +4305,7 @@ font-technology	Variable	ცვლადი
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ეს ერთფეროვანი ლოგო არ არის (მისი მყარი არეების {_1}% რამდენიმე ერთგვაროვან ფერს ემთხვევა), ამიტომ Flat Logo რეჟიმი მის გრადიენტებს ლაქებად აქცევდა: გამოიყენეთ Color რეჟიმი
 @msg	`{what}` closes nothing	`{what}` არაფერს ხურავს
 @msg	`{what}` closes something it didn't open	`{what}` ხურავს იმას, რაც არ გაუხსნია
+@msg	a graph's records don't end where they should: its art was read as it is	დიაგრამის ჩანაწერები იქ არ მთავრდება, სადაც უნდა: მისი გრაფიკა წაკითხულია ისე, როგორც არის
 @msg	`{w}` takes no operands	`{w}` ოპერანდებს არ იღებს
 @msg	a wraparound group is inside a compound path	ტექსტის გარსშემოვლების ჯგუფი შედგენილი ტრაექტორიის შიგნითაა
 @msg	a path has too many points	ტრაექტორიას ზედმეტად ბევრი წერტილი აქვს
@@ -4319,6 +4320,7 @@ font-technology	Variable	ცვლადი
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
+@msg	graphs come in as plain art, without their data or settings	დიაგრამები შემოდის როგორც ჩვეულებრივი გრაფიკა, მათი მონაცემებისა და პარამეტრების გარეშე
 @msg	an image whose data is cut short was left out	გამოსახულება, რომლის მონაცემებიც შეკვეცილია, გამოტოვებულია
 @msg	its editing data doesn't say where its art is	მისი რედაქტირების მონაცემები არ მიუთითებს, სად არის მისი ნახატი
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ეს ფაილი PDF-თავსებადობის გარეშეა შენახული და მისი რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება ({why})

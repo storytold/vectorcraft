@@ -4481,6 +4481,7 @@ theme	Appearance	Erscheinungsbild
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dies ist kein Logo aus flächigen Farben ({_1} % seiner einfarbigen Bereiche entsprechen wenigen flächigen Farben), daher würde der Modus „Flaches Logo“ seine Verläufe in Flecken zerlegen: Verwenden Sie stattdessen den Modus „Farbe“
 @msg	`{what}` closes nothing	`{what}` schließt nichts
 @msg	`{what}` closes something it didn't open	`{what}` schließt etwas, das es nicht geöffnet hat
+@msg	a graph's records don't end where they should: its art was read as it is	die Datensätze eines Diagramms enden nicht dort, wo sie sollten: seine Grafik wurde so gelesen, wie sie ist
 @msg	`{w}` takes no operands	`{w}` nimmt keine Operanden
 @msg	a wraparound group is inside a compound path	eine Textumfluss-Gruppe liegt in einem zusammengesetzten Pfad
 @msg	a path has too many points	ein Pfad hat zu viele Punkte
@@ -4495,6 +4496,7 @@ theme	Appearance	Erscheinungsbild
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
 @msg	an image VectorCraft can't read was left out	ein Bild, das VectorCraft nicht lesen kann, wurde ausgelassen
+@msg	graphs come in as plain art, without their data or settings	Diagramme werden als einfache Grafik übernommen, ohne ihre Daten und Einstellungen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen

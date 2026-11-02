@@ -4514,6 +4514,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	αυτό δεν είναι λογότυπο επίπεδων χρωμάτων ({_1}% των συμπαγών περιοχών του αντιστοιχούν σε λίγα χρώματα), επομένως η λειτουργία Επίπεδο λογότυπο θα μετατρέψει τα ντεγκραντέ σε κηλίδες: χρησιμοποιήστε τη λειτουργία Χρώμα
 @msg	`{what}` closes nothing	το `{what}` δεν κλείνει κανένα στοιχείο
 @msg	`{what}` closes something it didn't open	το `{what}` κλείνει στοιχείο που δεν άνοιξε
+@msg	a graph's records don't end where they should: its art was read as it is	οι εγγραφές ενός γραφήματος δεν τελειώνουν εκεί που πρέπει: το έργο του διαβάστηκε όπως είναι
 @msg	`{w}` takes no operands	το `{w}` δεν δέχεται τελεστέους
 @msg	a wraparound group is inside a compound path	μια ομάδα αναδίπλωσης κειμένου βρίσκεται μέσα σε σύνθετη διαδρομή
 @msg	a path has too many points	η διαδρομή έχει υπερβολικά πολλά σημεία
@@ -4528,6 +4529,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	τα αντικείμενα με πολλαπλά γεμίσματα, περιγράμματα, εφέ ή πινέλα εισήχθησαν ως απεικονίσεις ({_1}): η εμφάνισή τους δεν είναι ακόμη επεξεργάσιμη
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	το ντεγκραντέ «{name}» δεν ορίζεται στο αρχείο: χρησιμοποιείται στη θέση του ένα συμπαγές χρώμα
 @msg	an image VectorCraft can't read was left out	παραλείφθηκε εικόνα που δεν μπορεί να διαβάσει το VectorCraft
+@msg	graphs come in as plain art, without their data or settings	τα γραφήματα εισάγονται ως απλή γραφική, χωρίς τα δεδομένα και τις ρυθμίσεις τους
 @msg	an image whose data is cut short was left out	παραλείφθηκε εικόνα με περικομμένα δεδομένα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	οι περιοχές κειμένου με πλαίσια πολύ μικρά για μία γραμμή της γραμματοσειράς τους απέκτησαν μεγαλύτερο ύψος ({_1}), διαφορετικά το κείμενο δεν θα εμφανιζόταν

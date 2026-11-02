@@ -91,6 +91,8 @@ private editing data. VectorCraft:
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868.
   lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects,
   brushes and symbols come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
+  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868. Graphs (`%_Gs` … `%_GS`)
+  come in as their drawn art, as plain groups, paths and type, without their data or settings, with a note.
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, with its paragraphs' letter
   and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`).
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy

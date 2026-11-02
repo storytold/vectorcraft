@@ -4602,6 +4602,7 @@ axis	Both	Оба
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	это не логотип из плоских цветов ({_1}% его сплошных областей совпадает с несколькими плоскими цветами), поэтому режим «Плоский логотип» превратил бы градиенты в пятна: используйте режим «Цвет»
 @msg	`{what}` closes nothing	`{what}` ничего не закрывает
 @msg	`{what}` closes something it didn't open	`{what}` закрывает то, что не открывал
+@msg	a graph's records don't end where they should: its art was read as it is	записи диаграммы не заканчиваются там, где должны: её графика прочитана как есть
 @msg	`{w}` takes no operands	`{w}` не принимает операндов
 @msg	a wraparound group is inside a compound path	группа обтекания текстом находится внутри составного контура
 @msg	a path has too many points	в контуре слишком много точек
@@ -4616,6 +4617,7 @@ axis	Both	Оба
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиент «{name}» не определён в файле: вместо него используется сплошной цвет
 @msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено
+@msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в области в рамках, слишком низких для строки шрифта, которым он отображается, получил более высокие рамки ({_1}): иначе он не был бы виден
