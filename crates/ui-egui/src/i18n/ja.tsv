@@ -1588,6 +1588,7 @@ digits	Malayalam	マラヤーラム数字
 	Files of this standard tag their colours with ICC profiles.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。
 	Fill	塗り
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
+	Start Lists From Typed Markers	入力した記号からリストを開始
 	Fill Rule	塗りのルール
 	Fill and Stroke	塗りと線
 	Fill new strokes	新しいストロークに塗りを適用

@@ -1091,6 +1091,7 @@
 	Stroke When Editable	可编辑时的描边
 	Fill Color	填色
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
+	Start Lists From Typed Markers	从键入的标记开始列表
 	Fill Rule	填充规则
 	Fill with Placeholder Text	用占位文本填充
 	Insert Inline Symbol	插入行内符号

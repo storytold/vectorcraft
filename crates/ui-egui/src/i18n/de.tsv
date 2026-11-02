@@ -1122,6 +1122,7 @@ font-technology	Variable	Variabel
 	Stroke When Editable	Kontur, wenn bearbeitbar
 	Fill Color	Flächenfarbe
 	Fill New Type Objects With Placeholder Text	Neue Textobjekte mit Platzhaltertext füllen
+	Start Lists From Typed Markers	Listen aus getippten Aufzählungszeichen beginnen
 	Fill Rule	Füllregel
 	Fill with Placeholder Text	Mit Platzhaltertext füllen
 	Fill:	Fläche:

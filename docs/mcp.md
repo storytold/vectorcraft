@@ -3284,6 +3284,9 @@ Pen's second anchor at (150, 431), in line with the square's centre.
 
 - `placeholderText` (on by default): type the Type tools place (`pointer_gesture` with `type`, `areaType`…) starts with
   placeholder text, selected, so `type_text` replaces it; `text.create` and `text.createInPath` take `placeholder: true`.
+- `typedLists` (on by default; Type › Start Lists From Typed Markers): a list marker and a space typed with the Type tool
+  at the start of a paragraph start a list (see `text.startList`). Off, the Type tool leaves them as typed text;
+  `text.startList`, `text.setFormat {list}` and the Bullets and Numbered List buttons work as before.
 - `typeSizeIncrement`, `trackingIncrement`, `baselineShiftIncrement`: what `type.step {attribute: "size" | "leading" |
   "tracking" | "kerning" | "baselineShift", by?}` steps by, on the text range given, the type objects in `ids`, the
   Type tool's selected text or the selected type objects. `type.size.increase` / `type.size.decrease` (Cmd+Shift+. and
@@ -5019,7 +5022,8 @@ whose left and first-line indents are both 0 gets 18 pt and -18 pt. The tool run
 the byte after the space, as an undo step of its own after the typing: one Undo puts the characters back as text with no
 list, and typing goes on after them; Redo removes them again, and typing goes on before the paragraph's text. The same
 characters later in a paragraph start nothing, and so do list characters that arrive in one piece with the space: a
-paste, an IME commit, or `type_text` of a longer string. From a script, `text.startList {id, at?}` (`at` defaults to the end of the text) does
+paste, an IME commit, or `type_text` of a longer string. With the `typedLists` preference off (Preferences › Type ›
+Start Lists From Typed Markers), the Type tool starts no list from typed characters. From a script, `text.startList {id, at?}` (`at` defaults to the end of the text) does
 the same with the text before `at` and returns `started` and `caret`. When the list starts, `caret` is the byte where
 the paragraph's text now starts; when the text before `at` starts no list, nothing changes, `started` is false and
 `caret` is `at`.

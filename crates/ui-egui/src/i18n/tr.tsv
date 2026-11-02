@@ -1104,6 +1104,7 @@ font-technology	Variable	Değişken
 	Merge only with selection	Yalnızca seçimle birleştir
 	Fill Color	Dolgu Rengi
 	Fill New Type Objects With Placeholder Text	Yeni Yazım Nesnelerini Yer Tutucu Metinle Doldurun
+	Start Lists From Typed Markers	Yazılan İşaretlerden Liste Başlat
 	Fill Rule	Doldurma Kuralı
 	Fill with Placeholder Text	Yer Tutucu Metinle Doldur
 	Fill:	Doldurun:

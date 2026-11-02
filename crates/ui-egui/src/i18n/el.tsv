@@ -1080,6 +1080,7 @@ font-technology	Variable	Μεταβλητές
 	Live curve fitting	Προσαρμογή καμπύλης σε πραγματικό χρόνο
 	Fill Color	Χρώμα γεμίσματος
 	Fill New Type Objects With Placeholder Text	Συμπλήρωση νέων αντικειμένων κειμένου με κείμενο υπόδειξης
+	Start Lists From Typed Markers	Έναρξη λιστών από πληκτρολογημένα σύμβολα
 	Fill Rule	Κανόνας γεμίσματος
 	Fill with Placeholder Text	Γέμισμα με κείμενο υπόδειξης
 	Fill:	Γέμισμα:

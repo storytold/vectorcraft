@@ -1152,6 +1152,7 @@ font-technology	Variable	Variabili
 	Stroke When Editable	Traccia se modificabile
 	Fill Color	Colore riempimento
 	Fill New Type Objects With Placeholder Text	Riempi i nuovi oggetti di testo con testo segnaposto
+	Start Lists From Typed Markers	Avvia elenchi dai marcatori digitati
 	Fill Rule	Regola di riempimento
 	Fill with Placeholder Text	Riempi con testo segnaposto
 	Fill:	Riempimento:

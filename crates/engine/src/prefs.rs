@@ -78,6 +78,9 @@ pub struct Prefs {
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
     pub placeholder_text: bool,
+    /// Type › Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list (on by default). Off, they stay as typed text.
+    pub typed_lists: bool,
     // Units
     pub units_general: String,
     pub units_stroke: String,
@@ -371,6 +374,7 @@ impl Default for Prefs {
             highlight_alternate_glyphs: false,
             highlight_substituted_fonts: true,
             placeholder_text: true,
+            typed_lists: true,
             units_general: s("points"),
             units_stroke: s("points"),
             units_type: s("points"),

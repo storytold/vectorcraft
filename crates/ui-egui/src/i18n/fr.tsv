@@ -1145,6 +1145,7 @@ font-technology	Variable	Variables
 	Stroke When Editable	Contour quand il est modifiable
 	Fill Color	Couleur de fond
 	Fill New Type Objects With Placeholder Text	Remplir les nouveaux objets texte avec un texte de substitution
+	Start Lists From Typed Markers	Commencer des listes à partir des marqueurs saisis
 	Fill Rule	Règle de remplissage
 	Fill with Placeholder Text	Remplir avec un texte de substitution
 	Fill:	Fond :

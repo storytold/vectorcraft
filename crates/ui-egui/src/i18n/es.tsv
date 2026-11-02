@@ -1150,6 +1150,7 @@ font-technology	Variable	Variables
 	Stroke When Editable	Trazo si es editable
 	Fill Color	Color de relleno
 	Fill New Type Objects With Placeholder Text	Rellenar nuevos objetos de texto con texto de muestra
+	Start Lists From Typed Markers	Iniciar listas a partir de marcadores escritos
 	Fill Rule	Regla de relleno
 	Fill with Placeholder Text	Rellenar con texto de muestra
 	Insert Inline Symbol	Insertar símbolo en el texto

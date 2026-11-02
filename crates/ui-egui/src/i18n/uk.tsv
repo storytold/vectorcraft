@@ -1146,6 +1146,7 @@ font-technology	Variable	Варіативні
 	Stroke When Editable	Обведення, яке можна редагувати
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
+	Start Lists From Typed Markers	Починати списки з введених маркерів
 	Fill Rule	Правило заливки
 	Fill with Placeholder Text	Заповнити текстом-заповнювачем
 	Fill:	Заливка:

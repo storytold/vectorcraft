@@ -1116,6 +1116,7 @@ font-technology	Variable	可變
 	Highlight:	強調顯示：
 	Stroke When Editable	可編輯時的筆畫
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
+	Start Lists From Typed Markers	從輸入的標記開始清單
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
 	Insert Inline Symbol	插入行內符號
