@@ -56,6 +56,9 @@ const SCRIBBLE: &str = "Adobe Scribble Fill"; // brand-ok: the filter's name in 
 const EXPAND_VERSION: &str = "Adobe Effect Expand Before Version"; // brand-ok: the key's name in the files
 const DEFORM: &str = "Adobe Deform"; // brand-ok: the filter's name in the files
 const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the files
+/// Effect › Path › Outline Object.
+const OUTLINE_TYPE: &str = "Adobe Outline Type"; // brand-ok: the filter's name in the files
+const OUTLINE_STROKE: &str = "Adobe Outline Stroke"; // brand-ok: the filter's name in the files
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
@@ -100,7 +103,7 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners, Scribble and Convert to Shape on the object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// Feather, Round Corners, Scribble, Convert to Shape and the Path effects (Offset Path, Outline Object, Outline Stroke) on the object: what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -659,6 +662,45 @@ fn shape_effect(f: &Filter) -> Option<Effect> {
     Some(Effect { id: id.into(), params, visible: f.visible })
 }
 
+/// The largest offset Offset Path reads, in points (the effect's own limit).
+const MAX_OFFSET: f64 = 1e5;
+
+/// Effect › Path: Offset Path with its Offset, Joins and Miter Limit
+/// (https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/offset-duplicate-objects.html),
+/// Outline Object and Outline Stroke, which have no settings. Offset Path's keys are LiveEffect
+/// XML's: `ofst` in points, `jntp` 0 round, 1 bevel or 2 miter, and `mlim`
+/// (https://community.adobe.com/questions-652/illustrator-javascript-count-area-with-offset-782386).
+/// `None`: a missing, unknown or out-of-range setting, or one of another kind, which keeps the
+/// drawn look; there is no default to stand in for a missing one.
+fn path_effect(f: &Filter) -> Option<Effect> {
+    if !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
+        return None;
+    }
+    let (id, params) = match f.name.as_str() {
+        OFFSET => {
+            const KEYS: [(&str, Kind); 3] = [("ofst", Kind::Real), ("jntp", Kind::Int), ("mlim", Kind::Real)];
+            if f.kinds.len() != KEYS.len() || KEYS.iter().any(|(key, kind)| f.kinds.get(*key) != Some(kind)) {
+                return None;
+            }
+            let value = |key: &str| f.params.get(key).copied().filter(|v| v.is_finite());
+            let offset = value("ofst").filter(|v| v.abs() <= MAX_OFFSET)?;
+            let miter = value("mlim").filter(|v| (1.0..=500.0).contains(v))?;
+            let joins = match value("jntp")? {
+                0.0 => "round",
+                1.0 => "bevel",
+                2.0 => "miter",
+                _ => return None,
+            };
+            ("path.offsetPath", json!({"offset": offset, "joins": joins, "miterLimit": miter}))
+        }
+        // Outline Stroke without a `width`: the stroke it is on, or the object's, gives it.
+        OUTLINE_STROKE if f.kinds.is_empty() => ("path.outlineStroke", json!({})),
+        OUTLINE_TYPE if f.kinds.is_empty() => ("path.outlineObject", json!({})),
+        _ => return None,
+    };
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
 /// The live effect filter `f` is, when it is one read here.
 fn effect(f: &Filter) -> Option<Effect> {
     if let Some(stylized) = stylize(f) {
@@ -684,15 +726,7 @@ fn effect(f: &Filter) -> Option<Effect> {
                 }),
             )
         }
-        // `jntp`: 0 round, 1 bevel, 2 miter (the joins LiveEffect XML writes in public scripts).
-        OFFSET => (
-            "path.offsetPath",
-            json!({
-                "offset": param("ofst").unwrap_or(10.0).clamp(-1e5, 1e5),
-                "joins": match param("jntp").map(|v| v as i64) { Some(0) => "round", Some(1) => "bevel", _ => "miter" },
-                "miterLimit": param("mlim").unwrap_or(4.0).clamp(1.0, 500.0),
-            }),
-        ),
+        OFFSET | OUTLINE_TYPE | OUTLINE_STROKE => return path_effect(f),
         // Art space has y up: a move up is a negative `moveV` in the document.
         TRANSFORM => (
             "distort.transform",
@@ -879,6 +913,9 @@ fn style(filters: &[Filter]) -> ArtStyle {
                     | "convertToShape.rectangle"
                     | "convertToShape.roundedRectangle"
                     | "convertToShape.ellipse"
+                    | "path.offsetPath"
+                    | "path.outlineObject"
+                    | "path.outlineStroke"
             )
         });
     st
