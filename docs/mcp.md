@@ -1668,7 +1668,18 @@ already walks Image Trace. Short agent entry points:
   Export end the file name of a step with `format` in that `format`, in lower case and without a leading dot, when it
   is one of the format's extensions (`.svg` and `SVG` give `.svg`, `.JPEG` gives `.jpeg`), and otherwise in the
   format's first extension (`png8` gives `.png`, `template` gives `.vctemplate`). A step without `format` keeps the
-  source file's extension (`.vectorcraft` over data sets).
+  source file's extension (`.vectorcraft` over data sets). Override Export gives a `document.exportForScreens` or
+  `assets.export` step the `folder` `destinationFolder/<stem>`, in place of the step's own folder or an export
+  preset's: one folder for each source file, named after the file without its extension, or for each data set,
+  named as its files are (`datasetFileNaming`). Both names drop trailing periods and spaces (`a..svg` gives `a`). The export names
+  the files in it as it does outside Batch. When two source files have the same name without the extension
+  (`a.svg` and `sub/a.svg`, `a.svg` and `a.ai`, or `a.svg` and `a..svg`), the folder destination and the overrides
+  add `-2`, `-3`… to the name for each later file (compared without case), as for data sets. They also add it when a
+  later file's folder or file would have the name of a file or folder an earlier one wrote: with the folder
+  destination, `a.svg` is saved as `a.svg`, so the Export for Screens folder of `a.svg.svg` is `a.svg-2`. When
+  `destinationFolder` holds source files, only a file's own output takes its name, and no export folder takes the
+  name of a subfolder that holds source files: with `a..svg` and `a.svg` saved in place, `a..svg` is saved as
+  `a-2.svg` and `a.svg` over itself.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the
