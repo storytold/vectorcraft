@@ -188,7 +188,9 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
 
 /// The panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let selected: Option<(usize, usize)> = pstate(ui.ctx(), "actions-selected");
+    // A selected action counts only while its set is the current one, as the panel shows it: a set
+    // deleted since leaves the stored pair pointing at another set's action.
+    let selected = pstate::<Option<(usize, usize)>>(ui.ctx(), "actions-selected").filter(|&(s, _)| app.ui.action_set == Some(s));
     let has = selected.and_then(|(s, a)| app.ui.action_sets.get(s).and_then(|set| set.actions.get(a))).is_some();
     if widgets::menu_item(ui, tl!("New Set…"), true, false) {
         crate::dialogs::action_set_options::open_new(app);
@@ -535,6 +537,26 @@ mod tests {
             let names = app.ui.action_sets[1].actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>();
             assert_eq!(names, ["Nudge", "Nudge Again"], "{fields}");
         }
+    }
+
+    /// After `ui.actionSet.delete` removes a set above the selected action's set, the panel menu's
+    /// Action Options… is off: it does not open for the action that moved to the stored position.
+    #[test]
+    fn action_options_is_off_after_a_set_above_the_selection_is_deleted() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        let action = |name: &str| Action { name: name.into(), steps: vec![] };
+        app.ui.action_sets[2].actions.push(action("Spin"));
+        app.ui.action_sets.push(ActionSet::new("Last", vec![action("Wrong")]));
+        let ctx = egui::Context::default();
+        app.ui.action_set = Some(2);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((2, 0)));
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        assert_eq!(app.ui.action_set, Some(1), "Other is still current");
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        assert!(app.ui.dialog.is_none(), "Action Options… does not open for Last's action");
     }
 
     /// An app with the default set and the sets Mine (two actions) and Other.
