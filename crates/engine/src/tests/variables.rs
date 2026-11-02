@@ -877,7 +877,7 @@ fn dataset_set_with_a_new_name_renames_the_row() {
     assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "z"}}));
     assert_eq!(sets["datasets"][1]["values"], json!({"Name": {"text": "e"}}));
 
-    s.execute("edit.undo", &json!({})).unwrap();
+    // The set that changed nothing added no step: one undo takes the rename back.
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["active"], "D", "undo puts the name back");
 }
