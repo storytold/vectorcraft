@@ -41,20 +41,28 @@ use std::collections::HashMap;
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Dash, Effect, LineCap, LineJoin, WidthProfile};
+use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, WidthProfile};
 
 use super::lex::{Lexer, Tok};
 use super::obj::V;
 use super::paint;
 
 const GLOW: &str = "Adobe Outer Glow"; // brand-ok: the filter's name in the files
-const FEATHER: &str = "Adobe Feather"; // brand-ok: the filter's name in the files
+const INNER_GLOW: &str = "Adobe Inner Glow"; // brand-ok: the filter's name in the files
+const FEATHER: &str = "Adobe Fuzzy Mask"; // brand-ok: the filter's name in the files
 const SHADOW: &str = "Adobe Drop Shadow"; // brand-ok: the filter's name in the files
+const ROUND_CORNERS: &str = "Adobe Round Corners"; // brand-ok: the filter's name in the files
+const SCRIBBLE: &str = "Adobe Scribble Fill"; // brand-ok: the filter's name in the files
+const EXPAND_VERSION: &str = "Adobe Effect Expand Before Version"; // brand-ok: the key's name in the files
 const DEFORM: &str = "Adobe Deform"; // brand-ok: the filter's name in the files
 const OFFSET: &str = "Adobe Offset Path"; // brand-ok: the filter's name in the files
+/// Effect › Path › Outline Object.
+const OUTLINE_TYPE: &str = "Adobe Outline Type"; // brand-ok: the filter's name in the files
+const OUTLINE_STROKE: &str = "Adobe Outline Stroke"; // brand-ok: the filter's name in the files
 const TRANSFORM: &str = "Adobe Transform"; // brand-ok: the filter's name in the files
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
+const SHAPE_EFFECTS: &str = "Adobe Shape Effects"; // brand-ok: the filter's name in the files
 
 const CHAIN: &str = "Chain Style Filter";
 const STACK: &str = "Stack Style Filter";
@@ -94,8 +102,8 @@ pub(super) struct ArtStyle {
     /// The style reads as [`Self::items`] and [`Self::effects`].
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
-    /// no transparency or effects of their own, and only Outer Glow, Feather, Drop Shadow and Bas
-    /// Relief read from its settings block on the object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
+    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke) and Bas Relief read from its settings block on the object: what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -106,6 +114,9 @@ pub(super) struct ArtStyle {
     pub effects: Vec<Effect>,
     /// How many of [`Self::items`] paint below the object's contents (`None`: none do).
     pub contents_index: Option<usize>,
+    /// The object's own opacity, blend mode, isolation and knockout (its blend filter), when the
+    /// style has them.
+    pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -148,6 +159,17 @@ impl Default for ItemLook {
     }
 }
 
+/// How a filter's dictionary writes an entry: `value /Int (key) ,`, `/Real`, `/Bool`, a fill's
+/// style (`/FillStyle : … /Def ; (key) ,`), or anything else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
+    Int,
+    Real,
+    Bool,
+    Fill,
+    Other,
+}
+
 #[derive(Debug)]
 struct Filter {
     name: String,
@@ -156,6 +178,8 @@ struct Filter {
     parent: Option<usize>,
     compound: bool,
     params: HashMap<String, f64>,
+    /// How each key of its dictionary is written.
+    kinds: HashMap<String, Kind>,
     /// Its dictionary's arrays (`/Array : v /Real , … ; (key) ,`), by key.
     arrays: HashMap<String, Vec<f64>>,
     fill: Option<Paint>,
@@ -174,6 +198,8 @@ struct Filter {
     pattern: Option<(String, Option<[f64; 6]>)>,
     /// `mode opacity … Xy`.
     xy: Option<(usize, f32)>,
+    /// `… isolate knockout … Xy`.
+    xy_group: Option<(bool, Knockout)>,
     /// Its settings block's bytes (`/Binary : /ASCII85Decode ,`), `Err` when it isn't read.
     data: Option<Result<Vec<u8>, ()>>,
 }
@@ -186,6 +212,7 @@ impl Default for Filter {
             parent: None,
             compound: false,
             params: HashMap::new(),
+            kinds: HashMap::new(),
             arrays: HashMap::new(),
             fill: None,
             stroke: None,
@@ -199,6 +226,7 @@ impl Default for Filter {
             gradient_of: None,
             pattern: None,
             xy: None,
+            xy_group: None,
             data: None,
         }
     }
@@ -206,6 +234,55 @@ impl Default for Filter {
 
 /// Most filters read in one style.
 const MAX_FILTERS: usize = 4096;
+
+/// Most entries read from a style list.
+const MAX_LISTED: usize = 4096;
+/// The longest style name read from a style list, in bytes.
+const MAX_LISTED_NAME: usize = 1024;
+
+/// The style list (`%AI9_BeginArtStyleList`, between its markers): one literal string per style,
+/// the Graphic Styles panel's order. Each name is its string's bytes, escapes undone; other tokens,
+/// a string the data ends inside and names past [`MAX_LISTED_NAME`] are left out.
+pub(super) fn art_style_list(data: &[u8]) -> Vec<Vec<u8>> {
+    let mut names = vec![];
+    let mut lex = Lexer::new(data);
+    loop {
+        let before = lex.offset();
+        if names.len() >= MAX_LISTED {
+            break;
+        }
+        let Some(t) = lex.next_token() else { break };
+        // The lexer stops a string at its closing `)` or at the end of the data.
+        let closed = lex.offset() < data.len() || data.get(before..).is_some_and(closes);
+        if let Tok::Str(s) = t.tok
+            && closed
+            && s.len() <= MAX_LISTED_NAME
+        {
+            names.push(s);
+        }
+    }
+    names
+}
+
+/// Does the first literal string in `data` end with its own `)` (not an escaped one or one that
+/// closes a nested pair)?
+fn closes(data: &[u8]) -> bool {
+    let Some(start) = data.iter().position(|b| *b == b'(') else { return false };
+    let mut depth = 0usize;
+    let mut bytes = data.iter().skip(start + 1);
+    while let Some(b) = bytes.next() {
+        match b {
+            b'\\' => {
+                bytes.next();
+            }
+            b'(' => depth += 1,
+            b')' if depth == 0 => return true,
+            b')' => depth -= 1,
+            _ => {}
+        }
+    }
+    false
+}
 
 /// The styles of the section `data` (between its markers), by name.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
@@ -226,6 +303,10 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     };
     let mut array: Option<Vec<V>> = None;
     let mut dict_array: Option<Vec<f64>> = None;
+    // A paint style being read as a dictionary entry: its key follows its `/Def ;`.
+    let mut style_entry: Option<Kind> = None;
+    // A name of a basic filter's that may be an entry's type, with the string that follows it.
+    let mut other_entry: Option<Option<String>> = None;
     // The last name was `/Binary`.
     let mut binary = false;
     let mut lex = Lexer::new(data);
@@ -240,7 +321,12 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
         }
         match t.tok {
             Tok::Num(v) => operands.push(V::Num(v)),
-            Tok::Str(s) | Tok::Hex(s) => operands.push(V::Str(s)),
+            Tok::Str(s) | Tok::Hex(s) => {
+                if let Some(key @ None) = other_entry.as_mut() {
+                    *key = Some(String::from_utf8_lossy(&s).into_owned());
+                }
+                operands.push(V::Str(s));
+            }
             // A basic filter's settings block: its bytes are on the comment lines the lexer skips.
             Tok::Name(b"ASCII85Decode") if after_binary && in_basic => {
                 let block = binary_block(&mut lex, data.len()).ok_or(());
@@ -254,8 +340,10 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     finish(name.take(), &mut filters);
                     operands.clear();
                     open.clear();
-                    (pending, in_basic) = (None, false);
+                    (pending, in_basic, style_entry, other_entry) = (None, false, None, None);
                 }
+                b"FillStyle" => style_entry = Some(Kind::Fill),
+                b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
@@ -288,17 +376,31 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                         a.extend(value);
                         continue;
                     }
+                    let kind = match n {
+                        b"Int" => Kind::Int,
+                        b"Real" => Kind::Real,
+                        _ => Kind::Bool,
+                    };
                     // The key follows: `value /Real (key) ,`.
-                    if let (Some(value), Some(Tok::Str(key))) = (value, lex.next_token().map(|t| t.tok))
+                    if let Some(Tok::Str(key)) = lex.next_token().map(|t| t.tok)
                         && let Some(f) = filters.last_mut()
                     {
-                        f.params.insert(String::from_utf8_lossy(&key).into_owned(), value);
+                        let key = String::from_utf8_lossy(&key).into_owned();
+                        match value {
+                            Some(value) => f.params.insert(key.clone(), value),
+                            None => f.params.remove(&key),
+                        };
+                        f.kinds.insert(key, kind);
                     }
                     continue;
                 }
+                // Perhaps an entry of another type (`(text) /String (key) ,`): its key, if any, is
+                // the string before the `,`.
+                _ if in_basic => other_entry = Some(None),
                 _ => {}
             },
             Tok::Word(w) => {
+                let entry = other_entry.take().flatten();
                 let op = std::str::from_utf8(w).unwrap_or_default();
                 if op == "[" {
                     array = Some(vec![]);
@@ -321,6 +423,15 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 if op == ";" && !in_basic {
                     open.pop();
                 }
+                if op == "," {
+                    let key = match style_entry.take() {
+                        Some(kind) => operands.iter().rev().find_map(V::text).map(|k| (k, kind)),
+                        None => entry.map(|k| (k, Kind::Other)),
+                    };
+                    if let (Some((key, kind)), Some(f)) = (key, filters.last_mut()) {
+                        f.kinds.insert(key, kind);
+                    }
+                }
                 if let Some(f) = filters.last_mut() {
                     paint_op(f, op, &operands);
                 }
@@ -329,7 +440,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 continue;
             }
-            Tok::Comment(_) | Tok::Data(_) | Tok::Preview(_) => {}
+            Tok::Comment(_) | Tok::Data(_) | Tok::Preview(_) | Tok::Document(_) => {}
         }
         if operands.len() > 64 {
             operands.clear();
@@ -434,11 +545,18 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
         }
         "Xy" => {
             let n: Vec<f64> = vals.iter().filter_map(V::num).collect();
-            if let [mode, opacity, ..] = n.as_slice()
+            if let [mode, opacity, rest @ ..] = n.as_slice()
                 && mode.is_finite()
                 && opacity.is_finite()
             {
                 f.xy = Some((mode.max(0.0) as usize, opacity.clamp(0.0, 1.0) as f32));
+                // As an object's own `Xy` reads them.
+                let knockout = match rest.get(1).map(|v| *v as i64) {
+                    Some(1) => Knockout::On,
+                    Some(2) => Knockout::Neutral,
+                    _ => Knockout::Off,
+                };
+                f.xy_group = Some((rest.first().is_some_and(|v| *v != 0.0), knockout));
             }
         }
         // `flag (name) x y angle length a b c d tx ty Bg`.
@@ -492,39 +610,232 @@ fn width_profile(arrays: &HashMap<String, Vec<f64>>) -> Option<WidthProfile> {
     (!uniform).then_some(WidthProfile { points })
 }
 
+/// A Stylize effect's dictionary, read only as it is written: each setting a key of the kind it
+/// names, with a finite value in the effect's range.
+struct Settings<'a>(&'a Filter);
+
+impl Settings<'_> {
+    /// Every key is one of `known`, or one of `fixed` holding the value it names.
+    /// The choices (`blnd`, `csrc`, `gtyp`) are written as `/Int`, the colors as fill styles and
+    /// the other settings as `/Real`.
+    fn only(&self, known: &[&str], fixed: &[(&str, Kind, f64)]) -> bool {
+        let f = self.0;
+        let kind_of = |key: &str| match key {
+            "blnd" | "csrc" | "gtyp" => Kind::Int,
+            "sclr" | "gclr" => Kind::Fill,
+            _ => Kind::Real,
+        };
+        f.arrays.is_empty()
+            && f.kinds.iter().all(|(key, kind)| {
+                (known.contains(&key.as_str()) && kind_of(key) == *kind)
+                    || fixed.iter().any(|(k, want, v)| k == key && want == kind && f.params.get(key.as_str()) == Some(v))
+            })
+    }
+
+    fn real(&self, key: &str, range: std::ops::RangeInclusive<f64>) -> Option<f64> {
+        (self.0.kinds.get(key) == Some(&Kind::Real)).then_some(())?;
+        self.0.params.get(key).copied().filter(|v| v.is_finite() && range.contains(v))
+    }
+
+    /// A choice numbered from 0 to `max`.
+    fn choice(&self, key: &str, max: u8) -> Option<usize> {
+        (self.0.kinds.get(key) == Some(&Kind::Int)).then_some(())?;
+        let v = self.0.params.get(key).copied().filter(|v| v.is_finite() && v.fract() == 0.0 && (0.0..=f64::from(max)).contains(v))?;
+        Some(v as usize)
+    }
+
+    /// The blend mode in `blnd`, numbered as transparency's (`Xy`).
+    fn mode(&self) -> Option<String> {
+        Some(super::read::blend_name(self.choice("blnd", 15)?))
+    }
+
+    /// The color of the fill style written as `key`: a solid color, in Normal at full opacity.
+    fn color(&self, key: &str) -> Option<vectorcraft_color::Color> {
+        let f = self.0;
+        let normal = f.xy.is_none_or(|(mode, opacity)| mode == 0 && opacity >= 1.0);
+        (f.kinds.get(key) == Some(&Kind::Fill) && !f.gradient && f.pattern.is_none() && normal).then_some(())?;
+        f.fill.as_ref()?.color()
+    }
+}
+
+/// Drop Shadow, Inner Glow, Outer Glow, Feather, Round Corners and Scribble (`None`: another
+/// filter). `Some(None)` is one whose settings aren't all read: an unknown key, a key of another
+/// kind, a value out of range or a missing setting keeps the drawn look. The keys are LiveEffect
+/// XML's
+/// (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450).
+fn stylize(f: &Filter) -> Option<Option<(&'static str, serde_json::Value)>> {
+    let s = Settings(f);
+    let opacity = || Some(s.real("opac", 0.0..=1.0)? * 100.0);
+    Some(match f.name.as_str() {
+        // `horz` and `vert` are the X and Y Offset, right and down
+        // (https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/create-drop-shadows.html);
+        // `csrc` 0 is Color (`sclr`), 1 Darkness (`dark`, a percent). `blur` is half the catalog's.
+        SHADOW => (|| {
+            let fixed = [("pair", Kind::Bool, 1.0), ("usePSLBlur", Kind::Bool, 1.0), (EXPAND_VERSION, Kind::Int, 16.0)];
+            s.only(&["blnd", "opac", "horz", "vert", "blur", "csrc", "dark", "sclr"], &fixed).then_some(())?;
+            let mut params = json!({
+                "mode": s.mode()?,
+                "opacity": opacity()?,
+                "blur": 2.0 * s.real("blur", 0.0..=500.0)?,
+                "x": s.real("horz", -1e4..=1e4)?,
+                "y": s.real("vert", -1e4..=1e4)?,
+            });
+            if s.choice("csrc", 1)? == 0 {
+                params["color"] = json!(s.color("sclr")?);
+            } else {
+                params["shade"] = json!("darkness");
+                params["darkness"] = json!(s.real("dark", 0.0..=100.0)?);
+                if let Some(c) = s.color("sclr") {
+                    params["color"] = json!(c);
+                }
+            }
+            Some(("stylize.dropShadow", params))
+        })(),
+        // `gtyp` 0 is Center, 1 Edge (https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/create-an-inner-or-outer-glow.html);
+        // `blur` is the catalog's.
+        INNER_GLOW => (|| {
+            s.only(&["blnd", "opac", "blur", "gtyp", "gclr"], &[]).then_some(())?;
+            let source = if s.choice("gtyp", 1)? == 0 { "center" } else { "edge" };
+            let params = json!({
+                "mode": s.mode()?,
+                "opacity": opacity()?,
+                "blur": s.real("blur", 0.0..=1000.0)?,
+                "color": s.color("gclr")?,
+                "source": source,
+            });
+            Some(("stylize.innerGlow", params))
+        })(),
+        // `blur` is half the catalog's.
+        GLOW => (|| {
+            s.only(&["blnd", "opac", "blur", "sclr"], &[("usePSLBlur", Kind::Bool, 1.0), (EXPAND_VERSION, Kind::Int, 16.0)]).then_some(())?;
+            let params = json!({"mode": s.mode()?, "opacity": opacity()?, "blur": 2.0 * s.real("blur", 0.0..=500.0)?, "color": s.color("sclr")?});
+            Some(("stylize.outerGlow", params))
+        })(),
+        // https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/feather-object-edges.html
+        FEATHER => s.only(&["Radius"], &[]).then(|| s.real("Radius", 0.0..=1000.0)).flatten().map(|r| ("stylize.feather", json!({"radius": r}))),
+        ROUND_CORNERS => {
+            s.only(&["radius"], &[]).then(|| s.real("radius", 0.0..=1e4)).flatten().map(|r| ("stylize.roundCorners", json!({"radius": r})))
+        }
+        // `Angle` in degrees; widths, spacings and overlaps in points; `Scribbliness` (Curviness)
+        // and `ScribbleVariation` as fractions. The catalog's Scribble has no color, so a Scribble
+        // with `sclr` keeps the drawn look.
+        SCRIBBLE => (|| {
+            let keys =
+                ["Angle", "EdgeOverlap", "EdgeOverlapVariation", "StrokeWidth", "Scribbliness", "ScribbleVariation", "Spacing", "SpacingVariation"];
+            s.only(&keys, &[]).then_some(())?;
+            let params = json!({
+                "angle": s.real("Angle", -360.0..=360.0)?,
+                "overlap": s.real("EdgeOverlap", -1000.0..=1000.0)?,
+                "overlapVariation": s.real("EdgeOverlapVariation", 0.0..=100.0)?,
+                "strokeWidth": s.real("StrokeWidth", 0.01..=1000.0)?,
+                "curviness": s.real("Scribbliness", 0.0..=1.0)? * 100.0,
+                "curvinessVariation": s.real("ScribbleVariation", 0.0..=1.0)? * 100.0,
+                "spacing": s.real("Spacing", 0.1..=1000.0)?,
+                "spacingVariation": s.real("SpacingVariation", 0.0..=100.0)?,
+            });
+            Some(("stylize.scribble", params))
+        })(),
+        _ => return None,
+    })
+}
+
+/// The largest size or radius Convert to Shape reads, in points.
+const MAX_SHAPE_SIZE: f64 = 1e5;
+
+/// Convert to Shape: Rectangle, Rounded Rectangle or Ellipse, with an absolute size or one relative
+/// to the object, and a corner radius
+/// (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+/// The keys are LiveEffect XML's: `Shape` 0 Rectangle, 1 Rounded Rectangle, 2 Ellipse
+/// (https://community.adobe.com/questions-652/effect-convert-to-shape-ellipse-in-javascript-761645),
+/// `Absolute` 1 for an absolute `AbsWidth` × `AbsHeight`, else `RelWidth` and `RelHeight` added to
+/// each side, and `CornerRadius`; a missing size is 18 pt a side or 36 pt, and a missing radius
+/// 9 pt. `None`: a key, a kind or a value that isn't read, which keeps the drawn look.
+fn shape_effect(f: &Filter) -> Option<Effect> {
+    const SIZES: [&str; 5] = ["AbsWidth", "AbsHeight", "RelWidth", "RelHeight", "CornerRadius"];
+    let known = f.kinds.iter().all(|(key, kind)| match key.as_str() {
+        "DisplayString" => *kind == Kind::Other,
+        "Shape" => *kind == Kind::Int,
+        key => (key == "Absolute" || SIZES.contains(&key)) && *kind == Kind::Real,
+    });
+    if !known || !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
+        return None;
+    }
+    // A written size is a finite number from `min`; a missing one is `default`.
+    let size = |key: &str, min: f64, default: f64| match f.kinds.get(key) {
+        None => Some(default),
+        Some(_) => f.params.get(key).copied().filter(|v| v.is_finite() && (min..=MAX_SHAPE_SIZE).contains(v)),
+    };
+    let shape = f.params.get("Shape").copied().filter(|_| f.kinds.get("Shape") == Some(&Kind::Int))?;
+    let absolute = match f.params.get("Absolute").copied() {
+        Some(0.0) => false,
+        Some(1.0) => true,
+        _ => return None,
+    };
+    let (rel_w, rel_h) = (size("RelWidth", -MAX_SHAPE_SIZE, 18.0)?, size("RelHeight", -MAX_SHAPE_SIZE, 18.0)?);
+    let (abs_w, abs_h, radius) = (size("AbsWidth", 0.0, 36.0)?, size("AbsHeight", 0.0, 36.0)?, size("CornerRadius", 0.0, 9.0)?);
+    let id = match shape {
+        0.0 => "convertToShape.rectangle",
+        1.0 => "convertToShape.roundedRectangle",
+        // A relative Ellipse in the file is drawn round the enlarged box, and VectorCraft's inside
+        // it: it keeps its drawn look.
+        2.0 if absolute => "convertToShape.ellipse",
+        _ => return None,
+    };
+    let mut params = json!({"relative": !absolute, "extraW": 2.0 * rel_w, "extraH": 2.0 * rel_h, "width": abs_w, "height": abs_h});
+    if id == "convertToShape.roundedRectangle" {
+        params["radius"] = json!(radius);
+    }
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
+/// The largest offset Offset Path reads, in points (the effect's own limit).
+const MAX_OFFSET: f64 = 1e5;
+
+/// Effect › Path: Offset Path with its Offset, Joins and Miter Limit
+/// (https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/offset-duplicate-objects.html),
+/// Outline Object and Outline Stroke, which have no settings. Offset Path's keys are LiveEffect
+/// XML's: `ofst` in points, `jntp` 0 round, 1 bevel or 2 miter, and `mlim`
+/// (https://community.adobe.com/questions-652/illustrator-javascript-count-area-with-offset-782386).
+/// `None`: a missing, unknown or out-of-range setting, or one of another kind, which keeps the
+/// drawn look; there is no default to stand in for a missing one.
+fn path_effect(f: &Filter) -> Option<Effect> {
+    if !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
+        return None;
+    }
+    let (id, params) = match f.name.as_str() {
+        OFFSET => {
+            const KEYS: [(&str, Kind); 3] = [("ofst", Kind::Real), ("jntp", Kind::Int), ("mlim", Kind::Real)];
+            if f.kinds.len() != KEYS.len() || KEYS.iter().any(|(key, kind)| f.kinds.get(*key) != Some(kind)) {
+                return None;
+            }
+            let value = |key: &str| f.params.get(key).copied().filter(|v| v.is_finite());
+            let offset = value("ofst").filter(|v| v.abs() <= MAX_OFFSET)?;
+            let miter = value("mlim").filter(|v| (1.0..=500.0).contains(v))?;
+            let joins = match value("jntp")? {
+                0.0 => "round",
+                1.0 => "bevel",
+                2.0 => "miter",
+                _ => return None,
+            };
+            ("path.offsetPath", json!({"offset": offset, "joins": joins, "miterLimit": miter}))
+        }
+        // Outline Stroke without a `width`: the stroke it is on, or the object's, gives it.
+        OUTLINE_STROKE if f.kinds.is_empty() => ("path.outlineStroke", json!({})),
+        OUTLINE_TYPE if f.kinds.is_empty() => ("path.outlineObject", json!({})),
+        _ => return None,
+    };
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
 /// The live effect filter `f` is, when it is one read here.
 fn effect(f: &Filter) -> Option<Effect> {
+    if let Some(stylized) = stylize(f) {
+        let (id, params) = stylized?;
+        return Some(Effect { id: id.into(), params, visible: f.visible });
+    }
     let param = |k: &str| f.params.get(k).copied().filter(|v| v.is_finite());
     let flag = |k: &str| param(k).is_some_and(|v| v != 0.0);
-    let mode = |default: usize| super::read::blend_name(param("blnd").map_or(default, |v| v.max(0.0) as usize));
-    let color = f.fill.as_ref().and_then(Paint::color).unwrap_or(vectorcraft_color::Color::BLACK);
     let (id, params) = match f.name.as_str() {
-        // `blur`'s scale isn't publicly documented: read as the Gaussian's σ, an effect's blur being 2σ.
-        GLOW => (
-            "stylize.outerGlow",
-            json!({"mode": mode(2), "opacity": param("opac").unwrap_or(0.75) * 100.0, "blur": 2.0 * param("blur").unwrap_or(5.0), "color": color}),
-        ),
-        // LiveEffect XML uses `radius`; art styles abbreviate it `rad` (public scripting posts on applyEffect).
-        FEATHER => ("stylize.feather", json!({"radius": param("rad").or_else(|| param("radius")).unwrap_or(5.0)})),
-        SHADOW => {
-            let mut params = json!({
-                "mode": mode(1),
-                "opacity": param("opac").unwrap_or(0.75) * 100.0,
-                "blur": 2.0 * param("blur").unwrap_or(5.0),
-                // Undocumented; read as the dialog's offsets, not flipped like art-space y: its default 7/7 pt is
-                // right and down (https://helpx.adobe.com/illustrator/using/drop-shadows-glows-feathering.html).
-                "x": param("horz").unwrap_or(7.0),
-                "y": param("vert").unwrap_or(7.0),
-                "color": color,
-            });
-            // A `csrc` of 1 is Darkness, the object's own colors with black added; any value other than 0 is read as
-            // Darkness. `dark` is the percent of black (0 to 100, where `opac` is a fraction), and 100 when it is missing or not finite.
-            if param("csrc").unwrap_or(0.0) != 0.0 {
-                params["shade"] = json!("darkness");
-                params["darkness"] = json!(param("dark").map_or(100.0, |v| v.clamp(0.0, 100.0)));
-            }
-            ("stylize.dropShadow", params)
-        }
         // Effect › Warp: `DeformStyle` numbers the styles from 1 as the dialog lists them, `Rotate`
         // is Vertical, and the bend and distortions are fractions.
         DEFORM => {
@@ -541,15 +852,7 @@ fn effect(f: &Filter) -> Option<Effect> {
                 }),
             )
         }
-        // `jntp`: 0 round, 1 bevel, 2 miter (the joins LiveEffect XML writes in public scripts).
-        OFFSET => (
-            "path.offsetPath",
-            json!({
-                "offset": param("ofst").unwrap_or(10.0).clamp(-1e5, 1e5),
-                "joins": match param("jntp").map(|v| v as i64) { Some(0) => "round", Some(1) => "bevel", _ => "miter" },
-                "miterLimit": param("mlim").unwrap_or(4.0).clamp(1.0, 500.0),
-            }),
-        ),
+        OFFSET | OUTLINE_TYPE | OUTLINE_STROKE => return path_effect(f),
         // Art space has y up: a move up is a negative `moveV` in the document.
         TRANSFORM => (
             "distort.transform",
@@ -575,14 +878,17 @@ fn effect(f: &Filter) -> Option<Effect> {
                 Some(data) => adapter::bas_relief(&descriptor(f, data)?)?,
             },
         ),
+        SHAPE_EFFECTS => return shape_effect(f),
         _ => return None,
     };
     Some(Effect { id: id.into(), params, visible: f.visible })
 }
 
-/// The fields of filter `f`'s settings block `data`, when it was read and its `dataSize` is its length.
+/// The fields of filter `f`'s settings block `data`, when it was read and its `dataSize`, written
+/// as `/Int`, is its length.
 fn descriptor(f: &Filter, data: &Result<Vec<u8>, ()>) -> Option<Vec<(adapter::Key, adapter::Value)>> {
     let data = data.as_ref().ok()?;
+    (f.kinds.get("dataSize") == Some(&Kind::Int)).then_some(())?;
     let size = f.params.get("dataSize").copied()?;
     if size != data.len() as f64 {
         return None;
@@ -671,9 +977,11 @@ impl Builder<'_> {
                         (look.blend, look.opacity) = (super::read::blend_mode(mode), opacity);
                     }
                 }
+                // Convert to Shape on one fill or stroke isn't read yet: what it draws there is
+                // the drawn look's.
                 _ => match effect(c) {
-                    Some(e) => look.effects.push(e),
-                    None => self.plain = false,
+                    Some(e) if !e.id.starts_with("convertToShape.") => look.effects.push(e),
+                    _ => self.plain = false,
                 },
             }
         }
@@ -723,7 +1031,12 @@ fn style(filters: &[Filter]) -> ArtStyle {
             }
             CONDUIT => {}
             // The object's own transparency, which its look carries too.
-            BLEND => {}
+            BLEND => {
+                if let Some((mode, opacity)) = f.xy {
+                    let (isolate, knockout) = f.xy_group.unwrap_or((false, Knockout::Off));
+                    st.transparency = Some((opacity, super::read::blend_mode(mode), isolate, knockout));
+                }
+            }
             _ => match effect(f) {
                 Some(e) => st.effects.push(e),
                 None => b.plain = false,
@@ -740,7 +1053,18 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
         && st.effects.iter().all(|e| match e.id.as_str() {
-            "stylize.outerGlow" | "stylize.feather" | "stylize.dropShadow" => true,
+            "stylize.dropShadow"
+            | "stylize.innerGlow"
+            | "stylize.outerGlow"
+            | "stylize.feather"
+            | "stylize.roundCorners"
+            | "stylize.scribble"
+            | "convertToShape.rectangle"
+            | "convertToShape.roundedRectangle"
+            | "convertToShape.ellipse"
+            | "path.offsetPath"
+            | "path.outlineObject"
+            | "path.outlineStroke" => true,
             "sketch.basRelief" => bas_relief,
             _ => false,
         });

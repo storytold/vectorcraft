@@ -585,3 +585,44 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
     let (_, im) = placed(&s);
     assert!((im.width, im.height) == (600, 300) && !s.doc().unwrap().doc.images[&im.key].is_proxy(), "{im:?}");
 }
+
+/// A placed file of a `.ai` file whose folder moved with the document is found by the folder the
+/// file keeps relative to the document's (`src/`), and its link takes the size, modification time
+/// and hash of the file found there. Not found, the link keeps no such details.
+#[test]
+fn links_of_an_imported_file_are_found_by_their_relative_folder() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("imported-relative");
+    std::fs::create_dir_all(dir.0.join("src")).unwrap();
+    let pic = dir.file("src/photo.png").replace('\\', "/");
+    let place = "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n(/no/such/folder/src/photo.png)`\n\
+         %%IncludeFile:/no/such/folder/src/photo.png\n%AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n\
+         %AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n%AI26_BeginPlacedObjectPreview\n\
+         2 1 8 32 17 \x7f\x10\x10\x60\x7f\x10\x10\x60\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n";
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    let link = |s: &Session| {
+        let mut found = vec![];
+        s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+        let [im] = &found[..] else { panic!("one image: {found:?}") };
+        (im.link.clone().unwrap(), s.doc().unwrap().doc.images[&im.key].is_proxy())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("photo.png"), "{r}");
+    let (l, proxy) = link(&s);
+    assert_eq!((l.path.as_str(), l.relative.as_deref()), ("/no/such/folder/src/photo.png", Some("src/photo.png")));
+    assert!(proxy && l.size.is_none() && l.modified.is_none() && l.hash.is_none(), "{l:?}");
+
+    let bytes = png(600, 300, RED);
+    write(&pic, &bytes);
+    let r = open(&mut s, &doc_path);
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+    let (l, proxy) = link(&s);
+    assert!(!proxy, "the file's pixels, not the preview");
+    assert_eq!(l.path.replace('\\', "/"), pic);
+    assert_eq!((l.size, l.hash.clone()), (Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&bytes))));
+    assert!(l.modified.is_some(), "{l:?}");
+}

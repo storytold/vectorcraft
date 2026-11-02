@@ -72,6 +72,11 @@ impl VectorcraftApp {
         self.session.active_index().and_then(|i| self.views.get(i))
     }
 
+    /// Whether the active document is in Outline view (View › Outline); false without one.
+    pub fn outline_view(&self) -> bool {
+        self.view().is_some_and(|v| v.outline)
+    }
+
     /// The zero point shown by rulers and position fields: the document's with global rulers, the
     /// active artboard's with artboard rulers. Command coordinates stay absolute.
     pub(crate) fn ruler_origin(&self) -> vectorcraft_geom::Point {
@@ -88,7 +93,7 @@ impl VectorcraftApp {
     pub fn view_info(&self) -> ViewInfo {
         ViewInfo {
             zoom: self.view().map(|v| v.zoom).unwrap_or(1.0),
-            outline: self.ui.view.outline,
+            outline: self.outline_view(),
             smart_guides: self.ui.view.smart_guides,
             guides: self.ui.view.guides,
             snap_to_grid: self.ui.view.snap_to_grid,
