@@ -3563,6 +3563,7 @@ theme	Appearance	Ulkoasu
 	Type Object Selection by Path Only	Tekstiobjektin valinta vain polusta
 	UI Scaling	Käyttöliittymän skaalaus
 	Use Compression	Käytä pakkausta
+	Include Editing Data for Other Apps	Sisällytä muokkaustiedot muille sovelluksille
 	Use Japanese Crop Marks	Käytä japanilaisia rajausmerkkejä
 	Use Low Resolution Proxy for Linked EPS	Käytä matalan tarkkuuden välityskuvaa linkitetyille EPS-tiedostoille
 	Use Precise Cursors	Käytä tarkkoja kohdistimia

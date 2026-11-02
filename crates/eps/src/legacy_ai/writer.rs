@@ -2,11 +2,11 @@ use super::encoding::{
     Ink, average, direct_fill, direct_stroke, finite, font_of, invertible, latin_string, lost_attributes, segment_point, unit, writable,
 };
 use super::{
-    Affine, AnchorKind, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
-    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
-    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, LineCap, LineJoin, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS,
-    Paint, ParaDirection, ParaStyle, PathData, Point, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY,
-    TYPE, TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, latin, ps, stroke,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
+    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection,
+    ParaStyle, PathData, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
+    TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
 
 pub(super) struct Writer<'a> {
@@ -363,13 +363,9 @@ impl<'a> Writer<'a> {
         self.line(if sp.closed { "h\nW\nn" } else { "H\nW\nN" });
     }
 
-    /// A guide (§6): `(N) *`, its path, `(N) *`.
+    /// A guide ([`ai_ops::guide`]).
     fn guide(&mut self, path: &PathData) {
-        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
-            self.line("(N) *");
-            self.subpath(sp);
-            self.line("(N) *");
-        }
+        ai_ops::guide(&mut self.body, self.to_art, path, false);
     }
 
     /// A path's fills and strokes: one object with one fill and a plain stroke over it where it
@@ -528,71 +524,14 @@ impl<'a> Writer<'a> {
         self.line(if rule == FillRule::EvenOdd { "1 XR" } else { "0 XR" });
     }
 
-    /// One subpath's points, in art space: `m`, then a line or curve to each point (lower case: the
-    /// point is smooth, upper case: a corner, §5.3.2), and for a closed one the segment back to the
-    /// start, which says whether the start is smooth or a corner (as the specification's examples
-    /// close paths: the start point again, then the painting operator).
+    /// One subpath's points, in art space ([`ai_ops::subpath`]).
     fn subpath(&mut self, sp: &SubPath) {
-        let Some(first) = sp.anchors.first() else { return };
-        let xf = self.to_art;
-        let s = &mut self.body;
-        let pt = |s: &mut String, p: Point| {
-            let p = xf * p;
-            ps::push_nums(s, &[p.x, p.y]);
-        };
-        pt(s, first.p);
-        s.push_str("m\n");
-        let segment = |s: &mut String, a: &vectorcraft_geom::Anchor, b: &vectorcraft_geom::Anchor| {
-            let straight = a.h_out == a.p && b.h_in == b.p;
-            let smooth = b.kind == AnchorKind::Smooth;
-            if straight {
-                pt(s, b.p);
-                s.push_str(if smooth { "l\n" } else { "L\n" });
-            } else {
-                pt(s, a.h_out);
-                pt(s, b.h_in);
-                pt(s, b.p);
-                s.push_str(if smooth { "c\n" } else { "C\n" });
-            }
-        };
-        for pair in sp.anchors.windows(2) {
-            if let [a, b] = pair {
-                segment(s, a, b);
-            }
-        }
-        if sp.closed
-            && sp.anchors.len() > 1
-            && let Some(last) = sp.anchors.last()
-        {
-            segment(s, last, first);
-        }
+        ai_ops::subpath(&mut self.body, self.to_art, sp);
     }
 
-    /// The stroke's width, cap, join, miter limit and dashes: `w J j M d`.
+    /// The stroke's width, cap, join, miter limit and dashes ([`ai_ops::line_style`]).
     fn line_style(&mut self, st: &StrokeLayer) {
-        let cap = match st.cap {
-            LineCap::Butt => 0,
-            LineCap::Round => 1,
-            LineCap::Square => 2,
-        };
-        let join = match st.join {
-            LineJoin::Miter => 0,
-            LineJoin::Round => 1,
-            LineJoin::Bevel => 2,
-        };
-        let s = &mut self.body;
-        ps::push_num(s, st.width);
-        let _ = write!(s, " w {cap} J {join} j ");
-        ps::push_num(s, if st.miter_limit.is_finite() { st.miter_limit.max(1.0) } else { 10.0 });
-        s.push_str(" M [");
-        let dash = st.dash.as_ref().filter(|d| d.is_dashed());
-        if let Some(d) = dash {
-            ps::push_nums(s, &d.pattern);
-            s.pop();
-        }
-        s.push_str("] ");
-        ps::push_num(s, dash.map_or(0.0, |d| d.offset));
-        s.push_str(" d\n");
+        ai_ops::line_style(&mut self.body, st);
     }
 
     // ---------- colour ----------

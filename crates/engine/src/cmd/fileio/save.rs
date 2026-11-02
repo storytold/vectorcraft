@@ -574,6 +574,9 @@ fn blank_pages(doc: &Document) -> Document {
 
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
+/// The same, for a file that carries the editing copy of its art.
+const NOT_PDF_COMPATIBLE_EDITING: &str =
+    "saved without PDF content: VectorCraft and apps that read its editing data open it, other apps show empty pages";
 
 /// `e`, an error of the export encoders, under the save command `cmd` instead of
 /// `document.export`.
@@ -582,6 +585,14 @@ fn named_for_save(cmd: &str, e: crate::EngineError) -> crate::EngineError {
         crate::EngineError::BadParams { cmd: c, msg } if c == "document.export" => bad(cmd, msg),
         e => e,
     }
+}
+
+/// The `.ai` option `editingData`: whether the file also carries the editing copy of the art that
+/// other apps read (default on).
+#[derive(Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct AiEditingData {
+    editing_data: Option<bool>,
 }
 
 /// The shared Save and Export encoder for PDF-compatible `.ai` files (and `.ait` templates, the
@@ -613,16 +624,46 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
             return Err(bad(cmd, "pdfCompatible: false needs every artboard to keep the editable artwork"));
         }
     }
-    let pages = doc.without_edit_modes();
+    let edited = doc.without_edit_modes();
     // Resolve placed files only for the drawn pages. Missing files become preview images there;
     // the native attachment keeps the original placed objects and their relinkable metadata.
-    let (pages, placed_warnings) =
-        if pdf_compatible { crate::cmd::place::document::full_documents(&pages) } else { (std::borrow::Cow::Owned(blank_pages(&pages)), Vec::new()) };
+    let (pages, placed_warnings) = if pdf_compatible {
+        crate::cmd::place::document::full_documents(&edited)
+    } else {
+        (std::borrow::Cow::Owned(blank_pages(&edited)), Vec::new())
+    };
     let native = || super::native::ai_native(cmd, doc, &native_options);
-    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, &params, native)?;
+    let other_apps: AiEditingData = super::encode::options(f, &params)?;
+    let carries_editing = std::cell::Cell::new(false);
+    let private = || {
+        if !other_apps.editing_data.unwrap_or(true) {
+            return Ok(None);
+        }
+        // The art with placed files resolved as the pages draw them, also when the pages are blank.
+        let resolved;
+        let (art, mut resolved_warnings): (&Document, Vec<String>) = if pdf_compatible {
+            (&pages, Vec::new())
+        } else {
+            let (d, w) = crate::cmd::place::document::full_documents(&edited);
+            resolved = d;
+            (&resolved, w)
+        };
+        // With the artboards' background colors, as the pages draw them.
+        let art = super::export::with_artboard_fills(art, &params, 0..art.artboards.len()).map_err(|e| bad(cmd, e))?;
+        let o = vectorcraft_eps::AiEditingOptions {
+            title: doc.title.clone(),
+            created: doc.metadata.created.or_else(vectorcraft_doc::metadata::output_time),
+        };
+        let (data, lost) = vectorcraft_eps::ai_private_data(&art, &o).map_err(|e| bad(cmd, e))?;
+        // Placed files that weren't found are written as their previews here too.
+        resolved_warnings.extend(lost);
+        carries_editing.set(true);
+        Ok(Some((data, resolved_warnings)))
+    };
+    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, &params, native, private)?;
     warnings.extend(placed_warnings);
     if !pdf_compatible {
-        warnings.push(NOT_PDF_COMPATIBLE.to_string());
+        warnings.push(if carries_editing.get() { NOT_PDF_COMPATIBLE_EDITING } else { NOT_PDF_COMPATIBLE }.to_string());
     }
     Ok(Encoded { warnings, ..Encoded::one(bytes) })
 }

@@ -104,6 +104,7 @@ fn label(o: &FormatOption) -> String {
         "embedProfiles" => tl!("Embed ICC Profiles").into(),
         "pdfCompatible" => tl!("Create PDF-Compatible File").into(),
         "compress" => tl!("Use Compression").into(),
+        "editingData" => tl!("Include Editing Data for Other Apps").into(),
         _ => form::humanize(o.name),
     }
 }

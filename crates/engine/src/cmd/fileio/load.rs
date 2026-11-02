@@ -309,9 +309,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "pdf" | "ai" | "ait" => {
             // Saved with Preserve Editing: the document it carries, unless some pages are picked.
-            let editing = opts
-                .pages
-                .is_none()
+            let editing = (opts.pages.is_none() && opts.native)
                 .then(|| vectorcraft_pdf::editing_with(bytes, opts.password.as_deref()))
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));

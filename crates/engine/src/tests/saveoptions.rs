@@ -196,7 +196,11 @@ fn ai_without_pdf_content_and_compression() {
     };
     let (full, _) = ai(&mut s, json!({}));
     let (blank, warnings) = ai(&mut s, json!({"pdfCompatible": false}));
-    assert!(warnings.as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("without PDF content")), "{warnings}");
+    let says = |w: &Value, text: &str| w.as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains(text));
+    assert!(says(&warnings, "without PDF content") && says(&warnings, "apps that read its editing data open it"), "{warnings}");
+    // Without the editing copy, other apps show empty pages.
+    let (_, plain) = ai(&mut s, json!({"pdfCompatible": false, "editingData": false}));
+    assert!(says(&plain, "VectorCraft opens it as before") && !says(&plain, "editing data"), "{plain}");
     // The pages are empty (an import of a page finds no art), the document comes back whole.
     let page = |s: &mut Session, b: &[u8]| {
         s.execute("document.open", &json!({"name": "x.ai", "dataBase64": vectorcraft_format::base64_encode(b), "pages": "1"})).unwrap();

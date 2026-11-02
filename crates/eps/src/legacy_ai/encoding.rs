@@ -1,7 +1,7 @@
 use super::writer::Writer;
 use super::{
-    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Color, Gradient, GradientKind, Paint, ParaStyle, PathEffect, StrokeLayer, TextKind,
-    TextObject, Write, latin, ps, stroke,
+    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Gradient, GradientKind, Paint, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    Write, latin, ps, stroke,
 };
 
 /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd`, `[`, the stops
@@ -63,9 +63,7 @@ pub(super) enum Ink {
     },
 }
 
-pub(super) fn unit(v: f32) -> f32 {
-    if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
-}
+pub(super) use crate::ai_ops::{average, unit};
 
 /// Can `a` be drawn through (a finite, non-flat map)?
 pub(super) fn invertible(a: Affine) -> bool {
@@ -174,11 +172,4 @@ pub(super) fn direct_fill(p: &Paint) -> bool {
 /// Can stroke `s` be written as the stroke of a path object (a plain line of a colour)?
 pub(super) fn direct_stroke(s: &StrokeLayer) -> bool {
     matches!(s.paint, Paint::Solid { .. }) && stroke::is_plain(s)
-}
-
-/// The average colour of a gradient's stops (in RGB).
-pub(super) fn average(g: &Gradient) -> Color {
-    let n = g.stops.len().max(1) as f32;
-    let sum = g.stops.iter().map(|s| s.color.to_rgb()).fold([0.0f32; 3], |a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]]);
-    Color::rgb(unit(sum[0] / n), unit(sum[1] / n), unit(sum[2] / n))
 }
