@@ -1262,6 +1262,7 @@ file-filter	Templates	範本
 	Get Preferences	取得偏好設定
 	Get Text Range	取得文字範圍
 	Global	全域
+	Global Adjust	整體調整
 	Global Brush Dimensions	整體筆刷尺寸
 	Global Process Color	整體印刷色
 	Global Process Color, CMYK	整體印刷色，CMYK
@@ -1801,6 +1802,7 @@ file-filter	Templates	範本
 @msg	`groupColors` must be an array	`groupColors` 必須是陣列
 @msg	`mode` applies to freeform gradients	`mode` 只適用於任意形狀漸層
 @msg	`preserve` must be an object	`preserve` 必須是物件
+@msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
 @msg	`{k}` must be [x, y]	`{k}` 必須是 [x, y]
 @msg	a gradient needs at least two stops	漸層至少需要兩個色標

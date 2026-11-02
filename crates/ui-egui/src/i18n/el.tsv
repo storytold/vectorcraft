@@ -1208,6 +1208,7 @@ font-technology	Variable	Μεταβλητές
 	Get Preferences	Λήψη προτιμήσεων
 	Get Text Range	Λήψη περιοχής κειμένου
 	Global	Καθολικό
+	Global Adjust	Καθολική ρύθμιση
 	Global Brush Dimensions	Καθολικές διαστάσεις πινέλου
 	Global Process Color	Καθολικό χρώμα τετραχρωμίας
 	Global Process Color, CMYK	Καθολικό χρώμα τετραχρωμίας, CMYK
@@ -2208,6 +2209,7 @@ axis	Both	Και τα δύο
 @msg	`library` is a library id or name (see {list})	Το `library` είναι αναγνωριστικό ή όνομα βιβλιοθήκης (δείτε {list})
 @msg	`mode` applies to freeform gradients	Το `mode` ισχύει για ντεγκραντέ ελεύθερης μορφής
 @msg	`preserve` must be an object	Το `preserve` πρέπει να είναι αντικείμενο
+@msg	`globalAdjust` must be an object	Το `globalAdjust` πρέπει να είναι αντικείμενο
 @msg	`sampleSize` must be 1, 3 or 5	Το `sampleSize` πρέπει να είναι 1, 3 ή 5
 @msg	`stops` must be an array	Το `stops` πρέπει να είναι πίνακας
 @msg	`svg` must be an object of SVG options (see document.formats)	Το `svg` πρέπει να είναι αντικείμενο επιλογών SVG (δείτε document.formats)

@@ -2166,6 +2166,7 @@ digits	Malayalam	Malajálamské
 	Color Mode:	Barevný režim:
 	Convert	Převést
 	Global	Globální
+	Global Adjust	Globální úprava
 	Green	Zelená
 	Shifts the tints of global and spot colors; other colors stay.	Posune tóny globálních a přímých barev; ostatní barvy zůstanou.
 	Tint	Tón
@@ -4299,6 +4300,7 @@ imageTrace	Outline	Obrys
 @msg	`library` is a library id or name (see {list})	`library` je ID nebo název knihovny (viz {list})
 @msg	`mode` applies to freeform gradients	`mode` platí pro volné přechody
 @msg	`preserve` must be an object	`preserve` musí být objekt
+@msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)

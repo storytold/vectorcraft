@@ -1652,6 +1652,7 @@ digits	Malayalam	말라얄람어
 	Get Preferences	환경 설정 가져오기
 	Get Text Range	텍스트 범위 가져오기
 	Global	전역
+	Global Adjust	전체 조정
 	Global Brush Dimensions	전역 브러시 치수
 	Global Process Color	전역 프로세스 색상
 	Go To Link	링크로 이동
@@ -4076,6 +4077,7 @@ theme	Appearance	외관
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다
 @msg	`mode` applies to freeform gradients	`mode`는 자유형 그레이디언트에 적용됩니다
 @msg	`preserve` must be an object	`preserve`는 개체여야 합니다
+@msg	`globalAdjust` must be an object	`globalAdjust`는 개체여야 합니다
 @msg	`stops` must be an array	`stops`는 배열이어야 합니다
 @msg	`{k}` must be [x, y]	`{k}`은(는) [x, y]여야 합니다
 @msg	a gradient needs at least two stops	그레이디언트에는 정지점이 두 개 이상 필요합니다

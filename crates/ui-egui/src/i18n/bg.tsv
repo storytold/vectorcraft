@@ -1244,6 +1244,7 @@ font-technology	Variable	Променливи
 	Get Preferences	Извличане на предпочитания
 	Get Text Range	Вземане на текстов диапазон
 	Global	Глобален
+	Global Adjust	Глобална корекция
 	Global Brush Dimensions	Глобални размери на четката
 	Global Process Color	Глобален процесен цвят
 	Global Process Color, CMYK	Глобален процесен цвят, CMYK

@@ -1292,6 +1292,7 @@ file-filter	Templates	Шаблони
 	Get Preferences	Отримати налаштування
 	Get Text Range	Отримати діапазон тексту
 	Global	Глобальний
+	Global Adjust	Глобальне налаштування
 	Global Brush Dimensions	Глобальні розміри пензля
 	Global Process Color	Глобальний складовий колір
 	Global Process Color, CMYK	Глобальний складовий колір, CMYK
@@ -4017,6 +4018,7 @@ axis	Both	Обидві
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
 @msg	`preserve` must be an object	`preserve` має бути об’єктом
+@msg	`globalAdjust` must be an object	`globalAdjust` має бути об’єктом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` має бути 1, 3 або 5
 @msg	`stops` must be an array	`stops` має бути масивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` має бути об’єктом параметрів SVG (див. document.formats)

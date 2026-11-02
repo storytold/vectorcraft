@@ -1224,6 +1224,7 @@ font-technology	Variable	Değişken
 	Get Preferences	Tercihleri Al
 	Get Text Range	Metin Aralığını Al
 	Global	Küresel
+	Global Adjust	Genel Ayarlama
 	Global Brush Dimensions	Küresel Fırça Boyutları
 	Global Process Color	Global Proses Rengi
 	Global Process Color, CMYK	Küresel Proses Rengi, CMYK
@@ -3786,6 +3787,7 @@ axis	Both	Her İkisi
 @msg	`library` is a library id or name (see {list})	'kitaplık' bir kitaplık kimliği veya adıdır (bkz. {list})
 @msg	`mode` applies to freeform gradients	"mod" serbest biçimli degradeler için geçerlidir
 @msg	`preserve` must be an object	`preserve` bir nesne olmalıdır
+@msg	`globalAdjust` must be an object	`globalAdjust` bir nesne olmalıdır
 @msg	`sampleSize` must be 1, 3 or 5	"sampleSize" 1, 3 veya 5 olmalıdır
 @msg	`stops` must be an array	"duraklar" bir dizi olmalıdır
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`, SVG seçeneklerinin bir nesnesi olmalıdır (bkz. document.formats)

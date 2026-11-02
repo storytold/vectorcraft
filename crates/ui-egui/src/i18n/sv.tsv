@@ -1246,6 +1246,7 @@ font-technology	Variable	Variabla
 	Get Preferences	Hämta inställningar
 	Get Text Range	Hämta textintervall
 	Global	Global
+	Global Adjust	Global justering
 	Global Brush Dimensions	Globala penseldimensioner
 	Global Process Color	Global processfärg
 	Global Process Color, CMYK	Global processfärg, CMYK
@@ -3903,6 +3904,7 @@ axis	Both	Båda
 @msg	`library` is a library id or name (see {list})	`library` är ett biblioteks-id eller biblioteksnamn (se {list})
 @msg	`mode` applies to freeform gradients	`mode` gäller för fria gradienter
 @msg	`preserve` must be an object	`preserve` måste vara ett objekt
+@msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
