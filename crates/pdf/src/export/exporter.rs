@@ -46,6 +46,7 @@ impl<'a> Exporter<'a> {
             layer_index: crate::forms::pdf_layers(doc).iter().enumerate().map(|(i, l)| (address(l.node), i)).collect(),
             in_layer: 0,
             symbol_nodes: 0,
+            symbol_limit: vectorcraft_doc::MAX_SYMBOL_NODES,
             overprint: false,
             overprinted: false,
             invisible: false,

@@ -145,6 +145,68 @@ fn preview_lists_pages_tiles_inks_and_warnings() {
 }
 
 #[test]
+fn copies_per_sheet_print_a_grid_of_the_artboard() {
+    // A 2 × 3.5 in card filled by a rectangle.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 144, "height": 252})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 144, "height": 252})).unwrap();
+    let v = s.execute("print.setup", &json!({})).unwrap();
+    assert_eq!((v["settings"]["copiesPerSheet"].clone(), v["settings"]["gutter"].clone()), (json!(false), json!(0.0)));
+    // With an 18 pt gutter, Letter holds 3 × 3 copies; the first, at the top left, spans x 72 to 216.
+    let set = json!({"settings": {"copiesPerSheet": true, "gutter": 18}});
+    let v = s.execute("print.preview", &set).unwrap();
+    let copies = v["sheets"][0]["copies"].as_array().unwrap();
+    assert_eq!((v["pages"].clone(), copies.len(), copies[0].clone()), (json!(1), 9, json!([72.0, 0.0, 216.0, 252.0])));
+    // The PDF draws the card's paths nine times.
+    let cards = |bytes: &[u8]| {
+        let mut n = 0;
+        vectorcraft_pdf::import(bytes).unwrap().walk(|node| {
+            n += usize::from(node.path_data().and_then(|p| p.bounds()).is_some_and(|b| (b.width().round(), b.height().round()) == (144.0, 252.0)))
+        });
+        n
+    };
+    let (bytes, v) = print(&mut s, set);
+    assert_eq!(v["pages"], 1);
+    let one = cards(&print(&mut s, json!({})).0);
+    assert!(one > 0 && cards(&bytes) == 9 * one, "{one}");
+    // PostScript places the art once per copy.
+    let mut ps = |p: Value| {
+        let v = s.execute("file.print", &p).unwrap();
+        String::from_utf8(vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap()
+    };
+    let one = ps(json!({"format": "postscript"})).matches(" cm\n").count();
+    let grid = ps(json!({"format": "postscript", "settings": {"copiesPerSheet": true, "gutter": 18}})).matches(" cm\n").count();
+    assert_eq!(grid, one + 8);
+}
+
+#[test]
+fn print_presets_keep_copies_per_sheet_and_older_presets_leave_it_off() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 144, "height": 252})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 144, "height": 252})).unwrap();
+    // [Default] prints one copy per sheet.
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    assert_eq!((v["presets"][0]["settings"]["copiesPerSheet"].clone(), v["presets"][0]["settings"]["gutter"].clone()), (json!(false), json!(0.0)));
+    // A saved preset keeps the option and the gutter, lists them as changed, and prints with them.
+    s.execute("print.presets.save", &json!({"name": "Cards", "settings": {"copiesPerSheet": true, "gutter": 18}})).unwrap();
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    let changed: Vec<&str> = v["presets"][1]["changed"].as_array().unwrap().iter().filter_map(|c| c["option"].as_str()).collect();
+    assert_eq!(changed, ["copiesPerSheet", "gutter"]);
+    let v = s.execute("print.preview", &json!({"preset": "Cards"})).unwrap();
+    assert_eq!(v["sheets"][0]["copies"].as_array().map(Vec::len), Some(9));
+    // The option survives export and import.
+    let text = s.execute("print.presets.export", &json!({"names": ["Cards"]})).unwrap()["data"].as_str().unwrap().to_string();
+    let mut t = Session::new();
+    t.execute("print.presets.import", &json!({"data": text})).unwrap();
+    assert_eq!((t.prefs.print_presets[0].settings.copies_per_sheet, t.prefs.print_presets[0].settings.gutter), (true, 18.0));
+    // A presets file written without the option imports with it off and no gutter.
+    let old = r#"{"format": "vcprintpresets", "presets": [{"name": "Old", "settings": {"copies": 2}}]}"#;
+    t.execute("print.presets.import", &json!({"data": old})).unwrap();
+    let q = &t.prefs.print_presets[1].settings;
+    assert_eq!((q.copies, q.copies_per_sheet, q.gutter), (2, false, 0.0));
+}
+
+#[test]
 fn bad_settings_are_bad_params() {
     let (mut s, _) = session();
     for p in [
@@ -154,6 +216,7 @@ fn bad_settings_are_bad_params() {
         json!({"settings": {"media": "quarto"}}),
         json!({"settings": {"artboards": "range", "range": "2"}}),
         json!({"settings": {"scaling": "tileFull", "overlap": 500}}),
+        json!({"settings": {"gutter": 800}}),
     ] {
         for c in ["file.print", "print.preview"] {
             assert!(matches!(s.execute(c, &p), Err(EngineError::BadParams { .. })), "{c} {p}");
