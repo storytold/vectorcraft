@@ -18,6 +18,10 @@ pub struct BuilderArrangement {
     /// The pieces of the other paths' outlines, keyed by input index (the front-most where inputs
     /// share one); only when asked for.
     pub edges: Vec<Shape>,
+    /// The pieces of the paths with no closed subpath that lie under the outline of a closed path
+    /// in front of them, keyed by input index. No piece of `lines` covers them; there the edge is
+    /// the closed path's (in `edges`, when asked for).
+    pub lines_under: Vec<Shape>,
 }
 
 /// Does any of `shapes` have an open subpath (a cutting edge for the Shape Builder)?
@@ -74,15 +78,16 @@ pub(crate) fn builder(shapes: &[Shape], edges: bool, gap: f64, precision: f64) -
         .then(|| {
             let keyed: Vec<Shape> = shapes.iter().enumerate().map(|(i, s)| Shape::new(s.path.clone(), s.rule, i as u64)).collect();
             if has_open && gap.is_finite() && gap > 0.0 {
-                let (faces, pieces) = build(&gap_inputs(&keyed, gap), precision).unwrap_or_default();
+                let (faces, pieces, under) = build(&gap_inputs(&keyed, gap), precision).unwrap_or_default();
                 // Gap targets split original outlines too, but the bridges themselves aren't art.
-                (faces, pieces.into_iter().filter(|p| p.key < shapes.len() as u64).collect())
+                let art = |p: &Shape| p.key < shapes.len() as u64;
+                (faces, pieces.into_iter().filter(art).collect(), under.into_iter().filter(art).collect())
             } else {
                 build(&keyed, precision).unwrap_or_default()
             }
         })
-        .filter(|(faces, pieces)| !faces.is_empty() || !pieces.is_empty());
-    let Some((faces, pieces)) = planar else {
+        .filter(|(faces, pieces, _)| !faces.is_empty() || !pieces.is_empty());
+    let Some((faces, pieces, under)) = planar else {
         return BuilderArrangement { regions: filled_regions(shapes, precision), ..Default::default() };
     };
     let is_line = |i: u64| shapes.get(i as usize).is_some_and(|s| !s.path.subpaths.iter().any(|sp| sp.closed));
@@ -95,7 +100,12 @@ pub(crate) fn builder(shapes: &[Shape], edges: bool, gap: f64, precision: f64) -
         regions.extend(faces.into_iter().filter(|f| f.sources.is_empty()));
         regions
     };
-    BuilderArrangement { regions, lines: if has_open { lines } else { Vec::new() }, edges: if edges { outline } else { Vec::new() } }
+    BuilderArrangement {
+        regions,
+        lines: if has_open { lines } else { Vec::new() },
+        edges: if edges { outline } else { Vec::new() },
+        lines_under: if has_open { under } else { Vec::new() },
+    }
 }
 
 /// The regions of the shapes' filled areas. A shape that fills nothing (open paths that enclose no

@@ -384,6 +384,25 @@ fn shape_builder_lines_cut_regions() {
 }
 
 #[test]
+fn shape_builder_keeps_the_pieces_of_a_line_under_an_outline_in_front() {
+    // A line whose left half lies under the bottom edge of a rectangle in front of it.
+    let s = [line((0.0, 50.0), (200.0, 50.0), 0), rect(0.0, 0.0, 100.0, 50.0, 1)];
+    let BuilderArrangement { lines, edges, lines_under, .. } = shape_builder(&s, true);
+    let span = |l: &Shape| l.path.bounds().map(|b| (b.x0, b.x1));
+    assert_eq!(lines.iter().map(span).collect::<Vec<_>>(), [Some((100.0, 200.0))], "{lines:?}");
+    assert_eq!(lines_under.iter().map(span).collect::<Vec<_>>(), [Some((0.0, 100.0))], "{lines_under:?}");
+    assert!(lines.iter().chain(&lines_under).all(|l| l.key == 0));
+    // The rectangle's outline keeps its edge there.
+    assert!(!edges.is_empty() && edges.iter().all(|e| e.key == 1 && e.path.bounds() == Some(Rect::new(0.0, 0.0, 100.0, 50.0))), "{edges:?}");
+    // Live Paint keeps one edge there, the front-most input's.
+    let (_, pieces) = live_paint(&s);
+    assert!(!pieces.iter().any(|p| p.key == 0 && p.path.bounds().is_some_and(|b| b.x1 <= 100.0)), "{pieces:?}");
+    // A line in front of the outline has no pieces under it.
+    let s = [rect(0.0, 0.0, 100.0, 50.0, 0), line((0.0, 50.0), (200.0, 50.0), 1)];
+    assert!(shape_builder(&s, true).lines_under.is_empty());
+}
+
+#[test]
 fn shape_builder_merges_adjacent_gap_closed_faces_without_keeping_bridges() {
     let outline = Shape::new(
         PathData::single(SubPath::polyline(
