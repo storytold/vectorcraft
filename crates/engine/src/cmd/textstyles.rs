@@ -475,7 +475,10 @@ fn name_param<'a>(p: &'a Value, kind: Kind, verb: &str) -> Result<&'a str> {
     str_param(p, "name").ok_or_else(|| bad(&kind.cmd(verb), "missing `name`"))
 }
 
-fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, Value>>> {
+/// The `attrs` of `p`, validated. `kept` holds the style's current attributes (`charStyle.edit`) or
+/// the target text's attributes (`charStyle.new`): a language tag that is not in the list, which a
+/// file can give a style or a run, stays when `attrs` keeps it.
+fn attrs_param(p: &Value, kind: Kind, verb: &str, kept: Option<&Map<String, Value>>) -> Result<Option<Map<String, Value>>> {
     match p.get("attrs") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Object(m)) => {
@@ -486,7 +489,9 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
                 Kind::Char => {
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
                     // A language of the list, stored as its tag (as text.setFormat takes it).
-                    if let Some(l) = &st.language {
+                    if let Some(l) = &st.language
+                        && kept.and_then(|k| k.get("language")) != m.get("language")
+                    {
                         st.language = vectorcraft_doc::setup::char_language(l).map_err(|e| bad(&c, e))?.map(str::to_string);
                     }
                     char_attrs(&st)
@@ -532,9 +537,10 @@ fn list(s: &mut Session, kind: Kind) -> Result<Value> {
 
 fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("new");
-    let attrs = match attrs_param(p, kind, "new")? {
+    let target = selection_attrs(s, p, kind)?;
+    let attrs = match attrs_param(p, kind, "new", target.as_ref())? {
         Some(a) => a,
-        None => match selection_attrs(s, p, kind)? {
+        None => match target {
             Some(a) => a,
             None => {
                 let a = new_style_attrs(s, kind);
@@ -660,7 +666,7 @@ fn redefine(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 
 fn set_attrs(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "setAttrs")?.to_string();
-    let attrs = attrs_param(p, kind, "setAttrs")?.ok_or_else(|| bad(&kind.cmd("setAttrs"), "missing `attrs`"))?;
+    let attrs = attrs_param(p, kind, "setAttrs", None)?.ok_or_else(|| bad(&kind.cmd("setAttrs"), "missing `attrs`"))?;
     redefine_to(s, kind, &name, attrs, "setAttrs")
 }
 
@@ -668,9 +674,9 @@ fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("edit");
     let name = name_param(p, kind, "edit")?.to_string();
     let to = str_param(p, "to").ok_or_else(|| bad(&c, "missing `to`"))?.trim().to_string();
-    let attrs = attrs_param(p, kind, "edit")?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
     let d = &s.doc()?.doc;
     let old = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
+    let attrs = attrs_param(p, kind, "edit", Some(&old))?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
     if name == kind.normal() {
         return Err(bad(&c, format!("`{name}` can't be edited this way")));
     }
