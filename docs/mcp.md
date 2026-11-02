@@ -5920,8 +5920,9 @@ Plug-ins › Artwork Cleanup and in its panel (`window.panel {panel: "artworkCle
 `addon.cleanup.simplify {tolerance?, protectCorners?, ids?}` removes the anchors each selected path can do without and
 refits the handles beside each one, so the outline keeps its shape. `tolerance` runs from 1 to 100 (20 by default); the
 outline stays within tolerance × 0.02 pt of where it was, measured against the original outline, so removals don't add
-up. With `protectCorners`, anchors where the path turns by more than 30° stay. Open ends always stay. It reports the
-anchor counts `before` and `after`, as one undo step.
+up. With `protectCorners`, anchors where the path turns by more than 30° stay. Open ends always stay. Locked and hidden
+paths, and paths in locked or hidden groups, are left out. It reports the anchor counts `before` and `after`, as one
+undo step.
 
 The health check looks for issues in the selection, or in the whole document while nothing is selected (`scope:
 "selection"|"document"` picks one). Locked and hidden objects, and the insides of live or generated art (blends,
@@ -5955,7 +5956,8 @@ envelopes, graphs, symbols), are left out.
 
 `addon.cleanup.deepUngroup {includeClipGroups?, ids?}` takes apart every level of grouping in the selection. Clipping
 groups stay whole unless `includeClipGroups` is true; their clipping paths then become plain paths. Objects keep the
-opacity of the groups they were in.
+opacity of the groups they were in. Locked and hidden groups stay whole, and locked and hidden objects stay locked or
+hidden and are left out of the selection.
 
 `addon.cleanup.rejoin {gap?, ids?}` welds the selected open paths whose ends lie within `gap` (0 to 6 pt, 0.1 by
 default) back into paths. Each end joins one other end: where several are in reach, the one the path turns least to go

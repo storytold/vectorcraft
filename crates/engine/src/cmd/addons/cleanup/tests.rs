@@ -104,6 +104,39 @@ fn simplify_keeps_the_shape_with_fewer_anchors_in_one_step() {
     }
 }
 
+#[test]
+fn simplify_leaves_locked_and_hidden_paths_alone() {
+    let mut s = session();
+    let mut ids = vec![];
+    for x in [20.0, 140.0, 260.0] {
+        ids.push(id_of(&s.execute("shape.ellipse", &json!({"x": x, "y": 50, "width": 100, "height": 100})).unwrap()));
+        s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+        s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+    }
+    select(&mut s, &ids);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    change(&mut s, ids[1], |n| n.locked = true);
+    change(&mut s, ids[2], |n| n.visible = false);
+    select(&mut s, &[g]);
+    let r = s.execute("addon.cleanup.simplify", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([ids[0].0]));
+    assert_eq!(r["before"], 16);
+    assert!(anchors(&s, ids[0]) < 16);
+    assert_eq!((anchors(&s, ids[1]), anchors(&s, ids[2])), (16, 16));
+    // Named by `ids`, or in a locked group, a path stays too, with no undo step.
+    let steps = undo_steps(&s);
+    s.execute("addon.cleanup.simplify", &json!({"ids": [ids[1].0, ids[2].0]})).unwrap();
+    assert_eq!((anchors(&s, ids[1]), anchors(&s, ids[2])), (16, 16));
+    assert_eq!(undo_steps(&s), steps);
+    change(&mut s, ids[1], |n| n.locked = false);
+    change(&mut s, g, |n| n.locked = true);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.simplify", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((r["before"].as_u64(), r["after"].as_u64()), (Some(0), Some(0)));
+    assert_eq!(anchors(&s, ids[1]), 16);
+    assert_eq!(undo_steps(&s), steps);
+}
+
 /// Each kind: what makes the issue in a fresh document (beside a clean rectangle).
 fn make_issue(s: &mut Session, kind: &str) {
     match kind {
@@ -331,6 +364,51 @@ fn deep_ungroup_takes_apart_every_level_but_clipping_groups() {
     let d = &s.doc().unwrap().doc;
     assert!(d.node(clip_group).is_none());
     assert!(matches!(d.node(clip).unwrap().kind, NodeKind::Path { clipping: false, .. }));
+}
+
+#[test]
+fn deep_ungroup_keeps_hidden_art_hidden_and_locked_art_locked() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 10.0, 20.0, 20.0);
+    let c = rect(&mut s, 70.0, 10.0, 20.0, 20.0);
+    let e = rect(&mut s, 100.0, 10.0, 20.0, 20.0);
+    select(&mut s, &[b]);
+    let hidden = id_of(&s.execute("object.group", &json!({})).unwrap());
+    select(&mut s, &[c]);
+    let locked = id_of(&s.execute("object.group", &json!({})).unwrap());
+    change(&mut s, hidden, |n| n.visible = false);
+    change(&mut s, locked, |n| n.locked = true);
+    change(&mut s, e, |n| n.locked = true);
+    s.edit("t", |d, _| {
+        let w = d.alloc_id();
+        Ok(d.wrap(&[a, hidden, locked, e], |ch| Node::group(w, ch))?)
+    })
+    .unwrap();
+    let outer = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    select(&mut s, &[outer]);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({})).unwrap();
+    assert_eq!(r["ungrouped"], 1);
+    assert_eq!(r["ids"], json!([a.0]));
+    let d = &s.doc().unwrap().doc;
+    let layer: Vec<NodeId> = d.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(layer, [a, hidden, locked, e], "the hidden and locked groups stay whole");
+    assert!(!d.node(hidden).unwrap().visible && d.node(b).unwrap().visible);
+    assert!(d.node(locked).unwrap().locked && d.node(e).unwrap().locked);
+    assert_eq!(s.doc().unwrap().selection.objects, [a]);
+    // Named by `ids`, a locked group stays as it is, with no undo step.
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [locked.0]})).unwrap();
+    assert_eq!(r["ungrouped"], 0);
+    assert!(node(&s, locked).is_some());
+    assert_eq!(undo_steps(&s), steps);
+    // With nothing ungrouped, the selection stays and the reply lists it.
+    assert_eq!(r["ids"], json!([a.0]));
+    let f = rect(&mut s, 130.0, 10.0, 20.0, 20.0);
+    select(&mut s, &[a]);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [f.0]})).unwrap();
+    assert_eq!((r["ids"].clone(), r["ungrouped"].clone()), (json!([a.0]), json!(0)));
+    assert_eq!(s.doc().unwrap().selection.objects, [a]);
 }
 
 #[test]
