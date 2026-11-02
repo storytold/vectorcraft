@@ -123,6 +123,37 @@ fn a_postscript_ai_that_names_its_prolog_without_including_it_opens_with_its_lay
     assert_eq!(tree(d.layers[1].children().unwrap()), "p");
 }
 
+/// A `.ai` in PostScript form with a graph on each of two layers (version 7 specification §17): its
+/// data on `%_` lines, then its drawn art in a group, each object followed by `%_… Go`.
+fn graphs_on_layers() -> String {
+    let graph = |x: u32| {
+        format!(
+            "%_Gs\n%_{x} 10 {} 90 Gb\n%_2 0 0 12 1 1 0 0 2 30 0 Gy\n%_1 1 1 1 Gz\n%_() Gc 5 Gc GC\n%_Gt\n%_0.5 g\n%_GT\n\
+             u\n0 0 0 1 k\n{x} 10 m\n{} 10 L\n{} 50 L\n{x} 50 L\n{x} 10 L\nf\n%_1 0 0 0 Go\nu\nU\nU\n%_GS\n",
+            x + 60,
+            x + 20,
+            x + 20
+        )
+    };
+    NAMED_PROLOG
+        .replace("10 10 L\nS\nLB", &format!("10 10 L\nS\n{}LB", graph(100)))
+        .replace("190 90 L\nS\nLB", &format!("190 90 L\nS\n{}LB", graph(10)))
+}
+
+#[test]
+fn graphs_open_as_their_drawn_art_on_their_layers() {
+    let r = import(graphs_on_layers().as_bytes()).unwrap();
+    assert!(!r.preview, "read through the layers, not a fallback preview");
+    let d = &r.document;
+    let names: Vec<_> = d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["SECTION::Cut", "SECTION::Hatch"]);
+    assert_eq!(tree(d.layers[0].children().unwrap()), "p g[p g[]]");
+    assert_eq!(tree(d.layers[1].children().unwrap()), "p g[p g[]]");
+    let notes: Vec<_> = r.warnings.iter().filter(|w| w.contains("graphs come in as plain art")).collect();
+    assert_eq!(notes.len(), 1, "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("doesn't know") || w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
 /// A `.ai` in PostScript form whose layers can't be read either says why, after what stopped its
 /// program.
 #[test]

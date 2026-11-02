@@ -4886,3 +4886,42 @@ proptest! {
         survive("mutated .ai blend", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
     }
 }
+
+/// A graph in `.ai` editing data, written by hand from the version 7 specification's chapter 17:
+/// its data and settings on `%_` lines (cells, strings, an array, a name), then its drawn art, a bar
+/// with its `Go` tag and an empty group, in a group.
+fn graph_text() -> String {
+    "%_Gs\n%_10 10 110 90 Gb\n%_3 0 0 12 1 1 0 0 2 30 0 Gy\n%_6 1 1 0 80 70 0 50 60 80 70 Gd\n%_0 1 Gj\n\
+     %_1 () Ga 0 12 0 0 0 0 0 () 0 0 GA\n%_40 Gw\n%_2 2 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 7 Gc GC\n\
+     %_Gt\n%_(Bars) GD [1 2 3] 0 Ge\n%_/Name 1 Gi\n%_0.5 G\n%_0 g\n%_GT\n\
+     u\n0 0 0 1 k\n10 10 m\n10 50 L\n30 50 L\n30 10 L\nf\n%_2 0 0 0 Go\nu\nU\nU\n%_GS\n"
+        .to_string()
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` graph whose records are damaged, cut or hostile never panics. With only the numbers
+    /// in its records changed, the records keep their shape, and the bar still comes in.
+    #[test]
+    fn ai_graph_never_panics(cut in 0usize..700, edits in prop::collection::vec((0usize..700, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '/', '%', '_', 'G', 's', 'S', 't', 'T', 'u', 'U'])), 0..12), digits in prop::collection::vec((0usize..600, 0u8..10), 0..12)) {
+        let text = mutate_text(&graph_text(), cut, &edits);
+        let private = ai_private(&text);
+        survive("mutated .ai graph", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+        let src = graph_text();
+        let records = src.find("u\n0 0 0 1 k").unwrap_or(0).max(1);
+        let mut kept: Vec<char> = src.chars().collect();
+        for (at, d) in digits {
+            if let Some(c) = kept.get_mut(at % records).filter(|c| c.is_ascii_digit()) {
+                *c = char::from(b'0' + d);
+            }
+        }
+        let (doc, notes, read) = vectorcraft_eps::layered_ai(&ai_private(&kept.into_iter().collect::<String>()), Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        prop_assert!(read, "{:?}", notes);
+        let mut paths = 0;
+        doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+        prop_assert_eq!(paths, 1, "{:?}", notes);
+        prop_assert!(notes.iter().any(|n| n.contains("graphs come in as plain art")), "{:?}", notes);
+        prop_assert!(!notes.iter().any(|n| n.contains("art this can't read")), "the records aren't art: {:?}", notes);
+    }
+}

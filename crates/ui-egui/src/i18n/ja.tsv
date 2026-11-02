@@ -4323,6 +4323,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	its objects are nested too deeply	オブジェクトの入れ子が深すぎます
 @msg	its section ending with `%{end}` doesn't end	`%{end}` で終わるはずのセクションが終わっていません
 @msg	an image VectorCraft can't read was left out	VectorCraft で読み込めない画像は除外されました
+@msg	graphs come in as plain art, without their data or settings	グラフは通常のアートとして読み込まれ、データと設定は保持されません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
