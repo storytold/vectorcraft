@@ -117,6 +117,31 @@ fn area_type_starts_at_the_right_edge_and_wraps_to_the_left() {
     assert!(l.glyphs.iter().all(|g| g.outline.bounding_box().y1 <= 105.0 + 1e-6), "inside the frame");
 }
 
+/// A vertical frame too narrow for its first column is made wider from its right edge, where that
+/// column is; its height stays.
+#[test]
+fn fit_first_line_widens_a_vertical_frame_from_its_right_edge() {
+    let mut t = vertical("§§");
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(90.0, 0.0, 100.0, 105.0).to_path(0.1)) };
+    assert!(layout(FontDb::global(), &t).lines.is_empty(), "a column doesn't fit");
+    assert!(fit_first_line(FontDb::global(), &mut t));
+    let TextKind::Area { frame } = &t.kind else { panic!("area") };
+    let b = frame.bounds().unwrap();
+    assert!((b.x1 - 100.0).abs() < 1e-6 && b.x0 < 90.0 && b.x0 > 60.0 && (b.y0, b.y1) == (0.0, 105.0), "{b:?}");
+    let l = layout(FontDb::global(), &t);
+    assert_eq!(l.lines.len(), 1);
+    assert!(ink(&l, 0).x1 <= 100.0 + 1e-6, "the column at the right edge: {:?}", ink(&l, 0));
+    // A fixed first baseline further in than the line's ascent: wide enough for it too.
+    let mut t = vertical("§§");
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(90.0, 0.0, 100.0, 105.0).to_path(0.1)) };
+    t.area.first_baseline = crate::FirstBaseline::Fixed;
+    t.area.first_baseline_min = 40.0;
+    assert!(fit_first_line(FontDb::global(), &mut t));
+    let TextKind::Area { frame } = &t.kind else { panic!("area") };
+    assert!(frame.bounds().unwrap().x0 < 60.0, "{:?}", frame.bounds());
+    assert_eq!(layout(FontDb::global(), &t).lines.len(), 1);
+}
+
 /// `baselines`: one per line that holds characters, along it for horizontal type and down the
 /// column's centre line for vertical type (where point type's anchor is); none on a path.
 #[test]
