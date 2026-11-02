@@ -69,7 +69,8 @@ pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<
     let scale = in_units(board) || (!fits(board, 1.0) && in_units(art));
     let (mut doc, notes) = build_from(structure, data, None, Page::Artboard, false, false, 1.0)?;
     if scale {
-        scale_document(&mut doc, unit);
+        // The graphic styles here are all the file's, drawn in its units too.
+        scale_document(&mut doc, unit, true);
     }
     Ok((doc, notes))
 }
@@ -1212,7 +1213,7 @@ mod candidate_tests {
             doc.insert(Some(doc.layers[0].id), 0, n).unwrap();
             ids.push(id);
         }
-        scale_document(&mut doc, 10.0);
+        scale_document(&mut doc, 10.0, false);
         let offsets: Vec<_> = ids.iter().map(|id| doc.node(*id).and_then(|n| n.extras().wrap)).collect();
         let wrap = |offset| Some(vectorcraft_doc::TextWrap { offset, invert: true });
         assert_eq!(offsets, [wrap(60.0), wrap(1000.0), wrap(-1000.0)]);
