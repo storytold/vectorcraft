@@ -4267,6 +4267,9 @@ axis	Both	Her İkisi
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} yerleştirilemedi: {e}
 @msg	Couldn't paste from the clipboard: {e}	Panodan yapıştırılamadı: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Yapıştırılamadı: yapıştırıldığı belge kapatıldı
+@msg	Saved {path} with {_1} note(s): {first}	{path}, {_1} notlarıyla kaydedildi: {first}
+@msg	Exported {what} with {_1} note(s): {first}	{_1} notlarıyla birlikte dışa aktarılan {what}: {first}
 @msg	Exported {what}	Dışa aktarılan {what}
 @msg	Saved {n} files beside {path}	{path}'nin yanında kaydedilen {n} dosyaları
 @msg	Saving	Kaydediliyor
@@ -4274,6 +4277,7 @@ axis	Both	Her İkisi
 @msg	Exporting {_1}	{_1}'yi dışa aktarma
 @msg	Packaging {_1}	{_1} paketleniyor
 @msg	Placing {_1}	{_1} yerleştiriliyor
+@msg	Pasting	Yapıştırılıyor
 @msg	Saving recovery data for {_1}	{_1} için kurtarma verileri kaydediliyor
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin

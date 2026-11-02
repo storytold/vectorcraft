@@ -4445,6 +4445,9 @@ theme	Appearance	Erscheinungsbild
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}
 @msg	Couldn't paste from the clipboard: {e}	Aus der Zwischenablage konnte nicht eingefügt werden: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde geschlossen
+@msg	Saved {path} with {_1} note(s): {first}	{path} mit {_1} Hinweis(en) gespeichert: {first}
+@msg	Exported {what} with {_1} note(s): {first}	{what} mit {_1} Hinweis(en) exportiert: {first}
 @msg	Exported {what}	{what} exportiert
 @msg	Saved {n} files beside {path}	{n} Dateien neben {path} gespeichert
 @msg	Saving	Wird gespeichert
@@ -4452,6 +4455,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Exporting {_1}	{_1} wird exportiert
 @msg	Packaging {_1}	{_1} wird verpackt
 @msg	Placing {_1}	{_1} wird platziert
+@msg	Pasting	Wird eingefügt
 @msg	Saving recovery data for {_1}	Wiederherstellungsdaten für {_1} werden gespeichert
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten

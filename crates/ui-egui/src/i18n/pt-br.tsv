@@ -4112,6 +4112,9 @@ axis	Both	Ambos
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Não foi possível inserir {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Não foi possível colar da área de transferência: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Não foi possível colar: o documento em que estava sendo colado foi fechado
+@msg	Saved {path} with {_1} note(s): {first}	{path} salvo com {_1} observação(ões): {first}
+@msg	Exported {what} with {_1} note(s): {first}	{what} exportado com {_1} observação(ões): {first}
 @msg	Exported {what}	{what} exportado
 @msg	Saved {n} files beside {path}	{n} arquivos salvos ao lado de {path}
 @msg	Saving	Salvando
@@ -4119,6 +4122,7 @@ axis	Both	Ambos
 @msg	Exporting {_1}	Exportando {_1}
 @msg	Packaging {_1}	Empacotando {_1}
 @msg	Placing {_1}	Inserindo {_1}
+@msg	Pasting	Colando
 @msg	Saving recovery data for {_1}	Salvando dados de recuperação de {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} documento recuperado descartado|{n} documentos recuperados descartados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} documento recuperado restaurado: salve-o para mantê-lo|{n} documentos recuperados restaurados: salve-os para mantê-los

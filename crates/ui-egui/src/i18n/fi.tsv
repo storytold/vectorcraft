@@ -4738,6 +4738,9 @@ imageTrace	Outline	Ääriviiva
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kohdetta {name} ei voitu sijoittaa: {e}
 @msg	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on suljettu
+@msg	Saved {path} with {_1} note(s): {first}	Tallennettiin {path}, {_1} huomautus(ta): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Vietiin {what}, {_1} huomautus(ta): {first}
 @msg	Exported {what}	Vietiin {what}
 @msg	Saved {n} files beside {path}	Tallennettiin {n} tiedostoa kohteen {path} viereen
 @msg	Saving	Tallennetaan
@@ -4745,6 +4748,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Exporting {_1}	Viedään {_1}
 @msg	Packaging {_1}	Paketoidaan {_1}
 @msg	Placing {_1}	Sijoitetaan {_1}
+@msg	Pasting	Liitetään
 @msg	Saving recovery data for {_1}	Tallennetaan palautustietoja: {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Hylättiin {n} palautettu asiakirja|Hylättiin {n} palautettua asiakirjaa
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Palautettiin {n} asiakirja: tallenna se säilyttääksesi sen|Palautettiin {n} asiakirjaa: tallenna ne säilyttääksesi ne

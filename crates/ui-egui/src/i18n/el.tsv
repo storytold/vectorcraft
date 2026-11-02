@@ -4478,6 +4478,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Δεν ήταν δυνατή η τοποθέτηση του {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Δεν ήταν δυνατή η επικόλληση από το πρόχειρο: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση έκλεισε
+@msg	Saved {path} with {_1} note(s): {first}	Αποθηκεύτηκε το {path} με {_1} σημειώσεις: {first}
+@msg	Exported {what} with {_1} note(s): {first}	Εξήχθη το {what} με {_1} σημειώσεις: {first}
 @msg	Exported {what}	Εξήχθη: {what}
 @msg	Saved {n} files beside {path}	Αποθηκεύτηκαν {n} αρχεία δίπλα στο {path}
 @msg	Saving	Αποθήκευση σε εξέλιξη
@@ -4485,6 +4488,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Exporting {_1}	Εξαγωγή {_1}
 @msg	Packaging {_1}	Συσκευασία {_1}
 @msg	Placing {_1}	Τοποθέτηση {_1}
+@msg	Pasting	Επικόλληση
 @msg	Saving recovery data for {_1}	Αποθήκευση δεδομένων ανάκτησης για {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Απορρίφθηκε {n} ανακτημένο έγγραφο|Απορρίφθηκαν {n} ανακτημένα έγγραφα
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Επαναφέρθηκε {n} ανακτημένο έγγραφο: αποθηκεύστε το για να διατηρηθεί|Επαναφέρθηκαν {n} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν

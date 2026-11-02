@@ -4494,6 +4494,9 @@ imageTrace	Outline	Contour
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kon {name} niet plaatsen: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kon niet van het klembord plakken: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Kon niet plakken: het document waarin werd geplakt, is gesloten
+@msg	Saved {path} with {_1} note(s): {first}	{path} opgeslagen met {_1} opmerking(en): {first}
+@msg	Exported {what} with {_1} note(s): {first}	{what} geëxporteerd met {_1} opmerking(en): {first}
 @msg	Exported {what}	{what} geëxporteerd
 @msg	Saved {n} files beside {path}	{n} bestanden opgeslagen naast {path}
 @msg	Saving	Bezig met opslaan
@@ -4501,6 +4504,7 @@ imageTrace	Outline	Contour
 @msg	Exporting {_1}	Bezig met exporteren van {_1}
 @msg	Packaging {_1}	Bezig met verpakken van {_1}
 @msg	Placing {_1}	Bezig met plaatsen van {_1}
+@msg	Pasting	Bezig met plakken
 @msg	Saving recovery data for {_1}	Bezig met opslaan van herstelgegevens voor {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} hersteld document verworpen|{n} herstelde documenten verworpen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} hersteld document teruggezet: sla het op om het te behouden|{n} herstelde documenten teruggezet: sla ze op om ze te behouden

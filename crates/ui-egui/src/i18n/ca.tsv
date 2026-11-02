@@ -4977,6 +4977,7 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't copy to the system clipboard: {e}	No s’ha pogut copiar al porta-retalls del sistema: {e}
 @msg	Couldn't open {name}: {e}	No s’ha pogut obrir {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	No s’ha pogut enganxar del porta-retalls: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
@@ -5335,6 +5336,7 @@ digits	Malayalam	Malaiàlam
 @msg	Persistent libraries not found: {files}	No s’han trobat biblioteques persistents: {files}
 @msg	pick a colour, gradient or pattern to save as a swatch	tria un color, un degradat o un motiu per desar-lo com a mostra
 @msg	Placing {_1}	Col·locant {_1}
+@msg	Pasting	S’està enganxant
 @msg	plane must be left, right or ground	plane ha de ser left, right o ground
 @msg	plug-in ABI: {0}	ABI del complement: {0}
 @msg	plug-in exceeded its {0}	el complement ha superat el seu {0}

@@ -79,6 +79,7 @@ impl Session {
             batch_steps: None,
             place_hand_off: None,
             queue_hand_off: None,
+            image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
