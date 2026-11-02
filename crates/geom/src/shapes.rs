@@ -45,6 +45,15 @@ impl CornerKind {
             CornerKind::Chamfer => CornerKind::Round,
         }
     }
+
+    /// The kind before this one (the Down arrow while dragging a corner widget).
+    pub fn previous(self) -> Self {
+        match self {
+            CornerKind::Round => CornerKind::Chamfer,
+            CornerKind::InvertedRound => CornerKind::Round,
+            CornerKind::Chamfer => CornerKind::InvertedRound,
+        }
+    }
 }
 
 /// The largest corner radius a `w` × `h` rectangle draws: half its shorter side.

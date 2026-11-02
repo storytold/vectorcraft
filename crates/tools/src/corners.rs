@@ -3,7 +3,8 @@
 //! corner anchor: one that isn't smooth, where two sides, straight or curved, meet at an angle. Dragging one rounds (or
 //! sharpens) the corners whose widgets show together, on every selected path (#938): every corner
 //! of a path selected whole, those with a selected anchor when Direct Selection picked some. Alt-clicking a widget cycles their corner
-//! kind (round, inverted round, chamfer); double-clicking one opens the Corners dialog. The
+//! kind (round, inverted round, chamfer), as the Up and Down arrows do while one is dragged
+//! (#2898); double-clicking one opens the Corners dialog. The
 //! Selection and Direct Selection tools share this, and the canvas draws the widgets from the same
 //! geometry.
 
@@ -239,7 +240,10 @@ pub struct CornerDrag {
     /// Each shown path's outline, in the order of [`CornerWidgets`]' paths.
     outlines: Vec<Outline>,
     start: Point,
+    /// The interaction began (a drag or an arrow press): the corners preview and commit.
     began: bool,
+    /// The pointer moved past the drag threshold: the radius follows it.
+    dragging: bool,
     alt: bool,
     radius: f64,
     /// The pointer went past fully round: the dragged corner is at its largest radius.
@@ -247,6 +251,9 @@ pub struct CornerDrag {
     at: Point,
     /// Direct Selection: what a click (no drag) on the pressed widget selects.
     click: Option<CornerClick>,
+    /// The corner kind the Up and Down arrows picked during the drag, which it sets with the
+    /// radius (#2898); None: the corners keep theirs.
+    kind: Option<CornerKind>,
 }
 
 /// Direct Selection: the drawn anchors of a widget's corner, which a click on the widget selects
@@ -288,7 +295,20 @@ impl CornerDrag {
                 Some(Outline { corners: lc.corners.clone(), base: lc.base.into_owned(), radii, kinds, xf: w.xf })
             })
             .collect::<Option<Vec<_>>>()?;
-        Some(Self { widgets, widget, outlines, start: p, began: false, alt: ev.mods.alt, radius, at_limit: false, at: p, click })
+        Some(Self {
+            widgets,
+            widget,
+            outlines,
+            start: p,
+            began: false,
+            dragging: false,
+            alt: ev.mods.alt,
+            radius,
+            at_limit: false,
+            at: p,
+            click,
+            kind: None,
+        })
     }
 
     /// The start radius (as drawn: no larger than fits) plus the pointer's travel along the
@@ -344,16 +364,54 @@ impl CornerDrag {
 
     pub fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let mut out = vec![];
-        if !self.began {
+        if !self.dragging {
+            // The drag threshold holds after an arrow press too: until the pointer passes it, the
+            // radius stays as it was.
             if p.distance(self.start) < cx.tol(3.0) {
                 return out;
             }
-            self.began = true;
-            out.push(Action::Begin("Corner Radius".into()));
+            self.dragging = true;
+            if !self.began {
+                self.began = true;
+                out.push(Action::Begin("Corner Radius".into()));
+            }
         }
         (self.radius, self.at_limit) = self.radius_at(p);
         self.at = p;
-        out.push(Action::Preview("object.setLiveShape".into(), self.widgets.command("radius", json!(self.radius))));
+        out.push(self.preview());
+        out
+    }
+
+    /// The corners as the gesture sets them: the radius once the pointer drags it, and the kind
+    /// the arrows picked. An arrow press without a drag sends the kind alone, so the corners keep
+    /// their own radii.
+    fn preview(&self) -> Action {
+        let p = match (self.dragging, self.kind) {
+            (true, kind) => {
+                let mut p = self.widgets.command("radius", json!(self.radius));
+                if let Some(k) = kind {
+                    p["kind"] = json!(k);
+                }
+                p
+            }
+            (false, Some(k)) => self.widgets.command("kind", json!(k)),
+            (false, None) => self.widgets.command("radius", json!(self.radius)),
+        };
+        Action::Preview("object.setLiveShape".into(), p)
+    }
+
+    /// The Up (`up`) or Down arrow while the widget is pressed or dragged: the corners take the
+    /// next (or previous) kind, round, inverted round and chamfer in turn, starting from the
+    /// pressed corner's, and keep it when the drag ends (#2898).
+    pub fn step_kind(&mut self, up: bool) -> Vec<Action> {
+        let Some(from) = self.kind.or_else(|| self.widgets.widget(self.widget.0, self.widget.1).map(|w| w.kind)) else { return vec![] };
+        self.kind = Some(if up { from.next() } else { from.previous() });
+        let mut out = vec![];
+        if !self.began {
+            self.began = true;
+            out.push(Action::Begin("Corner Radius".into()));
+        }
+        out.push(self.preview());
         out
     }
 

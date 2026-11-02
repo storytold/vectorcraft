@@ -614,6 +614,10 @@ impl Tool for SelectionTool {
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        // Up and Down while a corner widget is pressed: the corners' kind (#2898).
+        if let (ToolKey::Up | ToolKey::Down, State::Corner(c)) = (key, &mut self.state) {
+            return c.step_kind(key == ToolKey::Up);
+        }
         if key == ToolKey::Letter('e')
             && let State::Marquee { enclosed, .. } = &mut self.state
         {
@@ -649,6 +653,7 @@ impl Tool for SelectionTool {
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
+            State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) => key == ToolKey::Escape,
             _ => false,
         }

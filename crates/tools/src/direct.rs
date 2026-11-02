@@ -659,6 +659,10 @@ impl Tool for DirectSelectionTool {
     /// entirely inside it, whole, and E pressed again makes it select what it selects by default.
     /// The arrow keys nudge the selected frame anchors of area type.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
+        // Up and Down while a corner widget is pressed: the corners' kind (#2898).
+        if let (ToolKey::Up | ToolKey::Down, State::Corner(c)) = (key, &mut self.state) {
+            return c.step_kind(key == ToolKey::Up);
+        }
         if let Some(out) = self.mesh_nudge(cx, key, mods) {
             return out;
         }
@@ -688,7 +692,10 @@ impl Tool for DirectSelectionTool {
         if frame { vec![Action::Cancel, Action::Notify(FRAME_PICKED.into())] } else { vec![Action::Cancel] }
     }
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        self.claims_letter(key) || self.mesh_nudge(cx, key, Mods::default()).is_some() || self.frame_nudge(cx, key, Mods::default()).is_some()
+        (matches!(self.state, State::Corner(_)) && matches!(key, ToolKey::Up | ToolKey::Down))
+            || self.claims_letter(key)
+            || self.mesh_nudge(cx, key, Mods::default()).is_some()
+            || self.frame_nudge(cx, key, Mods::default()).is_some()
     }
     fn notify(&mut self, cx: &ToolContext, what: &str) {
         if what == FRAME_PICKED {
