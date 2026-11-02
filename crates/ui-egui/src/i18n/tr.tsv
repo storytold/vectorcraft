@@ -5600,6 +5600,7 @@ axis	Y Axis	Y ekseni
 	Snap to Tangent	Teğete Yasla
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
+	Geometric Patterns	Geometrik Desenler
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
