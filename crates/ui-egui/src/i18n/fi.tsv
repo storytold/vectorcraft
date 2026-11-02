@@ -4779,6 +4779,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`{what}` closes nothing	`{what}` ei sulje mitään
 @msg	`{what}` closes something it didn't open	`{what}` sulkee jotain, mitä se ei avannut
 @msg	a path has too many points	polulla on liian monta pistettä
+@msg	it ends inside a group or compound path	se päättyy ryhmän tai yhdistelmäpolun sisään
 @msg	it ends inside a layer	se päättyy tason sisään
 @msg	it has art outside its layers	siinä on kuvitusta tasojensa ulkopuolella
 @msg	it has more than {MAX_NODES} objects	siinä on yli {MAX_NODES} objektia

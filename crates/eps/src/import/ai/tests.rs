@@ -1164,6 +1164,20 @@ fn what_it_doesnt_read_is_an_error_where_it_shows() {
 }
 
 #[test]
+fn a_group_still_open_at_the_end_is_an_error() {
+    let square = format!("{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    for open in ["u", "q", "*u", "%_u"] {
+        let e = read(stream(&format!("{}{open}\n{square}", layer(""))).as_bytes()).unwrap_err();
+        assert_eq!(e, "it ends inside a group or compound path", "{open}");
+    }
+    // A group open inside a layer that doesn't end is the layer's error.
+    let unended = format!("%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\nu\n{square}");
+    assert_eq!(read(stream(&unended).as_bytes()).unwrap_err(), "it ends inside a layer");
+    // Patterns read with a group of their own still read.
+    assert!(read_ok(&format!("{DOTS}{}", layer(""))).doc.pattern("Dots").is_some());
+}
+
+#[test]
 fn unresolved_pattern_reset_before_group_path_keeps_live_art() {
     for (operator, draw, reset) in [("p", "f", "0 0 0 1 k"), ("P", "S", "0 0 0 1 K")] {
         let body = format!("u\n(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] {operator}\n{reset}\n{}{draw}\nU\n", rect_path(0.0, 0.0, 4.0, 4.0),);

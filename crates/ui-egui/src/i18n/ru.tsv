@@ -4607,6 +4607,7 @@ axis	Both	Оба
 @msg	`{what}` closes nothing	`{what}` ничего не закрывает
 @msg	`{what}` closes something it didn't open	`{what}` закрывает то, что не открывал
 @msg	a path has too many points	в контуре слишком много точек
+@msg	it ends inside a group or compound path	они заканчиваются внутри группы или составного контура
 @msg	it ends inside a layer	они заканчиваются внутри слоя
 @msg	it has art outside its layers	в них есть графика вне слоёв
 @msg	it has more than {MAX_NODES} objects	в них больше {MAX_NODES} объектов

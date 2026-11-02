@@ -4837,6 +4837,7 @@ imageTrace	Outline	Obris
 @msg	`{what}` closes nothing	`{what}` ne zatvara ništa
 @msg	`{what}` closes something it didn't open	`{what}` zatvara nešto što nije otvorio
 @msg	a path has too many points	putanja ima previše tačaka
+@msg	it ends inside a group or compound path	završava unutar grupe ili složene putanje
 @msg	it ends inside a layer	završava unutar sloja
 @msg	it has art outside its layers	ima crtež izvan svojih slojeva
 @msg	it has more than {MAX_NODES} objects	ima više od {MAX_NODES} objekata

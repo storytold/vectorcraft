@@ -4314,6 +4314,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{what}` closes nothing	`{what}` に対応する開始部分がありません
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
 @msg	a path has too many points	ポイントが多すぎるパスがあります
+@msg	it ends inside a group or compound path	グループまたは複合パスの途中で終わっています
 @msg	it ends inside a layer	レイヤーの途中で終わっています
 @msg	it has art outside its layers	レイヤーの外にアートがあります
 @msg	it has more than {MAX_NODES} objects	オブジェクトが {MAX_NODES} 個を超えています

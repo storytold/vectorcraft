@@ -4486,6 +4486,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{what}` closes nothing	`{what}` schließt nichts
 @msg	`{what}` closes something it didn't open	`{what}` schließt etwas, das es nicht geöffnet hat
 @msg	a path has too many points	ein Pfad hat zu viele Punkte
+@msg	it ends inside a group or compound path	es endet innerhalb einer Gruppe oder eines zusammengesetzten Pfads
 @msg	it ends inside a layer	es endet innerhalb einer Ebene
 @msg	it has art outside its layers	es enthält Grafik außerhalb seiner Ebenen
 @msg	it has more than {MAX_NODES} objects	es enthält mehr als {MAX_NODES} Objekte

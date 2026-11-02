@@ -4519,6 +4519,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{what}` closes nothing	το `{what}` δεν κλείνει κανένα στοιχείο
 @msg	`{what}` closes something it didn't open	το `{what}` κλείνει στοιχείο που δεν άνοιξε
 @msg	a path has too many points	η διαδρομή έχει υπερβολικά πολλά σημεία
+@msg	it ends inside a group or compound path	τερματίζει μέσα σε ομάδα ή σύνθετη διαδρομή
 @msg	it ends inside a layer	τερματίζει μέσα σε επίπεδο
 @msg	it has art outside its layers	περιέχει σχέδιο εκτός των επιπέδων του
 @msg	it has more than {MAX_NODES} objects	περιέχει περισσότερα από {MAX_NODES} αντικείμενα

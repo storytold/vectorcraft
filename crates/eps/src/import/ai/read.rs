@@ -48,7 +48,7 @@
 //!
 //! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
 //! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
-//! it doesn't know are errors.
+//! it doesn't know are errors. So is data that ends inside a layer, a group or a compound path.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
@@ -390,6 +390,12 @@ impl<'a> Reader<'a> {
                     }
                 }
             }
+        }
+        // A pattern's or symbol's reader opens a group of its own and checks it is the only frame
+        // left. In the document, a container still open after the last layer holds art no layer has.
+        let in_layer = self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_)));
+        if self.subreader_depth == 0 && !in_layer && self.frames.iter().any(|f| !matches!(f.kind, Kind::Obj(_) | Kind::Mask)) {
+            return Err("it ends inside a group or compound path".into());
         }
         if self.frames.iter().any(|f| matches!(f.kind, Kind::Layer(_))) {
             return Err("it ends inside a layer".into());

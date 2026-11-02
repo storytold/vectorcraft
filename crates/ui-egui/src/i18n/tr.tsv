@@ -4313,6 +4313,7 @@ axis	Both	Her İkisi
 @msg	`{what}` closes nothing	`{what}` hiçbir şeyi kapatmaz
 @msg	`{what}` closes something it didn't open	`{what}` açmadığı bir şeyi kapatıyor
 @msg	a path has too many points	bir yolun çok fazla noktası var
+@msg	it ends inside a group or compound path	bir grubun veya bileşik yolun içinde bitiyor
 @msg	it ends inside a layer	bir katmanın içinde bitiyor
 @msg	it has art outside its layers	katmanlarının dışında sanat var
 @msg	it has more than {MAX_NODES} objects	{MAX_NODES}'den daha fazla nesneye sahip

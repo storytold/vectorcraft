@@ -4470,6 +4470,7 @@ axis	Both	Båda
 @msg	`{what}` closes nothing	`{what}` stänger ingenting
 @msg	`{what}` closes something it didn't open	`{what}` stänger något som den inte öppnade
 @msg	a path has too many points	en bana har för många punkter
+@msg	it ends inside a group or compound path	den slutar inuti en grupp eller en sammansatt bana
 @msg	it ends inside a layer	den slutar inuti ett lager
 @msg	it has art outside its layers	den har grafik utanför sina lager
 @msg	it has more than {MAX_NODES} objects	den har fler än {MAX_NODES} objekt

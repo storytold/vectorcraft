@@ -4877,6 +4877,7 @@ imageTrace	Outline	Obrys
 @msg	`{what}` closes nothing	`{what}` nic neuzavírá
 @msg	`{what}` closes something it didn't open	`{what}` uzavírá něco, co neotevřel
 @msg	a path has too many points	cesta má příliš mnoho bodů
+@msg	it ends inside a group or compound path	končí uvnitř skupiny nebo složené cesty
 @msg	it ends inside a layer	končí uvnitř vrstvy
 @msg	it has art outside its layers	má kresbu mimo své vrstvy
 @msg	it has more than {MAX_NODES} objects	má více než {MAX_NODES} objektů
