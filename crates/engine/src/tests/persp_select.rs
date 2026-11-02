@@ -229,6 +229,40 @@ fn diagonal_shift_snap_lands_an_edge_on_a_gridline() {
 }
 
 #[test]
+fn snap_moves_objects_at_different_depths_by_one_plane_offset() {
+    let (mut s, _) = persp_session();
+    let rect = |s: &mut Session, x: f64| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 380, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap())
+    };
+    let near = rect(&mut s, 240.0);
+    s.execute("perspective.attach", &json!({"ids": [near.0], "plane": "left"})).unwrap();
+    s.execute("perspective.plane.move", &json!({"plane": "left", "offset": 50})).unwrap();
+    let far = rect(&mut s, 150.0);
+    s.execute("perspective.attach", &json!({"ids": [far.0], "plane": "left"})).unwrap();
+    s.execute("perspective.plane.move", &json!({"plane": "left", "offset": 0})).unwrap();
+    assert_eq!(attached(&s, near), Some((Plane::Left, 0.0)));
+    assert_eq!(attached(&s, far), Some((Plane::Left, 50.0)));
+    s.execute("perspective.grid.snap", &json!({"on": true})).unwrap();
+    let g = grid(&s);
+    let (near_before, far_before) = (plane_pts(&s, near, Plane::Left, 0.0), plane_pts(&s, far, Plane::Left, 50.0));
+    let b = bounds_of(&near_before).union(bounds_of(&far_before));
+    // A move that ends 0.3 pt past a gridline crossing on the near object's plane.
+    let past = |v: f64| (v / g.cell).ceil() * g.cell + 0.3 - v;
+    let start = bounds_of(&near_before).center();
+    let h = g.homography_at(Plane::Left, 0.0).unwrap();
+    let from = h.apply(start).unwrap();
+    let to = h.apply(start + Vec2::new(past(b.x0), past(b.y0))).unwrap();
+    s.execute("perspective.move", &json!({"ids": [near.0, far.0], "from": [from.x, from.y], "to": [to.x, to.y]})).unwrap();
+    let near_delta = plane_pts(&s, near, Plane::Left, 0.0)[0] - near_before[0];
+    let far_delta = plane_pts(&s, far, Plane::Left, 50.0)[0] - far_before[0];
+    assert!((near_delta - far_delta).hypot() < 1e-6, "near {near_delta:?}, far {far_delta:?}");
+    let on_line = |v: f64| ((v / g.cell).round() * g.cell - v).abs() < 1e-6;
+    let moved = b + near_delta;
+    assert!(on_line(moved.x0) || on_line(moved.x1), "{moved:?}");
+    assert!(on_line(moved.y0) || on_line(moved.y1), "{moved:?}");
+}
+
+#[test]
 fn constrained_move_uses_each_objects_plane() {
     let (mut s, right) = persp_session();
     let left_result = s.execute("shape.rectangle", &json!({"x": 240, "y": 380, "width": 60, "height": 60})).unwrap();
