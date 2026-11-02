@@ -17,7 +17,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
-| Formats opened or placed | ~30 | 28 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, Pixar, PS |
+| Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (no Illustrator editing data) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
@@ -145,7 +145,8 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | HEIC / HEIF | open, place | no | no | |
 | PCX | open, place | yes (1 bit in the header palette's first two colors, black and white without them; 1 bit in two to four planes and 4 bits with up to 16 colors; 2 bits in the CGA colors the header's CGA palette settings pick; 8 bits with the 256-color palette, gray without one; 24-bit color in three planes) | no | the header's HDpi and VDpi size the image; a file of another depth or plane count, cut short or past the pixel allowance is refused with a message; tests in `crates/engine/src/cmd/fileio/tests_pcxread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | JPEG 2000 | open, place | yes (JP2 and raw codestream images; multiple codestreams and JPX composition or layers are refused) | no | `.jpf`, `.jpx`, `.jp2`, `.j2k`, `.j2c`, `.jpc`; resolution uses the valid `resd` (display) value on each axis, or else the valid `resc` (capture) value, or 72 ppi; bounded decoding; `tests_jp2read.rs` |
-| PICT, Pixar PXR | open, place (legacy) | no | no | rarely used |
+| PICT | open, place (legacy) | no | no | rarely used |
+| Pixar PXR | open, place (legacy) | yes (any set of the R, G, B and A channels in 8 or 12 bits, dumped or run-length encoded, in tiles; R alone is gray; alpha matted to black or unassociated) | no | recognized by its magic number; 12-bit samples are clamped to 0.0 to 1.0; null tiles are transparent with A and black without; the offsets aren't read, and the image takes the default resolution; a file cut short, with header values or packets the format doesn't define, or past the pixel allowance is refused with a message; tested on synthetic files only; tests in `crates/engine/src/cmd/fileio/tests_pxrread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | FreeHand `.fh*` | open (legacy) | no | no | |
 | CorelDRAW `.cdr` | open | no | no | |
 | Text `.txt` | place, export | place (Text Import Options) | yes | |
