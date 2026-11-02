@@ -6217,6 +6217,7 @@ name = "vectorcraft-engine"
 version = "0.20.0"
 dependencies = [
  "cfb",
+ "chrono",
  "craft-docpath",
  "crc32fast",
  "flate2",
