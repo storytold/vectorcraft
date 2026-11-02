@@ -4711,7 +4711,7 @@ imageTrace	Outline	Kontur
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	zawiera {_1}, czego VectorCraft jeszcze z niego nie odczytuje
 @msg	its objects are nested too deeply	jego obiekty są zagnieżdżone zbyt głęboko
 @msg	its section ending with `%{end}` doesn't end	jego sekcja kończąca się na `%{end}` nie ma końca
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	obiekty z kilkoma wypełnieniami lub obrysami, efektami albo pędzlami wczytano jako ich narysowany wygląd ({_1}): ich wyglądu nie można jeszcze edytować
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	obiekty z kilkoma wypełnieniami lub obrysami, obrysami o zmiennej szerokości, efektami albo pędzlami wczytano jako ich narysowany wygląd ({_1}): ich wyglądu nie można jeszcze edytować
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradient „{name}” nie jest zdefiniowany w pliku: zastąpiono go jednolitym kolorem
 @msg	an image VectorCraft can't read was left out	pominięto obraz, którego VectorCraft nie potrafi odczytać
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi

@@ -4443,7 +4443,7 @@ axis	Both	И двете
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	той съдържа {_1}, който VectorCraft все още не може да разчете
 @msg	its objects are nested too deeply	обектите му са вложени твърде дълбоко
 @msg	its section ending with `%{end}` doesn't end	разделът му, завършващ на `%{end}`, няма край
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, щрихове с променлива ширина, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато

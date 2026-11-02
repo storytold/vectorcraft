@@ -1869,6 +1869,71 @@ fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The art style `Tapered`: a 4 pt stroke with width points `widths` (position, width) along it.
+fn width_profile_style(widths: &[(f64, f64)]) -> String {
+    let array = |values: Vec<f64>| values.iter().map(|v| format!("{v} /Real ,\n")).collect::<String>();
+    format!(
+        "%AI9_BeginArtStyles\n\
+        /KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+        /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 4 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+        /Dictionary : /NotRecorded ,\n2 /Int (BSWidthSource) ,\n/Array :\n{}; (BSVariableWidthTValuesArray) ,\n/Array :\n{}; (BSCenteredWidthsArray) ,\n\
+        ; (kAIBeautifulStrokesParamsDictKey) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n\
+        %AI9_EndArtStyles\n",
+        array(widths.iter().map(|w| w.0).collect()),
+        array(widths.iter().map(|w| w.1).collect()),
+    )
+}
+
+#[test]
+fn a_variable_width_stroke_comes_in_as_its_drawn_outline() {
+    // GUARDS: the object came in as a live stroke whose profile is straight between its width
+    // points, thinner than the drawn outline, and left gaps next to fills built to meet it.
+    let hidden_line = "0 5 m\n10 5 L\n".replace('\n', "\n%_");
+    let fills = format!("{RED}{}f\n", rect_path(30.0, 0.0, 40.0, 10.0));
+    let art_ = format!("{fills}0 Ae\nu\n{RED}{}f\nU\n%_{hidden_line}S\n1 (Tapered) XW\n{fills}", rect_path(0.0, 3.0, 10.0, 7.0));
+    let lens = width_profile_style(&[(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
+    let r = read_ok(&format!("{lens}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    let look = &a[1];
+    assert!(matches!(look.kind, NodeKind::Group { .. }), "{look:#?}");
+    let [outline] = look.children().unwrap().as_slice() else { panic!("{look:#?}") };
+    assert!(matches!(outline.kind, NodeKind::Path { .. }) && outline.appearance.fill().is_some(), "{outline:#?}");
+    assert!(outline.appearance.stroke().is_none_or(|s| s.profile.is_none()), "{outline:#?}");
+    assert!([&a[0], &a[2]].iter().all(|n| matches!(n.kind, NodeKind::Path { .. })), "the objects beside it stay in place");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+
+    // A uniform profile is a plain stroke: the object comes in as itself.
+    let uniform = width_profile_style(&[(0.0, 1.0), (1.0, 1.0)]);
+    let r = read_ok(&format!("{uniform}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    assert!(matches!(a[1].kind, NodeKind::Path { .. }), "{:#?}", a[1]);
+    assert_eq!(a[1].appearance.stroke().map(|s| (s.width, s.profile.is_none())), Some((4.0, true)), "{:#?}", a[1]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_variable_width_stroke_with_an_empty_look_comes_in_as_itself() {
+    // GUARDS: with no outline in its look to keep, the object was dropped.
+    let hidden_line = "0 5 m\n10 5 L\n".replace('\n', "\n%_");
+    let hidden_fill = format!("{}f\n", rect_path(0.0, 3.0, 10.0, 7.0)).replace('\n', "\n%_");
+    let lens = width_profile_style(&[(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
+    // An empty look, and ones whose group or compound path holds only a copy read from `%_` lines.
+    for look in ["u\nU\n".to_string(), format!("u\nu\n%_{hidden_fill}\nU\nU\n"), format!("u\n*u\n%_{hidden_fill}\n*U\nU\n")] {
+        let art_ = format!("{look}%_{hidden_line}S\n1 (Tapered) XW\n");
+        let r = read_ok(&format!("{lens}{}", layer(&art_)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{look:?}: {a:#?}") };
+        assert!(matches!(object.kind, NodeKind::Path { .. }), "{look:?}: {object:#?}");
+        assert_eq!(object.appearance.stroke().map(|s| (s.width, s.profile.is_some())), Some((4.0, true)), "{look:?}: {object:#?}");
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{look:?}: {:?}", r.warnings);
+    }
+}
+
 #[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.

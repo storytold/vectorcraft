@@ -2957,6 +2957,36 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
 }
 
 #[test]
+fn type_with_a_variable_width_stroke_keeps_it_live() {
+    // GUARDS: other objects with a variable-width stroke come in as their drawn look; type keeps the
+    // stroke, since its drawn look can't be retyped.
+    use vectorcraft_doc::AppearanceItem;
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let style = "%AI9_BeginArtStyles\n/KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+        /Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n0.5 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+        /Array :\n0 /Real ,\n1 /Real ,\n0 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n";
+    let drawing = "0 0 0 1 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(style.to_string() + &layer("Art", true, &format!("{look}{own}1 (Tapered) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    let mut texts = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push((t.plain_text(), n.appearance.clone()));
+        }
+    });
+    let [(text, a)] = texts.as_slice() else { panic!("{texts:?} {notes:?}") };
+    assert_eq!(text, "Bang");
+    let [AppearanceItem::Stroke(stroke)] = a.items.as_slice() else { panic!("{a:?}") };
+    assert_eq!(stroke.profile.as_ref().map(|p| p.points.clone()), Some(vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]));
+    assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
+}
+
+#[test]
 fn point_type_without_a_matrix_is_placed_by_its_layout() {
     // GUARDS: Illustrator 24 leaves an unturned, unscaled point type's matrix out of its frame; such
     // stories weren't read, and the type was left out.

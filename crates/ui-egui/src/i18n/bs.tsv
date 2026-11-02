@@ -4845,7 +4845,7 @@ imageTrace	Outline	Obris
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	sadrži {_1}, što VectorCraft još ne čita iz nje
 @msg	its objects are nested too deeply	njeni objekti su previše duboko ugniježđeni
 @msg	its section ending with `%{end}` doesn't end	njen odjeljak koji završava s `%{end}` ne završava
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekti s više ispuna ili poteza, efekata ili četkica stigli su kao njihov iscrtani izgled ({_1}): njihov izgled se još ne može uređivati
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekti s više ispuna ili poteza, poteza promjenljive širine, efekata ili četkica stigli su kao njihov iscrtani izgled ({_1}): njihov izgled se još ne može uređivati
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradijent „{name}” nije definisan u datoteci: umjesto njega koristi se obična boja
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni

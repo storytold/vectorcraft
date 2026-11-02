@@ -531,6 +531,24 @@ impl<'a> Reader<'a> {
         {
             return;
         }
+        // A variable-width stroke's look that draws nothing but copies read from `%_` lines: an
+        // empty group, which [`styled`] takes the stroke for.
+        let drawn;
+        let look = if !hidden
+            && slot_of(object.name.as_deref()).is_none()
+            && matches!(look.kind, NodeKind::Group { .. })
+            && self.styles.get(&style).is_some_and(|st| st.uneven)
+            && !draws(look, &self.hidden_ids)
+        {
+            let mut copy = look.clone();
+            if let Some(children) = copy.children_mut() {
+                children.clear();
+            }
+            drawn = copy;
+            &drawn
+        } else {
+            look
+        };
         // A style read here: the object, painted as it says.
         if let Some(appearance) = self
             .styles
@@ -658,7 +676,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // A text object's slot (an empty group standing for it) takes the style as the type will.
     let slot = slot_of(object.name.as_deref()).is_some();
     if !st.plain
-        || (!slot && !st.simple)
+        // A look with no outline in it to keep takes a variable-width stroke as the object's own.
+        || (!slot && !st.simple && (!st.uneven || draws(look, &HashSet::new())))
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
     {
         return None;
@@ -731,5 +750,17 @@ fn strip(n: &mut Node, hidden: &HashSet<NodeId>) {
         for c in children.iter_mut() {
             strip(Arc::make_mut(c), hidden);
         }
+    }
+}
+
+/// Whether `n` holds anything that draws, apart from the children read from `%_` lines (`hidden`):
+/// a node other than a group or a compound path.
+fn draws(n: &Node, hidden: &HashSet<NodeId>) -> bool {
+    if hidden.contains(&n.id) {
+        return false;
+    }
+    match n.children() {
+        Some(children) if matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. }) => children.iter().any(|c| draws(c, hidden)),
+        _ => true,
     }
 }

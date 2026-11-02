@@ -1,19 +1,59 @@
 use super::*;
 
-#[test]
-fn a_variable_width_stroke_keeps_its_profile() {
-    let data = b"/KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+/// The style `Tapered`: a 30 pt stroke whose beautiful-strokes dictionary holds `arrays`.
+fn width_style(arrays: &str) -> ArtStyle {
+    let data = format!(
+        "/KnownStyle :\n(Tapered) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
             2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 30 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
-            /Dictionary : /NotRecorded ,\n2 /Int (BSWidthSource) ,\n/Array :\n0 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
-            /Array :\n1 /Real ,\n0.1 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n; /Dict ;\n /Part ,\n\
-            /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n";
-    let styles = art_styles(data);
-    let style = &styles["Tapered"];
-    assert!(style.plain);
-    let [StyleItem::Stroke { width, profile, .. }] = style.items.as_slice() else { panic!("{:?}", style.items) };
-    assert_eq!(*width, 30.0);
-    assert_eq!(profile.as_ref().map(|p| p.points.clone()), Some(vec![(0.0, 1.0, 1.0), (1.0, 0.1, 0.1)]));
+            /Dictionary : /NotRecorded ,\n2 /Int (BSWidthSource) ,\n{arrays}; (kAIBeautifulStrokesParamsDictKey) ,\n; /Dict ;\n /Part ,\n\
+            /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n"
+    );
+    art_styles(data.as_bytes()).remove("Tapered").unwrap_or_default()
+}
+
+/// A beautiful-strokes array `key` of `values`.
+fn bs_array(key: &str, values: &[&str]) -> String {
+    let items: String = values.iter().map(|v| format!("{v} /Real ,\n")).collect();
+    format!("/Array :\n{items}; ({key}) ,\n")
+}
+
+#[test]
+fn a_variable_width_stroke_keeps_its_profile_for_type_only() {
+    // GUARDS: the profile is straight between its width points, so other objects read with it drew
+    // other widths than their drawn look and left gaps next to fills built to meet it.
+    let t = |v: &[&str]| bs_array("BSVariableWidthTValuesArray", v);
+    let w = |v: &[&str]| bs_array("BSCenteredWidthsArray", v);
+    for (arrays, points) in [
+        (t(&["0", "0.5", "1"]) + &w(&["0", "1", "0"]), vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]),
+        (t(&["0", "1"]) + &w(&["1", "0.1"]), vec![(0.0, 1.0, 1.0), (1.0, 0.1, 0.1)]),
+    ] {
+        let style = width_style(&arrays);
+        assert!(style.plain && !style.simple, "{arrays:?}: {style:?}");
+        let [StyleItem::Stroke { width, profile, .. }] = style.items.as_slice() else { panic!("{:?}", style.items) };
+        assert_eq!((*width, profile.as_ref().map(|p| p.points.clone())), (30.0, Some(points)), "{arrays:?}");
+    }
+}
+
+#[test]
+fn a_uniform_or_unreadable_width_profile_stays_a_live_stroke() {
+    let t = |v: &[&str]| bs_array("BSVariableWidthTValuesArray", v);
+    let w = |v: &[&str]| bs_array("BSCenteredWidthsArray", v);
+    for arrays in [
+        String::new(),
+        t(&["0", "1"]) + &w(&["1", "1"]),
+        // No widths, widths of another length, widths that aren't numbers.
+        t(&["0", "0.5", "1"]),
+        t(&["0", "0.5", "1"]) + &w(&["0", "1"]),
+        t(&["0", "1"]) + "/Array :\n(x) /String ,\n(y) /String ,\n; (BSCenteredWidthsArray) ,\n",
+        // Positions that aren't numbers.
+        t(&["nan", "nan"]) + &w(&["0", "1"]),
+    ] {
+        let style = width_style(&arrays);
+        assert!(style.plain && style.simple, "{arrays:?}: {style:?}");
+        let [StyleItem::Stroke { width, profile, .. }] = style.items.as_slice() else { panic!("{arrays:?}: {:?}", style.items) };
+        assert_eq!((*width, profile), (30.0, &None), "{arrays:?}");
+    }
 }
 
 #[test]

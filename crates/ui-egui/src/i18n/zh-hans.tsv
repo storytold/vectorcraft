@@ -4050,7 +4050,7 @@ imageTrace	Outline	轮廓
 @msg	an image VectorCraft can't read was left out	已略去 VectorCraft 无法读取的图像
 @msg	an image whose data is cut short was left out	已略去数据不完整的图像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、可变宽度描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
 @msg	patterns nested too deeply are filled with mid-grey	嵌套过深的图案以中灰色填充
 @msg	shadings of an unknown type were left out	已略去未知类型的着色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函数类型未知的着色以其中间颜色填充

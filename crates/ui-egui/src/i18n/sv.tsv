@@ -4478,7 +4478,7 @@ axis	Both	Båda
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	den innehåller {_1}, som VectorCraft inte kan läsa från den än
 @msg	its objects are nested too deeply	dess objekt är för djupt kapslade
 @msg	its section ending with `%{end}` doesn't end	dess avsnitt som slutar med `%{end}` avslutas aldrig
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, konturer med variabel bredd, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten ”{name}” är inte definierad i filen: en enfärgad fyllning används i stället
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades

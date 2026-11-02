@@ -4579,7 +4579,7 @@ axis	Both	Ambos
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	tienen {_1}, que VectorCraft aún no lee de ellos
 @msg	its objects are nested too deeply	sus objetos están anidados a demasiada profundidad
 @msg	its section ending with `%{end}` doesn't end	su sección que termina con `%{end}` no termina
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	los objetos con varios rellenos o trazos, efectos o pinceles se importaron con su aspecto dibujado ({_1}): su aspecto aún no se puede editar
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	los objetos con varios rellenos o trazos, trazos de ancho variable, efectos o pinceles se importaron con su aspecto dibujado ({_1}): su aspecto aún no se puede editar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	el degradado “{name}” no está definido en el archivo: lo sustituye un color sólido
 @msg	an image VectorCraft can't read was left out	se omitió una imagen que VectorCraft no puede leer
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos

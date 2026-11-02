@@ -1973,7 +1973,7 @@ file-filter	Templates	範本
 @msg	an image VectorCraft can't read was left out	已略過 VectorCraft 無法讀取的影像
 @msg	an image whose data is cut short was left out	已略過資料不完整的影像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、可變寬度筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
 @msg	patterns nested too deeply are filled with mid-grey	巢狀層級過深的圖樣以中灰色填滿
 @msg	shadings of an unknown type were left out	已略過類型未知的著色
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	函數類型未知的著色以其中間顏色填滿

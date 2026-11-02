@@ -4787,7 +4787,7 @@ imageTrace	Outline	Ääriviiva
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	siinä on {_1}, jota VectorCraft ei vielä lue siitä
 @msg	its objects are nested too deeply	sen objektit ovat liian syvällä sisäkkäin
 @msg	its section ending with `%{end}` doesn't end	sen `%{end}`-merkintään päättyvä osio ei pääty
-@msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, vaihtelevan levyisiä viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
 @msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
 @msg	an image whose data is cut short was left out	kuva, jonka data on katkennut, jätettiin pois
