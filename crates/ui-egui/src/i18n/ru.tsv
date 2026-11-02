@@ -4606,6 +4606,8 @@ axis	Both	Оба
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	это не логотип из плоских цветов ({_1}% его сплошных областей совпадает с несколькими плоскими цветами), поэтому режим «Плоский логотип» превратил бы градиенты в пятна: используйте режим «Цвет»
 @msg	`{what}` closes nothing	`{what}` ничего не закрывает
 @msg	`{what}` closes something it didn't open	`{what}` закрывает то, что не открывал
+@msg	`{w}` takes no operands	`{w}` не принимает операндов
+@msg	a wraparound group is inside a compound path	группа обтекания текстом находится внутри составного контура
 @msg	a path has too many points	в контуре слишком много точек
 @msg	it ends inside a layer	они заканчиваются внутри слоя
 @msg	it has art outside its layers	в них есть графика вне слоёв

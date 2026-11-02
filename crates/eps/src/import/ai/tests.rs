@@ -3039,10 +3039,39 @@ fn legacy_wrap_group() {
     assert_eq!(kids.len(), 1, "{:?}", r.warnings);
     let NodeKind::Group { children, clip: false } = &kids[0].kind else { panic!("a group: {:?}", kids[0].kind) };
     let wraps: Vec<(bool, bool)> = children.iter().map(|c| (matches!(c.kind, NodeKind::Text(_)), wrap_of(c).is_some())).collect();
-    assert_eq!(wraps, [(false, false), (true, false), (false, true), (false, true)], "{:?}", r.warnings);
-    assert_eq!(wrap_of(&children[2]), Some(vectorcraft_doc::TextWrap::default()));
+    assert_eq!(wraps, [(false, true), (true, false), (false, true), (false, true)], "objects before the text are wrap objects too: {:?}", r.warnings);
+    let none = Some(vectorcraft_doc::TextWrap { offset: 0.0, invert: false });
+    assert_eq!(wrap_of(&children[0]), none, "no offset");
+    assert_eq!(wrap_of(&children[2]), none, "no offset");
     assert_eq!(wrap_of(&children[3]), Some(vectorcraft_doc::TextWrap { offset: 3.0, invert: true }));
     assert!(!r.warnings.iter().any(|w| w.contains("*w") || w.contains("*W")), "{:?}", r.warnings);
+}
+
+/// A wraparound group with no type in it: each of its objects is a wrap object, with no offset.
+#[test]
+fn legacy_wrap_group_without_text() {
+    let body = format!("*w\n{RED}{}f\n{}f\n*W\n", rect_path(0.0, 0.0, 5.0, 5.0), rect_path(30.0, 30.0, 50.0, 50.0));
+    let r = read_ok(&layer(&body));
+    let kids = art(&r.doc);
+    assert_eq!(kids.len(), 1, "{:?}", r.warnings);
+    let NodeKind::Group { children, clip: false } = &kids[0].kind else { panic!("a group: {:?}", kids[0].kind) };
+    let wraps: Vec<_> = children.iter().map(|c| wrap_of(c)).collect();
+    assert_eq!(wraps, [Some(vectorcraft_doc::TextWrap { offset: 0.0, invert: false }); 2]);
+}
+
+/// `*w` and `*W` take no operands, and a wraparound group can't be an element of a compound path.
+#[test]
+fn legacy_wrap_group_errors() {
+    let square = format!("{RED}{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    for (body, error) in [
+        (format!("1 *w\n{square}*W\n"), "`*w` takes no operands"),
+        (format!("*w\n{square}0 *W\n"), "`*W` takes no operands"),
+        (format!("*u\n*w\n{square}*W\n*U\n"), "a wraparound group is inside a compound path"),
+        (format!("*u\nu\n*w\n{square}*W\nU\n*U\n"), "a wraparound group is inside a compound path"),
+    ] {
+        let e = read(stream(&layer(&body)).as_bytes()).unwrap_err();
+        assert!(e.contains(error), "{body:?}: {e}");
+    }
 }
 
 /// The printer's crop marks Illustrator draws after the last layer (`%AI3_BeginCrops`, inside

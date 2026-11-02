@@ -4038,6 +4038,8 @@ imageTrace	Outline	轮廓
 @msg	unknown command `{0}`; did you mean `{1}`?	未知命令 `{0}`；您是否想输入 `{1}`？
 @msg	`{what}` closes nothing	`{what}` 没有可结束的内容
 @msg	`{what}` closes something it didn't open	`{what}` 结束了并非由它开始的内容
+@msg	`{w}` takes no operands	`{w}` 不接受操作数
+@msg	a wraparound group is inside a compound path	文本绕排组位于复合路径内
 @msg	a path has too many points	某条路径的点过多
 @msg	it ends inside a layer	它在图层内部结束
 @msg	it has art outside its layers	它有位于图层之外的图稿

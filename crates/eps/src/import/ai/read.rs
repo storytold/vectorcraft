@@ -8,7 +8,9 @@
 //!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
 //!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
-//!   with `W` clips); a group's transparency and name follow its end.
+//!   with `W` clips); a group's transparency and name follow its end. A wraparound group `*w` …
+//!   `*W` (version 7 specification §15.4.2) is a group whose objects other than its type wrap
+//!   area type, with no offset.
 //! - Paths: `m`, `l`/`L`, `c`/`C`, `v`/`V`, `y`/`Y`, painted by `N n F f S s B b` (lower case
 //!   closes), `(op) *` for a guide. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.

@@ -4313,6 +4313,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown command `{0}`; did you mean `{1}`?	`{0}` は不明なコマンドです。`{1}` のことですか?
 @msg	`{what}` closes nothing	`{what}` に対応する開始部分がありません
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
+@msg	`{w}` takes no operands	`{w}` はオペランドを取りません
+@msg	a wraparound group is inside a compound path	テキストの回り込みグループが複合パスの中にあります
 @msg	a path has too many points	ポイントが多すぎるパスがあります
 @msg	it ends inside a layer	レイヤーの途中で終わっています
 @msg	it has art outside its layers	レイヤーの外にアートがあります

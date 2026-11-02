@@ -4702,6 +4702,8 @@ imageTrace	Outline	Kontur
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	to nie jest logo z płaskimi kolorami ({_1}% jego jednolitych obszarów pasuje do kilku płaskich kolorów), więc tryb Płaskie logo zamieniłby jego gradienty w plamy: użyj trybu Kolor
 @msg	`{what}` closes nothing	`{what}` niczego nie zamyka
 @msg	`{what}` closes something it didn't open	`{what}` zamyka coś, czego nie otworzył
+@msg	`{w}` takes no operands	`{w}` nie przyjmuje operandów
+@msg	a wraparound group is inside a compound path	grupa oblewania tekstem jest wewnątrz ścieżki złożonej
 @msg	a path has too many points	ścieżka ma zbyt wiele punktów
 @msg	it ends inside a layer	kończy się wewnątrz warstwy
 @msg	it has art outside its layers	ma kompozycję poza warstwami

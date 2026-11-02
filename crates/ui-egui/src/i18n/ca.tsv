@@ -4823,6 +4823,8 @@ digits	Malayalam	Malaiàlam
 @msg	`{to}` is not an available name	`{to}` no és un nom disponible
 @msg	`{what}` closes nothing	`{what}` no tanca res
 @msg	`{what}` closes something it didn't open	`{what}` tanca una cosa que no havia obert
+@msg	`{w}` takes no operands	`{w}` no admet operands
+@msg	a wraparound group is inside a compound path	un grup d’ajustament del text és dins d’un traçat compost
 @msg	a bitmap is empty	un mapa de bits és buit
 @msg	a bitmap is too large to read	un mapa de bits és massa gran per llegir-lo
 @msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	el nom d’un pinzell de cerres pot tenir com a màxim {max} caràcters: `{name}` en té {count}

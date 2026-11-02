@@ -4219,6 +4219,8 @@ theme	Appearance	Giao diện
 @msg	`{to}` is not an available name	`{to}` không phải là tên khả dụng
 @msg	`{what}` closes nothing	`{what}` không đóng gì
 @msg	`{what}` closes something it didn't open	`{what}` đóng thứ nó chưa mở
+@msg	`{w}` takes no operands	`{w}` không nhận toán hạng
+@msg	a wraparound group is inside a compound path	một nhóm bao văn bản nằm trong một đường dẫn phức
 @msg	a bitmap is empty	ảnh bitmap trống
 @msg	a bitmap is too large to read	ảnh bitmap quá lớn để đọc
 @msg	A browser with WebGPU or WebGL2 is required.	Cần trình duyệt hỗ trợ WebGPU hoặc WebGL2.

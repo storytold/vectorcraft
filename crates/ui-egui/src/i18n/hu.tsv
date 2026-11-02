@@ -4567,6 +4567,8 @@ imageTrace	Outline	Körvonal
 @msg	`{to}` is not an available name	ez a név nem használható: `{to}`
 @msg	`{what}` closes nothing	`{what}` semmit sem zár le
 @msg	`{what}` closes something it didn't open	`{what}` olyat zár le, amit nem nyitott meg
+@msg	`{w}` takes no operands	`{w}` nem fogad operandusokat
+@msg	a wraparound group is inside a compound path	egy szövegkörbefuttatási csoport összetett útvonalon belül van
 @msg	a bitmap is empty	egy bitkép üres
 @msg	a bitmap is too large to read	egy bitkép túl nagy a beolvasáshoz
 @msg	A browser with WebGPU or WebGL2 is required.	WebGPU-t vagy WebGL2-t támogató böngésző szükséges.

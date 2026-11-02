@@ -4141,6 +4141,8 @@ axis	Both	Ambos
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	este não é um logotipo de cores chapadas ({_1}% de suas áreas sólidas correspondem a poucas cores chapadas), então o modo Logotipo plano transformaria seus gradientes em manchas: use o modo Cor
 @msg	`{what}` closes nothing	`{what}` não fecha nada
 @msg	`{what}` closes something it didn't open	`{what}` fecha algo que não abriu
+@msg	`{w}` takes no operands	`{w}` não aceita operandos
+@msg	a wraparound group is inside a compound path	um grupo de quebra de texto está dentro de um traçado composto
 @msg	a path has too many points	um traçado tem pontos demais
 @msg	it ends inside a layer	termina dentro de uma camada
 @msg	it has art outside its layers	tem arte fora de suas camadas
