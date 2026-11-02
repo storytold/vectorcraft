@@ -126,18 +126,31 @@ impl Homography {
         Some(Self(self.0.map(|row| row.map(|v| ldexp(v, -e)))))
     }
 
-    /// Inverse; `None` when [`Self::has_significant_det`] counts the map as not invertible or its
-    /// inverse has an entry that is not finite. When the determinant is not finite or is below the
-    /// normal range, this is the inverse of [`Self::scaled`] (the exact inverse multiplied by one
-    /// power of two, which is the same map).
+    /// Inverse; `None` when [`Self::has_significant_det`] counts the map as not invertible. The
+    /// inverse is formed from the map itself when its determinant is finite and in the normal
+    /// range, and is kept when every entry is finite and it passes [`Self::has_significant_det`].
+    /// Otherwise it is the inverse of [`Self::scaled`] (the exact inverse multiplied by one power
+    /// of two, which is the same map), and `None` when that one fails the same checks.
     pub fn inverse(&self) -> Option<Self> {
         if !self.has_significant_det() {
             return None;
         }
         let d = self.det();
-        let h = if d.is_finite() && d.abs() >= f64::MIN_POSITIVE { *self } else { self.scaled()? };
-        let d = h.det();
-        let m = &h.0;
+        if d.is_finite()
+            && d.abs() >= f64::MIN_POSITIVE
+            && let Some(inv) = self.adjugate_inverse()
+        {
+            return Some(inv);
+        }
+        self.scaled()?.adjugate_inverse()
+    }
+
+    /// The adjugate divided by the determinant; `None` when an entry is not finite or the result
+    /// fails [`Self::has_significant_det`] (a cofactor that underflows to 0 can leave a whole row
+    /// at 0).
+    fn adjugate_inverse(&self) -> Option<Self> {
+        let d = self.det();
+        let m = &self.0;
         let c = |r0: usize, c0: usize, r1: usize, c1: usize| m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0];
         let adj = [
             [c(1, 1, 2, 2), -c(0, 1, 2, 2), c(0, 1, 1, 2)],
@@ -150,11 +163,9 @@ impl Homography {
                 out[r][k] = v / d;
             }
         }
-        if out.iter().flatten().any(|v| !v.is_finite()) {
-            return None;
-        }
+        let out = Self(out);
         // H⁻¹·(x, y, 1) = (u, v, 1)/w_H, so points in front of the camera keep w > 0.
-        Some(Self(out))
+        out.has_significant_det().then_some(out)
     }
 
     /// `self ∘ other`: `other` first.
@@ -461,6 +472,16 @@ mod tests {
         let inv = uneven.inverse().unwrap();
         for p in [Point::new(1e-300, 2.0), Point::new(-3e-299, -0.5)] {
             let q = uneven.apply(p).unwrap();
+            let back = inv.apply(q).unwrap();
+            assert!((back.x - p.x).abs() <= 1e-9 * p.x.abs() && (back.y - p.y).abs() <= 1e-9 * p.y.abs(), "{p:?} {back:?}");
+        }
+        // A normal determinant (1e-200) whose cofactor 1e-200 · 1e-200 is below the smallest
+        // positive f64: the inverse still has a w row that is not 0.
+        let tiny = Homography([[1e-200, 0.0, 0.0], [0.0, 1e-200, 0.0], [0.0, 0.0, 1e200]]);
+        assert_eq!(Homography::from_array(tiny.to_array()), Some(tiny));
+        let inv = tiny.inverse().unwrap();
+        for p in [Point::new(1e300, -2e299), Point::new(-4e299, 5e300)] {
+            let q = tiny.apply(p).unwrap();
             let back = inv.apply(q).unwrap();
             assert!((back.x - p.x).abs() <= 1e-9 * p.x.abs() && (back.y - p.y).abs() <= 1e-9 * p.y.abs(), "{p:?} {back:?}");
         }
