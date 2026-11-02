@@ -518,7 +518,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     match settings {
         Err(e) => {
-            ui.painter().rect_filled(area, 2.0, t.pasteboard);
+            ui.painter().rect_filled(area, t.cr_small(), t.pasteboard);
             ui.painter().text(area.center(), egui::Align2::CENTER_CENTER, format!("⚠ {e}"), egui::FontId::proportional(12.5), t.text);
         }
         Ok(s) => {

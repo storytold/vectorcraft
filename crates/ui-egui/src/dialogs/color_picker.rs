@@ -46,12 +46,11 @@ const HEADER_H: f32 = 30.0;
 const CHIP_H: f32 = 64.0;
 const ACTION_GAP: f32 = 2.0;
 const ACTIONS_H: f32 = 3.0 * 28.0 + 2.0 * ACTION_GAP;
-const ROW_H: f32 = 26.0;
 const VALUE_GAP: f32 = 4.0;
 const ROW_GAP: f32 = 1.0;
 const GROUP_GAP: f32 = 2.0;
 const PREVIEW_GAP: f32 = 12.0;
-const FIELD: f32 = ACTIONS_H + PREVIEW_GAP + 7.0 * ROW_H + 6.0 * ROW_GAP + GROUP_GAP;
+const FIELD: f32 = ACTIONS_H + PREVIEW_GAP + 7.0 * widgets::FIELD_HEIGHT + 6.0 * ROW_GAP + GROUP_GAP;
 const MIN_FIELD: f32 = 160.0;
 // channel_slider reserves 6 points on each side for its arrows: the painted ramp is 20 wide.
 const SLIDER_W: f32 = 32.0;
@@ -556,8 +555,6 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
                     2 => ("b", lab.b, ""),
                     _ => (["C", "M", "Y", "K"][i - 3], cmyk[i - 3] * 100.0, "%"),
                 };
-                // The hex field is taller than a value field. K's row takes the height of the hex
-                // field's row beside it.
                 let height = if i == 6 { (left.response.rect.bottom() - ui.cursor().top()).round() } else { ui.spacing().interact_size.y };
                 let size = vec2(ui.available_size_before_wrap().x, height);
                 ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(egui::Align::Center), |ui| {

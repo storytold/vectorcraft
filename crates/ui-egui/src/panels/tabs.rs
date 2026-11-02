@@ -412,8 +412,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let w = ui.available_width().max(120.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 34.0), Sense::click_and_drag());
     let p = ui.painter_at(rect.expand(2.0));
-    p.rect_filled(rect, 2.0, t.input);
-    p.rect_stroke(rect, 2.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    p.rect_filled(rect, t.cr(), t.input);
+    p.rect_stroke(rect, t.cr(), Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let scale = (w as f64 - 8.0) / span;
     let to_x = |pt: f64| rect.left() + 4.0 + (pt * scale) as f32;
     let to_pt = |x: f32| (((x - rect.left() - 4.0) as f64) / scale).max(0.0);

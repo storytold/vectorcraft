@@ -12,7 +12,7 @@
 //!
 //! Fields: `level` (0..=100, the command's parameter).
 
-use egui::{Color32, CornerRadius, Order, Pos2, Sense, Stroke, vec2};
+use egui::{Color32, Order, Pos2, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::{SIMPLIFY_LEVEL, auto_simplify_level, simplify_level_tolerance};
 use vectorcraft_geom::Rect;
@@ -111,7 +111,7 @@ impl Strip {
             egui::Frame::NONE
                 .fill(t.panel)
                 .stroke(Stroke::new(1.0, t.tool_active))
-                .corner_radius(CornerRadius::same(5))
+                .corner_radius(t.cr_float())
                 .inner_margin(egui::Margin::symmetric(8, 6))
                 .shadow(egui::epaint::Shadow { offset: [0, 3], blur: 10, spread: 0, color: Color32::from_black_alpha(70) })
                 .show(ui, |ui| {

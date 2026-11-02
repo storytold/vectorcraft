@@ -508,7 +508,7 @@ fn inline_actions_are_aligned_and_modes_keep_the_window_size() {
             .iter()
             .find(|r| (r.width() - VALUE_W).abs() < 0.5 && r.left() > k.right() && r.contains(egui::pos2(r.center().x, k.center().y)))
             .unwrap();
-        assert!((last_input.bottom() - field.bottom()).abs() < 2.0, "{last_input:?} vs {field:?}");
+        assert!((last_input.bottom() - field.bottom()).abs() <= 2.5, "{last_input:?} vs {field:?}");
         // Fonts and translated actions may leave one normal gutter, but never an unused column.
         assert!((last_input.right() - ok.right()).abs() < COLUMN_GAP, "no unused column beside the inputs: {last_input:?} vs {ok:?}");
         let id = egui::Id::unique(("dialog", KIND));

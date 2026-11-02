@@ -358,7 +358,7 @@ fn paint(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Op
         let text = format!("{}  {:.1}°", ["X", "Y", "Z"].get(*axis).unwrap_or(&""), d.f64(key, 0.0));
         let pos = g.center + vec2(0.0, g.radius * 1.12 + 18.0);
         let galley = painter.layout_no_wrap(text, FontId::proportional(12.0), t.text_strong);
-        painter.rect_filled(Rect::from_center_size(pos, galley.size() + vec2(14.0, 8.0)), 4.0, t.panel);
+        painter.rect_filled(Rect::from_center_size(pos, galley.size() + vec2(14.0, 8.0)), t.cr(), t.panel);
         painter.galley(pos - galley.size() * 0.5, galley, t.text_strong);
     }
 }
@@ -386,7 +386,7 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
             );
         }
         let label = labels[axis];
-        painter.rect_filled(label, 4.0, if active == Some(axis) { t.hover } else { t.panel });
+        painter.rect_filled(label, t.cr(), if active == Some(axis) { t.hover } else { t.panel });
         let text = if axis == 0 { tl!("Rotation") } else { tl!("Height") };
         painter.text(label.center(), Align2::CENTER_CENTER, text, FontId::proportional(11.0), t.warning);
     }
@@ -418,7 +418,7 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
     let name = crate::i18n::tr_ctx(crate::i18n::current(), "lighting", "Light");
     let galley = painter.layout_no_wrap(name.to_string(), FontId::proportional(11.0), t.warning);
     let name_pos = p - vec2(galley.size().x * 0.5, 25.0 + galley.size().y);
-    painter.rect_filled(Rect::from_min_size(name_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)), 3.0, t.panel);
+    painter.rect_filled(Rect::from_min_size(name_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)), t.cr(), t.panel);
     painter.galley(name_pos, galley, t.warning);
     if drag.is_some() {
         let [rotation, height] = [("lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0), ("lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1)]
@@ -426,7 +426,7 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
         let text = format!("{} {rotation:.1}°   {} {height:.1}°", tl!("Rotation"), tl!("Height"));
         let galley = painter.layout_no_wrap(text, FontId::proportional(11.5), t.text_strong);
         let pos = g.center + vec2(0.0, radius + 56.0);
-        painter.rect_filled(Rect::from_center_size(pos, galley.size() + vec2(12.0, 6.0)), 4.0, t.panel);
+        painter.rect_filled(Rect::from_center_size(pos, galley.size() + vec2(12.0, 6.0)), t.cr(), t.panel);
         painter.galley(pos - galley.size() * 0.5, galley, t.text_strong);
     }
 }

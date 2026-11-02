@@ -227,8 +227,8 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                 let w = 12.0 + 7.0 * label.len() as f32;
                 let r = egui::Rect::from_min_max(egui::pos2(x - w, bar.top() + 3.0), egui::pos2(x, bar.bottom() - 3.0));
                 let resp = ui.interact(r, ui.scope_id().with(("pat-bar", cmd)), Sense::click());
-                ui.painter().rect_filled(r, 3.0, if resp.hovered() { t.hover } else { t.panel });
-                ui.painter().rect_stroke(r, 3.0, Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
+                ui.painter().rect_filled(r, t.cr(), if resp.hovered() { t.hover } else { t.panel });
+                ui.painter().rect_stroke(r, t.cr(), Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
                 ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), t.text);
                 if resp.clicked() {
                     pattern_cmd = Some(cmd);

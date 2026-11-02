@@ -4,7 +4,7 @@
 //! Distort. It sets the tool's options through `tool.setOption` (`constrain`, `mode`), as agents
 //! do; the modifier keys keep working while dragging.
 
-use egui::{Color32, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -56,7 +56,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &Ui, canvas: Rect) {
         egui::Frame::NONE
             .fill(t.panel)
             .stroke(Stroke::new(1.0, t.button_border))
-            .corner_radius(CornerRadius::same(4))
+            .corner_radius(t.cr_float())
             .inner_margin(egui::Margin::same(3))
             .shadow(egui::epaint::Shadow { offset: [0, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(60) })
             .show(ui, |ui| {
@@ -93,7 +93,7 @@ fn button(ui: &mut Ui, glyph: Glyph, tip: &str, on: bool, enabled: bool) -> bool
     } else {
         Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(rect, CornerRadius::same(3), bg);
+    ui.painter().rect_filled(rect, t.cr(), bg);
     let color = match (enabled, on) {
         (false, _) => t.text_dim,
         (true, true) => t.text,
