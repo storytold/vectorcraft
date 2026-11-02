@@ -352,6 +352,14 @@ impl DocState {
             self.revision += 1;
         }
     }
+    /// Clear the Variables panel highlight when the document defines no variable of that name
+    /// (deleted, or taken out by Undo or Redo), so a variable defined later under that name is
+    /// not highlighted without a click.
+    pub(crate) fn drop_stale_variables_highlight(&mut self) {
+        if self.variables_highlight.as_ref().is_some_and(|h| self.doc.variables.variable(h).is_none()) {
+            self.variables_highlight = None;
+        }
+    }
     /// Count the document as modified, as if never saved (a document restored by Data Recovery).
     pub fn mark_unsaved(&mut self) {
         self.saved_doc = Arc::new(Document::new(1.0, 1.0));

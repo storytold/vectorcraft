@@ -87,6 +87,58 @@ fn set_range_style_splits_runs() {
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0, "size": -1})).is_err());
 }
 
+/// `featureChanges` turns features on and off on top of each run's own and keeps the rest, in
+/// `text.setStyle` and `text.setRangeStyle`, in one undo step; an unknown tag is an error.
+#[test]
+fn feature_changes_keep_each_runs_other_features() {
+    let mut s = session();
+    let id = text(&mut s, "1/23");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "features": ["numr", "smcp"]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "features": ["swsh"]})).unwrap();
+    let features = |s: &Session| obj(s, id).runs.iter().map(|r| r.style.features.clone()).collect::<Vec<_>>();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setStyle", &json!({"featureChanges": ["dnom", "-numr"]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(features(&s), [vec!["smcp", "dnom"], vec!["swsh", "dnom"], vec!["dnom"]]);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 2, "featureChanges": ["dnom", "-liga", "-dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "-liga"], vec!["swsh", "-liga"], vec!["dnom"]], "the last change of a feature counts");
+    for cmd in ["text.setStyle", "text.setRangeStyle"] {
+        for tag in ["zzzz", "--liga", "+-dnom"] {
+            let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": [tag]})).unwrap_err().to_string();
+            assert!(e.contains(&format!("`{tag}`")), "{cmd}: {e}");
+        }
+        for bad in [json!(["numr", 12]), json!([12]), json!("numr")] {
+            let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": bad})).unwrap_err().to_string();
+            assert!(e.contains("featureChanges must be a list of tags"), "{cmd} {bad}: {e}");
+        }
+        let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": vec!["numr"; 257]})).unwrap_err().to_string();
+        assert!(e.contains("at most 256"), "{cmd}: {e}");
+    }
+    assert_eq!(features(&s), [vec!["smcp", "-liga"], vec!["swsh", "-liga"], vec!["dnom"]], "the refused commands change nothing");
+    // Tags of features the change does not name stay as they were: one the list does not know
+    // (kept from an opened file) and an explicit `liga`, which keeps tracked type ligated.
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.features = vec!["zzzz".into(), "liga".into(), "dnom".into()];
+    }
+    s.execute("text.setStyle", &json!({"featureChanges": ["numr", "-dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "-liga", "numr"], vec!["swsh", "-liga", "numr"], vec!["zzzz", "liga", "numr"]]);
+    // Ligatures turned on are written as `liga`, so tracked type keeps them.
+    s.execute("text.setStyle", &json!({"featureChanges": ["+liga"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "numr", "liga"], vec!["swsh", "numr", "liga"], vec!["zzzz", "numr", "liga"]]);
+    // A list longer than shaping reads keeps the tags shaping uses, and the new tag is read too:
+    // `-onum` overrides `onum`, unknown tags do nothing, and `ordn` lies past the entries read.
+    let max = vectorcraft_text::MAX_STYLE_FEATURES;
+    let mut long = vec!["onum".to_string(), "-onum".into()];
+    long.extend(std::iter::repeat_n("zzzz".to_string(), max - 3));
+    long.extend(["swsh".to_string(), "ordn".into()]);
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.features = long;
+    }
+    s.execute("text.setStyle", &json!({"featureChanges": ["dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "numr", "liga", "dnom"], vec!["swsh", "numr", "liga", "dnom"], vec!["-onum", "swsh", "dnom"]]);
+}
+
 #[test]
 fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let mut s = session();
@@ -95,10 +147,10 @@ fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let result = s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
     assert_eq!(result["kerning"], "optical");
     assert!(obj(&s, id).runs[0].style.optical_kerning);
-    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    assert_eq!(obj(&s, id).runs[0].style.kerning, None, "choosing Optical clears the manual value");
     s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "kerning": 0})).unwrap();
     let styled = obj(&s, id);
-    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![Some(70.0), Some(0.0), Some(70.0)]);
+    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![None, Some(0.0), None]);
     assert!(styled.runs.iter().all(|r| r.style.optical_kerning));
     let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
     let opened = vectorcraft_format::load(&bytes).unwrap();
@@ -108,14 +160,18 @@ fn optical_command_manual_pair_undo_redo_and_native_reopen() {
         styled.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>()
     );
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.kerning.is_none()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0), "undoing Optical brings the manual value back");
+    assert!(!obj(&s, id).runs[0].style.optical_kerning);
+    s.execute("edit.redo", &json!({})).unwrap();
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).runs[1].style.kerning, Some(0.0));
     assert!(obj(&s, id).runs.iter().all(|r| r.style.optical_kerning));
 }
 
 #[test]
-fn optical_set_format_keeps_existing_pair_override() {
+fn optical_set_format_clears_existing_pair_override() {
     let mut s = session();
     let id = text(&mut s, "III");
     s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 40})).unwrap();
@@ -123,7 +179,7 @@ fn optical_set_format_keeps_existing_pair_override() {
     assert_eq!(result["kerning"], "optical");
     let t = obj(&s, id);
     assert!(t.runs.iter().all(|r| r.style.optical_kerning));
-    assert_eq!(t.runs[0].style.kerning, Some(40.0));
+    assert!(t.runs.iter().all(|r| r.style.kerning.is_none()), "choosing Optical clears the manual value");
 }
 
 #[test]

@@ -43,15 +43,41 @@ pub struct PointerEvent {
     pub backquote: bool,
     #[serde(default = "one")]
     pub pressure: f32,
+    /// The pen's tilt and barrel rotation, when the pointer is a pen that reads either (a mouse:
+    /// `None`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pen: Option<PenPose>,
 }
 
 fn one() -> f32 {
     1.0
 }
 
+/// How a pen is held, as far as it reads it. Tilt is in degrees, each −90..90 as Pointer Events
+/// give it, in document axes: `[x, y]`, x positive when the pen leans to the right and y positive
+/// when it leans down the page. Rotation is the barrel's, in degrees clockwise (0..360).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PenPose {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tilt: Option<[f32; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<f32>,
+}
+
+impl PenPose {
+    /// Within its ranges: each tilt is clamped to −90..90 and the rotation brought into 0..360; a
+    /// tilt or rotation that is not a number is left out.
+    pub fn sanitized(self) -> Self {
+        let tilt = self.tilt.filter(|t| t.iter().all(|v| v.is_finite())).map(|t| t.map(|v| v.clamp(-90.0, 90.0)));
+        // `rem_euclid` can round a tiny negative angle up to 360 itself.
+        let rotation = self.rotation.filter(|r| r.is_finite()).map(|r| r.rem_euclid(360.0)).map(|r| if r >= 360.0 { 0.0 } else { r });
+        Self { tilt, rotation }
+    }
+}
+
 impl PointerEvent {
     pub fn new(kind: PointerKind, x: f64, y: f64) -> Self {
-        Self { kind, pos: Point::new(x, y), mods: Mods::default(), backquote: false, pressure: 1.0 }
+        Self { kind, pos: Point::new(x, y), mods: Mods::default(), backquote: false, pressure: 1.0, pen: None }
     }
     pub fn with_mods(mut self, m: Mods) -> Self {
         self.mods = m;
@@ -60,6 +86,18 @@ impl PointerEvent {
     /// The pen `pressure` of a pointer event given as JSON (control channel, MCP): 0..1, default 1.
     pub fn json_pressure(e: &Value) -> f32 {
         e.get("pressure").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.0, 1.0) as f32)
+    }
+    /// The pen's tilt and rotation of a pointer event given as JSON (control channel, MCP):
+    /// `tiltX` and `tiltY` (degrees, −90..90, in document axes; one without the other is 0) and
+    /// `rotation` (degrees clockwise, brought into 0..360). Values that are not numbers are left
+    /// out; `None` without any.
+    pub fn json_pen(e: &Value) -> Option<PenPose> {
+        let num = |k: &str| e.get(k).and_then(Value::as_f64).filter(|f| f.is_finite());
+        let tilt = |v: Option<f64>| v.map_or(0.0, |v| v.clamp(-90.0, 90.0) as f32);
+        let (tx, ty) = (num("tiltX"), num("tiltY"));
+        let tilt = (tx.is_some() || ty.is_some()).then(|| [tilt(tx), tilt(ty)]);
+        let pose = PenPose { tilt, rotation: num("rotation").map(|r| r.rem_euclid(360.0) as f32) }.sanitized();
+        (pose != PenPose::default()).then_some(pose)
     }
     /// How long the pointer then holds still, in seconds, from a JSON pointer event's `holdMs`
     /// (0..60000; default 0): the time [`Tool::tick`] gets.

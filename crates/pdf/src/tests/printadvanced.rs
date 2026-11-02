@@ -63,11 +63,6 @@ fn colours(pdf: &[u8], page: usize) -> Vec<(String, Vec<f32>)> {
     out
 }
 
-/// `v` as the writer stores it (8 bits a component).
-fn q8(v: &[f32]) -> Vec<f32> {
-    v.iter().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0).collect()
-}
-
 fn close(a: &[f32], b: &[f32]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-3)
 }
@@ -119,13 +114,13 @@ fn a_cmyk_printer_profile_writes_device_cmyk_with_the_intent() {
     let to_cmyk = Cms::new(&ColorSettings { cmyk: GENERIC_CMYK.into(), ..cms::active_settings() }).unwrap();
     for intent in [Intent::Perceptual, Intent::Saturation] {
         let c = colours(&job(&d, json!({"color": {"profile": GENERIC_CMYK, "intent": intent}})).bytes, 0);
-        let ink = q8(&to_cmyk.srgb_to_cmyk([1.0, 0.0, 0.0], intent));
+        let ink = to_cmyk.srgb_to_cmyk([1.0, 0.0, 0.0], intent);
         assert!(c.len() == 1 && c[0].0 == "k" && close(&c[0].1, &ink), "{intent:?}: {c:?} vs {ink:?}");
     }
     // CMYK colours keep their numbers with Preserve CMYK Numbers.
     let d = doc(&[(Color::cmyk(0.1, 0.2, 0.3, 0.4), false)]);
     let c = colours(&job(&d, json!({"color": {"profile": DEVICE_CMYK, "preserveNumbers": true}})).bytes, 0);
-    assert!(c[0].0 == "k" && close(&c[0].1, &q8(&[0.1, 0.2, 0.3, 0.4])), "{c:?}");
+    assert!(c[0].0 == "k" && close(&c[0].1, &[0.1, 0.2, 0.3, 0.4]), "{c:?}");
 }
 
 #[test]
