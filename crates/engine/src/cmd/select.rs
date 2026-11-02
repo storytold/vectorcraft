@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, LockedArtboards, Node, NodeId, NodeKind};
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::wand::{fill_of, stroke_of};
@@ -250,8 +250,8 @@ pub(crate) fn selectable_ids(d: &Document, iso: Option<NodeId>) -> BTreeSet<Node
 }
 
 /// Whether [`walk_selectable`] visits `id`, read from the objects that hold it instead of a walk of
-/// the document.
-pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, id: NodeId) -> bool {
+/// the document. `locks` is the document's [`Document::locked_artboards`].
+pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, locks: &LockedArtboards, id: NodeId) -> bool {
     let Some(a) = d.ancestry(id) else { return false };
     if !a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked && !n.is_template())) {
         return false;
@@ -260,7 +260,6 @@ pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, id: NodeId) -> bo
         // Inside the isolated container, or the single object isolated.
         Some(c) => a.iter().position(|i| *i == c.id).is_some_and(|p| p + 1 < a.len() || !c.is_container()),
         None => {
-            let locks = d.locked_artboards();
             // The object Select All takes: the outermost one that is not a layer.
             let top = a.iter().filter_map(|i| d.node(*i)).find(|n| !n.is_layer());
             top.is_some_and(|t| locks.is_empty() || !locks.holds(t))

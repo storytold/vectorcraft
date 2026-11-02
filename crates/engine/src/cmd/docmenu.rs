@@ -2,7 +2,7 @@
 //! brush strokes, Save/recall selections), View → Guides, and File → Close All / Document Color
 //! Mode / File Info.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -322,37 +322,53 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
     finish_same(s, cmd, ids)
 }
 
-/// The type objects among the selected objects and inside them, in selection order, keeping only
-/// those [`walk_selectable`] visits: none that is hidden, locked, on a hidden, locked or template
-/// layer, or outside the isolated group.
-fn selected_text(s: &Session) -> Vec<NodeId> {
-    fn inside(n: &Node, out: &mut Vec<NodeId>) {
+/// Call `f` with each type object among the selected objects and inside them, in selection order,
+/// keeping only those [`walk_selectable`] visits: none that is hidden, locked, on a hidden, locked
+/// or template layer, or outside the isolated group. A type object inside two selected objects is
+/// given twice. The walk stops when `f` returns false.
+fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
+    fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
         if !n.visible || n.locked {
+            return true;
+        }
+        if matches!(n.kind, NodeKind::Text(_)) && !f(n.id) {
+            return false;
+        }
+        n.children().into_iter().flatten().all(|c| inside(c, f))
+    }
+    let Some(st) = s.active() else { return };
+    let locks = st.doc.locked_artboards();
+    for id in &st.selection.objects {
+        if is_selectable(&st.doc, st.isolation, &locks, *id)
+            && let Some(n) = st.doc.node(*id)
+            && !inside(n, &mut f)
+        {
             return;
         }
-        if matches!(n.kind, NodeKind::Text(_)) && !out.contains(&n.id) {
-            out.push(n.id);
-        }
-        for c in n.children().into_iter().flatten() {
-            inside(c, out);
-        }
     }
-    let Some(st) = s.active() else { return vec![] };
-    let mut out = vec![];
-    for id in &st.selection.objects {
-        if is_selectable(&st.doc, st.isolation, *id)
-            && let Some(n) = st.doc.node(*id)
-        {
-            inside(n, &mut out);
+}
+
+/// The type objects [`each_selected_text`] gives, each once, in selection order.
+fn selected_text(s: &Session) -> Vec<NodeId> {
+    let (mut out, mut seen) = (vec![], HashSet::new());
+    each_selected_text(s, |id| {
+        if seen.insert(id) {
+            out.push(id);
         }
-    }
+        true
+    });
     out
 }
 
 /// A type object is selected, or is inside a selected object.
 fn has_text_selection(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    if selected_text(s).is_empty() { Err("select a text object".into()) } else { Ok(()) }
+    let mut any = false;
+    each_selected_text(s, |_| {
+        any = true;
+        false
+    });
+    if any { Ok(()) } else { Err("select a text object".into()) }
 }
 
 /// Select › Same › Link Block Series: the frames of the threads the selected type objects are
@@ -365,12 +381,19 @@ fn same_link_block_series(s: &mut Session, _: &Value) -> Result<Value> {
     }
     let st = s.doc()?;
     let can = selectable_ids(&st.doc, st.isolation);
-    let mut ids: Vec<NodeId> = vec![];
-    for seed in seeds {
-        let series = st.doc.text_threads.iter().find(|t| t.contains(&seed)).cloned().unwrap_or_else(|| vec![seed]);
+    // Each frame's thread: the first thread that lists it.
+    let mut threads: HashMap<NodeId, &[NodeId]> = HashMap::new();
+    for t in &st.doc.text_threads {
+        for id in t {
+            threads.entry(*id).or_insert(t.as_slice());
+        }
+    }
+    let (mut ids, mut seen): (Vec<NodeId>, HashSet<NodeId>) = (vec![], HashSet::new());
+    for seed in &seeds {
+        let series = threads.get(seed).copied().unwrap_or(std::slice::from_ref(seed));
         for id in series {
-            if can.contains(&id) && !ids.contains(&id) {
-                ids.push(id);
+            if can.contains(id) && seen.insert(*id) {
+                ids.push(*id);
             }
         }
     }
