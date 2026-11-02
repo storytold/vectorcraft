@@ -357,7 +357,7 @@ impl Writer<'_> {
             line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
             line(3, "<rdf:Description rdf:about=\"\">");
             for (term, value) in dublin_core(self.doc) {
-                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_escape(&value)));
+                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_text(&value)));
             }
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");

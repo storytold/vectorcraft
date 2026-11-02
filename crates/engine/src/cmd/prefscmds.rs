@@ -81,6 +81,16 @@ pub const UNITS: &[(&str, &str)] = &[
     ("yards", "Yards"),
     ("feet", "Feet"),
 ];
+/// What Units › East Asian Type offers, as (`Unit::key`, `Unit::label`): [`Unit::EAST_ASIAN`].
+pub const EAST_ASIAN_UNITS: &[(&str, &str)] = &{
+    let mut out = [("", ""); Unit::EAST_ASIAN.len()];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = (Unit::EAST_ASIAN[i].key(), Unit::EAST_ASIAN[i].label());
+        i += 1;
+    }
+    out
+};
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup. The
 /// values are WebGPU's power preferences plus `automatic`; 0.5.0's default, `powerSaving`, reads as
@@ -201,7 +211,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),
     p!("unitsStroke", "Units", "", "Stroke", choice(UNITS)),
     p!("unitsType", "Units", "", "Type", choice(UNITS)),
-    p!("unitsAsianType", "Units", "", "East Asian Type", choice(UNITS)),
+    p!("unitsAsianType", "Units", "", "East Asian Type", choice(EAST_ASIAN_UNITS)),
     p!("numbersWithoutUnitsArePoints", "Units", "", "Numbers Without Units Are Points", bool),
     p!("identifyObjectsBy", "Units", "", "Identify Objects By", choice(&[("objectName", "Object Name"), ("xmlId", "XML ID")])),
     // Guides & Grid

@@ -221,7 +221,7 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
 /// export into a folder or a download has warnings, the status bar shows the first as
-/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n note(s): …".
+/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …".
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }

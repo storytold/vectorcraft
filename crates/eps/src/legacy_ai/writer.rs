@@ -1,12 +1,13 @@
 use super::encoding::{
-    Ink, average, direct_fill, direct_stroke, finite, font_of, invertible, latin_string, lost_attributes, segment_point, unit, writable,
+    Ink, average, direct_fill, direct_stroke, finite, font_of, holds_as_text, invertible, latin_string, lost_attributes, rotated, segment_point,
+    unit, writable,
 };
 use super::{
     Affine, AnchorKind, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
     Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
     LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, LineCap, LineJoin, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS,
-    Paint, ParaDirection, ParaStyle, PathData, Point, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY,
-    TYPE, TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, latin, ps, stroke,
+    Paint, ParaDirection, ParaStyle, PathData, Point, ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES,
+    TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, latin, ps, stroke,
 };
 
 pub(super) struct Writer<'a> {
@@ -719,7 +720,8 @@ impl<'a> Writer<'a> {
 
     // ---------- type ----------
 
-    /// Type: a text object when the format can hold it as text, else its outlines. A run whose
+    /// Type: a text object when the format can hold it as text, else its outlines (type with
+    /// rotated characters among them, which keeps their rotation). A run whose
     /// font size measures a height other than the em box is written at the em size it is drawn
     /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text(&mut self, t: &TextObject) {
@@ -732,7 +734,12 @@ impl<'a> Writer<'a> {
             if writable(t) {
                 return self.text_object(t);
             }
-            self.warn(TYPE);
+            if !holds_as_text(t) {
+                self.warn(TYPE);
+            }
+            if rotated(t) {
+                self.warn(ROTATED_TYPE);
+            }
         }
         self.outlines(t);
     }

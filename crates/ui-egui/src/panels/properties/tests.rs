@@ -135,7 +135,7 @@ fn start_global_edit_quick_action_and_escape() {
     assert!(!tall(&mut app, vec![]).iter().any(|(t, _)| t == "Start Global Edit"), "type has no Global Edit");
 }
 
-/// The options' Result(s) count is found once per document revision, options and selected
+/// The options' Results count is found once per document revision, options and selected
 /// object, not every frame; another selected object or other options find it again.
 #[test]
 fn the_global_edit_result_count_is_cached() {

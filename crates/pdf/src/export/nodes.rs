@@ -102,7 +102,8 @@ impl Exporter<'_> {
         {
             // A PDF layer: hidden layers and sublayers are written too (their group is off).
             let enclosing = std::mem::replace(&mut self.in_layer, address(n));
-            crate::forms::form(s, Mark::Layer(i), |s| self.node(s, n, page, true));
+            let paper = self.paper;
+            crate::forms::layer_form(s, i, paper, |s| self.node(s, n, page, true));
             self.in_layer = enclosing;
             return;
         }

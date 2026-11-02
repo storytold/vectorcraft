@@ -37,8 +37,8 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("areaType", "Area Type Tool", None, "tool-type-area"),
         t("typeOnPath", "Type on a Path Tool", None, "tool-type-path"),
         t("verticalType", "Vertical Type Tool", None, "tool-type-vertical"),
-        t("verticalAreaType", "Vertical Area Type Tool", None, "tool-type-vertical"),
-        t("verticalTypeOnPath", "Vertical Type on a Path Tool", None, "tool-type-path"),
+        t("verticalAreaType", "Vertical Area Type Tool", None, "tool-type-vertical-area"),
+        t("verticalTypeOnPath", "Vertical Type on a Path Tool", None, "tool-type-vertical-path"),
         t("touchType", "Touch Type Tool", Some("Shift+T"), "tool-touch-type"),
     ],
     &[

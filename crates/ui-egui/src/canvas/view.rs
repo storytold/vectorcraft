@@ -23,17 +23,23 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let zoom = if how == "view.actualSize" {
         actual_size_zoom(app.session.prefs.display_print_size)
     } else {
-        // The width and height of the box round the target turned with the view, at zoom 1.
-        let (sn, cs) = app.view().map_or(0.0, |v| v.rotation.to_radians()).sin_cos();
-        let (w, h) = (target.width(), target.height());
-        let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
-        let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
-        zx.min(zy).clamp(0.0313, 640.0)
+        fit_zoom(rect, target, app.view().map_or(0.0, |v| v.rotation))
     };
     let Some(v) = app.view_mut() else { return };
     v.center = target.center();
     v.fitted = true;
     v.zoom = zoom;
+}
+
+/// The zoom at which `target`, turned `rotation` degrees with the view, fits in `rect` with a
+/// 30-point margin on each side.
+pub(super) fn fit_zoom(rect: egui::Rect, target: Rect, rotation: f64) -> f64 {
+    // The width and height of the box round the target turned with the view, at zoom 1.
+    let (sn, cs) = rotation.to_radians().sin_cos();
+    let (w, h) = (target.width(), target.height());
+    let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
+    let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
+    zx.min(zy).clamp(0.0313, 640.0)
 }
 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).
