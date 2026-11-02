@@ -4521,6 +4521,9 @@ axis	Both	Оба
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	больше {MAX_CSV_ROWS} наборов данных: «Импортировать наборы данных» читает не более {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	больше {MAX_CSV_COLS} переменных: «Импортировать наборы данных» читает не более {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	переменные, которые не являются текстовыми, пропущены: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	новый документ не прочитает эти переменные обратно с их типом: {names}
+@msg	a new document refuses this file because of these variables: {names}	новый документ отклоняет этот файл из-за этих переменных: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заголовок `{header}` для `{name}` будет прочитан как переменная `{other}`: переименуйте одну из них
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` и `options.{key}: {inner}` противоречат друг другу: укажите параметр только один раз
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файлы версии {0} не могут быть сжаты: только версия {COMPRESSED_SINCE} и новее открывают сжатые файлы
 @msg	width and height are at least 1 pixel	ширина и высота должны быть не менее 1 пикселя

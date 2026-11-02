@@ -5138,6 +5138,9 @@ mark-style	Japanese	Japansk
 	Export Data Sets…	Eksportér datasæt…
 	Load Variable Library…	Indlæs variabelbibliotek…
 @msg	variables that aren't text were left out: {kinds}	variabler, der ikke er tekst, blev udeladt: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	et nyt dokument læser ikke disse variabler tilbage med deres type: {names}
+@msg	a new document refuses this file because of these variables: {names}	et nyt dokument afviser denne fil på grund af disse variabler: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	overskriften `{header}` for `{name}` ville blive læst som variablen `{other}`: omdøb en af dem
 	Make Graph Dynamic	Gør diagram dynamisk
 	Batch…	Batch…
 	Source Folder:	Kildemappe:
