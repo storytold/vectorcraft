@@ -2423,9 +2423,11 @@ whatever the options are then.
 ```
 
 Compound shapes (the Pathfinder panel menu, and Alt-clicking a Shape Mode button): `object.compoundShape.make
-{mode?, ids?}` makes the two or more selected objects (paths, compound paths, groups, compound shapes, type) the
-members of one live compound shape, each in shape mode `mode` (`"add"`, the default, `"subtract"`, `"intersect"` or
-`"exclude"`). It draws, prints and exports as the area its members make from the backmost up, painted with its own
+{mode?, ids?}` makes the two or more selected objects (paths, compound paths, groups, compound shapes, type, blends,
+envelopes) the members of one live compound shape, each in shape mode `mode` (`"add"`, the default, `"subtract"`,
+`"intersect"` or `"exclude"`). It draws, prints and exports as the area its members make from the backmost up (a blend
+as its steps, an envelope as its distorted art, an object with a warp or another geometry effect as it draws, each
+updated when the member is edited), painted with its own
 appearance, which it takes from the topmost member not in Subtract (with every member subtracting, the backmost); a
 fill or stroke given to it or to a member paints the compound shape. The members stay editable (Direct Selection,
 the Layers panel, isolation mode). `object.compoundShape.setMode {mode, ids?}` sets the mode of the members the
