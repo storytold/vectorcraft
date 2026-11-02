@@ -5323,6 +5323,7 @@ mark-style	Japanese	Japońskie
 @msg	choose a source folder	wybierz folder źródłowy
 @msg	open a document with data sets	otwórz dokument z zestawami danych
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	z zestawu danych {name} nic nie zastosowano: żaden obiekt nie jest powiązany ze zmienną, dla której ma on wartość
+@msg	no bound object reports a value (locked objects and embedded images report none)	żaden powiązany obiekt nie zwraca wartości (zablokowane obiekty i osadzone obrazy nie zwracają żadnej)
 @msg	the action has no steps	operacja nie ma kroków
 
 # User Interface › Accent Color

@@ -1775,7 +1775,8 @@ locked; `skipped` counts those objects.
 data set holds. A variable whose objects report no value, because they are locked, inside a locked layer or group,
 or deleted, keeps the data set's value. With `all: true` it also adds every other variable that the
 objects report a value for. The reply gives `values`, the number of values it wrote, and `left`, the variables it
-did not write.
+did not write. When every bound object is locked, it writes no value and adds no undo step, and `dataset.capture`
+returns the error "no bound object reports a value (locked objects and embedded images report none)".
 
 ## Graphic styles
 

@@ -5046,6 +5046,7 @@ lighting	Light	광원
 @msg	choose a source folder	소스 폴더를 선택하세요
 @msg	open a document with data sets	데이터 세트가 있는 문서를 여세요
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	데이터 세트 {name}에서 적용된 항목이 없습니다: 값이 있는 변수에 연결된 개체가 없습니다
+@msg	no bound object reports a value (locked objects and embedded images report none)	값을 보고하는 연결된 개체가 없습니다(잠긴 개체와 포함된 이미지는 값을 보고하지 않습니다)
 @msg	the action has no steps	액션에 단계가 없습니다
 
 # User Interface › Accent Color

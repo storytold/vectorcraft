@@ -5078,6 +5078,7 @@ lighting	Light	Свет
 @msg	choose a source folder	выберите исходную папку
 @msg	open a document with data sets	откройте документ с наборами данных
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	из набора данных {name} ничего не применено: ни один объект не привязан к переменной, для которой в нём есть значение
+@msg	no bound object reports a value (locked objects and embedded images report none)	ни один привязанный объект не сообщает значение (заблокированные объекты и внедрённые изображения не сообщают значений)
 @msg	the action has no steps	в действии нет шагов
 
 # User Interface › Accent Color

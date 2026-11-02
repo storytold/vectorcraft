@@ -5083,6 +5083,7 @@ lighting	Light	Luce
 @msg	choose a source folder	scegli una cartella di origine
 @msg	open a document with data sets	apri un documento con set di dati
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	non è stato applicato nulla del set di dati {name}: nessun oggetto è associato a una variabile per cui ha un valore
+@msg	no bound object reports a value (locked objects and embedded images report none)	nessun oggetto associato restituisce un valore (gli oggetti bloccati e le immagini incorporate non ne restituiscono)
 @msg	the action has no steps	l'azione non ha passaggi
 
 # User Interface › Accent Color

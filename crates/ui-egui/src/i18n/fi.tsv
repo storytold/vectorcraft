@@ -5414,6 +5414,7 @@ mark-style	Japanese	Japanilainen
 @msg	choose a source folder	valitse lähdekansio
 @msg	open a document with data sets	avaa asiakirja, jossa on tietojoukkoja
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	tietojoukosta {name} ei käytetty mitään: mitään objektia ei ole sidottu muuttujaan, jolle siinä on arvo
+@msg	no bound object reports a value (locked objects and embedded images report none)	mikään sidottu objekti ei ilmoita arvoa (lukitut objektit ja upotetut kuvat eivät ilmoita arvoa)
 @msg	select an Intertwine group	valitse lomitusryhmä
 @msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	yhdistelmäpolun, sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevaan polkuun ei voi kiinnittää objekteja

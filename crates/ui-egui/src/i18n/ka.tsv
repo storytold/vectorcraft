@@ -5121,6 +5121,7 @@ imageTrace	Outline	კონტური
 @msg	choose a source folder	აირჩიეთ წყარო საქაღალდე
 @msg	open a document with data sets	გახსენით დოკუმენტი მონაცემთა ნაკრებებით
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	მონაცემთა ნაკრები {name}: არაფერი გამოყენებულა; არცერთი ობიექტი არ არის მიბმული ცვლადზე, რომელსაც მასში მნიშვნელობა აქვს
+@msg	no bound object reports a value (locked objects and embedded images report none)	არცერთი მიბმული ობიექტი არ აბრუნებს მნიშვნელობას (ჩაკეტილი ობიექტები და ჩაშენებული გამოსახულებები მნიშვნელობას არ აბრუნებს)
 @msg	the action has no steps	მოქმედებას ნაბიჯები არ აქვს
 	Convert to Straight Lines	სწორ ხაზებად გარდაქმნა
 	Corner Point Angle Threshold:	კუთხოვანი წერტილის კუთხის ზღვარი:

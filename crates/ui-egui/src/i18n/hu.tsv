@@ -5456,6 +5456,7 @@ imageTrace	Outline	Körvonal
 @msg	choose a source folder	válasszon forrásmappát
 @msg	open a document with data sets	nyisson meg egy adatkészleteket tartalmazó dokumentumot
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ebből az adatkészletből semmi sem lett alkalmazva: {name}; egyetlen objektum sincs olyan változóhoz kötve, amelynek értéke van benne
+@msg	no bound object reports a value (locked objects and embedded images report none)	egyetlen kötött objektum sem ad értéket (a zárolt objektumok és a beágyazott képek nem adnak értéket)
 @msg	the action has no steps	a műveletnek nincsenek lépései
 
 # User Interface › Accent Color

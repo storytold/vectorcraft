@@ -14,7 +14,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{DataSet, DataValue, NodeId, NodeKind, Variable, VariableKind, Variables};
+use vectorcraft_doc::{DataSet, DataValue, Document, NodeId, NodeKind, Variable, VariableKind, Variables};
 
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
@@ -384,6 +384,9 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let values = st.doc.captured_values();
     if values.is_empty() {
+        if anything_bound(&st.doc) {
+            return Err(bad(C, "no bound object reports a value (locked objects and embedded images report none)"));
+        }
         return Err(bad(C, "bind something to a variable first"));
     }
     let name = match optional_name(p, "name", C)? {
@@ -406,30 +409,36 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
 /// variable the row holds. A variable whose objects report no value (locked, inside a locked
 /// layer or group, or gone) keeps the row's value. With `all`, every other variable the
 /// objects report a value for is added to the row. Without an active row there is nothing to
-/// update, so say so rather than picking one.
+/// update, so say so rather than picking one. With every bound object locked, no value is
+/// written; an update that writes no value adds no undo step.
 fn dataset_update(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.update";
     let all = bool_or(p, "all", false);
-    let values = s.doc()?.doc.captured_values();
-    let Some(name) = s.doc()?.doc.variables.active_dataset.clone() else {
+    let st = s.doc()?;
+    let Some(name) = st.doc.variables.active_dataset.clone() else {
         return Err(bad(C, "no active data set"));
     };
-    if values.is_empty() {
+    if !anything_bound(&st.doc) {
         return Err(bad(C, "bind something to a variable first"));
     }
-    let (written, left) = s.edit("Update Data Set", |d, _| {
-        let ds = d.variables.datasets.iter_mut().find(|d| d.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
-        let mut written = BTreeSet::new();
-        for (var, value) in &values {
-            if all || ds.values.contains_key(var) {
-                ds.values.insert(var.clone(), value.clone());
-                written.insert(var.as_str());
-            }
-        }
-        let left: Vec<String> = d.variables.variables.iter().filter(|v| !written.contains(v.name.as_str())).map(|v| v.name.clone()).collect();
-        Ok((written.len(), left))
-    })?;
+    let ds = st.doc.variables.dataset(&name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
+    let writes: BTreeMap<String, DataValue> = st.doc.captured_values().into_iter().filter(|(var, _)| all || ds.values.contains_key(var)).collect();
+    let left: Vec<String> = st.doc.variables.variables.iter().filter(|v| !writes.contains_key(&v.name)).map(|v| v.name.clone()).collect();
+    let written = writes.len();
+    if written > 0 {
+        s.edit("Update Data Set", |d, _| {
+            let ds = d.variables.datasets.iter_mut().find(|d| d.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
+            ds.values.extend(writes);
+            Ok(())
+        })?;
+    }
     Ok(json!({"name": name, "values": written, "left": left}))
+}
+
+/// Whether any object in the document is bound to a variable. A locked one counts: it is
+/// bound, though it reports no value.
+fn anything_bound(doc: &Document) -> bool {
+    doc.variables.bindings.iter().any(|(id, names)| !names.is_empty() && doc.node(*id).is_some())
 }
 
 fn dataset_delete(s: &mut Session, p: &Value) -> Result<Value> {

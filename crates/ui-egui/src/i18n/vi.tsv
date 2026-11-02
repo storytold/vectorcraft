@@ -5066,6 +5066,7 @@ theme	Appearance	Giao diện
 @msg	choose a source folder	hãy chọn thư mục nguồn
 @msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	không có gì trong tập dữ liệu {name} được áp dụng: không có đối tượng nào được gắn với biến số mà tập dữ liệu có giá trị
+@msg	no bound object reports a value (locked objects and embedded images report none)	không có đối tượng được gắn nào báo cáo giá trị (đối tượng bị khóa và hình ảnh nhúng không báo cáo giá trị nào)
 @msg	the action has no steps	hành động không có bước nào
 
 # User Interface › Accent Color
