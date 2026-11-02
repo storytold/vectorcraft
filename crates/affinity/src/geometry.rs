@@ -178,6 +178,10 @@ const MAX_PRESSURE_SEGMENTS: usize = 256;
 /// points; the document's limit counts all of them.
 const PRESSURE_POINTS: usize = 512;
 
+/// Most points one pressure curve can have (see [`PRESSURE_POINTS`]). A curve that can't be read
+/// counts this many against the document's limit.
+pub(crate) const MAX_PRESSURE_CURVE_POINTS: usize = 1 + 4 * MAX_PRESSURE_SEGMENTS;
+
 /// A stroke's pressure curve (`LDsc.LDeP`, a `CrvD` whose positional `Data` holds an array of
 /// 18-byte records as in [`curves`]): x is the position along the path (0 to 1) and y the width as
 /// a fraction of the stroke's weight. Each segment is sampled at 2 to 8 points, at most

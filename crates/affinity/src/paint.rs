@@ -357,8 +357,9 @@ pub(crate) fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, beh
         r.warn("brush strokes (imported as plain strokes)");
     }
     // The pressure curve sets the width along the path; one at full width all along is a plain
-    // stroke. Every curve read, full width or not, counts against the document's points, and once
-    // they are used up the rest are not read.
+    // stroke. Every curve read counts against the document's points: one at full width counts its
+    // points, and one that can't be read counts the most a curve may have. Once the points are
+    // used up the rest are not read.
     const BEYOND: &str = "pressure strokes beyond the pressure points one document may hold (imported as plain strokes)";
     let ldep = s.obj(ldsc, b"LDeP");
     if ldep.is_some() && r.budget.pressure == 0 {
@@ -377,6 +378,7 @@ pub(crate) fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, beh
             }
         },
         Some(None) => {
+            r.budget.pressure = r.budget.pressure.saturating_sub(crate::geometry::MAX_PRESSURE_CURVE_POINTS);
             r.warn("pressure strokes whose pressure curve can't be read (imported as plain strokes)");
             None
         }

@@ -462,6 +462,12 @@ mod native {
         let flat: Vec<Vec<u8>> = (0..=768).map(|i| node(f64::from(i) / 768.0, 1.0, if i % 3 == 0 { 4 } else { 0 }, (i % 3) as u8)).collect();
         let r = load("flat-many.af", &pressure_documents(flat, 2100)).unwrap();
         assert!(r.warnings.iter().any(|w| w.contains("pressure points one document may hold")), "{:?}", r.warnings);
+
+        // So do curves that can't be read: 768 segments, more than a curve may have.
+        let long: Vec<Vec<u8>> = (0..=768).map(|i| node(f64::from(i) / 768.0, f64::from(i % 2), 4, 0)).collect();
+        let r = load("long-many.af", &pressure_documents(long, 2100)).unwrap();
+        assert!(r.warnings.iter().any(|w| w.contains("pressure curve can't be read")), "{:?}", r.warnings);
+        assert!(r.warnings.iter().any(|w| w.contains("pressure points one document may hold")), "{:?}", r.warnings);
     }
 
     #[test]
