@@ -991,7 +991,8 @@ fn above_text_puts_the_ruler_over_the_text_at_the_zoom() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
     app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+    // The canvas starts low enough in the window for the panel to fit above the text at 200%.
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 440.0), vec2(1000.0, 700.0)));
     for zoom in [1.0, 2.0] {
         if let Some(v) = app.view_mut() {
             v.zoom = zoom;
@@ -1011,4 +1012,97 @@ fn above_text_puts_the_ruler_over_the_text_at_the_zoom() {
         assert!((ruler - 300.0 * zoom as f32).abs() < 0.01);
     }
     assert_eq!(app.ui.docking.unwrap().floating.len(), 1, "placed again, not floated twice");
+}
+
+/// Position Panel Above Text moves the panel when it already floats in an OS window of its own:
+/// the window's desktop rect goes above the text too, from the main window's top-left (#4995).
+#[test]
+fn above_text_moves_a_panel_floating_in_its_own_window() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+    if let Some(v) = app.view_mut() {
+        v.zoom = 1.0;
+    }
+    let (node, _, span) = current(&app).unwrap();
+    let ctx = egui::Context::default();
+    above_text(&mut app, &ctx, &node, span).unwrap();
+    // The panel's OS window sits elsewhere on the desktop, as after the user dragged it there.
+    let mut layout = app.ui.docking.clone().unwrap();
+    let window = layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
+    window.native = Some([1500.0, 900.0, window.rect[2], window.rect[3]]);
+    app.ui.docking = Some(layout);
+    // The main window's content starts at (200, 100) on the desktop.
+    let mut raw = egui::RawInput::default();
+    raw.viewports.entry(egui::ViewportId::ROOT).or_default().inner_rect =
+        Some(egui::Rect::from_min_size(egui::pos2(200.0, 100.0), vec2(1200.0, 800.0)));
+    ctx.run_ui(raw, |_| {}).textures_delta.clear();
+    above_text(&mut app, &ctx, &node, span).unwrap();
+    let layout = app.ui.docking.clone().unwrap();
+    let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+    let native = g.native.unwrap();
+    assert_eq!([native[0], native[1]], [200.0 + g.rect[0], 100.0 + g.rect[1]], "the OS window goes above the text");
+    assert_eq!([native[2], native[3]], [g.rect[2], g.rect[3]]);
+}
+
+/// Text near the top of the window: Position Panel Above Text puts the panel just below the text,
+/// so neither the panel nor its OS window goes above the screen and the text stays in view. Text
+/// with no room below it either gets the panel at the window's top.
+#[test]
+fn above_text_keeps_the_panel_bar_in_the_window() {
+    for (text_height, below) in [(100.0, true), (760.0, false)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+        app.session.execute("text.create", &json!({"x": 40, "y": 10, "text": "a	b", "area": {"width": 300, "height": text_height}})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+        if let Some(v) = app.view_mut() {
+            v.zoom = 1.0;
+        }
+        let (node, _, span) = current(&app).unwrap();
+        let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let frame = xf.rect_to_screen(node.geometric_bounds().unwrap());
+        assert!(frame.top() < 240.0, "no room above the text");
+        let ctx = egui::Context::default();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let mut layout = app.ui.docking.clone().unwrap();
+        let window = layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        let top = if below { frame.bottom() + 6.0 } else { 0.0 };
+        assert_eq!(window.rect[1], top, "text {text_height} high");
+        window.native = Some([1500.0, 900.0, window.rect[2], window.rect[3]]);
+        app.ui.docking = Some(layout);
+        let mut raw = egui::RawInput::default();
+        raw.viewports.entry(egui::ViewportId::ROOT).or_default().inner_rect =
+            Some(egui::Rect::from_min_size(egui::pos2(200.0, 100.0), vec2(1200.0, 800.0)));
+        ctx.run_ui(raw, |_| {}).textures_delta.clear();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let layout = app.ui.docking.clone().unwrap();
+        let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        assert_eq!(g.native.unwrap()[1], 100.0 + top, "text {text_height} high: the OS window");
+    }
+}
+
+/// Position Panel Above Text puts the panel at the window's top when the place below the text is
+/// above the window (text panned above the canvas), or when the panel at the height it floats at
+/// does not fit below the text in the canvas.
+#[test]
+fn above_text_puts_the_panel_at_the_top_when_below_the_text_does_not_fit() {
+    // The view's centre and the text's height: panned so the text is above the canvas, and a text
+    // whose bottom leaves room for 240 points of panel but not for the 360 it floats at.
+    for (center_y, text_height) in [(600.0, 100.0), (350.0, 340.0)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 600, "height": 800})).unwrap();
+        app.session.execute("text.create", &json!({"x": 40, "y": 20, "text": "a	b", "area": {"width": 300, "height": text_height}})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+        if let Some(v) = app.view_mut() {
+            v.zoom = 1.0;
+            v.center = vectorcraft_geom::Point::new(300.0, center_y);
+        }
+        let (node, _, span) = current(&app).unwrap();
+        let ctx = egui::Context::default();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let layout = app.ui.docking.clone().unwrap();
+        let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        assert_eq!(g.rect[1], 0.0, "view centered at y {center_y}");
+    }
 }
