@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); text that is hidden or locked, in a hidden or locked group or layer, or on a locked artboard keeps its font → {runs, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); text that is hidden or locked, in a hidden or locked group or layer, or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
             has_doc,
             replace
         ),
@@ -435,6 +435,16 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
     };
+    // The style a matching run is set in after the change, or `None` when the run doesn't match or
+    // is already set in that family and style with no version or Variable Font settings.
+    let new_style = |st: &vectorcraft_doc::CharStyle| {
+        if !matches(st) {
+            return None;
+        }
+        // An explicit style, else the closest the new family has to the old one.
+        let style = ts.clone().or_else(|| db.face(&tf, &st.font_style).map(|f| f.style.clone())).unwrap_or_else(|| st.font_style.clone());
+        (st.font_family != tf || st.font_style != style || st.font_version.is_some() || !st.font_axes.is_empty()).then_some(style)
+    };
     // Only text the Selection tool can reach changes: not hidden or locked, in a hidden or locked
     // group or layer, or on a locked artboard. The text left in the font is counted.
     let (ids, skipped) = {
@@ -442,39 +452,41 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         let editable = d.editable();
         let (ids, other): (Vec<NodeId>, Vec<NodeId>) = scope(s, bool_or(p, "selectionOnly", false))?.into_iter().partition(|id| editable(*id));
         let skipped = other.into_iter().filter(|id| text(d, *id).is_some_and(|t| t.runs.iter().any(|r| matches(&r.style)))).count();
+        // The text that changes: when none does, the document and its undo history stay as they are.
+        let ids: Vec<NodeId> =
+            ids.into_iter().filter(|id| text(d, *id).is_some_and(|t| t.runs.iter().any(|r| new_style(&r.style).is_some()))).collect();
         (ids, skipped)
     };
     // The fonts the replaced runs are set in, for the warning.
     let mut set = BTreeSet::new();
-    let n = s.edit("Replace Font", |d, _| {
-        let mut n = 0;
-        for id in &ids {
-            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let mut changed = false;
-            for r in &mut t.runs {
-                if matches(&r.style) {
-                    // An explicit style, else the closest the new family has to the old one.
-                    let style = ts
-                        .clone()
-                        .or_else(|| db.face(&tf, &r.style.font_style).map(|f| f.style.clone()))
-                        .unwrap_or_else(|| r.style.font_style.clone());
-                    r.style.font_family = tf.clone();
-                    r.style.font_style = style;
-                    // Another font: none of the old one's versions or Variable Font settings.
-                    r.style.font_version = None;
-                    r.style.font_axes.clear();
-                    set.insert(font_of(&r.style));
-                    changed = true;
-                    n += 1;
+    let n = if ids.is_empty() {
+        0
+    } else {
+        s.edit("Replace Font", |d, _| {
+            let mut n = 0;
+            for id in &ids {
+                let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+                let mut changed = false;
+                for r in &mut t.runs {
+                    if let Some(style) = new_style(&r.style) {
+                        r.style.font_family = tf.clone();
+                        r.style.font_style = style;
+                        // Another font: none of the old one's versions or Variable Font settings.
+                        r.style.font_version = None;
+                        r.style.font_axes.clear();
+                        set.insert(font_of(&r.style));
+                        changed = true;
+                        n += 1;
+                    }
+                }
+                if changed {
+                    vectorcraft_text::edit::normalize(&mut t.runs);
+                    refresh_bounds(t);
                 }
             }
-            if changed {
-                vectorcraft_text::edit::normalize(&mut t.runs);
-                refresh_bounds(t);
-            }
-        }
-        Ok(n)
-    })?;
+            Ok(n)
+        })?
+    };
     let mut out = json!({ "runs": n });
     let mut warnings = Vec::new();
     if skipped > 0 {
@@ -720,6 +732,36 @@ mod tests {
         // A plain replacement carries no warning.
         let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
         assert_eq!(r, json!({"runs": 2}));
+    }
+
+    /// Replace Font adds no undo step when no run changes: only locked text uses the font, no text
+    /// uses it, or the text is already set in the new font and style.
+    #[test]
+    fn replace_font_that_changes_nothing_adds_no_undo_step() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let serif = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        let sans = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "Sans", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [serif]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+        let before = steps(&s);
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0, "skipped": 1, "warning": REPLACE_SKIPPED}));
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Nothing Uses This"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        let style = text(&s.doc().unwrap().doc, NodeId(sans)).unwrap().runs[0].style.font_style.clone();
+        let r =
+            s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Source Sans 3", "style": style}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        assert_eq!(steps(&s), before);
+        // A change is still one step.
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(steps(&s), before + 1);
+        assert_eq!(text_family(&s, sans), "Inter");
     }
 
     /// The font family of text object `id`'s first run.
