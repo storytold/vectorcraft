@@ -68,10 +68,10 @@ fn pattern_choice(d: &Dialog, choice: &str) -> Option<String> {
     (!reserved && pattern_names(d).iter().any(|candidate| candidate == name)).then(|| name.to_string())
 }
 
+/// Whether tile `field`'s menu offers Original: the tile the dialog opened with, kept available after
+/// a swatch is chosen so the tile can go back to it.
 pub(super) fn original_available(d: &Dialog, field: &str) -> bool {
-    let choice = d.str(&tile_key(field));
-    let drawn = if field.ends_with("corner") { corner_art_field(d.fields.get("__def"), field) } else { Some(field) };
-    drawn.is_some() && pattern_choice(d, &choice).is_none()
+    !field.ends_with("corner") || corner_art_field(d.fields.get("__def"), field).is_some()
 }
 
 pub(super) fn reconcile_pattern_choices(f: &mut Map<String, Value>) {
@@ -541,8 +541,7 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     radios(ui, d, "fit", &fits);
 }
 
-/// Built-in corner choices. Original is disabled when the slot has no retained art or a listed
-/// swatch was selected.
+/// Built-in corner choices. Original is disabled when the corner opened with no art to draw.
 fn corner_choices() -> [(&'static str, &'static str); 6] {
     [
         (CornerSource::None.id(), tl!("None")),

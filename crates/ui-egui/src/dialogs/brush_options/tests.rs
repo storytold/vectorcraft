@@ -452,6 +452,9 @@ fn pattern_options_set_each_corner_tile_to_original_none_or_an_automatic_tile() 
     app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.str("outerCornerTile"), d.str("innerCornerTile")), ("none".into(), "none".into()), "Diamonds has no corner art");
+    for corner in ["outer_corner", "inner_corner"] {
+        assert!(!crate::dialogs::brush_art_options::original_available(d, corner), "{corner}: no Original without corner art");
+    }
     let shown_tree = tree(|ui| super::super::show(&mut app, ui.ctx()));
     for name in ["Outer Corner Tile", "Inner Corner Tile"] {
         let roles: Vec<_> = shown_tree.iter().filter(|n| n.label() == Some(name)).map(|n| n.role()).collect();
@@ -471,6 +474,12 @@ fn pattern_options_set_each_corner_tile_to_original_none_or_an_automatic_tile() 
     app.run("ui.brushOptions", json!({"name": "Chain"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.str("outerCornerTile"), d.str("innerCornerTile")), ("original".into(), "original".into()));
+    // Original stays in a corner's menu after another choice, and goes back to the corner art.
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::brush_art_options::choose_corner(d, "outerCornerTile", "autoBetween");
+    assert!(crate::dialogs::brush_art_options::original_available(d, "outer_corner"));
+    crate::dialogs::brush_art_options::choose_corner(d, "outerCornerTile", "original");
+    assert_eq!(d.str("outerCornerTile"), "original");
     super::super::confirm(&mut app).unwrap();
     let def = app.run("brush.get", json!({"name": "Chain"})).unwrap();
     assert!(def["outer_corner"].is_object() && def["inner_corner"].is_object() && def.get("outer_source").is_none(), "{def}");
@@ -529,13 +538,32 @@ fn pattern_tile_menus_use_document_patterns_and_side_none_keeps_dialog_open() {
             assert_eq!(ids.get(1).map(String::as_str), Some("original"));
         }
     }
+    // Original stays available after a swatch is chosen, and restores the tile the dialog opened with.
     let d = app.ui.dialog.as_mut().unwrap();
     crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "Wide");
-    assert!(!crate::dialogs::brush_art_options::original_available(d, "side"));
+    assert!(crate::dialogs::brush_art_options::original_available(d, "side"));
+    crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "original");
+    let restored = crate::dialogs::brush_art_options::edited_def(d);
+    assert_eq!((&restored["side"], &restored["side_frame"]), (&before["side"], &before["side_frame"]));
+    super::super::confirm(&mut app).unwrap();
+    let kept = app.run("brush.get", json!({"name":"Diamonds"})).unwrap();
+    assert_eq!((&kept["side"], &kept["side_frame"]), (&before["side"], &before["side_frame"]));
+    app.run("ui.brushOptions", json!({"name":"Diamonds"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "Wide");
     let preview = crate::dialogs::brush_art_options::edited_def(d);
     assert_eq!(preview["side_frame"], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
     assert_ne!(preview["side"], before["side"]);
     super::super::confirm(&mut app).unwrap();
+    // A tile that opens on a swatch can also go back to the art it opened with.
+    let opened = app.run("brush.get", json!({"name":"Diamonds"})).unwrap();
+    app.run("ui.brushOptions", json!({"name":"Diamonds"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.str("sideTile"), "pattern:Wide");
+    assert!(crate::dialogs::brush_art_options::original_available(d, "side"));
+    crate::dialogs::brush_art_options::choose_corner(d, "sideTile", "original");
+    assert_eq!(crate::dialogs::brush_art_options::edited_def(d)["side"], opened["side"]);
+    super::super::cancel(&mut app);
     app.session
         .edit("Delete pattern", |doc, _| {
             doc.patterns.clear();
