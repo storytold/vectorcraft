@@ -83,12 +83,14 @@ pub use save::{
     templates_folder,
 };
 pub use screens::{
-    PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS, PRESETS as SCREEN_PRESETS, ScreenExport, ScreenExportPreset, ScreenSize,
-    builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_rows as screen_preset_rows,
+    PRESET_FILE_EXTS as SCREEN_EXPORT_PRESET_EXTS, PRESET_FILE_FORMAT as SCREEN_EXPORT_PRESET_FORMAT, PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS,
+    PRESETS as SCREEN_PRESETS, SHARED_KEYS as SCREEN_SETTINGS_KEYS, ScreenExport, ScreenExportPreset, ScreenSize,
+    builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_list as screen_export_preset_list,
+    preset_rows as screen_preset_rows,
 };
 pub(crate) use screens::{
-    SHARED_KEYS as SCREEN_SETTINGS_KEYS, check_settings as check_screen_settings, export as export_screens, safe_file_name,
-    store_settings as store_screen_settings,
+    check_settings as check_screen_settings, export as export_screens, safe_file_name, store_settings as store_screen_settings,
+    with_export_preset as with_screen_export_preset,
 };
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
@@ -122,7 +124,7 @@ pub use commands::specs;
 pub use export_names::artboard_file_names;
 pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
 use export_names::{distinct_names_by, write_encoded};
-use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, writable};
+use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,
     file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, titled_for_export,

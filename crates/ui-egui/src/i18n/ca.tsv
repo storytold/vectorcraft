@@ -3495,6 +3495,7 @@ digits	Malayalam	Malaiàlam
 	Save a Copy…	Desa una còpia…
 	Save and Close	Desa i tanca
 	Save As	Desa com a
+	Save As Preset…	Desa com a preajust…
 	Save as New Preset…	Desa com a preajust nou…
 	Save as PDF…	Desa com a PDF…
 	Save as preset:	Desa com a preajust:
@@ -3504,6 +3505,7 @@ digits	Malayalam	Malaiàlam
 	Save Brush Library	Desa la biblioteca de pinzells
 	Save Brush Library…	Desa la biblioteca de pinzells…
 	Save Brushes…	Desa els pinzells…
+	Save Changes	Desa els canvis
 	Save changes to {name}	Desa els canvis a {name}
 	Save color group to Swatch panel	Desa el grup de colors al panell de mostres
 	Save Colors as Swatches	Desa els colors com a mostres
@@ -3511,6 +3513,10 @@ digits	Malayalam	Malaiàlam
 	Save Document Info…	Desa la informació del document…
 	Save each artboard to a separate file	Desa cada tauler en un fitxer separat
 	Save Export Preset	Desa el preajust d’exportació
+	Export Export Presets	Exporta els preajustos d’exportació
+	Export Preset…	Exporta el preajust…
+	Import Export Presets	Importa preajustos d’exportació
+	Import Preset…	Importa un preajust…
 	Save for Office Documents	Desa per a documents d’Office
 	Save for Office Documents…	Desa per a documents d’Office…
 	Save for Web	Desa per a web
@@ -4835,6 +4841,12 @@ digits	Malayalam	Malaiàlam
 @msg	`{to}` is not an available name	`{to}` no és un nom disponible
 @msg	`{what}` closes nothing	`{what}` no tanca res
 @msg	`{what}` closes something it didn't open	`{what}` tanca una cosa que no havia obert
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` és el nom d’un preajust de document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	no hi ha cap preajust d’exportació `{n}` (vegeu document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	no hi ha preajustos d’exportació desats per exportar (anomeneu els integrats a `names`)
+@msg	not an export presets file (format `{_1}`)	no és un fitxer de preajustos d’exportació (format `{_1}`)
+@msg	not an export presets file: {e}	no és un fitxer de preajustos d’exportació: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 @msg	a mask that covers several layers comes in as a clipping group in each layer it covers	una màscara que cobreix diverses capes entra com un grup de retall a cada capa que cobreix
 @msg	a graph's records don't end where they should: its art was read as it is	els registres d’un gràfic no acaben on haurien: la seva il·lustració s’ha llegit tal com és
 @msg	`{w}` takes no operands	`{w}` no admet operands
@@ -5715,6 +5727,7 @@ file-filter	Flattener presets	Preajustos de l’aplanador
 file-filter	PDF presets	Preajustos de PDF
 file-filter	PDF-compatible .ai	.ai compatible amb PDF
 file-filter	Print presets	Preajustos d’impressió
+file-filter	Export presets	Preajustos d’exportació
 file-filter	SVG Compressed	SVG comprimit
 file-filter	Swatch libraries	Biblioteques de mostres
 file-filter	Templates	Plantilles
