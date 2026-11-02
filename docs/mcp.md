@@ -1488,8 +1488,8 @@ nothing. Nothing of it is saved.
 (or on an object inside it) with the Selection tool does: it is no longer highlighted, and later edits leave it as it
 is. It returns `{active, count, ids}`, the objects left in the Global Edit; with fewer than two left, the Global Edit
 ends (`{active: false, count: 0, ids: []}`). The object the Global Edit started from can't be left out, and neither
-can an object that is not a match. It is not an undo step. A Shift-drag that starts on a match moves the selection
-and leaves the match in. Source: [Update assets quickly with Global
+can an object that is not a match. It is not an undo step. A Shift-drag that starts on a match selects it and moves
+it with the selection, and leaves it in the Global Edit. Source: [Update assets quickly with Global
 Edit](https://helpx.adobe.com/ph_fil/illustrator/how-to/global-editing-sensei.html).
 
 ## Saved selections
