@@ -271,8 +271,11 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
         "ui.perspectivePlane" => app.session.active().is_some(),
-        // Only one window per document so far: greyed out, as Window › Arrange's items are (#3724).
+        // Only one window per document so far: greyed out, as Cascade and Float in Window are (#3724).
         "window.newWindow" => false,
+        // Tile with two documents or more; Consolidate All Windows while they are tiled.
+        "window.arrange.tile" => app.session.documents().len() > 1,
+        "window.arrange.consolidateAllWindows" => app.ui.tiled && !app.session.documents().is_empty(),
         "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }

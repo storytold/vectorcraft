@@ -438,6 +438,10 @@ pub struct UiState {
     /// Presentation Mode came back on restart with no way out).
     #[serde(skip)]
     pub screen_mode: u8,
+    /// Window › Arrange › Tile: the open documents share the document area, one pane each, until
+    /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
+    #[serde(skip)]
+    pub tiled: bool,
     /// Draw Normal / Behind / Inside.
     pub draw_mode: u8,
     pub about: bool,
@@ -876,6 +880,7 @@ impl Default for UiState {
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
+            tiled: false,
             draw_mode: 0,
             about: false,
             action_sets: crate::panels::actions::default_sets(),

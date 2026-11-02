@@ -517,6 +517,8 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
         "window.newWindow" => Err("New Window isn't available yet: a document opens in one window".into()),
+        "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.consolidateAllWindows" => crate::canvas::consolidate(app),
         "window.nextDocument" => crate::chrome::step_document(app, true),
         "window.previousDocument" => crate::chrome::step_document(app, false),
         "tool.select" => match s("tool") {
