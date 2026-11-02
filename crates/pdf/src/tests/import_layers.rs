@@ -416,3 +416,35 @@ fn a_pdfs_private_data_is_its_pdf_streams_joined() {
     let both = format!("/AIPDFPrivateData1 {a} 0 R /AIPDFPrivateData2 {b} 0 R /AIPrivateData1 {c} 0 R");
     assert_eq!(illustrator_data(&pdf_with_catalog(&[page(both)], &[&one, &two, &other], "", None), None).unwrap(), b"%AI24_ZStandard_Data other");
 }
+
+/// The private data of a file whose other objects the import refuses (#4366) is read without its
+/// PDF part, and only then; a private data stream under a filter the reader doesn't know, or with
+/// decode parameters, is read neither way.
+#[test]
+fn private_data_reads_without_a_pdf_part_that_cant_be_read() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let page = PdfPage {
+        entries: format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {a} 0 R /AIPrivateData2 {b} 0 R /NumBlock 2 >> >> >>"),
+        ..PdfPage::new(100.0, 100.0, "1 0 0 rg 10 10 30 30 re f")
+    };
+    let (one, two) = (stream("", "%AI24_ZStandard_Data first "), stream("", "second"));
+    let refused = stream("/DecodeParms << /Predictor 12 /Columns 0 >>", "x");
+    let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&one, &two, &refused], "", None);
+    assert!(illustrator_data(&pdf, None).is_none());
+    let read = illustrator_data_without_pdf_part(&pdf, None).unwrap();
+    assert_eq!((read.data.as_slice(), read.user_unit, read.trim), (&b"%AI24_ZStandard_Data first second"[..], 1.0, (100.0, 100.0)));
+    let whole = pdf_with_catalog(std::slice::from_ref(&page), &[&one, &two], "", None);
+    assert_eq!(illustrator_data_without_pdf_part(&whole, None).map(|p| p.data), illustrator_data(&whole, None));
+    // The trim box in points, as the page shows it.
+    let large = PdfPage { entries: format!("{} /UserUnit 10 /TrimBox [10 10 60 30] /Rotate 90", page.entries), ..page.clone() };
+    let read = illustrator_data_without_pdf_part(&pdf_with_catalog(&[large], &[&one, &two, &refused], "", None), None).unwrap();
+    assert_eq!((read.user_unit, read.trim), (10.0, (200.0, 500.0)));
+    assert!(illustrator_data_without_pdf_part(b"not a pdf", None).is_none());
+    for odd in ["/Filter /Bogus", "/Filter [/Bogus]", "/DP << /Predictor 2 >>", "/Filter /FlateDecode /DecodeParms [<< /Predictor 2 >>]", "/Filter 5"]
+    {
+        let first = stream(odd, "%AI24_ZStandard_Data first ");
+        let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&first, &two], "", None);
+        assert!(illustrator_data(&pdf, None).is_none(), "{odd}");
+        assert!(illustrator_data_without_pdf_part(&pdf, None).is_none(), "{odd}");
+    }
+}

@@ -10,6 +10,10 @@ use crate::theme::Tokens;
 use crate::widgets::{self, dim_label};
 use crate::{VectorcraftApp, icons};
 
+mod files;
+pub(crate) use files::can_load;
+pub use files::{ACTIONS_EXT, LOAD_SET, SAVE_SET, load_set, save_set};
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
     pub name: String,
@@ -39,6 +43,14 @@ fn next_set_id() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Serde reader for the saved current set ([`crate::UiState::action_set`]): a whole number is the
+/// set's index, and any other value is no current set. An index past the last set is ignored where
+/// the panel reads it.
+pub fn deserialize_current_set<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<usize>, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_u64().and_then(|i| usize::try_from(i).ok()))
+}
+
 /// Built-in actions (our own, handy defaults).
 pub fn default_sets() -> Vec<ActionSet> {
     let step = |c: &str, p: Value| (c.to_string(), p);
@@ -66,6 +78,24 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
     let commands: Vec<Value> = a.steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
     app.run("command.batch", json!({"label": a.name, "commands": commands}))
+}
+
+/// The command that renames an action ([`rename_action`]).
+pub const RENAME_ACTION: &str = "ui.action.rename";
+
+/// `ui.action.rename {set, action, name}`: renames the action at index `action` of set `set` (0 is
+/// the top set) to `name` with spaces trimmed from both ends, and keeps its steps. An index past
+/// the last set or action, or a name with nothing but spaces, is an error, and then nothing is
+/// renamed. The panel menu's Action Options… runs this for the selected action. → {name}
+pub fn rename_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let name = p.get("name").and_then(Value::as_str).map(str::trim).unwrap_or_default();
+    let action = index("set").zip(index("action")).and_then(|(s, a)| app.ui.action_sets.get_mut(s)?.actions.get_mut(a)).ok_or("no such action")?;
+    if name.is_empty() {
+        return Err("name is empty".into());
+    }
+    action.name = name.to_string();
+    Ok(json!({ "name": name }))
 }
 
 /// The command that deletes action sets ([`delete_sets`]).
@@ -146,9 +176,6 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     }
     // An open Set Options or Batch dialog holds a set index: it closes when its set is deleted,
     // and otherwise follows its set down.
-    let holds_set = |d: &crate::state::Dialog| {
-        d.kind == crate::dialogs::action_batch::KIND || (d.kind == crate::dialogs::action_set_options::KIND && d.fields.contains_key("set"))
-    };
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| holds_set(d))
         && let Some(set) = d.fields.get("set").and_then(Value::as_u64).and_then(|s| usize::try_from(s).ok())
     {
@@ -157,6 +184,14 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
         } else {
             d.fields.insert("set".into(), json!(set - sets.iter().filter(|&&s| s < set).count()));
         }
+    }
+    // The panel's selected action follows its set down too, and is no longer selected when its set
+    // is deleted, so a set made later at its old index does not find it selected.
+    if let Some(ctx) = app.ui_ctx.clone()
+        && let Some((set, action)) = pstate::<Option<(usize, usize)>>(&ctx, "actions-selected")
+    {
+        let moved = (!sets.contains(&set)).then(|| (set - sets.iter().filter(|&&s| s < set).count(), action));
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", moved);
     }
     for &s in sets.iter().rev() {
         app.ui.action_sets.remove(s);
@@ -168,17 +203,104 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     Ok(json!({ "deleted": sets.len() }))
 }
 
+/// Whether dialog `d` is a Set Options or Batch dialog that holds a set index in its `set` field.
+fn holds_set(d: &crate::state::Dialog) -> bool {
+    d.kind == crate::dialogs::action_batch::KIND || (d.kind == crate::dialogs::action_set_options::KIND && d.fields.contains_key("set"))
+}
+
+/// The command that duplicates an action or an action set ([`duplicate`]).
+pub const DUPLICATE: &str = "ui.actionSet.duplicate";
+
+/// The panel menu's Duplicate: copies the selected action, else the current set ([`DUPLICATE`]),
+/// and selects the copy.
+fn duplicate_selection(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    const SELECTED: &str = "actions-selected";
+    let Some(set) = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len()) else { return };
+    // A selected action counts only while its set is the current one, as the panel shows it.
+    let params = match pstate::<Option<(usize, usize)>>(ctx, SELECTED).filter(|&(s, _)| s == set) {
+        Some((s, a)) => json!({ "set": s, "action": a }),
+        None => json!({ "set": set }),
+    };
+    match app.run(DUPLICATE, params) {
+        Ok(r) => {
+            let copy = r["set"].as_u64().zip(r["action"].as_u64()).and_then(|(s, a)| Some((usize::try_from(s).ok()?, usize::try_from(a).ok()?)));
+            set_pstate::<Option<(usize, usize)>>(ctx, SELECTED, copy);
+        }
+        Err(e) => app.status(e),
+    }
+}
+
+/// `ui.actionSet.duplicate {set?: index, action?: index}`: copies the action at index `action`
+/// of set `set` into the same set, right after the original; without `action`, copies set `set`
+/// with all its actions to right after the original set (default: the current set). The copy is
+/// named after the original with " copy" added, and a copied set gets an id of its own
+/// ([`ActionSet::id`]). The copy is selected and its set is the current one. A recording and an
+/// open Set Options or Batch dialog keep to their own set and action. → {set, action?}
+pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    const SELECTED: &str = "actions-selected";
+    let len = app.ui.action_sets.len();
+    let index = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok());
+    let set = match p.get("set") {
+        None | Some(Value::Null) => app.ui.action_set.filter(|&s| s < len).ok_or("no action set is current")?,
+        Some(v) => index(v).filter(|&s| s < len).ok_or("no such action set")?,
+    };
+    let Some(src) = app.ui.action_sets.get_mut(set) else { return Err("no such action set".into()) };
+    let action = match p.get("action") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(index(v).filter(|&a| a < src.actions.len()).ok_or("no such action")?),
+    };
+    let (copy, result) = if let Some(a) = action {
+        let Some(mut copy) = src.actions.get(a).cloned() else { return Err("no such action".into()) };
+        copy.name = format!("{} copy", copy.name);
+        src.actions.insert(a + 1, copy);
+        // A Batch dialog open on a later action of the set follows it down.
+        if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == crate::dialogs::action_batch::KIND)
+            && d.fields.get("set").and_then(index) == Some(set)
+            && let Some(da) = d.fields.get("action").and_then(index).filter(|&da| da > a)
+        {
+            d.fields.insert("action".into(), json!(da + 1));
+        }
+        (Some((set, a + 1)), json!({ "set": set, "action": a + 1 }))
+    } else {
+        let copy = ActionSet::new(format!("{} copy", src.name), src.actions.clone());
+        app.ui.action_sets.insert(set + 1, copy);
+        if let Some((rec, ..)) = app.ui.recording.as_mut()
+            && *rec > set
+        {
+            *rec += 1;
+        }
+        if let Some(d) = app.ui.dialog.as_mut().filter(|d| holds_set(d))
+            && let Some(ds) = d.fields.get("set").and_then(index).filter(|&ds| ds > set)
+        {
+            d.fields.insert("set".into(), json!(ds + 1));
+        }
+        (None, json!({ "set": set + 1 }))
+    };
+    let current = copy.map_or(set + 1, |(s, _)| s);
+    app.ui.action_set = Some(current);
+    app.ui.action_sets_selected = vec![current];
+    if let Some(ctx) = app.ui_ctx.clone() {
+        set_pstate::<Option<(usize, usize)>>(&ctx, SELECTED, copy);
+    }
+    Ok(result)
+}
+
 /// The panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let selected: Option<(usize, usize)> = pstate(ui.ctx(), "actions-selected");
+    // A selected action counts only while its set is the current one, as the panel shows it: a set
+    // deleted since leaves the stored pair pointing at another set's action.
+    let selected = pstate::<Option<(usize, usize)>>(ui.ctx(), "actions-selected").filter(|&(s, _)| app.ui.action_set == Some(s));
     let has = selected.and_then(|(s, a)| app.ui.action_sets.get(s).and_then(|set| set.actions.get(a))).is_some();
     if widgets::menu_item(ui, tl!("New Set…"), true, false) {
         crate::dialogs::action_set_options::open_new(app);
     }
+    let current = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len());
+    if widgets::menu_item(ui, tl!("Duplicate"), current.is_some(), false) {
+        duplicate_selection(app, ui.ctx());
+    }
     if widgets::menu_item(ui, tl!("Delete"), has || !selected_sets(app).is_empty(), false) {
         delete_selection(app, ui.ctx());
     }
-    let current = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len());
     if widgets::menu_item(ui, tl!("Set Options…"), current.is_some(), false)
         && let Some(s) = current
     {
@@ -195,6 +317,25 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         && let Err(e) = play(app, s, a)
     {
         app.status(e);
+    }
+    if widgets::menu_item(ui, tl!("Action Options…"), has, false)
+        && let Some((s, a)) = selected
+    {
+        crate::dialogs::action_set_options::open_action(app, s, a);
+    }
+    ui.separator();
+    // As commands, so a file dialog shown off the UI thread saves or loads when it answers.
+    // Save Actions… names the current set by its id, so a file dialog that answers later saves that set.
+    let save = json!({ "id": current.and_then(|s| app.ui.action_sets.get(s)).map(|s| s.id) });
+    for (label, id, on, params) in
+        [(tl!("Save Actions…"), SAVE_SET, current.is_some(), save), (tl!("Load Actions…"), LOAD_SET, can_load(app), json!({}))]
+    {
+        if widgets::menu_item(ui, label, on, false)
+            && let Err(e) = app.run(id, params)
+            && e != "cancelled"
+        {
+            app.status(e);
+        }
     }
 }
 
@@ -292,6 +433,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 app.ui.action_sets.push(ActionSet::new("Set 1", vec![]));
             }
             let set = current.filter(|&s| s < app.ui.action_sets.len()).unwrap_or(0);
+            // With no set current, the recording goes into the first set, which becomes current so
+            // the panel shows where the recording goes.
+            if app.ui.action_set != Some(set) {
+                app.ui.action_set = Some(set);
+                app.ui.action_sets_selected = vec![set];
+            }
             let n = app.ui.action_sets.get(set).map_or(0, |s| s.actions.len()) + 1;
             let start = app.session.journal.len();
             // Keep every step from here on until recording stops, however long it runs.
@@ -434,6 +581,134 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let names = app.ui.action_sets.iter().map(|s| (s.name.as_str(), s.actions.len())).collect::<Vec<_>>();
         assert_eq!(names, [("Default Actions", 6), ("Web", 0)], "the clicked set is renamed, the other kept");
+    }
+
+    /// #1629: the panel menu's Action Options… is off with no action selected, and with an action
+    /// selected it asks for a new name: OK renames that action and keeps its steps, Cancel keeps
+    /// the name.
+    #[test]
+    fn action_options_renames_the_selected_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        let action_options = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
+            click(ctx, app, item.center(), menu);
+        };
+        action_options(&ctx, &mut app);
+        assert!(app.ui.dialog.is_none(), "no action selected: Action Options… is off");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Nudge Again").center(), show);
+        frame_events(&ctx, &mut app, vec![], show);
+        action_options(&ctx, &mut app);
+        let d = app.ui.dialog.as_ref().expect("Action Options opens");
+        assert_eq!((d.kind.as_str(), d.str("name")), (crate::dialogs::action_set_options::KIND, "Nudge Again".to_string()));
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.ui.action_sets[1].actions[1].name, "Nudge Again", "Cancel keeps the name");
+        action_options(&ctx, &mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("  Nudge Right  "));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let names = app.ui.action_sets[1].actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>();
+        assert_eq!(names, ["Nudge", "Nudge Right"], "the selected action is renamed, trimmed; the other is kept");
+        assert_eq!(app.ui.action_sets[1].actions[1].steps, [("object.move".to_string(), json!({"dx": 1, "dy": 0}))], "the steps stay");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "no set is renamed");
+    }
+
+    /// `ui.action.rename` renames the action at its set and action indexes and refuses a missing
+    /// index or a name with nothing but spaces, renaming nothing.
+    #[test]
+    fn rename_action_renames_one_action_and_refuses_bad_params() {
+        let mut app = app_with_sets();
+        let names = |app: &VectorcraftApp| app.ui.action_sets[1].actions.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0, "name": "Push"})).unwrap(), json!({"name": "Push"}));
+        assert_eq!(names(&app), ["Push", "Nudge Again"]);
+        for p in [
+            json!({"set": 1, "action": 2, "name": "X"}),
+            json!({"set": 3, "action": 0, "name": "X"}),
+            json!({"set": 1, "name": "X"}),
+            json!({"action": 0, "name": "X"}),
+            json!({"set": 4_294_967_297u64, "action": 0, "name": "X"}),
+        ] {
+            assert_eq!(app.run(RENAME_ACTION, p.clone()).unwrap_err(), "no such action", "{p}");
+        }
+        assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0, "name": "   "})).unwrap_err(), "name is empty");
+        assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0})).unwrap_err(), "name is empty");
+        assert_eq!(names(&app), ["Push", "Nudge Again"], "a refused rename renames nothing");
+    }
+
+    /// OK in Action Options or Set Options whose `set` or `action` field `ui.dialog.set` changed to
+    /// something that is not an index is an error: it renames no set or action, adds no set, and
+    /// keeps the dialog open.
+    #[test]
+    fn options_with_a_field_that_is_not_an_index_change_nothing() {
+        use crate::dialogs::action_set_options::KIND;
+        let mut app = app_with_sets();
+        for fields in [
+            json!({"set": 1, "action": null, "name": "X"}),
+            json!({"set": null, "action": 0, "name": "X"}),
+            json!({"set": 1, "action": 9, "name": "X"}),
+            json!({"set": null, "name": "X"}),
+            json!({"set": 9, "name": "X"}),
+        ] {
+            app.ui.dialog = Some(crate::state::Dialog::new(KIND, fields.clone()));
+            assert!(crate::dialogs::confirm(&mut app).is_err(), "{fields}");
+            assert!(app.ui.dialog.is_some(), "the dialog stays open: {fields}");
+            assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "{fields}");
+            let names = app.ui.action_sets[1].actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>();
+            assert_eq!(names, ["Nudge", "Nudge Again"], "{fields}");
+        }
+    }
+
+    /// After `ui.actionSet.delete` removes a set above the selected action's set, the panel menu's
+    /// Action Options… is off: it does not open for the action that moved to the stored position.
+    #[test]
+    fn action_options_is_off_after_a_set_above_the_selection_is_deleted() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        let action = |name: &str| Action { name: name.into(), steps: vec![] };
+        app.ui.action_sets[2].actions.push(action("Spin"));
+        app.ui.action_sets.push(ActionSet::new("Last", vec![action("Wrong")]));
+        let ctx = egui::Context::default();
+        app.ui.action_set = Some(2);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((2, 0)));
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        assert_eq!(app.ui.action_set, Some(1), "Other is still current");
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        assert!(app.ui.dialog.is_none(), "Action Options… does not open for Last's action");
+    }
+
+    /// `ui.actionSet.delete` moves the panel's selected action down with its set, and clears it
+    /// when its set is deleted: a new set made at that index, and the action recorded into it, are
+    /// not selected, so the panel menu's Action Options… stays off.
+    #[test]
+    fn deleting_sets_moves_or_clears_the_selected_action() {
+        use super::super::tests_appearance::{click, frame_events};
+        let selected = |ctx: &egui::Context| pstate::<Option<(usize, usize)>>(ctx, "actions-selected");
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        app.ui.action_set = Some(1);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 1)));
+        app.run(DELETE_SETS, json!({"sets": [0]})).unwrap();
+        assert_eq!(selected(&ctx), Some((0, 1)), "Nudge Again is still selected, at its set's new index");
+        app.ui.action_sets.push(ActionSet::new("Last", vec![]));
+        app.ui.action_set = Some(2);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((2, 0)));
+        app.ui.action_sets[2].actions.push(Action { name: "Spin".into(), steps: vec![] });
+        app.run(DELETE_SETS, json!({"sets": [2]})).unwrap();
+        assert_eq!(selected(&ctx), None, "the deleted set's action is no longer selected");
+        crate::dialogs::action_set_options::open_new(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.action_set, Some(2), "the new set is current, at the deleted set's index");
+        app.ui.action_sets[2].actions.push(Action { name: "Recorded".into(), steps: vec![] });
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        assert!(app.ui.dialog.is_none(), "Action Options… does not open for the new set's action");
     }
 
     /// An app with the default set and the sets Mine (two actions) and Other.
@@ -651,6 +926,59 @@ mod tests {
         assert_eq!(ids.len(), 6, "six sets, six ids");
     }
 
+    /// The current set is saved with the UI preferences: after a restart a recording goes into the
+    /// set clicked before it, not into Default Actions.
+    #[test]
+    fn a_recording_after_a_restart_goes_into_the_set_current_before_it() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        click_set(&ctx, &mut app, "Other", egui::Modifiers::NONE);
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui = serde_json::from_value(saved).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        assert_eq!(app.ui.action_set, Some(2), "Other is current after the restart");
+        let ctx = egui::Context::default();
+        frame_events(&ctx, &mut app, vec![], show);
+        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
+        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        let [stop, record, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        click(&ctx, &mut app, record.center(), show);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        click(&ctx, &mut app, stop.center(), show);
+        let counts = app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>();
+        assert_eq!(counts, [6, 2, 1], "recorded into Other");
+    }
+
+    /// A saved current set that is not a set index, or is past the last set, leaves no set current;
+    /// the other preferences still load, and Begin Recording then records into the first set and
+    /// makes it current.
+    #[test]
+    fn a_saved_current_set_that_is_gone_falls_back_to_the_first_set() {
+        use super::super::tests_appearance::{click, frame_events};
+        let app = app_with_sets();
+        let mut saved = serde_json::to_value(&app.ui).unwrap();
+        saved["action_set"] = json!("Other");
+        let restored = serde_json::from_value::<crate::state::UiState>(saved.clone()).unwrap();
+        assert_eq!((restored.action_set, restored.action_sets.len()), (None, 3), "not an index: no set current, the sets load");
+        saved["action_set"] = json!(9);
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui = serde_json::from_value(saved).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        frame_events(&ctx, &mut app, vec![], show);
+        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
+        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        let [stop, record, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        click(&ctx, &mut app, record.center(), show);
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(0), vec![0]), "the set recorded into is current");
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        click(&ctx, &mut app, stop.center(), show);
+        let counts = app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>();
+        assert_eq!(counts, [7, 2, 0], "recorded into Default Actions");
+    }
+
     /// Shift-click on another set's name while an action is selected selects the sets from the
     /// current one to it and clears the action.
     #[test]
@@ -732,6 +1060,97 @@ mod tests {
         app.run(DELETE_SETS, json!({"sets": [0]})).unwrap();
         let d = app.ui.dialog.as_ref().expect("the Batch dialog of a kept set stays open");
         assert_eq!((d.fields["set"].clone(), d.fields["action"].clone()), (json!(0), json!(1)), "it follows Mine to index 0");
+    }
+
+    /// A click on the panel menu's Duplicate.
+    fn menu_duplicate(ctx: &egui::Context, app: &mut VectorcraftApp) {
+        use super::super::tests_appearance::{click, frame_events};
+        let texts = frame_events(ctx, app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Duplicate").map(|(_, r)| *r).expect("Duplicate in the menu");
+        click(ctx, app, item.center(), menu);
+    }
+
+    fn action_names(app: &VectorcraftApp, set: usize) -> Vec<String> {
+        app.ui.action_sets[set].actions.iter().map(|a| a.name.clone()).collect()
+    }
+
+    /// The panel menu's Duplicate copies the selected action to right after it in its set, named
+    /// with " copy" added and with steps of its own, and selects the copy.
+    #[test]
+    fn the_panel_menus_duplicate_copies_the_selected_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Nudge").center(), show);
+        frame_events(&ctx, &mut app, vec![], show);
+        menu_duplicate(&ctx, &mut app);
+        assert_eq!(action_names(&app, 1), ["Nudge", "Nudge copy", "Nudge Again"], "the copy goes right after the original");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "no set is added");
+        assert_eq!(app.ui.action_sets[1].actions[1].steps, app.ui.action_sets[1].actions[0].steps);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 1)), "the copy is selected");
+        frame_events(&ctx, &mut app, vec![], show);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 1)), "and stays selected in the panel");
+        app.ui.action_sets[1].actions[1].steps[0].1 = json!({"dx": 5, "dy": 0});
+        assert_eq!(app.ui.action_sets[1].actions[0].steps[0].1, json!({"dx": 1, "dy": 0}), "the original's steps are its own");
+    }
+
+    /// The panel menu's Duplicate with a set selected copies the set and all its actions to right
+    /// after it, with an id of its own, makes the copy current, and the copy is saved with the sets.
+    #[test]
+    fn the_panel_menus_duplicate_copies_the_current_set() {
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        click_set(&ctx, &mut app, "Mine", egui::Modifiers::NONE);
+        menu_duplicate(&ctx, &mut app);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Mine copy", "Other"]);
+        assert_eq!(action_names(&app, 2), ["Nudge", "Nudge Again"], "every action is copied");
+        assert_ne!(app.ui.action_sets[2].id, app.ui.action_sets[1].id, "the copy has an id of its own");
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(2), vec![2]), "the copy is current");
+        app.ui.action_sets[2].actions[0].steps.clear();
+        assert_eq!(app.ui.action_sets[1].actions[0].steps.len(), 1, "the original's steps are its own");
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        let restored = serde_json::from_value::<crate::state::UiState>(saved).unwrap();
+        assert_eq!(restored.action_sets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Default Actions", "Mine", "Mine copy", "Other"]);
+    }
+
+    /// The panel menu's Duplicate does nothing while no action and no set is selected.
+    #[test]
+    fn the_panel_menus_duplicate_needs_a_selected_action_or_set() {
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        menu_duplicate(&ctx, &mut app);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"]);
+        assert_eq!(app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>(), [6, 2, 0]);
+        assert_eq!(app.ui.action_set, None);
+    }
+
+    /// `ui.actionSet.duplicate` copies an action or a set by index, the current set by default,
+    /// refuses indexes past the last set or action, and keeps a recording and an open Batch dialog
+    /// on their own set and action.
+    #[test]
+    fn the_duplicate_command_copies_by_index_and_keeps_recordings_and_dialogs_in_place() {
+        let mut app = app_with_sets();
+        assert_eq!(app.run(DUPLICATE, json!({})).unwrap_err(), "no action set is current");
+        assert_eq!(app.run(DUPLICATE, json!({"set": 3})).unwrap_err(), "no such action set");
+        assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 2})).unwrap_err(), "no such action");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "a refused index copies nothing");
+        crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
+        assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 0})).unwrap(), json!({"set": 1, "action": 1}));
+        assert_eq!(action_names(&app, 1), ["Nudge", "Nudge copy", "Nudge Again"]);
+        let d = app.ui.dialog.as_ref().expect("the Batch dialog stays open");
+        assert_eq!((d.fields["set"].clone(), d.fields["action"].clone()), (json!(1), json!(2)), "it follows Nudge Again");
+        app.ui.dialog = None;
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let start = app.session.journal.len();
+        app.session.journal.hold(Some(start));
+        app.ui.recording = Some((2, "Action 1".into(), start));
+        crate::dialogs::action_set_options::open(&mut app, 2);
+        app.ui.action_set = Some(0);
+        assert_eq!(app.run(DUPLICATE, json!({})).unwrap(), json!({"set": 1}), "the current set by default");
+        assert_eq!(set_names(&app), ["Default Actions", "Default Actions copy", "Mine", "Other"]);
+        assert_eq!(app.ui.recording.as_ref().map(|r| r.0), Some(3), "still recording into Other");
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["set"].clone()), Some(json!(3)), "Set Options still on Other");
     }
 
     /// A recording keeps its steps when a canceled undo group drops journal entries made before the
@@ -844,5 +1263,137 @@ mod tests {
         assert_eq!(lefts(&app), [x0, x0 + 90.0, x1 - 20.0], "distributed across artboard 2, active when the action plays");
         play(&mut app, 0, spacing).unwrap();
         assert_eq!(lefts(&app), [x0, x0 + 80.0, x1 - 20.0], "spaced across artboard 2, active when the action plays");
+    }
+
+    /// Files in memory for `app`: what it writes, and what it reads back. Save dialogs pick
+    /// `/sets/` and the suggested name, open dialogs pick `open`.
+    fn with_files(app: &mut VectorcraftApp, open: &str) -> std::rc::Rc<std::cell::RefCell<std::collections::BTreeMap<String, Vec<u8>>>> {
+        let files = std::rc::Rc::new(std::cell::RefCell::new(std::collections::BTreeMap::<String, Vec<u8>>::new()));
+        let (w, r) = (files.clone(), files.clone());
+        app.services.write = Some(Box::new(move |path: &str, bytes: &[u8]| {
+            w.borrow_mut().insert(path.to_string(), bytes.to_vec());
+            Ok(())
+        }));
+        app.services.read = Some(Box::new(move |path: &str| r.borrow().get(path).cloned().ok_or_else(|| "no such file".to_string())));
+        app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/sets/{}", pick.name))));
+        let open = open.to_string();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(open.clone())));
+        files
+    }
+
+    /// The panel menu's Save Actions… writes the current set with its actions to a file named
+    /// after it, and Load Actions… adds the set it reads after the others, with the same actions
+    /// and steps; a set named like one in the panel gets the next free number, and the other sets
+    /// and the current set stay as they are.
+    #[test]
+    fn save_actions_and_load_actions_round_trip_a_set() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/Mine.vcactions");
+        let ctx = egui::Context::default();
+        let item = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            texts.iter().find(|(s, _)| s.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"))
+        };
+        let save = item(&ctx, &mut app, "Save Actions…");
+        click(&ctx, &mut app, save, menu);
+        assert!(files.borrow().is_empty(), "no set is current: nothing to save");
+        click_set(&ctx, &mut app, "Mine", egui::Modifiers::NONE);
+        let save = item(&ctx, &mut app, "Save Actions…");
+        click(&ctx, &mut app, save, menu);
+        let text = String::from_utf8(files.borrow()["/sets/Mine.vcactions"].clone()).unwrap();
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!((v["format"].clone(), v["version"].clone(), v["name"].clone()), (json!("vcactions"), json!(1), json!("Mine")));
+        assert_eq!(v["actions"][1], json!({"name": "Nudge Again", "steps": [{"command": "object.move", "params": {"dx": 1, "dy": 0}}]}));
+        let load = item(&ctx, &mut app, "Load Actions…");
+        click(&ctx, &mut app, load, menu);
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other", "Mine 2"], "added after the others, numbered");
+        assert_eq!(app.ui.action_set, Some(1), "the current set stays");
+        let steps = |s: &ActionSet| s.actions.iter().map(|a| (a.name.clone(), a.steps.clone())).collect::<Vec<_>>();
+        assert_eq!(steps(&app.ui.action_sets[3]), steps(&app.ui.action_sets[1]), "the same actions and steps");
+        let r = app.run(LOAD_SET, json!({"data": text})).unwrap();
+        assert_eq!(r, json!({"set": 4, "name": "Mine 3", "actions": 2}));
+        assert_ne!(app.ui.action_sets[3].id, app.ui.action_sets[4].id, "each loaded set has an id of its own");
+    }
+
+    /// `ui.actionSet.save` saves the set at `set`, else the current one, and `ui.actionSet.load` of
+    /// a set no other set is named like keeps its name; one with no name takes the file's.
+    #[test]
+    fn load_actions_adds_a_set_and_keeps_the_others() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/Other.vcactions");
+        assert_eq!(app.run(SAVE_SET, json!({})).unwrap_err(), "no action set to save");
+        assert_eq!(app.run(SAVE_SET, json!({"set": 3})).unwrap_err(), "no such action set");
+        assert_eq!(app.run(SAVE_SET, json!({"set": 1, "path": "/sets/kept.vcactions"})).unwrap(), json!({"path": "/sets/kept.vcactions"}));
+        let text = String::from_utf8(files.borrow()["/sets/kept.vcactions"].clone()).unwrap();
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/kept.vcactions"})).unwrap(), json!({"set": 2, "name": "Mine", "actions": 2}));
+        assert_eq!(set_names(&app), ["Default Actions", "Other", "Mine"]);
+        let unnamed = text.replacen("\"name\": \"Mine\"", "\"name\": \"\"", 1);
+        files.borrow_mut().insert("/sets/Print Jobs.vcactions".into(), unnamed.into_bytes());
+        assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/Print Jobs.vcactions"})).unwrap()["name"], json!("Print Jobs"));
+        assert_eq!(app.run(SAVE_SET, json!({"set": 0, "path": "/sets/d.vcactions"})).unwrap(), json!({"path": "/sets/d.vcactions"}));
+        assert_eq!(files::set_file_stem("a/b: c?."), "a-b- c-");
+        for (name, stem) in
+            [("CON", "CON-"), ("nul", "nul-"), ("Com1.print", "Com1-.print"), ("lpt²", "lpt²-"), ("COM10", "COM10"), ("Console", "Console")]
+        {
+            assert_eq!(files::set_file_stem(name), stem, "{name}");
+        }
+    }
+
+    /// A file that is not an action set file, or is too large, is refused with a message, and no
+    /// set is added.
+    #[test]
+    fn load_actions_refuses_a_file_that_is_not_an_action_set() {
+        let mut app = app_with_sets();
+        let before = set_names(&app);
+        let many = json!({"format": "vcactions", "version": 1, "name": "Many", "actions": vec![json!({"name": "A", "steps": []}); 1001]});
+        let steps = vec![json!({"command": "object.move"}); 10_001];
+        let long = json!({"format": "vcactions", "version": 1, "name": "Long", "actions": [{"name": "A", "steps": steps}]});
+        for (data, want) in [
+            (json!("GIMP Palette"), "not an action set file (expected value at line 1 column 1)"),
+            (json!("{\"format\": \"vcstyles\", \"version\": 1, \"name\": \"S\", \"actions\": []}"), "not an action set file"),
+            (json!(42), "not an action set file"),
+            (json!(many.to_string()), "the action set file holds more than 1,000 actions"),
+            (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
+            (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
+            (
+                json!("{\"format\": \"vcactions\", \"version\": 2, \"name\": \"S\", \"actions\": []}"),
+                "the action set file needs a later version of VectorCraft",
+            ),
+        ] {
+            assert_eq!(app.run(LOAD_SET, json!({ "data": data })).unwrap_err(), want);
+        }
+        with_files(&mut app, "/sets/missing.vcactions");
+        assert_eq!(app.run(LOAD_SET, json!({})).unwrap_err(), "no such file");
+        assert_eq!(set_names(&app), before, "no set added");
+    }
+
+    /// Save Actions… does not write a set that Load Actions… would refuse: more than 1,000 actions.
+    #[test]
+    fn save_actions_does_not_write_a_set_load_actions_refuses() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/none.vcactions");
+        app.ui.action_sets[2].actions = vec![Action { name: "A".into(), steps: vec![] }; 1001];
+        let r = app.run(SAVE_SET, json!({"set": 2, "path": "/sets/big.vcactions"}));
+        assert_eq!(r.unwrap_err(), "the action set file holds more than 1,000 actions");
+        assert!(files.borrow().is_empty(), "nothing written");
+    }
+
+    /// `ui.actionSet.save` with the set id the panel menu passes saves that set after another set
+    /// took its index and the current set changed, as when its file dialog answers later; an id
+    /// that no set has saves nothing, and `set` is not read.
+    #[test]
+    fn save_actions_saves_the_set_it_was_chosen_for() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/none.vcactions");
+        let id = app.ui.action_sets[2].id;
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        app.ui.action_sets.push(ActionSet::new("Third", vec![]));
+        app.ui.action_set = Some(2);
+        app.run(SAVE_SET, json!({"id": id, "path": "/sets/x.vcactions"})).unwrap();
+        let v: Value = serde_json::from_slice(&files.borrow()["/sets/x.vcactions"]).unwrap();
+        assert_eq!(v["name"], json!("Other"), "the set chosen, not the current one");
+        assert_eq!(app.run(SAVE_SET, json!({"id": 0, "set": 0, "path": "/sets/y.vcactions"})).unwrap_err(), "no such action set");
     }
 }

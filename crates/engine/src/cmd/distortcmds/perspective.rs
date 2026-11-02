@@ -1,6 +1,6 @@
 use super::{
     Affine, Arc, Document, EngineError, Homography, NodeId, NodeKind, PerspectiveGrid, Plane, Point, Result, Session, Value, bad, check_numbers,
-    check_switches, collect_points, duplicate_in, finite_numbers, id_param, ids_param, json, matrix_param, number_or, ok, outermost, persp,
+    check_switches, collect_points, duplicate_in, finite_numbers, json, matrix_param, named_id, named_ids, number_or, ok, outermost, persp,
     point_param, project_node, selected_roots, str_param, switch_or,
 };
 
@@ -92,7 +92,7 @@ fn plane_param(g: &PerspectiveGrid, p: &Value, cmd: &str) -> Result<Plane> {
 }
 
 pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    match named_ids(p)? {
         Some(v) => Ok(outermost(&s.doc()?.doc, v)),
         None => selected_roots(s),
     }
@@ -478,9 +478,8 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn plane_match(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id = id_param(p, "id")
-        .or_else(|| st.selection.objects.first().copied())
-        .ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
+    let id =
+        named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
     let mut g = grid_of(&st.doc);
     let (plane, depth) = g.attachment_of(&st.doc, id).ok_or_else(|| EngineError::Other("the object isn't in perspective".into()))?;
     g.set_offset(plane, depth);
@@ -586,8 +585,7 @@ pub fn perspective_click(s: &Session, cmd: &str, params: &Value, at: Point) -> O
 /// mode, to be edited; exiting isolation projects it again ([`finish_edit_text`]).
 pub(super) fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id =
-        id_param(p, "id").or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
+    let id = named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
     if !st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)) && n.projection().is_some()) {
         return Err(EngineError::Other("select type in perspective".into()));
     }

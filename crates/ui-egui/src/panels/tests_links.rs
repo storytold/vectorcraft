@@ -172,7 +172,19 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
 #[test]
 fn edit_original_opens_image_and_document_files_only() {
     let dir = Folder::new("kinds");
-    for f in ["photo.png", "Art.SVG", "run.exe", "run.bat", "photo.png.lnk", "page.hta", "app.desktop"] {
+    for f in [
+        "photo.png",
+        "Art.SVG",
+        "scan.dib",
+        "photo.PDD",
+        "run.exe",
+        "run.bat",
+        "photo.png.lnk",
+        "page.hta",
+        "app.desktop",
+        "art.affinity",
+        "scan.jpeg2000",
+    ] {
         dir.file(f, b"");
     }
     for f in ["Tool.app", "folder.png"] {
@@ -180,7 +192,21 @@ fn edit_original_opens_image_and_document_files_only() {
     }
     let ok = |f: &str| super::links::openable_original(&dir.0.join(f).to_string_lossy()).is_ok();
     assert!(ok("photo.png") && ok("Art.SVG"));
-    for f in ["run.exe", "run.bat", "photo.png.lnk", "page.hta", "app.desktop", "Tool.app", "folder.png", "missing.png", ""] {
+    assert!(ok("scan.dib") && ok("photo.PDD"), "BMP and Photoshop files by their other names");
+    // A format's id is not one of its extensions.
+    for f in [
+        "run.exe",
+        "run.bat",
+        "photo.png.lnk",
+        "page.hta",
+        "app.desktop",
+        "art.affinity",
+        "scan.jpeg2000",
+        "Tool.app",
+        "folder.png",
+        "missing.png",
+        "",
+    ] {
         assert!(!ok(f), "{f}");
     }
     #[cfg(unix)]

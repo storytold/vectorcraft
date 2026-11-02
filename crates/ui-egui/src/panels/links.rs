@@ -238,7 +238,8 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
 pub(crate) fn openable_original(path: &str) -> Result<(), String> {
     let readable = |p: &std::path::Path| {
         let ext = p.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-        !ext.is_empty() && vectorcraft_engine::cmd::fileio::FORMATS.iter().any(|f| f.read && f.extensions.contains(&ext.as_str()))
+        use vectorcraft_engine::cmd::fileio::{FORMATS, read_extensions};
+        !ext.is_empty() && FORMATS.iter().any(|f| f.read && read_extensions(f).contains(&ext.as_str()))
     };
     let name = std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
     let real = std::fs::canonicalize(path).map_err(|e| format!("can't open “{name}”: {e}"))?;
