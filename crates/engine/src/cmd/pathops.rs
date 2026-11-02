@@ -14,6 +14,7 @@ use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
 use super::edit::selected_roots;
+use super::expand::{fill_shape, reshaped, seeded};
 use super::{
     CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, number_or, str_param,
     switch_or,
@@ -861,22 +862,58 @@ pub(crate) fn outlined_stroke(
 
 /// Path `l` with every stroke outlined, in appearance order: runs of fills stay on copies of
 /// the path, each stroke becomes its outline (or brush art), grouped when there are several.
+/// As on the canvas, the path's geometry effects ([`reshaped`]) shape the path first, and each
+/// stroke's own geometry effects then shape the path that stroke outlines; [`outlined_stroke`]
+/// gets the stroke without them. A fill with a random Transform effect paints the outline its
+/// geometry effects make of the path, on a copy of its own. A path whose Transform effect copies
+/// it with a gradient, or has Scale Strokes & Effects or Transform Patterns on, becomes the art the
+/// canvas draws for it, each copy with its own gradient, stroke width and pattern, and its strokes
+/// outlined before the art gets new ids. Random in a Transform effect takes its seed
+/// from the object's id, so these effects give the outline the values the canvas drew. When the
+/// geometry effects leave nothing to paint, an empty group takes the path's place.
 /// `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, is_geometry, reshape};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
+    if has_transform_art(l) {
+        let mut art = reshape(Some(&*d), l, None)?;
+        outline_member_strokes(d, brushes, &mut art);
+        return Some(d.reid(&art));
+    }
+    let reshaped = reshaped(l);
+    let l = reshaped.as_ref().unwrap_or(l);
     let (path, rule) = node_path(l)?;
+    let ctx = GeomContext::of(l);
     let mut parts: Vec<Node> = vec![];
     let mut fills: Vec<AppearanceItem> = vec![];
     for item in &l.appearance.items {
         match item {
-            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => fills.push(item.clone()),
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => {
+                let shaped = f.effects.iter().any(seeded).then(|| path.bounds().and_then(|b| fill_shape(l, item, &path, b))).flatten();
+                let Some((shape, ..)) = shaped else {
+                    fills.push(item.clone());
+                    continue;
+                };
+                if !fills.is_empty() {
+                    parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
+                }
+                let mut plain = item.clone();
+                plain.effects_mut().retain(|e| !is_geometry(&e.id));
+                parts.push(styled_copy(d, &shape, vec![plain]));
+            }
             AppearanceItem::Stroke(st) if outlinable(st) => {
                 if !fills.is_empty() {
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
-                parts.extend(outlined_stroke(d, brushes, &path, rule, st));
+                let mut plain = st.clone();
+                plain.effects.retain(|e| !is_geometry(&e.id));
+                let stroked = match path.bounds() {
+                    Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
+                    _ => path.clone(),
+                };
+                parts.extend(outlined_stroke(d, brushes, &stroked, rule, &plain));
             }
             _ => {}
         }
@@ -884,7 +921,25 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
     if !fills.is_empty() {
         parts.push(styled_copy(d, l, fills));
     }
+    let reshapes = reshaped.is_some()
+        || l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st) && has_geometry(&st.effects)));
+    if parts.is_empty() && reshapes {
+        // The geometry effects leave nothing to paint, as on the canvas: an empty group takes the path's place.
+        parts.push(Node::group(d.alloc_id(), vec![]));
+    }
     assemble(d, l, parts)
+}
+
+/// Outline the strokes of every member of group `n`, however deep ([`outline_strokes`]).
+fn outline_member_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &mut Node) {
+    let Some(children) = n.children_mut() else { return };
+    for c in children.iter_mut() {
+        if let Some(o) = outline_strokes(d, brushes, c) {
+            *c = Arc::new(o);
+        } else if c.children().is_some() {
+            outline_member_strokes(d, brushes, Arc::make_mut(c));
+        }
+    }
 }
 
 /// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
