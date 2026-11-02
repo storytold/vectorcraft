@@ -348,6 +348,167 @@ fn editing_data_that_cant_be_read_keeps_the_pdf_parts_notes() {
     assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE, unread]), "{r}");
 }
 
+/// Decode parameters the import refuses, for the page's content stream (#4366).
+const REFUSED_CONTENT: &str = "/DecodeParms << /Predictor 12 /Columns 0 >>";
+
+/// A `.ai` and a PDF saved with the editing data, carrying `private`, whose page's content stream
+/// the import refuses.
+fn refused_files(private: &[u8], page: &str) -> [(&'static str, Vec<u8>); 2] {
+    [("art.ai", ai::ai_with_content(private, page, REFUSED_CONTENT)), ("art.pdf", ai::pdf_with_content(private, page, REFUSED_CONTENT))]
+}
+
+/// The note of a file opened from its editing data because its PDF part fails with `e`.
+fn unread_pdf_part(e: &str) -> String {
+    format!("the PDF part couldn't be read ({e}): the file opened from its editing data")
+}
+
+/// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
+/// its editing data, with a first note saying why. Pages picked, layers off or the editing data
+/// off keep the error, and so does editing data that can't be read.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
+    let mut s = Session::new();
+    for (name, file) in refused_files(&compressed(&ai::sample_data()), ai::page_pdf()) {
+        let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
+        assert!(e.contains("a page's content in it (object 4) has decode parameters that can't be applied"), "{name}: {e}");
+        let r = open(&mut s, name, &file, json!({})).unwrap();
+        assert_eq!(r["format"], json!(&name[4..]), "{name}: {r}");
+        assert_eq!(r["warnings"], json!([unread_pdf_part(&e)]), "{name}: {r}");
+        check_sample(&s);
+        assert!(load(name, &file).unwrap().editing_data, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), e, "{name}: {p}");
+        }
+    }
+    for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
+        let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+    }
+}
+
+/// A file saved in units of 10 points (`/UserUnit 10`, as in
+/// `an_ai_file_with_a_user_unit_opens_at_its_size_in_points`) whose PDF part can't be read opens
+/// from its editing data at its size in points.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_opens_at_its_size_in_points() {
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(20.0, 20.0, 60.0, 50.0))));
+    let file = ai::ai_with_entries_and_content(&compressed(data.as_bytes()), "1 0 0 rg 20 20 40 30 re f", "/UserUnit 10", REFUSED_CONTENT);
+    let near = |r: vectorcraft_geom::Rect, want: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(want).all(|(a, b)| (a - b).abs() < 0.01);
+    let mut s = Session::new();
+    let r = open(&mut s, "large.ai", &file, json!({})).unwrap();
+    assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read ("), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    assert!(near(doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{:?}", doc.artboards[0].rect);
+    let art = doc.art_bounds().unwrap();
+    assert!(near(art, [200.0, 500.0, 600.0, 800.0]), "{art:?}");
+    // On a page turned a quarter, the same.
+    let file = ai::ai_with_entries_and_content(&compressed(data.as_bytes()), "", "/UserUnit 10 /Rotate 90", REFUSED_CONTENT);
+    open(&mut s, "turned.ai", &file, json!({})).unwrap();
+    assert!(near(s.doc().unwrap().doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{:?}", s.doc().unwrap().doc.artboards[0].rect);
+    // A page cropped to the art: its box has the art's size in those units.
+    let art = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(20.0, 20.0, 60.0, 50.0));
+    let cropped = ai::editing_data_in([20.0, 20.0, 60.0, 50.0], [0.0, 0.0, 200.0, 100.0], &ai::layer("Art", &art));
+    let file = ai::ai_with_entries_and_content(&compressed(cropped.as_bytes()), "", "/UserUnit 10 /TrimBox [20 20 60 50]", REFUSED_CONTENT);
+    open(&mut s, "cropped.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert!(near(doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{:?}", doc.artboards[0].rect);
+    assert!(near(doc.art_bounds().unwrap(), [200.0, 500.0, 600.0, 800.0]), "{:?}", doc.art_bounds());
+    // Saved in points, it opens as it is.
+    let file = ai::ai_with_entries_and_content(&compressed(data.as_bytes()), "", "", REFUSED_CONTENT);
+    open(&mut s, "points.ai", &file, json!({})).unwrap();
+    assert!(near(s.doc().unwrap().doc.artboards[0].rect, [0.0, 0.0, 200.0, 100.0]));
+}
+
+/// Type asked for as outlines in a file whose PDF part can't be read: the editing data's type,
+/// outlined, as for a file saved without its PDF part.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
+    let [(name, file), _] = refused_files(&typed_data(), "");
+    let mut s = Session::new();
+    let r = open(&mut s, name, &file, json!({})).unwrap();
+    assert_eq!(texts_and_paths(&s).0, 1, "by default the editing data's type is type: {r}");
+    let r = open(&mut s, name, &file, json!({"textAs": "outlines"})).unwrap();
+    let (texts, paths) = texts_and_paths(&s);
+    assert_eq!(texts, 0, "no type left: {r}");
+    assert!(paths > 0, "the outlines are there: {r}");
+}
+
+/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// left out, and both notes say so.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
+    let data = String::from_utf8_lossy(&ai::sample_data()).replace("] 0 0 2 1 2 1 8 3", "] 0 0 6000 6000 6000 6000 8 3");
+    let [(name, file), _] = refused_files(&compressed(data.as_bytes()), ai::page_pdf());
+    let mut s = Session::new();
+    let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
+    let r = open(&mut s, name, &file, json!({})).unwrap();
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+}
+
+/// A copied file whose PDF part can't be read pastes the objects of its editing data when asked
+/// for them, with the note; without `editingData` its page can't be read.
+#[test]
+fn a_copied_file_whose_pdf_part_cant_be_read_pastes_from_its_editing_data() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for (name, file) in refused_files(&compressed(&ai::sample_data()), ai::page_pdf()) {
+        let (r, pasted) = paste(&mut s, &file, true);
+        assert_eq!(r["count"], 7, "{name}: {r}");
+        let pasted: Vec<String> = pasted.iter().map(|n| n.name.clone().unwrap_or_default()).collect();
+        assert_eq!(pasted, ["Pair", "Ring", "Window", "Shaded", "", "Sub", ""], "{name}");
+        assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read (cannot read PDF: "), "{name}: {r}");
+        let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file)});
+        let e = s.execute("clipboard.importPdf", &p).unwrap_err().to_string();
+        assert!(e.contains("decode parameters"), "{name}: {e}");
+    }
+}
+
+/// A file whose PDF part can't be read places its first artboard from its editing data, with the
+/// note; any other page keeps the error.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_places_from_its_editing_data() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    for (name, file) in refused_files(&compressed(&ai::sample_data()), ai::page_pdf()) {
+        let data = vectorcraft_format::base64_encode(&file);
+        let r = s.execute("file.place", &json!({"name": name, "dataBase64": data, "link": false})).unwrap();
+        assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(200.0), Some(100.0)), "{name}: {r}");
+        assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read ("), "{name}: {r}");
+        let placed = s.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+        assert_eq!(names(&placed.children().unwrap()[1..]), ["Pair", "Ring", "Window"], "{name}: after the clipping path");
+        for off in [json!({"editingData": false}), json!({"layers": false})] {
+            let mut p = json!({"name": name, "dataBase64": data, "link": false});
+            p.as_object_mut().unwrap().extend(off.as_object().unwrap().clone());
+            let e = s.execute("file.place", &p).unwrap_err().to_string();
+            assert!(e.contains("decode parameters"), "{name}: {off}: {e}");
+        }
+    }
+    let [(name, file), _] = refused_files(&typed_data(), "");
+    let data = vectorcraft_format::base64_encode(&file);
+    let r = s.execute("file.place", &json!({"name": name, "dataBase64": data, "link": false, "textAs": "outlines", "crop": "bounding"})).unwrap();
+    assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read ("), "{r}");
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+    let mut texts = 0;
+    placed.walk(&mut |n| texts += usize::from(matches!(n.kind, NodeKind::Text(_))));
+    assert_eq!(texts, 0, "placed with its type outlined: {r}");
+    // Two artboards: the second can't be placed.
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let art = format!("0 g\n{}f\n{}f\n", ai::rect(10.0, 10.0, 50.0, 50.0), ai::rect(10.0, -140.0, 70.0, -100.0));
+    let paged = ai::editing_data(100.0, 100.0, &(boards.to_string() + &ai::layer("Art", &art)));
+    let [(name, file), _] = refused_files(&compressed(paged.as_bytes()), ai::page_pdf());
+    let data = vectorcraft_format::base64_encode(&file);
+    let size = |s: &mut Session, page: u64| {
+        let r = s.execute("file.place.info", &json!({"name": name, "dataBase64": data, "page": page, "crop": "bounding"}));
+        r.map(|r| (r["width"].as_f64(), r["height"].as_f64())).map_err(|e| e.to_string())
+    };
+    assert_eq!(size(&mut s, 1), Ok((Some(40.0), Some(40.0))));
+    let second = size(&mut s, 2);
+    assert!(second.as_ref().is_err_and(|e| e.contains("decode parameters")), "{second:?}");
+}
+
 /// A copied `.ai` whose editing data can't be read, or isn't there, pastes its page as a PDF
 /// does: the same objects as without `editingData`.
 #[test]
