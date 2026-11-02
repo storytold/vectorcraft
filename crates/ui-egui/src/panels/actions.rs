@@ -176,6 +176,14 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
             d.fields.insert("set".into(), json!(set - sets.iter().filter(|&&s| s < set).count()));
         }
     }
+    // The panel's selected action follows its set down too, and is no longer selected when its set
+    // is deleted, so a set made later at its old index does not find it selected.
+    if let Some(ctx) = app.ui_ctx.clone()
+        && let Some((set, action)) = pstate::<Option<(usize, usize)>>(&ctx, "actions-selected")
+    {
+        let moved = (!sets.contains(&set)).then(|| (set - sets.iter().filter(|&&s| s < set).count(), action));
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", moved);
+    }
     for &s in sets.iter().rev() {
         app.ui.action_sets.remove(s);
     }
@@ -557,6 +565,36 @@ mod tests {
         let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
         click(&ctx, &mut app, item.center(), menu);
         assert!(app.ui.dialog.is_none(), "Action Options… does not open for Last's action");
+    }
+
+    /// `ui.actionSet.delete` moves the panel's selected action down with its set, and clears it
+    /// when its set is deleted: a new set made at that index, and the action recorded into it, are
+    /// not selected, so the panel menu's Action Options… stays off.
+    #[test]
+    fn deleting_sets_moves_or_clears_the_selected_action() {
+        use super::super::tests_appearance::{click, frame_events};
+        let selected = |ctx: &egui::Context| pstate::<Option<(usize, usize)>>(ctx, "actions-selected");
+        let mut app = app_with_sets();
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        app.ui.action_set = Some(1);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 1)));
+        app.run(DELETE_SETS, json!({"sets": [0]})).unwrap();
+        assert_eq!(selected(&ctx), Some((0, 1)), "Nudge Again is still selected, at its set's new index");
+        app.ui.action_sets.push(ActionSet::new("Last", vec![]));
+        app.ui.action_set = Some(2);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((2, 0)));
+        app.ui.action_sets[2].actions.push(Action { name: "Spin".into(), steps: vec![] });
+        app.run(DELETE_SETS, json!({"sets": [2]})).unwrap();
+        assert_eq!(selected(&ctx), None, "the deleted set's action is no longer selected");
+        crate::dialogs::action_set_options::open_new(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.action_set, Some(2), "the new set is current, at the deleted set's index");
+        app.ui.action_sets[2].actions.push(Action { name: "Recorded".into(), steps: vec![] });
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Action Options…").map(|(_, r)| *r).expect("Action Options… in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        assert!(app.ui.dialog.is_none(), "Action Options… does not open for the new set's action");
     }
 
     /// An app with the default set and the sets Mine (two actions) and Other.
