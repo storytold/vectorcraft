@@ -68,6 +68,11 @@
 
 ## A look around
 
+<p align="center">
+  <a href="examples/image-trace-showcase/README.md"><img src="examples/image-trace-showcase/posters/family-poster.jpg" alt="Four traces: Hiroshige, a WPA Grand Canyon poster, a Haeckel jellyfish and a Leonardo drawing, each traced to vector shapes in VectorCraft" width="480"></a>
+  <br><sub><b>Four traces</b>: public-domain artwork traced in VectorCraft, from flat colour to pen and ink. <a href="examples/image-trace-showcase/README.md">Posters, settings sheets and notes.</a></sub>
+</p>
+
 <table>
 <tr>
 <td width="50%" valign="top">

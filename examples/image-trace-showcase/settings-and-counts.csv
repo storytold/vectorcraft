@@ -1,0 +1,64 @@
+sheet,image,caption,preset,mode,colors_setting,colors_output,paths_setting,corners,noise,method,path_count,anchor_count,success,svg
+a01-cat-face,a01-cat-face,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,12,217,True,svg/a01-cat-face--00-default.svg
+a01-cat-face,a01-cat-face,Auto Color,Auto Color,color,6,4,65.0,60.0,16,abutting,17,533,True,svg/a01-cat-face--01-auto-color.svg
+a01-cat-face,a01-cat-face,3 Colors,3 Colors,color,3,3,60.0,60.0,20,abutting,14,511,True,svg/a01-cat-face--02-3-colors.svg
+a01-cat-face,a01-cat-face,6 Colors,6 Colors,color,6,5,65.0,60.0,16,abutting,17,537,True,svg/a01-cat-face--03-6-colors.svg
+a01-cat-face,a01-cat-face,Flat Logo,Flat Logo,logo,8,5,60.0,50.0,6,abutting,19,899,True,svg/a01-cat-face--04-flat-logo.svg
+a01-cat-face,a01-cat-face,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,9,309,True,svg/a01-cat-face--05-black-and-white-logo.svg
+a01-cat-face,a01-cat-face,Outline,Outline,blackAndWhite,6,1,80.0,70.0,10,abutting,9,115,True,svg/a01-cat-face--06-outline.svg
+f01-apple,f01-apple,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,4,83,True,svg/f01-apple--07-default.svg
+f01-apple,f01-apple,Auto Color,Auto Color,color,6,4,65.0,60.0,16,abutting,6,294,True,svg/f01-apple--08-auto-color.svg
+f01-apple,f01-apple,3 Colors,3 Colors,color,3,3,60.0,60.0,20,abutting,4,132,True,svg/f01-apple--09-3-colors.svg
+f01-apple,f01-apple,6 Colors,6 Colors,color,6,6,65.0,60.0,16,abutting,6,123,True,svg/f01-apple--10-6-colors.svg
+f01-apple,f01-apple,Flat Logo,Flat Logo,logo,8,6,60.0,50.0,6,abutting,6,317,True,svg/f01-apple--11-flat-logo.svg
+f01-apple,f01-apple,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,2,157,True,svg/f01-apple--12-black-and-white-logo.svg
+f01-apple,f01-apple,Outline,Outline,blackAndWhite,6,1,80.0,70.0,10,abutting,2,75,True,svg/f01-apple--13-outline.svg
+f02-cherries,f02-cherries,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,4,202,True,svg/f02-cherries--14-default.svg
+f02-cherries,f02-cherries,Auto Color,Auto Color,color,6,4,65.0,60.0,16,abutting,7,406,True,svg/f02-cherries--15-auto-color.svg
+f02-cherries,f02-cherries,3 Colors,3 Colors,color,3,3,60.0,60.0,20,abutting,5,164,True,svg/f02-cherries--16-3-colors.svg
+f02-cherries,f02-cherries,6 Colors,6 Colors,color,6,6,65.0,60.0,16,abutting,9,246,True,svg/f02-cherries--17-6-colors.svg
+f02-cherries,f02-cherries,Flat Logo,Flat Logo,logo,8,6,60.0,50.0,6,abutting,15,478,True,svg/f02-cherries--18-flat-logo.svg
+f02-cherries,f02-cherries,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,1,608,True,svg/f02-cherries--19-black-and-white-logo.svg
+f02-cherries,f02-cherries,Outline,Outline,blackAndWhite,6,1,80.0,70.0,10,abutting,1,591,True,svg/f02-cherries--20-outline.svg
+s02-waves,s02-waves,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,3,410,True,svg/s02-waves--21-default.svg
+s02-waves,s02-waves,Auto Color,Auto Color,color,6,5,65.0,60.0,16,abutting,6,254,True,svg/s02-waves--22-auto-color.svg
+s02-waves,s02-waves,3 Colors,3 Colors,color,3,3,60.0,60.0,20,abutting,4,276,True,svg/s02-waves--23-3-colors.svg
+s02-waves,s02-waves,6 Colors,6 Colors,color,6,5,65.0,60.0,16,abutting,6,336,True,svg/s02-waves--24-6-colors.svg
+s02-waves,s02-waves,Flat Logo,Flat Logo,logo,8,5,60.0,50.0,6,abutting,6,1648,True,svg/s02-waves--25-flat-logo.svg
+s02-waves,s02-waves,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,2,624,True,svg/s02-waves--26-black-and-white-logo.svg
+s02-waves,s02-waves,Outline,Outline,blackAndWhite,6,1,80.0,70.0,10,abutting,2,456,True,svg/s02-waves--27-outline.svg
+g02-star-badge,g02-star-badge,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,4,196,True,svg/g02-star-badge--28-default.svg
+g02-star-badge,g02-star-badge,Auto Color,Auto Color,color,6,4,65.0,60.0,16,abutting,4,118,True,svg/g02-star-badge--29-auto-color.svg
+g02-star-badge,g02-star-badge,3 Colors,3 Colors,color,3,3,60.0,60.0,20,abutting,3,98,True,svg/g02-star-badge--30-3-colors.svg
+g02-star-badge,g02-star-badge,6 Colors,6 Colors,color,6,4,65.0,60.0,16,abutting,4,120,True,svg/g02-star-badge--31-6-colors.svg
+g02-star-badge,g02-star-badge,Flat Logo,Flat Logo,logo,8,4,60.0,50.0,6,abutting,4,321,True,svg/g02-star-badge--32-flat-logo.svg
+g02-star-badge,g02-star-badge,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,2,433,True,svg/g02-star-badge--33-black-and-white-logo.svg
+g02-star-badge,g02-star-badge,Outline,Outline,blackAndWhite,6,1,80.0,70.0,10,abutting,2,484,True,svg/g02-star-badge--34-outline.svg
+c05-junctions,c05-junctions,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,4,318,True,svg/c05-junctions--35-default.svg
+c05-junctions,c05-junctions,Auto Color,Auto Color,color,6,6,65.0,60.0,16,abutting,11,108,True,svg/c05-junctions--36-auto-color.svg
+c05-junctions,c05-junctions,3 Colors,3 Colors,color,3,3,60.0,60.0,20,abutting,7,206,True,svg/c05-junctions--37-3-colors.svg
+c05-junctions,c05-junctions,6 Colors,6 Colors,color,6,6,65.0,60.0,16,abutting,11,108,True,svg/c05-junctions--38-6-colors.svg
+c05-junctions,c05-junctions,Flat Logo,Flat Logo,logo,8,6,60.0,50.0,6,abutting,11,44,True,svg/c05-junctions--39-flat-logo.svg
+c05-junctions,c05-junctions,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,3,485,True,svg/c05-junctions--40-black-and-white-logo.svg
+c05-junctions,c05-junctions,Outline,Outline,blackAndWhite,6,1,80.0,70.0,10,abutting,3,342,True,svg/c05-junctions--41-outline.svg
+gray-leg,gray-leg,Default,Default,blackAndWhite,6,2,50.0,75.0,25,abutting,350,11789,True,svg/gray-leg--47-default.svg
+gray-leg,gray-leg,Line Art,Line Art,blackAndWhite,6,1,80.0,70.0,10,abutting,606,9732,True,svg/gray-leg--48-line-art.svg
+gray-leg,gray-leg,Technical Drawing,Technical Drawing,blackAndWhite,6,1,95.0,90.0,4,abutting,874,12217,True,svg/gray-leg--49-technical-drawing.svg
+gray-leg,gray-leg,Sketched Art,Sketched Art,blackAndWhite,6,1,50.0,50.0,100,abutting,78,4957,True,svg/gray-leg--50-sketched-art.svg
+gray-leg,gray-leg,Black and White Logo,Black and White Logo,blackAndWhite,6,1,95.0,80.0,8,abutting,683,11237,True,svg/gray-leg--51-black-and-white-logo.svg
+hiroshige,hiroshige,6 Colors,6 Colors,color,6,6,65.0,60.0,16,abutting,2512,67480,True,svg/hiroshige--52-6-colors.svg
+hiroshige,hiroshige,16 Colors,16 Colors,color,16,15,70.0,55.0,10,abutting,7765,125969,True,svg/hiroshige--53-16-colors.svg
+hiroshige,hiroshige,Low Fidelity Photo,Low Fidelity Photo,color,20,18,60.0,50.0,12,overlapping,3908,162439,True,svg/hiroshige--54-low-fidelity-photo.svg
+hiroshige,hiroshige,Shades of Gray,Shades of Gray,grayscale,8,8,60.0,50.0,10,overlapping,2367,65063,True,svg/hiroshige--55-shades-of-gray.svg
+paths-corners,a01-cat-face,Paths 0 / Corners 0,6 Colors,color,6,5,0,0,16,abutting,17,378,True,svg/paths-corners--56-paths-0-corners-0.svg
+paths-corners,a01-cat-face,Paths 50 / Corners 0,6 Colors,color,6,5,50,0,16,abutting,17,488,True,svg/paths-corners--57-paths-50-corners-0.svg
+paths-corners,a01-cat-face,Paths 100 / Corners 0,6 Colors,color,6,5,100,0,16,abutting,17,1507,True,svg/paths-corners--58-paths-100-corners-0.svg
+paths-corners,a01-cat-face,Paths 0 / Corners 50,6 Colors,color,6,5,0,50,16,abutting,17,350,True,svg/paths-corners--59-paths-0-corners-50.svg
+paths-corners,a01-cat-face,Paths 50 / Corners 50,6 Colors,color,6,5,50,50,16,abutting,17,458,True,svg/paths-corners--60-paths-50-corners-50.svg
+paths-corners,a01-cat-face,Paths 100 / Corners 50,6 Colors,color,6,5,100,50,16,abutting,17,1408,True,svg/paths-corners--61-paths-100-corners-50.svg
+paths-corners,a01-cat-face,Paths 0 / Corners 100,6 Colors,color,6,5,0,100,16,abutting,17,348,True,svg/paths-corners--62-paths-0-corners-100.svg
+paths-corners,a01-cat-face,Paths 50 / Corners 100,6 Colors,color,6,5,50,100,16,abutting,17,448,True,svg/paths-corners--63-paths-50-corners-100.svg
+paths-corners,a01-cat-face,Paths 100 / Corners 100,6 Colors,color,6,5,100,100,16,abutting,17,1364,True,svg/paths-corners--64-paths-100-corners-100.svg
+noise,a01-cat-face,Noise 1,6 Colors,color,6,5,65.0,60.0,1,abutting,23,561,True,svg/noise--65-noise-1.svg
+noise,a01-cat-face,Noise 16,6 Colors,color,6,5,65.0,60.0,16,abutting,17,537,True,svg/noise--66-noise-16.svg
+noise,a01-cat-face,Noise 50,6 Colors,color,6,5,65.0,60.0,50,abutting,17,537,True,svg/noise--67-noise-50.svg

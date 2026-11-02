@@ -136,3 +136,16 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+Image Trace showcase
+--------------------
+examples/image-trace-showcase contains original VectorCraft layouts and synthetic test
+logos under MIT OR Apache-2.0, plus reproductions and traces of artwork by Utagawa
+Hiroshige, Henry Vandyke Carter (Gray's Anatomy), Ernst Haeckel, Leonardo da Vinci,
+and C. Don (Chester) Powell (WPA Federal Art Project). The exact Wikimedia Commons
+scan records, their stated public-domain bases, source SHA-256 hashes, and crops are
+in examples/image-trace-showcase/SOURCES.md. In particular, the Powell poster is
+identified as LCCN 2007676131 / ppmsca.13397, with the Commons PD-USGov-WPA tag and
+item-specific publication statement. The layouts' licence does not relicense the
+underlying scans. Fonts are referenced by name, not redistributed files.
