@@ -339,3 +339,25 @@ fn replace_missing_fonts_with_the_default_or_a_chosen_font() {
     let r = s.execute("addon.cleanup.replaceFonts", &json!({"font": "No Such Font Family"}));
     assert!(matches!(r, Err(EngineError::BadParams { .. })), "{r:?}");
 }
+
+#[test]
+fn replace_missing_fonts_reaches_the_type_in_symbols() {
+    let mut s = session();
+    let gone = text(&mut s, json!({"x": 40, "y": 60, "text": "Lost", "size": 20, "font": "No Such Font Family"}));
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [gone.0]})).unwrap();
+    let family = |s: &Session| crate::cmd::fonts::symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_family.clone();
+    assert_eq!(family(&s), "No Such Font Family");
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    assert_eq!((r["runs"].as_u64(), r["font"].as_str()), (Some(1), Some("Source Sans 3")), "{r}");
+    assert_eq!(family(&s), "Source Sans 3");
+    assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+    assert_eq!(other(s.execute("addon.cleanup.replaceFonts", &json!({}))), "No fonts are missing");
+    // A symbol being edited: its type on the editing layer is replaced once.
+    let gone = text(&mut s, json!({"x": 40, "y": 60, "text": "Lost", "size": 20, "font": "No Such Font Family"}));
+    s.execute("symbol.new", &json!({"name": "Mark 2", "ids": [gone.0]})).unwrap();
+    s.execute("symbol.edit", &json!({"name": "Mark 2"})).unwrap();
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    assert_eq!(r["runs"].as_u64(), Some(1), "{r}");
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+}
