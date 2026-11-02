@@ -1,4 +1,5 @@
 use super::*;
+use vectorcraft_doc::Mojikumi;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
@@ -542,4 +543,144 @@ fn reset_panel_resets_the_hyphenation_options() {
         assert!(!para.roman_hanging, "Roman Hanging Punctuation off");
         assert_eq!(serde_json::to_value(&para).unwrap().get("justification"), None, "saves no justification options");
     }
+}
+
+/// Reset Panel gives the paragraphs it acts on new type's Mojikumi Set (Line-end Punctuation
+/// Half Width) and no tab stops, as one undo step named Reset Panel: while the Type tool edits,
+/// the paragraph at its caret (the typing before it stays a step of its own), and then the
+/// selected type's paragraphs. In an undo group that is already open, the reset is part of
+/// that group's step.
+#[test]
+fn reset_panel_resets_the_mojikumi_set_and_tab_stops_in_one_step() {
+    let (mut app, id) = editing_text("First\nSecond");
+    app.run("text.setFormat", json!({"id": id, "mojikumi": "none"})).unwrap();
+    app.run("text.tabs.set", json!({"id": id, "stops": [{"position": 36}, {"position": 90, "align": "right"}]})).unwrap();
+    let text = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        text.as_ref().clone()
+    };
+    let paras = |app: &VectorcraftApp| {
+        let text = text(app);
+        [text.para_at(0), text.para_at(1)].map(|p| (p.mojikumi, p.tabs.len()))
+    };
+    let custom = (Mojikumi::None, 2);
+    let reset = (Mojikumi::LineEndHalf, 0);
+    assert_eq!(paras(&app), [custom, custom]);
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let last_step = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().map(|e| e.label.clone());
+    // Type over the second paragraph's text: the typing session is still open.
+    select_range(&mut app, 6, 12);
+    let before = steps(&app);
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { events: vec![egui::Event::Text("X".into())], ..Default::default() };
+    ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+    assert_eq!(app.session.tool_options()["typing"], json!(true));
+    reset_panel(&mut app);
+    assert_eq!(paras(&app), [custom, reset], "only the paragraph at the caret");
+    assert_eq!((steps(&app), last_step(&app)), (before + 2, Some("Reset Panel".to_string())));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(paras(&app), [custom, custom]);
+    assert_eq!(text(&app).plain_text(), "First\nX", "the typing stays");
+    app.run("edit.redo", json!({})).unwrap();
+    app.session.set_tool_option("stopEditing", &json!(true));
+    let doc = app.session.active().unwrap().doc.clone();
+    let before = steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(paras(&app), [reset, reset]);
+    assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Reset Panel".to_string())));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, doc, "one Undo takes the whole reset back");
+    // In an undo group that is already open (MCP `command_batch` with `atomic`), the reset is
+    // part of that group's step.
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    let before = steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(paras(&app), [reset, reset]);
+    app.run("text.setFormat", json!({"id": id, "mojikumi": "none"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Batch".to_string())));
+}
+
+/// Reset Panel gives paragraphs that start with different Mojikumi Sets and tab stops the same
+/// Mojikumi Set and no tab stops, as one undo step, and one Undo gives each paragraph its own
+/// values back: while the Type tool edits, the paragraphs the selection touches, and then the
+/// paragraphs of every selected type object.
+#[test]
+fn reset_panel_resets_paragraphs_with_different_values_in_one_step() {
+    let (mut app, id) = editing_text("First\nSecond\nThird");
+    app.run("text.setFormat", json!({"id": id, "start": 0, "end": 1, "mojikumi": "none"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 6, "end": 7, "mojikumi": "lineEndHalf"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 13, "end": 14, "mojikumi": "none"})).unwrap();
+    app.run("text.tabs.set", json!({"id": id, "start": 0, "end": 1, "stops": [{"position": 36}, {"position": 90, "align": "right"}]})).unwrap();
+    app.run("text.tabs.set", json!({"id": id, "start": 6, "end": 7, "stops": [{"position": 120, "align": "decimal", "leader": "."}]})).unwrap();
+    let paras = |app: &VectorcraftApp, id: &Value| {
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        text.paragraph_styles().into_iter().map(|p| (p.mojikumi, p.tabs.iter().map(|t| t.position).collect::<Vec<_>>())).collect::<Vec<_>>()
+    };
+    let first = (Mojikumi::None, vec![36.0, 90.0]);
+    let second = (Mojikumi::LineEndHalf, vec![120.0]);
+    let third = (Mojikumi::None, vec![]);
+    let reset = (Mojikumi::LineEndHalf, vec![]);
+    assert_eq!(paras(&app, &id), [first.clone(), second.clone(), third.clone()]);
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let last_step = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().map(|e| e.label.clone());
+    // A selection from the first paragraph into the second.
+    select_range(&mut app, 2, 8);
+    let doc = app.session.active().unwrap().doc.clone();
+    let before = steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(paras(&app, &id), [reset.clone(), reset.clone(), third.clone()], "only the paragraphs the selection touches");
+    assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Reset Panel".to_string())));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, doc, "one Undo takes the whole reset back");
+    assert_eq!(paras(&app, &id), [first.clone(), second.clone(), third.clone()]);
+    // Two selected type objects.
+    app.session.set_tool_option("stopEditing", &json!(true));
+    let other = app.run("text.create", json!({"x": 40, "y": 120, "text": "Other"})).unwrap()["id"].clone();
+    app.run("text.setFormat", json!({"id": other, "mojikumi": "none"})).unwrap();
+    app.run("text.tabs.set", json!({"id": other, "stops": [{"position": 48, "align": "center"}]})).unwrap();
+    let other_values = (Mojikumi::None, vec![48.0]);
+    app.run("select.set", json!({"ids": [id, other]})).unwrap();
+    let doc = app.session.active().unwrap().doc.clone();
+    let before = steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(paras(&app, &id), [reset.clone(), reset.clone(), reset.clone()]);
+    assert_eq!(paras(&app, &other), [reset]);
+    assert_eq!((steps(&app), last_step(&app)), (before + 1, Some("Reset Panel".to_string())));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, doc, "one Undo takes the whole reset back");
+    assert_eq!(paras(&app, &id), [first, second, third]);
+    assert_eq!(paras(&app, &other), [other_values]);
+}
+
+/// Reset Panel closes only the undo group it opens: an undo group open in another document
+/// stays open, and that document's later edits stay part of its step.
+#[test]
+fn reset_panel_leaves_an_undo_group_open_in_another_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "A"})).unwrap()["id"].clone();
+    // The second document is open before the group begins, so switching to it opens no group in it.
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    assert_eq!(app.session.active_index(), Some(1));
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap();
+    app.session.set_active(0);
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "mojikumi": "none"})).unwrap();
+    let steps = |st: &vectorcraft_engine::DocState| (st.history.undo.len(), st.history.undo.last().map(|e| e.label.clone()));
+    let a_steps = steps(&app.session.documents()[0]);
+    assert_eq!(a_steps.1, Some("Batch".to_string()));
+    app.session.set_active(1);
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    let b_steps = steps(app.session.active().unwrap()).0;
+    reset_panel(&mut app);
+    assert_eq!(steps(app.session.active().unwrap()), (b_steps + 1, Some("Reset Panel".to_string())));
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    assert!(app.session.documents()[0].undo_group.is_some(), "the other document's undo group stays open");
+    app.session.set_active(0);
+    app.run("text.setFormat", json!({"id": a, "mojikumi": "lineEndHalf"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
 }
