@@ -117,11 +117,13 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     } else if let Some(d) = drag {
         // The pointer gone (a pen lifted with its press), the drag ends where it was last seen.
         let p = pointer.interact_pos().or_else(|| ui.data(|dd| dd.get_temp(drag_pos_id()))).unwrap_or(rect.center());
-        let held = if middle_pan { pointer.button_down(egui::PointerButton::Middle) } else { pointer.primary_down() };
+        let button = if middle_pan { egui::PointerButton::Middle } else { egui::PointerButton::Primary };
+        let held = pointer.button_down(button);
         if held {
             drag_held(app, ui, &f, d, p);
         } else {
-            drag_released(app, ui, &f, d, p);
+            // The drag ends where its button went up: the moves after the release in this frame are hover.
+            drag_released(app, ui, &f, d, release_pos(ui, button).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
@@ -548,6 +550,16 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             }
         }
     }
+}
+
+/// Where `button` went up in this frame, if it did.
+fn release_pos(ui: &Ui, button: egui::PointerButton) -> Option<Pos2> {
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::PointerButton { pos, button: b, pressed: false, .. } if *b == button => Some(*pos),
+            _ => None,
+        })
+    })
 }
 
 /// Whether Space moves the Zoom tool's marquee in the drag under way ([`zoom_marquee_start`]).
