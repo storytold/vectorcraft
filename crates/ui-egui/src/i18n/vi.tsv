@@ -181,7 +181,6 @@
 	All Artwork Above	Tất cả tác phẩm phía trên
 	All Caps	Viết hoa toàn bộ
 	All Categories	Tất cả danh mục
-	All colours are within the CMYK gamut	Tất cả màu nằm trong gam CMYK
 	All on Active Artboard	Tất cả trên bảng vẽ hiện hoạt
 	All on Same Layers	Tất cả trên cùng lớp
 	All printer's marks	Tất cả dấu máy in
@@ -4691,6 +4690,8 @@ theme	Appearance	Giao diện
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Đã sao chép CSS của {n} đối tượng
 @msgplural	Downloaded {n} file|Downloaded {n} files	Đã tải xuống {n} tệp
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Đã xuất {n} tệp vào {folder}
+@msg	All colors are within the CMYK gamut	Tất cả màu nằm trong gam CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} màu nằm ngoài gam CMYK
 @msg	Reload the page to go on (changes not saved yet may be lost).	Tải lại trang để tiếp tục (các thay đổi chưa lưu có thể bị mất).
 @msg	Replace Spine: select a blend and a path	Thay thế trục: chọn một đối tượng hòa trộn và một đường dẫn
 @msg	Reset {_1}	Đã đặt lại {_1}

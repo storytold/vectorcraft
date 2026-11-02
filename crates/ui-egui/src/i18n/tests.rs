@@ -1528,6 +1528,29 @@ fn messages_with_a_count_take_the_plural_form() {
     assert_eq!(message(cs, "Packaged 21 files"), "Zabaleno 21 souborů");
 }
 
+/// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
+/// and every complete catalog translates it, in the form its plural rule picks.
+#[test]
+fn gamut_check_status_takes_the_plural_form() {
+    use crate::panels::separations::gamut_check_status;
+    assert_eq!(gamut_check_status(0), "All colors are within the CMYK gamut");
+    assert_eq!(gamut_check_status(1), "1 color is out of the CMYK gamut");
+    assert_eq!(gamut_check_status(3), "3 colors are out of the CMYK gamut");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for n in [0, 1, 3] {
+            let s = gamut_check_status(n);
+            assert_ne!(message(lang, &s), s, "{code}: {s}");
+        }
+    }
+    assert_eq!(message(de(), &gamut_check_status(1)), "1 Farbe liegt außerhalb des CMYK-Farbumfangs");
+    assert_eq!(message(de(), &gamut_check_status(3)), "3 Farben liegen außerhalb des CMYK-Farbumfangs");
+    let cs = cs();
+    assert_eq!(message(cs, &gamut_check_status(1)), "1 barva je mimo gamut CMYK");
+    assert_eq!(message(cs, &gamut_check_status(3)), "3 barvy jsou mimo gamut CMYK");
+    assert_eq!(message(cs, &gamut_check_status(5)), "5 barev je mimo gamut CMYK");
+}
+
 /// The link, font and export status messages with a count, in English for a count of 1 and of 2.
 const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("1 linked file can't be read here: its preview shows", "2 linked files can't be read here: their previews show"),
