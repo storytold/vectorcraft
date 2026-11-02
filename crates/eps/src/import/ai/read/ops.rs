@@ -125,6 +125,11 @@ impl<'a> Reader<'a> {
                 self.end_path_quietly();
                 self.open(Kind::Compound, hidden)?
             }
+            // A wraparound group takes no operands and isn't an element of a compound path.
+            "*w" | "*W" if !vals.is_empty() => return Err(format!("`{w}` takes no operands")),
+            "*w" if self.frames.iter().any(|f| matches!(f.kind, Kind::Compound)) => {
+                return Err("a wraparound group is inside a compound path".into());
+            }
             "*w" => {
                 self.end_path_quietly();
                 self.open(Kind::Wrap, hidden)?

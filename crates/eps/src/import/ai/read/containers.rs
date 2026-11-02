@@ -98,13 +98,13 @@ impl<'a> Reader<'a> {
             self.pending_unread_fill = pending_unread_fill;
             self.pending_unread_stroke = pending_unread_stroke;
         }
-        // Wraparound text: the objects after its text object are wrap objects, at the default
-        // options (the format gives none) unless their dictionaries give theirs.
-        if matches!(kind, Kind::Wrap)
-            && let Some(text) = kids.iter().position(|k| matches!(k.kind, NodeKind::Text(_)) || slot_of(k.name.as_deref()).is_some())
-        {
-            for k in kids.iter_mut().skip(text + 1).filter(|k| k.extras().wrap.is_none()) {
-                k.extras_mut().wrap = Some(TextWrap::default());
+        // Wraparound text: every object in it other than type is a wrap object, before the text or
+        // after it, with no offset (the format gives none) unless its dictionary gives its options.
+        // One before the text is below it, so the text flows around it only once it is moved above.
+        if matches!(kind, Kind::Wrap) {
+            let graphics = kids.iter_mut().filter(|k| !matches!(k.kind, NodeKind::Text(_)) && slot_of(k.name.as_deref()).is_none());
+            for k in graphics.filter(|k| k.extras().wrap.is_none()) {
+                k.extras_mut().wrap = Some(TextWrap { offset: 0.0, invert: false });
             }
         }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
