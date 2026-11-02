@@ -114,6 +114,113 @@ fn applying_a_dataset_reports_the_area_type_it_overflows() {
     assert_eq!((&v["name"], &v["overflow"]), (&json!("Long"), &json!([a.0])), "{v}");
 }
 
+/// Area type threaded into a rectangle → (session, first frame, second frame, the story).
+fn threaded(second_height: u32) -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running. ".repeat(3) + "\nSecond paragraph.\nThird.";
+    let r = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap();
+    let a = NodeId(r["id"].as_u64().unwrap());
+    let r = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": second_height})).unwrap();
+    let b = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    (s, a, b, story)
+}
+
+/// Whether `dataset.list` says the data set `name` matches the art.
+fn matches(s: &mut Session, name: &str) -> bool {
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    let set = sets["datasets"].as_array().unwrap().iter().find(|d| d["name"] == name).unwrap().clone();
+    set["matches"].as_bool().unwrap()
+}
+
+#[test]
+fn a_text_value_on_a_frame_of_threaded_type_replaces_the_whole_story() {
+    let (mut s, a, b, story) = threaded(200);
+    assert!(!plain(&s, a).is_empty() && !plain(&s, b).is_empty());
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0]})).unwrap();
+    // A capture reads the whole story, every frame's text in thread order.
+    s.execute("dataset.capture", &json!({"name": "Orig"})).unwrap();
+    let orig = s.doc().unwrap().doc.variables.dataset("Orig").unwrap().values.get("Name").cloned();
+    assert_eq!(orig, Some(vectorcraft_doc::DataValue::Text(story.clone())));
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob"}})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(0)));
+    assert_eq!((plain(&s, a), plain(&s, b)), ("Bob".to_string(), String::new()));
+    assert!(matches(&mut s, "B"));
+    // The captured row applied back gives the story back, every time.
+    for _ in 0..2 {
+        s.execute("dataset.select", &json!({"name": "Orig"})).unwrap();
+        assert_eq!(format!("{}{}", plain(&s, a), plain(&s, b)), story);
+        assert!(!plain(&s, b).is_empty());
+        assert!(matches(&mut s, "Orig"));
+        s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+        assert_eq!(format!("{}{}", plain(&s, a), plain(&s, b)), "Bob");
+    }
+}
+
+#[test]
+fn a_text_value_on_a_later_frame_of_threaded_type_replaces_the_whole_story() {
+    let (mut s, a, b, story) = threaded(200);
+    s.execute("variable.define", &json!({"name": "Tail", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Tail", "ids": [b.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "Orig"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "T", "values": {"Tail": "END"}})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "T"})).unwrap();
+    assert_eq!(v["applied"].as_u64(), Some(1));
+    assert_eq!((plain(&s, a), plain(&s, b)), ("END".to_string(), String::new()));
+    assert!(matches(&mut s, "T"));
+    s.execute("dataset.select", &json!({"name": "Orig"})).unwrap();
+    assert_eq!(format!("{}{}", plain(&s, a), plain(&s, b)), story);
+    assert!(matches(&mut s, "Orig"));
+}
+
+#[test]
+fn a_story_with_a_locked_frame_is_neither_read_nor_rewritten() {
+    let (mut s, a, b, story) = threaded(200);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob"}})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(0), Some(1)));
+    assert_eq!(format!("{}{}", plain(&s, a), plain(&s, b)), story);
+    assert!(s.doc().unwrap().doc.captured_values().is_empty());
+}
+
+#[test]
+fn two_text_variables_in_one_story_apply_in_definition_order() {
+    let (mut s, a, b, _) = threaded(200);
+    s.execute("variable.define", &json!({"name": "Head", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Tail", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Tail", "ids": [a.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Head", "ids": [b.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "R", "values": {"Head": "one", "Tail": "two"}})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "R"})).unwrap();
+    assert_eq!(v["applied"].as_u64(), Some(2));
+    assert_eq!(format!("{}{}", plain(&s, a), plain(&s, b)), "two");
+}
+
+#[test]
+fn applying_a_dataset_to_threaded_type_reports_overflow_on_the_last_frame() {
+    let (mut s, a, b, _) = threaded(40);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Long", "values": {"Name": "word ".repeat(120)}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Short", "values": {"Name": "Ann"}})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "Long"})).unwrap();
+    assert_eq!(&v["overflow"], &json!([b.0]), "{v}");
+    let v = s.execute("dataset.select", &json!({"name": "Short"})).unwrap();
+    assert!(v.get("overflow").is_none(), "{v}");
+}
+
 #[test]
 fn mismatched_and_missing_bindings_are_skipped_and_counted() {
     let mut s = session();
@@ -409,7 +516,8 @@ fn make_dynamic_errors_name_the_command() {
 }
 
 /// Lock Variables refuses defining, deleting and renaming variables, Make … Dynamic included,
-/// while binding, unbinding and the dataset commands still run.
+/// while binding, unbinding and the dataset commands still run (an import that would define a
+/// variable is refused; see `locked_variables_refuse_header_cells_that_define_variables`).
 #[test]
 fn locked_variables_refuse_new_deleted_and_renamed_variables() {
     let mut s = session();
@@ -451,6 +559,14 @@ fn locked_variables_refuse_new_deleted_and_renamed_variables() {
     assert_eq!(s.execute("variable.lock", &json!({"locked": false})).unwrap()["locked"], false);
     assert_eq!(s.execute("variable.lock", &json!({"locked": false})).unwrap()["locked"], false);
     s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+}
+
+/// `variable.lock`'s params text names the dataset command it refuses: an import whose header
+/// would define a variable.
+#[test]
+fn the_lock_params_text_names_the_refused_import() {
+    let params = cmd::find_command("variable.lock").unwrap().params;
+    assert!(params.contains("the dataset commands still run, except a dataset.import whose header would define a variable"), "{params}");
 }
 
 /// Locking is an undo step only when it changes the state, and the lock is saved with the
@@ -650,6 +766,20 @@ fn renaming_carries_the_bindings_and_values_with_it() {
     assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["active"], "Title");
     s.execute("dataset.new", &json!({"name": "Taken"})).unwrap();
     assert!(s.execute("dataset.rename", &json!({"name": "Title", "newName": "Taken"})).is_err());
+}
+
+/// Renaming a name that does not exist onto one that does reports the missing name, the same
+/// error a rename to a free name gives.
+#[test]
+fn renaming_a_missing_name_onto_a_taken_one_reports_the_missing_name() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "A", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A"})).unwrap();
+
+    let e = s.execute("variable.rename", &json!({"name": "Nope", "newName": "A"})).unwrap_err().to_string();
+    assert!(e.contains("no variable named `Nope`"), "{e}");
+    let e = s.execute("dataset.rename", &json!({"name": "Nope", "newName": "A"})).unwrap_err().to_string();
+    assert!(e.contains("no dataset named `Nope`"), "{e}");
 }
 
 /// `dataset.set` is how a value changes after the row exists: replacing it must not need the
@@ -1630,6 +1760,37 @@ fn locked_variables_refuse_a_library_that_deletes_or_defines_variables() {
     let vars = &s.doc().unwrap().doc.variables;
     assert!(vars.variables.is_empty() && vars.locked);
     assert_eq!(vars.datasets.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["B"]);
+}
+
+/// A graph variable's data set applies its CSV as `graph.setData` does: a right-axis series the row's data no longer
+/// has is dropped, and a row with neither a label nor a value is not drawn as an empty slot.
+#[test]
+fn graph_variable_applies_csv_as_set_data() {
+    let mut s = session();
+    let create = json!({"type": "column", "x": 10, "y": 10, "width": 120, "height": 80, "csv": ",a,b\nQ1,10,1000\nQ2,5,500"});
+    let id = s.execute("graph.create", &create).unwrap()["id"].as_u64().unwrap();
+    let other = s.execute("graph.create", &create).unwrap()["id"].as_u64().unwrap();
+    for g in [id, other] {
+        s.execute("graph.setType", &json!({"id": g, "seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("variable.makeGraphDynamic", &json!({})).unwrap();
+    let name = s.execute("variable.list", &json!({})).unwrap()["variables"][0]["name"].as_str().unwrap().to_string();
+    let spec = |s: &Session, g: u64| s.doc().unwrap().doc.node(NodeId(g)).unwrap().extras().graph.as_deref().unwrap().clone();
+    // A dropped empty row wider than the others (`,,`) adds no blank series, so the right axis keeps nothing.
+    for (row, csv) in [("Wide", ",a\nQ1,10\n,,\nQ2,5"), ("One", ",a\nQ1,10\nQ2,5"), ("Blank", ",a\nQ1,10\n,\nQ2,5")] {
+        s.execute("dataset.new", &json!({"name": row, "values": {name.clone(): csv}})).unwrap();
+        s.execute("dataset.select", &json!({"name": row})).unwrap();
+        s.execute("graph.setData", &json!({"id": other, "csv": csv})).unwrap();
+        let (merged, set) = (spec(&s, id), spec(&s, other));
+        assert_eq!(merged.right_series, set.right_series, "{row}");
+        assert_eq!(merged.categories, set.categories, "{row}");
+        assert_eq!(merged.cells(), set.cells(), "{row}");
+        assert!(merged.right_series.is_empty(), "{row}");
+        assert_eq!(merged.cells(), [[Some(10.0)], [Some(5.0)]], "{row}");
+    }
+    assert!(spec(&s, id).right_series.is_empty());
+    assert_eq!(spec(&s, id).categories, ["Q1", "Q2"]);
 }
 
 #[test]

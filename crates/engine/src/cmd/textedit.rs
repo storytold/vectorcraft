@@ -186,6 +186,48 @@ pub(crate) fn set_plain_text(d: &mut vectorcraft_doc::Document, id: NodeId, text
     Ok(())
 }
 
+/// Replace the whole story of the type object `id` as [`set_plain_text`] replaces one type
+/// object's content: for a frame of threaded text, every frame's text. The new text goes into the
+/// thread's first frame and the other frames are emptied; the edit's reflow then pours it through
+/// them. → the story's last frame, which holds any text that does not fit.
+pub(crate) fn set_story_text(d: &mut vectorcraft_doc::Document, id: NodeId, text: &str) -> Result<NodeId> {
+    let story = d.story_of(id);
+    let (Some((&first, rest)), Some(&last)) = (story.split_first(), story.last()) else {
+        return Err(EngineError::NoNode(id));
+    };
+    if rest.is_empty() {
+        set_plain_text(d, id, text)?;
+        return Ok(id);
+    }
+    let frames: Vec<TextObject> = story
+        .iter()
+        .filter_map(|f| match d.node(*f).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some((**t).clone()),
+            _ => None,
+        })
+        .collect();
+    let refs: Vec<&TextObject> = frames.iter().collect();
+    // The first frame takes the whole story first, so the replace keeps the story's first style
+    // and paragraph styles follow as for one type object.
+    let t = text_mut(d, first).ok_or(EngineError::NoNode(first))?;
+    t.runs = vectorcraft_text::thread::story(&refs);
+    t.set_paragraph_styles(vectorcraft_text::thread::story_paras(&refs, &[]));
+    set_plain_text(d, first, text)?;
+    // An emptied frame's paragraph takes the new text's last paragraph style, so it does not
+    // restyle that paragraph when the story is joined again.
+    let tail = match d.node(first).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => t.paragraph_styles().last().cloned().unwrap_or_default(),
+        _ => Default::default(),
+    };
+    for f in rest {
+        let t = text_mut(d, *f).ok_or(EngineError::NoNode(*f))?;
+        t.runs.clear();
+        t.set_paragraph_styles(vec![tail.clone()]);
+        refresh_bounds(t);
+    }
+    Ok(last)
+}
+
 /// The byte offset that `k` holds, read with [`index`].
 fn byte_param(p: &Value, k: &str) -> Option<usize> {
     p.get(k).and_then(Value::as_u64).map(index)
