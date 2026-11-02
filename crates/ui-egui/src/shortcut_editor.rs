@@ -124,6 +124,7 @@ pub fn sync(ui: &UiState) {
         GENERATION.fetch_add(1, Ordering::Relaxed);
     }
     crate::workspaces::sync(ui);
+    crate::custom_toolbars::sync(ui);
 }
 
 /// Registry default shortcut of a command (engine or UI command).
