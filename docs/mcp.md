@@ -4052,8 +4052,8 @@ groups and in other repeats included, with its type `radial`, `grid` or `mirror`
 and a grid's `rows` and `cols`; with `selectionOnly`, the Repeat objects in the selection)
 and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
 out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
-`format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?}`) and the package report
-write.
+`format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?, selectionOnly?, category?}`:
+only `category` when given, else every category) and the package report write.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.package","params":{"folder":"/tmp/handoff","copyFonts":false}}}

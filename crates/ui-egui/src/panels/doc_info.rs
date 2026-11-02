@@ -101,11 +101,15 @@ fn named_rows(id: &str, rows: &[Value]) -> std::ops::Range<usize> {
     }
 }
 
-/// `docInfo.save {path?, selectionOnly?}`: write the text report to `path`, else a picked file
-/// (the web downloads it) → `{path}`.
+/// `docInfo.save {path?, selectionOnly?, category?}`: write the text report (only `category` when given,
+/// else every category) to `path`, else a picked file (the web downloads it) → `{path}`.
 pub(crate) fn save_report(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let sel_only = p.get("selectionOnly").and_then(Value::as_bool).unwrap_or(false);
-    let r = app.session.execute("document.info", &json!({ "format": "text", "selectionOnly": sel_only })).map_err(|e| e.to_string())?;
+    let mut q = json!({ "format": "text", "selectionOnly": sel_only });
+    if let Some(c) = p.get("category").and_then(Value::as_str).filter(|c| !c.is_empty()) {
+        q["category"] = c.into();
+    }
+    let r = app.session.execute("document.info", &q).map_err(|e| e.to_string())?;
     let text = r["text"].as_str().unwrap_or_default();
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
@@ -134,7 +138,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Save…"), app.session.active().is_some(), false) {
-        crate::menus::invoke(app, "docInfo.save", json!({ "selectionOnly": sel }));
+        crate::menus::invoke(app, "docInfo.save", json!({ "selectionOnly": sel, "category": category }));
     }
 }
 
@@ -206,5 +210,64 @@ mod tests {
         assert_eq!(r["path"], "/tmp/info.txt");
         let report = String::from_utf8(written.borrow().clone()).unwrap();
         assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n") && report.contains("\nREPEAT OBJECTS\n"), "{report}");
+    }
+
+    /// The report the panel menu's Save… writes with category `category` shown ("" for All
+    /// Categories) and Selection Only set to `sel_only`.
+    fn saved_from_menu(app: &mut VectorcraftApp, category: &str, sel_only: bool) -> String {
+        let written: std::rc::Rc<std::cell::RefCell<Vec<u8>>> = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
+            w.borrow_mut().extend_from_slice(b);
+            Ok(())
+        }));
+        app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name))));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "docinfo-category", category.to_string());
+        set_pstate(&ctx, "docinfo-sel", sel_only);
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(236.0, 800.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+        };
+        let labels = frame(app, vec![]);
+        let at = labels.iter().find(|(t, _)| t.trim() == "Save…").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Save… in {labels:?}"));
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(app, vec![egui::Event::PointerMoved(at), button(true)]);
+        frame(app, vec![button(false)]);
+        let report = String::from_utf8(written.borrow().clone()).unwrap();
+        assert!(report.starts_with("Document Info: "), "nothing saved: {report:?}");
+        report
+    }
+
+    /// Save… writes the category the panel shows, with Selection Only applied; All Categories
+    /// writes every category.
+    #[test]
+    fn save_writes_the_category_the_panel_shows() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let text = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        let objects = saved_from_menu(&mut app, "objects", false);
+        assert!(objects.contains("\nOBJECTS\n") && objects.contains("Paths: 1") && objects.contains("Text Objects: 1"), "{objects}");
+        assert!(!objects.contains("\nDOCUMENT\n") && !objects.contains("\nFONTS\n"), "only Objects: {objects}");
+        let fonts = saved_from_menu(&mut app, "fonts", false);
+        assert!(fonts.contains("\nFONTS\n") && fonts.contains("Source Sans 3"), "{fonts}");
+        assert!(!fonts.contains("\nOBJECTS\n") && !fonts.contains("\nFONT DETAILS\n"), "only Fonts: {fonts}");
+        let all = saved_from_menu(&mut app, "", false);
+        assert!(
+            all.contains("\nDOCUMENT\n") && all.contains("\nOBJECTS\n") && all.contains("\nFONTS\n") && all.contains("\nREPEAT OBJECTS\n"),
+            "{all}"
+        );
+        app.session.execute("select.set", &json!({"ids": [text]})).unwrap();
+        let selected = saved_from_menu(&mut app, "objects", true);
+        assert!(selected.contains("(the selection only)") && selected.contains("Text Objects: 1"), "{selected}");
+        assert!(!selected.contains("Paths: 1") && !selected.contains("\nFONTS\n"), "the selection's objects only: {selected}");
+        // The command takes the category too; an unknown one is an error and writes nothing.
+        let err = app.run("docInfo.save", json!({"path": "/tmp/info.txt", "category": "colors"})).unwrap_err();
+        assert!(err.contains("category `colors`"), "{err}");
     }
 }
