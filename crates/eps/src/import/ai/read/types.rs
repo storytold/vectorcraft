@@ -25,7 +25,7 @@ pub(super) const MAX_PIXELS: u64 = 1 << 25;
 pub(super) const MAX_PLACED_ELSEWHERE: usize = 4096;
 
 /// The note for an image past [`MAX_PIXELS`]: the file then opens from its PDF part, which reads
-/// larger images (#1479).
+/// larger images (#1479), unless that part can't be read either; then the image is left out.
 pub const IMAGE_TOO_LARGE: &str = "an image too large to read from the editing data was left out";
 
 /// Most hex digits of an image's samples read from comment lines (CMYK and alpha at the largest size).
