@@ -1464,10 +1464,15 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Color Effects › Find Nearest Swatch… lists each colour of the selection (fills and strokes, as ticked; solid colours and gradient stops, inside groups and type) with the three swatches of the chosen library closest to it by CIEDE2000 difference, with that difference (`addon.color.nearestSwatch`, #4923). The library is the document's swatches, a built-in library, or a library or colour book the user saved or loaded (no colour book data ships with VectorCraft). Apply gives each colour its nearest swatch as one undo step (`addon.color.applyNearestSwatch`): global and spot swatches link, and a library's swatches the colours take are added to the document first, so a spot colour stays spot. Remaining: typing a colour to look up in the dialog (the command takes `color`), and applying a match other than the nearest. Tests: `cmd::addons::color::nearest::tests` (engine), `addons::color::nearest::tests::find_nearest_swatch_lists_the_matches_and_applies_the_nearest` (ui-egui).
 
+## Paragraph panel: vertical alignment of area type (2026-11-01)
+
+With area type selected, the Paragraph panel shows Align Top, Align Center, Align Bottom and Justify Vertically buttons below the paragraph alignments. They set the type's vertical alignment in its frame (`text.areaOptions {verticalAlign}`, as Area Type Options does) on every selected frame in one undo step; the shared alignment shows selected, none when the frames differ (#3759). `text.areaOptions` given for several frames now changes only the options given on each one, keeping each frame's others (it used to copy the first frame's options onto all of them). Tests: `panels::paragraph::tests::vertical_alignment_buttons_set_the_selected_area_types_alignment`, `cmd::typecmd::area_tests::area_options_for_several_frames_change_only_what_is_given`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Paragraph panel vertical alignment buttons for area type; text.areaOptions per-frame merge (#3759); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); evidence added; scores unchanged. |

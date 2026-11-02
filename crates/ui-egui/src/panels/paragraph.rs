@@ -352,6 +352,52 @@ pub fn alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle
     }
 }
 
+/// The vertical alignments of area type, as the Paragraph panel's buttons show them: (alignment,
+/// icon, tooltip, `text.areaOptions` value).
+pub const VERTICAL_ALIGNMENTS: [(vectorcraft_doc::VerticalAlign, &str, &str, &str); 4] = [
+    (vectorcraft_doc::VerticalAlign::Top, "dc-al-top", "Align Top", "top"),
+    (vectorcraft_doc::VerticalAlign::Center, "dc-al-vcenter", "Align Center", "center"),
+    (vectorcraft_doc::VerticalAlign::Bottom, "dc-al-bottom", "Align Bottom", "bottom"),
+    (vectorcraft_doc::VerticalAlign::Justify, "dc-dist-vcenter", "Justify Vertically", "justify"),
+];
+
+/// The vertical alignment the selected area type shares (`Some(None)` when it differs); `None`
+/// when no area type is selected.
+fn selected_vertical_align(app: &VectorcraftApp) -> Option<Option<vectorcraft_doc::VerticalAlign>> {
+    let st = app.session.active()?;
+    let mut shared: Option<Option<vectorcraft_doc::VerticalAlign>> = None;
+    // The frames `text.areaOptions` changes: selected area type and area type in selected groups.
+    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        n.walk(&mut |c| {
+            if let vectorcraft_doc::NodeKind::Text(t) = &c.kind
+                && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })
+            {
+                let a = t.area.vertical_align;
+                shared = Some(match shared {
+                    None => Some(a),
+                    Some(Some(b)) if b == a => Some(a),
+                    Some(_) => None,
+                });
+            }
+        });
+    }
+    shared
+}
+
+/// The vertical alignment buttons of the selected area type (#3759): top, center, bottom and
+/// justify, as Area Type Options sets them (`text.areaOptions {verticalAlign}`, one undo step for
+/// every selected frame, each keeping its other options). Nothing shows without area type.
+pub fn vertical_alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
+    let Some(shown) = selected_vertical_align(app) else { return };
+    for (a, icon, tip, id) in VERTICAL_ALIGNMENTS {
+        if widgets::icon_button(ui, icon, tl!(tip), shown == Some(a), size).clicked()
+            && let Err(e) = app.run("text.areaOptions", json!({ "verticalAlign": id }))
+        {
+            app.status(e);
+        }
+    }
+}
+
 /// Type › Bullets and Numbering › Apply Bullets (`type.applyBullets {bullet?}`): the paragraphs of
 /// the selected type, or those the Type tool's selection touches, become a bulleted list with
 /// `bullet`; without it, a list keeps its bullet and other paragraphs take the dot.
@@ -538,6 +584,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
+    // Area type: its vertical alignment in the frame (#3759).
+    if selected_vertical_align(app).is_some() {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            vertical_alignment_buttons(app, ui, 28.0);
+        });
+    }
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         bullets_button(app, ui, 28.0);
