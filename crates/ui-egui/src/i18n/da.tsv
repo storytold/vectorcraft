@@ -4474,6 +4474,7 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunne ikke placere {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunne ikke indsætte fra udklipsholderen: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Kunne ikke indsætte: dokumentet, der blev indsat i, var lukket
 @msg	Saved {path} with {_1} note(s): {first}	Gemte {path} med {_1} note(r): {first}
 @msg	Exported {what}	Eksporterede {what}
 @msg	Saved {n} files beside {path}	Gemte {n} filer ved siden af {path}
@@ -4482,6 +4483,7 @@ imageTrace	Outline	Kontur
 @msg	Exporting {_1}	Eksporterer {_1}
 @msg	Packaging {_1}	Pakker {_1}
 @msg	Placing {_1}	Placerer {_1}
+@msg	Pasting	Indsætter
 @msg	Saving recovery data for {_1}	Gemmer gendannelsesdata for {_1}
 @msg	Discarded {_1} recovered document(s)	Forkastede {_1} gendannet(e) dokument(er)
 @msg	Restored {_1} recovered document(s): save them to keep them	Genvandt {_1} gendannet(e) dokument(er): gem dem for at beholde dem

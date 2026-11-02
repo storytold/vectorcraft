@@ -4780,6 +4780,7 @@ imageTrace	Outline	Obris
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nije moguće postaviti {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nije moguće zalijepiti: dokument u koji se lijepilo je zatvoren
 @msg	Saved {path} with {_1} note(s): {first}	Sačuvano {path} s bilješkama ({_1}): {first}
 @msg	Exported {what}	Izvezeno: {what}
 @msg	Saved {n} files beside {path}	Sačuvano datoteka pored {path}: {n}
@@ -4788,6 +4789,7 @@ imageTrace	Outline	Obris
 @msg	Exporting {_1}	Izvoz {_1}
 @msg	Packaging {_1}	Pakovanje {_1}
 @msg	Placing {_1}	Postavljanje {_1}
+@msg	Pasting	Lijepljenje
 @msg	Saving recovery data for {_1}	Čuvanje podataka za oporavak za {_1}
 @msg	Discarded {_1} recovered document(s)	Odbačeno oporavljenih dokumenata: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Vraćeno oporavljenih dokumenata: {_1}; sačuvajte ih da ih zadržite

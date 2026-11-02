@@ -4371,6 +4371,7 @@ theme	Appearance	외관
 @msg	Exporting {_1}	{_1} 내보내는 중
 @msg	Packaging {_1}	{_1} 패키지 만드는 중
 @msg	Placing {_1}	{_1} 가져오는 중
+@msg	Pasting	붙여넣는 중
 @msg	Exported {what}	{what}을(를) 내보냈습니다
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}"은(는) 색상이 아닙니다: #rrggbb 형식으로 입력하세요
 @msg	could not decode image: {0}	이미지를 디코딩할 수 없습니다: {0}
@@ -4610,6 +4611,7 @@ theme	Appearance	외관
 @msg	{_1} is reserved by the system	{_1}은(는) 시스템에서 예약되어 있습니다
 @msg	Couldn't copy to the system clipboard: {e}	시스템 클립보드로 복사할 수 없습니다: {e}
 @msg	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	붙여넣을 수 없습니다: 붙여넣던 문서가 닫혔습니다
 @msg	nothing selected	선택된 항목이 없습니다
 @msg	nothing selected is in a group	선택한 항목 중 그룹에 속한 항목이 없습니다
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다

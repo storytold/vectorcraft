@@ -3934,8 +3934,15 @@ also before its formats are published. While a text field or the Type tool has t
 them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
-bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). On the web Copy publishes SVG text, and
-Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image). A `.ai`
+bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). A Paste from the menus or the keys decodes
+a bitmap (a copied image file too) on the thread that reads placed files, with "Pasting" in the status bar and the
+busy spinner, and pastes it once it is decoded, in the document it was given in: Windows' device-independent bitmap and
+Linux's image are encoded as PNG there, and the bitmap is read as `clipboard.importImage` reads it. The paste is
+centered where the view was and goes where new art went (the current layer, the isolated group, the object Draw
+Inside drew into), and Paste in Front and Paste in Back paste next
+to the objects selected when it was given (a second paste given before the first is pasted goes next to the first).
+A Copy or Cut made meanwhile keeps the internal clipboard it made. `edit.paste*` over MCP and scripts reads the bitmap at once.
+On the web Copy publishes SVG text, and Paste takes SVG text and the pictures and files a paste carries (a screenshot pastes as an embedded image). A `.ai`
 or `.ait` file that holds a PDF, copied in a file manager or carried by a paste, is loaded with `clipboard.importPdf
 {editingData: true}`, and its objects go into the active layer.
 

@@ -4378,6 +4378,7 @@ axis	Both	И двете
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Неуспешно поставяне на {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Неуспешно поставяне от клипборда: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Неуспешно поставяне: документът, в който се поставяше, е затворен
 @msg	Saved {path} with {_1} note(s): {first}	{path} е запазен с {_1} бележка/и: {first}
 @msg	Exported {what}	Експортирано: {what}
 @msg	Saved {n} files beside {path}	Записани са {n} файла до {path}
@@ -4386,6 +4387,7 @@ axis	Both	И двете
 @msg	Exporting {_1}	Експортиране на {_1}
 @msg	Packaging {_1}	Пакетиране на {_1}
 @msg	Placing {_1}	Вмъкване на {_1}
+@msg	Pasting	Поставяне
 @msg	Saving recovery data for {_1}	Записване на данни за възстановяване на {_1}
 @msg	Discarded {_1} recovered document(s)	Изхвърлени са {_1} възстановени документ(и)
 @msg	Restored {_1} recovered document(s): save them to keep them	Възстановени са {_1} документ(и): запазете ги, за да ги съхраните

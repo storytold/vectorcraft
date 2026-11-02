@@ -608,6 +608,9 @@ the Windows clipboard and, with SVG, from the macOS pasteboard, and an `.eps` fi
 and pastes nothing. Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
 Paste event for it). Screenshots paste on every platform: Windows reads `PNG`, else `CF_DIBV5`/`CF_DIB`, macOS the
 pasteboard's PNG or TIFF, Linux `image/png`, and the web the picture the browser's paste event carries (#457).
+In the desktop app a Paste from the menus or the keys (`ui.key`) decodes a bitmap off the UI thread: `ui.inspect` lists
+`clipboard` in `placing` until it is pasted, and an import error then shows in the status bar. `engine.execute`
+`edit.paste*` reads it at once.
 
 File menu details: `file.openRecent1`…`file.openRecent30` open the recent files the `recentFilesCount` preference
 lists (0 hides them all; `file.recentFiles` returns the listed paths), `file.reveal` shows the document's file in the

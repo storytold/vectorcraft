@@ -163,6 +163,9 @@ pub struct Session {
     /// While [`Session::place_queue_read`] runs `file.place.queue`: the files read for it, which
     /// the command loads the place cursor with instead of reading them; `None` otherwise.
     pub(crate) queue_hand_off: Option<cmd::place::QueueRead>,
+    /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
+    /// which the command loads instead of reading `dataBase64`; `None` otherwise.
+    pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,

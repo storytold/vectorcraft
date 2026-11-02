@@ -2090,6 +2090,7 @@ file-filter	Templates	範本
 @msg	Exporting {_1}	正在匯出 {_1}
 @msg	Packaging {_1}	正在封裝 {_1}
 @msg	Placing {_1}	正在置入 {_1}
+@msg	Pasting	正在貼上
 @msg	Exported {what}	已匯出 {what}
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" 不是顏色：請寫成 #rrggbb
 @msg	could not decode image: {0}	無法解碼影像：{0}
@@ -2322,6 +2323,7 @@ file-filter	Templates	範本
 @msg	{_1} is reserved by the system	{_1} 已被系統保留
 @msg	Couldn't copy to the system clipboard: {e}	無法複製到系統剪貼簿：{e}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
+@msg	Couldn't paste: the document it was pasted in was closed	無法貼上：要貼上的文件已關閉
 @msg	nothing selected	未選取任何物件
 @msg	nothing selected is in a group	選取的物件都不在群組中
 @msg	the {tool} tool has no options	{tool} 工具沒有選項

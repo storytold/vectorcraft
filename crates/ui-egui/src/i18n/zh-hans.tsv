@@ -4167,6 +4167,7 @@ imageTrace	Outline	轮廓
 @msg	Exporting {_1}	正在导出 {_1}
 @msg	Packaging {_1}	正在打包 {_1}
 @msg	Placing {_1}	正在置入 {_1}
+@msg	Pasting	正在粘贴
 @msg	Exported {what}	已导出 {what}
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" 不是颜色：请写为 #rrggbb
 @msg	could not decode image: {0}	无法解码图像：{0}
@@ -4399,6 +4400,7 @@ imageTrace	Outline	轮廓
 @msg	{_1} is reserved by the system	{_1} 已被系统保留
 @msg	Couldn't copy to the system clipboard: {e}	无法复制到系统剪贴板：{e}
 @msg	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
+@msg	Couldn't paste: the document it was pasted in was closed	无法粘贴：要粘贴到的文档已关闭
 @msg	nothing selected	未选择任何对象
 @msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项

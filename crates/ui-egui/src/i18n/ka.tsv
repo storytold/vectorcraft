@@ -4261,6 +4261,7 @@ font-technology	Variable	ცვლადი
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name}-ის განთავსება ვერ მოხერხდა: {e}
 @msg	Couldn't paste from the clipboard: {e}	გაცვლის ბუფერიდან ჩასმა ვერ მოხერხდა: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	ჩასმა ვერ მოხერხდა: დოკუმენტი, რომელშიც ის ჩაისმებოდა, დაიხურა
 @msg	Saved {path} with {_1} note(s): {first}	შენახულია {path}, შენიშვნები: {_1}: {first}
 @msg	Exported {what}	ექსპორტირებულია {what}
 @msg	Saved {n} files beside {path}	{path}-ის გვერდით შენახულია ფაილები: {n}
@@ -4269,6 +4270,7 @@ font-technology	Variable	ცვლადი
 @msg	Exporting {_1}	ექსპორტირდება: {_1}
 @msg	Packaging {_1}	იფუთება: {_1}
 @msg	Placing {_1}	თავსდება: {_1}
+@msg	Pasting	ჩასმა
 @msg	Saving recovery data for {_1}	{_1}-ის აღდგენის მონაცემების შენახვა
 @msg	Discarded {_1} recovered document(s)	უარყოფილია აღდგენილი დოკუმენტები: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	აღდგენილია დოკუმენტები: {_1}: შესანარჩუნებლად შეინახეთ ისინი

@@ -4444,6 +4444,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Exporting {_1}	{_1} を書き出し中
 @msg	Packaging {_1}	{_1} をパッケージ中
 @msg	Placing {_1}	{_1} を配置中
+@msg	Pasting	貼り付け中
 @msg	Exported {what}	{what} を書き出しました
 @msg	"{0}" is not a colour: write it as #rrggbb	「{0}」はカラーではありません: #rrggbb の形式で指定してください
 @msg	could not decode image: {0}	画像をデコードできませんでした: {0}
@@ -4683,6 +4684,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{_1} is reserved by the system	{_1} はシステムで予約されています
 @msg	Couldn't copy to the system clipboard: {e}	システムのクリップボードにコピーできませんでした: {e}
 @msg	Couldn't paste from the clipboard: {e}	クリップボードから貼り付けられませんでした: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	貼り付けられませんでした: 貼り付け先のドキュメントは閉じられています
 @msg	nothing selected	何も選択されていません
 @msg	nothing selected is in a group	選択したオブジェクトはどれもグループ内にありません
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません

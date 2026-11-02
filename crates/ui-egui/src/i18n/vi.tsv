@@ -4351,6 +4351,7 @@ theme	Appearance	Giao diện
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
 @msg	Couldn't open {name}: {e}	Không thể mở {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Không thể dán từ khay nhớ tạm: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
@@ -4386,6 +4387,7 @@ theme	Appearance	Giao diện
 @msg	Exporting {_1}	Đang xuất {_1}
 @msg	Packaging {_1}	Đang đóng gói {_1}
 @msg	Placing {_1}	Đang đặt {_1}
+@msg	Pasting	Đang dán
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	phiên bản tệp {0} mới hơn VectorCraft hỗ trợ ({VERSION})
 @msg	Flatten Transparency: select objects to flatten	Dẹp phẳng độ trong suốt: hãy chọn đối tượng để dẹp phẳng
 @msg	Flatten Transparency: {e}	Dẹp phẳng độ trong suốt: {e}

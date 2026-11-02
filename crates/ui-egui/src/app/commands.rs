@@ -1,5 +1,6 @@
 use super::fonts::MAX_RECENT_FONTS;
 use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
+use crate::placing;
 
 /// The last repeatable Pathfinder operation completed by a command or atomic batch.
 fn completed_pathfinder_operation<'a>(id: &'a str, params: &'a Value) -> Option<&'a str> {
@@ -15,11 +16,14 @@ impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
         // A file dialog it shows off the UI thread runs it again with the path picked.
-        if self.picks.is_entry_free() {
+        let result = if self.picks.is_entry_free() {
             let entry = picks::Entry::Command(id.to_string(), params.clone());
-            return picks::as_entry(self, move || entry, |app| app.run_now(id, params));
-        }
-        self.run_now(id, params)
+            picks::as_entry(self, move || entry, |app| app.run_now(id, params))
+        } else {
+            self.run_now(id, params)
+        };
+        placing::settle_swatch_paste(self);
+        result
     }
 
     /// [`Self::run`] it, inside what asks for file dialogs.
@@ -89,10 +93,6 @@ impl VectorcraftApp {
             }
         }
         if id.starts_with("edit.paste") {
-            if let Err(e) = self.adopt_system_clipboard() {
-                self.ui.status = e.clone();
-                return Err(e);
-            }
             // Paste (also without formatting) goes to the centre of the view.
             if matches!(id, "edit.paste" | "edit.pasteWithoutFormatting")
                 && ["center", "dx", "dy"].iter().all(|k| params.get(k).is_none())
@@ -100,6 +100,16 @@ impl VectorcraftApp {
                 && let Some(p) = params.as_object_mut()
             {
                 p.insert("center".into(), serde_json::json!([c.x, c.y]));
+            }
+            // A Paste the user gives decodes a bitmap off the UI thread ([`placing::adopt_for_paste`]),
+            // and runs with these params once it is decoded.
+            match placing::adopt_for_paste(self, id, &params) {
+                Err(e) => {
+                    self.ui.status = e.clone();
+                    return Err(e);
+                }
+                Ok(Some(started)) => return Ok(started),
+                Ok(None) => {}
             }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;

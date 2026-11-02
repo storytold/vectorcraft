@@ -4699,6 +4699,7 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}
 @msg	Couldn't open {name}: {e}	Nem sikerült megnyitni: {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nem sikerült beilleszteni a vágólapról: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, bezárták
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nem sikerült elhelyezni: {name}; a céldokumentumot bezárták
 @msg	Couldn't place {name}: the document it was placed in was closed	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, bezárták
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
@@ -4735,6 +4736,7 @@ imageTrace	Outline	Körvonal
 @msg	Exporting {_1}	Exportálás: {_1}
 @msg	Packaging {_1}	Csomagolás: {_1}
 @msg	Placing {_1}	Elhelyezés: {_1}
+@msg	Pasting	Beillesztés
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	a fájl verziója újabb, mint amit ez a VectorCraft támogat: {0} (támogatott: {VERSION})
 @msg	Flatten Transparency: select objects to flatten	Átlátszóság lapítása: jelöld ki a lapítandó objektumokat
 @msg	Flatten Transparency: {e}	Átlátszóság lapítása: {e}

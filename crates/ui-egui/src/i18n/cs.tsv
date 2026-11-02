@@ -4820,6 +4820,7 @@ imageTrace	Outline	Obrys
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} nelze umístit: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nelze vložit: dokument, do kterého se vkládalo, byl zavřen
 @msg	Saved {path} with {_1} note(s): {first}	Uloženo: {path}, poznámky ({_1}): {first}
 @msg	Exported {what}	Exportováno: {what}
 @msg	Saved {n} files beside {path}	Uloženo souborů: {n} vedle {path}
@@ -4828,6 +4829,7 @@ imageTrace	Outline	Obrys
 @msg	Exporting {_1}	Exportování {_1}
 @msg	Packaging {_1}	Balení {_1}
 @msg	Placing {_1}	Umísťování {_1}
+@msg	Pasting	Vkládání
 @msg	Saving recovery data for {_1}	Ukládání dat pro obnovení pro {_1}
 @msg	Discarded {_1} recovered document(s)	Zahozeno obnovených dokumentů: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Obnoveno dokumentů: {_1}; pokud je chcete zachovat, uložte je

@@ -164,7 +164,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
-    if let Err(e) = app.run(id, p) {
+    // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
+    app.placing.for_user = id.starts_with("edit.paste");
+    let r = app.run(id, p);
+    app.placing.for_user = false;
+    if let Err(e) = r {
         app.status(e);
     } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
         app.ui.open_panel = Some("patternOptions".into());

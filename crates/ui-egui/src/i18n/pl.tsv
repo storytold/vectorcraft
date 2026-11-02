@@ -4646,6 +4646,7 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nie udało się umieścić {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nie udało się wkleić ze schowka: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nie udało się wkleić: dokument, do którego wklejano, został zamknięty
 @msg	Saved {path} with {_1} note(s): {first}	Zapisano {path}, uwagi ({_1}): {first}
 @msg	Exported {what}	Wyeksportowano {what}
 @msg	Saved {n} files beside {path}	Zapisane pliki obok {path}: {n}
@@ -4654,6 +4655,7 @@ imageTrace	Outline	Kontur
 @msg	Exporting {_1}	Eksportowanie {_1}
 @msg	Packaging {_1}	Pakowanie {_1}
 @msg	Placing {_1}	Umieszczanie {_1}
+@msg	Pasting	Wklejanie
 @msg	Saving recovery data for {_1}	Zapisywanie danych odzyskiwania dla {_1}
 @msg	Discarded {_1} recovered document(s)	Odrzucone odzyskane dokumenty: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Przywrócone odzyskane dokumenty: {_1} — zapisz je, aby je zachować

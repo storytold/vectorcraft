@@ -41,6 +41,9 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
         "conflicts": conflicts, "index": 0, "choice": "merge", "applyToAll": false, "choices": {},
         "__command": command, "__params": params,
     });
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND) {
+        crate::placing::cancel_swatch_paste(app);
+    }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Some(Ok(json!({ "dialog": KIND })))
 }
@@ -125,5 +128,5 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let mut params = d.fields.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
     params["swatchConflict"] = Value::Object(choices);
     app.ui.dialog = None;
-    app.run(&d.str("__command"), params)
+    crate::placing::confirm_swatch_paste(app, &d.str("__command"), params, d.fields.get("__deferredPaste").and_then(Value::as_u64))
 }

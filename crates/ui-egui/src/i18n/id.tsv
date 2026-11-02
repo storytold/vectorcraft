@@ -4474,6 +4474,7 @@ imageTrace	Outline	Kontur
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Tidak dapat menempatkan {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Tidak dapat menempel: dokumen tempatnya ditempel sudah ditutup
 @msg	Saved {path} with {_1} note(s): {first}	{path} disimpan dengan {_1} catatan: {first}
 @msg	Exported {what}	{what} diekspor
 @msg	Saved {n} files beside {path}	{n} berkas disimpan di sebelah {path}
@@ -4482,6 +4483,7 @@ imageTrace	Outline	Kontur
 @msg	Exporting {_1}	Mengekspor {_1}
 @msg	Packaging {_1}	Mengemas {_1}
 @msg	Placing {_1}	Menempatkan {_1}
+@msg	Pasting	Menempel
 @msg	Saving recovery data for {_1}	Menyimpan data pemulihan untuk {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} dokumen hasil pemulihan dibuang
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang

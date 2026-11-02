@@ -4555,6 +4555,7 @@ axis	Both	Entrambi
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Impossibile inserire {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Impossibile incollare dagli appunti: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Impossibile incollare: il documento in cui si incollava è stato chiuso
 @msg	Saved {path} with {_1} note(s): {first}	Salvato {path} con {_1} nota/e: {first}
 @msg	Exported {what}	Esportato {what}
 @msg	Saved {n} files beside {path}	Salvati {n} file accanto a {path}
@@ -4563,6 +4564,7 @@ axis	Both	Entrambi
 @msg	Exporting {_1}	Esportazione di {_1}
 @msg	Packaging {_1}	Creazione del pacchetto {_1}
 @msg	Placing {_1}	Inserimento di {_1}
+@msg	Pasting	Incollamento
 @msg	Saving recovery data for {_1}	Salvataggio dei dati di recupero per {_1}
 @msg	Discarded {_1} recovered document(s)	Documenti recuperati scartati: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Documenti recuperati ripristinati: {_1}. Salvali per conservarli

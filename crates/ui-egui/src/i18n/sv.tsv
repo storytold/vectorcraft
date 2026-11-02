@@ -4413,6 +4413,7 @@ axis	Both	Båda
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunde inte placera {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunde inte klistra in från urklippet: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Kunde inte klistra in: dokumentet det klistrades in i har stängts
 @msg	Saved {path} with {_1} note(s): {first}	Sparade {path} med {_1} anteckning(ar): {first}
 @msg	Exported {what}	Exporterade {what}
 @msg	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
@@ -4421,6 +4422,7 @@ axis	Both	Båda
 @msg	Exporting {_1}	Exporterar {_1}
 @msg	Packaging {_1}	Paketerar {_1}
 @msg	Placing {_1}	Placerar {_1}
+@msg	Pasting	Klistrar in
 @msg	Saving recovery data for {_1}	Sparar återställningsdata för {_1}
 @msg	Discarded {_1} recovered document(s)	Kastade {_1} återställda dokument
 @msg	Restored {_1} recovered document(s): save them to keep them	Återställde {_1} återskapade dokument: spara dem för att behålla dem

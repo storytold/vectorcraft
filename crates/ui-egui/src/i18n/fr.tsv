@@ -4503,6 +4503,7 @@ axis	Both	Les deux
 @msg	{path}: {e}	{path} : {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Impossible d’importer {name} : {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Impossible de coller, car le document de destination a été fermé
 @msg	Couldn't paste from the clipboard: {e}	Impossible de coller depuis le presse-papiers : {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} enregistré avec {_1} remarque(s) : {first}
 @msg	Exported {what}	{what} exporté
@@ -4512,6 +4513,7 @@ axis	Both	Les deux
 @msg	Exporting {_1}	Exportation de {_1}
 @msg	Packaging {_1}	Assemblage de {_1}
 @msg	Placing {_1}	Importation de {_1}
+@msg	Pasting	Collage
 @msg	Saving recovery data for {_1}	Enregistrement des données de récupération de {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} document(s) récupéré(s) supprimé(s)
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} document(s) récupéré(s) restauré(s) : enregistrez-les pour les conserver

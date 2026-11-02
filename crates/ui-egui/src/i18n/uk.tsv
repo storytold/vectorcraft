@@ -4539,6 +4539,7 @@ axis	Both	Обидві
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не вдалося помістити {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не вдалося вставити з буфера обміну: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Не вдалося вставити: документ, у який виконувалося вставлення, було закрито
 @msg	Saved {path} with {_1} note(s): {first}	Збережено: {path} з примітками ({_1}) : {first}
 @msg	Exported {what}	Експортовано: {what}
 @msg	Saved {n} files beside {path}	Збережено файлів: {n} поруч із {path}
@@ -4547,6 +4548,7 @@ axis	Both	Обидві
 @msg	Exporting {_1}	Експорт {_1}
 @msg	Packaging {_1}	Пакування {_1}
 @msg	Placing {_1}	Розміщення {_1}
+@msg	Pasting	Вставлення
 @msg	Saving recovery data for {_1}	Збереження даних відновлення для {_1}
 @msg	Discarded {_1} recovered document(s)	Скасовано відновлених документів: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Відновлено документів: {_1}: збережіть їх, щоб залишити

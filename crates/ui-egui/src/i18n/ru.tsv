@@ -4550,6 +4550,7 @@ axis	Both	Оба
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не удалось поместить {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не удалось вставить из буфера обмена: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Не удалось вставить: документ, в который выполнялась вставка, был закрыт
 @msg	Saved {path} with {_1} note(s): {first}	Сохранено: {path} с примечаниями ({_1}) : {first}
 @msg	Exported {what}	Экспортировано: {what}
 @msg	Saved {n} files beside {path}	Сохранено файлов: {n} рядом с {path}
@@ -4558,6 +4559,7 @@ axis	Both	Оба
 @msg	Exporting {_1}	Экспорт {_1}
 @msg	Packaging {_1}	Упаковка {_1}
 @msg	Placing {_1}	Размещение {_1}
+@msg	Pasting	Вставка
 @msg	Saving recovery data for {_1}	Сохранение данных восстановления для {_1}
 @msg	Discarded {_1} recovered document(s)	Отменено восстановленных документов: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Восстановлено документов: {_1}: сохраните их, чтобы оставить
