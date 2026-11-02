@@ -754,7 +754,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.pluginPanel",
         "Plug-in Panel",
         "",
-        "{id: a panel plug-in (plugin.list kind panel)} show the plug-in's panel as window.panel does (panel id `plugin:<id>`, which window.panel.* moves, docks and closes): floating the first time, else where it was, with its group when they were hidden together; one that shows is left be. Window › Plug-ins lists them as window.panel {panel, toggle: true} items, which also hide them. Drawn for the first time since it opened, it sends the plug-in an open event (plugin.panel.event) and shows its answer; its buttons, checkboxes, dropdowns and committed fields send events of their own → {open: id, panel}",
+        "{id: a panel plug-in (plugin.list kind panel)} show the plug-in's panel as window.panel does (panel id `plugin:<id>`, which window.panel.* moves, docks and closes): floating the first time, else where it was, with its group when they were hidden together; one that shows is left be. Window › Plug-ins lists them as window.panel {panel, toggle: true} items, which also hide them. Drawn for the first time since it opened (closed or hidden, it forgets what it showed), it sends the plug-in an open event (plugin.panel.event) and shows its answer; its buttons, checkboxes, dropdowns and committed fields send events of their own → {open: id, panel}",
     ),
     (
         "window.swatchLibrary",

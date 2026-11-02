@@ -6,7 +6,8 @@
 //! it shows.
 //!
 //! The panel draws what the plug-in answered last (`plugin.panel.event`): its `items`, top to
-//! bottom ([`item`]). An item of a type this host doesn't know is left out. Drawn for the first time
+//! bottom ([`item`]). An item of a type this host doesn't know is left out. Closed or hidden, the
+//! panel forgets that answer ([`tidy`]). Drawn for the first time
 //! since it opened, the panel asks the plug-in what it shows (an `open` event); a button clicked, a
 //! checkbox or dropdown changed, a field's text or number committed and a file picked with a file
 //! field ([`pick_file`]) are events too, sent with the values of all the panel's fields, and the
@@ -147,26 +148,24 @@ pub(crate) fn open_command(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
     Ok(json!({ "open": id, "panel": panel }))
 }
 
-/// Float plug-in panel `panel`. Opened again, it asks its plug-in afresh what it shows.
+/// Float plug-in panel `panel`.
 pub(crate) fn float(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
-    if let Some(id) = parse(panel) {
-        app.ui.plugin_panels.remove(id);
-    }
     app.run("window.panel.float", json!({ "panel": panel, "height": 320 }))
 }
 
-/// Per frame, before the panels are drawn: close the panels of plug-ins that are gone.
+/// Per frame, before the panels are drawn: close the panels of plug-ins that are gone, and forget
+/// what each panel that isn't open (closed, or hidden with its group) showed, so that opened again,
+/// however it is, it asks its plug-in afresh. A panel behind another tab is open and remembers.
 pub fn tidy(app: &mut VectorcraftApp) {
     for panel in open_panels(&app.ui) {
-        if parse(&panel).is_none_or(|id| installed(id).is_none()) {
-            if let Err(e) = app.run("window.panel.close", json!({ "panel": panel })) {
-                app.status(e);
-            }
-            if let Some(id) = parse(&panel) {
-                app.ui.plugin_panels.remove(id);
-            }
+        if parse(&panel).is_none_or(|id| installed(id).is_none())
+            && let Err(e) = app.run("window.panel.close", json!({ "panel": panel }))
+        {
+            app.status(e);
         }
     }
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    app.ui.plugin_panels.retain(|id, _| layout.contains(&panel_id(id)));
 }
 
 /// Sends `event` to panel plug-in `id` with its fields' values, and keeps the answer, or why it

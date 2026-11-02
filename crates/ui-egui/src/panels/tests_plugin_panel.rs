@@ -1,6 +1,7 @@
 //! Plug-in panels in headless frames: Window › Plug-ins lists panel plug-ins and shows and hides
 //! their panels as it does the other panels, which draw the plug-in's answer, send their buttons'
-//! clicks and show why an event failed; a panel whose plug-in is removed closes.
+//! clicks and show why an event failed, and ask afresh each time they open; a panel whose plug-in
+//! is removed closes.
 
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat as tpl;
@@ -118,6 +119,50 @@ fn window_plug_ins_shows_and_hides_a_panel_as_the_window_menu_does_the_others() 
     assert!(!crate::panel_docking::floats(&app.ui, &panel));
     assert!(open(&app, "properties"));
     assert!(checked(&app));
+}
+
+#[test]
+fn a_panel_asks_its_plug_in_afresh_each_time_it_opens() {
+    let mut app = app_with_rect();
+    let id = "test.ui.afresh";
+    install(&mut app, id, &json!({"panel": {"items": [{"type": "text", "text": "Hello"}]}}));
+    let panel = plugin_panel::panel_id(id);
+    let item = json!({"panel": panel, "toggle": true});
+    let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| plugin_panel::show(app, ui, &plugin_panel::panel_id(id));
+    let ctx = egui::Context::default();
+    // The events the panel is sent in a frame (each runs a command), tidied first as the app's
+    // frames are.
+    let events = |app: &mut VectorcraftApp| {
+        plugin_panel::tidy(app);
+        let before = app.run_count;
+        frame_events(&ctx, app, vec![], draw);
+        app.run_count - before
+    };
+    app.run("window.panel", item.clone()).unwrap();
+    assert_eq!(events(&mut app), 1, "open");
+    assert_eq!(events(&mut app), 0);
+
+    // Behind another tab it is open, and remembers what it shows.
+    app.run("window.panel.dock", json!({"panel": panel, "onto": "properties"})).unwrap();
+    app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    plugin_panel::tidy(&mut app);
+    assert!(app.ui.plugin_panels.contains_key(id));
+    app.run("window.panel", item.clone()).unwrap();
+    assert_eq!(events(&mut app), 0);
+
+    // Hidden with its group, it forgets, and shown again it asks again.
+    app.run("window.panel", json!({"panel": panel, "toggle": true, "toggleGroup": true})).unwrap();
+    plugin_panel::tidy(&mut app);
+    assert!(!app.ui.plugin_panels.contains_key(id));
+    app.run("window.panel", item.clone()).unwrap();
+    assert_eq!(events(&mut app), 1, "open again");
+
+    // So it does closed and opened again.
+    app.run("window.panel", item.clone()).unwrap();
+    plugin_panel::tidy(&mut app);
+    assert!(!app.ui.plugin_panels.contains_key(id));
+    app.run("window.pluginPanel", json!({"id": id})).unwrap();
+    assert_eq!(events(&mut app), 1, "open again");
 }
 
 #[test]

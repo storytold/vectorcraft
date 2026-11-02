@@ -66,7 +66,7 @@ In the app, **Window › Plug-ins** lists the installed panels, as panel `plugin
 Window menu's other panel items do (`window.panel {"panel": "plugin:<id>", "toggle": true}`): checked while the panel
 shows, an item hides it, else shows it, floating the first time, then where it was, with its group when they were
 hidden together. It docks, tabs and closes as any panel. `window.pluginPanel {id}` shows a panel and leaves it be when
-it shows. Drawn for the first time since it opened, it sends its
+it shows. Closed or hidden, a panel forgets what it showed: drawn for the first time since it opened, it sends its
 plug-in an `open` event; a button clicked, a checkbox or dropdown changed, a text or number field committed (Enter,
 or leaving it) and a file picked with a file field are events too, sent with the values of all its fields. It draws
 the plug-in's last answer: the `items` of `panel`, top to bottom, each one of
