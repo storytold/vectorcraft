@@ -4612,6 +4612,7 @@ axis	Both	Entrambi
 @msg	`{what}` closes nothing	`{what}` non chiude nulla
 @msg	`{what}` closes something it didn't open	`{what}` chiude qualcosa che non ha aperto
 @msg	a path has too many points	un tracciato ha troppi punti
+@msg	it ends inside a group or compound path	terminano all'interno di un gruppo o di un tracciato composto
 @msg	it ends inside a layer	terminano all'interno di un livello
 @msg	it has art outside its layers	contengono grafica al di fuori dei loro livelli
 @msg	it has more than {MAX_NODES} objects	contengono più di {MAX_NODES} oggetti

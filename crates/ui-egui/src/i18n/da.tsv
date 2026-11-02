@@ -4529,6 +4529,7 @@ imageTrace	Outline	Kontur
 @msg	`{what}` closes nothing	`{what}` lukker intet
 @msg	`{what}` closes something it didn't open	`{what}` lukker noget, den ikke åbnede
 @msg	a path has too many points	en sti har for mange punkter
+@msg	it ends inside a group or compound path	den slutter inde i en gruppe eller en sammensat kurve
 @msg	it ends inside a layer	den slutter inde i et lag
 @msg	it has art outside its layers	den har grafik uden for sine lag
 @msg	it has more than {MAX_NODES} objects	den har flere end {MAX_NODES} objekter

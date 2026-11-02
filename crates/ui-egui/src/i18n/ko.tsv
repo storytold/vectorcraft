@@ -4241,6 +4241,7 @@ theme	Appearance	외관
 @msg	`{what}` closes nothing	`{what}`이(가) 닫는 항목이 없습니다
 @msg	`{what}` closes something it didn't open	`{what}`이(가) 열지 않은 항목을 닫습니다
 @msg	a path has too many points	패스의 점이 너무 많습니다
+@msg	it ends inside a group or compound path	그룹 또는 컴파운드 패스 안에서 끝납니다
 @msg	it ends inside a layer	레이어 안에서 끝납니다
 @msg	it has art outside its layers	레이어 밖에 아트웍이 있습니다
 @msg	it has more than {MAX_NODES} objects	개체가 {MAX_NODES}개를 넘습니다

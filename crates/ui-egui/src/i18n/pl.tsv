@@ -4703,6 +4703,7 @@ imageTrace	Outline	Kontur
 @msg	`{what}` closes nothing	`{what}` niczego nie zamyka
 @msg	`{what}` closes something it didn't open	`{what}` zamyka coś, czego nie otworzył
 @msg	a path has too many points	ścieżka ma zbyt wiele punktów
+@msg	it ends inside a group or compound path	kończy się wewnątrz grupy lub ścieżki złożonej
 @msg	it ends inside a layer	kończy się wewnątrz warstwy
 @msg	it has art outside its layers	ma kompozycję poza warstwami
 @msg	it has more than {MAX_NODES} objects	ma ponad {MAX_NODES} obiektów

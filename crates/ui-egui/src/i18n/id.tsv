@@ -4529,6 +4529,7 @@ imageTrace	Outline	Kontur
 @msg	`{what}` closes nothing	`{what}` tidak menutup apa pun
 @msg	`{what}` closes something it didn't open	`{what}` menutup sesuatu yang tidak dibukanya
 @msg	a path has too many points	sebuah jalur memiliki terlalu banyak titik
+@msg	it ends inside a group or compound path	berakhir di dalam grup atau jalur majemuk
 @msg	it ends inside a layer	berakhir di dalam lapisan
 @msg	it has art outside its layers	memiliki karya seni di luar lapisannya
 @msg	it has more than {MAX_NODES} objects	memiliki lebih dari {MAX_NODES} objek

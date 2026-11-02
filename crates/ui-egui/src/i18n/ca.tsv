@@ -5054,6 +5054,7 @@ digits	Malayalam	Malaiàlam
 @msg	invalid stroke widths	amplades de traç no vàlides
 @msg	is not an image VectorCraft reads	no és una imatge que VectorCraft pugui llegir
 @msg	it decompresses to more than {_1} MB	es descomprimeix fins a més de {_1} MB
+@msg	it ends inside a group or compound path	acaba dins d’un grup o d’un traçat compost
 @msg	it ends inside a layer	acaba dins d’una capa
 @msg	it has art outside its layers	té art fora de les seves capes
 @msg	it has more than one artboard	té més d’un tauler

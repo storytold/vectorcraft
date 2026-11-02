@@ -4541,6 +4541,7 @@ imageTrace	Outline	Contour
 @msg	`{what}` closes nothing	`{what}` sluit niets
 @msg	`{what}` closes something it didn't open	`{what}` sluit iets dat het niet heeft geopend
 @msg	a path has too many points	een pad heeft te veel punten
+@msg	it ends inside a group or compound path	het eindigt binnen een groep of samengesteld pad
 @msg	it ends inside a layer	het eindigt binnen een laag
 @msg	it has art outside its layers	het heeft illustratie buiten zijn lagen
 @msg	it has more than {MAX_NODES} objects	het heeft meer dan {MAX_NODES} objecten

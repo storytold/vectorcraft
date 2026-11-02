@@ -4316,6 +4316,7 @@ font-technology	Variable	ცვლადი
 @msg	`{what}` closes nothing	`{what}` არაფერს ხურავს
 @msg	`{what}` closes something it didn't open	`{what}` ხურავს იმას, რაც არ გაუხსნია
 @msg	a path has too many points	ტრაექტორიას ზედმეტად ბევრი წერტილი აქვს
+@msg	it ends inside a group or compound path	ის ჯგუფის ან შედგენილი ტრაექტორიის შიგნით მთავრდება
 @msg	it ends inside a layer	ის შრის შიგნით მთავრდება
 @msg	it has art outside its layers	მას შრეების გარეთ ნახატი აქვს
 @msg	it has more than {MAX_NODES} objects	მას {MAX_NODES}-ზე მეტი ობიექტი აქვს

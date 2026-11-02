@@ -4427,6 +4427,7 @@ theme	Appearance	Giao diện
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
 @msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
+@msg	it ends inside a group or compound path	nó kết thúc bên trong một nhóm hoặc đường dẫn phức
 @msg	it ends inside a layer	nó kết thúc bên trong một lớp
 @msg	it has art outside its layers	nó có tác phẩm ngoài các lớp
 @msg	it has more than one artboard	nó có nhiều hơn một bảng vẽ
