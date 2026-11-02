@@ -422,7 +422,7 @@ fn rulers(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Snap to Grid for a move of `ids` from page point `from` to `to` (unless `p` says `snap: false`):
 /// the plane and depth of the first one and the plane-space correction that lands the edge of the
-/// joint bounds of the objects there nearer a gridline on it.
+/// joint bounds of the objects on that plane, each measured at its own depth, nearer a gridline on it.
 pub(crate) fn snap_fix(doc: &Document, ids: &[NodeId], p: &Value, (from, to): (Point, Point)) -> Option<(Plane, f64, Vec2)> {
     let g = grid_of(doc);
     if !bool_or(p, "snap", g.snap) {
