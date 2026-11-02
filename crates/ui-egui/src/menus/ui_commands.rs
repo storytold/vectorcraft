@@ -991,6 +991,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Hyphenation (the Paragraph panel menu's Hyphenation…) on the paragraphs the Paragraph panel acts on, filled in with the values it shows (dialog `hyphenation`: hyphenate, wordsLongerThan 1..25, afterFirst 1..15, beforeLast 1..15, hyphenLimit 0..25 (0: no limit), hyphenationZone (pt), hyphenateCapitalized): OK runs text.setFormat with the values that changed, as one undo step; an error with no type selected",
     ),
     (
+        "ui.tateChuYokoSettings",
+        "Tate-chu-yoko Settings…",
+        "",
+        "{} open Tate-chu-yoko Settings (the Character panel menu's Tate-chu-yoko Settings…, with Show East Asian Options) on the characters the Character panel acts on, filled in with the values they share (dialog `tateChuYokoSettings`: tcyUpDown, tcyLeftRight (pt, -1296..1296)): OK runs text.setFormat (text.setRangeStyle while the Type tool edits text) with the values that changed, as one undo step; an error with no type selected",
+    ),
+    (
         "ui.colorGuideLimit",
         "Limit Color Guide to Library",
         "",
