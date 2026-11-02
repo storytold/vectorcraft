@@ -1509,10 +1509,15 @@ A VectorCraft addition (it replaces a script some users ran), so no area score m
 
 Edit › Keyboard Shortcuts lists every item of the Effect menu under its menu path (Effect › Distort & Transform › Transform…) and gives each one a shortcut of its own (stored as `effect:<id>`; they all run `effect.dialog {effect}`, or `effect.apply` for an effect without options, so a shortcut on the command alone couldn't tell them apart). The menu shows the shortcut, and pressing it opens that effect's dialog for the selection (#3296). Test: `shortcuts::tests::an_effect_menu_item_takes_a_shortcut_of_its_own`.
 
+## Live Corners: arrow keys change the corner kind while dragging (2026-11-01)
+
+While a corner widget is pressed or dragged with the Selection or Direct Selection tool, the Up and Down arrows step the kind of the corners being edited (Round, Inverted Round, Chamfer, in turn, from the pressed corner's), shown live with the radius and kept, with it, as one undo step when the drag ends; a press with an arrow and no drag changes just the kind (#2898). Alt-clicking a widget still cycles it as before. Test: `tests::livecorners::arrows_while_dragging_a_corner_widget_change_the_corner_kind`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Live Corners: Up/Down while dragging a corner widget step the corner kind (#2898); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Shortcuts for Effect menu items (#3296); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Create Swatch Legend add-on under Object › Plug-ins › Color Effects (`addon.color.swatchLegend`, #4919); evidence added; scores unchanged. |
