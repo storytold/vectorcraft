@@ -4206,6 +4206,8 @@ axis	Both	Entrambi
 @msg	join needs open paths	per unire servono tracciati aperti
 @msg	lang must be one of {_1}	lang deve essere uno dei seguenti: {_1}
 @msg	layers can't be wrap objects	i livelli non possono essere oggetti di avvolgimento
+@msg	line {line}: value for `{var}` must be true or false	riga {line}: il valore di `{var}` deve essere true o false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	riga {line}: il valore di `{var}` supera i {MAX_GRAPH_CSV} byte
 @msg	missing `folder`	manca `folder`
 @msg	missing `id` (see plugin.list)	manca `id` (vedi plugin.list)
 @msg	missing `name`	manca `name`

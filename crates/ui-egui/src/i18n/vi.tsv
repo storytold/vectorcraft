@@ -4460,6 +4460,8 @@ theme	Appearance	Giao diện
 @msg	lang must be one of {_1}	lang phải là một trong {_1}
 @msg	larger than 256 MB	lớn hơn 256 MB
 @msg	layers can't be wrap objects	lớp không thể là đối tượng bọc
+@msg	line {line}: value for `{var}` must be true or false	dòng {line}: giá trị của `{var}` phải là true hoặc false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	dòng {line}: giá trị của `{var}` dài hơn {MAX_GRAPH_CSV} byte
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	ảnh liên kết hiển thị bản xem trước độ phân giải thấp đã lưu trong tệp cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Hợp nhất tô trực tiếp: chọn nhóm tô trực tiếp và các đường dẫn để thêm
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Tô trực tiếp nhận đường dẫn và đường dẫn phức: hãy chuyển văn bản, hình ảnh và các đối tượng khác thành đường dẫn trước

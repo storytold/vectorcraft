@@ -4079,6 +4079,8 @@ theme	Appearance	Erscheinungsbild
 @msg	join needs open paths	zum Zusammenfügen sind offene Pfade nötig
 @msg	lang must be one of {_1}	lang muss einer der folgenden Werte sein: {_1}
 @msg	layers can't be wrap objects	Ebenen können keine Umflussobjekte sein
+@msg	line {line}: value for `{var}` must be true or false	Zeile {line}: der Wert für `{var}` muss true oder false sein
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	Zeile {line}: der Wert für `{var}` ist länger als {MAX_GRAPH_CSV} Byte
 @msg	missing `folder`	`folder` fehlt
 @msg	missing `id` (see plugin.list)	`id` fehlt (siehe plugin.list)
 @msg	missing `name`	`name` fehlt
