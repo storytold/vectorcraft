@@ -115,7 +115,7 @@ impl Writer<'_> {
     pub(super) fn line(&mut self, s: &str) {
         let ind = self.indent(self.depth);
         self.body.push_str(&ind);
-        self.body.push_str(s);
+        self.body.push_str(&merge_class_attrs(s));
         if !self.opts.minify {
             self.body.push('\n');
         }
@@ -195,6 +195,18 @@ impl Writer<'_> {
         // Preserve sublayer identity independently of object data attributes.
         if !out.is_empty() && n.is_layer() && self.layer_nest > 1 {
             out.push_str(&format!(" {}=\"sublayer\"", crate::import::SUBLAYER));
+        }
+        let classes: Vec<&str> = n
+            .extras()
+            .attrs
+            .as_deref()
+            .map_or(&[][..], |a| a.classes.as_slice())
+            .iter()
+            .map(String::as_str)
+            .filter(|c| !c.is_empty() && !c.chars().any(|ch| ch.is_control() || matches!(ch, '\u{fffe}' | '\u{ffff}')))
+            .collect();
+        if !classes.is_empty() && !self.tiny() {
+            out.push_str(&format!(" class=\"{}\"", xml_attr_escape(&classes.join(" "))));
         }
         let mut keys = HashSet::new();
         for (k, v) in n.extras().attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
@@ -507,6 +519,28 @@ impl Writer<'_> {
             self.warnings.push(w.to_string());
         }
     }
+}
+
+/// An element that has both its own classes and a generated `cls-N` would write `class` twice:
+/// join the two into one attribute (the first, the object's own, comes first).
+fn merge_class_attrs(s: &str) -> std::borrow::Cow<'_, str> {
+    const KEY: &str = " class=\"";
+    let tag_end = s.find('>').unwrap_or(s.len());
+    let tag = s.get(..tag_end).unwrap_or(s);
+    let Some(first) = tag.find(KEY) else { return s.into() };
+    let first_val = first + KEY.len();
+    let Some(first_len) = tag.get(first_val..).and_then(|t| t.find('"')) else { return s.into() };
+    let first_end = first_val + first_len;
+    let Some(second) = tag.get(first_end..).and_then(|t| t.find(KEY)).map(|i| i + first_end) else { return s.into() };
+    let second_val = second + KEY.len();
+    let Some(second_len) = tag.get(second_val..).and_then(|t| t.find('"')) else { return s.into() };
+    let second_end = second_val + second_len;
+    let (Some(b), Some(head), Some(mid), Some(rest)) =
+        (s.get(second_val..second_end), s.get(..first_end), s.get(first_end + 1..second), s.get(second_end + 1..))
+    else {
+        return s.into();
+    };
+    format!("{head} {b}\"{mid}{rest}").into()
 }
 
 /// The rectangle whose corners `q` are, in order either way round, with its edges alternately

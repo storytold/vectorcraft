@@ -40,8 +40,8 @@ pub(super) use layers::DEFAULT_FONT_SIZE;
 pub(crate) use layers::SUBLAYER;
 use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name};
 pub(super) use prepass::Edits;
+use prepass::{Extras, labels, prepass};
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
-use prepass::{labels, prepass};
 
 mod css;
 mod css_transform;
@@ -309,7 +309,7 @@ struct Importer {
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
-    data: HashMap<String, Vec<(String, String)>>,
+    data: HashMap<String, Extras>,
     /// The event attributes of elements, by id ([`user_events`]).
     events: HashMap<String, Vec<(String, String)>>,
     /// The attributes of elements in other applications' namespaces, by id ([`foreign`]).

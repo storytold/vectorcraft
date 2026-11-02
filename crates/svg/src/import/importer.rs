@@ -79,11 +79,15 @@ impl Importer {
         Some(out)
     }
 
-    /// Give `n` the `data-*` attributes of element `id`, unless it has data already (what an
+    /// Give `n` the `data-*` attributes and classes of element `id`, unless it has data already (what an
     /// inner element made of it keeps).
     pub(super) fn keep_data(&self, id: &str, n: &mut Node) {
-        if let Some(data) = self.data.get(id).filter(|_| n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty())) {
+        let Some((data, classes)) = self.data.get(id) else { return };
+        if n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty()) {
             n.edit_attrs(|a| a.data = data.clone());
+        }
+        if n.extras().attrs.as_ref().is_none_or(|a| a.classes.is_empty()) {
+            n.edit_attrs(|a| a.classes = classes.clone());
         }
     }
 
