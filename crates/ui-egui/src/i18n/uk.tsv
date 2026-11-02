@@ -4597,6 +4597,10 @@ axis	Both	Обидві
 @msg	`{what}` closes something it didn't open	`{what}` закриває те, що не відкривав
 @msg	a path has too many points	у контурі занадто багато точок
 @msg	it ends inside a layer	вони закінчуються всередині шару
+@msg	it ends inside a multi-layer mask	вони закінчуються всередині багатошарової маски
+@msg	a multi-layer mask's operators are out of order	оператори багатошарової маски йдуть у неправильному порядку
+@msg	a multi-layer mask needs one clipping path	багатошаровій масці потрібен один відсічний контур
+@msg	a group crosses a multi-layer mask	група перетинає багатошарову маску
 @msg	it has art outside its layers	у них є графіка поза шарами
 @msg	it has more than {MAX_NODES} objects	в них більше {MAX_NODES} об’єктів
 @msg	it has no layers	у них немає шарів

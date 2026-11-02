@@ -4314,6 +4314,10 @@ axis	Both	Her İkisi
 @msg	`{what}` closes something it didn't open	`{what}` açmadığı bir şeyi kapatıyor
 @msg	a path has too many points	bir yolun çok fazla noktası var
 @msg	it ends inside a layer	bir katmanın içinde bitiyor
+@msg	it ends inside a multi-layer mask	çok katmanlı bir maskenin içinde bitiyor
+@msg	a multi-layer mask's operators are out of order	çok katmanlı bir maskenin işleçleri yanlış sırada
+@msg	a multi-layer mask needs one clipping path	çok katmanlı bir maskenin bir kırpma yoluna ihtiyacı var
+@msg	a group crosses a multi-layer mask	bir grup çok katmanlı bir maskeyi kesiyor
 @msg	it has art outside its layers	katmanlarının dışında sanat var
 @msg	it has more than {MAX_NODES} objects	{MAX_NODES}'den daha fazla nesneye sahip
 @msg	it has no layers	katmanı yok

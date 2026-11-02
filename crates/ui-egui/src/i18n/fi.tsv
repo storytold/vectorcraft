@@ -4780,6 +4780,10 @@ imageTrace	Outline	Ääriviiva
 @msg	`{what}` closes something it didn't open	`{what}` sulkee jotain, mitä se ei avannut
 @msg	a path has too many points	polulla on liian monta pistettä
 @msg	it ends inside a layer	se päättyy tason sisään
+@msg	it ends inside a multi-layer mask	se päättyy monitasoisen maskin sisään
+@msg	a multi-layer mask's operators are out of order	monitasoisen maskin operaattorit ovat väärässä järjestyksessä
+@msg	a multi-layer mask needs one clipping path	monitasoinen maski tarvitsee yhden leikkauspolun
+@msg	a group crosses a multi-layer mask	ryhmä ylittää monitasoisen maskin rajan
 @msg	it has art outside its layers	siinä on kuvitusta tasojensa ulkopuolella
 @msg	it has more than {MAX_NODES} objects	siinä on yli {MAX_NODES} objektia
 @msg	it has no layers	siinä ei ole tasoja

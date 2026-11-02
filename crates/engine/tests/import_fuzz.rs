@@ -3140,6 +3140,48 @@ proptest! {
         let text = mutate_text(NAMED_PROLOG_AI, cut, &edits);
         survive("mutated PostScript-form .ai", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
     }
+
+    /// Multi-layer masks (`Mb` <path> `W n` `Md` … `MB`) over any number of layers, with tokens
+    /// dropped or put anywhere (the mask operators, layer ends, groups, clipping paths) and the
+    /// data cut short.
+    #[test]
+    fn ai_multi_layer_masks_never_panic(
+        layers in 1usize..5,
+        aliases in any::<bool>(),
+        edits in prop::collection::vec((0usize..64, prop::sample::select(vec!["", "Mb", "Md", "MB", "Mi", "LB", "u", "U", "q", "Q", "W n", "h W n"])), 0..4),
+        cut in prop::option::of(0usize..64),
+    ) {
+        use vectorcraft_testkit::ai;
+        let (begin, define) = if aliases { ("Mv", "ME") } else { ("Mb", "Md") };
+        let mut tokens: Vec<String> = vec![];
+        for i in 0..layers {
+            if i > 0 {
+                tokens.push(format!("LB\n%AI5_EndLayer--\n%AI5_BeginLayer\n1 1 1 1 0 1 1 79 128 255 Lb\n(L{i}) Ln\n"));
+            } else {
+                tokens.extend([begin.to_string(), "40 40 m 120 40 L 120 120 L 40 120 L h W n".into(), define.to_string()]);
+            }
+            let x = 10 * i;
+            tokens.push(format!("0.5 0 0 0 k {x} {x} m {} {x} L {} {} L f", x + 140, x + 140, x + 140));
+        }
+        tokens.extend(["MB".to_string(), "150 150 m 190 150 L 190 190 L f".into()]);
+        for (at, with) in &edits {
+            let at = at % (tokens.len() + 1);
+            if with.is_empty() {
+                if at < tokens.len() {
+                    tokens.remove(at);
+                }
+            } else {
+                tokens.insert(at, with.to_string());
+            }
+        }
+        if let Some(cut) = cut {
+            tokens.truncate(cut);
+        }
+        let data = ai::editing_data(200.0, 100.0, &format!("%AI5_BeginLayer\n1 1 1 1 0 1 1 79 128 255 Lb\n(L0) Ln\n{}\nLB\n", tokens.join("\n")));
+        survive("multi-layer masks", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("multi-layer masks in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
 }
 
 /// An operand of a layer's options (`Lb`): a flag, a colour index or component, a percentage, or
@@ -3197,6 +3239,13 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "Lb",
             "Ln",
             "(name) Ln",
+            "\n%AI5_BeginLayer\n1 1 1 1 0 1 1 79 128 255 Lb\n",
+            "Mb",
+            "Mv",
+            "Md",
+            "ME",
+            "Mi",
+            "MB",
             "g",
             "G",
             "k",

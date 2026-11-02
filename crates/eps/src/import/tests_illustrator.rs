@@ -132,6 +132,25 @@ fn a_postscript_ai_whose_layers_cant_be_read_says_why() {
     assert!(e.contains("`Adobe_packedarray`") && e.contains("its layers couldn't be read either") && e.contains("`frobnicate`"), "{e}");
 }
 
+/// A `.ai` in PostScript form with a multi-layer mask (`Mb`, its path, `Md`, objects in both
+/// layers, `MB`) opens through its layers: a clipping group in each, and what follows `MB` unclipped.
+#[test]
+fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
+    let src = NAMED_PROLOG
+        .replace("0 D\n10 10 m", "0 D\nMb\n20 20 m\n180 20 L\n180 80 L\n20 80 L\nh\nW\nn\nMd\n10 10 m")
+        .replace("190 90 L\nS\nLB", "190 90 L\nS\nMB\n150 50 m\n195 95 L\nS\nLB");
+    let r = import(src.as_bytes()).unwrap();
+    assert!(!r.preview, "read through the layers, not a fallback preview");
+    let d = &r.document;
+    let names: Vec<_> = d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["SECTION::Cut", "SECTION::Hatch"]);
+    assert_eq!(tree(d.layers[0].children().unwrap()), "k[c p]");
+    assert_eq!(tree(d.layers[1].children().unwrap()), "k[c p] p");
+    let mask = d.layers[1].children().unwrap()[0].children().unwrap()[0].clone();
+    assert_eq!(mask.geometric_bounds(), Some(Rect::new(20.0, 20.0, 180.0, 80.0)));
+    assert!(r.warnings.iter().any(|w| w.contains("clipping group in each layer")), "{:?}", r.warnings);
+}
+
 /// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
 /// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`XB` (a tab definition) and `Th`
 /// (hyphen control). These keep no geometry, so the reader drops them rather than failing the

@@ -3102,3 +3102,224 @@ fn an_objects_on_path_group_in_versioned_content_opens_once() {
     assert_eq!(kids[0].children().unwrap().len(), 5);
     assert!(kids[0].extras().objects_on_path.is_some());
 }
+
+/// Editing data in the legacy format (`%AI5_FileFormat 2.0`, ten `Lb` operands), then `body`.
+fn mask_stream7(body: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: test\n%%BoundingBox: 0 0 200 200\n%AI5_FileFormat 2.0\n%AI5_ArtSize: 200 200\n\
+         %AI3_TemplateBox: 100 100 100 100\n%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{body}\n\
+         %%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n"
+    )
+}
+
+/// The start of a legacy layer named `name`, `masks` its multi-layer mask flag (`Lb`'s sixth operand).
+fn begin7(name: &str, masks: u8) -> String {
+    format!("%AI5_BeginLayer\n1 1 1 1 0 {masks} 1 79 128 255 Lb\n({name}) Ln\n")
+}
+
+const END7: &str = "LB\n%AI5_EndLayer--\n";
+
+/// `Mb`, an 80 by 80 point mask path painted `W n`, `Md` (the version 7 specification's §10.4 order).
+fn mask_start() -> String {
+    format!("Mb\n{}h\nW\nn\nMd\n", rect_path(40.0, 40.0, 120.0, 120.0))
+}
+
+/// A filled square at `x`.
+fn masked(x: f64) -> String {
+    format!("0.5 0 0 0 k\n{}f\n", rect_path(x, x, x + 140.0, x + 140.0))
+}
+
+/// A layer's objects as a tree: `p` a path, `c` a clipping path, `o` a compound path, `g[…]` a
+/// group, `k[…]` a clipping group, `l[…]` a sublayer.
+fn mask_tree(nodes: &[Arc<Node>]) -> String {
+    let one = |n: &Arc<Node>| match &n.kind {
+        NodeKind::Layer { children, .. } => format!("l[{}]", mask_tree(children)),
+        NodeKind::Group { children, clip: false } => format!("g[{}]", mask_tree(children)),
+        NodeKind::Group { children, clip: true } => format!("k[{}]", mask_tree(children)),
+        NodeKind::Path { clipping: true, .. } => "c".into(),
+        NodeKind::Path { .. } => "p".into(),
+        NodeKind::Compound { .. } => "o".into(),
+        k => format!("{k:?}"),
+    };
+    nodes.iter().map(one).collect::<Vec<_>>().join(" ")
+}
+
+fn read7(body: &str) -> Structure {
+    match read(mask_stream7(body).as_bytes()) {
+        Ok(r) => r,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// Each layer's tree, and whether the layer itself clips.
+fn layer_trees(doc: &Document) -> Vec<(String, String, bool)> {
+    doc.layers
+        .iter()
+        .map(|l| {
+            let NodeKind::Layer { children, clip, .. } = &l.kind else { panic!("a layer") };
+            (l.name.clone().unwrap_or_default(), mask_tree(children), *clip)
+        })
+        .collect()
+}
+
+/// A multi-layer mask (version 7 specification §10.4: `Mb`, the mask path, `Md`, objects in two
+/// layers, `MB`) comes in as a clipping group in each layer it covers, each clipped by a copy of
+/// the mask's path; what follows `MB` isn't clipped.
+#[test]
+fn a_multi_layer_mask_clips_each_layer_it_covers() {
+    let body = format!("{}{}{}{END7}{}{}MB\n{}{END7}", begin7("A", 1), mask_start(), masked(15.0), begin7("B", 1), masked(30.0), masked(150.0));
+    let r = read7(&body);
+    assert_eq!(layer_trees(&r.doc), [("A".to_string(), "k[c p]".to_string(), false), ("B".to_string(), "k[c p] p".to_string(), false)]);
+    let mask = |l: usize| r.doc.layers[l].children().unwrap()[0].children().unwrap()[0].clone();
+    let (a, b) = (mask(0), mask(1));
+    assert_ne!(a.id, b.id, "each layer has a copy of its own");
+    assert_eq!(a.geometric_bounds(), b.geometric_bounds());
+    let bounds = a.geometric_bounds().unwrap();
+    assert_eq!((bounds.width(), bounds.height()), (80.0, 80.0));
+    assert!(r.warnings.iter().any(|w| w.contains("clipping group in each layer")), "{:?}", r.warnings);
+    // The layers' flag saying they have multi-layer masks changes nothing.
+    let unflagged = read7(&body.replace(&begin7("A", 1), &begin7("A", 0)).replace(&begin7("B", 1), &begin7("B", 0)));
+    assert_eq!(format!("{:?}", unflagged.doc.layers), format!("{:?}", r.doc.layers));
+}
+
+#[test]
+fn a_multi_layer_mask_in_one_layer_or_over_three() {
+    let one = format!("{}{}{}MB\n{}{END7}", begin7("A", 1), mask_start(), masked(15.0), masked(150.0));
+    assert_eq!(layer_trees(&read7(&one).doc), [("A".to_string(), "k[c p] p".to_string(), false)]);
+    let three = format!(
+        "{}{}{}{END7}{}{}{END7}{}{}MB\n{END7}",
+        begin7("A", 1),
+        mask_start(),
+        masked(15.0),
+        begin7("B", 1),
+        masked(30.0),
+        begin7("C", 1),
+        masked(45.0)
+    );
+    let trees: Vec<_> = layer_trees(&read7(&three).doc).into_iter().map(|(_, t, clip)| (t, clip)).collect();
+    assert_eq!(trees, vec![("k[c p]".to_string(), false); 3]);
+    // Objects before the mask's path are masked too; a layer between with nothing in it stays empty.
+    let before = format!(
+        "{}Mb\n{}{}h\nW\nn\nMd\n{END7}{}{END7}{}{}MB\n{END7}",
+        begin7("A", 1),
+        masked(15.0),
+        rect_path(40.0, 40.0, 120.0, 120.0),
+        begin7("B", 1),
+        begin7("C", 1),
+        masked(45.0)
+    );
+    let trees: Vec<_> = layer_trees(&read7(&before).doc).into_iter().map(|(_, t, _)| t).collect();
+    assert_eq!(trees, ["k[c p]", "", "k[c p]"]);
+}
+
+#[test]
+fn a_multi_layer_mask_in_a_group_or_sublayer() {
+    // Begun and ended in a group of one layer.
+    let grouped = format!("{}u\n{}{}MB\n{}U\n{END7}", begin7("A", 1), mask_start(), masked(15.0), masked(150.0));
+    assert_eq!(layer_trees(&read7(&grouped).doc)[0].1, "g[k[c p] p]");
+    // A sublayer in the mask: what the mask covers in the layer around it and in the sublayer.
+    let nested = format!("{}{}{}{}{}{END7}{}MB\n{END7}", begin7("A", 1), mask_start(), masked(15.0), begin7("S", 1), masked(30.0), masked(45.0));
+    assert_eq!(layer_trees(&read7(&nested).doc)[0].1, "k[c p] l[k[c p]] k[c p]");
+}
+
+#[test]
+fn a_multi_layer_masks_path_can_be_painted_or_compound() {
+    // `W f`: the path also paints, under what the mask covers.
+    let painted = format!("{}Mb\n0 0 0 1 k\n{}h\nW\nf\nMd\n{}MB\n{END7}", begin7("A", 1), rect_path(40.0, 40.0, 120.0, 120.0), masked(15.0));
+    let doc = read7(&painted).doc;
+    assert_eq!(layer_trees(&doc)[0].1, "k[c p p]");
+    let group = doc.layers[0].children().unwrap()[0].clone();
+    let kids = group.children().unwrap();
+    assert_eq!(fill(&kids[1]).color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), "the painted path first");
+    // A compound path of clipping paths.
+    let compound = format!(
+        "{}Mb\n*u\n{}h\nW\nn\n{}h\nW\nn\n*U\nMd\n{}MB\n{END7}",
+        begin7("A", 1),
+        rect_path(40.0, 40.0, 80.0, 80.0),
+        rect_path(90.0, 90.0, 120.0, 120.0),
+        masked(15.0)
+    );
+    assert_eq!(layer_trees(&read7(&compound).doc)[0].1, "k[o p]");
+}
+
+/// `Mv` starts a mask as `Mb` does, `ME` defines one as `Md` does, and `Mi` changes nothing.
+#[test]
+fn other_multi_layer_mask_operators() {
+    let body = format!("{}{}{}{END7}{}{}MB\n{}{END7}", begin7("A", 1), mask_start(), masked(15.0), begin7("B", 1), masked(30.0), masked(150.0));
+    let plain = format!("{:?}", read7(&body).doc.layers);
+    let aliases = body.replace("Mb\n", "Mv\n").replace("Md\n", "ME\n");
+    assert_eq!(format!("{:?}", read7(&aliases).doc.layers), plain);
+    let with_mi = body.replace("Md\n", "Md\nMi\n").replace("MB\n", "Mi\nMB\n");
+    assert_eq!(format!("{:?}", read7(&with_mi).doc.layers), plain);
+}
+
+#[test]
+fn a_malformed_multi_layer_mask_is_an_error() {
+    let path = format!("{}h\nW\nn\n", rect_path(40.0, 40.0, 120.0, 120.0));
+    let sq = masked(15.0);
+    let cases = [
+        ("an end without a start", format!("{sq}MB\n")),
+        ("a definition without a start", format!("{path}Md\n{sq}")),
+        ("no mask path", format!("Mb\n{sq}Md\n{sq}MB\n")),
+        ("a start inside another", format!("Mb\nMb\n{path}Md\n{sq}MB\n")),
+        ("an end before the definition", format!("Mb\n{path}MB\n")),
+        ("a definition in another group", format!("Mb\nu\n{path}Md\n{sq}MB\nU\n")),
+        ("a group crossing the end", format!("{}u\n{sq}MB\nU\n", mask_start())),
+        ("a group crossing the start", format!("u\n{}{sq}U\nMB\n", mask_start())),
+    ];
+    for (why, art) in cases {
+        let body = format!("{}{art}{END7}", begin7("A", 1));
+        let e = read(mask_stream7(&body).as_bytes()).unwrap_err();
+        assert!(e.contains("mask"), "{why}: {e}");
+    }
+    let layered = [
+        ("a layer ends before the definition", format!("{}Mb\n{sq}{END7}{}{path}Md\nMB\n{END7}", begin7("A", 1), begin7("B", 1))),
+        ("a group open at the layer's end", format!("{}{}u\n{sq}{END7}{}U\nMB\n{END7}", begin7("A", 1), mask_start(), begin7("B", 1))),
+        ("the end of the file inside the mask", format!("{}{}{sq}{END7}", begin7("A", 1), mask_start())),
+    ];
+    for (why, body) in layered {
+        let e = read(mask_stream7(&body).as_bytes()).unwrap_err();
+        assert!(e.contains("mask"), "{why}: {e}");
+    }
+    // Outside the layers, `Md` has nowhere to take its path from.
+    let outside = format!("Mb\nMd\n{}{path}{sq}MB\n{END7}", begin7("A", 1));
+    let e = read(mask_stream7(&outside).as_bytes()).unwrap_err();
+    assert!(e.contains("mask"), "{e}");
+}
+
+/// A clipping path painted among the masked objects clips its whole layer, as outside a mask.
+#[test]
+fn a_layers_clipping_path_in_a_multi_layer_mask_clips_the_layer() {
+    let path = format!("{}h\nW\nn\n", rect_path(10.0, 10.0, 190.0, 190.0));
+    let body = format!("{}{}{}{path}{}MB\n{END7}", begin7("A", 1), mask_start(), masked(15.0), masked(30.0));
+    assert_eq!(layer_trees(&read7(&body).doc), [("A".to_string(), "c k[c p p]".to_string(), true)]);
+}
+
+/// `Mb` before the first layer it covers and `MB` after the last one's `LB`.
+#[test]
+fn a_multi_layer_mask_begun_or_ended_between_layers() {
+    let body = format!(
+        "Mb\n{}{}h\nW\nn\nMd\n{}{END7}{}{}{END7}MB\n{}{}{END7}",
+        begin7("A", 1),
+        rect_path(40.0, 40.0, 120.0, 120.0),
+        masked(15.0),
+        begin7("B", 1),
+        masked(30.0),
+        begin7("C", 1),
+        masked(150.0)
+    );
+    let trees: Vec<_> = layer_trees(&read7(&body).doc).into_iter().map(|(_, t, _)| t).collect();
+    assert_eq!(trees, ["k[c p]", "k[c p]", "p"]);
+}
+
+/// Each copy of the mask counts toward the most objects read, with its points.
+#[test]
+fn copies_of_a_multi_layer_mask_count_toward_the_limit() {
+    let points: String = (0..2_000_001).map(|i| format!("{} 40 L\n", 40 + i % 80)).collect();
+    let mask = format!("Mb\n40 40 m\n{points}h\nW\nn\nMd\n");
+    let one = format!("{}{mask}{}MB\n{END7}", begin7("A", 1), masked(15.0));
+    assert_eq!(layer_trees(&read7(&one).doc)[0].1, "k[c p]");
+    let two = format!("{}{mask}{}{END7}{}{}MB\n{END7}", begin7("A", 1), masked(15.0), begin7("B", 1), masked(30.0));
+    let e = read(mask_stream7(&two).as_bytes()).unwrap_err();
+    assert!(e.contains("objects"), "{e}");
+}

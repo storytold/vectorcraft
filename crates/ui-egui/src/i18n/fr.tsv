@@ -4562,6 +4562,10 @@ axis	Both	Les deux
 @msg	`{what}` closes something it didn't open	`{what}` ferme quelque chose qu’il n’a pas ouvert
 @msg	a path has too many points	un tracé a trop de points
 @msg	it ends inside a layer	elles se terminent à l’intérieur d’un calque
+@msg	it ends inside a multi-layer mask	elles se terminent à l’intérieur d’un masque multicalque
+@msg	a multi-layer mask's operators are out of order	les opérateurs d’un masque multicalque sont dans le désordre
+@msg	a multi-layer mask needs one clipping path	un masque multicalque nécessite un seul tracé d’écrêtage
+@msg	a group crosses a multi-layer mask	un groupe chevauche un masque multicalque
 @msg	it has art outside its layers	elles contiennent des illustrations hors de leurs calques
 @msg	it has more than {MAX_NODES} objects	elles contiennent plus de {MAX_NODES} objets
 @msg	it has no layers	elles n’ont aucun calque

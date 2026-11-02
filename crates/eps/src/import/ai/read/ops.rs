@@ -136,13 +136,14 @@ impl<'a> Reader<'a> {
                     a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
                 }
             }
-            "LB" => self.end_layer()?,
+            "LB" => self.end_layer_in_mask()?,
             // Paths.
             "m" | "l" | "L" | "c" | "C" | "v" | "V" | "y" | "Y" => self.path_op(w, &vals)?,
             "h" => close(&mut self.path),
             // Ends a path that stays open.
             "H" => {}
             "W" => self.clip_next = true,
+            "Mb" | "Mv" | "Md" | "ME" | "MB" | "Mi" => self.multi_mask_op(w)?,
             // A text object's frame or path.
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" if self.in_text_path() => self.text_path(),
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" => self.paint(w, hidden, false)?,

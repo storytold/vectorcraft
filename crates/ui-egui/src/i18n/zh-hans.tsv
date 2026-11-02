@@ -4040,6 +4040,10 @@ imageTrace	Outline	轮廓
 @msg	`{what}` closes something it didn't open	`{what}` 结束了并非由它开始的内容
 @msg	a path has too many points	某条路径的点过多
 @msg	it ends inside a layer	它在图层内部结束
+@msg	it ends inside a multi-layer mask	它在跨图层蒙版内部结束
+@msg	a multi-layer mask's operators are out of order	跨图层蒙版的运算符顺序错误
+@msg	a multi-layer mask needs one clipping path	跨图层蒙版需要一条剪切路径
+@msg	a group crosses a multi-layer mask	编组跨越了跨图层蒙版
 @msg	it has art outside its layers	它有位于图层之外的图稿
 @msg	it has more than {MAX_NODES} objects	它包含超过 {MAX_NODES} 个对象
 @msg	it has no layers	它没有图层
