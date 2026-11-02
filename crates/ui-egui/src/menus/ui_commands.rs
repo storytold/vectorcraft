@@ -1130,7 +1130,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "docInfo.save",
         "Save Document Info…",
         "",
-        "{path?, selectionOnly?} write Document Info's text report (document.info {format: \"text\"}) to path, else a picked file (the web downloads it) → {path}",
+        "{path?, selectionOnly?, category?} write Document Info's text report (document.info {format: \"text\"}) to path, else a picked file (the web downloads it); with category (a document.info category id) only that category, else every category. The panel menu's Save… passes the category the panel shows and its Selection Only → {path}",
     ),
     (
         "ui.epsOptionsDialog",

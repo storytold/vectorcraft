@@ -646,7 +646,8 @@ Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for
 gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),
 `copyLinks`, `linksFolder`, `relink`, `copyFonts`, `report`. `ui.dialog.confirm` saves unsaved changes, runs
 `file.package` and then opens a `confirm` dialog whose OK runs `file.showPackage {folder}`; the web downloads the zip
-instead. Document Info's flyout picks a category and Save… runs `docInfo.save {path?, selectionOnly?}`.
+instead. Document Info's flyout picks a category and Save… runs `docInfo.save {path?, selectionOnly?, category?}` with the
+category the panel shows (none for All Categories, which writes every category).
 
 Slices: through the app, `object.slice.options` and `object.slice.divide` with no params open their dialogs on the
 selected slices. `sliceOptions` (fields `kind`: `image`/`noImage`/`htmlText`, `name`, `url`, `target`, `message`,
