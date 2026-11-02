@@ -397,6 +397,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 |---|---|---|
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
+| 2026-11-01 | minor | Object › Plug-ins › Color Effects › Create Swatch Legend…: a dialog that draws labelled chips of the colour swatches (all, or the ones selected in the Swatches panel) as one group (#4919); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); scores and estimates unchanged |
 | 2026-11-01 | minor | Arrange Tools add-on (a VectorCraft addition): Randomize Opacity (#4925); scores and estimates unchanged |

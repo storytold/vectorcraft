@@ -2,10 +2,12 @@
 //! Duotone and Invert Colors, in Effect › Color Effects) are the effects crate's; here, Apply as
 //! Filter writes any colour adjustment into the colours themselves, Select by Color Kind selects the
 //! objects that use spot colours, carry a live colour adjustment, or are images of a colour model,
-//! Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print, and Find Nearest
-//! Swatch ([`nearest`]) matches colours to a swatch library's. Its panel and its submenu, Object ›
+//! Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print, Find Nearest
+//! Swatch ([`nearest`]) matches colours to a swatch library's, and Create Swatch Legend
+//! ([`legend`]) draws labelled chips of the document's swatches. Its panel and its submenu, Object ›
 //! Plug-ins › Color Effects, are the UI's.
 
+pub mod legend;
 mod nearest;
 mod print_fixes;
 #[cfg(test)]
@@ -71,6 +73,9 @@ pub fn specs() -> Vec<CommandSpec> {
             nearest::apply
         ),
     ]
+    .into_iter()
+    .chain(legend::specs())
+    .collect()
 }
 
 fn select(s: &mut Session, p: &Value) -> Result<Value> {

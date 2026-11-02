@@ -2014,6 +2014,18 @@ swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back
 {"name":"run_command","arguments":{"command":"swatch.library.get","params":{"library":"earth-tones"}}}
 {"name":"run_command","arguments":{"command":"swatch.library.add","params":{"library":"earth-tones","names":["Clay"]}}}
 ```
+`addon.color.swatchLegend {names?, columns?, size?, gap?, values?, x?, y?}` draws a legend of colour swatches on the page as one
+group, in one undo step, and selects it: a square chip per swatch (`size` pt, 72 by default, `columns` to a row, 4 by
+default, `gap` pt apart, 12 by default) filled with the swatch and linked to it, labelled inside with the swatch's name
+and its values (`values`: any of `hex`, `rgb`, `cmyk`, `lab`, `gray`; by default the swatch's own colour model; spot
+swatches also say Spot), in black on light chips and white on dark ones. `names` picks swatches (default: every colour
+swatch, in panel order); `x`, `y` place the top-left (default: the first artboard's, inset by `gap`). Object ›
+Plug-ins › Color Effects › Create Swatch Legend… sets these in a dialog with a preview, and can limit it to the
+swatches selected in the Swatches panel (#4919). → `{id, count}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.color.swatchLegend","params":{"columns":6,"values":["hex","cmyk"]}}}
+```
 `swatch.library.save {path?, format?: "vcswatches"|"gpl"|"ase"|"css", names?, name?, user?}` writes the document's
 swatches as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour
 groups; `.gpl` is 8-bit RGB; a swatch exchange `.ase` file keeps solid colors in their own model
