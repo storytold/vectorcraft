@@ -259,7 +259,12 @@ as `recolor.reduce` returns them), `colors` (null for Auto), `method`, `preserve
 `sliderMode` (the mode of the color sliders under the rows: `hsb`, `rgb`, `cmyk`, `lab`, or `tint` for a row whose new
 color is a spot color of the library; unset, they show the new color's own model). The sliders edit the first selected
 row's new color and give that row `model: "new"`, so the preview and confirm give only that row's art the color in
-the sliders' mode; another edit of the row's new color, Reset and rows reduced again remove it. Setting
+the sliders' mode; another edit of the row's new color, Reset and rows reduced again remove it. The Edit tab shows the
+same sliders under the wheel, and its mode menu also has Global Adjust (`sliderMode: "global"`): Saturation,
+Brightness, Temperature and Luminosity sliders that set `globalAdjust` (`{saturation, brightness, temperature,
+luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-zero `globalAdjust` as `recolor.apply`'s
+`globalAdjust` in every slider mode, so one slider changes every recolored color at once and the rows keep their new
+colors; colors opened alone are saved as a group with the change. Setting
 `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
