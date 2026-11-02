@@ -7,7 +7,8 @@
 //! path column by column from left to right, top to bottom in each column, spread evenly from its
 //! first anchor and turned to follow it. Pivot and Rotate come from the command's params, otherwise
 //! from the tool's options (Objects on Path Tool Options). `object.objectsOnPath.options` sets the
-//! group's Pivot and Rotate, and `object.objectsOnPath.expand` makes it a plain group.
+//! group's Pivot, Rotate and Space (the distance between the objects along the path, and where the
+//! first one attaches), and `object.objectsOnPath.expand` makes it a plain group.
 //!
 //! After every edit, [`refresh`] puts the objects of each Objects on Path group that changed back
 //! on its path: editing the path moves them, an object moved on its own goes back to its place,
@@ -48,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Objects on Path Options",
             [],
             None,
-            "{ids?: Objects on Path groups or objects in them (default: the selection), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; 4: the center), rotate?: degrees counter-clockwise from upright on the path} set how the objects of the groups attach → {ids}",
+            "{ids?: Objects on Path groups or objects in them (default: the selection), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; 4: the center), rotate?: degrees counter-clockwise from upright on the path, spacing?: points along the path from each object's attachment point to the next one's (0 or more, kept to what the path has room for; or \"auto\", the default: spread evenly with the last object at the end of an open path), start?: points along the path from its first anchor to the first object's attachment point (default 0)} set how the objects of the groups attach and are spaced → {ids}",
             has_objects_on_path,
             options
         ),
@@ -256,16 +257,37 @@ fn attach(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Options ----------
 
+/// `spacing` and `start` from `p`, each checked: `spacing` takes points (0 or more) or `"auto"`
+/// (`None`), and `start` points along the path.
+fn spacing_start(p: &Value, cmd: &str, spacing: Option<f64>, start: f64) -> Result<(Option<f64>, f64)> {
+    let spacing = match p.get("spacing").filter(|v| !v.is_null()) {
+        None => spacing,
+        Some(Value::String(a)) if a == "auto" => None,
+        Some(v) => Some(
+            v.as_f64()
+                .filter(|g| g.is_finite() && *g >= 0.0)
+                .ok_or_else(|| bad(cmd, "`spacing` must be a number of points, 0 or more, or \"auto\""))?,
+        ),
+    };
+    let start = match p.get("start").filter(|v| !v.is_null()) {
+        None => start,
+        Some(v) => v.as_f64().filter(|s| s.is_finite()).ok_or_else(|| bad(cmd, "`start` must be a finite number"))?,
+    };
+    Ok((spacing, start))
+}
+
 fn options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.objectsOnPath.options";
     let groups = target_groups(s, p, C)?;
     pivot_rotate(p, C, CENTER, 0.0)?;
+    spacing_start(p, C, None, 0.0)?;
     s.edit("Objects on Path Options", |d, _| {
         for g in &groups {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
             let Some(rec) = n.extras().objects_on_path.as_deref().cloned() else { continue };
             let (pivot, rotate) = pivot_rotate(p, C, rec.pivot, rec.rotate)?;
-            n.extras_mut().objects_on_path = Some(Box::new(ObjectsOnPath { pivot, rotate, ..rec }));
+            let (spacing, start) = spacing_start(p, C, rec.spacing, rec.start)?;
+            n.extras_mut().objects_on_path = Some(Box::new(ObjectsOnPath { pivot, rotate, spacing, start, ..rec }));
         }
         Ok(())
     })?;

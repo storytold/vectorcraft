@@ -6055,11 +6055,21 @@ attaches nothing.
 The group stays live: after every edit its objects go back on its path. Editing the path moves them, an object moved
 on its own goes back to its place, an object moved into the group (`layer.move` with `place: "inside"`) joins the end
 of the path, an object moved out of it leaves, and art that replaces an object (`symbol.breakLink`) keeps its place.
-`object.objectsOnPath.options {ids?, pivot?, rotate?}` changes Pivot and Rotate, and
+`object.objectsOnPath.options {ids?, pivot?, rotate?, spacing?, start?}` changes Pivot, Rotate and Space, and
 `object.objectsOnPath.expand {ids?}` makes the groups plain groups. Both act on the groups that `ids` names (Objects
 on Path groups or objects in them), or on the groups of the selection when `ids` is not given. The native file keeps
 the group with an `objects_on_path` record; SVG, PDF and the other exports write the path and the objects as plain
 art.
+
+Space sets the distance along the path between neighboring objects' attachment points. `spacing` takes points, 0 or
+more, or `"auto"`, the default, which spreads the objects evenly with the last one at the end of an open path. `start`
+is the distance in points along the path from its first anchor to the first object's attachment point (default 0). A
+`spacing` larger than the path has room for is drawn smaller: on an open path the last object stops at the end, and on
+a closed path the objects go no more than once around. The value is kept, so lengthening the path again brings the
+objects back to it. On a closed path, `start` counts around from the first anchor. Pivot, Rotate, moving the group and
+saving the file keep the Space. Scaling, rotating or shearing the group keeps the first and last objects where the
+transform takes them on the new path, and sets `spacing` and `start` to match; a value that cannot be kept that way
+scales as much as the path's length.
 
 In the desktop app, double-clicking the Objects on Path tool (`tool.options {tool: "objectsOnPath"}`) opens Objects on
 Path Tool Options (dialog `objectsOnPathOptions`): the nine-point Pivot grid and the Rotate field (°). Save sets the
@@ -6075,10 +6085,20 @@ counter-clockwise on the page: the drag previews `object.objectsOnPath.options {
 group's Rotate plus that angle and keeps it as one undo step on release. Shift turns in steps of 15°, and Escape
 cancels the drag.
 
+With two or more objects in the group, the same tools show the Space widget, a square handle beyond the group's last
+object, ahead along the path and joined by a line to its attachment point. Dragging it moves the last object along the
+path as far as the pointer moves along the path, and previews
+`object.objectsOnPath.options {ids: [group], spacing, start}` and keeps it as one undo step on release. The first
+object stays where it is and the others move toward or away from it; on an open path the last object goes no further
+than the end. With Alt (Option on macOS) held, the objects spread from both ends toward or away from the center of an
+open path, or of the first anchor of a closed path, up to the whole path. With measurement labels on, the distance
+between the objects shows next to the pointer in the document's units. Escape cancels the drag.
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"pivot":7,"rotate":15}}}
+{"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"spacing":24,"start":0}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.expand","params":{}}}
 ```
 
