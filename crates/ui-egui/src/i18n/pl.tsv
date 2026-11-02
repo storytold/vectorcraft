@@ -4612,6 +4612,8 @@ imageTrace	Outline	Kontur
 @msg	unknown workspace (one of {_1})	nieznany obszar roboczy (jeden z: {_1})
 @msg	unsupported: {0}	nieobsługiwane: {0}
 @msg	variables are locked	zmienne są zablokowane
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	więcej niż {MAX_CSV_ROWS} zestawów danych: Importuj zestawy danych odczytuje najwyżej {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	więcej niż {MAX_CSV_COLS} zmiennych: Importuj zestawy danych odczytuje najwyżej {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	pominięto zmienne, które nie są tekstowe: {kinds}
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` i `options.{key}: {inner}` są sprzeczne: podaj opcję tylko raz
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	plików w wersji {0} nie można kompresować: skompresowane pliki otwierają tylko wersje {COMPRESSED_SINCE} i nowsze

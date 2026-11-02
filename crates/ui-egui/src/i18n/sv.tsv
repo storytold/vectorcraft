@@ -4379,6 +4379,8 @@ axis	Both	Båda
 @msg	unknown workspace (one of {_1})	okänd arbetslayout (en av {_1})
 @msg	unsupported: {0}	stöds inte: {0}
 @msg	variables are locked	variablerna är låsta
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	fler än {MAX_CSV_ROWS} datauppsättningar: Importera datauppsättningar läser högst {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	fler än {MAX_CSV_COLS} variabler: Importera datauppsättningar läser högst {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	variabler som inte är text utelämnades: {kinds}
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` och `options.{key}: {inner}` stämmer inte överens: ange alternativet bara en gång
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	filer i version {0} kan inte komprimeras: endast version {COMPRESSED_SINCE} och senare kan öppna komprimerade filer

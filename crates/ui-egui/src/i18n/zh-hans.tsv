@@ -3471,6 +3471,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Lock Variables	锁定变量
 	Unlock Variables	解锁变量
 @msg	variables are locked	变量已锁定
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	数据集超过 {MAX_CSV_ROWS} 个：“导入数据集”最多读取 {MAX_CSV_ROWS} 个
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	变量超过 {MAX_CSV_COLS} 个：“导入数据集”最多读取 {MAX_CSV_COLS} 个
 @msg	variables that aren't text were left out: {kinds}	已省略非文本变量：{kinds}
 	List Variables	列出变量
 	Bind Variable	绑定变量

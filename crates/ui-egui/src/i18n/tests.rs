@@ -1736,6 +1736,39 @@ fn saved_tracing_preset_errors_are_translated() {
     }
 }
 
+/// Export Data Sets' refusals of more data sets or variables than Import Data Sets reads are
+/// translated in every language that translates every message.
+#[test]
+fn dataset_export_limit_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let rows: String = (1..=1000).map(|i| format!("Set {i},x\n")).collect();
+    s.execute("dataset.import", &json!({"csv": format!("name,V1\n{rows}")})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Set 1001"})).unwrap();
+    let mut errors = vec![];
+    let e = s.execute("dataset.export", &json!({})).unwrap_err();
+    let want = "more than 1000 data sets: Import Data Sets reads at most 1000";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    errors.push((e.to_string(), want));
+    s.execute("dataset.delete", &json!({"names": ["Set 1001"]})).unwrap();
+    for i in 2..=257 {
+        s.execute("variable.define", &json!({"name": format!("V{i}"), "kind": "text"})).unwrap();
+    }
+    let e = s.execute("dataset.export", &json!({})).unwrap_err();
+    let want = "more than 256 variables: Import Data Sets reads at most 256";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    errors.push((e.to_string(), want));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want), "{code}: {shown}");
+        }
+    }
+}
+
 /// The status bar's line for an EPS file whose PostScript stops on an error, opened partly or
 /// refused, and the refusal's dialog keep the error's name as PostScript spells it and its meaning,
 /// which each language shows as its catalog translates the meaning.

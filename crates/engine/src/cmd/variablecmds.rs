@@ -742,7 +742,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then variables); without path → {csv, datasets}",
+            "{path?} write every dataset as CSV (header: name, then variables); without path → {csv, datasets}. Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads",
             has_doc,
             dataset_export
         ),

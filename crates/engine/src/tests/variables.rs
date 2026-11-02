@@ -1282,6 +1282,33 @@ fn datasets_csv_keeps_spaces_in_quoted_cells() {
     assert_eq!(value("C"), text_value(" quoted "));
 }
 
+/// Export refuses a document with more data sets or variables than `dataset.import` reads, so
+/// every file it writes imports back: 1,000 data sets and 256 variables export and import, and
+/// one more of either is refused.
+#[test]
+fn datasets_export_refuses_more_than_import_reads() {
+    let mut s = session();
+    let header: Vec<String> = (1..=256).map(|i| format!("V{i}")).collect();
+    let rows: String = (1..=1000).map(|i| format!("Set {i},x\n")).collect();
+    s.execute("dataset.import", &json!({"csv": format!("name,{}\n{rows}", header.join(","))})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+
+    s.execute("dataset.new", &json!({"name": "Set 1001"})).unwrap();
+    let err = s.execute("dataset.export", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("more than 1000 data sets"), "{err}");
+    s.execute("dataset.delete", &json!({"names": ["Set 1001"]})).unwrap();
+    s.execute("dataset.export", &json!({})).unwrap();
+
+    s.execute("variable.define", &json!({"name": "V257", "kind": "text"})).unwrap();
+    let err = s.execute("dataset.export", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("more than 256 variables"), "{err}");
+    let dir = Folder::new("vars-csv-caps");
+    let out = dir.file("sets.csv");
+    assert!(s.execute("dataset.export", &json!({"path": out})).is_err());
+    assert!(!std::path::Path::new(&out).exists(), "no file is written");
+}
+
 /// A header row with a tab and no comma outside quotes makes tabs the separator; a quoted cell
 /// may then hold tabs and commas. A header row with a comma outside quotes keeps commas, even
 /// when a cell holds a tab. A tab-separated header with an unclosed quote fails with the reason.

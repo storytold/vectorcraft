@@ -5334,6 +5334,8 @@ theme	Appearance	Görünüm
 @msg	the spine has no segments	omurganın segmenti yok
 @msg	too many library panels were opened in this session	bu oturumda çok fazla kütüphane paneli açıldı
 @msg	variables are locked	değişkenler kilitli
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	{MAX_CSV_ROWS} veri setinden fazla: Veri Kümelerini İçe Aktar en fazla {MAX_CSV_ROWS} tane okur
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS} değişkenden fazla: Veri Kümelerini İçe Aktar en fazla {MAX_CSV_COLS} tane okur
 @msg	x and y must be finite	x ve y sonlu olmalıdır
 @msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 eski .ai dosyalarını yazar; bir .ait şablonu her zaman PDF uyumludur
 @msg	Edit Original opens image and document files only; “{name}” is not one	Özgünü Düzenle yalnızca görüntü ve belge dosyalarını açar; “{name}” bunlardan biri değil
