@@ -6,6 +6,7 @@
 //! Ctrl/Cmd keeps the inner radius where it is while the outer one follows the pointer, and Alt
 //! keeps the star's shoulders straight (#812). The start point and
 //! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
+//! Escape cancels the drag and puts back the options its keys and Ctrl/Cmd changed.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
@@ -37,6 +38,18 @@ pub struct ShapeTool {
     pub line_angle: f64,
     pub fill_line: bool,
     snap: DrawSnap,
+    /// The options a drag's keys and Ctrl/Cmd change, as they were when the drag began: Escape
+    /// puts them back.
+    before_drag: Option<DragOptions>,
+}
+
+/// The options that keys and Ctrl/Cmd change while a shape is dragged out.
+#[derive(Clone, Copy)]
+struct DragOptions {
+    sides: u32,
+    points: u32,
+    corner_radius: f64,
+    star_ratio: f64,
 }
 
 /// The inner-to-outer radius ratio that keeps a star of `points` points' shoulders straight (each
@@ -72,7 +85,20 @@ impl ShapeTool {
             line_length: 100.0,
             line_angle: 0.0,
             fill_line: false,
+            before_drag: None,
         }
+    }
+
+    fn drag_options(&self) -> DragOptions {
+        DragOptions { sides: self.sides, points: self.points, corner_radius: self.corner_radius, star_ratio: self.star_ratio }
+    }
+
+    /// Put back the options a canceled drag changed.
+    fn restore_drag_options(&mut self, o: DragOptions) {
+        self.sides = o.sides;
+        self.points = o.points;
+        self.corner_radius = o.corner_radius;
+        self.star_ratio = o.star_ratio;
     }
 
     /// Ctrl/Cmd in a star drag from `start` to `p`, where the last drag showed a star with the inner
@@ -228,6 +254,7 @@ impl Tool for ShapeTool {
                 self.last = ev.pos;
                 self.began = false;
                 self.inner = None;
+                self.before_drag = None;
                 vec![]
             }
             PointerKind::Drag => {
@@ -251,6 +278,7 @@ impl Tool for ShapeTool {
                         return out;
                     }
                     self.began = true;
+                    self.before_drag = Some(self.drag_options());
                     out.push(Action::Begin(self.label().into()));
                 }
                 let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
@@ -261,6 +289,7 @@ impl Tool for ShapeTool {
                 let Some(s) = self.start.take() else { return vec![] };
                 self.snap.clear();
                 self.inner = None;
+                self.before_drag = None;
                 if self.began {
                     self.began = false;
                     vec![Action::Commit]
@@ -309,6 +338,9 @@ impl Tool for ShapeTool {
             self.start = None;
             self.began = false;
             self.inner = None;
+            if let Some(o) = self.before_drag.take() {
+                self.restore_drag_options(o);
+            }
             self.snap.clear();
             vec![Action::Cancel]
         } else {
@@ -372,6 +404,16 @@ impl Tool for ShapeTool {
             "angle" => self.line_angle = finite.map_or(self.line_angle, |n| n.rem_euclid(360.0)),
             "fillLine" => self.fill_line = v.as_bool().unwrap_or(self.fill_line),
             _ => {}
+        }
+        // An option set while a shape is dragged out stays when Escape cancels the drag.
+        if let Some(b) = self.before_drag.as_mut() {
+            match key {
+                "sides" => b.sides = self.sides,
+                "points" => b.points = self.points,
+                "cornerRadius" => b.corner_radius = self.corner_radius,
+                "starRatio" => b.star_ratio = self.star_ratio,
+                _ => {}
+            }
         }
     }
 }
