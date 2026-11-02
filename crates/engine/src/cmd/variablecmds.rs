@@ -341,18 +341,34 @@ fn dataset_new(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Replace a dataset's values. A variable left out of `values` loses its value in this row,
-/// so the dataset ends up holding exactly what the call asked for.
+/// so the dataset ends up holding exactly what the call asked for. With `newName` the row is
+/// also renamed, in the same undo step, as `dataset.rename` would rename it.
 fn dataset_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.set";
     let name = var_name(p, C)?;
-    let values = values_param(&s.doc()?.doc.variables, p, C)?;
+    let to = match p.get("newName") {
+        None | Some(Value::Null) => name.clone(),
+        Some(v) => named(v.as_str(), "newName", C)?,
+    };
+    let st = s.doc()?;
+    if st.doc.variables.dataset(&name).is_none() {
+        return Err(bad(C, format!("no dataset named `{name}`")));
+    }
+    if to != name && st.doc.variables.dataset(&to).is_some() {
+        return Err(bad(C, format!("dataset `{to}` already exists")));
+    }
+    let values = values_param(&st.doc.variables, p, C)?;
     let (set, removed) = s.edit("Edit Data Set", |d, _| {
         let ds = d.variables.datasets.iter_mut().find(|x| x.name == name).ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
         let removed: Vec<String> = ds.values.keys().filter(|k| !values.contains_key(*k)).cloned().collect();
         ds.values = values.clone();
+        ds.name = to.clone();
+        if d.variables.active_dataset.as_deref() == Some(name.as_str()) {
+            d.variables.active_dataset = Some(to.clone());
+        }
         Ok((values.len(), removed))
     })?;
-    Ok(json!({"name": name, "values": set, "removed": removed}))
+    Ok(json!({"name": to, "values": set, "removed": removed}))
 }
 
 fn dataset_rename(s: &mut Session, p: &Value) -> Result<Value> {
@@ -670,7 +686,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Data Set…",
             ["Window", "Variables"],
             None,
-            "{name, values?: {variable: value}} replace a dataset's values; a variable left out loses its value in this row → {values, removed}",
+            "{name, newName?, values?: {variable: value}} replace a dataset's values; a variable left out loses its value in this row. `newName` also renames the dataset in the same undo step, refused when another dataset has that name → {name, values, removed}",
             has_doc,
             dataset_set
         ),

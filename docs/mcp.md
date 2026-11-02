@@ -1634,7 +1634,8 @@ already walks Image Trace. Short agent entry points:
   `variable.loadLibrary` that would delete or define a variable (below) fail with "variables are locked";
   `variable.bind`, `variable.unbind` and the `dataset.*` commands still run (except a `dataset.import` whose header
   would define a variable, below), and `variable.list` reports `locked`.
-- Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, values?}`, `dataset.rename`,
+- Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, newName?, values?}` (`newName` also
+  renames the row, in the same undo step; Edit Data Set's Name field sends it), `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
   `dataset.export {path?}` (CSV: `name`, then one column per variable). `dataset.import` also reads tab-separated

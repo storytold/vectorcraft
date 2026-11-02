@@ -817,6 +817,37 @@ fn dataset_set_replaces_the_row_and_reports_what_it_dropped() {
     assert_eq!(plain(&s, t), "z");
 }
 
+/// `newName` renames the row in the same step as its values change, and keeps it active.
+#[test]
+fn dataset_set_with_a_new_name_renames_the_row() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Name": "y"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "E", "values": {"Name": "e"}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "D"})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+
+    let v = s.execute("dataset.set", &json!({"name": "D", "newName": "Spring", "values": {"Name": "z"}})).unwrap();
+    assert_eq!(v["name"], "Spring");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!((sets["datasets"][0]["name"].clone(), sets["active"].clone()), (json!("Spring"), json!("Spring")));
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "z"}}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+
+    // Its own name is no rename; another row's name, or an empty one, is refused and changes nothing.
+    s.execute("dataset.set", &json!({"name": "Spring", "newName": "Spring", "values": {"Name": "z"}})).unwrap();
+    for bad in [json!("E"), json!(""), json!(3)] {
+        assert!(s.execute("dataset.set", &json!({"name": "Spring", "newName": bad, "values": {"Name": "x"}})).is_err(), "{bad}");
+    }
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "z"}}));
+    assert_eq!(sets["datasets"][1]["values"], json!({"Name": {"text": "e"}}));
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["active"], "D", "undo puts the name back");
+}
+
 #[test]
 fn bad_variables_requests_are_errors_not_panics() {
     let mut s = session();
