@@ -80,6 +80,21 @@ impl Ruler {
         let from = if self.vertical { Point::new(self.pos, start) } else { Point::new(start, self.pos) };
         Some((self.pos, from, Kind::Guide))
     }
+
+    /// The line it pulls a rectangle into line with, whose extent along the guide is `lo..=hi`:
+    /// as [`Self::line_at`], but it starts at the middle of that extent, so the guide marked
+    /// there spans the rectangle rather than the canvas. None where the guide doesn't run along
+    /// the rectangle: one that spans an artboard needs the rectangle to overlap it, however near.
+    fn line_over(&self, (lo, hi): (f64, f64)) -> Option<(f64, Point, Kind)> {
+        if let Some((a, b)) = self.span
+            && (hi < a || lo > b)
+        {
+            return None;
+        }
+        let mid = (lo + hi) * 0.5;
+        let from = if self.vertical { Point::new(self.pos, mid) } else { Point::new(mid, self.pos) };
+        Some((self.pos, from, Kind::Guide))
+    }
 }
 
 #[cfg(test)]

@@ -40,6 +40,9 @@ pub struct Targets {
     pub(super) segments: Vec<(Rect, PathSeg)>,
     /// Ruler guides, which pull a point into line where they run (Snap to Point).
     pub(super) rulers: Vec<Ruler>,
+    /// Ruler guides the edges and centre of a moved selection line up with ([`Self::with_edge_rulers`]);
+    /// unlike `rulers`, they do not pull a point.
+    pub(super) edge_rulers: Vec<Ruler>,
     /// The bounds of the objects a moved selection spaces itself evenly with (Spacing Guides):
     /// gathered only for moves ([`Self::for_move`]).
     pub(super) boxes: Vec<Rect>,
@@ -91,6 +94,14 @@ fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnM
             walk_but(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), skip, f);
         }
     }
+}
+
+/// The ruler guides that are shown (and so unlocked to the selection tools), when guides are.
+fn ruler_guides(cx: &ToolContext) -> Vec<Ruler> {
+    if !cx.guides {
+        return vec![];
+    }
+    cx.doc.guides.iter().filter(|g| cx.doc.guide_shown(g)).map(|g| Ruler { vertical: g.vertical, pos: g.pos, span: cx.doc.guide_span(g) }).collect()
 }
 
 /// The lines of `lines` (sorted by where they run) within `tol` of `v`.
@@ -522,14 +533,17 @@ impl Targets {
     /// These targets and the ruler guides, when they are shown (and so unlocked to the selection
     /// tools): they pull a point into line where they run.
     pub(super) fn with_rulers(mut self, cx: &ToolContext) -> Self {
-        if cx.guides {
-            self.rulers = cx
-                .doc
-                .guides
-                .iter()
-                .filter(|g| cx.doc.guide_shown(g))
-                .map(|g| Ruler { vertical: g.vertical, pos: g.pos, span: cx.doc.guide_span(g) })
-                .collect();
+        self.rulers = ruler_guides(cx);
+        self
+    }
+
+    /// These targets and the ruler guides ([`Self::with_rulers`]'s), which the edges and centre of
+    /// a rectangle line up with ([`Self::snap_rects`]) as they do with the other art: a moved
+    /// selection's bounds land on a ruler guide, not only the point it was grabbed by (#4312).
+    /// With View → Snap to Point off, ruler guides pull nothing, as they pull no point.
+    pub(crate) fn with_edge_rulers(mut self, cx: &ToolContext) -> Self {
+        if cx.snap_to_point {
+            self.edge_rulers = ruler_guides(cx);
         }
         self
     }
@@ -928,9 +942,17 @@ impl Targets {
             let lines = if x { &self.xs } else { &self.ys };
             for r in rects {
                 let vs = if x { [r.x0, r.center().x, r.x1] } else { [r.y0, r.center().y, r.y1] };
+                let rulers = self.edge_rulers.iter().filter(|g| g.vertical == x).filter_map(|g| g.line_over(span(r, !x)));
+                let rulers: Vec<_> = rulers.collect();
                 for v in vs {
-                    for (t, from, _) in lines_near(lines, v, tol).iter().filter(|(t, ..)| (t - v).abs() <= tol) {
+                    let art = lines_near(lines, v, tol).iter().map(|l| (l, false));
+                    for ((t, from, _), ruler) in art.chain(rulers.iter().map(|l| (l, true))).filter(|((t, ..), _)| (t - v).abs() <= tol) {
                         let s = (t - v) / c;
+                        // A ruler guide runs the whole canvas, so a line nearly parallel to it would slide
+                        // the selection far to meet it: it pulls within the reach of a point's slide only.
+                        if ruler && s.abs() > 2.0 * tol {
+                            continue;
+                        }
                         if best.is_none_or(|b| s.abs() < b.0.abs()) {
                             best = Some((s, *t, *from, x));
                         }
@@ -1061,16 +1083,20 @@ impl Targets {
     /// (even with Alignment Guides off, or already in line, when there is no line or shift to
     /// tell).
     fn align_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
-        let nearest = |targets: &[(f64, Point, Kind)], along: fn(&Rect) -> [f64; 3]| {
+        let nearest = |targets: &[(f64, Point, Kind)], along: fn(&Rect) -> [f64; 3], x: bool| {
             rects
                 .iter()
                 .flat_map(|r| along(r).into_iter().map(move |v| (v, *r)))
-                .flat_map(|(v, r)| lines_near(targets, v, tol).iter().map(move |(t, from, _)| (t - v, *from, v, r)))
+                .flat_map(|(v, r)| {
+                    // The ruler guides across this axis that run along the rectangle.
+                    let rulers = self.edge_rulers.iter().filter(move |g| g.vertical == x).filter_map(move |g| g.line_over(span(&r, !x)));
+                    lines_near(targets, v, tol).iter().copied().chain(rulers).map(move |(t, from, _)| (t - v, from, v, r))
+                })
                 .filter(|(d, ..)| d.abs() <= tol)
                 .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
         };
-        let best_x = nearest(&self.xs, |r| [r.x0, r.center().x, r.x1]);
-        let best_y = nearest(&self.ys, |r| [r.y0, r.center().y, r.y1]);
+        let best_x = nearest(&self.xs, |r| [r.x0, r.center().x, r.x1], true);
+        let best_y = nearest(&self.ys, |r| [r.y0, r.center().y, r.y1], false);
         let mut d = Vec2::ZERO;
         let mut ov = vec![];
         if let Some((dx, from, x, r)) = best_x {

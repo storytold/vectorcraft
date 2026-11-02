@@ -196,9 +196,9 @@ impl MoveSnap {
         let points = |exclude: &[NodeId]| if cx.snap_to_grid { None } else { Targets::snap_to_point(cx, exclude) };
         Self {
             bounds: selection_bounds(cx),
-            targets: guides.then(|| Targets::for_move(cx, &cx.selection.objects)),
+            targets: guides.then(|| Targets::for_move(cx, &cx.selection.objects).with_edge_rulers(cx)),
             points: points(&cx.selection.objects),
-            copy_targets: guides.then(|| Targets::for_move(cx, &[])),
+            copy_targets: guides.then(|| Targets::for_move(cx, &[]).with_edge_rulers(cx)),
             copy_points: points(&[]),
             rulers: (guides && cx.snap_to_point).then(|| Targets::rulers(cx)),
         }

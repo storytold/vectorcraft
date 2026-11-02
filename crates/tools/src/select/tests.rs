@@ -691,6 +691,58 @@ fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     assert_eq!(dx(&ToolContext { snap_to_point: false, ..cx(&d, &s, &p) }, 172.0), 22.0);
 }
 
+/// #4312: with Smart Guides and Snap to Point on, a moved selection's edges and centre land on a
+/// ruler guide as they land on other art, wherever the pointer is; Snap to Point off, or out of
+/// reach, they don't.
+#[test]
+fn a_move_lands_the_edges_and_centre_on_a_ruler_guide() {
+    let (mut d, id) = doc_with_rect();
+    // The rectangle spans 100..200 on both axes; the artboard's lines (0, 250, 500) are out of reach.
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    // Grabbed at (120, 120), far from the guide, and dragged to put `to` of its bounds `short` before it.
+    let moved = |c: &ToolContext, vertical: bool, edge: f64, short: f64| {
+        let guide = 333.0;
+        let by = guide - short - edge;
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 120.0, 120.0));
+        let (x, y) = if vertical { (120.0 + by, 120.0) } else { (120.0, 120.0 + by) };
+        let a = t.pointer(c, &ev(PointerKind::Drag, x, y));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        v["matrix"][if vertical { 4 } else { 5 }].as_f64().unwrap() - by
+    };
+    for vertical in [true, false] {
+        d.guides = vec![vectorcraft_doc::Guide::new(vertical, 333.0)];
+        let c = cx(&d, &s, &p);
+        assert!(c.smart_guides && c.snap_to_point);
+        for (what, edge) in [("start edge", 100.0), ("centre", 150.0), ("end edge", 200.0)] {
+            let got = moved(&c, vertical, edge, 2.0);
+            assert!((got - 2.0).abs() < 1e-9, "{what} (vertical guide: {vertical}) is pulled onto the guide: {got}");
+            assert!(moved(&c, vertical, edge, 12.0).abs() < 1e-9, "{what} out of reach");
+        }
+        let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
+        assert!(moved(&off, vertical, 100.0, 2.0).abs() < 1e-9, "Snap to Point off");
+    }
+}
+
+/// #4312: a Shift move keeps to its line while its edges and centre land on a ruler guide.
+#[test]
+fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
+    let (mut d, id) = doc_with_rect();
+    d.guides = vec![vectorcraft_doc::Guide::new(true, 333.0)];
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    // Level; the left edge (100) would end 2 short of the guide, the pointer far from it.
+    let (m, _) = shift_moved(&c, (150.0 + 231.0, 150.0));
+    assert!(moved_by(m, (233.0, 0.0)), "{m:?}");
+    // The right edge, from the other side.
+    let (m, _) = shift_moved(&c, (150.0 + 136.0, 150.0));
+    assert!(moved_by(m, (133.0, 0.0)), "{m:?}");
+}
+
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
 /// gathered before the previews moved it); released, the move doesn't.
 #[test]
