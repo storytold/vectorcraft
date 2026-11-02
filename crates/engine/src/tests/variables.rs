@@ -1921,6 +1921,22 @@ fn a_variables_command_that_changes_nothing_ends_the_typing() {
     }
 }
 
+/// Applying the active data set again to threaded type that already holds the row's story records
+/// no undo step.
+#[test]
+fn applying_a_story_row_again_records_no_undo_step() {
+    let (mut s, a, b, _) = threaded(200);
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "Orig"})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Orig"})).unwrap();
+    assert!(!plain(&s, b).is_empty());
+    super::select_with_a_step_to_redo(&mut s, &[a]);
+    let before = super::history(&s);
+    s.execute("dataset.select", &json!({"name": "Orig"})).unwrap();
+    assert_eq!(super::history(&s), before);
+}
+
 /// Applying the active data set again to a graph whose data already matches the row records no
 /// undo step, and a row with other data still rebuilds the graph in one.
 #[test]

@@ -75,13 +75,23 @@ fn edit_variables<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Variables
 /// the active row: `f` runs on a copy of the document and the selection, and only a document that
 /// differs becomes an undo step, with the selection `f` left. When the document did not change, the
 /// undo and redo steps and the saved state stay as they were, and a selection `f` changed is set
-/// without an undo step.
+/// without an undo step. When the active row is applied again and the art already shows it,
+/// threaded type is compared after its story flows through its frames, as [`Session::edit`] flows
+/// it; any other change is an undo step without that extra flow.
 fn edit_if_changed<T>(s: &mut Session, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
     settle_typing(s)?;
     let st = s.doc()?;
     let mut doc = (*st.doc).clone();
     let mut sel = st.selection.clone();
     let v = f(&mut doc, &mut sel)?;
+    let vars = &st.doc.variables;
+    if doc != *st.doc
+        && !doc.text_threads.is_empty()
+        && doc.variables == *vars
+        && vars.active_dataset.as_deref().and_then(|n| vars.dataset(n)).is_some_and(|ds| ds.matches(&st.doc.captured_values()))
+    {
+        super::threads::reflow(&st.doc, &mut doc);
+    }
     if doc != *st.doc {
         s.edit(label, |d, selection| {
             *d = doc;
