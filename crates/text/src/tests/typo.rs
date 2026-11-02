@@ -67,6 +67,64 @@ fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
 }
 
 #[test]
+fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
+    for optical_kerning in [false, true] {
+        // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet carries the kerning.
+        let base = CharStyle { size: 100.0, optical_kerning, ..CharStyle::default() };
+        let kerned = |value: f64| {
+            let mut t = TextObject::point(Point::ZERO, "אבג", base.clone());
+            edit::style_range(&mut t.runs, 2, 4, |s| s.kerning = Some(value));
+            layout(db(), &t)
+        };
+        let ink = |lay: &TextLayout, byte: usize| {
+            let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+            assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+            (g.xf * Point::ZERO).x
+        };
+        let (plain, spaced) = (kerned(0.0), kerned(200.0));
+        let gap = |lay: &TextLayout, right: usize, left: usize| ink(lay, right) - ink(lay, left);
+        assert!(
+            (gap(&spaced, 2, 4) - gap(&plain, 2, 4) - 20.0).abs() < 0.01,
+            "kerning on bet spaces it from gimel, after it in reading order (Optical: {optical_kerning})"
+        );
+        assert!(
+            (gap(&spaced, 0, 2) - gap(&plain, 0, 2)).abs() < 0.01,
+            "alef, before bet in reading order, keeps its place (Optical: {optical_kerning})"
+        );
+        // The caret between bet and gimel stays at gimel: the new space is on bet's side of it.
+        let caret = |lay: &TextLayout| caret_position(lay, 4).0.x;
+        assert!((caret(&spaced) - ink(&spaced, 4) - (caret(&plain) - ink(&plain, 4))).abs() < 0.01);
+        assert!((ink(&spaced, 2) - caret(&spaced) - (ink(&plain, 2) - caret(&plain)) - 20.0).abs() < 0.01);
+    }
+}
+
+#[test]
+fn rtl_manual_kerning_on_a_rotated_character_moves_it_along_the_baseline() {
+    // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet is turned 90 degrees and
+    // carries the kerning.
+    let kerned = |value: f64| {
+        let mut t = TextObject::point(Point::ZERO, "אבג", CharStyle { size: 100.0, ..CharStyle::default() });
+        edit::style_range(&mut t.runs, 2, 4, |s| {
+            s.kerning = Some(value);
+            s.rotation = 90.0;
+        });
+        layout(db(), &t)
+    };
+    let origin = |lay: &TextLayout, byte: usize| {
+        let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+        assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+        g.xf * Point::ZERO
+    };
+    let (plain, spaced) = (kerned(0.0), kerned(200.0));
+    let moved = origin(&spaced, 2) - origin(&plain, 2);
+    let gimel = origin(&spaced, 4) - origin(&plain, 4);
+    assert!((moved.x - gimel.x - 20.0).abs() < 0.01, "kerning on the turned bet spaces it from gimel along the line: {moved:?}, {gimel:?}");
+    assert!(moved.y.abs() < 0.01, "the turned bet stays on its baseline: {moved:?}");
+    let alef = origin(&spaced, 0) - origin(&plain, 0);
+    assert!((alef.x - moved.x).abs() < 0.01 && alef.y.abs() < 0.01, "alef keeps its place next to bet: {alef:?}");
+}
+
+#[test]
 fn optical_pair_skips_an_invisible_soft_hyphen_with_an_outline() {
     use crate::test_fonts::{SOFT_HYPHEN_OUTLINE_FAMILY, soft_hyphen_outline_font};
 
