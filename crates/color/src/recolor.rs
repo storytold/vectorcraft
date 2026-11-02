@@ -244,6 +244,12 @@ pub fn is_tint(c: Color, base: Color) -> bool {
     a.iter().zip(b).all(|(x, y)| (x - y * t).abs() <= 0.01)
 }
 
+/// Whether `a` and `b` carry the same ink in `a`'s model, within [`is_tint`]'s tolerance.
+pub fn same_ink(a: Color, b: Color) -> bool {
+    let (x, y) = (ink(a, a.model()), ink(b, a.model()));
+    x.iter().zip(y).all(|(p, q)| (p - q).abs() <= 0.01)
+}
+
 /// `c` darkened by `f` (0..1) toward black: more K for CMYK and Gray, scaled RGB and Lab.
 pub fn shaded(c: Color, f: f32) -> Color {
     let f = f.clamp(0.0, 1.0);

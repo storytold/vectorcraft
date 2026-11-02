@@ -7,7 +7,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use serde_json::{Value, json};
-use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method, Preserve, Rng, RowMap, cluster};
+use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method, Preserve, Rng, RowMap, cluster, same_ink};
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::swatches::{node_colors, node_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
@@ -452,7 +452,8 @@ impl ColorMap {
     /// stay unlinked), a
     /// process swatch gives its colour in its own model; a color linked to a global swatch of the
     /// rewritten group that takes the row's new color keeps its link (at its tint in the row) when
-    /// the row gives it the new color in that color's model;
+    /// the row gives it the new color in that color's model and the Global Adjust gives it the
+    /// swatch's new color at that tint;
     /// other rows map the colour, which loses its link when it changes or when the group's rewrite
     /// would change it. True when anything changed.
     fn map_link(&self, c: &mut Color, link: &mut Option<String>, tint: &mut f32) -> bool {
@@ -462,9 +463,9 @@ impl ColorMap {
             && let Some(g) = link.as_deref().and_then(|n| self.group.iter().find(|g| g.name == n))
             && self.tos.get(i) == Some(&g.color)
             && !row.converts(*c)
-            && let Some(t) = row.tint(*c)
+            && let Some(t) = row.tint(*c).map(|t| t.clamp(0.0, 1.0))
+            && (self.adjust.is_identity() || same_ink(self.adjust.apply(row.map(*c)), g.shown.tinted(t)))
         {
-            let t = t.clamp(0.0, 1.0);
             let shown = g.shown.tinted(t);
             let changed = *tint != t || *c != shown;
             (*c, *tint) = (shown, t);

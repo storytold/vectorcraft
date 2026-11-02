@@ -812,6 +812,34 @@ fn global_adjust_with_a_library_and_a_group() {
     assert_eq!(c, fill(&s, art), "as the art is");
 }
 
+/// Art linked to a global swatch of the rewritten group takes the same Global Adjust as unlinked
+/// art of its color: at 100% it keeps the link, and a tint whose adjusted color is not the
+/// swatch's new color at that tint takes the adjusted color and loses the link.
+#[test]
+fn global_adjust_gives_linked_tints_of_a_group_the_adjusted_color() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#ff0000"]}));
+    let name = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().swatches[0].name.clone();
+    run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    let full = rect(&mut s, json!("#000000"));
+    let tint = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [full.0], "swatch": name}));
+    run(&mut s, "paint.setFill", json!({"ids": [tint.0], "swatch": name, "tint": 50}));
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => (color, swatch, tint),
+        p => panic!("{p:?}"),
+    };
+    select_all(&mut s);
+    let tint_key = vectorcraft_color::recolor::ColorKey::of(&fill(&s, tint)).to_string();
+    let rows = json!([{"from": ["rgb 255 0 0", tint_key], "to": "#ff0000"}]);
+    run(&mut s, "recolor.apply", json!({"map": rows, "method": "scaleTints", "group": "Theme", "globalAdjust": {"brightness": -50}}));
+    let (c, w, t) = link(&s, full);
+    assert!(close(c, Color::rgb(0.5, 0.0, 0.0)) && w.as_deref() == Some(name.as_str()) && t == 1.0, "{c:?} {w:?} {t}");
+    let (c, w, _) = link(&s, tint);
+    assert!(close(c, Color::rgb(0.5, 0.25, 0.25)), "the tint's own color, adjusted: {c:?}");
+    assert_eq!(w, None, "the adjusted tint is not a tint of the swatch's new color");
+}
+
 /// `globalAdjust` must be an object of numbers from -100 to 100; a refusal changes nothing and
 /// records no undo step. A null counts as left out.
 #[test]
