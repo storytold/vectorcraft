@@ -5064,6 +5064,7 @@ theme	Appearance	Giao diện
 @msg	Batch: {count} processed, {failed} failed	Hàng loạt: đã xử lý {count}, lỗi {failed}
 @msg	choose a destination folder	hãy chọn thư mục đích
 @msg	choose a source folder	hãy chọn thư mục nguồn
+@msg	columns {first} and {column} both name the variable `{name}`	cột {first} và cột {column} cùng chỉ định biến số `{name}`
 @msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	không có gì trong tập dữ liệu {name} được áp dụng: không có đối tượng nào được gắn với biến số mà tập dữ liệu có giá trị
 @msg	the action has no steps	hành động không có bước nào

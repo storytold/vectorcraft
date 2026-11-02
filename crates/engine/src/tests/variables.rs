@@ -1432,6 +1432,28 @@ fn datasets_csv_refuses_graph_data_file_columns() {
     assert!(vars.variables.is_empty() && vars.datasets.is_empty());
 }
 
+/// Two header cells that name one variable, by the same name or by a name and its prefix, are
+/// refused with both columns, and the import changes nothing.
+#[test]
+fn datasets_csv_refuses_two_columns_for_one_variable() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
+    let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
+    for (csv, first, second, var) in [
+        ("name,City,City\nR,Paris,Rome", 2, 3, "City"),
+        ("name,City,City\nR,Paris,", 2, 3, "City"),
+        ("City,Title,City\nParis,x,Rome", 1, 3, "City"),
+        ("name,Shown,#Shown\nR,true,false", 2, 3, "Shown"),
+        ("Title\t@Photo\t@ Photo\nx\ta.png\tb.png", 2, 3, "Photo"),
+    ] {
+        let err = error(&mut s, csv);
+        assert!(err.contains(&format!("columns {first} and {second} both name the variable `{var}`")), "{csv}: {err}");
+    }
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(vars.variables.len(), 1);
+    assert!(vars.datasets.is_empty());
+}
+
 /// While the variables are locked, an import is refused when a header cell would define a
 /// variable, as New Variable is, and a file whose headers all name variables imports.
 #[test]

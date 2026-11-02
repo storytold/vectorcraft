@@ -5119,6 +5119,7 @@ imageTrace	Outline	კონტური
 @msg	Batch: {count} processed, {failed} failed	პაკეტური დამუშავება: დამუშავდა {count}, ვერ დამუშავდა {failed}
 @msg	choose a destination folder	აირჩიეთ დანიშნულების საქაღალდე
 @msg	choose a source folder	აირჩიეთ წყარო საქაღალდე
+@msg	columns {first} and {column} both name the variable `{name}`	სვეტები {first} და {column} ორივე ასახელებს ცვლადს `{name}`
 @msg	open a document with data sets	გახსენით დოკუმენტი მონაცემთა ნაკრებებით
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	მონაცემთა ნაკრები {name}: არაფერი გამოყენებულა; არცერთი ობიექტი არ არის მიბმული ცვლადზე, რომელსაც მასში მნიშვნელობა აქვს
 @msg	the action has no steps	მოქმედებას ნაბიჯები არ აქვს

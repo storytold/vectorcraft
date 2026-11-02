@@ -5469,6 +5469,7 @@ mark-style	Japanese	Japonské
 @msg	Batch: {count} processed, {failed} failed	Dávka: zpracováno {count}, selhalo {failed}
 @msg	choose a destination folder	vyberte cílovou složku
 @msg	choose a source folder	vyberte zdrojovou složku
+@msg	columns {first} and {column} both name the variable `{name}`	sloupce {first} a {column} uvádějí stejnou proměnnou `{name}`
 @msg	open a document with data sets	otevřete dokument se sadami dat
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
 @msg	the action has no steps	akce nemá žádné kroky

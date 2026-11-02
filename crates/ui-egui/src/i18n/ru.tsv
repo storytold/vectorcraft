@@ -5076,6 +5076,7 @@ lighting	Light	Свет
 @msg	Batch: {count} processed, {failed} failed	Пакетная обработка: обработано {count}, с ошибкой {failed}
 @msg	choose a destination folder	выберите папку назначения
 @msg	choose a source folder	выберите исходную папку
+@msg	columns {first} and {column} both name the variable `{name}`	столбцы {first} и {column} указывают одну и ту же переменную `{name}`
 @msg	open a document with data sets	откройте документ с наборами данных
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	из набора данных {name} ничего не применено: ни один объект не привязан к переменной, для которой в нём есть значение
 @msg	the action has no steps	в действии нет шагов

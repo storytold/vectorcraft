@@ -5400,6 +5400,7 @@ effect	Points	Σημεία
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
+@msg	columns {first} and {column} both name the variable `{name}`	οι στήλες {first} και {column} ονομάζουν και οι δύο τη μεταβλητή `{name}`
 @msg	open a document with data sets	ανοίξτε ένα έγγραφο με σύνολα δεδομένων
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	δεν εφαρμόστηκε τίποτα από το σύνολο δεδομένων {name}: κανένα αντικείμενο δεν είναι συνδεδεμένο με μεταβλητή για την οποία έχει τιμή
 @msg	select an Intertwine group	επιλέξτε μια ομάδα διαπλοκής

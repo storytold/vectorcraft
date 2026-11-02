@@ -5321,6 +5321,7 @@ mark-style	Japanese	Japońskie
 @msg	Batch: {count} processed, {failed} failed	Przetwarzanie wsadowe: przetworzono {count}, niepowodzenia: {failed}
 @msg	choose a destination folder	wybierz folder docelowy
 @msg	choose a source folder	wybierz folder źródłowy
+@msg	columns {first} and {column} both name the variable `{name}`	kolumny {first} i {column} wskazują tę samą zmienną `{name}`
 @msg	open a document with data sets	otwórz dokument z zestawami danych
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	z zestawu danych {name} nic nie zastosowano: żaden obiekt nie jest powiązany ze zmienną, dla której ma on wartość
 @msg	the action has no steps	operacja nie ma kroków

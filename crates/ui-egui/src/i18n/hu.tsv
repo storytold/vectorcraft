@@ -5454,6 +5454,7 @@ imageTrace	Outline	Körvonal
 @msg	Batch: {count} processed, {failed} failed	Kötegelt feldolgozás: {count} feldolgozva, {failed} sikertelen
 @msg	choose a destination folder	válasszon célmappát
 @msg	choose a source folder	válasszon forrásmappát
+@msg	columns {first} and {column} both name the variable `{name}`	a(z) {first}. és a(z) {column}. oszlop ugyanazt a változót nevezi meg: `{name}`
 @msg	open a document with data sets	nyisson meg egy adatkészleteket tartalmazó dokumentumot
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ebből az adatkészletből semmi sem lett alkalmazva: {name}; egyetlen objektum sincs olyan változóhoz kötve, amelynek értéke van benne
 @msg	the action has no steps	a műveletnek nincsenek lépései

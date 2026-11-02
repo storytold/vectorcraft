@@ -5061,6 +5061,7 @@ lighting	Light	Світло
 @msg	Batch: {count} processed, {failed} failed	Пакетна обробка: оброблено {count}, з помилкою {failed}
 @msg	choose a destination folder	виберіть папку призначення
 @msg	choose a source folder	виберіть вихідну папку
+@msg	columns {first} and {column} both name the variable `{name}`	стовпці {first} і {column} вказують одну й ту саму змінну `{name}`
 @msg	open a document with data sets	відкрийте документ із наборами даних
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	з набору даних {name} нічого не застосовано: жоден об’єкт не прив’язано до змінної, для якої в ньому є значення
 @msg	the action has no steps	у дії немає кроків
