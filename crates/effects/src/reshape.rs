@@ -610,10 +610,11 @@ fn transform_items(art: &mut Node) {
 /// as [`transform_leaf`] transforms an object with that effect's map, copies and options, so the
 /// stroke's weight and dashes, the distances of its remaining effects and its pattern follow the
 /// map. The reference box is that geometry's bounds and the seed is the leaf's id, as the renderer
-/// draws a fill's or stroke's own effects. Its raster effects and the effects after the Transform
-/// effect stay on it (and on each copy), and a later such Transform effect applies to the result in
-/// the same way. The other fills and strokes stay together on paths of the leaf's geometry between
-/// them, with their own effects. `max` is the budget of the whole art and `used` what it has spent.
+/// draws a fill's or stroke's own effects. The geometry effects after the Transform effect then
+/// apply to the transformed path and its copies as one piece ([`transform_piece`]), and its other
+/// effects stay on each of them. The other fills and strokes stay together on paths of the leaf's
+/// geometry between them, with their own effects. `max` is the budget of the whole art and `used`
+/// what it has spent.
 fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
     if matches!(leaf.kind, NodeKind::Path { clipping: true, .. }) || !leaf.appearance.items.iter().any(item_transform_options) {
         return;
@@ -679,7 +680,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
         set_geometry(&mut p, g.clone(), rule);
         let made = transform_leaf(&mut p, &g, map, copies, options, room);
         *used = used.plus(made);
-        for_each_leaf(&mut p, &mut |l| transform_item_leaf(l, limit, used));
+        transform_piece(&mut p, ctx.seed, limit, used);
         pieces.push(Arc::new(p));
     }
     if !plain.is_empty() {
@@ -690,6 +691,57 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget) {
     leaf.appearance.contents_index = None;
     leaf.knockout = vectorcraft_doc::Knockout::Off;
     leaf.kind = NodeKind::Group { children: pieces, clip: false };
+}
+
+/// Apply the visible geometry effects left on the one fill or stroke of each path under `p` (a
+/// transformed piece of [`transform_item_leaf`] and its copies) to all of `p`'s paths as one piece:
+/// each effect takes the bounds of all the paths as its reference box and `seed`, as an object's
+/// own effects reshape all its paths ([`reshape_leaves_within`]). Each path applies its own copy of
+/// the effect, whose distances its Scale Strokes & Effects scaled. A Transform effect with
+/// Transform Patterns or Scale Strokes & Effects on transforms each path as [`transform_leaf`] does.
+/// The geometry effects then leave the fills and strokes; their other effects stay. The paths keep
+/// to `max` together with the rest of the art (`used`).
+fn transform_piece(p: &mut Node, seed: u64, max: Budget, used: &mut Budget) {
+    let mut count = 0;
+    for_each_leaf(p, &mut |l| {
+        if let Some(item) = l.appearance.items.first() {
+            count = count.max(item.effects().len());
+        }
+    });
+    for j in 0..count {
+        let Some(bounds) = p.geometric_bounds() else { break };
+        for_each_leaf(p, &mut |leaf| {
+            let Some(item) = leaf.appearance.items.first().cloned() else { return };
+            let Some(e) = item.effects().get(j).filter(|e| e.visible && is_geometry(&e.id)).cloned() else { return };
+            let Some((path, rule)) = leaf_geometry(leaf) else { return };
+            // What the other paths leave of the budget.
+            let before = Budget::of(&path);
+            let room = max.minus(used.minus(before));
+            if reaches_appearance(&e) {
+                let params = merged_params(&e.id, &e.params);
+                let (_, copies) = crate::distort::transform_map(bounds, &params, seed);
+                let options = crate::distort::TransformOptions::of(&params);
+                let map = crate::distort::transform_affine(bounds, &params, seed);
+                let made = transform_leaf(leaf, &path, map, copies, options, room);
+                *used = used.minus(before).plus(made);
+                return;
+            }
+            let appearance = leaf.appearance.clone();
+            let stroke = match &item {
+                AppearanceItem::Stroke(s) => Some(s),
+                AppearanceItem::Fill(_) => None,
+            };
+            let ctx = GeomContext { stroke, rule, seed, appearance: Some(&appearance), item: Some(0) };
+            let out = crate::geometry::apply_geometry_within(std::slice::from_ref(&e), &path, bounds, &ctx, room);
+            *used = used.minus(before).plus(Budget::of(&out));
+            set_geometry(leaf, out, rule);
+        });
+    }
+    for_each_leaf(p, &mut |leaf| {
+        for item in &mut leaf.appearance.items {
+            item.effects_mut().retain(|e| !(e.visible && is_geometry(&e.id)));
+        }
+    });
 }
 
 /// The bounds of each group of type's outlines under `n` ([`outline_text`]), `n` included, in
