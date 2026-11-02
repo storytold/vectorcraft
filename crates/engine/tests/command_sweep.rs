@@ -269,6 +269,20 @@ fn structured_junk() {
             json!({"points": [{"x": 0, "y": 0, "pressure": 2}, {"x": 1e308, "y": 0, "pressure": -1}], "extend": {"id": 2, "end": "start"}}),
         ),
         ("brush.freehand", json!({"points": [[0, 0, 0], [50, 50, 1]], "brush": "3 pt. Round"})),
+        (
+            "path.freehand",
+            json!({"points": [[0, 0, null, 1e308, -1e308, 1e308], [10, 0, 0.5, -500, null, -1e308], [20, 0, 1, 0, 0, 0], [20, 0, 1, 90, 90, 720]], "style": "brush"}),
+        ),
+        ("path.freehand", json!({"points": [{"x": 0, "y": 0, "tiltX": "a"}, {"x": 10, "y": 0, "rotation": {}}]})),
+        (
+            "brush.options",
+            json!({"name": "3 pt. Round", "params": {"modes": ["bearing", "tilt", "rotation"], "variation": [1e308, 1e308, 1e308], "angle": 1e308}}),
+        ),
+        (
+            "brush.freehand",
+            json!({"points": [[0, 0, 0.5, 30, 0, 90], [50, 50, 0.5, -30, 89, 270], [100, 0, 0.5, 0, 0, -1e308]], "brush": "3 pt. Round"}),
+        ),
+        ("brush.options", json!({"name": "Confetti", "params": {"modes": ["tilt", "bearing", "rotation", "bearing"], "rotation": [-1e308, 1e308]}})),
         ("brush.options", json!({"name": "3 pt. Round", "params": {"modes": ["pressure", "random", "nope"]}})),
         ("brush.options", json!({"name": "3 pt. Round", "params": {"modes": "pressure", "variation": [1e308, -1e308, 1e308]}})),
         (
