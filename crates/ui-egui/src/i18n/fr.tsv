@@ -1155,6 +1155,7 @@ font-technology	Variable	Variables
 	Find Font…	Rechercher une police…
 	Find Next	Rechercher le suivant
 	Find Objects	Rechercher des objets
+	Compare with Image	Comparer à une image
 	First Page	Première page
 	First-line Left Indent	Retrait gauche de première ligne
 	Fisheye…	Fish-eye…
@@ -5368,6 +5369,11 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path} : ce n’est pas une image PNG, JPEG, WebP, TIFF ou BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	l’image fait {iw} × {ih} pixels et le plan de travail à cette largeur fait {rw} × {rh} pixels : leurs proportions diffèrent
+@msg	`threshold` must be a number from 0 to 1	`threshold` doit être un nombre de 0 à 1
+@msg	background {v}: a color such as "#808080"	arrière-plan {v} : une couleur comme "#808080"
+@msg	comparing with an image file isn't available in the browser	la comparaison avec un fichier image n’est pas disponible dans le navigateur
 @msg	an image of {w} × {h} pixels is shown at reduced size	une image de {w} × {h} pixels est affichée en taille réduite
 @msg	the image can't be read as a texture	l'image ne peut pas être lue comme texture
 	Fill and Stroke Controls	Commandes de fond et de contour

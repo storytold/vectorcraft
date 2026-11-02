@@ -3245,6 +3245,7 @@ font-technology	Variable	Variáveis
 	Favorites	Favoritos
 	Fill (X), double-click for the Color Picker	Preenchimento (X), clique duas vezes para o seletor de cores
 	Find Objects	Localizar objetos
+	Compare with Image	Comparar com imagem
 	Flare Tool Options	Opções da ferramenta Reflexo
 	Halo	Halo
 	Rays	Raios
@@ -5301,6 +5302,11 @@ mark-style	Japanese	Japonesas
 @msg	The shape is too complex for a 3D effect	A forma é complexa demais para um efeito 3D
 @msg	The 3D surface is too complex; simplify the shape	A superfície 3D é complexa demais; simplifique a forma
 @msg	an image of {w} × {h} pixels is too large to draw	uma imagem de {w} × {h} pixels é grande demais para ser desenhada
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: não é uma imagem PNG, JPEG, WebP, TIFF ou BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	a imagem tem {iw} × {ih} pixels e a prancheta nessa largura tem {rw} × {rh} pixels: as proporções são diferentes
+@msg	`threshold` must be a number from 0 to 1	`threshold` deve ser um número de 0 a 1
+@msg	background {v}: a color such as "#808080"	plano de fundo {v}: uma cor como "#808080"
+@msg	comparing with an image file isn't available in the browser	a comparação com um arquivo de imagem não está disponível no navegador
 @msg	an image of {w} × {h} pixels is shown at reduced size	uma imagem de {w} × {h} pixels é exibida em tamanho reduzido
 	Fill and Stroke Controls	Controles de Preenchimento e Traçado
 	Coloring Controls	Controles de Coloração

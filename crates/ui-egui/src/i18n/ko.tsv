@@ -146,6 +146,7 @@ digits	Malayalam	말라얄람어
 	Find and Replace…	찾기 및 바꾸기…
 	Find Next	다음 찾기
 	Find Objects	개체 찾기
+	Compare with Image	이미지와 비교
 	Spelling	맞춤법
 	Auto Spell Check	자동 맞춤법 검사
 	Check Spelling…	맞춤법 검사…
@@ -4941,6 +4942,11 @@ lighting	Light	광원
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	이미지는 {iw} × {ih}픽셀이고 그 너비에서 아트보드는 {rw} × {rh}픽셀입니다: 비율이 다릅니다
+@msg	`threshold` must be a number from 0 to 1	`threshold`은(는) 0에서 1 사이의 숫자여야 합니다
+@msg	background {v}: a color such as "#808080"	배경 {v}: "#808080" 같은 색상이어야 합니다
+@msg	comparing with an image file isn't available in the browser	이미지 파일과 비교하는 기능은 브라우저에서 사용할 수 없습니다
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h}픽셀 이미지는 축소된 크기로 표시됩니다
 @msg	the image can't be read as a texture	이미지를 텍스처로 읽을 수 없습니다
 	Basic	기본

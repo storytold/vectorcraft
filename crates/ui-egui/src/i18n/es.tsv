@@ -1161,6 +1161,7 @@ font-technology	Variable	Variables
 	Find Font…	Buscar fuente…
 	Find Next	Buscar siguiente
 	Find Objects	Buscar objetos
+	Compare with Image	Comparar con imagen
 	First Page	Primera página
 	First-line Left Indent	Sangría izquierda en primera línea
 	Fisheye…	Ojo de pez…
@@ -5310,6 +5311,11 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no es una imagen PNG, JPEG, WebP, TIFF ni BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	la imagen mide {iw} × {ih} píxeles y la mesa de trabajo a ese ancho mide {rw} × {rh} píxeles: sus proporciones difieren
+@msg	`threshold` must be a number from 0 to 1	`threshold` debe ser un número de 0 a 1
+@msg	background {v}: a color such as "#808080"	fondo {v}: un color como "#808080"
+@msg	comparing with an image file isn't available in the browser	la comparación con un archivo de imagen no está disponible en el navegador
 @msg	an image of {w} × {h} pixels is shown at reduced size	una imagen de {w} × {h} píxeles se muestra a tamaño reducido
 @msg	the image can't be read as a texture	la imagen no se puede leer como textura
 	Fill and Stroke Controls	Controles de relleno y trazo

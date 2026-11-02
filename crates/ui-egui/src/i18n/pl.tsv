@@ -3106,6 +3106,7 @@ theme	Appearance	Wygląd
 	Document JSON	JSON dokumentu
 	Duplicate	Powiel
 	Find Objects	Znajdź obiekty
+	Compare with Image	Porównaj z obrazem
 	Inspect Document	Zbadaj dokument
 	Inspect Object	Zbadaj obiekt
 	Begin Undo Group	Rozpocznij grupę cofania
@@ -5208,6 +5209,11 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: to nie jest obraz PNG, JPEG, WebP, TIFF ani BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	obraz ma {iw} × {ih} pikseli, a obszar kompozycji przy tej szerokości ma {rw} × {rh} pikseli: ich proporcje się różnią
+@msg	`threshold` must be a number from 0 to 1	`threshold` musi być liczbą od 0 do 1
+@msg	background {v}: a color such as "#808080"	tło {v}: kolor, np. "#808080"
+@msg	comparing with an image file isn't available in the browser	porównywanie z plikiem obrazu nie jest dostępne w przeglądarce
 @msg	an image of {w} × {h} pixels is shown at reduced size	obraz o wymiarach {w} × {h} pikseli jest wyświetlany w zmniejszonym rozmiarze
 	Basic	Podstawowy
 	Fill and Stroke Controls	Elementy sterujące wypełnieniem i obrysem

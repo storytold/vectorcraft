@@ -1114,6 +1114,7 @@ font-technology	Variable	Değişken
 	Find Font…	Yazı Tipi Bul…
 	Find Next	Sonrakini Bul
 	Find Objects	Nesneleri Bul
+	Compare with Image	Görüntüyle Karşılaştır
 	First Page	İlk Sayfa
 	First-line Left Indent	Birinci Satırda Sol Girinti
 	Fisheye…	Balıkgözü…
@@ -3925,6 +3926,11 @@ axis	Both	Her İkisi
 @msg	invalid image data for `{0}`	`{0}` için geçersiz resim verileri
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` için geçersiz parametreler: {msg}
 @msg	is not an image VectorCraft reads	VectorCraft'ın okuduğu bir resim değil
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF veya BMP resmi değil
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	resim {iw} × {ih} piksel, çalışma yüzeyi bu genişlikte {rw} × {rh} piksel: oranları farklı
+@msg	`threshold` must be a number from 0 to 1	`threshold` 0 ile 1 arasında bir sayı olmalıdır
+@msg	background {v}: a color such as "#808080"	background {v}: "#808080" gibi bir renk
+@msg	comparing with an image file isn't available in the browser	bir resim dosyasıyla karşılaştırma tarayıcıda kullanılamaz
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	VectorCraft'ın PostScript okuyucusunun bilmediği `{at}`yi kullanıyor
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	{procs}'de VectorCraft'ın PostScript okuyucusunun bilmediği `{at}`yi kullanıyor
 @msg	its Windows metafile preview was opened instead, which may simplify the art	bunun yerine Windows meta dosyası önizlemesi açıldı, bu da işi basitleştirebilir

@@ -1360,6 +1360,7 @@ digits	Malayalam	Malayalam
 	Find Linked Files in Folder…	Tìm tệp liên kết trong thư mục…
 	Find Next	Tìm tiếp
 	Find Objects	Tìm đối tượng
+	Compare with Image	So sánh với ảnh
 	Fine Dots	Chấm mịn
 
 	Simple	Đơn giản
@@ -4964,6 +4965,11 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: không phải ảnh PNG, JPEG, WebP, TIFF hay BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	ảnh có kích thước {iw} × {ih} điểm ảnh, còn bảng vẽ ở chiều rộng đó có kích thước {rw} × {rh} điểm ảnh: tỉ lệ của chúng khác nhau
+@msg	`threshold` must be a number from 0 to 1	`threshold` phải là một số từ 0 đến 1
+@msg	background {v}: a color such as "#808080"	background {v}: màu như "#808080"
+@msg	comparing with an image file isn't available in the browser	không thể so sánh với tệp ảnh trong trình duyệt
 @msg	an image of {w} × {h} pixels is shown at reduced size	ảnh {w} × {h} điểm ảnh được hiển thị ở kích thước thu nhỏ
 	Basic	Cơ bản
 	Fill and Stroke Controls	Điều khiển tô và nét

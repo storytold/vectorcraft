@@ -1127,6 +1127,7 @@ font-technology	Variable	可變
 	Find Font…	尋找字體…
 	Find Next	尋找下一個
 	Find Objects	尋找物件
+	Compare with Image	與影像比較
 	First Page	第一頁
 	First-line Left Indent	首行左縮排
 	Fisheye…	魚眼…
@@ -5051,6 +5052,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	影像為 {iw} × {ih} 像素，而工作區域在該寬度下為 {rw} × {rh} 像素：兩者的比例不同
+@msg	`threshold` must be a number from 0 to 1	`threshold` 必須是 0 到 1 之間的數字
+@msg	background {v}: a color such as "#808080"	background {v}：顏色，例如 "#808080"
+@msg	comparing with an image file isn't available in the browser	瀏覽器中無法與影像檔案進行比較
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的影像以縮小的尺寸顯示
 	Basic	基本
 	Fill and Stroke Controls	填色和筆畫控制項

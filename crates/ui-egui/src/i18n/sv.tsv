@@ -1125,6 +1125,7 @@ font-technology	Variable	Variabla
 	Find Font…	Sök typsnitt…
 	Find Next	Sök nästa
 	Find Objects	Sök objekt
+	Compare with Image	Jämför med bild
 	First Page	Första sidan
 	First-line Left Indent	Vänsterindrag för första raden
 	Fisheye…	Fisköga…
@@ -5270,6 +5271,11 @@ mark-style	Japanese	Japanska
 theme	Appearance	Utseende
 	Load EPS into Clipboard	Läs in EPS till urklipp
 @msg	an image of {w} × {h} pixels is too large to draw	en bild på {w} × {h} pixlar är för stor för att ritas
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: inte en PNG-, JPEG-, WebP-, TIFF- eller BMP-bild
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	bilden är {iw} × {ih} pixlar och ritytan i den bredden är {rw} × {rh} pixlar: proportionerna skiljer sig åt
+@msg	`threshold` must be a number from 0 to 1	`threshold` måste vara ett tal från 0 till 1
+@msg	background {v}: a color such as "#808080"	background {v}: en färg som "#808080"
+@msg	comparing with an image file isn't available in the browser	jämförelse med en bildfil är inte tillgänglig i webbläsaren
 @msg	an image of {w} × {h} pixels is shown at reduced size	en bild på {w} × {h} pixlar visas i förminskad storlek
 	Fill and Stroke Controls	Kontroller för fyllning och kontur
 	Coloring Controls	Kontroller för färgläggning

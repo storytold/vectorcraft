@@ -269,6 +269,22 @@ chain (layer first) and `limit` caps `matches` (default 100; `0` only counts); w
 `selected`, the number of objects selected. `document.json` stays whole: it is the fidelity path, not the way to
 look around.
 
+`run_command document.compare {path, artboard?, background?, threshold?, diffPath?}` measures how far an
+artboard is from an image file (PNG, JPEG, WebP, TIFF or BMP). It renders the
+artboard (default 0) at the image's size, as `export` draws a PNG: the scale is the image's width in pixels over
+the artboard's width in points, and an image whose height differs from the artboard's height at that scale by
+more than one pixel is an error that names both sizes. The render and the image are both flattened on
+`background` (`"#rrggbb"`, default `"#ffffff"`). The reply is `{width, height, rmse, over, total, threshold}`:
+`rmse` is the root mean square of the R, G and B differences on a 0 to 1 scale, rounded to 6 decimals, and
+`over` counts the pixels with a channel that differs by more than `threshold` (0 to 1, default 0.08) of the
+total `total`. `diffPath` writes a PNG of each pixel's absolute R, G and B differences (black where the two
+match) and adds `diffPath` to the reply. As in a PNG export, linked images and placed documents are drawn
+from their files rather than from the previews saved for them. The reply's `warnings` are a PNG export's, in
+the same order: type on the artboard that doesn't fit its frame, an embedded image that couldn't be decoded (it
+is missing from the render), type in a font or style that isn't available, and a linked file that can't be read
+(its preview is drawn). `path` is read through the automation read root, and `diffPath` is written through the
+write root. The command does not change the document, and it is not available in the web app.
+
 ### Completions
 
 `completion/complete` answers for a prompt argument (`ref/prompt`) or a template variable

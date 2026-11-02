@@ -3227,6 +3227,7 @@ theme	Appearance	Motiv
 	Document JSON	JSON dokumentu
 	Duplicate	Duplikovat
 	Find Objects	Najít objekty
+	Compare with Image	Porovnat s obrazem
 	Inspect Document	Prozkoumat dokument
 	Inspect Object	Prozkoumat objekt
 	Begin Undo Group	Zahájit skupinu kroků zpět
@@ -5370,6 +5371,11 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: není obraz PNG, JPEG, WebP, TIFF ani BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	obraz má {iw} × {ih} obrazových bodů a pracovní plocha v této šířce má {rw} × {rh} obrazových bodů: jejich proporce se liší
+@msg	`threshold` must be a number from 0 to 1	`threshold` musí být číslo od 0 do 1
+@msg	background {v}: a color such as "#808080"	pozadí {v}: barva jako "#808080"
+@msg	comparing with an image file isn't available in the browser	porovnání se souborem obrazu není v prohlížeči k dispozici
 @msg	an image of {w} × {h} pixels is shown at reduced size	obraz o velikosti {w} × {h} obrazových bodů se zobrazuje ve zmenšené velikosti
 @msg	the image can't be read as a texture	obraz nelze načíst jako texturu
 	Fill and Stroke Controls	Ovládací prvky výplně a tahu

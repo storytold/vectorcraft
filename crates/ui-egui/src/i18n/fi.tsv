@@ -3165,6 +3165,7 @@ theme	Appearance	Ulkoasu
 	Document JSON	Asiakirjan JSON
 	Duplicate	Monista
 	Find Objects	Etsi objekteja
+	Compare with Image	Vertaa kuvaan
 	Inspect Document	Tarkastele asiakirjaa
 	Inspect Object	Tarkastele objektia
 	Begin Undo Group	Aloita kumoamisryhmä
@@ -5254,6 +5255,11 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	kuva on {iw} × {ih} pikseliä ja piirtoalusta tällä leveydellä {rw} × {rh} pikseliä: niiden mittasuhteet eroavat
+@msg	`threshold` must be a number from 0 to 1	`threshold` on oltava luku väliltä 0–1
+@msg	background {v}: a color such as "#808080"	tausta {v}: väri, kuten "#808080"
+@msg	comparing with an image file isn't available in the browser	vertailu kuvatiedostoon ei ole käytettävissä selaimessa
 @msg	an image of {w} × {h} pixels is shown at reduced size	kuva, jonka koko on {w} × {h} pikseliä, näytetään pienennettynä
 	Fill and Stroke Controls	Täytön ja viivan säätimet
 	Coloring Controls	Värityksen säätimet

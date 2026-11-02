@@ -1564,6 +1564,7 @@ digits	Malayalam	Malaiàlam
 	Find Linked Files in Folder…	Cerca fitxers enllaçats en una carpeta…
 	Find Next	Cerca el següent
 	Find Objects	Cerca objectes
+	Compare with Image	Compara amb una imatge
 	Fine Dots	Punts fins
 	Fine noise hides banding in the gradient fill	El soroll fi amaga l’efecte de bandes del farciment de degradat
 	First	Primer
@@ -4877,6 +4878,11 @@ digits	Malayalam	Malaiàlam
 @msg	an image has no pixels and was left out	una imatge no té píxels i s’ha omès
 @msg	an image of {w} × {h} pixels is shown at reduced size	una imatge de {w} × {h} píxels es mostra a mida reduïda
 @msg	an image of {w} × {h} pixels is too large to draw	una imatge de {w} × {h} píxels és massa gran per dibuixar-la
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no és una imatge PNG, JPEG, WebP, TIFF ni BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	la imatge fa {iw} × {ih} píxels i el tauler a aquesta amplada fa {rw} × {rh} píxels: les proporcions són diferents
+@msg	`threshold` must be a number from 0 to 1	`threshold` ha de ser un nombre de 0 a 1
+@msg	background {v}: a color such as "#808080"	fons {v}: un color com "#808080"
+@msg	comparing with an image file isn't available in the browser	la comparació amb un fitxer d’imatge no està disponible al navegador
 @msg	an image VectorCraft can't read was left out	s’ha omès una imatge que VectorCraft no pot llegir
 @msg	an image whose data is cut short was left out	s’ha omès una imatge les dades de la qual estan tallades
 @msg	an object can't be read	no es pot llegir un objecte

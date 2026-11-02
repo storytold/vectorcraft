@@ -1132,6 +1132,7 @@ font-technology	Variable	Variabel
 	Find Font…	Schrift suchen…
 	Find Next	Weitersuchen
 	Find Objects	Objekte suchen
+	Compare with Image	Mit Bild vergleichen
 	First Page	Erste Seite
 	First-line Left Indent	Einzug links in erster Zeile
 	Fisheye…	Fischauge…
@@ -4936,6 +4937,11 @@ lighting	Light	Licht
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: kein PNG-, JPEG-, WebP-, TIFF- oder BMP-Bild
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	das Bild hat {iw} × {ih} Pixel und die Zeichenfläche in dieser Breite {rw} × {rh} Pixel: ihre Proportionen unterscheiden sich
+@msg	`threshold` must be a number from 0 to 1	`threshold` muss eine Zahl von 0 bis 1 sein
+@msg	background {v}: a color such as "#808080"	background {v}: eine Farbe wie "#808080"
+@msg	comparing with an image file isn't available in the browser	der Vergleich mit einer Bilddatei ist im Browser nicht verfügbar
 @msg	an image of {w} × {h} pixels is shown at reduced size	ein Bild mit {w} × {h} Pixeln wird verkleinert angezeigt
 @msg	the image can't be read as a texture	das Bild kann nicht als Struktur gelesen werden
 	Basic	Basis

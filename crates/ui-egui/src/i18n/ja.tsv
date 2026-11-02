@@ -153,6 +153,7 @@ digits	Malayalam	マラヤーラム数字
 	Find and Replace…	検索と置換…
 	Find Next	次を検索
 	Find Objects	オブジェクトを検索
+	Compare with Image	画像と比較
 	Spelling	スペルチェック
 	Auto Spell Check	自動スペルチェック
 	Check Spelling…	スペルチェック…
@@ -5022,6 +5023,11 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG、JPEG、WebP、TIFF、BMP のいずれの画像でもありません
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	画像は {iw} × {ih} ピクセルで、その幅でのアートボードは {rw} × {rh} ピクセルです: 縦横比が異なります
+@msg	`threshold` must be a number from 0 to 1	`threshold` には 0 から 1 までの数値を指定してください
+@msg	background {v}: a color such as "#808080"	背景に {v} は指定できません: 「#808080」のようなカラーを指定してください
+@msg	comparing with an image file isn't available in the browser	画像ファイルとの比較はブラウザーでは使用できません
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} ピクセルの画像は縮小して表示されます
 @msg	the image can't be read as a texture	この画像はテクスチャとして読み込めません
 	Basic	基本

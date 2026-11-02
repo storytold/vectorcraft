@@ -1102,6 +1102,7 @@
 	Find Font…	查找字体…
 	Find Next	查找下一个
 	Find Objects	查找对象
+	Compare with Image	与图像比较
 	First Page	第一页
 	First-line Left Indent	首行左缩进
 	Fisheye…	鱼眼…
@@ -5240,6 +5241,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 图像
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	图像为 {iw} × {ih} 像素，而画板在该宽度下为 {rw} × {rh} 像素：两者的比例不同
+@msg	`threshold` must be a number from 0 to 1	`threshold` 必须是 0 到 1 之间的数字
+@msg	background {v}: a color such as "#808080"	background {v}：颜色，例如 "#808080"
+@msg	comparing with an image file isn't available in the browser	浏览器中无法与图像文件进行比较
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的图像以缩小的尺寸显示
 	Fill and Stroke Controls	填色和描边控件
 	Coloring Controls	颜色控件

@@ -1156,6 +1156,7 @@ font-technology	Variable	Варіативні
 	Find Font…	Знайти шрифт…
 	Find Next	Знайти далі
 	Find Objects	Знайти об’єкти
+	Compare with Image	Порівняти із зображенням
 	First Page	Перша сторінка
 	First-line Left Indent	Відступ ліворуч у першому рядку
 	Fisheye…	Риб’яче око…
@@ -4958,6 +4959,11 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	розмір зображення {iw} × {ih} пікселів, а монтажної області за цієї ширини {rw} × {rh} пікселів: їхні пропорції відрізняються
+@msg	`threshold` must be a number from 0 to 1	`threshold` має бути числом від 0 до 1
+@msg	background {v}: a color such as "#808080"	фон {v}: колір, наприклад "#808080"
+@msg	comparing with an image file isn't available in the browser	порівняння з файлом зображення недоступне в браузері
 @msg	an image of {w} × {h} pixels is shown at reduced size	зображення розміром {w} × {h} пікселів показано в зменшеному розмірі
 @msg	the image can't be read as a texture	зображення не вдається прочитати як текстуру
 	Basic	Базовий

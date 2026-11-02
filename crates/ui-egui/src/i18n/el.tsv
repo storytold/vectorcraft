@@ -1090,6 +1090,7 @@ font-technology	Variable	Μεταβλητές
 	Find Font…	Εύρεση γραμματοσειράς…
 	Find Next	Εύρεση επόμενου
 	Find Objects	Εύρεση αντικειμένων
+	Compare with Image	Σύγκριση με εικόνα
 	First Page	Πρώτη σελίδα
 	First-line Left Indent	Αριστερή εσοχή πρώτης γραμμής
 	Fisheye…	Εφέ ματιού ψαριού…
@@ -5114,6 +5115,11 @@ effect	Points	Σημεία
 	Load EPS into Clipboard	Φόρτωση EPS στο πρόχειρο
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	Άγνωστο στοιχείο ελέγχου `{name}`: fillStroke, coloring, drawMode ή screenMode
 @msg	an image of {w} × {h} pixels is too large to draw	Η εικόνα {w} × {h} εικονοστοιχείων είναι υπερβολικά μεγάλη για σχεδίαση
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: δεν είναι εικόνα PNG, JPEG, WebP, TIFF ή BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	η εικόνα είναι {iw} × {ih} εικονοστοιχεία και ο πίνακας σχεδίασης σε αυτό το πλάτος είναι {rw} × {rh} εικονοστοιχεία: οι αναλογίες τους διαφέρουν
+@msg	`threshold` must be a number from 0 to 1	Το `threshold` πρέπει να είναι αριθμός από 0 έως 1
+@msg	background {v}: a color such as "#808080"	φόντο {v}: χρώμα όπως "#808080"
+@msg	comparing with an image file isn't available in the browser	η σύγκριση με αρχείο εικόνας δεν είναι διαθέσιμη στο πρόγραμμα περιήγησης
 @msg	an image of {w} × {h} pixels is shown at reduced size	Η εικόνα {w} × {h} εικονοστοιχείων εμφανίζεται σε μειωμένο μέγεθος
 	Open Recent File 1	Άνοιγμα πρόσφατου αρχείου 1
 	Open Recent File 2	Άνοιγμα πρόσφατου αρχείου 2

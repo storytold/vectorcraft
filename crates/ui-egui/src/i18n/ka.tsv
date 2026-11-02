@@ -2791,6 +2791,7 @@ theme	Appearance	იერსახე
 	Document JSON	დოკუმენტის JSON
 	Duplicate	დუბლირება
 	Find Objects	ობიექტების ძებნა
+	Compare with Image	გამოსახულებასთან შედარება
 	Inspect Document	დოკუმენტის შემოწმება
 	Inspect Object	ობიექტის შემოწმება
 	Begin Undo Group	დაბრუნების ჯგუფის დაწყება
@@ -4919,6 +4920,11 @@ imageTrace	Outline	კონტური
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} პიქსელის გამოსახულება დასახატად ზედმეტად დიდია
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: არ არის PNG, JPEG, WebP, TIFF ან BMP გამოსახულება
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	გამოსახულება არის {iw} × {ih} პიქსელი, ხოლო სამუშაო დაფა ამ სიგანეზე არის {rw} × {rh} პიქსელი: მათი პროპორციები განსხვავდება
+@msg	`threshold` must be a number from 0 to 1	`threshold` უნდა იყოს რიცხვი 0-დან 1-მდე
+@msg	background {v}: a color such as "#808080"	ფონი {v}: ფერი, მაგალითად "#808080"
+@msg	comparing with an image file isn't available in the browser	გამოსახულების ფაილთან შედარება ბრაუზერში მიუწვდომელია
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} პიქსელის გამოსახულება შემცირებული ზომით ჩანს
 	A later row takes this shortcut	ამ მალსახმობს ქვემოთა სტრიქონი იყენებს
 	Add to the Current Shortcuts	მიმდინარე მალსახმობებზე დამატება
