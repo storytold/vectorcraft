@@ -4791,6 +4791,9 @@ imageTrace	Outline	Obris
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Nije moguće postaviti {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nije moguće zalijepiti: dokument u koji se lijepilo je zatvoren
+@msg	Saved {path} with {_1} note(s): {first}	Sačuvano {path} s bilješkama ({_1}): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Izvezeno {what} s bilješkama ({_1}): {first}
 @msg	Exported {what}	Izvezeno: {what}
 @msg	Saved {n} files beside {path}	Sačuvano datoteka pored {path}: {n}
 @msg	Saving	Čuvanje
@@ -4798,6 +4801,7 @@ imageTrace	Outline	Obris
 @msg	Exporting {_1}	Izvoz {_1}
 @msg	Packaging {_1}	Pakovanje {_1}
 @msg	Placing {_1}	Postavljanje {_1}
+@msg	Pasting	Lijepljenje
 @msg	Saving recovery data for {_1}	Čuvanje podataka za oporavak za {_1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
