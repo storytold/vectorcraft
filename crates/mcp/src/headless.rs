@@ -194,7 +194,14 @@ impl Headless {
             let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base);
             let backquote =
                 e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
-            let ev = PointerEvent { kind, pos: Point::new(x, y), mods, backquote, pressure: PointerEvent::json_pressure(e) };
+            let ev = PointerEvent {
+                kind,
+                pos: Point::new(x, y),
+                mods,
+                backquote,
+                pressure: PointerEvent::json_pressure(e),
+                pen: PointerEvent::json_pen(e),
+            };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
             // With no frames to show the highlight in later, a hover waits for the work the tool

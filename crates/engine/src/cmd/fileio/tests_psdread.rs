@@ -213,6 +213,28 @@ fn psd_exports_open_and_place_again() {
     assert!(PLACE_EXTS.contains(&"psd") && PLACE_EXTS.contains(&"psb") && OPEN_EXTS.contains(&"psb"));
 }
 
+/// Photoshop files named `.pdd` open and place as PSD, in any case; the dialogs and a drop on the
+/// window take them by their extension, and the desktop packaging doesn't associate them.
+#[test]
+fn pdd_files_open_and_place() {
+    let mut s = art();
+    let f = exported(&mut s, json!({"format": "psd"}));
+    for name in ["art.pdd", "ART.PDD"] {
+        assert_eq!(readable_format_for_name(name).map(|f| f.id), Some("psd"), "{name}");
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&f)})).unwrap();
+        assert_eq!((&r["format"], &r["warnings"]), (&json!("psd"), &json!([])), "{name}: {r}");
+        assert!((s.doc().unwrap().doc.artboards[0].rect.width() - 60.0).abs() < 1e-6, "{name}");
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let r = s.execute("file.place", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&f)})).unwrap();
+        assert_eq!((&r["format"], r["ids"].as_array().map(Vec::len)), (&json!("psd"), Some(1)), "{name}: {r}");
+    }
+    assert!(OPEN_EXTS.contains(&"pdd") && PLACE_EXTS.contains(&"pdd") && UNASSOCIATED_EXTS.contains(&"pdd"));
+    let photoshop = ("PSD", &["psd", "pdd"][..]);
+    assert!(open_filters().any(|f| f == photoshop) && place_filters().any(|f| f == photoshop));
+    assert!(!export_extensions().contains(&"pdd"), "exports still name their files .psd");
+    assert!(format_for_name("x.pdd").is_none() && writable_format(None, Some("x.pdd")).is_err(), "an export to .pdd is refused as before");
+}
+
 #[test]
 fn damaged_and_unsupported_files_are_refused_without_a_panic() {
     let good = psd(2, 4, (3, 2), 8, 3, &[], &[], &layer_count(-1, true), &raw(&[&[1; 6], &[2; 6], &[3; 6], &[4; 6]]));

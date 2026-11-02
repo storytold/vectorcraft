@@ -492,6 +492,26 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(("panel-state", key)), v));
 }
 
+/// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace
+/// remove its highlighted rows): it took it with a click on a row ([`set_row_keys`]) and kept it in
+/// every frame since, so it lapses when the panel isn't drawn.
+pub(crate) fn has_row_keys(ctx: &egui::Context, key: &str) -> bool {
+    pstate::<Option<u64>>(ctx, key).is_some_and(|pass| pass + 1 >= ctx.cumulative_pass_nr())
+}
+
+/// Take (`on`) or give up the keyboard for the rows of the panel whose state is `key`, for this
+/// frame and the next ([`has_row_keys`]).
+pub(crate) fn set_row_keys(ctx: &egui::Context, key: &str, on: bool) {
+    set_pstate(ctx, key, on.then(|| ctx.cumulative_pass_nr()));
+}
+
+/// Whether a plain Delete or Backspace belongs to a panel's rows this frame, the Layers or the
+/// Appearance panel's after a click on one of them, so [`crate::shortcuts::handle`] leaves it to the
+/// panel instead of running Edit › Clear on the selected art.
+pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
+    has_row_keys(ctx, layers::ROW_KEYS) || has_row_keys(ctx, appearance::ROW_KEYS)
+}
+
 /// [`crate::i18n::label_or_name`] in the UI language.
 pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)

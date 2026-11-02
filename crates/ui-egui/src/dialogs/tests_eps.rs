@@ -89,6 +89,6 @@ fn opening_an_eps_that_reads_partly_says_why() {
     let r = app.run("file.open", json!({"path": path.to_string_lossy()})).unwrap();
     let w = r["warnings"][0].as_str().unwrap();
     assert!(w.contains("`frobnicate`") && w.contains("in `p`"), "{r}");
-    assert!(app.ui.status.contains("Opened with 1 note(s)") && app.ui.status.contains("frobnicate"), "{}", app.ui.status);
+    assert!(app.ui.status.contains("Opened with 1 note:") && app.ui.status.contains("frobnicate"), "{}", app.ui.status);
     std::fs::remove_dir_all(dir).ok();
 }
