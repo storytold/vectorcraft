@@ -15,17 +15,27 @@ fn docked_tools_use_a_flush_shared_surface() {
         let width = if double { 80.0 } else { WIDTH };
         let mut remaining = egui::Rect::NOTHING;
         let mut bounds = egui::Rect::NOTHING;
+        let mut status_bounds = egui::Rect::NOTHING;
+        let mut hint_bounds = egui::Rect::NOTHING;
         let mut out = ctx.run_ui(
             egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))), ..Default::default() },
             |ui| {
+                // Match the app's bottom chrome order, including the hint strip above the status bar.
+                crate::chrome::status_bar(&mut app, ui);
+                crate::chrome::hint_bar(&mut app, ui);
                 show(&mut app, ui);
                 remaining = ui.available_rect_before_wrap();
                 bounds = egui::containers::panel::PanelState::load(ui.ctx(), ui.make_persistent_id("toolbar")).unwrap().outer_rect;
+                status_bounds = egui::containers::panel::PanelState::load(ui.ctx(), ui.make_persistent_id("status_bar")).unwrap().outer_rect;
+                hint_bounds = egui::containers::panel::PanelState::load(ui.ctx(), ui.make_persistent_id("hint_bar")).unwrap().outer_rect;
             },
         );
         out.textures_delta.clear();
         assert_eq!(bounds.min, Pos2::ZERO, "no left or top card gutter");
-        assert_eq!(bounds.size(), vec2(width, 1200.0), "no bottom gutter or extra width");
+        assert_eq!(bounds.size(), vec2(width, hint_bounds.top()), "no bottom gutter or extra width");
+        assert_eq!(bounds.bottom(), hint_bounds.top(), "toolbar border meets the bottom chrome");
+        assert_eq!(hint_bounds.bottom(), status_bounds.top(), "hint strip meets the status bar");
+        assert_eq!(status_bounds.bottom(), 1200.0, "status bar reaches the window bottom");
         assert_eq!(remaining.left(), width, "canvas starts at the tools' edge");
         assert!(app.ui.status.is_empty(), "{}", app.ui.status);
         let panel = out
