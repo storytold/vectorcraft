@@ -330,7 +330,7 @@ impl Tool for PerspectiveSelectionTool {
         if !self.claims_key(cx, key) {
             return vec![];
         }
-        vec![Action::Exec("perspective.nudge".into(), json!({"dx": dx, "dy": dy, "big": mods.shift, "copy": mods.alt}))]
+        vec![Action::Exec("perspective.nudge".into(), json!({"dx": dx, "dy": dy, "big": mods.shift, "fine": mods.cmd, "copy": mods.alt}))]
     }
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         // The arrows nudge a selection in perspective.

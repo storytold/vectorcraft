@@ -36,4 +36,4 @@ pub(crate) use bounds::{bounds_rewrite, object_bounds_transform};
 pub use commands::specs;
 pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
 pub(super) use shape::recut;
-pub(crate) use transform::{apply_transform, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};
+pub(crate) use transform::{apply_transform, nudge_step, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};

@@ -503,7 +503,7 @@ pub(super) fn persp_nudge(s: &mut Session, p: &Value) -> Result<Value> {
     if !(dx.is_finite() && dy.is_finite()) || (dx == 0.0 && dy == 0.0) {
         return Err(bad(C, "dx and dy give the arrow's direction"));
     }
-    let k = s.prefs.keyboard_increment * if switch_or(p, "big", false, C)? { 10.0 } else { 1.0 };
+    let k = crate::cmd::object::nudge_step(s.prefs.keyboard_increment, switch_or(p, "big", false, C)?, switch_or(p, "fine", false, C)?);
     let copy = switch_or(p, "copy", false, C)?;
     let ids = selected_roots(s)?;
     // The step is measured on the page at the centre of the selection's perspective box.

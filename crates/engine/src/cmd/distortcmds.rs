@@ -171,7 +171,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Nudge in Perspective",
             [],
             None,
-            "{dx, dy: arrow direction (-1, 0 or 1), big?: bool (×10), copy?: bool} move the selection in perspective by the keyboard increment, as the arrow keys do with the Perspective Selection tool → {ids}",
+            "{dx, dy: arrow direction (-1, 0 or 1), big?: bool (×10), fine?: bool (÷10; with big, one increment), copy?: bool} move the selection in perspective by the keyboard increment, as the arrow keys do with the Perspective Selection tool → {ids}",
             has_selection,
             persp_nudge
         ),

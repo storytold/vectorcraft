@@ -78,7 +78,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Nudge",
             [],
             None,
-            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move)} arrow-key nudge by the keyboard increment (the selected anchors, else objects, along the x and y axes turned by the constrainAngle preference; else ruler guides, along the page axes)",
+            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), fine?: bool (÷10; with big, one increment), copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move)} arrow-key nudge by the keyboard increment (the selected anchors, else objects, along the x and y axes turned by the constrainAngle preference; else ruler guides, along the page axes)",
             has_selection_or_guides,
             nudge
         ),

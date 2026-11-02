@@ -508,6 +508,13 @@ fn arrow_keys_nudge_in_perspective() {
     let c = bounds_of(&before).center();
     let step = h.apply(c + d).unwrap() - h.apply(c).unwrap();
     assert!((step - Vec2::new(s.prefs.keyboard_increment, 0.0)).hypot() < 1e-6, "{step:?}");
+    // Ctrl/Cmd takes a tenth of a step.
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    s.tool_key(ToolKey::Right, Mods { cmd: true, ..Default::default() }, v).unwrap();
+    let after = plane_pts(&s, id, Plane::Right, 0.0);
+    let c = bounds_of(&before).center();
+    let step = h.apply(c + (after[0] - before[0])).unwrap() - h.apply(c).unwrap();
+    assert!((step - Vec2::new(s.prefs.keyboard_increment / 10.0, 0.0)).hypot() < 1e-6, "{step:?}");
     // Alt copies; Shift takes ten steps.
     s.tool_key(ToolKey::Left, Mods { alt: true, shift: true, ..Default::default() }, v).unwrap();
     let copy = *s.doc().unwrap().selection.objects.first().unwrap();
