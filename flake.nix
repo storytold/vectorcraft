@@ -83,7 +83,7 @@
         }
       );
 
-      packages = forAllSystems ({ pkgs, commonDeps, ... }:
+      packages = forAllSystems ({ pkgs, commonDeps, system, ... }:
         let
           common = {
             version = version;
