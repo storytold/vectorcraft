@@ -184,6 +184,16 @@ impl Tool for CropImageTool {
         }
     }
 
+    /// A dropped press puts the box back as it was at the press; earlier changes to it stay.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if let Some(Drag::Handle(_, from) | Drag::Move(_, from)) = self.drag.take()
+            && let Some((id, _, _)) = self.current(cx)
+        {
+            self.rect = Some((Some(id), from));
+        }
+        vec![]
+    }
+
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::Enter | ToolKey::Escape) && self.current(cx).is_some()
     }
@@ -366,6 +376,27 @@ mod tests {
         let none = Selection::default();
         let cx = crate::testutil::cx(&d, &none, &p);
         assert!(t.overlays(&cx).is_empty() && !t.claims_key(&cx, ToolKey::Enter));
+    }
+
+    #[test]
+    fn a_dropped_press_puts_the_box_back_as_it_was_at_the_press() {
+        let (d, s) = doc_with_image((50.0, 60.0));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = CropImageTool::default();
+        drag(&mut t, &cx, (50.0, 60.0), (80.0, 70.0));
+        assert_eq!(t.options()["rect"], json!([80.0, 70.0, 170.0, 90.0]));
+        // A handle pressed and dragged, then the press dropped: the box is the adjusted one.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 250.0, 160.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 130.0));
+        assert!(t.drop_press(&cx).is_empty());
+        assert!(!t.busy());
+        assert_eq!(t.options()["rect"], json!([80.0, 70.0, 170.0, 90.0]));
+        // So is a moved box.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 110.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+        assert!(t.drop_press(&cx).is_empty());
+        assert_eq!(t.options()["rect"], json!([80.0, 70.0, 170.0, 90.0]));
     }
 
     #[test]
