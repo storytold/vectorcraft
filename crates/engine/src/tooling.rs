@@ -572,6 +572,24 @@ impl Session {
         self.tool.transforming()
     }
 
+    /// With Real-time Drawing off, how far a Selection-tool move drag has carried the selection
+    /// so far: the document moves on release, and the bounding box shows at this offset meanwhile.
+    pub fn deferred_move(&self) -> Option<vectorcraft_geom::Vec2> {
+        if self.tool.id() != "selection" || !self.tool.transforming() {
+            return None;
+        }
+        let it = self.active()?.interaction.as_ref()?;
+        if !matches!(it.label.as_str(), "Move" | "Copy") {
+            return None;
+        }
+        let (cmd, p) = self.unapplied_interaction_preview()?;
+        if cmd != "object.transform" || p.get("objects").and_then(Value::as_bool) == Some(false) {
+            return None;
+        }
+        let [a, b, c, d, e, f] = crate::cmd::matrix_param(&p, "matrix")?.as_coeffs();
+        (a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0).then(|| vectorcraft_geom::Vec2::new(e, f))
+    }
+
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
