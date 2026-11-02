@@ -138,7 +138,9 @@ mod tests {
             (None, None, None),
         ] {
             let mut g = FileFontGlyphs::default();
-            let info = |fs_type| move || FileFontInfo { family: "F".into(), style: "R".into(), postscript: "F-R".into(), ascent: 800.0, descent: -200.0, fs_type };
+            let info = |fs_type| {
+                move || FileFontInfo { family: "F".into(), style: "R".into(), postscript: "F-R".into(), ascent: 800.0, descent: -200.0, fs_type }
+            };
             let a = g.font("F", "R", info(first));
             let b = g.font("F", "R", info(second));
             assert_eq!(a, b);
