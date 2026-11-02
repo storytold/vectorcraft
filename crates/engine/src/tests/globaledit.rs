@@ -473,6 +473,20 @@ fn a_shift_click_inside_a_matched_group_leaves_the_whole_group_out() {
 }
 
 #[test]
+fn a_shift_click_on_a_member_inside_a_selected_group_deselects_the_group() {
+    let mut s = session();
+    let [a, b, c, wide, _] = squares(&mut s);
+    let pair = group_of(&mut s, &[b, wide]);
+    let all = start(&mut s, a, json!({}));
+    assert_eq!(all, [a, c, b], "the copy in the group comes after the small square");
+    sel(&mut s, &[pair]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "the copy inside the selected group is not highlighted");
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(members(&s), Some(all), "nothing is left out");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the group is deselected");
+}
+
+#[test]
 fn leaving_out_all_but_one_ends_global_edit_and_the_first_object_stays() {
     let mut s = session();
     let [a, b, c, wide, _] = squares(&mut s);

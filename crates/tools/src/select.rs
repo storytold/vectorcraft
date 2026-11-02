@@ -994,13 +994,15 @@ fn shift_press(cx: &ToolContext, h: &Hit, top: NodeId, out: &mut Vec<Action>) ->
 }
 
 /// The object of the Global Edit in progress that the click `h` lands on or inside, when it is
-/// highlighted: neither the object the edit started from nor one that is selected or holds a
-/// selected object (`select.globalEditExclude` leaves it out of the edit).
+/// highlighted: neither the object the edit started from nor one that is selected, holds a
+/// selected object or sits inside a selected object (`select.globalEditExclude` leaves it out of
+/// the edit).
 fn global_edit_member(cx: &ToolContext, h: &Hit) -> Option<NodeId> {
     let others = cx.global_edit.get(1..)?;
     let member = h.ancestry.iter().chain([&h.leaf]).find(|id| others.iter().any(|(m, _)| m == *id)).copied()?;
-    let selected = cx.selection.objects.iter().any(|s| cx.doc.ancestry(*s).is_some_and(|a| a.contains(&member)));
-    (!selected).then_some(member)
+    let holds = cx.selection.objects.iter().any(|s| cx.doc.ancestry(*s).is_some_and(|a| a.contains(&member)));
+    let inside = cx.doc.ancestry(member).is_some_and(|a| a.iter().any(|id| cx.selection.contains(*id)));
+    (!holds && !inside).then_some(member)
 }
 
 /// Can a click make `id` the key object? `select.key` takes only a selected top-level object. In

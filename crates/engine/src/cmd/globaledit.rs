@@ -716,8 +716,9 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
     edited
 }
 
-/// The outlines of the members of the active document's Global Edit that are not selected, in
-/// their layer's colour: the canvas highlights them while Global Edit is on.
+/// The outlines of the members of the active document's Global Edit that are not selected, hold
+/// no selected object and sit inside no selected object, in their layer's colour: the canvas
+/// highlights them while Global Edit is on.
 pub fn highlights(s: &Session) -> Outlines {
     let Some(st) = s.active() else { return vec![] };
     let Some(ge) = &st.global_edit else { return vec![] };
@@ -732,6 +733,9 @@ pub fn highlights(s: &Session) -> Outlines {
         .iter()
         .filter_map(|(id, _)| {
             let n = st.doc.node(*id).filter(|n| !holds(n, &st.selection.objects))?;
+            if st.doc.ancestry(*id).is_some_and(|a| a.iter().any(|p| st.selection.objects.contains(p))) {
+                return None;
+            }
             let path = match n.stroke_path() {
                 Some(p) => p,
                 None => n.geometric_bounds_with(&symbols)?.to_path(0.1),
