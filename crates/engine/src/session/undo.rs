@@ -102,6 +102,7 @@ impl Session {
                 deselect_hidden(&self.menu, &st.doc, &mut st.selection);
                 st.sync_new_art();
                 cmd::globaledit::follow_history(st);
+                st.drop_stale_variables_highlight();
                 st.revision += 1;
                 // The journal drops only the canceled groups' own entries and keeps the ones made in other documents meanwhile.
                 journal.extend(g.journal);
@@ -230,6 +231,7 @@ impl Session {
         st.doc = doc;
         st.selection = selection;
         cmd::globaledit::follow_history(st);
+        st.drop_stale_variables_highlight();
         deselect_hidden(&menu, &st.doc, &mut st.selection);
         st.history.recost_last(&st.doc);
         st.revision += 1;

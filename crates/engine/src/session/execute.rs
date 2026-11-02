@@ -219,6 +219,7 @@ impl Session {
                     st.interaction = interaction;
                     st.history = history;
                     cmd::globaledit::follow_history(st);
+                    st.drop_stale_variables_highlight();
                     st.revision += 1;
                 }
                 if let Some(i) = active.and_then(|uid| self.docs.iter().position(|d| d.uid == uid)) {

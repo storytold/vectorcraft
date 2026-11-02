@@ -893,6 +893,49 @@ fn highlight_follows_rename_and_clears_with_delete() {
     assert!(s.doc().unwrap().variables_highlight.is_none(), "a highlight of a deleted variable highlights nothing");
 }
 
+/// Undo of a rename takes the new name away, so the highlight that followed the rename goes
+/// too: a variable defined later under that name is not highlighted, and Delete without names
+/// does not delete it.
+#[test]
+fn undoing_a_rename_clears_the_highlight_of_the_new_name() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "A", "kind": "text"})).unwrap();
+    s.execute("variable.highlight", &json!({"variable": "A"})).unwrap();
+    s.execute("variable.rename", &json!({"name": "A", "newName": "B"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().variables_highlight.is_none());
+    s.execute("variable.define", &json!({"name": "B", "kind": "visibility"})).unwrap();
+    assert!(s.doc().unwrap().variables_highlight.is_none(), "B was never clicked");
+    assert!(s.execute("variable.delete", &json!({})).is_err(), "no variable highlighted");
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"].as_array().unwrap().len(), 2);
+}
+
+/// Undo of New Variable, Redo of Delete Variables and a canceled undo group each leave the
+/// highlighted name undefined, and the highlight goes with it.
+#[test]
+fn undo_redo_and_a_canceled_group_clear_a_highlight_of_a_variable_they_remove() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "N", "kind": "text"})).unwrap();
+    s.execute("variable.highlight", &json!({"variable": "N"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().variables_highlight.is_none(), "undo of New Variable");
+
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("variable.delete", &json!({"names": ["N"]})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("variable.highlight", &json!({"variable": "N"})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().variables_highlight.is_none(), "redo of Delete Variables");
+
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    s.execute("variable.define", &json!({"name": "G", "kind": "text"})).unwrap();
+    s.execute("variable.highlight", &json!({"variable": "G"})).unwrap();
+    s.execute("edit.undoGroup.end", &json!({"cancel": true})).unwrap();
+    assert!(s.doc().unwrap().doc.variables.variable("G").is_none(), "the cancel took G back");
+    assert!(s.doc().unwrap().variables_highlight.is_none(), "a canceled undo group");
+}
+
 /// A row that hides an object must be able to show it again, and hiding it on the artboard
 /// (as the Layers panel does) is what a capture records: a visibility variable reads and
 /// writes its object's own visibility, which therefore never makes the object off limits.
