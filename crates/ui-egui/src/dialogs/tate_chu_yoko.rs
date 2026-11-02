@@ -88,10 +88,10 @@ fn params(d: &Dialog) -> Map<String, Value> {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let p = params(d);
     app.ui.dialog = None;
-    if !p.is_empty() {
-        crate::panels::character::format(app, Value::Object(p));
+    if p.is_empty() {
+        return Ok(Value::Null);
     }
-    Ok(Value::Null)
+    crate::panels::character::run_format(app, Value::Object(p))
 }
 
 #[cfg(test)]
@@ -163,5 +163,30 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("tcyLeftRight".into(), json!(2));
         super::super::confirm(&mut app).unwrap();
         assert_eq!(offsets(&app, id), [(4.0, 2.0), (0.0, 2.0)]);
+    }
+
+    /// OK returns the error of a command that is refused, and the characters keep their values.
+    #[test]
+    fn tate_chu_yoko_settings_dialog_returns_a_refused_command_error() {
+        let (mut app, id) = app();
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("tcyUpDown".into(), json!(5));
+        app.run("select.set", json!({"ids": []})).unwrap();
+        assert!(super::super::confirm(&mut app).is_err());
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(offsets(&app, id), [(0.0, 0.0)]);
+    }
+
+    /// While the Type tool edits text, OK sets the selected characters and returns the result.
+    #[test]
+    fn tate_chu_yoko_settings_dialog_sets_the_range_the_type_tool_selects() {
+        let (mut app, id) = app();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 0, "caret": 2}));
+        assert_eq!(crate::panels::character::text_editing(&app), Some((NodeId(id), 0, 2)));
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("tcyLeftRight".into(), json!(6));
+        assert!(super::super::confirm(&mut app).is_ok());
+        assert_eq!(offsets(&app, id), [(0.0, 6.0), (0.0, 0.0)]);
     }
 }

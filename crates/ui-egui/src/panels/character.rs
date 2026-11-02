@@ -222,6 +222,20 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
     char_cmd(app, "text.setFormat", p);
 }
 
+/// [`format`] that returns the command's result: `text.setRangeStyle` on the range the Type tool
+/// has selected (the whole text when nothing is selected) while it edits text, else
+/// `text.setFormat` on the selected text objects.
+pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
+    let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    end_typing(app);
+    p["id"] = json!(id.0);
+    if b > a {
+        p["start"] = json!(a);
+        p["end"] = json!(b);
+    }
+    app.run("text.setRangeStyle", p)
+}
+
 /// The Tate-chu-yoko Settings Up/Down and Left/Right the characters the panels act on share, in
 /// document points; `None` where they differ, or with no type.
 pub(crate) fn shared_tcy_offsets(app: &VectorcraftApp) -> (Option<f64>, Option<f64>) {
