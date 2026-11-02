@@ -41,6 +41,9 @@ fn align_id(a: TabAlign) -> &'static str {
 /// The panel body's margin and the ruler's own inset: the ruler's 0 is this far right of the panel.
 const RULER_LEFT: f32 = 10.0 + 4.0;
 
+/// The most ticks the ruler draws.
+const MAX_TICKS: usize = 10_000;
+
 /// The largest stop position `text.tabs.set` takes, in points.
 const MAX_STOP: f64 = 100_000.0;
 
@@ -248,6 +251,27 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     Some((n, para, span.max(72.0)))
 }
 
+/// [`above_text`], then note the active document and text `n`. A floating panel is
+/// at least [`crate::panel_docking::PANEL_MIN_WIDTH`] wide, so for narrow text at a low zoom the
+/// panel comes out wider than asked; the ruler then draws text `n` at [`screen_scale`] and runs
+/// on past the text's width.
+fn place_above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) {
+    if above_text(app, ctx, n, span).is_some() {
+        set_pstate(ctx, "tabs-above", app.session.active().map(|doc| (doc.uid, n.id)));
+    }
+}
+
+/// Screen points per point of text `n` at the canvas zoom, as [`above_text`] sizes the ruler:
+/// across the frame for area type, the zoom for point type.
+fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
+    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let per = match &n.kind {
+        NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(xf.rect_to_screen(n.geometric_bounds()?).width()) / span,
+        _ => xf.zoom,
+    };
+    (per.is_finite() && per > 0.0).then_some(per)
+}
+
 /// Position Panel Above Text: float the panel just above text `n`, as wide as its ruler needs to
 /// put 0 on the text's left edge and its marks at the canvas zoom, so each stop sits over the
 /// column it sets (#729). `span`: the ruler's length in the text's points.
@@ -367,7 +391,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button(tl!("Above Text")).on_hover_text(tl!("Position Panel Above Text")).clicked() {
-                above_text(app, ui.ctx(), &node, span);
+                place_above_text(app, ui.ctx(), &node, span);
             }
         });
     });
@@ -414,7 +438,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let p = ui.painter_at(rect.expand(2.0));
     p.rect_filled(rect, 2.0, t.input);
     p.rect_stroke(rect, 2.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    let scale = (w as f64 - 8.0) / span;
+    // After Position Panel Above Text on this text, while the panel floats no wider than the
+    // narrowest floating window, a ruler wider than the text is on screen draws the text at its
+    // screen scale and runs on past its width. Any other ruler fits the span to its width.
+    let above: Option<(u64, vectorcraft_doc::NodeId)> = pstate(ui.ctx(), "tabs-above");
+    let narrowest = || {
+        let floating = app.ui.docking.as_ref().and_then(|l| l.floating.iter().find(|f| f.contains(&"tabs".to_string())));
+        floating.is_some_and(|f| f.rect[2] <= crate::panel_docking::PANEL_MIN_WIDTH + 0.5)
+    };
+    let scale = above
+        .filter(|at| Some(*at) == app.session.active().map(|doc| (doc.uid, node.id)) && narrowest())
+        .and_then(|_| screen_scale(app, &node, span))
+        .filter(|per| span * per + 8.0 < w as f64 - 0.5)
+        .unwrap_or((w as f64 - 8.0) / span);
+    let length = span.max((w as f64 - 8.0) / scale);
     let to_x = |pt: f64| rect.left() + 4.0 + (pt * scale) as f32;
     let to_pt = |x: f32| (((x - rect.left() - 4.0) as f64) / scale).max(0.0);
     // The ruler is numbered in the General unit, with the canvas rulers' label step at its scale
@@ -422,7 +459,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let unit = app.session.general_unit();
     let step = unit.ruler_step(scale);
     let minor = step / 10.0;
-    for k in 0..=(unit.from_pt(span) / minor + 1e-6).floor() as usize {
+    for k in 0..=((unit.from_pt(length) / minor + 1e-6).floor() as usize).min(MAX_TICKS) {
         let v = k as f64 * minor;
         let x = to_x(unit.to_pt(v));
         let len = match k % 10 {
