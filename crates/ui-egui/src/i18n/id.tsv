@@ -1388,6 +1388,12 @@ digits	Malayalam	Malayalam
 	Axis	Sumbu
 	ICF Top/Right	ICF atas/kanan
 	ICF Bottom/Left	ICF bawah/kiri
+	Show Font Height Options	Tampilkan opsi tinggi font
+	Hide Font Height Options	Sembunyikan opsi tinggi font
+	Set Font Height Reference	Atur acuan tinggi font
+	Em Box	Em Box
+	x-Height	Tinggi x
+	ICF Box	Kotak ICF
 	Copy Color Value (Hex)	Salin nilai warna (Hex)
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%
@@ -2866,6 +2872,7 @@ theme	Appearance	Tampilan
 	Duplicate Brush	Duplikatkan kuas
 	Duplicate Symbol	Duplikatkan simbol
 	Edit Symbol	Edit simbol
+	Exit Symbol Editing Mode	Keluar dari mode edit simbol
 	Expand Brush Strokes	Perluas guratan kuas
 	New Brush…	Kuas baru…
 	New Brush	Kuas baru
@@ -4317,6 +4324,8 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	pilih pengulangan
 @msg	select a stroke with a variable width	pilih goresan dengan lebar variabel
 @msg	select a symbol instance	pilih instans simbol
+@msg	select instances of one symbol	pilih instans dari satu simbol saja
+@msg	a symbol can't hold an instance of itself	simbol tidak dapat memuat instans dirinya sendiri
 @msg	select an Image Trace object	pilih objek Image Trace
 @msg	could not decode image: {0}	tidak dapat mendekode gambar: {0}
 @msg	image is empty	gambar kosong
@@ -5837,6 +5846,13 @@ anchor	Points:	Titik:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	berikan `inkLimit`, `removeWhiteOverprint`, atau `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Perbaikan Tinta Cetak bekerja pada dokumen CMYK: pilih dulu Berkas › Mode warna dokumen › Warna CMYK
 @msg	`{key}` must be 0..{max}	`{key}` harus 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Cari Swatch Terdekat…
+	Find Nearest Swatch	Cari Swatch Terdekat
+	Apply Nearest Swatch	Terapkan Swatch Terdekat
+	Select objects to find the swatches nearest their colors.	Pilih objek untuk menemukan swatch yang paling dekat dengan warnanya.
+@msg	select objects or give `color`	pilih objek atau berikan `color`
+@msg	`color` is not a colour	`color` bukan warna
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Alat sudut
 	Slide Anchor Along Path	Geser titik jangkar sepanjang jalur
@@ -5951,6 +5967,9 @@ breakText	Glyphs	Glif
 	Gap 4	Jarak 4
 	Dash 5	Garis 5
 	Gap 5	Jarak 5
+
+@msg	{_1}: they came in as the page's art	{_1}: diimpor sebagai gambar halaman
+
 @msg	You must choose a side pattern.	Anda harus memilih pola sisi.
 @msg	invalid pattern tile choice	pilihan ubin pola tidak valid
 @msg	no pattern named `{choice}`	tidak ada pola bernama `{choice}`
@@ -5981,6 +6000,9 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Perluas garis putus menjadi jalur
+@msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu
@@ -6003,6 +6025,11 @@ breakText	Glyphs	Glif
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} dan yang lebih baru (versi {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Ekspor Semua Dokumen Terbuka sebagai PDF
+	Export All Open Documents as SVG	Ekspor Semua Dokumen Terbuka sebagai SVG
+@msgplural	Exported {n} document|Exported {n} documents	Berhasil mengekspor {n} dokumen
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Berhasil mengekspor {n} dokumen; {title} tidak ditulis: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Jenis simbol:
 	Dynamic Symbol	Simbol dinamis

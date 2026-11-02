@@ -904,6 +904,7 @@ font-technology	Variable	Variabel
 	Edit Selection	Auswahl bearbeiten
 	Edit Selection…	Auswahl bearbeiten…
 	Edit Symbol	Symbol bearbeiten
+	Exit Symbol Editing Mode	Symbolbearbeitungsmodus beenden
 	Edit Text	Text bearbeiten
 	Edit the applied effect, or add another one?	Den angewendeten Effekt bearbeiten oder einen weiteren hinzufügen?
 	Edit the point	Punkt bearbeiten
@@ -3821,6 +3822,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	die Ebenen der Datei wurden nicht gelesen ({_1}): sie wird als ihre Seite in einer Ebene geöffnet
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	die Ebenen der Datei wurden nicht aus ihren Bearbeitungsdaten gelesen ({_1}): sie stammen aus ihrem PDF-Teil
 @msg	`to` must be "corner" or "smooth"	`to` muss "corner" oder "smooth" sein
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` muss "emBox", "capHeight", "xHeight" oder "icfBox" sein
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-Dateien sind RGB oder Graustufen: colorModel rgb oder gray
 @msg	Blend colors: select at least three objects with filled colours	Farben angleichen: Wählen Sie mindestens drei Objekte mit Flächenfarbe aus
 @msg	Combine Slices: the slices have no bounds	Slices kombinieren: Die Slices haben keine Begrenzung
@@ -4267,6 +4269,8 @@ theme	Appearance	Erscheinungsbild
 @msg	a clipping path can't be attached to a path	ein Schnittpfad kann nicht an einen Pfad angehängt werden
 @msg	select a stroke with a variable width	wählen Sie eine Kontur mit variabler Breite aus
 @msg	select a symbol instance	wählen Sie eine Symbolinstanz aus
+@msg	select instances of one symbol	wählen Sie Instanzen eines einzigen Symbols aus
+@msg	a symbol can't hold an instance of itself	ein Symbol kann keine Instanz von sich selbst enthalten
 @msg	select an Image Trace object	wählen Sie ein Bildnachzeichner-Objekt aus
 @msg	could not decode image: {0}	das Bild konnte nicht dekodiert werden: {0}
 @msg	image is empty	das Bild ist leer
@@ -4556,6 +4560,13 @@ theme	Appearance	Erscheinungsbild
 	Insert Inline Symbol	Inline-Symbol einfügen
 	ICF Top/Right	ICF oben/rechts
 	ICF Bottom/Left	ICF unten/links
+	Show Font Height Options	Optionen für Schrifthöhe einblenden
+	Hide Font Height Options	Optionen für Schrifthöhe ausblenden
+	Set Font Height Reference	Bezugsgröße der Schrifthöhe festlegen
+	Em Box	Geviert
+	Cap Height	Versalhöhe
+	x-Height	x-Höhe
+	ICF Box	ICF-Rahmen
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
@@ -5522,6 +5533,13 @@ anchor	Points:	Punkte:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geben Sie `inkLimit`, `removeWhiteOverprint` oder `overprintBlack` an
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Druckfarbkorrekturen wirken in CMYK-Dokumenten: Wählen Sie zuerst Datei › Dokumentfarbmodus › CMYK-Farbe
 @msg	`{key}` must be 0..{max}	`{key}` muss 0..{max} sein
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Ähnlichstes Farbfeld suchen…
+	Find Nearest Swatch	Ähnlichstes Farbfeld suchen
+	Apply Nearest Swatch	Ähnlichstes Farbfeld anwenden
+	Select objects to find the swatches nearest their colors.	Wählen Sie Objekte aus, um die Farbfelder zu finden, die ihren Farben am nächsten kommen.
+@msg	select objects or give `color`	wählen Sie Objekte aus oder geben Sie `color` an
+@msg	`color` is not a colour	`color` ist keine Farbe
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Ecken-Werkzeug
 	Slide Anchor Along Path	Ankerpunkt entlang des Pfads verschieben
@@ -5637,6 +5655,9 @@ breakText	Glyphs	Glyphen
 	Gap 4	Lücke 4
 	Dash 5	Strich 5
 	Gap 5	Lücke 5
+
+@msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+
 @msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
 @msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel
 @msg	no pattern named `{choice}`	kein Muster mit dem Namen `{choice}`
@@ -5667,6 +5688,9 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Striche in Pfade umwandeln
+@msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentwerkzeuge
 	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
@@ -5689,6 +5713,11 @@ breakText	Glyphs	Glyphen
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} und neuer (Version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Alle geöffneten Dokumente als PDF exportieren
+	Export All Open Documents as SVG	Alle geöffneten Dokumente als SVG exportieren
+@msgplural	Exported {n} document|Exported {n} documents	{n} Dokument exportiert|{n} Dokumente exportiert
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} Dokument exportiert; {title} wurde nicht geschrieben: {error}|{n} Dokumente exportiert; {title} wurde nicht geschrieben: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltyp:
 	Dynamic Symbol	Dynamisches Symbol

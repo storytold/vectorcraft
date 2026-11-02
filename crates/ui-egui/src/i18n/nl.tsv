@@ -1402,6 +1402,12 @@ digits	Malayalam	Malayalam
 	Axis	As
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
+	Show Font Height Options	Opties voor letterhoogte tonen
+	Hide Font Height Options	Opties voor letterhoogte verbergen
+	Set Font Height Reference	Referentie voor letterhoogte instellen
+	Em Box	Em-vak
+	x-Height	x-hoogte
+	ICF Box	ICF-vak
 	Copy Color Value (Hex)	Kleurwaarde kopiëren (Hex)
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%
@@ -2880,6 +2886,7 @@ theme	Appearance	Vormgeving
 	Duplicate Brush	Kwast dupliceren
 	Duplicate Symbol	Symbool dupliceren
 	Edit Symbol	Symbool bewerken
+	Exit Symbol Editing Mode	Symboolbewerkingsmodus verlaten
 	Expand Brush Strokes	Penseelstreken omzetten
 	New Brush…	Nieuw penseel…
 	New Brush	Nieuw penseel
@@ -4329,6 +4336,8 @@ imageTrace	Outline	Contour
 @msg	select a repeat	selecteer een herhaling
 @msg	select a stroke with a variable width	selecteer een lijn met een variabele breedte
 @msg	select a symbol instance	selecteer een symboolinstantie
+@msg	select instances of one symbol	selecteer instanties van één symbool
+@msg	a symbol can't hold an instance of itself	een symbool kan geen instantie van zichzelf bevatten
 @msg	select an Image Trace object	selecteer een Image Trace-object
 @msg	could not decode image: {0}	afbeelding kon niet worden gedecodeerd: {0}
 @msg	image is empty	afbeelding is leeg
@@ -5881,6 +5890,13 @@ anchor	Points:	Punten:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geef `inkLimit`, `removeWhiteOverprint` of `overprintBlack` op
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Drukinktcorrecties werken in CMYK-documenten: kies eerst Bestand › Documentkleurmodus › CMYK-kleur
 @msg	`{key}` must be 0..{max}	`{key}` moet 0..{max} zijn
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Dichtstbijzijnde staal zoeken…
+	Find Nearest Swatch	Dichtstbijzijnde staal zoeken
+	Apply Nearest Swatch	Dichtstbijzijnde staal toepassen
+	Select objects to find the swatches nearest their colors.	Selecteer objecten om de stalen te vinden die het dichtst bij hun kleuren liggen.
+@msg	select objects or give `color`	selecteer objecten of geef `color` op
+@msg	`color` is not a colour	`color` is geen kleur
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hoekengereedschap
 	Slide Anchor Along Path	Ankerpunt langs pad schuiven
@@ -5995,6 +6011,9 @@ breakText	Glyphs	Glyphs
 	Gap 4	Tussenruimte 4
 	Dash 5	Streepje 5
 	Gap 5	Tussenruimte 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+
 @msg	You must choose a side pattern.	Kies een zijpatroon.
 @msg	invalid pattern tile choice	ongeldige keuze voor patroontegel
 @msg	no pattern named `{choice}`	geen patroon met de naam `{choice}`
@@ -6025,6 +6044,9 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Streepjes uitbreiden tot paden
+@msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Documentgereedschappen
 	Save a Timestamped Copy	Een kopie met tijdstempel opslaan
@@ -6047,6 +6069,11 @@ breakText	Glyphs	Glyphs
 	Odia	Odia
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} en nieuwer (versie {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Alle geopende documenten exporteren als PDF
+	Export All Open Documents as SVG	Alle geopende documenten exporteren als SVG
+@msgplural	Exported {n} document|Exported {n} documents	{n} document geëxporteerd|{n} documenten geëxporteerd
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} document geëxporteerd; {title} is niet geschreven: {error}|{n} documenten geëxporteerd; {title} is niet geschreven: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symbooltype:
 	Dynamic Symbol	Dynamisch symbool

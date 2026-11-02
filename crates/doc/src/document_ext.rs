@@ -98,18 +98,22 @@ impl Document {
         self.views = kept;
     }
 
-    /// Leave opacity-mask editing: drop the temporary editing layer, a working copy of art the
-    /// mask already holds (the engine syncs it after every edit).
+    /// Leave opacity-mask editing and symbol editing: drop the temporary editing layer, a working
+    /// copy of art the mask or the symbol already holds (the engine syncs it after every edit).
     pub fn drop_edit_modes(&mut self) {
         if let Some(me) = self.mask_edit.take() {
             self.layers.retain(|l| l.id != me.layer);
         }
+        if let Some(se) = self.symbol_edit.take() {
+            self.layers.retain(|l| l.id != se.layer);
+        }
     }
 
-    /// The document as saved and exported: without the opacity-mask editing layer. Borrowed when
-    /// no mask is being edited. (Pattern editing is saved: its tile layer holds unapplied edits.)
+    /// The document as saved and exported: without the opacity-mask or symbol editing layer.
+    /// Borrowed when neither mode is on. (Pattern editing is saved: its tile layer holds unapplied
+    /// edits.)
     pub fn without_edit_modes(&self) -> std::borrow::Cow<'_, Document> {
-        if self.mask_edit.is_none() {
+        if self.mask_edit.is_none() && self.symbol_edit.is_none() {
             return std::borrow::Cow::Borrowed(self);
         }
         let mut d = self.clone();

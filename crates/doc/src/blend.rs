@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
-use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
@@ -1027,6 +1027,27 @@ impl Rail {
             n.transform(m, false);
         }
     }
+}
+
+/// A box round everything a blend of `keys` can paint once [`Rail::place`] puts its keys and steps
+/// on its spine, turned to it with Align to Path: the spine's box grown by three times the farthest
+/// any key paints from its centre. A step's shape lies within that distance of the point on the
+/// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
+/// moves.
+pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
+    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+        return None;
+    }
+    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let radius = keys
+        .iter()
+        .filter_map(|k| {
+            let (c, b) = (center_of(k), k.visual(symbols)?);
+            let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
+            Some(corners.into_iter().map(|q| (q - c).hypot()).fold(0.0, f64::max))
+        })
+        .fold(0.0, f64::max);
+    Some(spine.inflate(3.0 * radius, 3.0 * radius))
 }
 
 // =====================================================================================

@@ -348,6 +348,14 @@ impl DrawSnap {
         self.snap(cx, p, from)
     }
 
+    /// Snap the point pressed at `p` onto the art's anchors and paths alone, within the Smart
+    /// Guides snapping tolerance (the Knife's straight cut). The targets serve this press only.
+    pub fn press_on_paths(&mut self, cx: &ToolContext, p: Point) -> Point {
+        let targets = Targets::for_drawing(cx.doc, &[], visible(cx), None).styled(cx).anchors_and_paths();
+        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)) }));
+        self.snap(cx, p, None)
+    }
+
     /// Gather `targets` other than the art for the drag a press starts (a point being dragged
     /// leaves itself out); the next hover gathers its own again.
     pub fn hold(&mut self, cx: &ToolContext, targets: impl FnOnce() -> Targets) {

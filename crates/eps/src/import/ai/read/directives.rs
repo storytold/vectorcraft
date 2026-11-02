@@ -1,5 +1,5 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -23,7 +23,7 @@ impl<'a> Reader<'a> {
 
     // ---- comments --------------------------------------------------------------------------
 
-    pub(super) fn comment(&mut self, c: &[u8]) -> Result<(), String> {
+    pub(super) fn comment(&mut self, c: &[u8], hidden: bool) -> Result<(), String> {
         let line = String::from_utf8_lossy(c);
         let line = line.trim_end();
         if let Some((len, hex)) = self.blend_record.as_mut() {
@@ -54,6 +54,11 @@ impl<'a> Reader<'a> {
         if m == "BeginPattern" && self.pattern.is_none() {
             let section = self.section("EndPattern")?;
             self.define_pattern(section);
+            return Ok(());
+        }
+        if m == "BeginSymbol" {
+            let section = self.section("EndSymbol")?;
+            self.symbol_bounds(section);
             return Ok(());
         }
         if m == "BeginArtStyles" {
@@ -107,8 +112,8 @@ impl<'a> Reader<'a> {
             self.place = Some(Place::default());
         } else if line.starts_with("AI5_EndPlace") {
             // One that `~` didn't end isn't read.
-            if self.place.take().is_some() {
-                self.unreadable("placed files");
+            if self.place.is_some() {
+                self.end_place(hidden)?;
             }
         } else if self.frames.is_empty()
             && let Some(v) = line.strip_prefix("%HiResBoundingBox:")
@@ -185,13 +190,15 @@ impl<'a> Reader<'a> {
 
     /// A pattern's definition (`section`: what follows `%AI3_BeginPattern`), read by a reader of its
     /// own into a pattern swatch, its art in the pattern's space (y down). A definition it can't
-    /// read whole (an operator it doesn't know, type, unbalanced groups, no tile) isn't kept: art
+    /// read whole (an operator it doesn't know, type, a pattern it doesn't have, unbalanced groups,
+    /// no tile) isn't kept: art
     /// filled with it can't be read.
     fn define_pattern(&mut self, section: &[u8]) {
-        if self.pattern_tiles.len() >= MAX_PATTERNS {
+        if self.pattern_tiles.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
             return;
         }
         let mut sub = Reader::new(section);
+        sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
         // The gradients defined so far, lent (and those it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
@@ -200,7 +207,13 @@ impl<'a> Reader<'a> {
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
-        let whole = read.is_ok() && sub.unsupported.is_empty() && sub.unknown.is_empty() && sub.frames.len() == 1;
+        // Unread art in the definition, hidden or not, leaves the tile incomplete.
+        let whole = read.is_ok()
+            && sub.unsupported.is_empty()
+            && sub.unknown.is_empty()
+            && sub.unread.is_empty()
+            && sub.hidden_unread.is_empty()
+            && sub.frames.len() == 1;
         let (Some(head), Some(frame)) = (sub.pattern.take(), sub.frames.pop()) else { return };
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
@@ -224,6 +237,34 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Read a definition's box for an instance whose art must come from the page.
+    fn symbol_bounds(&mut self, section: &[u8]) {
+        if self.symbol_bounds.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
+            return;
+        }
+        let mut lex = super::Lexer::new(section);
+        let name = match lex.next_token().map(|t| t.tok) {
+            Some(Tok::Str(bytes)) => super::obj::text(&bytes),
+            _ => return,
+        };
+        let mut sub = Reader::new(section);
+        sub.subreader_depth = self.subreader_depth + 1;
+        sub.cropmarks = self.cropmarks;
+        sub.template = self.template;
+        sub.nodes = self.nodes;
+        let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
+        self.nodes = sub.nodes;
+        if read.is_err() || !sub.unsupported.is_empty() || !sub.unknown.is_empty() || sub.frames.len() != 1 {
+            return;
+        }
+        let Some(frame) = sub.frames.pop() else { return };
+        let bounds = frame.children.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds()));
+        let Some(bounds) = bounds.map(|b| sub.space().inverse().transform_rect_bbox(b)) else { return };
+        if sane(bounds) && bounds.area() > 0.0 {
+            self.symbol_bounds.insert(name, bounds);
+        }
+    }
+
     /// In a pattern's definition, the operands of its first operator start with its head,
     /// `(name) llx lly urx ury`: taken off them.
     pub(super) fn take_head(&mut self, mut vals: Vec<V>) -> Vec<V> {
@@ -235,5 +276,26 @@ impl<'a> Reader<'a> {
         head.name = name;
         head.tile = Some(Rect::new(*x0, *y0, *x1, *y1));
         vals.split_off(at + 5)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deeply_nested_symbol_definitions_stop_at_subreader_limit() {
+        let mut definition = String::from("(Outer) 0 Ae\n");
+        for i in 0..300 {
+            definition.push_str(&format!("%AI14_BeginSymbol\n(S{i}) 0 Ae\n"));
+        }
+        definition.push_str("0 0 m\n4 0 L\n4 4 L\n0 4 L\nf\n");
+        for _ in 0..300 {
+            definition.push_str("%AI10_EndSymbol\n0 0 m\n4 0 L\n4 4 L\n0 4 L\nf\n");
+        }
+        let mut reader = Reader::new(b"");
+        reader.subreader_depth = MAX_SUBREADERS;
+        reader.symbol_bounds(definition.as_bytes());
+        assert!(reader.symbol_bounds.is_empty());
     }
 }

@@ -1305,6 +1305,12 @@ digits	Malayalam	მალაიალამური
 	Axis	ღერძი
 	ICF Top/Right	ICF ზედა/მარჯვენა
 	ICF Bottom/Left	ICF ქვედა/მარცხენა
+	Show Font Height Options	შრიფტის სიმაღლის პარამეტრების ჩვენება
+	Hide Font Height Options	შრიფტის სიმაღლის პარამეტრების დამალვა
+	Set Font Height Reference	შრიფტის სიმაღლის საზომის დაყენება
+	Em Box	Em-ბლოკი
+	x-Height	x-სიმაღლე
+	ICF Box	ICF-ბლოკი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -2679,6 +2685,7 @@ theme	Appearance	იერსახე
 	Duplicate Brush	ფუნჯის დუბლირება
 	Duplicate Symbol	სიმბოლოს დუბლირება
 	Edit Symbol	სიმბოლოს რედაქტირება
+	Exit Symbol Editing Mode	სიმბოლოს რედაქტირების რეჟიმიდან გამოსვლა
 	Expand Brush Strokes	ფუნჯის შტრიხების გაშლა
 	New Brush…	ახალი ფუნჯი…
 	New Brush	ახალი ფუნჯი
@@ -3692,6 +3699,7 @@ font-technology	Variable	ცვლადი
 @msg	the art on them differs from the page's in {_1}% of it	მათზე არსებული ნახატი გვერდისას {_1}%-ით განსხვავდება
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` შეცვლილ პარამეტრებს ნიშნავს: შეინახეთ პრესეტი სხვა სახელით
 @msg	`to` must be "corner" or "smooth"	`to` უნდა იყოს "corner" ან "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` უნდა იყოს "emBox", "capHeight", "xHeight" ან "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ფაილები RGB-ა ან ნაცრისფერი: colorModel rgb ან gray
 @msg	Blend colors: select at least three objects with filled colours	ფერების შერევა: მონიშნეთ მინიმუმ სამი ობიექტი ფერადი შევსებით
 @msg	Combine Slices: the slices have no bounds	ნაჭრების გაერთიანება: ნაჭრებს საზღვრები არ აქვს
@@ -4101,6 +4109,8 @@ font-technology	Variable	ცვლადი
 @msg	select a repeat	მონიშნეთ გამეორება
 @msg	select a stroke with a variable width	მონიშნეთ ცვლადი სიგანის კონტური
 @msg	select a symbol instance	მონიშნეთ სიმბოლოს ეგზემპლარი
+@msg	select instances of one symbol	მონიშნეთ ერთი სიმბოლოს ეგზემპლარები
+@msg	a symbol can't hold an instance of itself	სიმბოლო ვერ შეიცავს საკუთარ ეგზემპლარს
 @msg	select an Image Trace object	მონიშნეთ გამოსახულების ვექტორიზაციის ობიექტი
 @msg	could not decode image: {0}	გამოსახულების დეკოდირება ვერ მოხერხდა: {0}
 @msg	image is empty	გამოსახულება ცარიელია
@@ -5927,6 +5937,13 @@ anchor	Points:	წერტილები:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	მიუთითეთ `inkLimit`, `removeWhiteOverprint` ან `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	საბეჭდი მელნის შესწორებები მუშაობს CMYK დოკუმენტებზე: ჯერ აირჩიეთ ფაილი › დოკუმენტის ფერის რეჟიმი › CMYK ფერი
 @msg	`{key}` must be 0..{max}	`{key}` უნდა იყოს 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	უახლოესი ფერის ნიმუშის პოვნა…
+	Find Nearest Swatch	უახლოესი ფერის ნიმუშის პოვნა
+	Apply Nearest Swatch	უახლოესი ფერის ნიმუშის გამოყენება
+	Select objects to find the swatches nearest their colors.	აირჩიეთ ობიექტები მათ ფერებთან უახლოესი ფერის ნიმუშების საპოვნელად.
+@msg	select objects or give `color`	აირჩიეთ ობიექტები ან მიუთითეთ `color`
+@msg	`color` is not a colour	`color` ფერი არ არის
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	კუთხეების ხელსაწყო
 	Slide Anchor Along Path	საყრდენი წერტილის სრიალი ტრაექტორიაზე
@@ -6041,6 +6058,9 @@ breakText	Glyphs	გლიფები
 	Gap 4	შუალედი 4
 	Dash 5	ტირე 5
 	Gap 5	შუალედი 5
+
+@msg	{_1}: they came in as the page's art	{_1}: იმპორტირებულია გვერდის გამოსახულების სახით
+
 @msg	You must choose a side pattern.	აირჩიეთ გვერდითი ნიმუში.
 @msg	invalid pattern tile choice	ნიმუშის ფილა არასწორად არის არჩეული
 @msg	no pattern named `{choice}`	ნიმუში სახელით `{choice}` არ არსებობს
@@ -6071,6 +6091,9 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი კონტურები ან სეგმენტები
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	ტირეების კონტურებად გაშლა
+@msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	დოკუმენტის ხელსაწყოები
 	Save a Timestamped Copy	ასლის შენახვა თარიღითა და დროით
@@ -6093,6 +6116,11 @@ breakText	Glyphs	გლიფები
 	Odia	ორია
 	Urdu	ურდუ
 	VectorCraft {release} and later (version {n})	VectorCraft {release} და უფრო ახალი (ვერსია {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად
+	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
+@msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	სიმბოლოს ტიპი:
 	Dynamic Symbol	დინამიკური სიმბოლო

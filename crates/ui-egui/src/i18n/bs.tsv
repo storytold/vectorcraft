@@ -1454,6 +1454,12 @@ digits	Malayalam	Malajalam
 	Axis	Osa
 	ICF Top/Right	ICF vrh/desno
 	ICF Bottom/Left	ICF dno/lijevo
+	Show Font Height Options	Prikaži opcije visine fonta
+	Hide Font Height Options	Sakrij opcije visine fonta
+	Set Font Height Reference	Postavi referentnu visinu fonta
+	Em Box	Em okvir
+	x-Height	Visina malih slova
+	ICF Box	ICF okvir
 	Copy Color Value (Hex)	Kopiraj vrijednost boje (hex)
 	Create New Swatch…	Kreiraj novi uzorak boje…
 	Name 40%	Naziv 40%
@@ -3082,6 +3088,7 @@ theme	Appearance	Izgled
 	Duplicate Brush	Dupliciraj četkicu
 	Duplicate Symbol	Dupliciraj simbol
 	Edit Symbol	Uredi simbol
+	Exit Symbol Editing Mode	Izađi iz načina uređivanja simbola
 	Expand Brush Strokes	Proširi poteze četkicom
 	New Brush…	Nova četkica…
 	New Brush	Nova četkica
@@ -4613,6 +4620,8 @@ imageTrace	Outline	Obris
 @msg	a clipping path can't be attached to a path	putanja isijecanja ne može se priložiti putanji
 @msg	select a stroke with a variable width	odaberite potez s promjenjivom širinom
 @msg	select a symbol instance	odaberite instancu simbola
+@msg	select instances of one symbol	odaberite instance jednog simbola
+@msg	a symbol can't hold an instance of itself	simbol ne može sadržavati instancu samog sebe
 @msg	select an Image Trace object	odaberite objekat praćenja slike
 @msg	could not decode image: {0}	nije moguće dekodirati sliku: {0}
 @msg	image is empty	slika je prazna
@@ -5945,6 +5954,13 @@ shape	Open	Otvoren
 	Gap 4	Razmak 4
 	Dash 5	Crtica 5
 	Gap 5	Razmak 5
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Pronađi najbliži uzorak boje…
+	Find Nearest Swatch	Pronađi najbliži uzorak boje
+	Apply Nearest Swatch	Primijeni najbliži uzorak boje
+	Select objects to find the swatches nearest their colors.	Odaberite objekte da pronađete uzorke boja najbliže njihovim bojama.
+@msg	select objects or give `color`	odaberite objekte ili navedite `color`
+@msg	`color` is not a colour	`color` nije boja
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Alat za uglove
 	Slide Anchor Along Path	Klizanje sidra po putanji
@@ -5969,6 +5985,8 @@ shape	Open	Otvoren
 @msg	`follow` must be "average", "a" or "b"	`follow` mora biti "average", "a" ili "b"
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
+@msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.
 @msg	invalid pattern tile choice	nevažeći izbor pločice uzorka
 @msg	no pattern named `{choice}`	nema uzorka pod nazivom `{choice}`
@@ -5999,6 +6017,9 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Proširi crtice u putanje
+@msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom
@@ -6021,6 +6042,11 @@ shape	Open	Otvoren
 	Odia	Odija
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i novije (verzija {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Izvezi sve otvorene dokumente kao PDF
+	Export All Open Documents as SVG	Izvezi sve otvorene dokumente kao SVG
+@msgplural	Exported {n} document|Exported {n} documents	Izvezen je {n} dokument|Izvezena su {n} dokumenta|Izvezeno je {n} dokumenata
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Izvezen je {n} dokument; {title} nije zapisan: {error}|Izvezena su {n} dokumenta; {title} nije zapisan: {error}|Izvezeno je {n} dokumenata; {title} nije zapisan: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Vrsta simbola:
 	Dynamic Symbol	Dinamički simbol

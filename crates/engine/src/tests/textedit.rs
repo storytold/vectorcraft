@@ -325,6 +325,16 @@ fn type_commands_refuse_a_number_or_boolean_given_as_text() {
             ("text.setRangeStyle", json!({"id": id.0, "allCaps": 1}), "allCaps"),
             ("text.setRangeStyle", json!({"id": id.0, "noBreak": "true"}), "noBreak"),
             ("text.setRangeStyle", json!({"id": id.0, "size": 30, "tateChuYoko": 1}), "tateChuYoko"),
+            ("text.setFormat", json!({"ids": [id.0], "underline": "true"}), "underline"),
+            ("text.setFormat", json!({"ids": [id.0], "strikethrough": 1}), "strikethrough"),
+            ("text.setFormat", json!({"ids": [id.0], "allCaps": "false"}), "allCaps"),
+            ("text.setFormat", json!({"ids": [id.0], "proportionalMetrics": 1}), "proportionalMetrics"),
+            ("text.setFormat", json!({"ids": [id.0], "tateChuYoko": "true"}), "tateChuYoko"),
+            ("text.setFormat", json!({"ids": [id.0], "standardVerticalRoman": "true"}), "standardVerticalRoman"),
+            ("text.setFormat", json!({"ids": [id.0], "rotation": 10, "noBreak": 1}), "noBreak"),
+            ("text.setFormat", json!({"ids": [id.0], "hyphenate": "false"}), "hyphenate"),
+            ("text.setFormat", json!({"ids": [id.0], "hyphenateCapitalized": 0}), "hyphenateCapitalized"),
+            ("text.setFormat", json!({"ids": [id.0], "romanHangingPunctuation": "true"}), "romanHangingPunctuation"),
             ("text.getRange", json!({"id": id.0, "effective": "true"}), "effective"),
             ("type.opticalMarginAlignment", json!({"on": "true"}), "on"),
             ("type.systemLayout", json!({"on": "true"}), "on"),
@@ -338,12 +348,13 @@ fn type_commands_refuse_a_number_or_boolean_given_as_text() {
     assert!(wrong.is_empty(), "not refused: {wrong:#?}");
     let style = json!({"id": id.0, "size": 30, "underline": true, "tracking": null, "start": null, "noBreak": true});
     s.execute("text.setRangeStyle", &style).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id.0], "strikethrough": true, "hyphenate": null})).unwrap();
     s.execute("type.size.increase", &json!({"by": null})).unwrap();
     s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap();
     s.execute("type.ruby", &json!({"text": "a", "size": null, "overhang": false})).unwrap();
     let t = obj(&s, id);
     let st = &t.runs[0].style;
-    assert!(st.underline && st.no_break && t.optical_margin && st.size > 30.0, "{st:?}");
+    assert!(st.underline && st.strikethrough && st.no_break && t.optical_margin && st.size > 30.0, "{st:?}");
     assert!(!t.ruby.is_empty() && t.ruby.iter().all(|r| !r.overhang && r.size_percent == 50.0), "{:?}", t.ruby);
 }
 
@@ -507,7 +518,7 @@ fn touch_type_moves_one_character_in_centered_and_right_aligned_lines() {
     }
 }
 
-/// `dy` moves a rotated character that many document points along its own up axis, also in type
+/// `dy` moves a rotated character that many document points up from its line, also in type
 /// scaled unevenly.
 #[test]
 fn touch_type_raises_a_rotated_character_in_unevenly_scaled_type() {
@@ -518,9 +529,66 @@ fn touch_type_raises_a_rotated_character_in_unevenly_scaled_type() {
     let before = glyph_pens(&s, id);
     s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 10})).unwrap();
     let (x, y) = moved_by(&before, &glyph_pens(&s, id), 1);
-    assert!(((x * x + y * y).sqrt() - 10.0).abs() < 1e-6, "({x}, {y})");
+    assert!(near((x, y), (0.0, -10.0)), "({x}, {y})");
 }
 
+/// A character rotated near or at a quarter turn moves across its line and along it: in "ABCD"
+/// with the B at 85, 90 and 95 degrees, `dx` 10 and `dy` 4 move the B 10 pt right and 4 pt up and
+/// leave the C and D where they are, through baseline shift and kerning only, with Auto and
+/// Optical kerning and in type scaled unevenly. Undo, redo and the native format keep the place.
+#[test]
+fn touch_type_moves_a_character_turned_near_a_quarter_turn_across_its_line() {
+    for rotation in [85.0, 90.0, 95.0, -90.0] {
+        for (kerning, scaled) in [("auto", false), ("optical", false), ("auto", true)] {
+            let case = format!("{rotation}°, {kerning}, scaled {scaled}");
+            let mut s = session();
+            let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "ABCD", "size": 40})).unwrap()["id"].as_u64().unwrap());
+            s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": kerning})).unwrap();
+            if scaled {
+                s.execute("object.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 0.5, 0, 0]})).unwrap();
+            }
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "rotation": rotation})).unwrap();
+            let before = glyph_pens(&s, id);
+            let runs_before = obj(&s, id).runs;
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dx": 10, "dy": 4})).unwrap();
+            let after = glyph_pens(&s, id);
+            assert!(near(moved_by(&before, &after, 1), (10.0, -4.0)), "{case}: {:?}", moved_by(&before, &after, 1));
+            for byte in [0, 2, 3] {
+                assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{case}, byte {byte}: {:?}", moved_by(&before, &after, byte));
+            }
+            // Only kerning and baseline shift change.
+            let t = obj(&s, id);
+            let style = |byte: usize| vectorcraft_text::edit::slice_runs(&t.runs, byte, byte + 1)[0].style.clone();
+            let plain = |mut st: CharStyle| {
+                st.kerning = None;
+                st.baseline_shift = 0.0;
+                st
+            };
+            for byte in 0..4 {
+                let was = vectorcraft_text::edit::slice_runs(&runs_before, byte, byte + 1)[0].style.clone();
+                assert_eq!(plain(style(byte)), plain(was), "{case}, byte {byte}");
+            }
+            let shift = style(1).baseline_shift;
+            assert!(shift > 0.0, "{case}: {shift}");
+            // A drag straight across the line is baseline shift alone.
+            let before = glyph_pens(&s, id);
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": -6})).unwrap();
+            assert!(near(moved_by(&before, &glyph_pens(&s, id), 1), (0.0, 6.0)), "{case}: {:?}", moved_by(&before, &glyph_pens(&s, id), 1));
+            s.execute("edit.undo", &json!({})).unwrap();
+            let moved = glyph_pens(&s, id);
+            assert!(near(moved_by(&after, &moved, 1), (0.0, 0.0)), "{case}: undone");
+            s.execute("edit.redo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            // The native format keeps both attributes and the place they give.
+            let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+            let NodeKind::Text(reopened) = &back.node(id).unwrap().kind else { panic!("not text") };
+            assert_eq!(reopened.runs, obj(&s, id).runs, "{case}");
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), reopened);
+            let pens: Vec<(usize, Point)> = lay.glyphs.iter().map(|g| (g.byte, reopened.xf * (g.xf * Point::ZERO))).collect();
+            assert!(near(moved_by(&moved, &pens, 1), (0.0, 0.0)), "{case}: reopened");
+        }
+    }
+}
 /// `dy` moves a character that many document points in type scaled up 2000 times, where baseline
 /// shift is limited to 0.648 pt of text space.
 #[test]

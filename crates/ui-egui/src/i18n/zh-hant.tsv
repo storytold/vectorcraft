@@ -887,6 +887,7 @@ font-technology	Variable	可變
 	Edit Selection	編輯選取範圍
 	Edit Selection…	編輯選取範圍…
 	Edit Symbol	編輯符號
+	Exit Symbol Editing Mode	結束符號編輯模式
 	Edit Text	編輯文字
 	Edit the applied effect, or add another one?	要編輯已套用的效果，還是新增另一個？
 	Edit the point	編輯點
@@ -911,6 +912,13 @@ font-technology	Variable	可變
 	Em Box Top/Right	全形字框上 / 右
 	ICF Top/Right	ICF 上 / 右
 	ICF Bottom/Left	ICF 下 / 左
+	Show Font Height Options	顯示字體高度選項
+	Hide Font Height Options	隱藏字體高度選項
+	Set Font Height Reference	設定字體高度參考
+	Em Box	全形字框
+	Cap Height	大寫字母高度
+	x-Height	x 字高
+	ICF Box	ICF 框
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入
@@ -1645,6 +1653,7 @@ file-filter	Templates	範本
 @msg	Saving {_1}	正在儲存 {_1}
 @msg	Sent to {_1}	已傳送至 {_1}
 @msg	`to` must be "corner" or "smooth"	`to` 必須是 "corner" 或 "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` 必須是 "emBox"、"capHeight"、"xHeight" 或 "icfBox"
 @msg	a layer couldn't be read	有一個圖層無法讀取
 @msg	it has more than one artboard	它有多個工作區域
 @msg	its editing data has no layers	其編輯資料中沒有圖層
@@ -1688,6 +1697,8 @@ file-filter	Templates	範本
 @msg	brushes move only within their type	筆刷只能在同一類型內移動
 @msg	no symbol instances selected	未選取符號實體
 @msg	select a symbol instance	請選取符號實體
+@msg	select instances of one symbol	請選取同一符號的實體
+@msg	a symbol can't hold an instance of itself	符號不能包含自身的實體
 @msg	the art has no bounds	圖稿沒有邊界
 @msg	Image Trace: the traced image is missing	影像描圖：找不到描圖的影像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	即時上色合併：請選取即時上色群組和要加入的路徑
@@ -5576,6 +5587,13 @@ anchor	Points:	點：
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	請指定 `inkLimit`、`removeWhiteOverprint` 或 `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷油墨修正適用於 CMYK 文件：請先選擇 檔案 › 文件色彩模式 › CMYK 色彩
 @msg	`{key}` must be 0..{max}	`{key}` 必須為 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	尋找最接近的色票…
+	Find Nearest Swatch	尋找最接近的色票
+	Apply Nearest Swatch	套用最接近的色票
+	Select objects to find the swatches nearest their colors.	選取物件以尋找與其顏色最接近的色票。
+@msg	select objects or give `color`	請選取物件或提供 `color`
+@msg	`color` is not a colour	`color` 不是顏色
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	轉角工具
 	Slide Anchor Along Path	沿路徑滑動錨點
@@ -5691,6 +5709,9 @@ breakText	Glyphs	字符
 	Gap 4	間隙 4
 	Dash 5	虛線 5
 	Gap 5	間隙 5
+
+@msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。
 @msg	invalid pattern tile choice	圖樣拼塊選項無效
 @msg	no pattern named `{choice}`	沒有名為 `{choice}` 的圖樣
@@ -5721,6 +5742,9 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	將短破折號展開為路徑
+@msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝
@@ -5743,6 +5767,11 @@ breakText	Glyphs	字符
 	Odia	歐利亞文
 	Urdu	烏都文
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更新版本 (版本 {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	將所有開啟的文件匯出為 PDF
+	Export All Open Documents as SVG	將所有開啟的文件匯出為 SVG
+@msgplural	Exported {n} document|Exported {n} documents	已匯出 {n} 份文件
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已匯出 {n} 份文件; 未寫入 {title}：{error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符號類型:
 	Dynamic Symbol	動態符號

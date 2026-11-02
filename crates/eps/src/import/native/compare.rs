@@ -47,7 +47,7 @@ const WHITE: u32 = 8;
 
 /// Do two pixels look different: in lightness, or one inked (as a light yellow is) where the other
 /// is white?
-pub(super) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
+pub(in crate::import) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
     let (p, q) = (on_white(p), on_white(q));
     let (a, b) = (ink(p), ink(q));
     lightness(p).abs_diff(lightness(q)) > SAME_PIXEL || (a.min(b) <= WHITE && a.abs_diff(b) > SAME_PIXEL)
@@ -59,7 +59,7 @@ const SAME_COLOUR: u32 = 64;
 
 /// Are two pixels different colours ([`differ`] also takes a red and a dark red of about the same
 /// lightness to be alike)?
-pub(super) fn differ_in_colour(p: &[u8; 4], q: &[u8; 4]) -> bool {
+pub(in crate::import) fn differ_in_colour(p: &[u8; 4], q: &[u8; 4]) -> bool {
     let (p, q) = (on_white(p), on_white(q));
     p.iter().zip(q).any(|(a, b)| a.abs_diff(b) > SAME_COLOUR)
 }
@@ -84,7 +84,7 @@ impl Difference {
 }
 
 /// The scale the comparisons draw a region at: about 400 pixels along its longer side.
-fn compare_scale(r: Rect) -> f64 {
+pub(in crate::import) fn compare_scale(r: Rect) -> f64 {
     (400.0 / r.width().max(r.height()).max(1.0)).min(4.0)
 }
 
@@ -362,14 +362,14 @@ const MARKED: f64 = 0.05;
 
 /// More of the page than this differing between the layers' art and the page's own, and the
 /// layers aren't used.
-pub(super) const MAX_DIFFERENCE: f64 = 0.05;
+pub(in crate::import) const MAX_DIFFERENCE: f64 = 0.05;
 
 /// More than this and the import says so.
 const NOTABLE_DIFFERENCE: f64 = 0.002;
 
 /// More of the page than this where one draws an object that the other doesn't (see
 /// [`Difference`]), and the layers aren't used: about a centimetre square on a letter page.
-pub(super) const MAX_SOLID_DIFFERENCE: f64 = 0.001;
+pub(in crate::import) const MAX_SOLID_DIFFERENCE: f64 = 0.001;
 
 /// How far (points) the art the layers print may reach past a page that holds it all.
 const PAST_THE_PAGE: f64 = 1.0;

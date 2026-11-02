@@ -2,9 +2,11 @@
 //! Duotone and Invert Colors, in Effect › Color Effects) are the effects crate's; here, Apply as
 //! Filter writes any colour adjustment into the colours themselves, Select by Color Kind selects the
 //! objects that use spot colours, carry a live colour adjustment, or are images of a colour model,
-//! and Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print. Its panel and
-//! its submenu, Object › Plug-ins › Color Effects, are the UI's.
+//! Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print, and Find Nearest
+//! Swatch ([`nearest`]) matches colours to a swatch library's. Its panel and its submenu, Object ›
+//! Plug-ins › Color Effects, are the UI's.
 
+mod nearest;
 mod print_fixes;
 #[cfg(test)]
 mod tests;
@@ -49,6 +51,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{scope?: \"selection\" (the selection, or `ids`; by default, the document while nothing is selected) | \"document\" (every layer), inkLimit?: total ink % 1..400 (0 or left out: off), excludePureBlack?: true (black-only and grey colours keep their ink), removeWhiteOverprint?: false (white fills and strokes stop overprinting), overprintBlack?: black % 1..100 (black-only and grey fills and strokes this dark or darker overprint, as edit.colors.overprintBlack; 0 or left out: off), textOnly?: false (Overprint Black on type only), fill?: true, stroke?: true, ids?: [id…]} prepare a CMYK document's inks for print as one undo step: CMYK colours (solid, gradient stops, gradient meshes) with more total ink than inkLimit are scaled down to it (colours of spot swatches and Registration stay), white overprint is removed and black overprint set. Refused in RGB documents (File › Document Color Mode › CMYK Color first) → {changed, inkLimited: paints and meshes scaled, whiteOverprintRemoved: objects, blackOverprinted: objects}",
             has_doc,
             print_fixes::run
+        ),
+        cmd!(
+            query "addon.color.nearestSwatch",
+            "Find Nearest Swatch",
+            ["Object", "Plug-ins", "Color Effects"],
+            None,
+            "{library?: a swatch library's id or name (swatch.library.list: the built-in ones, and the colour books and libraries the user saved or loaded) or \"document\" (the document's swatches; the default), color?: colour (look this colour up; default: the selection's), fill?: true, stroke?: true (the selected objects' fills and strokes, their type's and those of the objects inside them: solid colours and gradient stops, once each, the first 100), count?: 1..50 (5), ids?: [id…] (default: the selection)} list the library's colour swatches closest to each colour, closest first, by CIEDE2000 difference (ΔE; under 1 hardly tells apart, about 2 to 3 close). Tint swatches, None and Registration aren't matched → {library, colors: [{values, hex, matches: [{name, values, hex, spot, deltaE}]}]}",
+            has_doc,
+            nearest::find
+        ),
+        cmd!(
+            "addon.color.applyNearestSwatch",
+            "Apply Nearest Swatch",
+            ["Object", "Plug-ins", "Color Effects"],
+            None,
+            "{library?: as addon.color.nearestSwatch (default: \"document\"), fill?: true, stroke?: true, ids?: [id…] (default: the selection)} give each solid colour and gradient stop of the selected objects' fills and strokes (their type's and those of the objects inside them; gradient meshes too) the colour of its nearest swatch in the library, as addon.color.nearestSwatch finds it, as one undo step: a global or spot swatch's colour links to it. A library's swatches the colours take are added to the document's first, as swatch.library.add adds them (a spot colour stays spot); images and patterns keep their colours → {changed: paints changed, swatches: [the document swatches the colours took], added: [swatches added to the document]}",
+            has_selection,
+            nearest::apply
         ),
     ]
 }

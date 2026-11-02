@@ -1347,6 +1347,62 @@ fn character_alignment_on_the_icf_lines_small_characters_up_with_the_largest_fac
     }
 }
 
+/// The font height reference: 20 pt type that measures the cap height is set at the em size at
+/// which the font's cap height (OS/2) is 20 pt, and the same for the x height and for the ideographic
+/// character face's height (its width in vertical type); the em box keeps 20 pt to the em, and
+/// so does every reference in a font without these values. Auto leading follows the em size,
+/// and two runs that measure different heights each take their own em size.
+#[test]
+fn font_size_measures_the_font_height_reference() {
+    use crate::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, HEIGHT_ICF, HEIGHT_X, HEIGHTLESS_FAMILY, height_font};
+    use vectorcraft_doc::FontHeightReference as R;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(height_font(true).unwrap());
+    db.add_font(height_font(false).unwrap());
+    let st = |family: &str, r: R| CharStyle { font_family: family.into(), font_height_reference: r, ..style(20.0) };
+    // The em size each glyph of `t` is drawn at (its transform's scale times 1,000 units).
+    let ems = |t: &TextObject| layout(&db, t).glyphs.iter().map(|g| g.xf.determinant().abs().sqrt() * 1000.0).collect::<Vec<_>>();
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let (cap, x) = (f64::from(HEIGHT_CAP) / 1000.0, f64::from(HEIGHT_X) / 1000.0);
+    for vertical_type in [false, true] {
+        for (r, h) in [(R::EmBox, 1.0), (R::CapHeight, cap), (R::XHeight, x), (R::IcfBox, HEIGHT_ICF)] {
+            let mut t = point("Hx", st(HEIGHT_FAMILY, r));
+            t.vertical = vertical_type;
+            assert!(ems(&t).iter().all(|e| near(*e, 20.0 / h)), "{r:?} vertical {vertical_type}: {:?}", ems(&t));
+            t.runs[0].style.font_family = HEIGHTLESS_FAMILY.into();
+            assert!(ems(&t).iter().all(|e| near(*e, 20.0)), "{r:?} without the value, vertical {vertical_type}: {:?}", ems(&t));
+        }
+    }
+    let face = db.face(HEIGHT_FAMILY, "Regular").unwrap();
+    assert_eq!(face.font_height(R::CapHeight, false), Some(cap));
+    assert_eq!(db.face(HEIGHTLESS_FAMILY, "Regular").unwrap().font_height(R::XHeight, false), None);
+    // Auto leading: 120% of the em size the line is set at.
+    let lines = layout(&db, &point("H\nH", st(HEIGHT_FAMILY, R::CapHeight))).lines;
+    assert!(near(lines[1].baseline - lines[0].baseline, 1.2 * 20.0 / cap), "{lines:?}");
+    // One run at the em box, the next at the cap height.
+    let mut t = point("H", st(HEIGHT_FAMILY, R::EmBox));
+    t.runs.push(TextRun { text: "H".into(), style: st(HEIGHT_FAMILY, R::CapHeight), inline: None });
+    let set = ems(&t);
+    assert!(set.len() == 2 && near(set[0], 20.0) && near(set[1], 20.0 / cap), "{set:?}");
+}
+
+/// A font height outside 0.1 to 2 ems is not used: 20 pt type that measures a font's 2.5 em cap
+/// height or its 0.05 em x height is set at 20 pt to the em.
+#[test]
+fn a_font_height_outside_a_tenth_to_two_ems_measures_the_em_box() {
+    use crate::test_fonts::{HEIGHT_OUTSIDE_FAMILY, height_outside_font};
+    use vectorcraft_doc::FontHeightReference as R;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(height_outside_font().unwrap());
+    let face = db.face(HEIGHT_OUTSIDE_FAMILY, "Regular").unwrap();
+    for r in [R::CapHeight, R::XHeight] {
+        assert_eq!(face.font_height(r, false), None, "{r:?}");
+        let st = CharStyle { font_family: HEIGHT_OUTSIDE_FAMILY.into(), font_height_reference: r, ..style(20.0) };
+        let ems = layout(&db, &point("Hx", st)).glyphs.iter().map(|g| g.xf.determinant().abs().sqrt() * 1000.0).collect::<Vec<_>>();
+        assert!(!ems.is_empty() && ems.iter().all(|e| (e - 20.0).abs() < 1e-6), "{r:?}: {ems:?}");
+    }
+}
+
 /// Burasagari leaves Latin punctuation alone: in a measure of exactly "abcd", the full stop of
 /// "abcd. ef" doesn't hang with Standard or Forced (the line breaks as it does with None), and a
 /// Latin line ending in a full stop isn't shortened by Forced.

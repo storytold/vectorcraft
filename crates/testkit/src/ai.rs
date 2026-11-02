@@ -1,6 +1,7 @@
 //! Hand-written Illustrator editing data (the format `vectorcraft_eps`'s reader documents) and the
 //! EPS, `.ai` and PDF files that carry it, for import tests. Nothing here comes from files another
-//! app wrote, except the key names that [`pdf`] uses and the XML node keys of [`variable_library`].
+//! app wrote, except the key names that [`pdf`] uses, the XML node keys of [`variable_library`] and
+//! the keys of [`on_path_record`] and [`on_path_member`].
 
 /// Editing data of a `width` × `height` page: header comments (the art's bounding box and the crop
 /// marks are the page), `body` (setup and layers), the trailer.
@@ -75,6 +76,41 @@ pub fn variable_library(variables: &[&str], data_sets: &[&str]) -> String {
         "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n{}%_; (#document) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n",
         node(9, "#document", "", &[], &[library])
     )
+}
+
+/// The document data with an Objects on Path record: a `/Document` dictionary whose `Constraint
+/// Data` array holds a record named `name` (version 1) for the objects with the ids `ids` (the
+/// path's first), with the options `options` ([`on_path_options`]).
+pub fn on_path_record(name: &str, ids: &[&str], options: &str) -> String {
+    let ids: String = ids.iter().map(|id| format!("%_({id}) /UnicodeString ,\n")).collect();
+    format!(
+        "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n%_/Dictionary :\n%_1 /Int (Constraint Verison) ,\n\
+         %_({name}) /UnicodeString (Constraint Name) ,\n%_/Array :\n{ids}%_; (Constraint IDs) ,\n%_/Dictionary :\n{options}%_; (Constraint Dict) ,\n\
+         %_; ,\n%_; (Constraint Data) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n"
+    )
+}
+
+/// The options of an Objects on Path record for `members` objects: Pivot `pivot` (0 to 8),
+/// Rotate `rotation` (radians), spaced evenly from the start of the path, then `more` entries.
+pub fn on_path_options(members: usize, pivot: u8, rotation: f64, more: &str) -> String {
+    let data = "%_/Dictionary :\n%_; ,\n".repeat(members);
+    let order: String = (0..members).map(|i| format!("%_{i} /Int ,\n")).collect();
+    format!(
+        "%_0 /Real (StartRangeFraction) ,\n%_/Array :\n{data}%_; (ConstraintArtData) ,\n%_/Array :\n{order}%_; (ObjectsOrder) ,\n\
+         %_{pivot} /Int (PivotPosition) ,\n%_1 /Bool (IsEquiSpaced) ,\n%_{rotation} /Real (Rotation) ,\n{more}"
+    )
+}
+
+/// The dictionary of an object of an Objects on Path group, with the id `id`: the path's
+/// (`order` `None`), or the object's at `order` along the path whose frame is turned `angle`
+/// radians counterclockwise.
+pub fn on_path_member(id: &str, order: Option<usize>, angle: f64) -> String {
+    match order {
+        None => format!("%_/ArtDictionary :\n%_({id}) /String (Persistent ID) ,\n%_1 /Bool (KeyPath) ,\n%_;\n%_\n"),
+        Some(i) => format!(
+            "%_/ArtDictionary :\n%_{i} /Int (ConstraintArtOrderId) ,\n%_({id}) /String (Persistent ID) ,\n%_({angle}) /String (BBAccumRotation) ,\n%_;\n%_\n"
+        ),
+    }
 }
 
 /// A document of 200 × 100 pt with a bit of everything the reader reads. A layer `Art` that shows:

@@ -880,6 +880,7 @@ font-technology	Variable	Μεταβλητές
 	Edit Selection	Επεξεργασία επιλογής
 	Edit Selection…	Επεξεργασία επιλογής…
 	Edit Symbol	Επεξεργασία συμβόλου
+	Exit Symbol Editing Mode	Έξοδος από τη λειτουργία επεξεργασίας συμβόλου
 	Edit Text	Επεξεργασία κειμένου
 	Edit the applied effect, or add another one?	Επεξεργασία του εφαρμοσμένου εφέ ή προσθήκη άλλου;
 	Edit the point	Επεξεργασία σημείου
@@ -2123,6 +2124,7 @@ axis	Both	Και τα δύο
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%, αλλά θα χρησιμοποιηθούν τα δεδομένα επεξεργασίας
 @msg	`Custom` stands for changed settings: save the preset under another name	Το `Custom` αντιστοιχεί σε αλλαγμένες ρυθμίσεις: αποθηκεύστε την προεπιλογή με άλλο όνομα
 @msg	`to` must be "corner" or "smooth"	Το `to` πρέπει να είναι "corner" ή "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	Το `fontHeightReference` πρέπει να είναι "emBox", "capHeight", "xHeight" ή "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Τα αρχεία BMP πρέπει να είναι RGB ή σε κλίμακα του γκρι: colorModel rgb ή gray
 @msg	Blend colors: select at least three objects with filled colours	Ανάμειξη χρωμάτων: επιλέξτε τουλάχιστον τρία αντικείμενα με χρώμα γεμίσματος
 @msg	Combine Slices: the slices have no bounds	Συνδυασμός τομών: οι τομές δεν έχουν όρια
@@ -4300,6 +4302,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	select a repeat	επιλέξτε επανάληψη
 @msg	select a stroke with a variable width	επιλέξτε περίγραμμα μεταβλητού πλάτους
 @msg	select a symbol instance	επιλέξτε στιγμιότυπο συμβόλου
+@msg	select instances of one symbol	επιλέξτε στιγμιότυπα ενός μόνο συμβόλου
+@msg	a symbol can't hold an instance of itself	ένα σύμβολο δεν μπορεί να περιέχει στιγμιότυπο του εαυτού του
 @msg	select an Image Trace object	επιλέξτε αντικείμενο διανυσματοποίησης εικόνας
 @msg	could not decode image: {0}	δεν ήταν δυνατή η αποκωδικοποίηση εικόνας: {0}
 @msg	image is empty	η εικόνα είναι κενή
@@ -4581,6 +4585,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Insert Inline Symbol	Εισαγωγή ενσωματωμένου συμβόλου
 	ICF Top/Right	ICF επάνω/δεξιά
 	ICF Bottom/Left	ICF κάτω/αριστερά
+	Show Font Height Options	Εμφάνιση επιλογών ύψους γραμματοσειράς
+	Hide Font Height Options	Απόκρυψη επιλογών ύψους γραμματοσειράς
+	Set Font Height Reference	Ορισμός αναφοράς ύψους γραμματοσειράς
+	Em Box	Τετράγωνο em
+	x-Height	Ύψος x
+	ICF Box	Πλαίσιο ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
 @msg	`corners` must be an array of anchor indices, not {v}	το `corners` πρέπει να είναι πίνακας δεικτών αγκύρωσης, όχι {v}
@@ -5889,6 +5899,13 @@ anchor	Points:	Σημεία:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	δώστε `inkLimit`, `removeWhiteOverprint` ή `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Οι διορθώσεις μελανιών εκτύπωσης ισχύουν σε έγγραφα CMYK: επιλέξτε πρώτα Αρχείο › Λειτουργία χρώματος εγγράφου › Χρώμα CMYK
 @msg	`{key}` must be 0..{max}	το `{key}` πρέπει να είναι 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Εύρεση πλησιέστερου δείγματος χρώματος…
+	Find Nearest Swatch	Εύρεση πλησιέστερου δείγματος χρώματος
+	Apply Nearest Swatch	Εφαρμογή πλησιέστερου δείγματος χρώματος
+	Select objects to find the swatches nearest their colors.	Επιλέξτε αντικείμενα για να βρείτε τα δείγματα χρωμάτων που πλησιάζουν περισσότερο τα χρώματά τους.
+@msg	select objects or give `color`	επιλέξτε αντικείμενα ή δώστε `color`
+@msg	`color` is not a colour	το `color` δεν είναι χρώμα
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Γωνίες (Corner Tool)
 	Slide Anchor Along Path	Ολίσθηση σημείου αγκύρωσης κατά μήκος διαδρομής
@@ -6004,6 +6021,9 @@ breakText	Glyphs	Γλύφοι
 	Gap 4	Διάκενο 4
 	Dash 5	Παύλα 5
 	Gap 5	Διάκενο 5
+
+@msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.
 @msg	invalid pattern tile choice	μη έγκυρη επιλογή πλακιδίου μοτίβου
 @msg	no pattern named `{choice}`	δεν υπάρχει μοτίβο με όνομα `{choice}`
@@ -6034,6 +6054,9 @@ breakText	Glyphs	Γλύφοι
 	Remove Gaps	Αφαίρεση κενών
 @msg	that makes too many pieces (at most 100000): make the dashes longer	αυτό δίνει πάρα πολλά κομμάτια (το πολύ 100000): κάντε τις παύλες μεγαλύτερες
 @msg	select paths, or segments, to divide	επιλέξτε διαδρομές ή τμήματα για διαίρεση
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
+@msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Εργαλεία εγγράφου
 	Save a Timestamped Copy	Αποθήκευση αντιγράφου με ημερομηνία και ώρα
@@ -6056,6 +6079,11 @@ breakText	Glyphs	Γλύφοι
 	Odia	Όντια
 	Urdu	Ούρντου
 	VectorCraft {release} and later (version {n})	VectorCraft {release} και νεότερες (έκδοση {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Εξαγωγή όλων των ανοιχτών εγγράφων ως PDF
+	Export All Open Documents as SVG	Εξαγωγή όλων των ανοιχτών εγγράφων ως SVG
+@msgplural	Exported {n} document|Exported {n} documents	Εξήχθη {n} έγγραφο|Εξήχθησαν {n} έγγραφα
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Εξήχθη {n} έγγραφο; το {title} δεν γράφτηκε: {error}|Εξήχθησαν {n} έγγραφα; το {title} δεν γράφτηκε: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Τύπος συμβόλου:
 	Dynamic Symbol	Δυναμικό σύμβολο

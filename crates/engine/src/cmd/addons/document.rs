@@ -1,6 +1,7 @@
 //! Document Tools (`addon.document.*`), a built-in add-on: Save a Timestamped Copy writes a copy of
 //! the document named with the date and time through File › Save a Copy's save; New Symbols from
-//! Layers makes a symbol of each layer's art as New Symbol does. Its submenu (Object › Plug-ins ›
+//! Layers makes a symbol of each layer's art as New Symbol does; Export All Open Documents writes a
+//! copy of every open document to one folder as Save a Copy does (#4920). Its submenu (Object › Plug-ins ›
 //! Document Tools) is the UI's.
 
 #[cfg(test)]
@@ -29,6 +30,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{folder? (default: the document's own folder; needed for a document never saved), format?: vectorcraft|pdf|svg|svgz|ai|eps (default: the document's own, else vectorcraft), time?: Unix seconds (default: now)} write a copy of the document named <name>_YYYY-MM-DD_HH-MM.<ext> (the date and time in UTC; -2, -3… added when that name is taken) as File › Save a Copy writes it: the document keeps its path, title and modified state, and no undo step is made. Off where there is no clock (the web) → {path, format, bytes, warnings}",
             has_clock,
             save_timestamped_copy
+        ),
+        cmd!(
+            "addon.document.exportAllOpen",
+            "Export All Open Documents",
+            ["Object", "Plug-ins", "Document Tools"],
+            None,
+            "{folder, format?: vectorcraft|pdf|svg|svgz|ai|eps (default: pdf)} write a copy of every open document, in tab order, to `folder` as File › Save a Copy writes it, each named after its document (<name>.<ext>; -2, -3… added when that name is taken, so no file is replaced), one self-contained file each with all of its art (images embedded or included, every artboard; no remembered save options apply): every document keeps its path, title and modified state, and no undo step is made. A document that can't be written is listed in `failed` and the others are still written; the active document stays active → {files: [{title, path, warnings}], failed: [{title, error}], format}",
+            has_doc,
+            export_all_open
         ),
         cmd!(
             "addon.document.symbolsFromLayers",
@@ -86,6 +96,60 @@ fn save_timestamped_copy(s: &mut Session, p: &Value) -> Result<Value> {
     let path = free_name(&folder, &base, format.extensions[0], |p| std::path::Path::new(p).exists())
         .ok_or_else(|| bad(C, "every numbered name for the copy is taken"))?;
     fileio::save_document(s, SaveMode::Copy, &json!({ "path": path, "format": format.id }))
+}
+
+/// The save options of every copy, given in full so that no document's remembered options (linked
+/// SVG images, a PDF page range, separate artboard files) apply: one self-contained file per
+/// document with all of its art. Each format reads only the options it has, and `range` is left
+/// out of SVG, where it would pick artboards over `useArtboards`.
+fn copy_options(format: &str) -> Value {
+    match format {
+        "svg" | "svgz" => json!({ "images": "embed", "useArtboards": false }),
+        "pdf" => json!({ "range": "all" }),
+        "eps" => json!({ "includeLinkedFiles": true, "useArtboards": false }),
+        "ai" | "ait" => json!({ "range": "all", "includeLinked": true, "separateArtboards": false }),
+        _ => json!({ "includeLinked": true, "separateArtboards": false }),
+    }
+}
+
+fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "addon.document.exportAllOpen";
+    let format = fileio::save_format(Some(str_param(p, "format").unwrap_or("pdf")), None).map_err(|e| bad(C, e))?;
+    let folder = str_param(p, "folder").map(str::trim).filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "give `folder`"))?.to_string();
+    let ext = format.extensions.first().copied().ok_or_else(|| bad(C, "the format has no file extension"))?;
+    let (mut files, mut failed, mut written) = (vec![], vec![], Vec::<String>::new());
+    let active = s.active;
+    for i in 0..s.docs.len() {
+        // Each document in turn is the one Save a Copy writes; switching tabs this way leaves every
+        // document's tool and interaction alone, and the active one comes back below.
+        s.active = Some(i);
+        let Ok(st) = s.doc() else { continue };
+        let title = st.doc.title.clone();
+        let stem = fileio::file_stem(st.path.as_deref().unwrap_or(&title));
+        // Names the copies already took count as taken, as do files on disk.
+        let Some(path) = free_name(&folder, &stem, ext, |p| written.iter().any(|w| w == p) || std::path::Path::new(p).exists()) else {
+            failed.push(json!({ "title": title, "error": "every numbered name for the copy is taken" }));
+            continue;
+        };
+        let options = copy_options(format.id);
+        match fileio::save_document(s, SaveMode::Copy, &json!({ "path": path, "format": format.id, "options": options })) {
+            Ok(r) => {
+                written.push(path.clone());
+                // Any other file the save wrote is taken for the copies still to come.
+                for key in ["files", "linked"] {
+                    for f in r.get(key).and_then(Value::as_array).into_iter().flatten() {
+                        if let Some(f) = f.as_str().or_else(|| f.get("path").and_then(Value::as_str)) {
+                            written.push(f.to_string());
+                        }
+                    }
+                }
+                files.push(json!({ "title": title, "path": r.get("path").cloned().unwrap_or(json!(path)), "warnings": r.get("warnings").cloned().unwrap_or(json!([])) }));
+            }
+            Err(e) => failed.push(json!({ "title": title, "error": e.to_string() })),
+        }
+    }
+    s.active = active;
+    Ok(json!({ "files": files, "failed": failed, "format": format.id }))
 }
 
 /// `n` with each layer in it, and itself, made a group of the same art and clipping (a symbol holds

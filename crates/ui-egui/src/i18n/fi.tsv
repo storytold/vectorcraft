@@ -1451,6 +1451,12 @@ digits	Malayalam	Malajalam
 	Axis	Akseli
 	ICF Top/Right	ICF ylä/oikea
 	ICF Bottom/Left	ICF ala/vasen
+	Show Font Height Options	Näytä fontin korkeuden asetukset
+	Hide Font Height Options	Piilota fontin korkeuden asetukset
+	Set Font Height Reference	Aseta fontin korkeuden viite
+	Em Box	Em-laatikko
+	x-Height	x-korkeus
+	ICF Box	ICF-laatikko
 	Copy Color Value (Hex)	Kopioi väriarvo (heksa)
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
@@ -3052,6 +3058,7 @@ theme	Appearance	Ulkoasu
 	Duplicate Brush	Monista sivellin
 	Duplicate Symbol	Monista symboli
 	Edit Symbol	Muokkaa symbolia
+	Exit Symbol Editing Mode	Poistu symbolin muokkaustilasta
 	Expand Brush Strokes	Laajenna sivellinviivat
 	New Brush…	Uusi sivellin…
 	New Brush	Uusi sivellin
@@ -4123,6 +4130,7 @@ imageTrace	Outline	Ääriviiva
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	niiden kuvitus eroaa sivun kuvituksesta {_1} %:n osalta: ne tuodaan silti sen muokkaustiedoista
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` tarkoittaa muutettuja asetuksia: tallenna esiasetus toisella nimellä
 @msg	`to` must be "corner" or "smooth"	`to` on oltava "corner" tai "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` on oltava "emBox", "capHeight", "xHeight" tai "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-tiedostot ovat RGB- tai harmaasävykuvia: colorModel rgb tai gray
 @msg	Blend colors: select at least three objects with filled colours	Sulauta värit: valitse vähintään kolme objektia, joilla on väritäyttö
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja
@@ -4554,6 +4562,8 @@ imageTrace	Outline	Ääriviiva
 @msg	select a repeat	valitse toisto
 @msg	select a stroke with a variable width	valitse viiva, jolla on vaihteleva leveys
 @msg	select a symbol instance	valitse symboli-ilmentymä
+@msg	select instances of one symbol	valitse yhden symbolin ilmentymiä
+@msg	a symbol can't hold an instance of itself	symboli ei voi sisältää omaa ilmentymäänsä
 @msg	select an Image Trace object	valitse kuvan jäljitys -objekti
 @msg	could not decode image: {0}	kuvaa ei voitu purkaa: {0}
 @msg	image is empty	kuva on tyhjä
@@ -5968,6 +5978,13 @@ anchor	Points:	Pisteet:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	anna `inkLimit`, `removeWhiteOverprint` tai `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Painovärien korjaukset toimivat CMYK-asiakirjoissa: valitse ensin Tiedosto › Asiakirjan väritila › CMYK-väri
 @msg	`{key}` must be 0..{max}	`{key}` on oltava 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Etsi lähin värimalli…
+	Find Nearest Swatch	Etsi lähin värimalli
+	Apply Nearest Swatch	Käytä lähintä värimallia
+	Select objects to find the swatches nearest their colors.	Valitse objektit, joiden väreille haluat etsiä lähimmät värimallit.
+@msg	select objects or give `color`	valitse objekteja tai anna `color`
+@msg	`color` is not a colour	`color` ei ole väri
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Kulmatyökalu
 	Slide Anchor Along Path	Liu’uta ankkuripistettä polkua pitkin
@@ -6082,6 +6099,9 @@ breakText	Glyphs	Merkit
 	Gap 4	Väli 4
 	Dash 5	Viiva 5
 	Gap 5	Väli 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ne tuotiin sivun piirroksena
+
 @msg	You must choose a side pattern.	Valitse sivukuvio.
 @msg	invalid pattern tile choice	virheellinen kuviolaatan valinta
 @msg	no pattern named `{choice}`	kuviota nimeltä `{choice}` ei löydy
@@ -6112,6 +6132,9 @@ breakText	Glyphs	Merkit
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja
 @msg	select paths, or segments, to divide	valitse jaettavat polut tai segmentit
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Laajenna viivat poluiksi
+@msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Asiakirjatyökalut
 	Save a Timestamped Copy	Tallenna kopio aikaleimalla
@@ -6134,6 +6157,11 @@ breakText	Glyphs	Merkit
 	Odia	Orija
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ja uudemmat (versio {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Vie kaikki avoimet asiakirjat PDF-muodossa
+	Export All Open Documents as SVG	Vie kaikki avoimet asiakirjat SVG-muodossa
+@msgplural	Exported {n} document|Exported {n} documents	Vietiin {n} asiakirja|Vietiin {n} asiakirjaa
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Vietiin {n} asiakirja; {title} jäi kirjoittamatta: {error}|Vietiin {n} asiakirjaa; {title} jäi kirjoittamatta: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symbolin tyyppi:
 	Dynamic Symbol	Dynaaminen symboli

@@ -121,7 +121,7 @@ use access::{may_read, may_write};
 pub use commands::specs;
 pub use export_names::artboard_file_names;
 pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
-use export_names::{distinct_names, write_encoded};
+use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,

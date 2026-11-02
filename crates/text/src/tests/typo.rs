@@ -1430,6 +1430,51 @@ fn restyling_one_character_keeps_its_kerning_with_its_neighbors() {
     assert!((l.lines[1].baseline - l.lines[0].baseline - 60.0).abs() < 1e-9, "{:?}", l.lines);
 }
 
+/// Baseline shift moves a rotated character up from its line by the shift, at any rotation, in
+/// point type and on a slanted path, and leaves its neighbors where they are. It turns about its
+/// pen position moved by the shift (`xf * pivot`), and `xf * unturned` still places the shifted
+/// glyph without its rotation.
+#[test]
+fn baseline_shift_moves_a_rotated_character_across_its_line() {
+    let slanted = vectorcraft_geom::PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (300.0, -300.0)).to_path(1e-3));
+    for on_path in [false, true] {
+        for rotation in [0.0, 45.0, 85.0, 90.0, 95.0, -90.0] {
+            let at = |shift: f64| {
+                let mut t = avav(1, |s| {
+                    s.rotation = rotation;
+                    s.baseline_shift = shift;
+                });
+                if on_path {
+                    t.kind = TextKind::OnPath { path: slanted.clone(), start: 0.0, end: None };
+                }
+                layout(db(), &t)
+            };
+            let (plain, shifted) = (at(0.0), at(10.0));
+            let pen = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.xf * Point::ZERO).unwrap();
+            let v = plain.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let up = kurbo::Vec2::new(v.angle.sin(), -v.angle.cos());
+            let moved = pen(&shifted, 1) - pen(&plain, 1);
+            assert!((moved - up * 10.0).hypot() < 1e-6, "on a path {on_path}, {rotation}°: {moved:?}, up {up:?}");
+            for byte in [0, 2, 3] {
+                assert!((pen(&shifted, byte) - pen(&plain, byte)).hypot() < 1e-6, "on a path {on_path}, {rotation}°: byte {byte} moved");
+            }
+            let g = shifted.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let turn_at = g.xf * g.pivot;
+            assert!((turn_at - (v.origin + up * 10.0)).hypot() < 1e-6, "on a path {on_path}, {rotation}°: turns about {turn_at:?}");
+            let unrotated = layout(db(), &{
+                let mut t = avav(1, |s| s.baseline_shift = 10.0);
+                if on_path {
+                    t.kind = TextKind::OnPath { path: slanted.clone(), start: 0.0, end: None };
+                }
+                t
+            });
+            let u = unrotated.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let (a, b) = ((g.xf * g.unturned).as_coeffs(), u.xf.as_coeffs());
+            assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "on a path {on_path}, {rotation}°: {a:?} vs {b:?}");
+        }
+    }
+}
+
 #[test]
 fn tracking_or_kerning_on_one_character_keeps_the_kerning_before_it() {
     let plain = pens(&TextObject::point(Point::ZERO, "AVAV", style(40.0)));

@@ -9,7 +9,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Progress log row for the Arrange Tools add-on's Sort Objects; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Progress log row for the Color Effects add-on's Find Nearest Swatch; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -129,6 +129,8 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
+- 2026-11-01: Find Nearest Swatch joins the Color Effects add-on (Object › Plug-ins › Color Effects): for each colour of the selection, the closest swatches of the document, a built-in library or a library or colour book the user loaded, with their CIEDE2000 difference; Apply gives each colour its nearest swatch as one undo step, linking global and spot swatches and adding a library's to the document first, so a process colour becomes the closest spot colour (`addon.color.nearestSwatch`, `addon.color.applyNearestSwatch`, #4923).
+- 2026-11-01: Expand Dashes into Paths joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): each selected path's dashed stroke becomes separate open paths, one per dash, laid out exactly as the stroke draws them (pattern, offset, Align Dashes to Corners and Path Ends), each keeping the stroke with the dashes off, so the gaps are real gaps for cutters and plotters, as one undo step (`addon.pathtools.expandDashes`, #4922).
 - 2026-11-01: Randomize Opacity joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): each selected object gets its own opacity at random between a minimum and a maximum percent, with a seed that repeats the result, as one undo step (`addon.arrange.randomizeOpacity`, #4925).
 - 2026-11-01: Sort Objects joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): the selected objects are sorted by width, height, area, position, opacity or stacking order (small to large, large to small or at random) and take another of those in that order, trading their values or stepping them evenly, as one undo step (`addon.arrange.sort`, #4917).
 - 2026-11-01: New Symbols from Layers joins the Document Tools add-on (Object › Plug-ins › Document Tools): one symbol of each top-level layer's art (the layers highlighted in the Layers panel when two or more are, else every layer), named after the layer, made as New Symbol makes one; Convert Layers to Symbols also puts an instance of each in place of its layer's art. Empty layers are skipped and reported; one undo step. A VectorCraft addition: headline numbers unchanged.
@@ -210,6 +212,8 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Progress log row for the Color Effects add-on's Find Nearest Swatch (#4923); headline numbers unchanged. |
+| 2026-11-01 | minor | Progress log row for the Path Precision Tools add-on's Expand Dashes into Paths (#4922); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Arrange Tools add-on's Randomize Opacity (#4925); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Arrange Tools add-on's Sort Objects (#4917); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Document Tools add-on's New Symbols from Layers (#4927); headline numbers unchanged. |

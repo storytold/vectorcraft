@@ -904,6 +904,7 @@ font-technology	Variable	Değişken
 	Edit Selection	Seçimi Düzenle
 	Edit Selection…	Seçimi Düzenle…
 	Edit Symbol	Sembolü Düzenle
+	Exit Symbol Editing Mode	Sembol Düzenleme Modundan Çık
 	Edit Text	Metni Düzenle
 	Edit the applied effect, or add another one?	Uygulanan efekti düzenlemek veya başka bir efekt eklemek mi istiyorsunuz?
 	Edit the point	Noktayı düzenle
@@ -3703,6 +3704,7 @@ axis	Both	Her İkisi
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	dosyanın katmanları okunmadı ({_1}): tek katmanda kendi sayfası olarak geliyor
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	dosyanın katmanları düzenleme verilerinden okunmadı ({_1}): PDF kısmından geliyorlar
 @msg	`to` must be "corner" or "smooth"	"to" "köşe" veya "pürüzsüz" olmalıdır
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` "emBox", "capHeight", "xHeight" veya "icfBox" olmalıdır
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP dosyaları RGB veya gri tonlamalıdır: colorModel rgb veya gri
 @msg	Blend colors: select at least three objects with filled colours	Renkleri karıştır: dolgulu renklere sahip en az üç nesne seçin
 @msg	Combine Slices: the slices have no bounds	Dilimleri Birleştir: dilimlerin sınırları yoktur
@@ -4104,6 +4106,8 @@ axis	Both	Her İkisi
 @msg	select an Intertwine group	bir Intertwine grubu seçin
 @msg	select a stroke with a variable width	değişken genişliğe sahip bir kontur seçin
 @msg	select a symbol instance	bir sembol örneği seçin
+@msg	select instances of one symbol	tek bir sembolün örneklerini seçin
+@msg	a symbol can't hold an instance of itself	bir sembol kendi örneğini içeremez
 @msg	select an Image Trace object	bir Görüntü İzleme nesnesi seçin
 @msg	could not decode image: {0}	görüntünün kodu çözülemedi: {0}
 @msg	image is empty	resim boş
@@ -4381,6 +4385,12 @@ axis	Both	Her İkisi
 	Insert Inline Symbol	Satır İçi Sembol Ekle
 	ICF Top/Right	ICF Üst/Sağ
 	ICF Bottom/Left	ICF Alt/Sol
+	Show Font Height Options	Yazı Tipi Yüksekliği Seçeneklerini Göster
+	Hide Font Height Options	Yazı Tipi Yüksekliği Seçeneklerini Gizle
+	Set Font Height Reference	Yazı Tipi Yüksekliği Referansını Ayarla
+	Em Box	Em Kutusu
+	x-Height	x-Yüksekliği
+	ICF Box	ICF Kutusu
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	"id", yalnızca "run" ve "command_batch" çözümleyen {r} adım referansıdır
 @msg	`ids` must be an array of object ids, not {v}	"kimlikler" {v} değil, bir nesne kimlikleri dizisi olmalıdır
 @msg	`corners` must be an array of anchor indices, not {v}	"köşeler" {v} değil, bir bağlantı indeksleri dizisi olmalıdır
@@ -5895,6 +5905,13 @@ anchor	Points:	Noktalar:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` veya `overprintBlack` verin
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Baskı Mürekkebi Düzeltmeleri CMYK belgelerinde çalışır: önce Dosya › Belge Renk Modu › CMYK Rengi'ni seçin
 @msg	`{key}` must be 0..{max}	`{key}` 0..{max} olmalıdır
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	En Yakın Renk Örneğini Bul…
+	Find Nearest Swatch	En Yakın Renk Örneğini Bul
+	Apply Nearest Swatch	En Yakın Renk Örneğini Uygula
+	Select objects to find the swatches nearest their colors.	Renklerine en yakın renk örneklerini bulmak için nesneleri seçin.
+@msg	select objects or give `color`	nesneleri seçin veya `color` verin
+@msg	`color` is not a colour	`color` bir renk değil
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Köşe Aracı
 	Slide Anchor Along Path	Bağlantı Noktasını Yol Boyunca Kaydır
@@ -6009,6 +6026,9 @@ breakText	Glyphs	Glifler
 	Gap 4	Boşluk 4
 	Dash 5	Çizgi 5
 	Gap 5	Boşluk 5
+
+@msg	{_1}: they came in as the page's art	{_1}: sayfanın çizimi olarak içe aktarıldılar
+
 @msg	You must choose a side pattern.	Bir yan desen seçmelisiniz.
 @msg	invalid pattern tile choice	geçersiz desen döşemesi seçimi
 @msg	no pattern named `{choice}`	`{choice}` adlı desen yok
@@ -6039,6 +6059,9 @@ breakText	Glyphs	Glifler
 	Remove Gaps	Boşlukları Kaldır
 @msg	that makes too many pieces (at most 100000): make the dashes longer	bu çok fazla parça oluşturur (en fazla 100000): tireleri uzatın
 @msg	select paths, or segments, to divide	bölünecek yolları veya bölümleri seçin
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Tireleri Yollara Genişlet
+@msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
@@ -6061,6 +6084,11 @@ breakText	Glyphs	Glifler
 	Odia	Oriya dili
 	Urdu	Urduca
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ve sonrası (sürüm {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Tüm Açık Belgeleri PDF Olarak Dışa Aktar
+	Export All Open Documents as SVG	Tüm Açık Belgeleri SVG Olarak Dışa Aktar
+@msgplural	Exported {n} document|Exported {n} documents	{n} belge dışa aktarıldı
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} belge dışa aktarıldı; {title} yazılamadı: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Sembol Türü:
 	Dynamic Symbol	Dinamik Sembol

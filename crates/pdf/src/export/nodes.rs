@@ -348,8 +348,8 @@ impl Exporter<'_> {
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
-    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of tints
-    /// of one spot ink ([`Self::perceptual_spot`])?
+    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
+    /// inks ([`Self::perceptual_spot`])?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),

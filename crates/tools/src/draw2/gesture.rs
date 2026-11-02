@@ -114,8 +114,11 @@ pub struct GestureTool {
     pub edit_within: f64,
     /// "Close paths when ends are within N pixels".
     pub close_within: f64,
-    /// Smart Guides for the Pencil's ends.
+    /// Smart Guides for the Pencil's ends and the press of a straight Knife cut.
     snap: DrawSnap,
+    /// Where the pointer went down, before any snap: a straight Knife cut released there cuts
+    /// nothing, even when its press snapped elsewhere.
+    pressed: Point,
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
@@ -194,6 +197,7 @@ impl GestureTool {
             edit_within: 12.0,
             close_within: 15.0,
             snap: DrawSnap::default(),
+            pressed: Point::ZERO,
             tip_at: None,
         }
     }
@@ -201,6 +205,31 @@ impl GestureTool {
     /// Do the ends of its strokes snap (the Pencil)?
     fn snaps(&self) -> bool {
         self.id == "pencil"
+    }
+
+    /// Does a straight Knife cut snap to anchors and paths? Only with Smart Guides on, which Snap to
+    /// Pixel and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the Pencil's straight
+    /// line's do: the press, and the release unless Shift keeps it on a 45° step.
+    fn knife_snaps(&self, cx: &ToolContext) -> bool {
+        self.id == "knife" && self.straight && cx.smart_guides && !cx.snap_to_pixel && !cx.snap_to_grid
+    }
+
+    /// Does the end of a straight line snap: the Pencil's Alt line's, or a straight Knife cut's
+    /// without Shift?
+    fn line_end_snaps(&self, cx: &ToolContext) -> bool {
+        self.straight && self.unconstrained && (self.snaps() || self.knife_snaps(cx))
+    }
+
+    /// Where a stroke or straight line released at `p` ends: where it snaps when its end snaps.
+    fn release_end(&mut self, cx: &ToolContext, p: Point) -> Point {
+        if (self.snaps() && !self.smoothing && !self.straight) || self.line_end_snaps(cx) { self.snap.drag(cx, p, None) } else { p }
+    }
+
+    /// Is a straight line with its end at `end` back at its press point (within a pixel), so that
+    /// there is no line? A Knife cut also is when the pointer, at `pointer`, is back where it went
+    /// down, though its press snapped elsewhere.
+    fn back_at_press(&self, cx: &ToolContext, pointer: Point, end: Point) -> bool {
+        self.points.first().is_some_and(|s| s.distance(end) < cx.tol(1.0)) || (self.id == "knife" && self.pressed.distance(pointer) < cx.tol(1.0))
     }
 
     fn draws_path(&self) -> bool {
@@ -532,10 +561,14 @@ impl Tool for GestureTool {
                     end
                 } else if self.snaps() && !self.smoothing && self.extend.is_none() && self.redraw.is_none() {
                     self.snap.press(cx, p, &[], None)
+                } else if self.knife_snaps(cx) {
+                    // A straight Knife cut, its overlay and Shift's 45° steps start from the snapped point.
+                    self.snap.press_on_paths(cx, p)
                 } else {
                     p
                 };
                 self.clear();
+                self.pressed = p;
                 self.push(start, ev.pressure);
                 vec![]
             }
@@ -554,19 +587,20 @@ impl Tool for GestureTool {
                     // Where the stroke would end: shown, taken on release.
                     end = self.snap.drag(cx, p, None);
                 }
-                let p = if self.straight && self.unconstrained && self.snaps() {
-                    // Alt's line ends where a stroke would: shown, taken on release.
+                let p = if self.line_end_snaps(cx) {
+                    // Alt's line ends where a stroke would, and a Knife cut's on the anchors and
+                    // paths its press snaps to: shown, taken on release.
                     self.snap.drag(cx, p, None)
                 } else {
                     p
                 };
                 if self.straight {
-                    if !self.unconstrained {
+                    if !self.line_end_snaps(cx) {
                         // The press's Smart Guides would stay on screen: the line's end doesn't snap.
                         self.snap.clear();
                     }
                     // The line runs from the press point to the pointer, wherever the drag went.
-                    if self.points.first().is_some_and(|s| s.distance(p) < cx.tol(1.0)) {
+                    if self.back_at_press(cx, ev.pos, p) {
                         // Back at the press point there is no line: the one shown goes.
                         self.points.truncate(1);
                         return if std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] };
@@ -618,12 +652,12 @@ impl Tool for GestureTool {
                 // Alt only on release cannot turn a freehand Knife drag into a straight cut.
                 self.knife_shift(ev.mods);
                 let p = self.constrained(cx, p, ev.mods);
-                let end = if self.snaps() && !self.smoothing && (!self.straight || self.unconstrained) { self.snap.drag(cx, p, None) } else { p };
+                let end = self.release_end(cx, p);
                 self.snap.clear();
                 let mut cancel = false;
                 if self.straight {
                     self.points.truncate(1);
-                    if self.points.first().is_some_and(|s| s.distance(end) >= cx.tol(1.0)) {
+                    if !self.back_at_press(cx, ev.pos, end) {
                         self.push(end, ev.pressure);
                     } else {
                         cancel = self.began;

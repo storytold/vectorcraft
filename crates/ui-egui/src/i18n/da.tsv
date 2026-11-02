@@ -1388,6 +1388,12 @@ digits	Malayalam	Malayalam
 	Axis	Akse
 	ICF Top/Right	ICF øverst/højre
 	ICF Bottom/Left	ICF nederst/venstre
+	Show Font Height Options	Vis indstillinger for skrifthøjde
+	Hide Font Height Options	Skjul indstillinger for skrifthøjde
+	Set Font Height Reference	Angiv reference for skrifthøjde
+	Em Box	Em-felt
+	x-Height	x-højde
+	ICF Box	ICF-felt
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
@@ -2866,6 +2872,7 @@ theme	Appearance	Udseende
 	Duplicate Brush	Duplikér pensel
 	Duplicate Symbol	Duplikér symbol
 	Edit Symbol	Redigér symbol
+	Exit Symbol Editing Mode	Afslut symbolredigeringstilstand
 	Expand Brush Strokes	Udvid penselstrøg
 	New Brush…	Ny pensel…
 	New Brush	Ny pensel
@@ -4317,6 +4324,8 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	markér en gentagelse
 @msg	select a stroke with a variable width	markér en streg med variabel bredde
 @msg	select a symbol instance	markér en symbolforekomst
+@msg	select instances of one symbol	markér forekomster af ét symbol
+@msg	a symbol can't hold an instance of itself	et symbol kan ikke indeholde en forekomst af sig selv
 @msg	select an Image Trace object	markér et Image Trace-objekt
 @msg	could not decode image: {0}	kunne ikke afkode billedet: {0}
 @msg	image is empty	billedet er tomt
@@ -5837,6 +5846,13 @@ anchor	Points:	Punkter:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	angiv `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Trykfarverettelser virker på CMYK-dokumenter: vælg først Filer › Dokumentets farvetilstand › CMYK-farve
 @msg	`{key}` must be 0..{max}	`{key}` skal være 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Find nærmeste farveprøve…
+	Find Nearest Swatch	Find nærmeste farveprøve
+	Apply Nearest Swatch	Anvend nærmeste farveprøve
+	Select objects to find the swatches nearest their colors.	Markér objekter for at finde de farveprøver, der ligger tættest på deres farver.
+@msg	select objects or give `color`	markér objekter, eller angiv `color`
+@msg	`color` is not a colour	`color` er ikke en farve
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hjørneværktøj
 	Slide Anchor Along Path	Skub ankerpunkt langs sti
@@ -5951,6 +5967,9 @@ breakText	Glyphs	Glyffer
 	Gap 4	Mellemrum 4
 	Dash 5	Streg 5
 	Gap 5	Mellemrum 5
+
+@msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.
 @msg	invalid pattern tile choice	ugyldigt valg af mønsterflise
 @msg	no pattern named `{choice}`	intet mønster med navnet `{choice}`
@@ -5981,6 +6000,9 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Udvid streger til stier
+@msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentværktøjer
 	Save a Timestamped Copy	Gem en kopi med dato og klokkeslæt
@@ -6003,6 +6025,11 @@ breakText	Glyphs	Glyffer
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} og nyere (version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Eksportér alle åbne dokumenter som PDF
+	Export All Open Documents as SVG	Eksportér alle åbne dokumenter som SVG
+@msgplural	Exported {n} document|Exported {n} documents	Eksporterede {n} dokument|Eksporterede {n} dokumenter
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Eksporterede {n} dokument; {title} blev ikke skrevet: {error}|Eksporterede {n} dokumenter; {title} blev ikke skrevet: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltype:
 	Dynamic Symbol	Dynamisk symbol

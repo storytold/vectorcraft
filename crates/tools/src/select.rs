@@ -1170,6 +1170,11 @@ impl SelectionTool {
             if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
                 return vec![Action::SwitchTool("type".into())];
             }
+            // A symbol instance: its symbol is edited in symbol editing mode, except one inside
+            // the art of a symbol already being edited.
+            if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })) {
+                return if cx.doc.symbol_edit.is_some() { vec![] } else { vec![Action::Exec("symbol.edit".into(), json!({ "id": top.0 }))] };
+            }
             // An object that [`isolates`], not the one already isolated.
             if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {
                 return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];

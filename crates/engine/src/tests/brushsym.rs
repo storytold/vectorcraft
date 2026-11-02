@@ -1117,13 +1117,12 @@ fn place_and_break_link_round_trip_geometry() {
 }
 
 #[test]
-fn edit_then_update_redefines_all_instances() {
+fn break_link_then_update_redefines_all_instances() {
     let mut s = session();
     let (inst, name, _) = make_symbol(&mut s);
     let other = NodeId(s.execute("symbol.place", &json!({"x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
     select(&mut s, &[inst]);
-    let r = s.execute("symbol.edit", &json!({})).unwrap();
-    assert_eq!(r["name"], name);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
     let art = NodeId(r["ids"][0].as_u64().unwrap());
     // Make the art twice as wide, then redefine.
     s.execute("object.transform", &json!({"ids": [art.0], "matrix": [2, 0, 0, 1, -140, 0]})).ok();

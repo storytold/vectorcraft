@@ -1478,6 +1478,12 @@ digits	Malayalam	Malajálamské
 	Axis	Osa
 	ICF Top/Right	ICF horní/pravý
 	ICF Bottom/Left	ICF dolní/levý
+	Show Font Height Options	Zobrazit možnosti výšky písma
+	Hide Font Height Options	Skrýt možnosti výšky písma
+	Set Font Height Reference	Nastavit referenční výšku písma
+	Em Box	Čtverčík
+	x-Height	Výška x
+	ICF Box	Rámeček ICF
 	Copy Color Value (Hex)	Kopírovat hodnotu barvy (hex)
 	Create New Swatch…	Vytvořit novou položku vzorníku…
 	Name 40%	Název 40 %
@@ -3113,6 +3119,7 @@ theme	Appearance	Motiv
 	Duplicate Brush	Duplikovat štětec
 	Duplicate Symbol	Duplikovat symbol
 	Edit Symbol	Upravit symbol
+	Exit Symbol Editing Mode	Ukončit režim úprav symbolu
 	Expand Brush Strokes	Rozložit tahy štětcem
 	New Brush…	Nový štětec…
 	New Brush	Nový štětec
@@ -4209,6 +4216,7 @@ imageTrace	Outline	Obrys
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	vrstvy souboru nebyly načteny ({_1}): soubor se otevře jako jeho stránka v jedné vrstvě
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	vrstvy souboru nebyly načteny z jeho dat pro úpravy ({_1}): pocházejí z jeho části PDF
 @msg	`to` must be "corner" or "smooth"	`to` musí být "corner" nebo "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` musí být "emBox", "capHeight", "xHeight" nebo "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	soubory BMP jsou RGB nebo ve stupních šedi: colorModel rgb nebo gray
 @msg	Blend colors: select at least three objects with filled colours	Prolnout barvy: vyberte alespoň tři objekty s barevnou výplní
 @msg	Combine Slices: the slices have no bounds	Spojit řezy: řezy nemají hranice
@@ -4652,6 +4660,8 @@ imageTrace	Outline	Obrys
 @msg	a clipping path can't be attached to a path	ořezovou cestu nelze připojit na cestu
 @msg	select a stroke with a variable width	vyberte tah s proměnnou šířkou
 @msg	select a symbol instance	vyberte instanci symbolu
+@msg	select instances of one symbol	vyberte instance jediného symbolu
+@msg	a symbol can't hold an instance of itself	symbol nemůže obsahovat instanci sebe sama
 @msg	select an Image Trace object	vyberte objekt vektorizace obrazu
 @msg	could not decode image: {0}	obraz nelze dekódovat: {0}
 @msg	image is empty	obraz je prázdný
@@ -5938,6 +5948,13 @@ anchor	Points:	Body:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	zadejte `inkLimit`, `removeWhiteOverprint` nebo `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Opravy tiskových barev fungují v dokumentech CMYK: nejprve zvolte Soubor › Barevný režim dokumentu › Barvy CMYK
 @msg	`{key}` must be 0..{max}	`{key}` musí být 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Najít nejbližší položku vzorníku…
+	Find Nearest Swatch	Najít nejbližší položku vzorníku
+	Apply Nearest Swatch	Použít nejbližší položku vzorníku
+	Select objects to find the swatches nearest their colors.	Vyberte objekty, k jejichž barvám chcete najít nejbližší položky vzorníku.
+@msg	select objects or give `color`	vyberte objekty nebo zadejte `color`
+@msg	`color` is not a colour	`color` není barva
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Nástroj Rohy
 	Slide Anchor Along Path	Posunout kotevní bod po cestě
@@ -6052,6 +6069,9 @@ breakText	Glyphs	Glyfy
 	Gap 4	Mezera 4
 	Dash 5	Čárka 5
 	Gap 5	Mezera 5
+
+@msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+
 @msg	You must choose a side pattern.	Musíte zvolit boční vzorek.
 @msg	invalid pattern tile choice	neplatná volba dlaždice vzorku
 @msg	no pattern named `{choice}`	vzorek s názvem `{choice}` neexistuje
@@ -6082,6 +6102,9 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Rozložit čárky na cesty
+@msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Nástroje dokumentu
 	Save a Timestamped Copy	Uložit kopii s datem a časem
@@ -6104,6 +6127,11 @@ breakText	Glyphs	Glyfy
 	Odia	Urijština
 	Urdu	Urdština
 	VectorCraft {release} and later (version {n})	VectorCraft {release} a novější (verze {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportovat všechny otevřené dokumenty jako PDF
+	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
+@msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Dynamický symbol

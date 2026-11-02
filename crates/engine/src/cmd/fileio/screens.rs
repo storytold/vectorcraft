@@ -21,7 +21,7 @@ use super::encode::single_artboard;
 use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names, encode_with_warnings, merge, unique_file_names,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names_by, encode_with_warnings, merge, unique_file_names,
     with_black_output, writable, write_file,
 };
 
@@ -490,13 +490,31 @@ pub(crate) fn check_settings(s: &Session, p: &Value) -> Result<()> {
     rows_of(s, p, ScreenParams::of(p)?.preset.as_deref()).map(|_| ())
 }
 
+/// `name` the way a case-insensitive file system compares names: lower-cased, then each character
+/// upper-cased where its upper case is one character. Names with the same lower case give the
+/// same key, and so do `ΟΣ`, `ος` and `οσ` (`ΟΣ`); `ᾈ` and `ᾀ` give `ᾀ`, and `ß` stays `ß`.
+fn fold(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| {
+            let mut upper = c.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(u), None) => u,
+                _ => c,
+            }
+        })
+        .collect()
+}
+
 /// The file names (and bytes) an export wrote, or the files it returns.
 #[derive(Default)]
 struct Output {
-    /// Lower-case relative names already used, with what wrote each (two identical rows write
-    /// one file; different files that would share a name get `-2`, `-3`…).
+    /// Relative names already used, by their [`fold`]ed spelling, with what wrote each (two
+    /// identical rows write one file; different files that would share a name get `-2`, `-3`…).
     taken: std::collections::HashMap<String, String>,
-    /// Sub-folders already made.
+    /// Each sub-folder as the first file in it spells it, by its [`fold`]ed name.
+    folders: std::collections::HashMap<String, String>,
+    /// Sub-folders already made, by their [`fold`]ed names.
     made: HashSet<String>,
     /// `(relative name, bytes)` kept to return or zip (empty when written to a folder).
     kept: Vec<(String, Vec<u8>)>,
@@ -505,12 +523,19 @@ struct Output {
 }
 
 impl Output {
-    /// The name the file `key` writes as `name` takes: `name`, else (with `number`) `name-2`,
-    /// `name-3`… when another file has it; `None` when the same file (`key`) was written as `name`
-    /// already, or, without `number`, when any file was (the first row wins, as Export for Screens
-    /// always did when no name pattern is given).
-    fn claim(&mut self, name: &str, key: &str, number: bool) -> Option<String> {
-        let (base, ext) = name.rsplit_once('.').map_or((name, ""), |(b, e)| (b, e));
+    /// The name the file `key` writes as `name` takes: `name`, else `name-2`, `name-3`… when
+    /// another file has it, with or without a name pattern; `None` when the same file (`key`) was
+    /// written as `name` already. Names are compared without case, and a sub-folder keeps the
+    /// spelling of the first file put in it.
+    fn claim(&mut self, name: &str, key: &str) -> Option<String> {
+        let name = match name.rsplit_once('/') {
+            Some((dir, file)) => {
+                let dir = self.folders.entry(fold(dir)).or_insert_with(|| dir.to_string());
+                format!("{dir}/{file}")
+            }
+            None => name.to_string(),
+        };
+        let (base, ext) = name.rsplit_once('.').map_or((name.as_str(), ""), |(b, e)| (b, e));
         for n in 1.. {
             let candidate = if n == 1 {
                 name.to_string()
@@ -519,11 +544,11 @@ impl Output {
             } else {
                 format!("{base}-{n}.{ext}")
             };
-            match self.taken.get(&candidate.to_lowercase()) {
-                Some(k) if k == key || !number => return None,
+            match self.taken.get(&fold(&candidate)) {
+                Some(k) if k == key => return None,
                 Some(_) => continue,
                 None => {
-                    self.taken.insert(candidate.to_lowercase(), key.to_string());
+                    self.taken.insert(fold(&candidate), key.to_string());
                     return Some(candidate);
                 }
             }
@@ -543,7 +568,7 @@ impl Output {
         match folder {
             Some(dir) if !keep => {
                 if let Some((sub, _)) = name.rsplit_once('/')
-                    && self.made.insert(sub.to_lowercase())
+                    && self.made.insert(fold(sub))
                 {
                     create_dir(&format!("{dir}/{sub}"))?;
                 }
@@ -686,8 +711,8 @@ pub(super) fn presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
-/// so do different files the `name` pattern gives one name. The reply's `warnings` lists every
-/// warning the encoders give for the files, each once.
+/// so do different files that would share a name, with or without the `name` pattern. The reply's
+/// `warnings` lists every warning the encoders give for the files, each once.
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
@@ -818,7 +843,7 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
             });
             let (sub, file) = naming.file(document.as_ref().unwrap_or(item), index, files, r);
             let name = sub.map_or_else(|| file.clone(), |d| format!("{d}/{file}"));
-            let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key), o.name.is_some()) else { continue };
+            let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key)) else { continue };
             let bytes = if let Some(boards) = single {
                 let mut options = r.options.clone();
                 options["range"] = json!(boards.iter().map(|b| (b + 1).to_string()).collect::<Vec<_>>().join(", "));
@@ -938,8 +963,9 @@ fn items(
         }
         isolated(doc, &doc.paint_order(ids.iter().copied()), name).map(|(d, r)| (Arc::new(d), r))
     };
-    // Each item's stem follows Windows' file-naming rules, and no two items share one.
-    let safe = |stems: Vec<String>| distinct_names(stems.iter().map(|s| safe_file_name(s)));
+    // Each item's stem follows Windows' file-naming rules, and no two items share one, compared as
+    // the item folders are (`fold`).
+    let safe = |stems: Vec<String>| distinct_names_by(stems.iter().map(|s| safe_file_name(s)), fold);
     let named = |pieces: Vec<(String, Arc<Document>, Option<usize>, Rect)>, fallback: &str| -> Vec<Item> {
         let stems = safe(unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
         pieces

@@ -3,7 +3,9 @@
 //! filter, into the colours themselves (`addon.color.filter`); below, under Inks, it opens Duotone's
 //! dialog and Print Ink Fixes' (`addon.color.printFixes`). The submenu applies the add-on's live
 //! effects, Duotone and Vector Halftone among them (Effect › Color Effects has them too), opens
-//! Print Ink Fixes and opens the panel.
+//! Print Ink Fixes and Find Nearest Swatch ([`nearest`]) and opens the panel.
+
+pub mod nearest;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
@@ -97,6 +99,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Vector Halftone…", "effect.dialog", json!({ "effect": "addon.color.halftone" })),
         Item::Sep,
         cmd(print_fixes()),
+        Item::Cmd("Find Nearest Swatch…", nearest::COMMAND, Value::Null),
         Item::Sep,
         Item::Sub(
             "Select by Color Kind",

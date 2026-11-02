@@ -910,6 +910,7 @@ font-technology	Variable	Променливи
 	Edit Selection	Редактиране на селекцията
 	Edit Selection…	Редактиране на селекцията…
 	Edit Symbol	Редактиране на символ
+	Exit Symbol Editing Mode	Изход от режим на редактиране на символ
 	Edit Text	Редактиране на текст
 	Edit the applied effect, or add another one?	Да се редактира ли приведеният ефект или да се добави друг?
 	Edit the point	Редактиране на точката
@@ -4221,6 +4222,8 @@ axis	Both	И двете
 @msg	select an Intertwine group	изберете група за преплитане (Intertwine)
 @msg	select a stroke with a variable width	изберете щрих с променлива дебелина
 @msg	select a symbol instance	изберете екземпляр на символ
+@msg	select instances of one symbol	изберете екземпляри на един символ
+@msg	a symbol can't hold an instance of itself	символ не може да съдържа свой собствен екземпляр
 @msg	select an Image Trace object	изберете обект за трасиране на изображение (Image Trace)
 @msg	could not decode image: {0}	изображението не може да бъде декодирано: {0}
 @msg	image is empty	изображението е празно
@@ -4501,6 +4504,12 @@ axis	Both	И двете
 	Insert Inline Symbol	Вграждане на вграден символ
 	ICF Top/Right	ICF горе/дясно
 	ICF Bottom/Left	ICF долу/ляво
+	Show Font Height Options	Показване на опциите за височина на шрифта
+	Hide Font Height Options	Скриване на опциите за височина на шрифта
+	Set Font Height Reference	Задаване на референтна височина на шрифта
+	Em Box	Квадратна касетка (Em Box)
+	x-Height	Височина на x
+	ICF Box	Касетка ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` трябва да бъде масив от индекси на опорни точки, а не {v}
@@ -5821,6 +5830,13 @@ anchor	Points:	Точки:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Корекциите на мастилата за печат работят върху CMYK документи: първо изберете Файл › Цветен режим на документа › CMYK цвят
 @msg	`{key}` must be 0..{max}	`{key}` трябва да е 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Намиране на най-близкия образец…
+	Find Nearest Swatch	Намиране на най-близкия образец
+	Apply Nearest Swatch	Прилагане на най-близкия образец
+	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
+@msg	select objects or give `color`	изберете обекти или задайте `color`
+@msg	`color` is not a colour	`color` не е цвят
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Инструмент „Ъгли“
 	Slide Anchor Along Path	Плъзгане на опорна точка по пътя
@@ -5936,6 +5952,9 @@ breakText	Glyphs	Глифи
 	Gap 4	Разстояние 4
 	Dash 5	Тире 5
 	Gap 5	Разстояние 5
+
+@msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+
 @msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.
 @msg	invalid pattern tile choice	невалиден избор на плочка за шаблон
 @msg	no pattern named `{choice}`	няма шаблон с име `{choice}`
@@ -5966,6 +5985,9 @@ breakText	Glyphs	Глифи
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
 @msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Разширяване на тиретата в пътища
+@msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменти за документи
 	Save a Timestamped Copy	Запазване на копие с дата и час
@@ -5988,6 +6010,11 @@ breakText	Glyphs	Глифи
 	Odia	Ория
 	Urdu	Урду
 	VectorCraft {release} and later (version {n})	VectorCraft {release} и по-нови (версия {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Експортиране на всички отворени документи като PDF
+	Export All Open Documents as SVG	Експортиране на всички отворени документи като SVG
+@msgplural	Exported {n} document|Exported {n} documents	Експортиран е {n} документ|Експортирани са {n} документа
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Експортиран е {n} документ; {title} не беше записан: {error}|Експортирани са {n} документа; {title} не беше записан: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Тип на символа:
 	Dynamic Symbol	Динамичен символ

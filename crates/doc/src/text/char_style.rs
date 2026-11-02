@@ -116,6 +116,10 @@ pub struct CharStyle {
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub digits: Digits,
+    /// Font height reference (Character panel menu › Show Font Height Options): the height of the
+    /// font that [`Self::size`] measures, the em box by default.
+    #[serde(default, rename = "fontHeightReference", skip_serializing_if = "crate::skip::is_default")]
+    pub font_height_reference: FontHeightReference,
     /// No Break (Character panel menu): these characters are not broken across lines, including
     /// at a space or a hyphenation point inside the run. A run longer than the line stays together
     /// and can overflow it.
@@ -128,6 +132,21 @@ pub struct CharStyle {
     /// document's language (Document Setup). Saved only when set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+}
+
+/// What a character's font size measures ([`CharStyle::font_height_reference`]): the em square
+/// of the font, the height of its capitals or of its lowercase letters (the cap height and x
+/// height of its OS/2 table), or its ideographic character face (ICF, OpenType's `icfb` and
+/// `icft` baselines). Layout sets the characters at the em size at which the chosen height equals
+/// the font size; with a font that has no such value, the size measures the em box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FontHeightReference {
+    #[default]
+    EmBox,
+    CapHeight,
+    XHeight,
+    IcfBox,
 }
 
 /// The numeral system digits are drawn in ([`CharStyle::digits`]): as typed, or every digit of
@@ -380,6 +399,7 @@ impl Default for CharStyle {
             standard_vertical_roman: false,
             small_caps: None,
             digits: Digits::Default,
+            font_height_reference: FontHeightReference::EmBox,
             no_break: false,
             language: None,
         }

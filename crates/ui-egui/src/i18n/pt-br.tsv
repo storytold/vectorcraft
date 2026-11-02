@@ -815,6 +815,7 @@
 	Edit selected paths within:	Editar caminhos selecionados a menos de:
 	Edit Selection…	Editar Seleção…
 	Edit Symbol	Editar Símbolo
+	Exit Symbol Editing Mode	Sair do Modo de Edição de Símbolo
 	Edit Text	Editar Texto
 	Edit Theme	Editar Tema
 	Edit Views…	Editar Visualizações…
@@ -840,6 +841,12 @@
 	Em Box Top/Right	Topo/Direita da Caixa Eme
 	ICF Top/Right	Topo/Direita do ICF
 	ICF Bottom/Left	Base/Esquerda do ICF
+	Show Font Height Options	Mostrar Opções de Altura da Fonte
+	Hide Font Height Options	Ocultar Opções de Altura da Fonte
+	Set Font Height Reference	Definir Referência de Altura da Fonte
+	Em Box	Caixa Eme
+	x-Height	Altura do x
+	ICF Box	Caixa ICF
 	Em Dash	Travessão
 	Em Space	Espaço Em
 	Embed	Incorporar
@@ -3485,6 +3492,7 @@ axis	Both	Ambos
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	as camadas do arquivo não foram lidas ({_1}): ele entra como sua página, em uma só camada
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	as camadas do arquivo não foram lidas dos seus dados de edição ({_1}): elas vêm da sua parte PDF
 @msg	`to` must be "corner" or "smooth"	`to` deve ser "corner" ou "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` deve ser "emBox", "capHeight", "xHeight" ou "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	arquivos BMP são RGB ou em tons de cinza: colorModel rgb ou gray
 @msg	Blend colors: select at least three objects with filled colours	Mesclar cores: selecione pelo menos três objetos com preenchimento de cor
 @msg	Combine Slices: the slices have no bounds	Combinar fatias: as fatias não têm limites
@@ -3918,6 +3926,8 @@ axis	Both	Ambos
 @msg	a clipping path can't be attached to a path	um caminho de recorte não pode ser anexado a um caminho
 @msg	select a stroke with a variable width	selecione um traço com largura variável
 @msg	select a symbol instance	selecione uma instância de símbolo
+@msg	select instances of one symbol	selecione instâncias de um único símbolo
+@msg	a symbol can't hold an instance of itself	um símbolo não pode conter uma instância de si mesmo
 @msg	select an Image Trace object	selecione um objeto de Vetorização de imagem
 @msg	could not decode image: {0}	não foi possível decodificar a imagem: {0}
 @msg	image is empty	a imagem está vazia
@@ -5855,6 +5865,13 @@ anchor	Points:	Pontos:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	informe `inkLimit`, `removeWhiteOverprint` ou `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	As Correções de Tinta para Impressão funcionam em documentos CMYK: escolha antes Arquivo › Modo de Cor do Documento › Cor CMYK
 @msg	`{key}` must be 0..{max}	`{key}` deve ser 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Localizar Amostra Mais Próxima…
+	Find Nearest Swatch	Localizar Amostra Mais Próxima
+	Apply Nearest Swatch	Aplicar Amostra Mais Próxima
+	Select objects to find the swatches nearest their colors.	Selecione objetos para localizar as amostras mais próximas de suas cores.
+@msg	select objects or give `color`	selecione objetos ou informe `color`
+@msg	`color` is not a colour	`color` não é uma cor
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Ferramenta Cantos
 	Slide Anchor Along Path	Deslizar Ponto de Ancoragem pelo Caminho
@@ -5971,6 +5988,9 @@ breakText	Glyphs	Glifos
 	Gap 4	Lacuna 4
 	Dash 5	Traço 5
 	Gap 5	Lacuna 5
+
+@msg	{_1}: they came in as the page's art	{_1}: foram importados como arte da página
+
 @msg	You must choose a side pattern.	Você deve escolher um padrão lateral.
 @msg	invalid pattern tile choice	escolha inválida de ladrilho de padrão
 @msg	no pattern named `{choice}`	não há padrão chamado `{choice}`
@@ -6001,6 +6021,9 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandir traços em demarcadores
+@msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora
@@ -6023,6 +6046,11 @@ breakText	Glyphs	Glifos
 	Odia	Oriá
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} e posteriores (versão {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportar todos os documentos abertos como PDF
+	Export All Open Documents as SVG	Exportar todos os documentos abertos como SVG
+@msgplural	Exported {n} document|Exported {n} documents	{n} documento exportado|{n} documentos exportados
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} documento exportado; {title} não foi gravado: {error}|{n} documentos exportados; {title} não foi gravado: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipo de símbolo:
 	Dynamic Symbol	Símbolo dinâmico

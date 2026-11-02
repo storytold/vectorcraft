@@ -1391,6 +1391,12 @@ digits	Malayalam	Malajalam
 	Axis	Oś
 	ICF Top/Right	ICF góra/prawo
 	ICF Bottom/Left	ICF dół/lewo
+	Show Font Height Options	Pokaż opcje wysokości czcionki
+	Hide Font Height Options	Ukryj opcje wysokości czcionki
+	Set Font Height Reference	Ustaw odniesienie wysokości czcionki
+	Em Box	Ramka firetowa
+	x-Height	Wysokość x
+	ICF Box	Ramka ICF
 	Copy Color Value (Hex)	Kopiuj wartość koloru (hex)
 	Create New Swatch…	Utwórz nową próbkę…
 	Name 40%	Nazwa 40%
@@ -2992,6 +2998,7 @@ theme	Appearance	Wygląd
 	Duplicate Brush	Powiel pędzel
 	Duplicate Symbol	Powiel symbol
 	Edit Symbol	Edytuj symbol
+	Exit Symbol Editing Mode	Wyjdź z trybu edycji symbolu
 	Expand Brush Strokes	Rozszerz pociągnięcia pędzla
 	New Brush…	Nowy pędzel…
 	New Brush	Nowy pędzel
@@ -4032,6 +4039,7 @@ imageTrace	Outline	Kontur
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	nie odczytano warstw pliku ({_1}): plik jest wczytywany jako jego strona, na jednej warstwie
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	nie odczytano warstw pliku z jego danych edycyjnych ({_1}): pochodzą z jego części PDF
 @msg	`to` must be "corner" or "smooth"	`to` musi mieć wartość "corner" lub "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` musi mieć wartość "emBox", "capHeight", "xHeight" lub "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Pliki BMP są w RGB lub skali szarości: colorModel rgb lub gray
 @msg	Blend colors: select at least three objects with filled colours	Przejście kolorów: zaznacz co najmniej trzy obiekty z wypełnieniem kolorem
 @msg	Combine Slices: the slices have no bounds	Połącz plasterki: plasterki nie mają granic
@@ -4477,6 +4485,8 @@ imageTrace	Outline	Kontur
 @msg	a clipping path can't be attached to a path	ścieżki przycinającej nie można dołączyć do ścieżki
 @msg	select a stroke with a variable width	zaznacz obrys o zmiennej szerokości
 @msg	select a symbol instance	zaznacz wystąpienie symbolu
+@msg	select instances of one symbol	zaznacz wystąpienia jednego symbolu
+@msg	a symbol can't hold an instance of itself	symbol nie może zawierać wystąpienia samego siebie
 @msg	select an Image Trace object	zaznacz obiekt obrysu obrazu
 @msg	could not decode image: {0}	nie udało się zdekodować obrazu: {0}
 @msg	image is empty	obraz jest pusty
@@ -5792,6 +5802,13 @@ anchor	Points:	Punkty:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	podaj `inkLimit`, `removeWhiteOverprint` lub `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Poprawki farb drukarskich działają w dokumentach CMYK: najpierw wybierz Plik › Tryb koloru dokumentu › Kolor CMYK
 @msg	`{key}` must be 0..{max}	`{key}` musi wynosić 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Znajdź najbliższą próbkę…
+	Find Nearest Swatch	Znajdź najbliższą próbkę
+	Apply Nearest Swatch	Zastosuj najbliższą próbkę
+	Select objects to find the swatches nearest their colors.	Zaznacz obiekty, aby znaleźć próbki najbliższe ich kolorom.
+@msg	select objects or give `color`	zaznacz obiekty lub podaj `color`
+@msg	`color` is not a colour	`color` nie jest kolorem
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Narzędzie Narożniki
 	Slide Anchor Along Path	Przesuń punkt kontrolny wzdłuż ścieżki
@@ -5907,6 +5924,9 @@ breakText	Glyphs	Glify
 	Gap 4	Odstęp 4
 	Dash 5	Kreska 5
 	Gap 5	Odstęp 5
+
+@msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
 @msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru
 @msg	no pattern named `{choice}`	nie ma wzoru o nazwie `{choice}`
@@ -5937,6 +5957,9 @@ breakText	Glyphs	Glify
 	Remove Gaps	Usuń odstępy
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje za dużo części (najwyżej 100000): wydłuż kreski
 @msg	select paths, or segments, to divide	zaznacz ścieżki lub segmenty do podzielenia
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Rozszerz kreski na ścieżki
+@msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Narzędzia dokumentu
 	Save a Timestamped Copy	Zapisz kopię z datą i godziną
@@ -5959,6 +5982,11 @@ breakText	Glyphs	Glify
 	Odia	Orija
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i nowsze (wersja {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Eksportuj wszystkie otwarte dokumenty jako PDF
+	Export All Open Documents as SVG	Eksportuj wszystkie otwarte dokumenty jako SVG
+@msgplural	Exported {n} document|Exported {n} documents	Wyeksportowano {n} dokument|Wyeksportowano {n} dokumenty|Wyeksportowano {n} dokumentów
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Wyeksportowano {n} dokument; nie zapisano {title}: {error}|Wyeksportowano {n} dokumenty; nie zapisano {title}: {error}|Wyeksportowano {n} dokumentów; nie zapisano {title}: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Symbol dynamiczny

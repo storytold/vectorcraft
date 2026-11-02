@@ -144,8 +144,14 @@ fn break_link_bakes_the_changes_and_edit_symbol_shows_the_symbols_own_art() {
     };
     let art = NodeId(s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap()["ids"][0].as_u64().unwrap());
     assert_eq!(fills(&s, art), ["#0000ff", "#ff0000"]);
-    let art = NodeId(s.execute("symbol.edit", &json!({"ids": [other.0]})).unwrap()["ids"][0].as_u64().unwrap());
-    assert_eq!(fills(&s, art), ["#0000ff", "#0000ff"], "the symbol's art, without this instance's changes");
+    // Symbol editing mode shows the symbol's art, without this instance's changes.
+    s.execute("symbol.edit", &json!({"ids": [other.0]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let parts: Vec<String> =
+        st.doc.node(layer).unwrap().children().unwrap().iter().map(|c| c.appearance.fill_paint().color().unwrap().to_hex()).collect();
+    assert_eq!(parts, ["#0000ff", "#0000ff"], "the symbol's art, without this instance's changes");
+    assert_eq!(overrides(&s, other), 1, "the instance keeps its changes");
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! Artboards panel: numbered list with inline rename (double-click the name, or the panel menu's
 //! Rename; while several artboards are selected, the name typed goes to all of them, numbered),
-//! move up / down, new
+//! move up / down (or drag a row above or below another), new
 //! (Alt-click: Artboard Options for the new artboard first), delete; a row dragged onto New
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
@@ -405,6 +405,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let all = picked(app, abs.len());
     let editing: Option<usize> = pstate(ui.ctx(), "ab-edit");
     let mut row_clicked = false;
+    // A row dropped on another row: (from, to), the index it lands at.
+    let mut dropped = None;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -512,10 +514,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else if resp.double_clicked() {
                     start_rename(ui.ctx(), app, i);
                 }
+                // Another row dragged over this one lands above or below it by the pointer's half,
+                // a line showing where.
+                if let Some(from) = resp.dnd_hover_payload::<RowDrag>().map(|d| d.0).filter(|from| *from != i) {
+                    let after = ui.input(|inp| inp.pointer.interact_pos()).is_some_and(|p| p.y > r.center().y);
+                    let y = if after { r.bottom() } else { r.top() };
+                    ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], egui::Stroke::new(2.0, t.accent));
+                    if resp.dnd_release_payload::<RowDrag>().is_some() {
+                        let to = i + usize::from(after);
+                        dropped = Some((from, if from < to { to - 1 } else { to }));
+                    }
+                }
             }
         });
         scrolled.inner_rect
     });
+    if let Some((from, to)) = dropped.filter(|(from, to)| from != to)
+        && app.run("artboard.reorder", json!({"index": from, "to": to})).is_ok()
+    {
+        select(app, to);
+    }
     // Keyboard: the panel takes it with a click on a row and gives it up when the pointer is
     // pressed outside the list or the panel is not drawn (`ab-keys`: the frame it last had it in).
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));

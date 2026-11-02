@@ -923,6 +923,7 @@ font-technology	Variable	Вариативные
 	Edit Selection	Редактировать выделение
 	Edit Selection…	Редактировать выделение…
 	Edit Symbol	Редактировать символ
+	Exit Symbol Editing Mode	Выйти из режима редактирования символа
 	Edit Text	Редактировать текст
 	Edit the applied effect, or add another one?	Редактировать применённый эффект или добавить другой?
 	Edit the point	Редактировать точку
@@ -947,6 +948,12 @@ font-technology	Variable	Вариативные
 	Em Box Top/Right	Верх/право кегельной площадки
 	ICF Top/Right	Верх/право ICF
 	ICF Bottom/Left	Низ/лево ICF
+	Show Font Height Options	Показать параметры высоты шрифта
+	Hide Font Height Options	Скрыть параметры высоты шрифта
+	Set Font Height Reference	Задать опорную высоту шрифта
+	Em Box	Кегельная площадка
+	x-Height	Высота строчных
+	ICF Box	Рамка ICF
 	Em Dash	Длинное тире
 	Em Space	Круглая шпация
 	Embed	Внедрить
@@ -3937,6 +3944,7 @@ axis	Both	Оба
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	слои файла не прочитаны ({_1}): он открывается как его страница, на одном слое
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	слои файла не прочитаны из его данных для редактирования ({_1}): они взяты из его PDF-части
 @msg	`to` must be "corner" or "smooth"	`to` должно быть "corner" или "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` должно быть "emBox", "capHeight", "xHeight" или "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	файлы BMP бывают RGB или в оттенках серого: colorModel rgb или gray
 @msg	Blend colors: select at least three objects with filled colours	Смешивание цветов: выберите не менее трёх объектов с цветными заливками
 @msg	Combine Slices: the slices have no bounds	Объединение фрагментов: у фрагментов нет границ
@@ -4382,6 +4390,8 @@ axis	Both	Оба
 @msg	a clipping path can't be attached to a path	контур обрезки нельзя прикрепить к контуру
 @msg	select a stroke with a variable width	выделите обводку с переменной шириной
 @msg	select a symbol instance	выделите экземпляр символа
+@msg	select instances of one symbol	выделите экземпляры одного символа
+@msg	a symbol can't hold an instance of itself	символ не может содержать собственный экземпляр
 @msg	select an Image Trace object	выделите объект трассировки изображения
 @msg	could not decode image: {0}	не удалось декодировать изображение: {0}
 @msg	image is empty	изображение пусто
@@ -5915,6 +5925,13 @@ anchor	Points:	Точки:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Исправления печатных красок работают в документах CMYK: сначала выберите Файл › Цветовой режим документа › Цвет CMYK
 @msg	`{key}` must be 0..{max}	`{key}` должен быть 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Найти ближайший образец…
+	Find Nearest Swatch	Найти ближайший образец
+	Apply Nearest Swatch	Применить ближайший образец
+	Select objects to find the swatches nearest their colors.	Выделите объекты, чтобы найти образцы, ближайшие к их цветам.
+@msg	select objects or give `color`	выделите объекты или укажите `color`
+@msg	`color` is not a colour	`color` не является цветом
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Инструмент «Углы»
 	Slide Anchor Along Path	Сдвинуть опорную точку вдоль контура
@@ -6029,6 +6046,9 @@ breakText	Glyphs	Глифы
 	Gap 4	Зазор 4
 	Dash 5	Штрих 5
 	Gap 5	Зазор 5
+
+@msg	{_1}: they came in as the page's art	{_1}: импортированы как графика страницы
+
 @msg	You must choose a side pattern.	Выберите боковой узор.
 @msg	invalid pattern tile choice	недопустимый выбор плитки узора
 @msg	no pattern named `{choice}`	узор с именем `{choice}` не найден
@@ -6059,6 +6079,9 @@ breakText	Glyphs	Глифы
 	Remove Gaps	Убрать зазоры
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так получится слишком много частей (не более 100000): удлините штрихи
 @msg	select paths, or segments, to divide	выделите контуры или сегменты для разделения
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Разобрать штрихи на контуры
+@msg	select paths with dashed strokes to expand	выделите контуры со штриховой обводкой для разбора
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменты документа
 	Save a Timestamped Copy	Сохранить копию с датой и временем
@@ -6081,6 +6104,11 @@ breakText	Glyphs	Глифы
 	Odia	Ория
 	Urdu	Урду
 	VectorCraft {release} and later (version {n})	VectorCraft {release} и новее (версия {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Экспортировать все открытые документы в PDF
+	Export All Open Documents as SVG	Экспортировать все открытые документы в SVG
+@msgplural	Exported {n} document|Exported {n} documents	Экспортирован {n} документ|Экспортировано {n} документа|Экспортировано {n} документов
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Экспортирован {n} документ; {title} не записан: {error}|Экспортировано {n} документа; {title} не записан: {error}|Экспортировано {n} документов; {title} не записан: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Тип символа:
 	Dynamic Symbol	Динамический символ

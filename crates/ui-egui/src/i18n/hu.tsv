@@ -1193,6 +1193,7 @@ font-technology	Variable	Változó
 	Edit Selection	Kijelölés szerkesztése
 	Edit Selection…	Kijelölés szerkesztése…
 	Edit Symbol	Szimbólum szerkesztése
+	Exit Symbol Editing Mode	Kilépés a szimbólumszerkesztési módból
 	Edit Text	Szöveg szerkesztése
 	Edit the applied effect, or add another one?	Szerkeszted az alkalmazott effektust, vagy újat adsz hozzá?
 	Edit the point	Pont szerkesztése
@@ -1937,6 +1938,12 @@ file-filter	Templates	Sablonok
 	Hyphenate Capitalized Words	Nagybetűs szavak elválasztása
 	ICC Profile	ICC-profil
 	ICF Bottom/Left	ICF alja/bal oldala
+	Show Font Height Options	Betűmagasság-beállítások megjelenítése
+	Hide Font Height Options	Betűmagasság-beállítások elrejtése
+	Set Font Height Reference	Betűmagasság viszonyítási alapjának beállítása
+	Em Box	Kvirtmező
+	x-Height	x-magasság
+	ICF Box	ICF-mező
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
@@ -4518,6 +4525,7 @@ imageTrace	Outline	Körvonal
 @msg	`stops` must be an array	`stops`: tömb kell
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`: SVG-beállításokat tartalmazó objektum kell (lásd: document.formats)
 @msg	`to` must be "corner" or "smooth"	`to`: "corner" vagy "smooth" kell
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`: "emBox", "capHeight", "xHeight" vagy "icfBox" kell
 @msg	`{_1}` is no save command	nem mentési parancs: `{_1}`
 @msg	`{area}` is no recovery area name	nem helyreállítási terület neve: `{area}`
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	nem szín: `{color}` (#rrggbb vagy előbeállítás neve)
@@ -5069,6 +5077,8 @@ imageTrace	Outline	Körvonal
 @msg	a clipping path can't be attached to a path	vágóútvonal nem csatolható útvonalhoz
 @msg	select a stroke with a variable width	jelölj ki egy változó szélességű körvonalat
 @msg	select a symbol instance	jelölj ki egy szimbólumpéldányt
+@msg	select instances of one symbol	egyetlen szimbólum példányait jelöld ki
+@msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
@@ -5924,6 +5934,13 @@ anchor	Points:	Pontok:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	adja meg: `inkLimit`, `removeWhiteOverprint` vagy `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	A nyomdai festékjavítások CMYK-dokumentumokon működnek: előbb válassza a Fájl › Dokumentum színmódja › CMYK-szín parancsot
 @msg	`{key}` must be 0..{max}	`{key}` értéke 0..{max} lehet
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Legközelebbi színminta keresése…
+	Find Nearest Swatch	Legközelebbi színminta keresése
+	Apply Nearest Swatch	Legközelebbi színminta alkalmazása
+	Select objects to find the swatches nearest their colors.	Jelöljön ki objektumokat a színeikhez legközelebbi színminták megkereséséhez.
+@msg	select objects or give `color`	jelöljön ki objektumokat, vagy adja meg ezt: `color`
+@msg	`color` is not a colour	a(z) `color` nem szín
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Sarok eszköz
 	Slide Anchor Along Path	Horgonypont csúsztatása az útvonal mentén
@@ -6038,6 +6055,9 @@ breakText	Glyphs	Glifák
 	Gap 4	Hézag 4
 	Dash 5	Vonal 5
 	Gap 5	Hézag 5
+
+@msg	{_1}: they came in as the page's art	{_1}: az oldal rajzaként lettek importálva
+
 @msg	You must choose a side pattern.	Válasszon oldalsó mintát.
 @msg	invalid pattern tile choice	érvénytelen mintacsempe-választás
 @msg	no pattern named `{choice}`	nincs `{choice}` nevű minta
@@ -6068,6 +6088,9 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
+@msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel
@@ -6090,6 +6113,11 @@ breakText	Glyphs	Glifák
 	Odia	Odia
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} és újabb (verzió: {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként
+	Export All Open Documents as SVG	Az összes megnyitott dokumentum exportálása SVG-ként
+@msgplural	Exported {n} document|Exported {n} documents	Exportált dokumentumok: {n}
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Szimbólum típusa:
 	Dynamic Symbol	Dinamikus szimbólum

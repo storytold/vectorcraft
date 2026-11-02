@@ -2,7 +2,8 @@
 //! the Extend Path tool's extension, the Measure & Inspect tool's readouts, the Anchor Inspector's
 //! anchor edits, Split / Add Points at Crossings, Slide Anchor Along Path, the Corner Tool's corners
 //! ([`corners`]), the Parametric Shape Tool's shapes ([`shape`]), the Shared Edge Merge Tool's
-//! merges with Keep Shared Points Together ([`shared_edge`]), and Divide into Dashes.
+//! merges with Keep Shared Points Together ([`shared_edge`]), Divide into Dashes and Expand Dashes
+//! into Paths.
 //! Its tools, panels and submenu (Object › Plug-ins › Path Precision Tools) are the tools crate's
 //! and the UI's.
 
@@ -17,7 +18,7 @@ mod tests;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AnchorRef, Document, NodeId, NodeKind};
+use vectorcraft_doc::{AnchorRef, Appearance, AppearanceItem, Document, LineCap, NodeId, NodeKind};
 use vectorcraft_geom::{PathData, Point, SubPath};
 use vectorcraft_pathops::addons::{self as po, pathtools as pt};
 
@@ -40,7 +41,7 @@ const MIN_RADIUS: f64 = 0.05;
 const MAX_DIAMETER: f64 = 2500.0;
 /// The farthest an end is extended at once (pt).
 const MAX_EXTEND: f64 = 1e6;
-/// Most pieces Divide into Dashes makes at once.
+/// Most pieces Divide into Dashes and Expand Dashes into Paths make at once.
 const MAX_PIECES: usize = 100_000;
 /// Most anchors Add Points puts on each segment.
 const MAX_ADD: u64 = pt::MAX_ADDED_PER_SEGMENT as u64;
@@ -163,6 +164,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{dash?: pt 0.01..1000000 (10), gap?: pt 0..1000000 (0: the pieces touch), fit?: bool (false: exact lengths, the last piece of each run what is left; true: fit to corners and ends, every run between corners and ends holding whole dashes, all stretched or squeezed alike so it starts and ends on a dash), removeGaps?: bool (true: the gaps are left empty; false: they stay as pieces too)} cut the selected paths into separate open paths along the curve, each dash long with gap between them and keeping the path's appearance, as one undo step. Only the direct-selected segments (or those between two direct-selected anchors) are divided when there are any, the dash pattern running on across segments that follow one another; the rest of such a path stays, as pieces of its own. The pieces are selected; at most 100000 → {ids, dashes}",
             has_selection,
             divide_dashes
+        ),
+        cmd!(
+            "addon.pathtools.expandDashes",
+            "Expand Dashes into Paths",
+            ["Object", "Plug-ins", "Path Precision Tools"],
+            None,
+            "{ids?: [id…] (default: the selection)} turn the dashed stroke of each path and compound path under the objects into separate open paths, one per dash, laid out as the stroke draws them (its dash pattern, offset and Align Dashes to Corners and Path Ends), each keeping the path's appearance with the dashes off, so the gaps are real gaps: a dash running all the way round a closed path stays closed, and with a round or projecting cap a dash of no length (a dot) becomes a path on its point. The top stroke's dashes are the ones expanded; its arrowheads go, and the path's fills stay on it, below its dashes. Paths without a dashed stroke stay as they are. One undo step; the dashes are selected; at most 100000 → {ids, dashes}",
+            has_selection,
+            expand_dashes
         ),
     ];
     v.extend(shape::specs());
@@ -792,4 +802,101 @@ fn divide_dashes(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(all)
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "dashes": dashes }))
+}
+
+// ---------- Expand Dashes into Paths ----------
+
+/// The paths and compound paths under `roots` whose top stroke is dashed: a compound path's
+/// members stand for it, which holds their paint. Clipping paths are left alone.
+fn dashed_paths(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let editable = d.editable();
+    let mut seen = BTreeSet::new();
+    let mut out = vec![];
+    for id in paths_under(d, roots) {
+        let compound = d.parent_of(id).and_then(|p| d.node(p)).filter(|p| matches!(p.kind, NodeKind::Compound { .. }));
+        let Some(n) = compound.or_else(|| d.node(id)) else { continue };
+        let dashed = n.appearance.stroke().and_then(|st| st.dash.as_ref()).is_some_and(|dash| dash.is_dashed());
+        if dashed && !matches!(n.kind, NodeKind::Path { clipping: true, .. }) && editable(n.id) && seen.insert(n.id) {
+            out.push(n.id);
+        }
+    }
+    out
+}
+
+fn expand_dashes(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "addon.pathtools.expandDashes";
+    let too_many = || bad(C, "that makes too many pieces (at most 100000): make the dashes longer");
+    let roots = checked_ids_or_selection(s, p, C)?;
+    let d = &s.doc()?.doc;
+    // Each dashed path and its dashes, as the canvas draws them.
+    let mut changed: Vec<(NodeId, Vec<SubPath>)> = vec![];
+    let mut count = 0;
+    for id in dashed_paths(d, &roots) {
+        let Some(n) = d.node(id) else { continue };
+        let (Some(st), Some(bp)) = (n.appearance.stroke(), n.stroke_path()) else { continue };
+        let Some(dash) = &st.dash else { continue };
+        // The line the stroke draws: the path, its ends trimmed under any arrowheads.
+        let line = vectorcraft_render::effects::stroke::stroke_pieces(&bp, st).line;
+        // A pattern too fine to draw is drawn solid: it has too many dashes to expand.
+        let dashed = vectorcraft_render::effects::stroke::dash(&line, dash).ok_or_else(too_many)?;
+        let mut pieces = PathData::from_bezpath(&dashed.path).subpaths;
+        // A dot paints its cap; a path that stays on its point is drawn so too. Under a butt cap it
+        // paints nothing.
+        if st.cap != LineCap::Butt {
+            pieces.extend(dashed.dots.iter().map(|dot| SubPath::polyline(&[dot.at, dot.at], false)));
+        }
+        count += pieces.len();
+        if count > MAX_PIECES {
+            return Err(too_many());
+        }
+        if !pieces.is_empty() {
+            changed.push((id, pieces));
+        }
+    }
+    if changed.is_empty() {
+        return Err(bad(C, "select paths with dashed strokes to expand"));
+    }
+    let ids = s.edit("Expand Dashes into Paths", |d, sel| {
+        let mut all = vec![];
+        let mut beside = Beside::replacing(d, &changed.iter().map(|(id, _)| *id).collect::<Vec<_>>());
+        for (id, pieces) in changed {
+            let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+            let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &n.kind else { continue };
+            let rule = *rule;
+            let filled = |i: &AppearanceItem| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none());
+            // The dashes: open paths with the strokes (the top one's dashes and arrowheads off).
+            let mut look = Appearance::clone(&n.appearance);
+            look.items.retain(|i| !matches!(i, AppearanceItem::Fill(_)));
+            if let Some(st) = look.stroke_mut() {
+                (st.dash, st.start_arrow, st.end_arrow) = (None, None, None);
+            }
+            let mut dash = n.clone();
+            dash.kind = NodeKind::Path { path: PathData::default(), rule, live: None, clipping: false, guide: false };
+            dash.appearance = look.into();
+            // The fills stay on the path, below its dashes; without fills it goes.
+            let mut parts = vec![];
+            if n.appearance.items.iter().any(filled) {
+                let mut fill = n.clone();
+                let mut look = Appearance::clone(&n.appearance);
+                look.items.retain(filled);
+                fill.appearance = look.into();
+                parts.push(fill);
+            }
+            for sp in pieces {
+                let mut piece = d.reid(&dash);
+                if let NodeKind::Path { path, .. } = &mut piece.kind {
+                    *path = PathData::single(sp);
+                }
+                all.push(piece.id);
+                parts.push(piece);
+            }
+            beside.put(d, id, parts)?;
+        }
+        beside.finish(d)?;
+        // The dashes join the objects selected (whole, in one go: there may be many).
+        let before = std::mem::take(&mut sel.objects);
+        sel.set(before.into_iter().filter(|id| d.node(*id).is_some()).chain(all.iter().copied()));
+        Ok(all)
+    })?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "dashes": ids.len() }))
 }

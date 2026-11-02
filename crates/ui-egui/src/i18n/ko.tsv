@@ -36,6 +36,13 @@ font-technology	Variable	가변
 	Em Box Top/Right	엠 박스 위/오른쪽
 	ICF Top/Right	ICF 위/오른쪽
 	ICF Bottom/Left	ICF 아래/왼쪽
+	Show Font Height Options	글꼴 높이 옵션 표시
+	Hide Font Height Options	글꼴 높이 옵션 숨기기
+	Set Font Height Reference	글꼴 높이 기준 설정
+	Em Box	엠 박스
+	Cap Height	대문자 높이
+	x-Height	x 높이
+	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
 	Character Direction	문자 방향
 	Digits	숫자
@@ -1423,6 +1430,7 @@ digits	Malayalam	말라얄람어
 	Edit PDF Preset	PDF 프리셋 편집
 	Edit Print Preset	인쇄 프리셋 편집
 	Edit Symbol	심볼 편집
+	Exit Symbol Editing Mode	심볼 편집 모드 종료
 	Edit Theme	테마 편집
 	Edit selected paths within:	다음 범위 안의 선택한 패스 편집:
 	Edit or Apply Color Group	색상 그룹 편집 또는 적용
@@ -3910,6 +3918,7 @@ theme	Appearance	외관
 @msg	Saving {_1}	{_1} 저장 중
 @msg	Sent to {_1}	{_1}(으)로 보냈습니다
 @msg	`to` must be "corner" or "smooth"	`to`는 "corner" 또는 "smooth"여야 합니다
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`는 "emBox", "capHeight", "xHeight" 또는 "icfBox"여야 합니다
 @msg	a layer couldn't be read	레이어를 읽을 수 없습니다
 @msg	it has more than one artboard	아트보드가 둘 이상입니다
 @msg	its editing data has no layers	편집 데이터에 레이어가 없습니다
@@ -3953,6 +3962,8 @@ theme	Appearance	외관
 @msg	brushes move only within their type	브러시는 같은 유형 안에서만 이동할 수 있습니다
 @msg	no symbol instances selected	선택한 심볼 인스턴스가 없습니다
 @msg	select a symbol instance	심볼 인스턴스를 선택하세요
+@msg	select instances of one symbol	한 심볼의 인스턴스를 선택하세요
+@msg	a symbol can't hold an instance of itself	심볼에는 자기 자신의 인스턴스를 넣을 수 없습니다
 @msg	the art has no bounds	아트웍에 경계가 없습니다
 @msg	Image Trace: the traced image is missing	이미지 추적: 추적한 이미지가 없습니다
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	라이브 페인트 병합: 라이브 페인트 그룹과 추가할 패스를 선택하세요
@@ -5519,6 +5530,13 @@ anchor	Points:	포인트:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` 또는 `overprintBlack`을 지정하십시오
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	인쇄 잉크 수정은 CMYK 문서에서 작동합니다. 먼저 파일 › 문서 색상 모드 › CMYK 색상을 선택하십시오
 @msg	`{key}` must be 0..{max}	`{key}`은(는) 0..{max}이어야 합니다
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	가장 가까운 견본 찾기…
+	Find Nearest Swatch	가장 가까운 견본 찾기
+	Apply Nearest Swatch	가장 가까운 견본 적용
+	Select objects to find the swatches nearest their colors.	색상에 가장 가까운 견본을 찾을 개체를 선택하십시오.
+@msg	select objects or give `color`	개체를 선택하거나 `color`를 지정하십시오
+@msg	`color` is not a colour	`color`은(는) 색상이 아닙니다
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	모퉁이 도구
 	Slide Anchor Along Path	패스를 따라 앵커 포인트 밀기
@@ -5634,6 +5652,9 @@ breakText	Glyphs	글리프
 	Gap 4	간격 4
 	Dash 5	대시 5
 	Gap 5	간격 5
+
+@msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+
 @msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.
 @msg	invalid pattern tile choice	잘못된 패턴 타일 선택
 @msg	no pattern named `{choice}`	`{choice}` 이름의 패턴이 없습니다
@@ -5664,6 +5685,9 @@ breakText	Glyphs	글리프
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
 @msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	대시를 패스로 확장
+@msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	문서 도구
 	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장
@@ -5686,6 +5710,11 @@ breakText	Glyphs	글리프
 	Odia	오리야어
 	Urdu	우르두어
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기
+	Export All Open Documents as SVG	열린 모든 문서를 SVG로 내보내기
+@msgplural	Exported {n} document|Exported {n} documents	문서 {n}개를 내보냈습니다
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	문서 {n}개를 내보냈습니다; {title}을(를) 쓰지 못했습니다: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	심볼 유형:
 	Dynamic Symbol	동적 심볼

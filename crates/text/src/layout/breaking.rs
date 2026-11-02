@@ -224,7 +224,7 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
     }
     let first = ((from - origin) / width - EPS).ceil();
     let copies = (((to - origin) / width + EPS).floor() - first).clamp(0.0, MAX_LEADER_COPIES) as usize;
-    let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((0.0, -g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
+    let local = Affine::translate((0.0, -g.bshift)) * Affine::rotate(-g.rotation.to_radians()) * Affine::scale_non_uniform(g.sx, g.sy);
     for k in 0..copies {
         let mut pen = origin + (first + k as f64) * width;
         for &(gid, adv) in &glyphs {

@@ -481,6 +481,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let label = e.label.clone();
     let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
+    let editing_symbol = st.doc.symbol_edit.clone();
     let doc = std::mem::replace(&mut st.doc, e.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.redo.last());
@@ -494,6 +495,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
+    super::symboledit::follow_history(st, editing_symbol.as_ref());
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
     Ok(json!({ "undone": label }))
@@ -507,6 +509,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let label = e.label.clone();
     let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
+    let editing_symbol = st.doc.symbol_edit.clone();
     let doc = std::mem::replace(&mut st.doc, e.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.undo.last());
@@ -519,6 +522,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
+    super::symboledit::follow_history(st, editing_symbol.as_ref());
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
     Ok(json!({ "redone": label }))
@@ -809,11 +813,13 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         && (st.doc.paste_remembers_layers || boards.is_some())
         && parent.is_some_and(|p| st.doc.node(p).is_some_and(Node::is_layer));
     // Front/back: relative to the selection (top-most / bottom-most selected object); with
-    // nothing selected, the top / bottom of the current layer.
+    // nothing selected, the top / bottom of the current layer. Art other than paths goes beside
+    // the compound path that holds the selected object, not into it.
     let anchor = if front || back {
         let order = st.selection.in_paint_order(&st.doc);
         let a = if front { order.last() } else { order.first() };
-        a.and_then(|id| st.doc.position(*id))
+        let paths_only = clip.nodes.iter().all(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }));
+        a.map(|id| paste_anchor(&st.doc, *id, paths_only)).and_then(|id| st.doc.position(id))
     } else {
         None
     };
@@ -856,17 +862,20 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                     Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
                     _ => None,
                 };
+                // In a clip group or a clipping layer the bottom child is the clipping path: art pasted
+                // in back goes above it, not below it.
+                let floor = |d: &Document, par: Option<NodeId>| usize::from(par.and_then(|p| d.node(p)).is_some_and(Node::clips));
                 let (par, idx) = match (into, anchor, layer) {
                     // Inside the object Draw Inside draws into, on top of what is in it already.
                     (Some(group), ..) => (Some(group), usize::MAX),
                     // Next to the anchor, unless the object goes back to another layer.
                     (None, Some((par, i, _)), l) if l.is_none() || l == par => {
                         let k = placed.get(&par).copied().unwrap_or(0);
-                        (par, if front { i + 1 + k } else { i + k })
+                        (par, if front { i + 1 + k } else { i.max(floor(d, par)) + k })
                     }
                     (None, _, l) => {
                         let par = l.or(parent);
-                        (par, if back { placed.get(&par).copied().unwrap_or(0) } else { usize::MAX })
+                        (par, if back { floor(d, par) + placed.get(&par).copied().unwrap_or(0) } else { usize::MAX })
                     }
                 };
                 *placed.entry(par).or_default() += 1;
@@ -894,6 +903,15 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         "merged": imported.merged,
         "renamed": imported.renamed,
     }))
+}
+
+/// What pasted art goes beside: `id`, or the compound path holding it when the art isn't only
+/// paths (a compound path holds paths only).
+fn paste_anchor(doc: &Document, id: NodeId, paths_only: bool) -> NodeId {
+    match doc.parent_of(id) {
+        Some(p) if !paths_only && doc.node(p).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. })) => p,
+        _ => id,
+    }
 }
 
 /// The first unlocked layer or sublayer called `name` (topmost first), or a new top layer.

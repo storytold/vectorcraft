@@ -237,10 +237,38 @@ fn perceptual_spot_gradients_export_as_separation_shadings() {
 }
 
 #[test]
+fn perceptual_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
+    let (mut s, _) = setup();
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": {"c": 1, "m": 0, "y": 1, "k": 0}, "spot": true}));
+    let ink_to_cyan = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": {"c": 1, "m": 0, "y": 0, "k": 0}}]});
+    let ink_to_leaf = json!({"stops": [{"offset": 0, "swatch": "Ink", "midpoint": 30}, {"offset": 1, "swatch": "Leaf", "tint": 50}]});
+    for (what, edit, space) in [
+        ("Ink → cyan", with(ink_to_cyan.clone(), json!({"method": "perceptual"})), "/DeviceN[/Cyan/Ink]/DeviceCMYK"),
+        ("Ink → Leaf 50 %", with(ink_to_leaf, json!({"method": "perceptual"})), "/DeviceN[/Ink/Leaf]/DeviceCMYK"),
+    ] {
+        run(&mut s, "paint.editGradient", edit);
+        let (pdf, warnings) = pdf_of(&s);
+        assert!(!pdf.contains("/Subtype/Image"), "{what}: no image");
+        assert!(pdf.contains("/ShadingType 2") && pdf.contains(space), "{what}: a DeviceN shading");
+        // The curve's stops: a stitching function of more than the two ends.
+        assert!(pdf.contains("/FunctionType 3"), "{what}: inks on the curve");
+        assert!(!warnings.iter().any(|w| w.contains("spot")), "{what}: {warnings:?}");
+    }
+    // The curve starts at the first stop's inks: no cyan, Ink at 100 %.
+    run(&mut s, "paint.editGradient", with(ink_to_cyan.clone(), json!({"method": "perceptual"})));
+    let (pdf, _) = pdf_of(&s);
+    assert!(pdf.contains("/C0[0 1]"), "the first stop's inks");
+    // A radial one too.
+    run(&mut s, "paint.editGradient", with(ink_to_cyan, json!({"method": "perceptual", "kind": "radial"})));
+    let (pdf, _) = pdf_of(&s);
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType 3") && pdf.contains("/DeviceN[/Cyan/Ink]/DeviceCMYK"), "radial");
+}
+
+#[test]
 fn spot_gradients_drawn_as_images_warn() {
     let (mut s, _) = setup();
     let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
-    let ink_to_cyan = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": {"c": 1, "m": 0, "y": 0, "k": 0}}]});
+    let ink_to_green = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": "#00ff00"}]});
     // More stops than the export finds tints for: an image, as before.
     let n = 4097;
     let stops: Vec<Value> = (0..n)
@@ -250,7 +278,7 @@ fn spot_gradients_drawn_as_images_warn() {
         })
         .collect();
     for (what, edit) in [
-        ("Perceptual Ink → cyan", with(ink_to_cyan, json!({"method": "perceptual"}))),
+        ("Perceptual Ink → RGB green", with(ink_to_green, json!({"method": "perceptual"}))),
         ("dithered Classic Ink → paper", with(ink_to_white(100.0), json!({"dither": true, "method": "classic"}))),
         ("dithered Perceptual Ink → paper", with(ink_to_white(100.0), json!({"dither": true, "method": "perceptual"}))),
         ("Perceptual Ink and paper, 4,097 stops", json!({"stops": stops, "dither": false, "method": "perceptual"})),

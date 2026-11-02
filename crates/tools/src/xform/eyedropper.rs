@@ -5,9 +5,10 @@
 //! onto the clicked object (`reverse`); Shift+Alt-click: add the clicked object's appearance to the
 //! selection's (`append`). Shift-click: sample only the colour under the cursor into the active
 //! fill/stroke (`paint.sampleColor`; in a CMYK document an RGB color is stored as CMYK): a
-//! gradient's color at that point, a pattern's tile art there (after the pattern's transform), or
-//! a gradient mesh's interpolated patch color. Clicking an image samples its pixels (averaged over
-//! the options' raster sample size; a CMYK image gives its ink amounts).
+//! gradient's color at that point, a pattern's tile art there (after the pattern's transform), a
+//! gradient mesh's interpolated patch color, or the art a blend or an envelope draws there (a
+//! blend's steps, an envelope's distorted contents). Clicking an image samples its pixels
+//! (averaged over the options' raster sample size; a CMYK image gives its ink amounts).
 //!
 //! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
 //! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
@@ -119,8 +120,8 @@ pub(crate) fn sample_source(cx: &ToolContext, p: Point) -> Option<(vectorcraft_d
     Some((paint_owner(cx.doc, h.leaf), h.kind))
 }
 
-/// The visible color under `p`, including image pixels, pattern tiles, mesh colors and
-/// intermediate gradient colors.
+/// The visible color under `p`, including image pixels, pattern tiles, mesh colors, intermediate
+/// gradient colors, the steps a blend draws and an envelope's distorted contents.
 pub(crate) fn sample_color_at(cx: &ToolContext, p: Point) -> Option<Color> {
     let (doc, opts, raster_sample) = (cx.doc, sample_options(cx), cx.raster_sample);
     vectorcraft_doc::depth::with_deep_stack(|| {
@@ -134,7 +135,9 @@ pub(crate) fn sample_color_at(cx: &ToolContext, p: Point) -> Option<Color> {
 
 /// The color the front-most object of `doc` hit at `p` with `opts` shows there. Where a stroke
 /// gives no color at `p` (a gap between its pattern's tiles), the object's own fill there does;
-/// an object that gives none at all is passed over for the ones below it. `levels` holds the
+/// an object that gives none at all is passed over for the ones below it. A hit on a blend or an
+/// envelope, or on an object it holds, samples the art it draws ([`live_color_at`]), and where
+/// that art leaves `p` empty the whole blend or envelope is passed over. `levels` holds the
 /// scratch documents for art inside art, one for each level deeper.
 fn color_under(s: &mut Sampler, doc: &Document, levels: &mut [Option<Document>], p: Point, opts: HitOptions) -> Option<Color> {
     let mut passed: HashSet<NodeId> = HashSet::new();
@@ -150,6 +153,15 @@ fn color_under(s: &mut Sampler, doc: &Document, levels: &mut [Option<Document>],
         };
         s.spend(cost)?;
         let h = hit_test_visible_skipping(doc, p, opts, &|id| passed.contains(&id))?;
+        if let Some(live) = drawn_live(doc, &h.ancestry) {
+            if let Some(c) = live_color_at(s, levels, live, p) {
+                return Some(c);
+            }
+            if !passed.insert(live.id) {
+                return None;
+            }
+            continue;
+        }
         let id = paint_owner(doc, h.leaf);
         let n = doc.node(id)?;
         let on_stroke = h.kind == HitKind::Stroke;
@@ -175,6 +187,23 @@ fn fill_covers(n: &Node, p: Point) -> bool {
         NodeKind::Compound { rule, .. } => n.stroke_path().is_some_and(|bp| fill_contains(&bp, *rule, p)),
         _ => false,
     }
+}
+
+/// The outermost blend or envelope (other than one whose contents are being edited) in `ancestry`,
+/// a hit's path through `doc`: the canvas draws its evaluated art, not the objects it holds.
+fn drawn_live<'d>(doc: &'d Document, ancestry: &[NodeId]) -> Option<&'d Node> {
+    ancestry.iter().filter_map(|id| doc.node(*id)).find(|n| matches!(n.kind, NodeKind::Blend { .. } | NodeKind::Envelope { editing: false, .. }))
+}
+
+/// The color the art blend or envelope `n` draws shows at `p`, sampled as [`art_color_at`] samples
+/// art: a blend's keys and steps, an envelope's distorted contents, symbol instances in them by
+/// their symbols' art. Evaluating it counts the objects it holds, and the art made counts its
+/// objects.
+fn live_color_at(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, p: Point) -> Option<Color> {
+    s.spend(n.count())?;
+    let art = vectorcraft_effects::expand_live_deep(Some(s.doc), n);
+    s.spend(art.count())?;
+    art_color_at(s, levels, [art], p)
 }
 
 /// The color `n` shows at `p`: an image's pixels, a mesh's interpolated patch color, a symbol
@@ -1197,5 +1226,188 @@ mod tests {
         let paint = Paint::Gradient(Box::new(g));
         assert_eq!(paint_color_at(&paint, None, Point::new(0.0, -50.0)).unwrap().to_hex(), "#000000");
         assert_eq!(paint_color_at(&paint, None, Point::new(50.0, 0.0)).unwrap().to_hex(), "#808080");
+    }
+
+    /// An unstroked rectangle of `d` filled with `color`.
+    fn solid_rect(d: &mut vectorcraft_doc::Document, r: vectorcraft_geom::Rect, color: Color) -> Node {
+        let a = vectorcraft_doc::Appearance::basic(Paint::solid(color), Paint::None, 0.0);
+        Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(r), a)
+    }
+
+    /// [`doc_with_rect`] plus a green rectangle (290, 290)–(430, 350) and, over it, `live` made by
+    /// `make` from the document.
+    fn doc_with_live_over_green(make: impl FnOnce(&mut vectorcraft_doc::Document) -> Node) -> vectorcraft_doc::Document {
+        use vectorcraft_geom::Rect;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let green = solid_rect(&mut d, Rect::new(290.0, 290.0, 430.0, 350.0), Color::rgb(0.0, 1.0, 0.0));
+        d.insert(Some(l), usize::MAX, green).unwrap();
+        let live = make(&mut d);
+        d.insert(Some(l), usize::MAX, live).unwrap();
+        d
+    }
+
+    /// Shift-click on a blend samples the step drawn under the cursor, and a gap between its steps
+    /// samples what lies below.
+    #[test]
+    fn shift_click_samples_the_blend_step_under_the_cursor() {
+        use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+        use vectorcraft_geom::Rect;
+        // Red (300, 300)–(320, 320) and blue (400, 300)–(420, 320) with 1 step, half red and half
+        // blue, at x 350 to 370.
+        let d = doc_with_live_over_green(|d| {
+            let red = solid_rect(d, Rect::new(300.0, 300.0, 320.0, 320.0), Color::rgb(1.0, 0.0, 0.0));
+            let blue = solid_rect(d, Rect::new(400.0, 300.0, 420.0, 320.0), Color::rgb(0.0, 0.0, 1.0));
+            let spec = BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() };
+            Node::new(d.alloc_id(), NodeKind::Blend { children: vec![std::sync::Arc::new(red), std::sync::Arc::new(blue)], spec: Box::new(spec) })
+        });
+        let (s, p) = (Selection::default(), paint());
+        let shift = Mods { shift: true, ..Default::default() };
+        let at = |x: f64| EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, x, 310.0).with_mods(shift));
+        let mid = Color::rgb(0.5, 0.0, 0.5).to_hex();
+        assert_eq!(sampled_hex(&at(360.0)), mid);
+        assert_eq!(crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), Point::new(360.0, 310.0)).map(|c| c.to_hex()), Some(mid));
+        assert_eq!(sampled_hex(&at(310.0)), "#ff0000");
+        // Between the red key and the step (x 320 to 350), and below the step.
+        assert_eq!(sampled_hex(&at(335.0)), "#00ff00");
+        let below = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 360.0, 325.0).with_mods(shift));
+        assert_eq!(sampled_hex(&below), "#00ff00");
+    }
+
+    /// A blend of two instances of one symbol draws its steps as instances too: Shift-click on a
+    /// step samples the symbol's art there, and where that art leaves the point empty, what lies
+    /// below.
+    #[test]
+    fn shift_click_samples_symbol_art_in_a_blends_steps() {
+        use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+        use vectorcraft_geom::{Affine, Rect};
+        // A red 20 pt square at the symbol's origin, placed at x 300 and 400, with 1 step at x 350.
+        let d = doc_with_live_over_green(|d| {
+            let art = solid_rect(d, Rect::new(0.0, 0.0, 20.0, 20.0), Color::rgb(1.0, 0.0, 0.0));
+            d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: std::sync::Arc::new(art) });
+            let mut instance = |x: f64| {
+                let kind = NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((x, 300.0)) };
+                std::sync::Arc::new(Node::new(d.alloc_id(), kind))
+            };
+            let children = vec![instance(300.0), instance(400.0)];
+            let spec = BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() };
+            Node::new(d.alloc_id(), NodeKind::Blend { children, spec: Box::new(spec) })
+        });
+        let (s, p) = (Selection::default(), paint());
+        let sample = |x: f64, y: f64| crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), Point::new(x, y)).map(|c| c.to_hex());
+        assert_eq!(sample(360.0, 310.0), Some("#ff0000".into()));
+        assert_eq!(sample(335.0, 310.0), Some("#00ff00".into()));
+        assert_eq!(sample(360.0, 325.0), Some("#00ff00".into()));
+    }
+
+    /// Align to Path turns a blend's keys and steps to its spine, past the keys' bounds: a click
+    /// there hits the blend and samples what it draws.
+    #[test]
+    fn shift_click_samples_blend_art_turned_past_its_bounds() {
+        use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
+        use vectorcraft_geom::Rect;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let green = solid_rect(&mut d, Rect::new(20.0, 20.0, 280.0, 280.0), Color::rgb(0.0, 1.0, 0.0));
+        d.insert(Some(l), usize::MAX, green).unwrap();
+        // 100 × 10 keys centred on (100, 100) and (200, 200): Align to Path turns them 45°, and the
+        // red one reaches (70, 66), above the keys' bounds (y 95 to 205).
+        let red = solid_rect(&mut d, Rect::new(50.0, 95.0, 150.0, 105.0), Color::rgb(1.0, 0.0, 0.0));
+        let blue = solid_rect(&mut d, Rect::new(150.0, 195.0, 250.0, 205.0), Color::rgb(0.0, 0.0, 1.0));
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(1), orientation: BlendOrientation::AlignToPath, ..Default::default() };
+        let id = d.alloc_id();
+        let blend = Node::new(id, NodeKind::Blend { children: vec![std::sync::Arc::new(red), std::sync::Arc::new(blue)], spec: Box::new(spec) });
+        d.insert(Some(l), usize::MAX, blend).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let at = Point::new(70.0, 66.0);
+        assert!(d.node(id).unwrap().geometric_bounds().is_some_and(|b| !b.contains(at)));
+        assert_eq!(hit_test(&d, at, cx(&d, &s, &p).hit_options()).map(|h| h.leaf), Some(id));
+        assert_eq!(crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), at).map(|c| c.to_hex()), Some("#ff0000".into()));
+        // Where the turned key leaves the point empty, the click passes the blend by.
+        assert_eq!(crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), Point::new(60.0, 90.0)).map(|c| c.to_hex()), Some("#00ff00".into()));
+        // A hidden red key does not hit there.
+        if let Some(NodeKind::Blend { children, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+            std::sync::Arc::make_mut(&mut children[0]).visible = false;
+        }
+        assert_eq!(hit_test(&d, at, cx(&d, &s, &p).hit_options()).map(|h| h.leaf), Some(d.layers[0].children().unwrap()[1].id));
+        // A red key clipped to its right half, centred on (125, 100): the line to the blue key's
+        // centre turns it about 53°, and its hidden left half reaches (89, 52).
+        let mut clip = solid_rect(&mut d, Rect::new(100.0, 95.0, 150.0, 105.0), Color::BLACK);
+        clip.appearance = Default::default();
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        let red = solid_rect(&mut d, Rect::new(50.0, 95.0, 150.0, 105.0), Color::rgb(1.0, 0.0, 0.0));
+        let key = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(red)], clip: true });
+        if let Some(NodeKind::Blend { children, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+            children[0] = std::sync::Arc::new(key);
+        }
+        let hidden = Point::new(89.0, 52.0);
+        assert!(d.node(id).unwrap().geometric_bounds().is_some_and(|b| !b.contains(hidden)));
+        assert_eq!(hit_test(&d, hidden, cx(&d, &s, &p).hit_options()).map(|h| h.leaf), Some(d.layers[0].children().unwrap()[1].id));
+        assert_eq!(crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), hidden).map(|c| c.to_hex()), Some("#00ff00".into()));
+    }
+
+    /// The stroke of an envelope's distorted contents paints past the envelope's bounds: a click
+    /// there hits the envelope and samples the stroke.
+    #[test]
+    fn shift_click_samples_an_envelopes_stroke_past_its_bounds() {
+        use vectorcraft_geom::{Affine, Rect};
+        let mut id = None;
+        let d = doc_with_live_over_green(|d| {
+            let a = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 10.0);
+            let red = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 300.0, 420.0, 320.0)), a);
+            let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true };
+            let content = vec![std::sync::Arc::new(red)];
+            let n = Node::new(
+                d.alloc_id(),
+                NodeKind::Envelope {
+                    content,
+                    kind: Box::new(kind),
+                    fidelity: 50.0,
+                    editing: false,
+                    options: Default::default(),
+                    frame: Box::new(Affine::IDENTITY),
+                },
+            );
+            id = Some(n.id);
+            n
+        });
+        let (s, p) = (Selection::default(), paint());
+        // The middle of the band's top edge stays at y 300, and its 10 pt stroke reaches y 295.
+        let at = Point::new(360.0, 296.0);
+        assert!(d.node(id.unwrap()).unwrap().geometric_bounds().is_some_and(|b| !b.inflate(3.0, 3.0).contains(at)));
+        assert_eq!(hit_test(&d, at, cx(&d, &s, &p).hit_options()).map(|h| h.leaf), id);
+        assert_eq!(crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), at).map(|c| c.to_hex()), Some("#0000ff".into()));
+    }
+
+    /// Shift-click on an envelope samples its distorted contents where they are drawn, and a point
+    /// in its bounds that they leave empty samples what lies below.
+    #[test]
+    fn shift_click_samples_the_envelopes_distorted_contents() {
+        use vectorcraft_geom::{Affine, Rect};
+        let d = doc_with_live_over_green(|d| {
+            let red = solid_rect(d, Rect::new(300.0, 300.0, 420.0, 320.0), Color::rgb(1.0, 0.0, 0.0));
+            let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true };
+            let content = vec![std::sync::Arc::new(red)];
+            let options = Default::default();
+            Node::new(
+                d.alloc_id(),
+                NodeKind::Envelope { content, kind: Box::new(kind), fidelity: 50.0, editing: false, options, frame: Box::new(Affine::IDENTITY) },
+            )
+        });
+        let (s, p) = (Selection::default(), paint());
+        let sample = |x: f64, y: f64| crate::xform::eyedropper::sample_color_at(&cx(&d, &s, &p), Point::new(x, y)).map(|c| c.to_hex());
+        let art = vectorcraft_effects::expand_live_deep(Some(&d), d.layers[0].children().unwrap().last().unwrap());
+        let b = art.geometric_bounds().unwrap();
+        // The arc bends the ends of the band down, below the 20 pt it was, and keeps its middle.
+        assert!(b.y1 > 330.0, "{b:?}");
+        assert_eq!(sample(360.0, 310.0), Some("#ff0000".into()));
+        assert_eq!(sample(310.0, 332.0), Some("#ff0000".into()));
+        // Only what the art paints counts: just past the bent end's edge, within the click
+        // tolerance of it, the green below shows.
+        assert_eq!(sample(305.0, 332.0), Some("#00ff00".into()));
+        assert_eq!(sample(360.0, 332.0), Some("#00ff00".into()));
+        assert_eq!(sample(b.x0 + 0.5, b.y0 + 1.0), Some("#00ff00".into()));
     }
 }

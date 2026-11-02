@@ -912,6 +912,7 @@ font-technology	Variable	Variabla
 	Edit Selection	Redigera markering
 	Edit Selection…	Redigera markering…
 	Edit Symbol	Redigera symbol
+	Exit Symbol Editing Mode	Avsluta symbolredigeringsläge
 	Edit Text	Redigera text
 	Edit the applied effect, or add another one?	Vill du redigera den använda effekten eller lägga till en till?
 	Edit the point	Redigera punkten
@@ -3818,6 +3819,7 @@ axis	Both	Båda
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	grafiken på dem skiljer sig från sidans i {_1} % av ytan: de hämtas ändå från dess redigeringsdata
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` står för ändrade inställningar: spara förinställningen med ett annat namn
 @msg	`to` must be "corner" or "smooth"	`to` måste vara "corner" eller "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` måste vara "emBox", "capHeight", "xHeight" eller "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-filer är RGB eller gråskala: colorModel rgb eller gray
 @msg	Blend colors: select at least three objects with filled colours	Blanda färger: markera minst tre objekt med färgfyllning
 @msg	Combine Slices: the slices have no bounds	Kombinera skivor: skivorna har inga gränser
@@ -4251,6 +4253,8 @@ axis	Both	Båda
 @msg	select a repeat	markera en upprepning
 @msg	select a stroke with a variable width	markera en kontur med variabel bredd
 @msg	select a symbol instance	markera en symbolinstans
+@msg	select instances of one symbol	markera instanser av en och samma symbol
+@msg	a symbol can't hold an instance of itself	en symbol kan inte innehålla en instans av sig själv
 @msg	select an Image Trace object	markera ett bildspårningsobjekt
 @msg	could not decode image: {0}	kunde inte avkoda bilden: {0}
 @msg	image is empty	bilden är tom
@@ -4538,6 +4542,12 @@ axis	Both	Båda
 	Insert Inline Symbol	Infoga symbol i texten
 	ICF Top/Right	ICF överkant/höger
 	ICF Bottom/Left	ICF nederkant/vänster
+	Show Font Height Options	Visa alternativ för teckenhöjd
+	Hide Font Height Options	Dölj alternativ för teckenhöjd
+	Set Font Height Reference	Ange referens för teckenhöjd
+	Em Box	Em-ruta
+	x-Height	x-höjd
+	ICF Box	ICF-ruta
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` är stegreferensen {r}, som bara `run` och `command_batch` löser upp
 @msg	`ids` must be an array of object ids, not {v}	`ids` måste vara en array med objekt-id:n, inte {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` måste vara en array med index för ankarpunkter, inte {v}
@@ -5990,6 +6000,13 @@ shape	Open	Öppen
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	ange `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Tryckfärgskorrigeringar fungerar i CMYK-dokument: välj först Fil › Dokumentets färgläge › CMYK-färg
 @msg	`{key}` must be 0..{max}	`{key}` måste vara 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Sök närmaste färgruta…
+	Find Nearest Swatch	Sök närmaste färgruta
+	Apply Nearest Swatch	Använd närmaste färgruta
+	Select objects to find the swatches nearest their colors.	Markera objekt för att hitta de färgrutor som ligger närmast deras färger.
+@msg	select objects or give `color`	markera objekt eller ange `color`
+@msg	`color` is not a colour	`color` är ingen färg
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hörnverktyget
 	Slide Anchor Along Path	Skjut ankarpunkt längs bana
@@ -6104,6 +6121,9 @@ breakText	Glyphs	Glyfer
 	Gap 4	Mellanrum 4
 	Dash 5	Streck 5
 	Gap 5	Mellanrum 5
+
+@msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.
 @msg	invalid pattern tile choice	ogiltigt val av mönsterplatta
 @msg	no pattern named `{choice}`	inget mönster med namnet `{choice}`
@@ -6134,6 +6154,9 @@ breakText	Glyphs	Glyfer
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
 @msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandera streck till banor
+@msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentverktyg
 	Save a Timestamped Copy	Spara en kopia med tidsstämpel
@@ -6156,6 +6179,11 @@ breakText	Glyphs	Glyfer
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} och senare (version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportera alla öppna dokument som PDF
+	Export All Open Documents as SVG	Exportera alla öppna dokument som SVG
+@msgplural	Exported {n} document|Exported {n} documents	Exporterade {n} dokument|Exporterade {n} dokument
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exporterade {n} dokument; {title} skrevs inte: {error}|Exporterade {n} dokument; {title} skrevs inte: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltyp:
 	Dynamic Symbol	Dynamisk symbol

@@ -158,6 +158,7 @@ mod swatchcmds;
 mod swatches;
 mod swatchlib;
 mod symbolbounds;
+mod symboledit;
 mod symbollib;
 mod targeting;
 mod textcombos;

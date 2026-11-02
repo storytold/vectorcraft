@@ -227,12 +227,22 @@ impl Ctx<'_> {
         let local = match &g.inline {
             // Inline graphics: art space to glyph space (no font outline).
             Some(ib) => Affine::translate((-lead, -g.bshift)) * ib.xf,
+            // Baseline shift moves the glyph across its line, and Character Rotation then turns it
+            // about its shifted pen position, so the shift is across the line at any rotation.
             None => {
-                Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx - lead, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy)
+                Affine::translate((0.0, -g.bshift))
+                    * Affine::rotate(-g.rotation.to_radians())
+                    * Affine::translate((g.dx - lead, g.dy))
+                    * Affine::scale_non_uniform(g.sx, g.sy)
             }
         };
+        // The turning point in font units, which later moves of the glyph's transform keep.
+        let pivot = match local.determinant() {
+            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(0.0, -g.bshift),
+            _ => Point::ZERO,
+        };
         let unturned = if g.inline.is_none() && g.rotation != 0.0 && g.sx != 0.0 && g.sy != 0.0 {
-            let placed = Affine::translate((g.dx - lead, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
+            let placed = Affine::translate((g.dx - lead, g.dy)) * Affine::scale_non_uniform(g.sx, g.sy);
             placed.inverse() * Affine::rotate(g.rotation.to_radians()) * placed
         } else {
             Affine::IDENTITY
@@ -306,6 +316,7 @@ impl Ctx<'_> {
             colour,
             bend: None,
             unturned,
+            pivot,
         });
     }
 

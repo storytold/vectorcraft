@@ -39,8 +39,8 @@ use dnd::drag_of;
 use dnd::highlighted;
 pub(crate) use dnd::{click_selection, drag_preview};
 pub(crate) use libraries::{
-    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, limit_key, limit_name, load_library, open_library, other_library, user_library,
-    window_menu,
+    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_label, library_list, limit_key, limit_name, load_library, open_library,
+    other_library, user_library, window_menu,
 };
 #[cfg(test)]
 pub(crate) use tiles::describe;

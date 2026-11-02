@@ -42,6 +42,13 @@ font-technology	Variable	バリアブル
 	Em Box Top/Right	仮想ボディの上 / 右
 	ICF Top/Right	平均字面の上 / 右
 	ICF Bottom/Left	平均字面の下 / 左
+	Show Font Height Options	フォントの高さオプションを表示
+	Hide Font Height Options	フォントの高さオプションを隠す
+	Set Font Height Reference	フォントの高さの基準を設定
+	Em Box	仮想ボディ
+	Cap Height	キャップハイト
+	x-Height	x ハイト
+	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
 	Character Direction	文字の方向
 	Digits	数字
@@ -1433,6 +1440,7 @@ digits	Malayalam	マラヤーラム数字
 	Edit PDF Preset	PDF プリセットを編集
 	Edit Print Preset	プリントプリセットを編集
 	Edit Symbol	シンボルを編集
+	Exit Symbol Editing Mode	シンボル編集モードを終了
 	Edit Theme	テーマを編集
 	Edit selected paths within:	選択したパスを次の距離以内で編集：
 	Edit or Apply Color Group	カラーグループを編集または適用
@@ -3983,6 +3991,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Saving {_1}	{_1} を保存中
 @msg	Sent to {_1}	{_1} に送信しました
 @msg	`to` must be "corner" or "smooth"	`to` には "corner" または "smooth" を指定してください
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` には "emBox"、"capHeight"、"xHeight"、"icfBox" のいずれかを指定してください
 @msg	a layer couldn't be read	読み込めなかったレイヤーがあります
 @msg	it has more than one artboard	アートボードが複数あります
 @msg	its editing data has no layers	編集データにレイヤーがありません
@@ -4026,6 +4035,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	brushes move only within their type	ブラシは同じ種類の中でのみ移動できます
 @msg	no symbol instances selected	シンボルインスタンスが選択されていません
 @msg	select a symbol instance	シンボルインスタンスを選択してください
+@msg	select instances of one symbol	1 つのシンボルのインスタンスを選択してください
+@msg	a symbol can't hold an instance of itself	シンボルにそれ自体のインスタンスを含めることはできません
 @msg	the art has no bounds	アートに境界がありません
 @msg	Image Trace: the traced image is missing	画像トレース: トレース元の画像が見つかりません
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ライブペイントの結合: ライブペイントグループと、追加するパスを選択してください
@@ -5623,6 +5634,13 @@ anchor	Points:	ポイント:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`、`removeWhiteOverprint` または `overprintBlack` を指定してください
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷インキの修正は CMYK ドキュメントで使用できます。先にファイル › ドキュメントのカラーモード › CMYK カラーを選択してください
 @msg	`{key}` must be 0..{max}	`{key}` は 0..{max} にしてください
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	最も近いスウォッチを検索…
+	Find Nearest Swatch	最も近いスウォッチを検索
+	Apply Nearest Swatch	最も近いスウォッチを適用
+	Select objects to find the swatches nearest their colors.	カラーに最も近いスウォッチを探すオブジェクトを選択してください。
+@msg	select objects or give `color`	オブジェクトを選択するか `color` を指定してください
+@msg	`color` is not a colour	`color` はカラーではありません
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	コーナーツール
 	Slide Anchor Along Path	パスに沿ってアンカーポイントをスライド
@@ -5738,6 +5756,9 @@ breakText	Glyphs	字形
 	Gap 4	間隔 4
 	Dash 5	線分 5
 	Gap 5	間隔 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+
 @msg	You must choose a side pattern.	側面パターンを選択してください。
 @msg	invalid pattern tile choice	パターンタイルの選択が無効です
 @msg	no pattern named `{choice}`	`{choice}` というパターンはありません
@@ -5768,6 +5789,9 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	破線をパスに拡張
+@msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	ドキュメントツール
 	Save a Timestamped Copy	日時付きのコピーを保存
@@ -5790,6 +5814,11 @@ breakText	Glyphs	字形
 	Odia	オディア語
 	Urdu	ウルドゥー語
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
+	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
+@msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	シンボルの種類:
 	Dynamic Symbol	ダイナミックシンボル
