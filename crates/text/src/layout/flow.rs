@@ -1,15 +1,21 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{
-    Metrics, Pen, break_line, candidates, hangs, leader_outline, optical_hangs, optical_hangs_rtl, optical_punct, optical_share, roman_share,
-    set_width, tab_advance, word_width,
+    Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, hangs, leader_outline, optical_hangs, optical_hangs_rtl, optical_punct, optical_share,
+    roman_share, set_width, squeeze_em, tab_advance, word_width,
 };
 use super::region::Region;
 use super::vertical::{EM_CENTER, align_shift, compress_punctuation, glyph_em, punct_half, space_japanese_and_latin};
 use super::{
-    Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, LeadingModel, LineFit, LineInfo, ListMarker, Mojikumi, ParaStyle,
-    Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line, hyphen_glyph, is_cjk,
-    is_word_space, kashida, mark_word_ends, style_metrics,
+    Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, Kinsoku, KinsokuShoriType, LeadingModel, LineFit, LineInfo,
+    ListMarker, Mojikumi, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose,
+    fit_line, hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
+
+/// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
+/// with kinsoku on)?
+fn pushes_in(para: &ParaStyle) -> bool {
+    para.kinsoku != Kinsoku::None && para.kinsoku_type != KinsokuShoriType::PushOutOnly
+}
 
 /// Paragraphs longer than this (glyphs) are always broken line by line.
 const MAX_COMPOSE_GLYPHS: usize = 200_000;
@@ -32,6 +38,8 @@ fn compose_para(
     // A paragraph whose commas or full stops may hang is composed line by line (as the Japanese
     // single-line composer does).
     let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
+    // So is a paragraph that may push characters kinsoku keeps off a line's ends in onto a line.
+    let may_push_in = pushes_in(para) && sg.iter().any(|g| no_line_start(g.ch) || no_line_end(g.ch));
     // A tab's width depends on where it falls in its line, which the composer's fixed glyph widths
     // can't follow: such a paragraph is broken line by line ([`break_line`] measures its tabs).
     // The tab after a list marker always starts the first line and has a fixed width.
@@ -42,6 +50,7 @@ fn compose_para(
         || sg.len() < 2
         || sg.len() > MAX_COMPOSE_GLYPHS
         || may_hang
+        || may_push_in
         || has_tab
         || has_soft_break
     {
@@ -283,6 +292,8 @@ struct PlacementContext<'a> {
     zone: f64,
     index: usize,
     para_line: usize,
+    /// Optical Margin Alignment or Roman Hanging Punctuation is on.
+    hanging: bool,
 }
 
 struct LinePosition {
@@ -291,13 +302,16 @@ struct LinePosition {
     x1: f64,
     end: usize,
     hyph: bool,
+    /// Kinsoku Shori Type pushed characters in onto the line ([`break_line`]).
+    pushed_in: bool,
     m: Metrics,
     ind_l: f64,
     ind_r: f64,
 }
 
 fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementContext<'_>) -> Option<LinePosition> {
-    let PlacementContext { para, pr, sg, continued, rtl, mirror, pm, composed, hyphen_run, hyphen_limit, zone, index: i, para_line } = context;
+    let PlacementContext { para, pr, sg, continued, rtl, mirror, pm, composed, hyphen_run, hyphen_limit, zone, index: i, para_line, hanging } =
+        context;
     let n = sg.len();
     let est = if *i < n { Metrics::of(&sg[*i]) } else { *pm };
     let first_line = *para_line == 0 && !*continued;
@@ -326,10 +340,17 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
         };
         let width = x1 - x0 - ind_l - ind_r;
         let hyphenate = (para.hyphenate && (*hyphen_limit == 0 || *hyphen_run < *hyphen_limit)).then_some((&para.hyphenation, *zone));
-        let (end, hyph) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
-            Some(&(end, hyph)) if end > *i => (end, hyph),
-            _ if *i < n => break_line(cx.text, sg, *i, width, &para.tabs, ind_l, hyphenate, para.burasagari, para.kinsoku),
-            _ => (n, false),
+        let (end, hyph, pushed_in) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+            Some(&(end, hyph)) if end > *i => (end, hyph, false),
+            _ if *i < n => {
+                let line =
+                    |ty| break_line(cx.text, sg, *i, width, &para.tabs, ind_l, hyphenate, para.burasagari, para.kinsoku, ty, *hanging, cx.vertical);
+                let (end, hyph) = line(para.kinsoku_type);
+                // The line pushed characters in where it ends after the line that pushes out.
+                let pushed_in = pushes_in(para) && end > line(KinsokuShoriType::PushOutOnly).0;
+                (end, hyph, pushed_in)
+            }
+            _ => (n, false, false),
         };
         let m = Metrics::max(&sg[*i..end]).unwrap_or(*pm);
         baseline += if same_baseline || (pen.regions.is_none() && first_in_region) {
@@ -351,7 +372,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
             pen.queued.clear();
             continue;
         }
-        return Some(LinePosition { baseline, x0, x1, end, hyph, m, ind_l, ind_r });
+        return Some(LinePosition { baseline, x0, x1, end, hyph, pushed_in, m, ind_l, ind_r });
     }
 }
 
@@ -379,6 +400,10 @@ struct LineJustification {
     per_space: f64,
     per_gap: f64,
     per_cjk: f64,
+    /// Kinsoku Shori Type: the share of an em (of the glyph before it, at most
+    /// [`PUSH_IN_SQUEEZE`]) each gap next to a CJK character closes by on a line that pushed
+    /// characters in; 0 on other lines.
+    squeeze: f64,
     fit: LineFit,
     start_x: f64,
     after: Vec<Option<usize>>,
@@ -413,6 +438,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
             zone: paragraph.zone,
             index,
             para_line: line_in_paragraph,
+            hanging: t.optical_margin || paragraph.para.roman_hanging,
         };
         let Some(position) = place_flow_line(cx, pen, &mut placement) else { return false };
         hyphen_run = if position.hyph && position.end > index { hyphen_run + 1 } else { 0 };
@@ -570,12 +596,13 @@ fn drawn_after(index: usize, glyph: usize, after: &[Option<usize>]) -> Option<us
 }
 
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
-// gaps next to a CJK character, not inside a Latin word or a tate-chu-yoko block.
+// gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko block or a shaped
+// cluster.
 fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
     !held.contains(&glyph)
-        && drawn_after(index, glyph, after)
-            .and_then(|next| sg.get(glyph).zip(sg.get(next)))
-            .is_some_and(|(a, b)| !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch)))
+        && drawn_after(index, glyph, after).and_then(|next| sg.get(glyph).zip(sg.get(next))).is_some_and(|(a, b)| {
+            a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
+        })
 }
 
 // What justification may change of glyph `j`: nothing of a `held` glyph, and no glyph
@@ -637,7 +664,17 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
     let width = line.render_width + kashidas.iter().map(|k| k.1).sum::<f64>();
     let (mut per_space, mut per_gap, mut per_cjk) = (0.0, 0.0, 0.0);
     let mut fit = LineFit::default();
-    if justify && (room - width).abs() > EPS {
+    let mut squeeze = 0.0;
+    // Kinsoku Shori Type: a line of area type that pushed characters in is wider than its
+    // measure, and closes its gaps next to CJK characters to fit, however it is aligned: each by
+    // the same share of the em of the glyph before it, at most [`PUSH_IN_SQUEEZE`].
+    let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
+    if pushed_in {
+        let ems: f64 = (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| squeeze_em(&sg[j], vertical)).sum();
+        if ems > EPS {
+            squeeze = ((room - width) / ems).max(-PUSH_IN_SQUEEZE);
+        }
+    } else if justify && (room - width).abs() > EPS {
         if cjk_gaps > 0 && room > width {
             // Spread over the CJK gaps and the word spaces alike.
             per_space = (room - width) / (cjk_gaps + spaces) as f64;
@@ -665,7 +702,7 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
         }
     }
     let position = &line.position;
-    let start_x = if justify {
+    let start_x = if justify || pushed_in {
         line.ax0 - line.opt_l
     } else if paragraph.regions.is_none() {
         match align {
@@ -680,7 +717,7 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, fit, start_x, after, kashidas }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas }
 }
 
 fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, justification: &LineJustification) {
@@ -736,9 +773,9 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
             }
             if glyph.is_space() {
                 advance += justification.per_space;
-            } else if justification.per_cjk != 0.0 {
+            } else if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
                 if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
-                    advance += justification.per_cjk;
+                    advance += justification.per_cjk + justification.squeeze * squeeze_em(glyph, cx.vertical);
                 }
             } else if !line.held.contains(&glyph_index)
                 && drawn_after(index, glyph_index, &justification.after).and_then(|next| sg.get(next)).is_some_and(|next| !next.continues_tcy())

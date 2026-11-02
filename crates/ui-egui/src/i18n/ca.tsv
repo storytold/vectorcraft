@@ -2075,6 +2075,7 @@ digits	Malayalam	Malaiàlam
 	Keywords:	Paraules clau:
 	Kind	Tipus
 	Kinsoku Set	Conjunt Kinsoku
+	Kinsoku Shori Type	Tipus de Kinsoku Shori
 	Kite	Estel
 	Knife	Ganivet
 	Knockout Group	Grup knockout
@@ -3118,6 +3119,9 @@ digits	Malayalam	Malaiàlam
 	Puppet Warp Pins	Pins de deformació de titella
 	Puppet Warp Tool	Eina de deformació de titella
 	Purple	Porpra
+	Push In First	Primer cap a dins
+	Push Out First	Primer cap a fora
+	Push Out Only	Només cap a fora
 	Put back in the toolbar	Torna a posar a la barra d’eines
 	Quality	Qualitat
 	Quality {quality}	Qualitat {quality}

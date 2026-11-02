@@ -2748,6 +2748,10 @@ file-filter	Templates	範本
 	Stylistic	風格化
 	Mojikumi Set	標點間距
 	Kinsoku Set	Kinsoku 集
+	Kinsoku Shori Type	Kinsoku 處理方式
+	Push In First	先推入
+	Push Out First	先推出
+	Push Out Only	只推出
 	Hard	強
 	Soft	弱
 	Monitor RGB	顯示器 RGB

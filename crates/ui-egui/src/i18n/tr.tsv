@@ -1751,6 +1751,10 @@ font-technology	Variable	Değişken
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
 	Kinsoku Set	Kinsoku Seti
+	Kinsoku Shori Type	Kinsoku Shori Türü
+	Push In First	Önce İçeri
+	Push Out First	Önce Dışarı
+	Push Out Only	Yalnızca Dışarı
 	Hard	Sert
 	Soft	Yumuşak
 	Monitor RGB	RGB'yi izleyin

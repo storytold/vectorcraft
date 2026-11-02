@@ -17,8 +17,8 @@ pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, 
 use char_style::yes;
 pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, ScriptMetrics};
 pub use para_style::{
-    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,
-    ParaStyle, SingleWordJustify,
+    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
+    Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
 };
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef};
 pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, NumberStyle, ParaList, TabAlign, TabStop};

@@ -1941,6 +1941,10 @@ file-filter	Templates	Шаблони
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
 	Kinsoku Set	Набір kinsoku
+	Kinsoku Shori Type	Тип kinsoku shori
+	Push In First	Спершу втягувати
+	Push Out First	Спершу виштовхувати
+	Push Out Only	Лише виштовхувати
 	Hard	Суворий
 	Soft	М’який
 	Monitor RGB	RGB монітора

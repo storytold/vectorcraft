@@ -75,6 +75,10 @@ digits	Malayalam	マラヤーラム数字
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
 	Kinsoku Set	禁則処理
+	Kinsoku Shori Type	禁則調整方式
+	Push In First	追い込み優先
+	Push Out First	追い出し優先
+	Push Out Only	追い出しのみ
 	Hard	強い禁則
 	Soft	弱い禁則
 	Latin	欧文

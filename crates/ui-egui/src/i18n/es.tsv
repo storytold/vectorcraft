@@ -1919,6 +1919,10 @@ font-technology	Variable	Variables
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
 	Kinsoku Set	Conjunto de kinsoku
+	Kinsoku Shori Type	Tipo de kinsoku shori
+	Push In First	Primero hacia dentro
+	Push Out First	Primero hacia fuera
+	Push Out Only	Solo hacia fuera
 	Hard	Fuerte
 	Soft	Suave
 	Monitor RGB	RGB del monitor

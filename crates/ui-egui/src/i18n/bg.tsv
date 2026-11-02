@@ -1860,6 +1860,10 @@ font-technology	Variable	Променливи
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
 	Kinsoku Set	Набор Kinsoku
+	Kinsoku Shori Type	Тип Kinsoku Shori
+	Push In First	Първо прибиране
+	Push Out First	Първо изтласкване
+	Push Out Only	Само изтласкване
 	Hard	Твърдо
 	Soft	Меко
 	Monitor RGB	RGB на монитора

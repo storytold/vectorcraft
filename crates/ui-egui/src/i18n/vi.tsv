@@ -1961,6 +1961,7 @@ digits	Hindi	Hindi
 	Keywords:	Từ khóa:
 	Kind	Loại
 	Kinsoku Set	Bộ Kinsoku
+	Kinsoku Shori Type	Kiểu Kinsoku Shori
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
@@ -2806,6 +2807,9 @@ mark-style	Japanese	Kiểu Nhật
 	Puppet Warp	Biến dạng con rối
 	Puppet Warp Pins	Ghim biến dạng con rối
 	Puppet Warp Tool	Công cụ Biến dạng con rối
+	Push In First	Đẩy vào trước
+	Push Out First	Đẩy ra trước
+	Push Out Only	Chỉ đẩy ra
 	Put back in the toolbar	Đặt trở lại vào thanh công cụ
 	Quality	Chất lượng
 	Quality {quality}	Chất lượng {quality}

@@ -1913,6 +1913,10 @@ font-technology	Variable	Variables
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
 	Kinsoku Set	Jeu de kinsoku
+	Kinsoku Shori Type	Type de kinsoku shori
+	Push In First	D’abord vers l’intérieur
+	Push Out First	D’abord vers l’extérieur
+	Push Out Only	Vers l’extérieur uniquement
 	Hard	Fort
 	Soft	Souple
 	Monitor RGB	RVB du moniteur

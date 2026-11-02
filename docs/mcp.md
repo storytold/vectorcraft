@@ -4861,6 +4861,27 @@ JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}
 ```
 
+## Kinsoku Shori Type
+
+`text.setFormat {kinsokuType: "pushInFirst"|"pushOutFirst"|"pushOutOnly"}` (Paragraph panel menu › Kinsoku Shori Type,
+shown with the East Asian options) sets how the area type lines of the paragraphs of the selected type (or `ids`, or the
+paragraphs a `start` / `end` range touches) keep the characters of their Kinsoku Set off their start and end. When the
+character that does not fit on a line may not start the next one, or the character before it may not end the line,
+**Push In First** sets it on the line, with the characters up to the next break the Kinsoku Set allows. The line then
+closes its gaps next to CJK characters to fit its measure, however it is aligned, each gap by the same share of the em
+of the character before it and by at most a tenth of that em; a line that cannot close up that much, or that holds a
+tab, pushes out instead. **Push Out First** pushes in
+the same way only when pushing out would leave the line more than an em, of the character before the break, short of
+its measure. **Push Out Only** (the default: new type and documents from before the setting) always moves the
+character before them to the next line with them. With Kinsoku Set None the setting does nothing. A paragraph that
+pushes in and holds such characters is broken line by line, as the Single-line Composer breaks it. The setting is saved
+with the paragraph (`kinsoku_type` in `para`) only when it is not `pushOutOnly`, paragraph styles carry it, and Reset
+Panel sets it back to Push Out Only. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsokuType":"pushInFirst"}}}
+```
+
 ## Hanging punctuation (burasagari)
 
 `text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /

@@ -2121,6 +2121,7 @@ file-filter	Templates	Sablonok
 	Keywords:	Kulcsszavak:
 	Kind	Típus
 	Kinsoku Set	Kinsoku-készlet
+	Kinsoku Shori Type	Kinsoku Shori típusa
 	Kite	Deltoid
 	Knife	Kés
 	Knockout Group	Kiütő csoport
@@ -3026,6 +3027,9 @@ mark-style	Japanese	Japán
 	Puppet Warp Pins	Bábtorzítás tűi
 	Puppet Warp Tool	Bábtorzítás
 	Purple	Lila
+	Push In First	Először behúzás
+	Push Out First	Először kitolás
+	Push Out Only	Csak kitolás
 	Put back in the toolbar	Visszahelyezés az eszköztárba
 	Quality	Minőség
 	Quality {quality}	Minőség: {quality}

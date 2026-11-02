@@ -1947,6 +1947,10 @@ file-filter	Templates	Modelli
 	Stylistic	Stilistica
 	Mojikumi Set	Set mojikumi
 	Kinsoku Set	Set kinsoku
+	Kinsoku Shori Type	Tipo di kinsoku shori
+	Push In First	Prima all'interno
+	Push Out First	Prima all'esterno
+	Push Out Only	Solo all'esterno
 	Hard	Forte
 	Soft	Debole
 	Monitor RGB	RGB monitor

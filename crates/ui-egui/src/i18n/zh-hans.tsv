@@ -4846,6 +4846,10 @@ font-technology	Variable	可变
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
 	Kinsoku Set	Kinsoku 集
+	Kinsoku Shori Type	Kinsoku 处理方式
+	Push In First	先推入
+	Push Out First	先推出
+	Push Out Only	只推出
 	Hard	强
 	Soft	弱
 	Saved Selection 1	已保存的选区 1
