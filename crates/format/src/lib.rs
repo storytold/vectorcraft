@@ -139,11 +139,26 @@ pub struct SaveOptions {
     pub profiles: BTreeMap<String, Vec<u8>>,
     /// Create PDF-Compatible File: a PDF of the document to carry.
     pub pdf: Option<Vec<u8>>,
+    /// Decimal places to round path anchors and handles to ([`Document::round_geometry`]), at
+    /// most [`MAX_PRECISION`] (a larger value rounds to that many); `None` writes them exactly.
+    pub precision: Option<u8>,
 }
+
+/// The most decimal places [`SaveOptions::precision`] rounds path geometry to.
+pub const MAX_PRECISION: u8 = 9;
 
 impl Default for SaveOptions {
     fn default() -> Self {
-        Self { pretty: false, compress: false, version: VERSION, preview: None, include_linked: false, profiles: BTreeMap::new(), pdf: None }
+        Self {
+            pretty: false,
+            compress: false,
+            version: VERSION,
+            preview: None,
+            include_linked: false,
+            profiles: BTreeMap::new(),
+            pdf: None,
+            precision: None,
+        }
     }
 }
 
@@ -206,7 +221,8 @@ struct Body {
 }
 
 /// `doc` as [`save_to`] writes it with `o`: without editing-mode working copies, with placed
-/// documents as their art for older versions, and its images taken out.
+/// documents as their art for older versions, path geometry rounded to `o.precision`, and its
+/// images taken out.
 fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     let version = o.version;
     let mut d = doc.without_edit_modes().into_owned();
@@ -217,6 +233,10 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
         d.placed_as_groups();
     } else {
         d.drop_placed_resources();
+    }
+    // The art placed documents became for older versions is rounded too.
+    if let Some(decimals) = o.precision {
+        d.round_geometry(decimals.min(MAX_PRECISION));
     }
     let linked = d.linked_only_images();
     // The blobs go in the file's `images` (only those the document uses).

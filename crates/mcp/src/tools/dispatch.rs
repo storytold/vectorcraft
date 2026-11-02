@@ -286,7 +286,8 @@ fn named_export_params(a: &Args) -> &'static [&'static str] {
 
 /// What `save_file` with arguments `a` adds to the save's `warnings`, for a file written in format
 /// `written` (none when nothing was written yet): each key in `options` that the format doesn't
-/// read. The save itself warns about `compress`, `version` and `preview` given at the top level.
+/// read. The save itself warns about `compress`, `version`, `preview` and `precision` given at the
+/// top level.
 fn save_file_warnings(a: &Args, written: Option<&str>) -> Vec<String> {
     let Some(f) = written.and_then(format) else { return vec![] };
     let nested = a.get("options").and_then(Value::as_object);

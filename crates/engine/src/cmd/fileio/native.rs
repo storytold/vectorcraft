@@ -35,6 +35,12 @@ pub const OPTIONS: &[FormatOption] = &[
         default: "false",
         description: "embed a PNG preview of the first artboard (at most 256 pixels on its longer side) for file browsers",
     },
+    FormatOption {
+        name: "precision",
+        ty: "integer",
+        default: "null",
+        description: "round path anchors and handles to this many decimal places, 0 to 9 (a smaller file; colors, transforms and type are kept exactly); null writes them exactly. Only the save that gives it rounds",
+    },
     SEPARATE_ARTBOARDS,
     SEPARATE_RANGE,
     INCLUDE_LINKED,
@@ -131,6 +137,7 @@ struct NativeOptions {
     compress: Option<bool>,
     version: Option<u32>,
     preview: bool,
+    precision: Option<Value>,
     include_linked: bool,
     embed_profiles: Option<bool>,
     pdf_compatible: bool,
@@ -151,6 +158,7 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
         compress: o.compress.unwrap_or(false),
         version: o.version.unwrap_or(vectorcraft_format::VERSION),
         include_linked: o.include_linked,
+        precision: o.precision.map(|v| precision(cmd, &v)).transpose()?,
         ..SaveOptions::default()
     };
     if o.embed_profiles.unwrap_or(true) {
@@ -158,6 +166,20 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
     }
     so.check().map_err(|e| bad(cmd, e.to_string()))?;
     Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible }))
+}
+
+/// The `precision` option `v`: a whole number of decimal places, 0 to
+/// [`vectorcraft_format::MAX_PRECISION`]. Any other value, a string included, gets the range message.
+fn precision(cmd: &str, v: &Value) -> Result<u8> {
+    let (key, min, max) = ("precision", 0u8, vectorcraft_format::MAX_PRECISION);
+    if let Some(x) = v.as_f64()
+        && x.fract() == 0.0
+        && (f64::from(min)..=f64::from(max)).contains(&x)
+    {
+        return Ok(x as u8);
+    }
+    let x = v.as_f64().map_or_else(|| v.to_string(), |x| x.to_string());
+    Err(bad(cmd, format!("`{key}` must be a whole number between {min} and {max} (got {x})")))
 }
 
 /// The `.vectorcraft` file of `doc` with the options in `p`.
@@ -177,13 +199,19 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
     } else {
         std::borrow::Cow::Borrowed(doc)
     };
+    // With a precision, the preview and PDF show the rounded art the file holds.
+    let drawn = match so.precision {
+        Some(decimals) if extras.preview || extras.pdf => Cow::Owned(rounded(&full, so.version, decimals)),
+        _ => Cow::Borrowed(full.as_ref()),
+    };
     if extras.preview {
-        so.preview = preview_png(&full)?;
+        so.preview = preview_png(&drawn)?;
     }
     if extras.pdf {
         // Every artboard as PDF pages (no editing data: the file is the native document).
-        so.pdf = Some(super::pdf::encode(cmd, &full, &json!({ "range": "all", "preserveEditing": false }))?.0);
+        so.pdf = Some(super::pdf::encode(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }))?.0);
     }
+    drop(drawn);
     let native = match full {
         Cow::Owned(full) if so.include_linked && so.version >= vectorcraft_format::VERSION => {
             // Include available bytes without replacing missing, relinkable placed objects.
@@ -195,6 +223,20 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
     };
     so.pretty = so.pretty_fits(&native);
     vectorcraft_format::save_to(&native, &so, w).map_err(|e| bad(cmd, e.to_string()))
+}
+
+/// `doc` with its path geometry rounded to `decimals` places, as [`vectorcraft_format::save_to`]
+/// writes it for `version`: placed documents become groups of their art for older versions.
+fn rounded(doc: &Document, version: u32, decimals: u8) -> Document {
+    let mut d = if version < vectorcraft_format::VERSION && doc.has_placed() {
+        let mut d = doc.with_placed_art().into_owned();
+        d.placed_as_groups();
+        d
+    } else {
+        doc.clone()
+    };
+    d.round_geometry(decimals.min(vectorcraft_format::MAX_PRECISION));
+    d
 }
 
 /// The ICC files of the profiles `doc` is tagged with that were loaded from files (the built-in
@@ -230,8 +272,8 @@ pub(super) fn ai_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Re
     let mut q = p.clone();
     if let Some(o) = q.as_object_mut() {
         // AI carries the current native format without a separate preview. Its compression
-        // and PDF-content flags are still validated as booleans.
-        o.retain(|k, _| !matches!(k.as_str(), "version" | "preview"));
+        // and PDF-content flags are still validated as booleans. Its coordinates are written exactly.
+        o.retain(|k, _| !matches!(k.as_str(), "version" | "preview" | "precision"));
         if o.get("pdfCompatible").is_some_and(Value::is_null) {
             o.remove("pdfCompatible");
         }
