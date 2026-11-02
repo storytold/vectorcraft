@@ -162,7 +162,7 @@ fn symbol_type_redraws_when_its_font_becomes_available() {
     let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(-140.0, 25.0), "Hamburg", style))));
     t.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 0.0}), visible: true });
     let art = Node::group(d.alloc_id(), vec![Arc::new(t)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Word".into(), art: Arc::new(art) });
     let (l, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 75.0)) })).unwrap();
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
@@ -207,7 +207,7 @@ fn type_with_geometry_effects_redraws_when_its_font_becomes_available() {
             }
             3 => {
                 let art = Node::group(d.alloc_id(), vec![Arc::new(object)]);
-                d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Word".into(), art: Arc::new(art) });
                 object = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 75.0)) });
                 object.appearance.effects.push(moved());
             }
@@ -243,7 +243,7 @@ fn enveloped_type_redraws_when_its_font_becomes_available() {
     let typed = word(&mut d, Point::new(10.0, 60.0));
     let art = word(&mut d, Point::new(-140.0, 20.0));
     let art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Word".into(), art: Arc::new(art) });
     let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 120.0)) });
     let l = d.layers[0].id;
     for (i, content) in [typed, shown].into_iter().enumerate() {

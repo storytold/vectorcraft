@@ -5,11 +5,34 @@ fn gpu(name: &str, backend: Backend, device_type: DeviceType) -> Candidate {
 }
 
 /// #1459: a 9048 px wide window (two display scales' ratio past 8192) fits an adapter that
-/// takes 16384 px textures; an adapter with less than eframe asks for changes nothing.
+/// takes 16384 px textures.
 #[test]
 fn the_surface_may_be_as_large_as_the_adapter_allows() {
-    assert_eq!(surface_limit(8192, 16384), 16384);
-    assert_eq!(surface_limit(8192, 4096), 8192);
+    let adapter = wgpu::Limits { max_texture_dimension_2d: 16384, ..wgpu::Limits::default() };
+    let asked = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked, &adapter).max_texture_dimension_2d, 16384);
+}
+
+/// #2105: a GPU that offers less than eframe asks for on any limit (here a Raspberry Pi 5's V3D 7.1:
+/// 15 inter-stage variables on Vulkan, 4096 px textures on OpenGL) gets a device with what it
+/// offers, instead of failing and leaving the window to the software rasterizer. A GPU that offers
+/// more is asked for no more than before, except for the texture side.
+#[test]
+fn the_device_asks_for_no_more_than_the_adapter_offers() {
+    let asked = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    let vulkan = wgpu::Limits { max_inter_stage_shader_variables: 15, max_texture_dimension_2d: 7680, ..wgpu::Limits::default() };
+    let limits = device_limits(asked.clone(), &vulkan);
+    assert_eq!((limits.max_inter_stage_shader_variables, limits.max_texture_dimension_2d), (15, 7680));
+    assert!(limits.check_limits(&vulkan), "{limits:?}");
+    let gl = wgpu::Limits { max_texture_dimension_2d: 4096, ..wgpu::Limits::downlevel_webgl2_defaults() };
+    let webgl2 = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::downlevel_webgl2_defaults() };
+    let limits = device_limits(webgl2.clone(), &gl);
+    assert_eq!(limits.max_texture_dimension_2d, 4096);
+    assert!(limits.check_limits(&gl), "{limits:?}");
+    let ample = wgpu::Limits { max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked.clone(), &ample), asked);
+    let better = wgpu::Limits { max_inter_stage_shader_variables: 31, max_texture_dimension_2d: 8192, ..wgpu::Limits::default() };
+    assert_eq!(device_limits(asked.clone(), &better), asked, "never more than eframe asked for");
 }
 
 fn names(c: &[Candidate], order: &[usize]) -> Vec<String> {

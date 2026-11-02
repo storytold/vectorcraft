@@ -731,7 +731,7 @@ fn previews_follow_the_swatches_images_and_pattern_options_their_art_uses() {
             }
             vectorcraft_brush::store(d, &brushes);
             for (name, art) in [("Ink Symbol", &inked), ("Picture Symbol", &pictured), ("Stripes Symbol", &striped), ("Fade Symbol", &faded)] {
-                d.symbols.push(Symbol { name: name.into(), art: Arc::new(art.clone()) });
+                d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art.clone()) });
             }
             Ok(())
         })

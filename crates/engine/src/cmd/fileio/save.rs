@@ -897,7 +897,7 @@ pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8])
 }
 
 /// A save command: plan, then write with the file system (a native file as it is encoded).
-fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
+pub(crate) fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
     let plan = save_plan(s, mode, p)?;
     let job = save_job(s, plan)?;
     let uid = s.doc()?.uid;

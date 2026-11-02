@@ -54,7 +54,12 @@ fn after_open_for(app: &mut VectorcraftApp, r: &Value, web: bool) {
     if web {
         let n = vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).len();
         if n > 0 && r["warnings"].as_array().is_none_or(Vec::is_empty) {
-            app.status(format!("{n} font(s) aren't available here: their text shows in another font"));
+            app.status(crate::i18n::msg_n(
+                n as u64,
+                "{n} font isn't available here: its text shows in another font",
+                "{n} fonts aren't available here: their text shows in another font",
+                &[],
+            ));
         }
         return;
     }
@@ -399,13 +404,20 @@ fn add_fonts(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let n = len("copied") + len("kept");
     let folder = r["folder"].as_str().unwrap_or_default();
     match r["skipped"].as_array().and_then(|s| s.first()) {
-        None => app.status(format!("{n} font file(s) are now in {folder}")),
+        None => {
+            app.status(crate::i18n::msg_n(n as u64, "{n} font file is now in {folder}", "{n} font files are now in {folder}", &[("folder", folder)]))
+        }
         Some(first) => {
             let failed = len("skipped");
             let file =
                 first["file"].as_str().map(std::path::Path::new).and_then(std::path::Path::file_name).map(|f| f.to_string_lossy().into_owned());
             let reason = format!("{}: {}", file.unwrap_or_default(), first["reason"].as_str().unwrap_or_default());
-            app.status(format!("{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}"));
+            app.status(crate::i18n::msg_n(
+                n as u64,
+                "{n} font file is now in {folder}; {failed} couldn't be added: {reason}",
+                "{n} font files are now in {folder}; {failed} couldn't be added: {reason}",
+                &[("failed", &failed.to_string()), ("folder", folder), ("reason", &reason)],
+            ));
         }
     }
     Ok(r)

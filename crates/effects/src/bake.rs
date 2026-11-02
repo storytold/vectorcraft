@@ -122,10 +122,12 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             return Some(bake_pieces(d, m));
         }
         let symbol = match &n.kind {
-            NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
+            NodeKind::SymbolInstance { symbol, .. } => {
+                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n))
+            }
             _ => None,
         };
-        let m = reshape(Some(d), n, symbol.as_deref())?;
+        let m = reshape(Some(d), n, symbol.as_ref())?;
         return Some(bake_node(d, &m).unwrap_or(m));
     }
     // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
@@ -526,14 +528,25 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
 /// painted by that fill and every visible stroke without a brush its filled outline in the
 /// stroke's paint, opacity, blend mode and raster effects (a gradient along or across the stroke:
 /// its gradient meshes clipped to the outline; a brushed stroke stays a stroke), in paint order, as
-/// the members of a group keeping `n`'s id, transparency, opacity mask and raster effects. `None`
-/// when it has neither a stroke to outline nor a geometry effect, so bending first changes nothing.
+/// the members of a group keeping `n`'s id, transparency, opacity mask and raster effects. A path
+/// with [`has_transform_art`](crate::has_transform_art) is first made into the art [`reshape`]
+/// makes of it, and each copy is baked this way. `None` when it has neither a stroke to outline nor
+/// a geometry effect, so bending first changes nothing.
 pub fn bake_appearance(n: &Node) -> Option<Node> {
     if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
         return Some(m);
     }
     if !matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {
         return None;
+    }
+    // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
+    // patterns: the art Expand Appearance makes of it (each copy an object with its own strokes,
+    // patterns and gradients), each piece baked in turn.
+    if crate::has_transform_art(n)
+        && let Some(mut m) = reshape(None, n, None)
+    {
+        bake_appearance_pieces(&mut m);
+        return Some(m);
     }
     let outlined = |i: &AppearanceItem| paints(i) && matches!(i, AppearanceItem::Stroke(s) if s.brush.is_none());
     let geometric = has_geometry(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)));
@@ -585,6 +598,19 @@ pub fn bake_appearance(n: &Node) -> Option<Node> {
     m.appearance.contents_index = None;
     m.kind = NodeKind::Group { children: pieces, clip: false };
     Some(m)
+}
+
+/// [`bake_appearance`] every path and compound path in `n` that it changes, in place.
+fn bake_appearance_pieces(n: &mut Node) {
+    if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+        if let Some(m) = bake_appearance(n) {
+            *n = m;
+        }
+        return;
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        bake_appearance_pieces(Arc::make_mut(c));
+    }
 }
 
 /// A copy of `doc` ready to export: every live geometry effect baked into plain paths, and the

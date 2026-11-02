@@ -33,6 +33,16 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         assert_eq!(e.command.as_deref(), Some("addon.pathtools.crossings"));
         assert_eq!(e.params.get("cut").and_then(|v| v.as_bool()).unwrap_or(false), cut);
     }
+    // Expand Dashes into Paths runs at once: a dashed line becomes its dashes.
+    let line = app.run("path.create", json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("stroke.set", json!({"dash": [30, 10]})).unwrap();
+    let expand = under("Expand Dashes into Paths").expect("listed");
+    let (cmd, p) = menus::click_target(&expand.label, expand.command.as_deref().unwrap(), &expand.params);
+    menus::invoke(&mut app, &cmd, p);
+    let selected = app.session.doc().unwrap().selection.objects.len();
+    assert!(selected >= 3, "three dashes selected: {selected}");
+    app.run("edit.undo", json!({})).unwrap();
     // Artwork Cleanup's submenu and Install Plug-in… are still there.
     assert!(entries.iter().any(|e| e.path == ["Object", "Plug-ins", "Artwork Cleanup"]));
     assert!(entries.iter().any(|e| e.path == ["Object", "Plug-ins"] && e.label == "Install Plug-in…"));

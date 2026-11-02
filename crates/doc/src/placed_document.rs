@@ -667,7 +667,7 @@ mod tests {
                 pixels: None,
             })),
         );
-        d.symbols.push(Symbol { name: "Star".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Star".into(), art: Arc::new(art) });
         d.images.insert("pic".into(), ImageBlob::new("image/png", vec![1, 2, 3]));
         let mut children = vec![Arc::new(Node::new(NodeId(51), NodeKind::SymbolInstance { symbol: "Star".into(), xf: Affine::IDENTITY }))];
         if bytes.starts_with(b"nest") {
@@ -702,7 +702,11 @@ mod tests {
     fn the_art_and_its_resources_join_only_a_prepared_copy_under_their_own_names() {
         set_loader(stub_loader);
         let mut d = Document::new(200.0, 200.0);
-        d.symbols.push(Symbol { name: "Star".into(), art: Arc::new(Node::new(NodeId(60), NodeKind::Group { children: vec![], clip: false })) });
+        d.symbols.push(Symbol {
+            dynamic: false,
+            name: "Star".into(),
+            art: Arc::new(Node::new(NodeId(60), NodeKind::Group { children: vec![], clip: false })),
+        });
         d.images.insert("doc1-1".into(), ImageBlob::new("application/json", b"nest".to_vec()));
         let p = placed("doc1-1");
         let layer = d.layers[0].id;

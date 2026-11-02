@@ -1368,6 +1368,37 @@ fn artboard_options_x_and_y_count_from_the_ruler_origin_at_the_reference_point()
     assert!(has(&shown, "Width:") && !has(&shown, "X:") && !has(&shown, "Y:"), "{shown:?}");
 }
 
+/// Objects on Path Tool Options: a click on one of the nine Pivot points and a typed Rotate set the
+/// fields, Enter saves them as the tool's options, and the Reset button puts the center and 0 back.
+#[test]
+fn objects_on_path_tool_options_pivot_grid_rotate_field_and_reset() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "objectsOnPath"})).unwrap();
+    let mut f = Frames::new();
+    let bottom = f.control(&mut app, "Bottom", egui::accesskit::Role::RadioButton);
+    f.press(&mut app, bottom, true);
+    f.press(&mut app, bottom, false);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("pivot", -1.0), 7.0);
+    // The field is right of the 70 pt label column.
+    let shown = f.texts(&mut app);
+    let label = shown.iter().find(|(t, _)| t == "Rotate:").unwrap_or_else(|| panic!("no Rotate: in {shown:?}")).1;
+    let at = egui::pos2(label.left() + 70.0 + 30.0, label.center().y);
+    f.press(&mut app, at, true);
+    f.press(&mut app, at, false);
+    f.run(&mut app, vec![egui::Event::Text("45".into())]);
+    f.key(&mut app, egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(app.ui.dialog.is_none(), "Enter saves the dialog");
+    assert_eq!(app.session.tool_options_of("objectsOnPath"), json!({"pivot": 7, "rotate": 45.0}));
+    app.run("tool.options", json!({"tool": "objectsOnPath"})).unwrap();
+    let reset = f.button(&mut app, "Reset");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset keeps the dialog open");
+    assert_eq!((d.f64("pivot", -1.0), d.f64("rotate", -1.0)), (4.0, 0.0));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options_of("objectsOnPath"), json!({"pivot": 4, "rotate": 0.0}));
+}
+
 /// #1876: a new Width or Height in Artboard Options keeps the reference point where it was, as the
 /// Transform panel's does: about the center by default, so X and Y still read the same, and from
 /// the top-left corner with that reference point.

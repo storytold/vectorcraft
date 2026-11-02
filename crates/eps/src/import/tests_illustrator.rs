@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::clipnest::MAX_NEST;
 use vectorcraft_doc::{LayerColor, LineCap, Node, NodeKind};
 use vectorcraft_geom::Rect;
@@ -25,6 +26,16 @@ fn ai(header: &str, ugroup: &str, body: &str) -> Vec<u8> {
 /// header says they are in that format (`%AI…` comments or the creator, which the format's
 /// published specification documents; see the `import` module docs).
 const AI8: &str = "%%Creator: Adobe Illustrator(R) 8.0\n%AI5_FileFormat 4.0\n";
+
+/// The editing text of a version 7 file (`%AI5_FileFormat 3`), no prolog: `setup` in its setup,
+/// then `body`.
+fn stream7(setup: &str, body: &str) -> Vec<u8> {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 100 100\n%AI5_FileFormat 3\n%AI3_Cropmarks: 0 0 100 100\n%%EndComments\n\
+         %%BeginProlog\n%%EndProlog\n%%BeginSetup\n{setup}%%EndSetup\n{body}%%PageTrailer\n%%Trailer\n%%EOF\n"
+    )
+    .into_bytes()
+}
 
 /// A triangle filled at `x`.
 fn tri(x: u32) -> String {
@@ -112,6 +123,37 @@ fn a_postscript_ai_that_names_its_prolog_without_including_it_opens_with_its_lay
     assert_eq!(tree(d.layers[1].children().unwrap()), "p");
 }
 
+/// A `.ai` in PostScript form with a graph on each of two layers (version 7 specification §17): its
+/// data on `%_` lines, then its drawn art in a group, each object followed by `%_… Go`.
+fn graphs_on_layers() -> String {
+    let graph = |x: u32| {
+        format!(
+            "%_Gs\n%_{x} 10 {} 90 Gb\n%_2 0 0 12 1 1 0 0 2 30 0 Gy\n%_1 1 1 1 Gz\n%_() Gc 5 Gc GC\n%_Gt\n%_0.5 g\n%_GT\n\
+             u\n0 0 0 1 k\n{x} 10 m\n{} 10 L\n{} 50 L\n{x} 50 L\n{x} 10 L\nf\n%_1 0 0 0 Go\nu\nU\nU\n%_GS\n",
+            x + 60,
+            x + 20,
+            x + 20
+        )
+    };
+    NAMED_PROLOG
+        .replace("10 10 L\nS\nLB", &format!("10 10 L\nS\n{}LB", graph(100)))
+        .replace("190 90 L\nS\nLB", &format!("190 90 L\nS\n{}LB", graph(10)))
+}
+
+#[test]
+fn graphs_open_as_their_drawn_art_on_their_layers() {
+    let r = import(graphs_on_layers().as_bytes()).unwrap();
+    assert!(!r.preview, "read through the layers, not a fallback preview");
+    let d = &r.document;
+    let names: Vec<_> = d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["SECTION::Cut", "SECTION::Hatch"]);
+    assert_eq!(tree(d.layers[0].children().unwrap()), "p g[p g[]]");
+    assert_eq!(tree(d.layers[1].children().unwrap()), "p g[p g[]]");
+    let notes: Vec<_> = r.warnings.iter().filter(|w| w.contains("graphs come in as plain art")).collect();
+    assert_eq!(notes.len(), 1, "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("doesn't know") || w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
 /// A `.ai` in PostScript form whose layers can't be read either says why, after what stopped its
 /// program.
 #[test]
@@ -119,6 +161,25 @@ fn a_postscript_ai_whose_layers_cant_be_read_says_why() {
     let damaged = NAMED_PROLOG.replace("0 D\n", "0 D\n1 2 frobnicate\n");
     let e = import(damaged.as_bytes()).unwrap_err();
     assert!(e.contains("`Adobe_packedarray`") && e.contains("its layers couldn't be read either") && e.contains("`frobnicate`"), "{e}");
+}
+
+/// A `.ai` in PostScript form with a multi-layer mask (`Mb`, its path, `Md`, objects in both
+/// layers, `MB`) opens through its layers: a clipping group in each, and what follows `MB` unclipped.
+#[test]
+fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
+    let src = NAMED_PROLOG
+        .replace("0 D\n10 10 m", "0 D\nMb\n20 20 m\n180 20 L\n180 80 L\n20 80 L\nh\nW\nn\nMd\n10 10 m")
+        .replace("190 90 L\nS\nLB", "190 90 L\nS\nMB\n150 50 m\n195 95 L\nS\nLB");
+    let r = import(src.as_bytes()).unwrap();
+    assert!(!r.preview, "read through the layers, not a fallback preview");
+    let d = &r.document;
+    let names: Vec<_> = d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["SECTION::Cut", "SECTION::Hatch"]);
+    assert_eq!(tree(d.layers[0].children().unwrap()), "k[c p]");
+    assert_eq!(tree(d.layers[1].children().unwrap()), "k[c p] p");
+    let mask = d.layers[1].children().unwrap()[0].children().unwrap()[0].clone();
+    assert_eq!(mask.geometric_bounds(), Some(Rect::new(20.0, 20.0, 180.0, 80.0)));
+    assert!(r.warnings.iter().any(|w| w.contains("clipping group in each layer")), "{:?}", r.warnings);
 }
 
 /// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
@@ -136,6 +197,17 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let r = import(src.as_bytes()).unwrap();
     assert!(!r.preview, "read through the layers, not a fallback preview");
     assert!(!r.warnings.iter().any(|w| w.contains("doesn't know") || w.contains("couldn't be read")), "{:?}", r.warnings);
+    // `Th` sets the paragraph's hyphenation: off, 2 letters before and after a hyphen, and the
+    // limit of 99 hyphens in a row kept to the 25 `text.setFormat` takes.
+    let mut texts = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.para_at(0).clone());
+        }
+    });
+    let [p] = texts.as_slice() else { panic!("{texts:?}") };
+    assert!(!p.hyphenate);
+    assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
 }
 
 /// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):
@@ -164,6 +236,22 @@ fn an_illustrator_3_file_without_layers_opens_its_paths_on_one_layer() {
     let closed: Vec<_> = children.iter().map(|c| if let NodeKind::Path { path, .. } = &c.kind { path.is_closed() } else { false }).collect();
     assert_eq!(closed, [false, true]);
     assert_eq!(art[1].geometric_bounds(), Some(Rect::new(20.0, 50.0, 60.0, 80.0)));
+}
+
+/// In an Illustrator 3 file the case of a segment's operator says whether the anchor it ends on is
+/// smooth (lower case) or a corner (upper case).
+#[test]
+fn an_illustrator_3_files_anchors_are_smooth_or_corners_by_their_operators_case() {
+    use vectorcraft_geom::AnchorKind::{Corner, Smooth};
+    let src = PATHS_ONLY.replace("10 10 m\n100 10 L\n50 80 60 90 10 10 C\nn\n", "0 0 m\n10 10 20 0 30 0 c\n40 10 50 0 60 0 C\nh\nS\n");
+    let r = import(src.as_bytes()).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    let path = art[0].path_data().unwrap();
+    let kinds: Vec<_> = path.subpaths[0].anchors.iter().map(|a| a.kind).collect();
+    assert_eq!(kinds, [Corner, Smooth, Corner]);
+    let middle = path.subpaths[0].anchors[1];
+    assert_eq!([(middle.h_in.x, middle.h_in.y), (middle.h_out.x, middle.h_out.y)], [(20.0, 100.0), (40.0, 90.0)]);
 }
 
 /// The same program in a file that doesn't say it is in Illustrator's format is PostScript whose
@@ -207,6 +295,116 @@ fn a_legacy_file_with_its_prolog_comes_in_through_its_layers() {
     // Without the editing data, it is its page.
     let page = crate::import::import_with(file.as_bytes(), false).unwrap();
     assert_eq!(page.document.layers[0].name.as_deref(), Some("Layer 1"));
+}
+
+/// A placed EPS in the legacy format (version 7 specification §16, no `%AI5_BeginPlace`), its file
+/// included whole: the layers come in, the placed file as the art the page draws in its box.
+#[test]
+fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
+    // `` ` `` takes the file's user space into the page's (`concat`); `~` restores it.
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
+                  /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor\n\
+               newpath 10 20 moveto 50 20 lineto 50 50 lineto 10 50 lineto closepath fill\n%%EOF\n";
+    let placed = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n0 0 0 1 k\n{} {placed}LB\n%AI5_EndLayer--\n", tri(10));
+    let file = String::from_utf8(ai(AI8, "", &body)).unwrap().replace("%%EndProlog", &format!("{prolog}\n%%EndProlog"));
+    let r = import(file.as_bytes()).unwrap();
+    assert!(!r.preview);
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Back"], "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    assert_eq!(tree(art), "p g[p]", "{:?}", r.warnings);
+    // The file's box, moved by the matrix: 20 40 60 70 on the page, y up.
+    let bounds = art[1].geometric_bounds().unwrap();
+    assert!(
+        (bounds.x0 - 20.0).abs() < 0.01 && (bounds.y0 - 30.0).abs() < 0.01 && (bounds.x1 - 60.0).abs() < 0.01 && (bounds.y1 - 60.0).abs() < 0.01,
+        "{bounds:?}"
+    );
+    assert!(r.warnings.iter().any(|w| w.contains("placed files")), "{:?}", r.warnings);
+}
+
+/// A file in the legacy format without layers (Illustrator 3) whose prolog is included: its prolog,
+/// a setup, and `art`.
+fn layerless(art: &str) -> Vec<u8> {
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%%EndComments\n\
+         %%BeginProlog\n/m {{moveto}} def /L {{lineto}} def /f {{closepath fill}} def /A {{pop}} def /k {{setcmykcolor}} def\n\
+         %%EndProlog\n%%BeginSetup\n%%EndSetup\n{art}\n%%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n"
+    )
+    .into_bytes()
+}
+
+/// A file in the legacy format without layers whose prolog is included runs as its page, and comes
+/// in through its art on one layer when that looks like the page: what only the format keeps (here
+/// a lock) stays.
+#[test]
+fn a_legacy_file_without_layers_comes_in_through_its_art_on_one_layer() {
+    let file = layerless(&format!("1 A\n0 0 0 1 k\n{}", tri(10)));
+    let r = import(&file).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let d = &r.document;
+    assert_eq!(d.layers.len(), 1);
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(tree(art), "p");
+    assert!(art[0].locked, "the lock is kept");
+    // Without the editing data, it is its page, which has no locks.
+    let page = crate::import::import_with(&file, false).unwrap();
+    assert!(!page.document.layers[0].children().unwrap()[0].locked);
+}
+
+/// When its art can't be read as the format (here a procedure of its own draws it), the file comes
+/// in as its page, as before, without a note.
+#[test]
+fn a_legacy_file_without_layers_whose_art_cannot_be_read_comes_in_as_its_page() {
+    let file = layerless("/x {20 20 moveto 80 20 lineto 80 80 lineto closepath fill} def x");
+    let r = import(&file).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let page = crate::import::import_with(&file, false).unwrap();
+    assert_eq!(tree(r.document.layers[0].children().unwrap()), tree(page.document.layers[0].children().unwrap()));
+    assert_eq!(r.document.layers[0].children().unwrap()[0].visual_bounds(), page.document.layers[0].children().unwrap()[0].visual_bounds());
+}
+
+/// A version 7 palette writes no swatch names (the AI7 spec's §11 example): its swatches come in
+/// named by their paint, in its order, in place of the defaults.
+#[test]
+fn a_version_7_palette_keeps_its_swatches_without_names() {
+    let setup = "%AI5_BeginGradient: (B&W)\n(B&W) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                 %AI5_BeginPalette\n0 0 Pb\nPn\nPc\n1 g\nPc\n0 g\nPc\n0 0 0 0 k\nPc\n0.75 g\nPc\n\
+                 Bb\n2 (B&W) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\nPc\n0.25 0 0 0 k\nPc\n0 1 1 0 (Spot A) 0 x\nPc\n0.75 g\nPc\nPc\nPB\n%AI5_EndPalette\n";
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 1 -1 79 128 255 0 50 0 Lb\n(Art) Ln\n0 A\n0 Xw\n0 0 0 1 k\n{}\nLB\n%AI5_EndLayer--\n", tri(10));
+    let r = import(&stream7(setup, &body)).unwrap();
+    let d = &r.document;
+    assert_eq!(d.layers.len(), 1, "{:?}", r.warnings);
+    let names: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["[None]", "Gray K=0", "Gray K=100", "C=0 M=0 Y=0 K=0", "Gray K=25", "B&W", "C=25 M=0 Y=0 K=0", "Spot A", "Gray K=25"],
+        "{:?}",
+        r.warnings
+    );
+    assert!(d.swatch_groups.is_empty());
+    let spot = d.swatch("Spot A").unwrap();
+    assert!(spot.spot && spot.global, "{spot:?}");
+    assert!(d.swatches.iter().filter(|s| s.name != "Spot A").all(|s| !s.spot && !s.global));
+    assert!(matches!(&d.swatch("B&W").unwrap().paint, Paint::Gradient(g) if g.swatch.as_deref() == Some("B&W")));
+    assert_eq!(d.swatch("Gray K=0").unwrap().paint.color(), Some(Color::gray(0.0)), "1 g is white");
+}
+
+/// A version 8 file's paths keep their notes and Show Center.
+#[test]
+fn a_legacy_files_paths_keep_their_notes_and_show_center() {
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Notes) Ln\n0 A\n%AI3_Note:first\n%AI5_NoteMore:second line\n1 Ap\n0 0 0 1 k\n{}\n\
+         %AI3_Note:\n0 Ap\n{}\nLB\n%AI5_EndLayer--\n",
+        tri(10),
+        tri(40)
+    );
+    let r = import(&ai(AI8, "", &body)).unwrap();
+    let kids = r.document.layers[0].children().unwrap();
+    let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.note.clone(), a.show_center))).collect();
+    assert_eq!(attrs, [Some(("first\nsecond line".into(), Some(true))), None], "{:?}", r.warnings);
+    assert!(kids[0].shows_center() && !kids[1].shows_center());
 }
 
 #[test]

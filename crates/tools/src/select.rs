@@ -44,6 +44,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
+use crate::objects_on_path::{RotateAllDrag, over_rotate_all};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -96,6 +97,8 @@ enum State {
     Corner(CornerDrag),
     /// Dragging a live ellipse's pie widget.
     Pie(PieDrag),
+    /// Dragging an Objects on Path group's Rotate All widget.
+    RotateAll(RotateAllDrag),
     /// Move or rotate a live mirror axis.
     Mirror(crate::mirror::MirrorDrag),
     /// Drag a grid repeat's row, column or corner handle or a spacing slider.
@@ -427,6 +430,13 @@ pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
     remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds(cx.doc, &cx.selection.objects, cx.preview_bounds))
 }
 
+/// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
+/// on their own): its handles take a press only then. A path the Pen is drawing keeps its end
+/// anchor selected, so Cmd/Ctrl lending the Selection tool doesn't scale it by hidden handles (#4980).
+fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
+    (cx.show_bbox && cx.selection.anchors.is_empty()).then(|| selection_box(cx)).flatten()
+}
+
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
 fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
     remembered(cx, |m| m.by_object.entry(id).or_insert(None), || vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds))
@@ -460,7 +470,7 @@ fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
 /// Whether the current selection's bounding-box handle is under `p`, using the same geometry as
 /// the Selection tool's press handling.
 pub(crate) fn bbox_handle_at(cx: &ToolContext, p: Point) -> bool {
-    cx.show_bbox && selection_box(cx).is_some_and(|b| matches!(box_hit(cx, &b, p), Some(BoxHit::Handle(_))))
+    shown_box(cx).is_some_and(|b| matches!(box_hit(cx, &b, p), Some(BoxHit::Handle(_))))
 }
 
 /// How near (screen points) the pointer must come to an object's centre or anchor for Smart Guides
@@ -602,11 +612,15 @@ impl Tool for SelectionTool {
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
-    /// rotation, a marquee, a corner widget, a pie widget, the brackets of type on a path, a mirror
+    /// rotation, a marquee, a corner widget, a pie widget, the Rotate All widget, the brackets of type on a path, a mirror
     /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        // Up and Down while a corner widget is pressed: the corners' kind (#2898).
+        if let (ToolKey::Up | ToolKey::Down, State::Corner(c)) = (key, &mut self.state) {
+            return c.step_kind(key == ToolKey::Up);
+        }
         if key == ToolKey::Letter('e')
             && let State::Marquee { enclosed, .. } = &mut self.state
         {
@@ -642,6 +656,7 @@ impl Tool for SelectionTool {
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
+            State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) => key == ToolKey::Escape,
             _ => false,
         }
@@ -663,6 +678,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
             State::Corner(c) => c.adjusting(),
             State::Pie(d) => d.adjusting(),
+            State::RotateAll(d) => d.adjusting(),
             State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
@@ -817,6 +833,15 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 d.finish()
             }
+            (PointerKind::Drag, State::RotateAll(mut d)) => {
+                let out = d.drag(cx, p, m.shift);
+                self.state = State::RotateAll(d);
+                out
+            }
+            (PointerKind::Up, State::RotateAll(d)) => {
+                self.state = State::Idle;
+                d.finish()
+            }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
                 self.state = State::Bracket(b);
@@ -870,6 +895,7 @@ impl Tool for SelectionTool {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             State::Corner(c) => o.extend(c.overlays(cx)),
             State::Pie(d) => o.extend(d.overlays(cx)),
+            State::RotateAll(d) => o.extend(d.overlays(cx)),
             State::Loaded { press: Some((start, cur)), .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             _ => {}
         }
@@ -914,6 +940,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } => return if self.snapped { Cursor::ArrowHollow } else { Cursor::Arrow },
             State::Corner(_) => return Cursor::CornerRadius,
             State::Pie(_) => return Cursor::ArrowHollow,
+            State::RotateAll(_) => return Cursor::Rotate,
             State::Bracket(_) => return Cursor::PathBracket,
             State::Loaded { .. } => return Cursor::LoadedText,
             _ => {}
@@ -927,15 +954,16 @@ impl Tool for SelectionTool {
         if pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
+        if over_rotate_all(cx, p) {
+            return Cursor::Rotate;
+        }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
         }
         if typewidget::over_widget(cx, p) {
             return Cursor::TypeWidget;
         }
-        if cx.show_bbox
-            && let Some(bx) = selection_box(cx)
-        {
+        if let Some(bx) = shown_box(cx) {
             match box_hit(cx, &bx, p) {
                 Some(BoxHit::Handle(h)) => return handle_cursor(h, bx.angle - cx.view_angle()),
                 Some(BoxHit::Rotate) => return Cursor::rotate_about_in_view(bx.center(), p, cx.view_angle()),
@@ -1007,7 +1035,8 @@ pub(crate) fn is_threadable(n: &vectorcraft_doc::Node) -> bool {
 
 /// Does a double-click or the Control bar's Isolate Selected Object button isolate an object of
 /// this kind? A group, a compound path or a single path, image, mesh or placed file does. Blends,
-/// envelopes, repeats and symbol instances do not; they have editing modes of their own.
+/// envelopes, repeats and symbol instances do not; they have editing modes of their own (a
+/// repeat's is isolation of the repeat itself, to edit its source art).
 pub fn isolates(kind: &vectorcraft_doc::NodeKind) -> bool {
     use vectorcraft_doc::NodeKind as K;
     matches!(kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
@@ -1165,6 +1194,19 @@ impl SelectionTool {
             if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
                 return vec![Action::SwitchTool("type".into())];
             }
+            // A symbol instance: its symbol is edited in symbol editing mode, except one inside
+            // the art of a symbol already being edited.
+            if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })) {
+                return if cx.doc.symbol_edit.is_some() { vec![] } else { vec![Action::Exec("symbol.edit".into(), json!({ "id": top.0 }))] };
+            }
+            // A repeat: its source art is edited in isolation mode, where the repeat follows each
+            // edit (#5054), as the reference app's Repeat does.
+            if cx.double_click_isolate
+                && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_)))
+                && cx.isolation != Some(top)
+            {
+                return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
+            }
             // An object that [`isolates`], not the one already isolated.
             if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {
                 return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
@@ -1182,7 +1224,7 @@ impl SelectionTool {
             self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
             return Some(vec![]);
         }
-        // 1. Live Corners widgets, pie widgets and type on a path's brackets, then the
+        // 1. Live Corners widgets, pie widgets, the Rotate All widget and type on a path's brackets, then the
         // bounding-box handles of the current selection.
         if let Some(c) = CornerDrag::hit(cx, ev, false) {
             self.state = State::Corner(c);
@@ -1190,6 +1232,10 @@ impl SelectionTool {
         }
         if let Some(d) = PieDrag::hit(cx, ev) {
             self.state = State::Pie(d);
+            return Some(vec![]);
+        }
+        if let Some(d) = RotateAllDrag::hit(cx, ev) {
+            self.state = State::RotateAll(d);
             return Some(vec![]);
         }
         if let Some(b) = BracketDrag::hit(cx, ev) {
@@ -1205,9 +1251,7 @@ impl SelectionTool {
             self.state = State::Idle;
             return Some(vec![]);
         }
-        if cx.show_bbox
-            && let Some(bx) = selection_box(cx)
-        {
+        if let Some(bx) = shown_box(cx) {
             match box_hit(cx, &bx, p) {
                 Some(BoxHit::Handle(handle)) => {
                     let is_area = |id: &NodeId| cx.doc.node(*id).is_some_and(is_area_type);

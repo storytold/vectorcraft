@@ -9,6 +9,9 @@
 //! and Ctrl/Cmd keep its inner end at the distance from the center on the first modified drag as
 //! the outer end follows the pointer: Alt adds or removes whole winds of four segments, and
 //! Ctrl/Cmd changes the decay.
+//! On a grid, F and V lower and raise
+//! the skew of the horizontal (rectangular) or radial (polar) dividers, and X and C lower and raise
+//! that of the vertical or concentric ones.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -19,6 +22,9 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 
 /// How much ↑ or ↓ changes the arc's slope while it is dragged out.
 const ARC_SLOPE_STEP: f64 = 10.0;
+
+/// How much F, V, X or C changes a grid's divider skew (percent) while it is dragged out.
+const GRID_SKEW_STEP: f64 = 10.0;
 
 pub struct FamilyTool {
     id: &'static str,
@@ -154,6 +160,25 @@ impl FamilyTool {
                 let base = f64::from(self.spiral_alt_base.unwrap_or(self.segments));
                 self.segments = (base + 4.0 * ((fitted - base) / 4.0).round()).clamp(2.0, 1000.0) as u32;
             }
+        }
+    }
+
+    /// The skew a letter changes while a grid is dragged out, as an index into `skew`, and the
+    /// direction: F lowers and V raises the skew of the horizontal dividers (a rectangular grid's
+    /// rows) or the radial dividers (a polar grid's), X lowers and C raises that of the vertical
+    /// dividers (columns) or the concentric dividers.
+    fn grid_skew_key(&self, key: ToolKey) -> Option<(usize, f64)> {
+        let (horizontal_or_radial, vertical_or_concentric) = match self.id {
+            "rectangularGrid" => (0, 1),
+            "polarGrid" => (1, 0),
+            _ => return None,
+        };
+        match key {
+            ToolKey::Letter('f') => Some((horizontal_or_radial, -1.0)),
+            ToolKey::Letter('v') => Some((horizontal_or_radial, 1.0)),
+            ToolKey::Letter('x') => Some((vertical_or_concentric, -1.0)),
+            ToolKey::Letter('c') => Some((vertical_or_concentric, 1.0)),
+            _ => None,
         }
     }
 
@@ -316,6 +341,14 @@ impl Tool for FamilyTool {
                 self.columns = self.columns.saturating_sub(1);
                 true
             }
+            ("rectangularGrid" | "polarGrid", ToolKey::Letter(_)) => match self.grid_skew_key(key) {
+                Some((i, sign)) => {
+                    let max = vectorcraft_geom::shapes::GRID_SKEW_MAX;
+                    self.skew[i] = (self.skew[i] + sign * GRID_SKEW_STEP).clamp(-max, max);
+                    true
+                }
+                None => false,
+            },
             _ => false,
         };
         if changed {
@@ -338,8 +371,14 @@ impl Tool for FamilyTool {
         }
     }
     /// The Arc tool takes C and F while an arc is dragged out: C switches it between open and closed, and F switches its base axis.
+    /// The grid tools take F, V, X and C while a grid is dragged out, for its divider skews.
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        self.id == "arc" && self.began && self.start.is_some() && matches!(key, ToolKey::Letter('c' | 'f'))
+        self.began
+            && self.start.is_some()
+            && match self.id {
+                "arc" => matches!(key, ToolKey::Letter('c' | 'f')),
+                _ => self.grid_skew_key(key).is_some(),
+            }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
@@ -456,6 +495,48 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 60.0));
         assert!(matches!(&a[..], [Action::Preview(_, v)] if v["x"] == 30.0 && v["width"] == 60.0 && v["height"] == 40.0), "{a:?}");
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 60.0)), vec![Action::Commit]);
+    }
+
+    /// While a grid is dragged out, F/V lower/raise the skew of the horizontal (rectangular) or
+    /// radial (polar) dividers by 10 and X/C change that of the vertical or concentric ones, within
+    /// ±500; the grid drawn next keeps them.
+    #[test]
+    fn grid_drag_keys_change_the_divider_skews() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let key = ToolKey::Letter;
+        for (id, horizontal_or_radial, vertical_or_concentric) in
+            [("rectangularGrid", "rowSkew", "columnSkew"), ("polarGrid", "radialSkew", "concentricSkew")]
+        {
+            let mut t = FamilyTool::new(id);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            assert!(!t.claims_key(&cx, key('f')), "{id}: no drag yet");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+            assert!("fvxc".chars().all(|c| t.claims_key(&cx, key(c))), "{id}");
+            assert!(!t.claims_key(&cx, key('e')), "{id}");
+            let skews = |a: Vec<Action>| match &a[..] {
+                [Action::Preview(c, v)] if c == &format!("shape.{id}") => (v[horizontal_or_radial].clone(), v[vertical_or_concentric].clone()),
+                _ => panic!("{id}: {a:?}"),
+            };
+            assert_eq!(skews(t.key(&cx, key('v'), Mods::default())), (json!(10.0), json!(0.0)), "{id}: V");
+            assert_eq!(skews(t.key(&cx, key('f'), Mods::default())), (json!(0.0), json!(0.0)), "{id}: F");
+            assert_eq!(skews(t.key(&cx, key('f'), Mods::default())), (json!(-10.0), json!(0.0)), "{id}: F");
+            assert_eq!(skews(t.key(&cx, key('c'), Mods::default())), (json!(-10.0), json!(10.0)), "{id}: C");
+            assert_eq!(skews(t.key(&cx, key('x'), Mods::default())), (json!(-10.0), json!(0.0)), "{id}: X");
+            for _ in 0..60 {
+                t.key(&cx, key('x'), Mods::default());
+                t.key(&cx, key('v'), Mods::default());
+            }
+            assert_eq!(skews(t.key(&cx, key('x'), Mods::default())), (json!(500.0), json!(-500.0)), "{id}: within ±500");
+            assert_eq!(skews(t.key(&cx, key('v'), Mods::default())), (json!(500.0), json!(-500.0)), "{id}: within ±500");
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+            assert!(!t.claims_key(&cx, key('v')), "{id}: the drag is over");
+            let o = t.options();
+            assert_eq!((o[horizontal_or_radial].clone(), o[vertical_or_concentric].clone()), (json!(500.0), json!(-500.0)), "{id}");
+        }
     }
 
     /// #1377: a drag draws with the tool's stored options, which keep to their types and range.
@@ -739,8 +820,8 @@ mod tests {
         assert!(!t.claims_key(&cx, c), "the drag is over");
         let o = t.options();
         assert_eq!((o["closed"].clone(), o["baseAlong"].clone(), o["slope"].clone()), (json!(false), json!("y"), json!(100.0)));
-        // The other tools of the family leave C and F to their shortcuts.
-        let mut g = FamilyTool::new("rectangularGrid");
+        // The Spiral tool leaves C and F to their shortcuts.
+        let mut g = FamilyTool::new("spiral");
         g.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
         g.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
         assert!(!g.claims_key(&cx, c) && !g.claims_key(&cx, f));

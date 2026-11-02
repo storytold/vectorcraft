@@ -9,6 +9,7 @@ use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, fi
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
+        cmd!(query "view.capsLock", "Caps Lock Cursor State", [], None, "{on?: bool} set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value → {on}", always, caps_lock),
         cmd!(
             "view.saved.new",
             "New View…",
@@ -52,6 +53,13 @@ pub fn specs() -> Vec<CommandSpec> {
 fn glyph_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.prefs.glyph_snap = s.prefs.glyph_snap.merged(p).map_err(|e| bad("view.snapToGlyph.options", e))?;
     Ok(json!(s.prefs.glyph_snap))
+}
+
+fn caps_lock(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(on) = p.get("on") {
+        s.caps_lock = on.as_bool().ok_or_else(|| bad("view.capsLock", "on must be true or false"))?;
+    }
+    Ok(json!({ "on": s.caps_lock }))
 }
 
 fn transparency_grid(s: &mut Session, p: &Value) -> Result<Value> {

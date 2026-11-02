@@ -260,6 +260,39 @@ fn shaper_sources_are_no_targets() {
     assert!(gives_corner(&Targets::points_near(&d, &[b], near)));
 }
 
+/// Art inside a hidden group or layer is no target, even while its own visibility is on: not
+/// for drawing, the Knife's straight cut, a move or a transform tool's reference point on the
+/// shown group around it.
+#[test]
+fn art_in_hidden_groups_and_layers_is_no_target() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node};
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let square = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0)), Appearance::default_art());
+    let mut inner = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    inner.visible = false;
+    let outer = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    let g = outer.id;
+    d.insert(Some(l), 1, outer).unwrap();
+    let corner = Point::new(300.0, 300.0);
+    let gives = |t: &Targets, at: Point| {
+        t.points.iter().any(|(p, _)| *p == at)
+            || t.xs.iter().chain(&t.ys).any(|(_, p, _)| *p == at)
+            || t.segments.iter().any(|(_, s)| s.start() == at || s.end() == at)
+    };
+    assert!(!gives(&Targets::collect(&d, &[], None), corner));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None), corner));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), corner));
+    assert!(!gives(&Targets::points_near(&d, &[g], Rect::new(296.0, 296.0, 304.0, 304.0)), corner));
+    // The shown rectangle on the same layer still is one, until the layer is hidden.
+    let shown = Point::new(100.0, 100.0);
+    assert!(gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), shown));
+    d.node_mut(l).unwrap().visible = false;
+    assert!(!gives(&Targets::collect(&d, &[], None), shown));
+    assert!(!gives(&Targets::for_drawing(&d, &[], None, None).anchors_and_paths(), shown));
+}
+
 /// #2120: the dragged end of a straight segment at any angle lands on the segment's own
 /// extension (Line Extension), past its other end or short of it, the guide drawn from that
 /// end; with two anchors moving there is none to keep to.

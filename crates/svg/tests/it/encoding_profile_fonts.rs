@@ -140,7 +140,7 @@ fn tiny_has_no_filters_masks_symbols_or_style_sheets() {
         Some(Box::new(OpacityMask::new(Node::path(d.alloc_id(), shapes::ellipse(Rect::new(80.0, 10.0, 130.0, 60.0)), fill(255, 255, 255)), true)));
     add(&mut d, b);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-5.0, -5.0, 5.0, 5.0)), fill(0, 128, 0));
-    d.symbols.push(Symbol { name: "Dot".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(art) });
     add(&mut d, Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((200.0, 30.0)) }));
     let mut c = Node::path(
         vectorcraft_doc::NodeId(0),

@@ -4,6 +4,7 @@
 pub mod arrange;
 pub mod cleanup;
 pub mod color;
+pub mod document;
 pub mod pathtools;
 pub mod pen;
 
@@ -15,6 +16,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Arrange Tools", arrange::menu()),
         Item::Sub("Artwork Cleanup", cleanup::menu()),
         Item::Sub("Color Effects", color::menu()),
+        Item::Sub("Document Tools", document::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
         Item::Sub("Smart Pen", pen::menu()),
         Item::Sep,

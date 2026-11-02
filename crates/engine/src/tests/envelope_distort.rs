@@ -274,7 +274,7 @@ fn symbols_bend_with_the_envelope() {
                 shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
                 vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
             );
-            d.symbols.push(Symbol { name: "Box".into(), art: Arc::new(art) });
+            d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: Arc::new(art) });
             let id = d.alloc_id();
             let xf = Affine::translate((200.0, 150.0)) * Affine::scale_non_uniform(10.0, 5.0);
             d.insert(d.default_layer(), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf }))?;

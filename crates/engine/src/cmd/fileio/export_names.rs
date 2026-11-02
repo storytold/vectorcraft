@@ -20,6 +20,12 @@ pub(crate) fn unique_file_names<'a>(names: impl IntoIterator<Item = (&'a str, St
 
 /// `names` with `-2`, `-3`… after a name already used (compared without case).
 pub(super) fn distinct_names(names: impl IntoIterator<Item = String>) -> Vec<String> {
+    distinct_names_by(names, str::to_lowercase)
+}
+
+/// `names` with `-2`, `-3`… after a name already used, two names matching when `key` gives the same
+/// key for them.
+pub(super) fn distinct_names_by(names: impl IntoIterator<Item = String>, key: impl Fn(&str) -> String) -> Vec<String> {
     let mut taken = std::collections::HashSet::new();
     // The next number to try for each base: a name repeated many times doesn't search the numbers
     // taken before it.
@@ -28,8 +34,8 @@ pub(super) fn distinct_names(names: impl IntoIterator<Item = String>) -> Vec<Str
         .into_iter()
         .map(|base| {
             let mut name = base.clone();
-            while !taken.insert(name.to_lowercase()) {
-                let n = next.entry(base.to_lowercase()).or_insert(1);
+            while !taken.insert(key(&name)) {
+                let n = next.entry(key(&base)).or_insert(1);
                 *n += 1;
                 name = format!("{base}-{n}");
             }

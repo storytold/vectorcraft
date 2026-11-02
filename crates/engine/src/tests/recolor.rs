@@ -537,6 +537,58 @@ fn recolor_to_a_library_spot_colour_links_it_and_adds_the_swatch() {
     assert_eq!(r["swatches"], json!(["Leaf"]));
 }
 
+/// A row's `tint` gives the art linked to the row's spot color that share of its tint;
+/// randomize without a change keeps it on the row, and a tint that is not a number is refused.
+#[test]
+fn a_rows_tint_tints_the_spot_color_the_art_links_to() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink 101", "color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}, "spot": true}));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Ink 101"], "name": "Inks"}))["data"].as_str().unwrap().to_string();
+    let lib = run(&mut s, "swatch.library.load", json!({"data": data, "name": "inks.vcswatches"}))["library"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.delete", json!({"names": ["Ink 101"]}));
+    let red = rect(&mut s, json!("#e02010"));
+    select_all(&mut s);
+    let map = json!([{"from": ["rgb 224 32 16"], "to": "cmyk 0 100 0 0", "tint": 40}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "limitTo": lib}));
+    match s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => {
+            assert_eq!(swatch.as_deref(), Some("Ink 101"), "linked to the spot color");
+            assert!((tint - 0.4).abs() < 1e-4, "at the row's tint: {tint}");
+            assert!(close(color, Color::cmyk(0.0, 1.0, 0.0, 0.0).tinted(0.4)), "{color:?}");
+        }
+        p => panic!("{p:?}"),
+    }
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": false}));
+    assert_eq!(r["map"][0]["tint"], json!(40.0), "{r}");
+    let e = s.execute("recolor.apply", &json!({"map": [{"from": ["rgb 224 32 16"], "to": "#ff0000", "tint": "40"}]})).unwrap_err();
+    assert!(e.to_string().contains("`tint` must be a number"), "{e}");
+}
+
+/// Randomize order moves a row's tint with its new color; changing saturation and brightness
+/// drops the tint of every color it changes.
+#[test]
+fn randomize_moves_a_tint_with_its_color_and_drops_it_when_the_color_changes() {
+    let mut s = session();
+    let map = json!([
+        {"from": ["rgb 255 0 0"], "to": "cmyk 0 100 0 0", "tint": 40},
+        {"from": ["rgb 0 255 0"], "to": "rgb 0 255 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    let mut moved = false;
+    for seed in 0..20 {
+        let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": seed}));
+        for row in r["map"].as_array().unwrap() {
+            let spot = row["to"] == json!("cmyk 0 100 0 0");
+            assert_eq!(row.get("tint").cloned(), spot.then(|| json!(40.0)), "seed {seed}: the tint goes with its color: {r}");
+        }
+        moved |= r["map"][0]["to"] != map[0]["to"];
+    }
+    assert!(moved, "some seed moves the tinted color to another row");
+    let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true}));
+    assert_ne!(sb["map"][0]["to"], map[0]["to"], "{sb}");
+    assert!(sb["map"][0].get("tint").is_none(), "a changed color has no tint: {sb}");
+}
+
 #[test]
 fn model_param_chooses_the_model_of_the_new_colour() {
     // RGB art in a CMYK document: by default a CMYK replacement comes out RGB (#2170).
@@ -570,6 +622,40 @@ fn model_param_must_be_a_string_when_given() {
         assert!(s.execute("recolor.apply", &json!({"map": {"#1a1a1a": "#ff0000"}, "model": bad})).is_err(), "{bad}");
     }
     assert_eq!(fill(&s, art).to_hex(), "#1a1a1a", "nothing changed");
+}
+
+/// A row's own `model` takes the place of the command's for that row's colors; a bad one fails
+/// before editing; `recolor.randomize` moves it with its new color.
+#[test]
+fn a_rows_model_applies_to_its_own_colors() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, json!("#ff00ff")), rect(&mut s, json!("#00ffff")));
+    select_all(&mut s);
+    let row = |from: &str, to: Value| json!({"from": [from], "to": to});
+    let mut first = row("#ff00ff", json!({"c": 0, "m": 1, "y": 0, "k": 0}));
+    first["model"] = json!("new");
+    let map = json!([first, row("#00ffff", json!({"c": 1, "m": 0, "y": 0, "k": 0}))]);
+    run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!(fill(&s, a), Color::cmyk(0.0, 1.0, 0.0, 0.0), "the row with `new` takes the CMYK color");
+    assert_eq!(fill(&s, b).model(), vectorcraft_color::cms::Model::Rgb, "the other row keeps RGB");
+    run(&mut s, "edit.undo", json!({}));
+    let mut keep = map.clone();
+    keep[0]["model"] = json!("keep");
+    run(&mut s, "recolor.apply", json!({"map": keep, "model": "new"}));
+    assert_eq!(fill(&s, a).model(), vectorcraft_color::cms::Model::Rgb, "the row's `keep` wins over the command's `new`");
+    assert_eq!(fill(&s, b), Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    run(&mut s, "edit.undo", json!({}));
+    for bad in [json!("nope"), json!(42)] {
+        let mut m = map.clone();
+        m[0]["model"] = bad.clone();
+        assert!(s.execute("recolor.apply", &json!({"map": m})).is_err(), "{bad}");
+    }
+    assert_eq!(fill(&s, a).to_hex(), "#ff00ff", "nothing changed");
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": 1}));
+    let out = r["map"].as_array().unwrap();
+    let moved = out.iter().find(|r| r.get("model").is_some()).expect("the model stays on a row");
+    assert_eq!((&moved["to"], &moved["model"]), (&json!("cmyk 0 100 0 0"), &json!("new")), "{r}");
+    assert_eq!(out.iter().filter(|r| r.get("model").is_some()).count(), 1, "{r}");
 }
 
 /// Recolor Artwork's commands refuse a parameter of the wrong form, such as `limitTo: 5` or
@@ -634,4 +720,147 @@ fn document_model_converts_the_colours_of_a_group_too() {
     assert!(group(&s).iter().all(|c| c.model() == vectorcraft_color::cms::Model::Cmyk), "{:?}", group(&s));
     run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#00ff00"], "model": "document"}));
     assert!(group(&s).iter().all(|c| c.model() == vectorcraft_color::cms::Model::Cmyk), "{:?}", group(&s));
+}
+
+fn stroke(s: &Session, id: NodeId) -> Color {
+    s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().color().unwrap()
+}
+
+/// Global Adjust changes every colour the rows recolour, each one separately (the colours of a
+/// row of several, fills and strokes alike), in its own model, as one undo step; an excluded
+/// row's colours and preserved colours stay.
+#[test]
+fn global_adjust_changes_every_recolored_color() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    let pink = rect(&mut s, json!("#ff8080"));
+    let cmyk = rect(&mut s, json!({"c": 100, "m": 0, "y": 0, "k": 0}));
+    let kept = rect(&mut s, json!("#00ff00"));
+    run(&mut s, "paint.setStroke", json!({"ids": [red.0], "color": "#0000ff", "width": 2}));
+    select_all(&mut s);
+    let map = json!([
+        {"from": ["rgb 255 0 0", "rgb 255 128 128"], "to": "rgb 255 0 0"},
+        {"from": ["cmyk 100 0 0 0"], "to": "cmyk 100 0 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+        {"from": ["rgb 0 255 0"], "to": "rgb 0 255 0", "exclude": true},
+    ]);
+    let undo = s.doc().unwrap().history.undo.len();
+    let sat = |c: Color| c.to_hsb()[1];
+    let saturations = [fill(&s, red), fill(&s, pink), fill(&s, cmyk), stroke(&s, red)].map(sat);
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints", "globalAdjust": {"saturation": -50}}));
+    assert_eq!(r["changed"], 4, "three fills and a stroke: {r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let after = [fill(&s, red), fill(&s, pink), fill(&s, cmyk), stroke(&s, red)].map(sat);
+    for (n, what) in ["red", "pink", "cyan", "the stroke"].iter().enumerate() {
+        // CMYK reads back through the profile-free conversion, so its saturation is near half, not exact.
+        assert!((after[n] - saturations[n] * 0.5).abs() < 0.05, "{what} has about half its saturation: {} → {}", saturations[n], after[n]);
+    }
+    assert!(close(fill(&s, red), Color::rgb(1.0, 0.5, 0.5)), "{:?}", fill(&s, red));
+    assert!(close(fill(&s, pink), Color::rgb(1.0, 0.75, 0.75)), "each colour of a row changes on its own: {:?}", fill(&s, pink));
+    assert!(matches!(fill(&s, cmyk), Color::Cmyk { .. }), "a CMYK colour stays CMYK: {:?}", fill(&s, cmyk));
+    assert_eq!(fill(&s, kept).to_hex(), "#00ff00", "an excluded row keeps its colours");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(fill(&s, red).to_hex(), "#ff0000");
+    assert_eq!(fill(&s, pink).to_hex(), "#ff8080");
+    assert_eq!(stroke(&s, red).to_hex(), "#0000ff");
+    // Brightness -100 makes every recolored color black; the rows' new colors are taken first.
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["#ff0000"], "to": "#00ff00"}], "globalAdjust": {"brightness": -100}}));
+    assert_eq!(fill(&s, red).to_hex(), "#000000");
+    assert_eq!(fill(&s, pink).to_hex(), "#ff8080", "a colour no row holds stays");
+}
+
+/// Global Adjust at 0 changes nothing, a global swatch's link included, and a non-zero adjustment
+/// gives the art the adjusted colour without the link.
+#[test]
+fn global_adjust_at_zero_keeps_colors_and_links() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": "#2878f0", "global": true}));
+    let art = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [art.0], "swatch": "Brand"}));
+    select_all(&mut s);
+    let link = |s: &Session| match s.doc().unwrap().doc.node(art).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { swatch, .. } => swatch,
+        p => panic!("a solid fill: {p:?}"),
+    };
+    let before = fill(&s, art);
+    let zero = json!({"saturation": 0, "brightness": 0, "temperature": 0, "luminosity": 0});
+    run(&mut s, "recolor.apply", json!({"map": {"rgb 40 120 240": "rgb 40 120 240"}, "globalAdjust": zero}));
+    assert_eq!(fill(&s, art), before);
+    assert_eq!(link(&s).as_deref(), Some("Brand"), "the link stays");
+    run(&mut s, "recolor.apply", json!({"map": {"rgb 40 120 240": "rgb 40 120 240"}, "globalAdjust": {"temperature": 50}}));
+    let [r, _, b] = fill(&s, art).to_rgb();
+    let [r0, _, b0] = before.to_rgb();
+    assert!(r > r0 && b < b0, "warmer: {:?}", fill(&s, art));
+    assert_eq!(link(&s), None, "the adjusted colour is no longer the swatch's");
+}
+
+/// With Limit to Library each row's new colour takes the Global Adjust and then snaps to the
+/// library; a colour group rewritten with the rows' new colours takes the adjustment too.
+#[test]
+fn global_adjust_with_a_library_and_a_group() {
+    let mut s = session();
+    let art = rect(&mut s, json!("#f01020"));
+    select_all(&mut s);
+    run(&mut s, "recolor.apply", json!({"map": {"#f01020": "#f01020"}, "limitTo": "Web Safe 216", "globalAdjust": {"brightness": -100}}));
+    assert_eq!(fill(&s, art).to_hex(), "#000000", "black, a colour of the library");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#f01020"]}));
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["#f01020"], "to": "#f01020"}], "group": "Theme", "globalAdjust": {"saturation": -100}}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    let c = g.swatches[0].paint.color().unwrap();
+    assert!(c.to_hsb()[1] < 1e-3, "the group's colour is adjusted: {c:?}");
+    assert_eq!(c, fill(&s, art), "as the art is");
+}
+
+/// Art linked to a global swatch of the rewritten group takes the same Global Adjust as unlinked
+/// art of its color: at 100% it keeps the link, and a tint whose adjusted color is not the
+/// swatch's new color at that tint takes the adjusted color and loses the link.
+#[test]
+fn global_adjust_gives_linked_tints_of_a_group_the_adjusted_color() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#ff0000"]}));
+    let name = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().swatches[0].name.clone();
+    run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    let full = rect(&mut s, json!("#000000"));
+    let tint = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [full.0], "swatch": name}));
+    run(&mut s, "paint.setFill", json!({"ids": [tint.0], "swatch": name, "tint": 50}));
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => (color, swatch, tint),
+        p => panic!("{p:?}"),
+    };
+    select_all(&mut s);
+    let tint_key = vectorcraft_color::recolor::ColorKey::of(&fill(&s, tint)).to_string();
+    let rows = json!([{"from": ["rgb 255 0 0", tint_key], "to": "#ff0000"}]);
+    run(&mut s, "recolor.apply", json!({"map": rows, "method": "scaleTints", "group": "Theme", "globalAdjust": {"brightness": -50}}));
+    let (c, w, t) = link(&s, full);
+    assert!(close(c, Color::rgb(0.5, 0.0, 0.0)) && w.as_deref() == Some(name.as_str()) && t == 1.0, "{c:?} {w:?} {t}");
+    let (c, w, _) = link(&s, tint);
+    assert!(close(c, Color::rgb(0.5, 0.25, 0.25)), "the tint's own color, adjusted: {c:?}");
+    assert_eq!(w, None, "the adjusted tint is not a tint of the swatch's new color");
+}
+
+/// `globalAdjust` must be an object of numbers from -100 to 100; a refusal changes nothing and
+/// records no undo step. A null counts as left out.
+#[test]
+fn global_adjust_refuses_params_of_the_wrong_form() {
+    let mut s = session();
+    let art = rect(&mut s, json!("#ff0000"));
+    select_all(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let map = json!({"#ff0000": "#ff0000"});
+    for (adjust, msg) in [
+        (json!(5), "`globalAdjust` must be an object"),
+        (json!({"saturation": "50"}), "`saturation` must be a number"),
+        (json!({"brightness": 101}), "`brightness` must be between -100 and 100 (got 101)"),
+        (json!({"luminosity": -100.5}), "`luminosity` must be between -100 and 100 (got -100.5)"),
+    ] {
+        let e = s.execute("recolor.apply", &json!({"map": map, "globalAdjust": adjust})).unwrap_err().to_string();
+        assert!(e.contains(msg), "{adjust}: {e}");
+    }
+    assert_eq!(fill(&s, art).to_hex(), "#ff0000", "nothing changed");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    run(&mut s, "recolor.apply", json!({"map": map, "globalAdjust": null}));
+    run(&mut s, "recolor.apply", json!({"map": map, "globalAdjust": {"saturation": null, "temperature": -100}}));
+    assert_ne!(fill(&s, art).to_hex(), "#ff0000", "an amount at the end of the range applies");
 }

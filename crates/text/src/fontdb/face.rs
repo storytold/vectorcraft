@@ -279,6 +279,26 @@ impl FontFace {
         *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
     }
 
+    /// The height of the face that a font size measures with `reference`, in ems: 1 for the em
+    /// box; the cap height or x height of its OS/2 table; the height of its ideographic character
+    /// face ([`Self::icf_margins`]), or across a `vertical` line its width. None for a face whose
+    /// font has no such value (an OS/2 table without the heights, no ICF), or one outside 0.1 to
+    /// 2 ems.
+    pub fn font_height(&self, reference: vectorcraft_doc::FontHeightReference, vertical: bool) -> Option<f64> {
+        use vectorcraft_doc::FontHeightReference as R;
+        let units = |v: Option<f32>| v.map(f64::from).map(|v| v / self.upem);
+        let h = match reference {
+            R::EmBox => Some(1.0),
+            R::CapHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).cap_height),
+            R::XHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).x_height),
+            R::IcfBox => {
+                let m = self.icf_margins();
+                (m != IcfMargins::default()).then_some(if vertical { 1.0 - m.left - m.right } else { 1.0 - m.top - m.bottom })
+            }
+        };
+        h.filter(|h| (0.1..=2.0).contains(h))
+    }
+
     /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else
     /// as far below the em box top) against the em box `ideo` .. `idtp` (else the OS/2 typographic
     /// descender, and one em above it); across vertical lines, `icfb` and `icft` of the vertical

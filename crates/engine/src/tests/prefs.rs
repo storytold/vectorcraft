@@ -389,6 +389,31 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
+/// Caps Lock gives the drawing tools the precise crosshair while it is on, and leaves the saved
+/// Use Precise Cursors preference as it was.
+#[test]
+fn caps_lock_gives_drawing_tools_the_crosshair() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let cursor = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        s.cursor(vectorcraft_geom::Point::new(300.0, 300.0), Mods::default(), ViewInfo::default())
+    };
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+    assert_eq!(s.execute("view.capsLock", &json!({"on": true})).unwrap(), json!({"on": true}));
+    assert!(!s.prefs.use_precise_cursors, "Caps Lock leaves the preference off");
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "lasso"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    assert_eq!(s.execute("view.capsLock", &json!({"on": false})).unwrap(), json!({"on": false}));
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
+    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
+    assert!(s.execute("view.capsLock", &json!({"on": 1})).is_err());
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+}
+
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
 /// pointer; on, a crosshair. Every other drawing tool shows a crosshair either way, and the Type tool and the
 /// Scissors over no path keep theirs.
@@ -1676,6 +1701,39 @@ fn deferred_preview_overlays_are_cached_across_redraws() {
     let second = count(&mut s);
     assert_eq!(first, second);
     assert_eq!(s.doc().unwrap().revision, rev, "the preview command is not run again");
+}
+
+/// With Real-time Drawing off, a moved selection whose outlines have more points than the canvas
+/// outlines (100,000) shows its moved bounds instead (#525, #2460).
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_selection_too_big_to_outline() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let anchors: Vec<Value> = (0..120_000).map(|i| json!({"x": 100.0 + f64::from(i) * 0.003, "y": if i % 2 == 0 { 100 } else { 150 }})).collect();
+    let id = s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let at_rest = s.doc().unwrap().doc.bounds_of(&s.doc().unwrap().selection.objects, true).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 160.0), v).unwrap();
+    let feedback: Vec<_> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => Some(path),
+            _ => None,
+        })
+        .collect();
+    let points: usize = feedback.iter().map(|p| p.elements().len()).sum();
+    assert!(points <= 100_000, "the drag feedback has {points} points");
+    let [bounds] = feedback.as_slice() else { panic!("one bounds rectangle, got {} paths", feedback.len()) };
+    let b = kurbo::Shape::bounding_box(bounds);
+    let moved = (b.x0 - at_rest.x0, b.y0 - at_rest.y0, b.width() - at_rest.width(), b.height() - at_rest.height());
+    assert!(moved.0 > 1.0 && moved.1 > 1.0 && moved.2.abs() < 1e-6 && moved.3.abs() < 1e-6, "the bounds moved with the drag: {moved:?}");
 }
 
 /// A deferred commit that fails its preview cancels the interaction instead of leaving it open.
