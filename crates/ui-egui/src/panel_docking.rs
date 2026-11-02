@@ -39,6 +39,8 @@ pub(crate) const COLUMN_MIN: f32 = 220.0;
 pub(crate) const COLUMN_MAX: f32 = 720.0;
 /// Width of a column collapsed to icons.
 pub(crate) const ICON_WIDTH: f32 = 38.0;
+/// The narrowest a panel other than the canvas is drawn, docked or floating.
+pub(crate) const PANEL_MIN_WIDTH: f32 = 220.0;
 
 /// Docking state that lives for the session only.
 #[derive(Default)]
@@ -1292,7 +1294,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(220.0, 80.0) };
+        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 
