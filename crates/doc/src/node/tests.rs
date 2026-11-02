@@ -546,3 +546,23 @@ fn fields_before_the_type_are_buffered_within_the_value_budget() {
     assert!(with_buffered_value_budget(0, || read(&written)).is_ok(), "a saved object buffers nothing: {written}");
     assert!(read(reordered).is_ok(), "no budget outside a read");
 }
+
+/// A compound path's path is its members' paths one after another, open and closed, empty
+/// members and single anchors included.
+#[test]
+fn compound_stroke_path_is_its_members_in_order() {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let open = PathData::single(SubPath::new([(0.0, 0.0), (5.0, 1.0), (9.0, 7.0)].map(|(x, y)| Anchor::corner(Point::new(x, y))).to_vec(), false));
+    let lone = PathData::single(SubPath::new(vec![Anchor::corner(Point::new(3.0, 3.0))], false));
+    let members =
+        [shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), open, PathData::default(), lone, shapes::ellipse(Rect::new(10.0, 10.0, 20.0, 16.0))];
+    let mut expected = vectorcraft_geom::BezPath::new();
+    for pd in &members {
+        expected.extend(pd.to_bezpath());
+    }
+    let children = members.iter().enumerate().map(|(i, pd)| Arc::new(Node::path(NodeId(i as u64 + 1), pd.clone(), Appearance::default()))).collect();
+    let n = Node::new(NodeId(99), NodeKind::Compound { children, rule: vectorcraft_geom::FillRule::EvenOdd });
+    let bp = n.stroke_path().unwrap();
+    assert_eq!(bp.elements(), expected.elements());
+    assert!(!bp.elements().is_empty());
+}

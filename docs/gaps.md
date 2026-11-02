@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (G15: clicks on paths and compound paths are culled by their control points; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (G15: a compound path's assembled path is kept between frames; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -619,6 +619,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (2026-11-02):** the renderer keeps a compound path's assembled path with the node, as it keeps a plain
+  path's, instead of assembling its members again in every frame; the path is assembled into a buffer sized up front.
+  Unused geometry entries are dropped after a few frames however few there are (before, only past 1,024 entries), so
+  the copies a drag makes in every frame no longer stay alive with all their members
+  (`crates/render/src/tests/memory.rs`, `crates/doc/src/node/tests.rs`). Not timed; `vectorcraft-cli perf` not rerun.
 - **Improved (2026-11-02):** a click or hover culls paths and compound paths by the box of their control points
   (grown by their strokes' reach) instead of measuring along their curves, and tests a compound path's outline and
   fill against only the members whose control box, grown by the tolerance, holds the point; painted strokes are
@@ -724,6 +729,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
 | 2026-11-02 | minor | G15: hit testing culls paths and compound paths by their control points' box and tests a compound path's outline and fill against only its members near the click; the same objects are hit. Estimate unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |
 | 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
