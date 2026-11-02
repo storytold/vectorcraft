@@ -149,10 +149,17 @@ pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
 /// move (empty when the pen read neither), if any. The last move is the pointer's position; the
 /// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
 /// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
-/// too few for a low Fidelity to follow the hand (#3328).
-pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMove>, Option<PenPose>) {
+/// too few for a low Fidelity to follow the hand (#3328). With `release`, the moves stop at that
+/// button's button-up in this frame, if it came: the moves after it are hover, and the last move
+/// before it is the pointer's position.
+pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<egui::PointerButton>) -> (Vec<FrameMove>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
+        // How many of the frame's moves came before the button-up, if it came.
+        let before_up = release.and_then(|b| {
+            let up = i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button, pressed: false, .. } if *button == b))?;
+            Some(i.events.iter().take(up).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count())
+        });
         let mut moves = vec![];
         if i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
             let mut force = None;
@@ -173,6 +180,10 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMov
         } else {
             moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None, None)) } else { None }).collect();
         }
+        // Cut after pairing: the feed's samples pair with every move of the frame.
+        if let Some(n) = before_up {
+            moves.truncate(n);
+        }
         let last_pose = moves.pop().and_then(|(_, _, q)| q);
         // A burst of events (a stalled frame) is thinned to a bounded count.
         const MAX: usize = 64;
@@ -188,9 +199,11 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMov
 /// all of them for a tool that builds a stroke from them ([`vectorcraft_engine::Session::tool_wants_samples`]), none
 /// for the others, which get one drag a frame. The moves are read either way, so the host's feed
 /// pairs the next frame's with its own. The tilt and rotation the feed kept for the pointer's
-/// position come second, for every tool.
-pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> (Vec<FrameMove>, Option<PenPose>) {
-    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref());
+/// position come second, for every tool. With `released`, only the moves before the primary
+/// button-up count.
+pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp, released: bool) -> (Vec<FrameMove>, Option<PenPose>) {
+    let release = released.then_some(egui::PointerButton::Primary);
+    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref(), release);
     (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
 }
 

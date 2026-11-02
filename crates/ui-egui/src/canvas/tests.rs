@@ -6578,6 +6578,64 @@ fn a_drag_ends_where_the_button_went_up_in_its_frame() {
     assert!(app.session.active().unwrap().interaction.is_none(), "committed");
 }
 
+/// The moves that come after the button-up in the release's frame are hover: a stroke built from
+/// the drag's samples does not take them.
+#[test]
+fn moves_after_the_button_up_do_not_join_the_stroke() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let center = app.canvas_rect.unwrap().center();
+    app.select_tool("pencil");
+    let a = center - vec2(100.0, 0.0);
+    let end = a + vec2(120.0, 0.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    for x in [20.0, 40.0, 60.0] {
+        frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(x, 0.0))]);
+    }
+    let hover = [end + vec2(30.0, 100.0), end + vec2(60.0, 120.0), end + vec2(90.0, 140.0)];
+    let mut events = vec![Event::PointerMoved(a + vec2(90.0, 0.0)), Event::PointerMoved(end), button(end, false)];
+    events.extend(hover.map(Event::PointerMoved));
+    frame(&mut app, &ctx, events);
+    let st = app.session.active().unwrap();
+    let r = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    let (left, right) = (xf.to_doc(a), xf.to_doc(end));
+    assert!((r.x0 - left.x).abs() < 1.0 && (r.x1 - right.x).abs() < 1.0 && r.height() < 1.0, "the stroke stops at the release: {r:?}");
+}
+
+/// [`frame_moves`] with a release keeps the moves before the button-up, and the pose the feed kept
+/// for the last of them.
+#[test]
+fn frame_moves_stop_at_the_button_up() {
+    let ctx = egui::Context::default();
+    let (a, b, c, d) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(30.0, 40.0), pos2(40.0, 50.0));
+    let up = egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c), egui::Event::PointerMoved(d)];
+    let feed = StylusFeed::default();
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    let after = PenPose { tilt: Some([50.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, after), (0.8, after)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let release = Some(egui::PointerButton::Primary);
+    let mut out =
+        ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), release));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.4), Some(PenPose::default()))], "the moves after the button-up are left out");
+    assert_eq!(last, Some(at_b), "the pose is the last move's before the button-up");
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| moves = frame_moves(ui, None, None).0);
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, None, None), (b, None, None), (c, None, None)], "without a release every move counts");
+}
+
 #[test]
 fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let ctx = egui::Context::default();
@@ -6586,7 +6644,7 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let c = pos2(30.0, 40.0);
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
     let mut mouse = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None).0);
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     // A mouse keeps its moves too, without a pressure or a pose.
     assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
@@ -6597,7 +6655,8 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
     let (mut samples, mut last) = (vec![], None);
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
+    let mut out =
+        ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed), None));
     out.textures_delta.clear();
     assert_eq!(
         samples,
@@ -6605,17 +6664,17 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
         "paired from the end, each with its own pose; a lift's 0 is no pressure"
     );
     assert_eq!(last, Some(leaning), "the last move's pose comes with the moves");
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed), None));
     out.textures_delta.clear();
     assert_eq!(samples, [(a, None, None), (b, None, None)], "the moves were taken: a mouse's moves again");
     assert_eq!(last, None);
     let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
     let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
     let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     assert!(samples.len() <= 64, "a stalled frame stays bounded");
 }
@@ -7200,7 +7259,7 @@ fn only_the_freehand_tools_get_every_move_of_a_frame() {
     {
         app.select_tool(tool);
         let mut moves = vec![];
-        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app).0);
+        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app, false).0);
         out.textures_delta.clear();
         assert_eq!(moves.len(), if every { 19 } else { 0 }, "{tool}");
     }
