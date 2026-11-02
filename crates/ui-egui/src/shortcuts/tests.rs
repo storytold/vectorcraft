@@ -225,6 +225,26 @@ fn presses_follow_the_users_shortcuts() {
     assert!(runs_a_shortcut("=", "Equal", cmd()), "the defaults again");
 }
 
+/// A user's shortcut for a command whose menu bar item gives params runs what a click on that item
+/// runs: Clean Up…, Print Ink Fixes… and Find and Replace… open their dialogs instead of running
+/// without the values the dialog asks for.
+#[test]
+fn a_shortcut_runs_what_its_menu_item_runs() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    for id in ["object.path.cleanUp", "addon.color.printFixes", "edit.findReplace"] {
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), Default::default());
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, "Cmd+Alt+Shift+F9");
+        app.ui.status.clear();
+        frame(&mut app, chord.clone());
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{id} opens its dialog: {}", app.ui.status));
+        assert_eq!(d.fields["__command"], json!(id), "{:?}", d.fields);
+    }
+}
+
 /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
 /// tool's Shift+O), with the Selection tool or while the Type tool edits the text.
 #[test]
