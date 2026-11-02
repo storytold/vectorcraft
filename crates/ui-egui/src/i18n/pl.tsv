@@ -386,6 +386,7 @@
 	Stroke Weight	Grubość obrysu
 	Graphic Style	Styl graficzny
 	Symbol Instance	Wystąpienie symbolu
+	Link Block Series	Seria połączonych bloków
 	Font Family	Rodzina czcionek
 	Font Family & Style	Rodzina i styl czcionki
 	Font Family, Style & Size	Rodzina, styl i rozmiar czcionki
@@ -4431,6 +4432,7 @@ imageTrace	Outline	Kontur
 @msg	no user library folder here	brak folderu bibliotek użytkownika
 @msg	no user workspace `{from}`	brak obszaru roboczego użytkownika `{from}`
 @msg	node {_1} is not text	węzeł {_1} nie jest tekstem
+@msg	node {_1} is on a locked artboard	węzeł {_1} jest na zablokowanym obszarze kompozycji
 @msg	not a DXF drawing	to nie jest rysunek DXF
 @msg	not a VectorCraft file: {0}	to nie jest plik VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	to nie jest zestaw skrótów VectorCraft (brak `overrides`)
@@ -4813,6 +4815,9 @@ imageTrace	Outline	Kontur
 @msg	the PCX file is cut short	plik PCX jest ucięty
 @msg	the PCX file's header is damaged	nagłówek pliku PCX jest uszkodzony
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	nie można odczytać plików PCX z {bits}-bitowymi pikselami w {planes} płaszczyznach
+@msg	the Pixar file is cut short	plik Pixar jest ucięty
+@msg	the Pixar file's header is damaged	nagłówek pliku Pixar jest uszkodzony
+@msg	the Pixar file's image data is damaged	dane obrazu pliku Pixar są uszkodzone
 @msg	the JPEG 2000 file can't be read	nie można odczytać pliku JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	plik JPEG 2000 zawiera nieobsługiwaną przestrzeń barw lub zawartość JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
@@ -5487,7 +5492,9 @@ mark-style	Japanese	Japońskie
 	Effect Gallery	Galeria efektów
 	Filters	Filtry
 	Select artwork to apply effects	Wybierz grafikę, aby zastosować efekty
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	zmienne i zestawy danych pliku nie zostały wczytane (zmienne: {variables}, zestawy danych: {data_sets}): panel Zmienne ich nie wyświetla
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka zmiennych pliku została wczytana tylko częściowo (pominięte wpisy: {_1}): panel Zmienne wyświetla resztę
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	nie udało się wczytać biblioteki zmiennych pliku: panel Zmienne jej nie wyświetla
+@msg	a variable of unknown kind can't be bound to objects	zmiennej nieznanego rodzaju nie można powiązać z obiektami
 # Select by Color (select.color)
 	Select by Color	Zaznacz według koloru
 	Move Anchor Point	Przesuń punkt kontrolny

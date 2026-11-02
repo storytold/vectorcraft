@@ -4156,6 +4156,7 @@ digits	Malayalam	Malaiàlam
 	Switch x/y	Intercanvia x/y
 	Symbol	Símbol
 	Symbol Instance	Instància de símbol
+	Link Block Series	Sèrie de blocs enllaçats
 	Symbol Libraries	Biblioteques de símbols
 	Symbol Libraries Menu	Menú de biblioteques de símbols
 	Symbol Library	Biblioteca de símbols
@@ -5274,6 +5275,7 @@ digits	Malayalam	Malaiàlam
 @msg	no user library folder here	aquí no hi ha cap carpeta de biblioteca d’usuari
 @msg	no user workspace `{from}`	no hi ha l’espai de treball d’usuari `{from}`
 @msg	node {_1} is not text	el node {_1} no és text
+@msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat
 @msg	Non-finite dimension	Cota no finita
 @msg	not a blend	no és una fusió
 @msg	not a DXF drawing	no és un dibuix DXF
@@ -5513,7 +5515,9 @@ digits	Malayalam	Malaiàlam
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	no s’han llegit les capes del fitxer ({_1}): arriba com la seva pàgina, en una sola capa
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	no s’han llegit les capes del fitxer a partir de les seves dades d’edició ({_1}): provenen de la seva part PDF
 @msg	the file's preview header points outside the file	la capçalera de previsualització del fitxer apunta fora del fitxer
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no s’han llegit les variables ni els conjunts de dades del fitxer (variables: {variables}, conjunts de dades: {data_sets}): el panell Variables no els llista
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del fitxer s’ha llegit només en part (entrades omeses: {_1}): el panell Variables llista la resta
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no s’ha pogut llegir la biblioteca de variables del fitxer: el panell Variables no la llista
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipus desconegut no es pot vincular a objectes
 @msg	the files come to more than 1 GB: add fewer at a time	els fitxers sumen més d’1 GB: afegeix-ne menys alhora
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	El processador gràfic provat primer no ha pogut mostrar la finestra, així que VectorCraft s’ha iniciat de nou amb {summary}
 @msg	The graphics were lost and couldn't be restarted.	Els gràfics s’han perdut i no s’han pogut reiniciar.
@@ -5560,6 +5564,9 @@ digits	Malayalam	Malaiàlam
 @msg	the program runs, deletes or renames a file, which the reader can't do	el programa executa, suprimeix o reanomena un fitxer, cosa que el lector no pot fer
 @msg	the PSD file has an unknown colour mode ({m})	el fitxer PSD té un mode de color desconegut ({m})
 @msg	the PSD file is cut short	el fitxer PSD està truncat
+@msg	the Pixar file is cut short	el fitxer Pixar està truncat
+@msg	the Pixar file's header is damaged	la capçalera del fitxer Pixar està malmesa
+@msg	the Pixar file's image data is damaged	les dades d’imatge del fitxer Pixar estan malmeses
 @msg	the PSD file's header is damaged	la capçalera del fitxer PSD està malmesa
 @msg	the PSD file's image data can't be read: {e}	no es poden llegir les dades d’imatge del fitxer PSD: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	les dades d’imatge del fitxer PSD utilitzen una compressió desconeguda ({m})

@@ -3298,6 +3298,7 @@ effect	Points	Punkte
 	Graphic	Grafik
 	Show all open documents	Alle geöffneten Dokumente anzeigen
 	Symbol Instance	Symbolinstanz
+	Link Block Series	Reihe verketteter Blöcke
 	Symbol Libraries	Symbol-Bibliotheken
 	Symbol Screener Tool	Symbol-transparent-gestalten-Werkzeug
 	Symbol Scruncher Tool	Symbol-stauchen-Werkzeug
@@ -4217,6 +4218,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no user library folder here	hier gibt es keinen Ordner für Benutzerbibliotheken
 @msg	no user workspace `{from}`	kein Benutzerarbeitsbereich `{from}`
 @msg	node {_1} is not text	Knoten {_1} ist kein Text
+@msg	node {_1} is on a locked artboard	Knoten {_1} liegt auf einer gesperrten Zeichenfläche
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	kein VectorCraft-Tastaturbefehlssatz (`overrides` fehlt)
@@ -4728,6 +4730,9 @@ theme	Appearance	Erscheinungsbild
 @msg	the PCX file is cut short	die PCX-Datei ist unvollständig
 @msg	the PCX file's header is damaged	der Dateikopf der PCX-Datei ist beschädigt
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-Dateien mit {bits}-Bit-Pixeln in {planes} Ebenen können nicht gelesen werden
+@msg	the Pixar file is cut short	die Pixar-Datei ist unvollständig
+@msg	the Pixar file's header is damaged	der Dateikopf der Pixar-Datei ist beschädigt
+@msg	the Pixar file's image data is damaged	die Bilddaten der Pixar-Datei sind beschädigt
 @msg	the JPEG 2000 file can't be read	die JPEG-2000-Datei kann nicht gelesen werden
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	die JPEG-2000-Datei enthält einen nicht unterstützten Farbraum oder JPX-Inhalt
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
@@ -5214,7 +5219,9 @@ effect	Soft	Weich
 	Effect Gallery	Effekt-Galerie
 	Filters	Filter
 	Select artwork to apply effects	Wählen Sie Grafik aus, um Effekte anzuwenden
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	die Variablen und Datensätze der Datei wurden nicht gelesen (Variablen: {variables}, Datensätze: {data_sets}): Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	die Variablenbibliothek der Datei wurde nur teilweise gelesen (übersprungene Einträge: {_1}): Das Bedienfeld „Variablen“ listet den Rest auf
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	die Variablenbibliothek der Datei konnte nicht gelesen werden: Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	a variable of unknown kind can't be bound to objects	eine Variable unbekannter Art kann nicht an Objekte gebunden werden
 # Select by Color (select.color)
 	Select by Color	Nach Farbe auswählen
 	Move Anchor Point	Ankerpunkt verschieben

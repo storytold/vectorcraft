@@ -44,6 +44,7 @@ pub mod pngtext;
 pub mod ppi;
 pub mod progress;
 pub mod psdread;
+mod pxrread;
 mod save;
 mod screens;
 mod svg;
@@ -127,8 +128,8 @@ use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,
-    file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, titled_for_export,
-    writable_format,
+    file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, read_extensions,
+    readable_format, readable_format_for_name, titled_for_export, writable_format,
 };
 
 #[cfg(test)]
@@ -205,6 +206,8 @@ mod tests_psdread;
 mod tests_jp2read;
 #[cfg(test)]
 mod tests_pcxread;
+#[cfg(test)]
+mod tests_pxrread;
 
 #[cfg(test)]
 mod tests_epsimport;

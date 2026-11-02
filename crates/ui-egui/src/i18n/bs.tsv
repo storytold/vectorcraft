@@ -418,6 +418,7 @@
 	Stroke Weight	Debljina poteza
 	Graphic Style	Grafički stil
 	Symbol Instance	Instanca simbola
+	Link Block Series	Niz povezanih blokova
 	Font Family	Porodica fonta
 	Font Family & Style	Porodica i stil fonta
 	Font Family, Style & Size	Porodica, stil i veličina fonta
@@ -4931,6 +4932,9 @@ imageTrace	Outline	Obris
 @msg	the PCX file is cut short	PCX datoteka je skraćena
 @msg	the PCX file's header is damaged	zaglavlje PCX datoteke je oštećeno
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX datoteke s {bits}-bitnim pikselima u {planes} ravni nije moguće pročitati
+@msg	the Pixar file is cut short	Pixar datoteka je skraćena
+@msg	the Pixar file's header is damaged	zaglavlje Pixar datoteke je oštećeno
+@msg	the Pixar file's image data is damaged	slikovni podaci Pixar datoteke su oštećeni
 @msg	the JPEG 2000 file can't be read	datoteku JPEG 2000 nije moguće pročitati
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	datoteka JPEG 2000 ima nepodržan prostor boja ili JPX sadržaj
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
@@ -5546,7 +5550,9 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	varijable i skupovi podataka datoteke nisu pročitani (varijable: {variables}, skupovi podataka: {data_sets}): panel Varijable ih ne navodi
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
+@msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
 	Select by Color	Odaberi po boji
 	Move Anchor Point	Pomjeri sidrenu tačku
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zadržava 1 od {n} radnih ploča dokumenta: datoteka se ponovo otvara s jednom. Uključite Očuvaj mogućnosti uređivanja da ih zadržite sve.

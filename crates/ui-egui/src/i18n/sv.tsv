@@ -3276,6 +3276,7 @@ digits	Malayalam	Malayalam
 	Graphic	Grafik
 	Show all open documents	Visa alla öppna dokument
 	Symbol Instance	Symbolinstans
+	Link Block Series	Serie av länkade block
 	Symbol Libraries	Symbolbibliotek
 	Symbol Screener Tool	Verktyg för symbolopacitet
 	Symbol Scruncher Tool	Verktyg för att dra ihop symboler
@@ -4206,6 +4207,7 @@ axis	Both	Båda
 @msg	no user library folder here	ingen mapp för användarbibliotek här
 @msg	no user workspace `{from}`	ingen användararbetslayout `{from}`
 @msg	node {_1} is not text	nod {_1} är inte text
+@msg	node {_1} is on a locked artboard	nod {_1} ligger på en låst rityta
 @msg	not a DXF drawing	inte en DXF-ritning
 @msg	not a VectorCraft file: {0}	inte en VectorCraft-fil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	inte en kortkommandouppsättning för VectorCraft (`overrides` saknas)
@@ -4624,6 +4626,9 @@ axis	Both	Båda
 @msg	the PCX file is cut short	PCX-filen är avkortad
 @msg	the PCX file's header is damaged	PCX-filens huvud är skadat
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bitars pixlar i {planes} plan kan inte läsas
+@msg	the Pixar file is cut short	Pixar-filen är avkortad
+@msg	the Pixar file's header is damaged	Pixar-filens huvud är skadat
+@msg	the Pixar file's image data is damaged	Pixar-filens bilddata är skadade
 @msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan inte läsas
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har en färgrymd eller ett JPX-innehåll som inte stöds
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
@@ -5656,7 +5661,9 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
+@msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
 	Move Anchor Point	Flytta ankarpunkt

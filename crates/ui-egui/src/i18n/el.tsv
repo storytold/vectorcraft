@@ -3697,6 +3697,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Graphic	Γραφικό
 	Show all open documents	Εμφάνιση όλων των ανοιχτών εγγράφων
 	Symbol Instance	Στιγμιότυπο συμβόλου
+	Link Block Series	Σειρά συνδεδεμένων μπλοκ
 	Symbol Libraries	Βιβλιοθήκες συμβόλων
 	Symbol Screener Tool	Αραίωση συμβόλων (Symbol Screener Tool)
 	Symbol Scruncher Tool	Σύμπτυξη συμβόλων (Symbol Scruncher Tool)
@@ -4256,6 +4257,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no user library folder here	δεν υπάρχει φάκελος βιβλιοθήκης χρήστη εδώ
 @msg	no user workspace `{from}`	δεν υπάρχει χώρος εργασίας χρήστη `{from}`
 @msg	node {_1} is not text	ο κόμβος {_1} δεν είναι κείμενο
+@msg	node {_1} is on a locked artboard	ο κόμβος {_1} βρίσκεται σε κλειδωμένο πίνακα σχεδίασης
 @msg	not a DXF drawing	δεν είναι σχέδιο DXF
 @msg	not a VectorCraft file: {0}	δεν είναι αρχείο VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	δεν είναι σύνολο συντομεύσεων VectorCraft (λείπει το `overrides`)
@@ -4668,6 +4670,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PCX file is cut short	το αρχείο PCX είναι περικομμένο
 @msg	the PCX file's header is damaged	η κεφαλίδα του αρχείου PCX είναι κατεστραμμένη
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	τα αρχεία PCX με εικονοστοιχεία {bits} bit σε {planes} επίπεδα δεν διαβάζονται
+@msg	the Pixar file is cut short	το αρχείο Pixar είναι περικομμένο
+@msg	the Pixar file's header is damaged	η κεφαλίδα του αρχείου Pixar είναι κατεστραμμένη
+@msg	the Pixar file's image data is damaged	τα δεδομένα εικόνας του αρχείου Pixar είναι κατεστραμμένα
 @msg	the JPEG 2000 file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	το αρχείο JPEG 2000 έχει μη υποστηριζόμενο χρωματικό χώρο ή περιεχόμενο JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
@@ -5585,7 +5590,9 @@ effect	Points	Σημεία
 	Effect Gallery	Συλλογή εφέ
 	Filters	Φίλτρα
 	Select artwork to apply effects	Επιλέξτε γραφικά για να εφαρμόσετε εφέ
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	η βιβλιοθήκη μεταβλητών του αρχείου διαβάστηκε μόνο εν μέρει (καταχωρίσεις που παραλείφθηκαν: {_1}): ο πίνακας Μεταβλητές εμφανίζει τις υπόλοιπες
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	δεν ήταν δυνατή η ανάγνωση της βιβλιοθήκης μεταβλητών του αρχείου: ο πίνακας Μεταβλητές δεν την εμφανίζει
+@msg	a variable of unknown kind can't be bound to objects	μια μεταβλητή άγνωστου είδους δεν μπορεί να συνδεθεί με αντικείμενα
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
 	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης

@@ -3706,6 +3706,7 @@ mark-style	Japanese	Kiểu Nhật
 	Switch workspace	Chuyển không gian làm việc
 	Switch x/y	Đổi x/y
 	Symbol Instance	Thực thể ký hiệu
+	Link Block Series	Chuỗi khối liên kết
 	Symbol Libraries	Thư viện ký hiệu
 	Symbol Screener Tool	Công cụ Lọc ký hiệu
 	Symbol Scruncher Tool	Công cụ Thu gọn ký hiệu
@@ -4627,6 +4628,7 @@ theme	Appearance	Giao diện
 @msg	no user library folder here	không có thư mục thư viện người dùng ở đây
 @msg	no user workspace `{from}`	không có không gian làm việc người dùng `{from}`
 @msg	node {_1} is not text	nút {_1} không phải là văn bản
+@msg	node {_1} is on a locked artboard	nút {_1} nằm trên bảng vẽ bị khóa
 @msg	not a blend	không phải đối tượng hòa trộn
 @msg	not a DXF drawing	không phải bản vẽ DXF
 @msg	not a file	không phải tệp
@@ -4890,6 +4892,9 @@ theme	Appearance	Giao diện
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	tệp PCX có điểm ảnh {bits}-bit trong {planes} mặt phẳng không thể đọc được
+@msg	the Pixar file is cut short	tệp Pixar bị cắt ngắn
+@msg	the Pixar file's header is damaged	phần đầu của tệp Pixar bị hỏng
+@msg	the Pixar file's image data is damaged	dữ liệu ảnh của tệp Pixar bị hỏng
 @msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
@@ -5229,7 +5234,9 @@ theme	Appearance	Giao diện
 	Effect Gallery	Thư viện hiệu ứng
 	Filters	Bộ lọc
 	Select artwork to apply effects	Chọn đồ họa để áp dụng hiệu ứng
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	thư viện biến số của tệp chỉ được đọc một phần (mục đã bỏ qua: {_1}): bảng Biến liệt kê phần còn lại
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	không thể đọc thư viện biến số của tệp: bảng Biến không liệt kê nó
+@msg	a variable of unknown kind can't be bound to objects	không thể liên kết biến thuộc loại không xác định với đối tượng
 # Select by Color (select.color)
 	Select by Color	Chọn theo màu
 	Move Anchor Point	Di chuyển điểm neo

@@ -3169,6 +3169,7 @@ digits	Malayalam	Malayalam
 	Graphic	Grafik
 	Show all open documents	Tüm açık belgeleri göster
 	Symbol Instance	Sembol Örneği
+	Link Block Series	Bağlantılı Blok Serisi
 	Symbol Libraries	Sembol Kitaplıkları
 	Symbol Screener Tool	Sembol Perdeleyici Aracı
 	Symbol Scruncher Tool	Sembol Ezici Aracı
@@ -4061,6 +4062,7 @@ axis	Both	Her İkisi
 @msg	no user library folder here	burada kullanıcı kitaplığı klasörü yok
 @msg	no user workspace `{from}`	kullanıcı çalışma alanı yok `{from}`
 @msg	node {_1} is not text	{_1} düğümü metin değil
+@msg	node {_1} is on a locked artboard	{_1} düğümü kilitli bir çalışma yüzeyinde
 @msg	not a DXF drawing	DXF çizimi değil
 @msg	not a VectorCraft file: {0}	bir VectorCraft dosyası değil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft kısayol seti değil ("geçersiz kılmalar" eksik)
@@ -4457,6 +4459,9 @@ axis	Both	Her İkisi
 @msg	the PCX file is cut short	PCX dosyası kısa kesildi
 @msg	the PCX file's header is damaged	PCX dosyasının başlığı bozuk
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} düzlemde {bits}-bit pikseller içeren PCX dosyaları okunamaz
+@msg	the Pixar file is cut short	Pixar dosyası kısa kesildi
+@msg	the Pixar file's header is damaged	Pixar dosyasının başlığı bozuk
+@msg	the Pixar file's image data is damaged	Pixar dosyasının görüntü verileri bozuk
 @msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
@@ -5401,8 +5406,10 @@ theme	Appearance	Görünüm
 @msg	its zlib compression is damaged	zlib sıkıştırması hasarlı
 @msg	its Zstandard compression is damaged	Zstandard sıkıştırması hasarlı
 @msg	it decompresses to more than {_1} MB	açıldığında {_1} MB'tan fazla alan kaplıyor
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	dosyanın değişken kitaplığı yalnızca kısmen okundu (atlanan girdiler: {_1}): Değişkenler paneli kalanları listeliyor
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	dosyanın değişken kitaplığı okunamadı: Değişkenler paneli onu listelemiyor
+@msg	a variable of unknown kind can't be bound to objects	türü bilinmeyen bir değişken nesnelere bağlanamaz
 @msg	columns {first} and {column} both name the variable `{name}`	{first} ve {column} numaralı sütunların ikisi de `{name}` değişkenini adlandırıyor
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	dosyanın değişkenleri ve veri kümeleri okunmadı (değişkenler: {variables}, veri kümeleri: {data_sets}): Değişkenler paneli bunları listelemiyor
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin

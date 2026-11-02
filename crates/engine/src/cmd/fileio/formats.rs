@@ -494,6 +494,8 @@ pub const FORMATS: &[Format] = &[
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
     // ZSoft PCX images, read by `pcxread` and stored as PNG; exports don't write them.
     reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
+    // Pixar picture files, read by `pxrread` and stored as PNG; exports don't write them.
+    reader("pxr", "Pixar", &["pxr"], "image/x-pixar", true),
     // JP2 and raw codestreams are decoded to PNG; JPX composition is not supported.
     reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
 ];
@@ -508,6 +510,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "ai",
     "ait",
     "png",
+    "pns",
     "jpg",
     "jpeg",
     "gif",
@@ -515,11 +518,14 @@ pub const OPEN_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "dib",
+    "rle",
     "tga",
     "vda",
     "icb",
     "vst",
     "pcx",
+    "pxr",
     "jpf",
     "jpx",
     "jp2",
@@ -527,6 +533,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "j2c",
     "jpc",
     "psd",
+    "pdd",
     "psb",
     "vctemplate",
     "dxf",
@@ -542,10 +549,11 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX or JPEG 2000 type (File › Open and Place still read them all). On Linux the
-/// desktop entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer
-/// VectorCraft for it.
-pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst", "pcx", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc"];
+/// `.epsf`, `.ps`, Targa, PCX, Pixar or JPEG 2000 type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
+/// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
+pub const UNASSOCIATED_EXTS: &[&str] =
+    &["psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -586,6 +594,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "ai",
     "ait",
     "png",
+    "pns",
     "jpg",
     "jpeg",
     "gif",
@@ -593,11 +602,14 @@ pub const PLACE_EXTS: &[&str] = &[
     "tif",
     "tiff",
     "bmp",
+    "dib",
+    "rle",
     "tga",
     "vda",
     "icb",
     "vst",
     "pcx",
+    "pxr",
     "jpf",
     "jpx",
     "jp2",
@@ -605,6 +617,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "j2c",
     "jpc",
     "psd",
+    "pdd",
     "psb",
     "vctemplate",
     "dxf",
@@ -622,9 +635,32 @@ pub const PLACE_EXTS: &[&str] = &[
     "doc",
 ];
 
+/// The extensions File › Open and Place read PNG, BMP and Photoshop files by: the format's own,
+/// then the other names its files have (`.pns`, `.dib` and `.rle`, `.pdd`). Exports write only
+/// the format's own extension.
+const READ_ALIASES: &[(&str, &[&str])] = &[("png", &["png", "pns"]), ("bmp", &["bmp", "dib", "rle"]), ("psd", &["psd", "pdd"])];
+
+/// The extensions File › Open and Place read format `f` by: its own, and for PNG, BMP and PSD
+/// those of [`READ_ALIASES`].
+pub fn read_extensions(f: &Format) -> &'static [&'static str] {
+    READ_ALIASES.iter().find(|(id, _)| *id == f.id).map_or(f.extensions, |(_, exts)| *exts)
+}
+
+/// The readable format of extension `ext` (any case, leading dot allowed): [`format`]'s when it
+/// reads, else the one [`READ_ALIASES`] gives it (`.dib` is BMP).
+pub fn readable_format(ext: &str) -> Option<&'static Format> {
+    let k = ext.trim_start_matches('.').to_ascii_lowercase();
+    format(&k).filter(|f| f.read).or_else(|| READ_ALIASES.iter().find(|(_, exts)| exts.contains(&k.as_str())).and_then(|(id, _)| format(id)))
+}
+
+/// The readable format a file name's extension names ([`readable_format`]).
+pub fn readable_format_for_name(name: &str) -> Option<&'static Format> {
+    Some(extension(name)).filter(|e| !e.is_empty()).and_then(|e| readable_format(&e))
+}
+
 /// One dialog filter per readable format.
 fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions))
+    FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch

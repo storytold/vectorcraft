@@ -3385,6 +3385,7 @@ digits	Malayalam	Малаялам
 	Graphic	Графика
 	Show all open documents	Показать все открытые документы
 	Symbol Instance	Экземпляр символа
+	Link Block Series	Серия связанных блоков
 	Symbol Libraries	Библиотеки символов
 	Symbol Screener Tool	Инструмент «Прозрачность символов»
 	Symbol Scruncher Tool	Инструмент «Сжатие символов»
@@ -4338,6 +4339,7 @@ axis	Both	Оба
 @msg	no user library folder here	здесь нет папки пользовательских библиотек
 @msg	no user workspace `{from}`	нет пользовательской рабочей среды `{from}`
 @msg	node {_1} is not text	узел {_1} не является текстом
+@msg	node {_1} is on a locked artboard	узел {_1} находится на заблокированной монтажной области
 @msg	not a DXF drawing	не является чертежом DXF
 @msg	not a VectorCraft file: {0}	не является файлом VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не является набором сочетаний клавиш VectorCraft (отсутствует `overrides`)
@@ -4746,6 +4748,9 @@ axis	Both	Оба
 @msg	the PCX file is cut short	файл PCX обрезан
 @msg	the PCX file's header is damaged	заголовок файла PCX повреждён
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файлы PCX с {bits}-битными пикселями в {planes} плоскостях не читаются
+@msg	the Pixar file is cut short	файл Pixar обрезан
+@msg	the Pixar file's header is damaged	заголовок файла Pixar повреждён
+@msg	the Pixar file's image data is damaged	данные изображения в файле Pixar повреждены
 @msg	the JPEG 2000 file can't be read	не удается прочитать файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 содержит неподдерживаемое цветовое пространство или содержимое JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
@@ -5243,7 +5248,9 @@ lighting	Light	Свет
 	Effect Gallery	Галерея эффектов
 	Filters	Фильтры
 	Select artwork to apply effects	Выберите графику, чтобы применить эффекты
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	переменные и наборы данных файла не прочитаны (переменных: {variables}, наборов данных: {data_sets}): панель «Переменные» их не показывает
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотека переменных файла прочитана только частично (пропущено записей: {_1}): панель «Переменные» показывает остальные
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не удалось прочитать библиотеку переменных файла: панель «Переменные» её не показывает
+@msg	a variable of unknown kind can't be bound to objects	переменную неизвестного вида нельзя связать с объектами
 # Select by Color (select.color)
 	Select by Color	Выделить по цвету
 	Move Anchor Point	Переместить опорную точку

@@ -3383,6 +3383,7 @@ effect	Points	Точки
 	Graphic	Графіка
 	Show all open documents	Показати всі відкриті документи
 	Symbol Instance	Екземпляр символу
+	Link Block Series	Серія пов’язаних блоків
 	Symbol Libraries	Бібліотеки символів
 	Symbol Screener Tool	Інструмент «Прозорість символів»
 	Symbol Scruncher Tool	Інструмент «Стиск символів»
@@ -4327,6 +4328,7 @@ axis	Both	Обидві
 @msg	no user library folder here	тут немає папки користувацьких бібліотек
 @msg	no user workspace `{from}`	немає користувача робочого середовища `{from}`
 @msg	node {_1} is not text	вузол {_1} не є текстом
+@msg	node {_1} is on a locked artboard	вузол {_1} розташований на заблокованій монтажній області
 @msg	not a DXF drawing	не є кресленням DXF
 @msg	not a VectorCraft file: {0}	не є файлом VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не є набором поєднань клавіш VectorCraft (відсутнє `overrides`)
@@ -4733,6 +4735,9 @@ axis	Both	Обидві
 @msg	the PCX file is cut short	файл PCX обрізаний
 @msg	the PCX file's header is damaged	заголовок файлу PCX пошкоджений
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файли PCX з {bits}-бітними пікселями в {planes} площинах не читаються
+@msg	the Pixar file is cut short	файл Pixar обрізаний
+@msg	the Pixar file's header is damaged	заголовок файлу Pixar пошкоджений
+@msg	the Pixar file's image data is damaged	дані зображення у файлі Pixar пошкоджені
 @msg	the JPEG 2000 file can't be read	не вдається прочитати файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 містить непідтримуваний колірний простір або вміст JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
@@ -5228,7 +5233,9 @@ lighting	Light	Світло
 	Effect Gallery	Галерея ефектів
 	Filters	Фільтри
 	Select artwork to apply effects	Виберіть графіку, щоб застосувати ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	змінні та набори даних файлу не прочитано (змінних: {variables}, наборів даних: {data_sets}): панель «Змінні» їх не показує
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	бібліотеку змінних файлу прочитано лише частково (пропущено записів: {_1}): панель «Змінні» показує решту
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не вдалося прочитати бібліотеку змінних файлу: панель «Змінні» її не показує
+@msg	a variable of unknown kind can't be bound to objects	змінну невідомого виду не можна прив’язати до об’єктів
 # Select by Color (select.color)
 	Select by Color	Виділити за кольором
 	Move Anchor Point	Перемістити опорну точку

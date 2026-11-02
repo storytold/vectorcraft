@@ -3354,6 +3354,7 @@ digits	Malayalam	Malayálam
 	Graphic	Gráfico
 	Show all open documents	Mostrar todos los documentos abiertos
 	Symbol Instance	Instancia de símbolo
+	Link Block Series	Serie de bloques enlazados
 	Symbol Libraries	Bibliotecas de símbolos
 	Symbol Screener Tool	Herramienta Transparencia de símbolos
 	Symbol Scruncher Tool	Herramienta Concentración de símbolos
@@ -4301,6 +4302,7 @@ axis	Both	Ambos
 @msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
+@msg	node {_1} is on a locked artboard	el nodo {_1} está en una mesa de trabajo bloqueada
 @msg	not a DXF drawing	no es un dibujo DXF
 @msg	not a VectorCraft file: {0}	no es un archivo de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no es un conjunto de atajos de VectorCraft (falta `overrides`)
@@ -4707,6 +4709,9 @@ axis	Both	Ambos
 @msg	the PCX file is cut short	el archivo PCX está incompleto
 @msg	the PCX file's header is damaged	el encabezado del archivo PCX está dañado
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	los archivos PCX con píxeles de {bits} bits en {planes} planos no se pueden leer
+@msg	the Pixar file is cut short	el archivo Pixar está incompleto
+@msg	the Pixar file's header is damaged	el encabezado del archivo Pixar está dañado
+@msg	the Pixar file's image data is damaged	los datos de imagen del archivo Pixar están dañados
 @msg	the JPEG 2000 file can't be read	no se puede leer el archivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el archivo JPEG 2000 tiene un espacio de color o contenido JPX no compatible
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
@@ -5575,7 +5580,9 @@ mark-style	Japanese	Japonesas
 	Effect Gallery	Galería de efectos
 	Filters	Filtros
 	Select artwork to apply effects	Seleccione gráficos para aplicar efectos
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no se leyeron las variables ni los conjuntos de datos del archivo (variables: {variables}, conjuntos de datos: {data_sets}): el panel Variables no los muestra
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del archivo se leyó solo en parte (entradas omitidas: {_1}): el panel Variables muestra el resto
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no se pudo leer la biblioteca de variables del archivo: el panel Variables no la muestra
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipo desconocido no se puede vincular a objetos
 # Select by Color (select.color)
 	Select by Color	Seleccionar por color
 	Move Anchor Point	Mover punto de ancla

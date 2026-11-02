@@ -3222,6 +3222,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Graphic	图形
 	Show all open documents	显示所有打开的文档
 	Symbol Instance	符号实例
+	Link Block Series	链接块系列
 	Symbol Libraries	符号库
 	Symbol Screener Tool	符号透明度工具
 	Symbol Scruncher Tool	符号紧缩工具
@@ -4030,6 +4031,7 @@ imageTrace	Outline	轮廓
 @msg	a graphic style named `{to}` already exists	名为 `{to}` 的图形样式已存在
 @msg	no graphic style `{name}`	没有图形样式 `{name}`
 @msg	node {_1} is not text	节点 {_1} 不是文字
+@msg	node {_1} is on a locked artboard	节点 {_1} 位于已锁定的画板上
 @msg	Text Wrap: select a wrap object	文本绕排：请选择一个绕排对象
 @msg	layers can't be wrap objects	图层不能作为绕排对象
 @msg	line {line}: value for `{var}` must be true or false	第 {line} 行：`{var}` 的值必须是 true 或 false
@@ -4504,6 +4506,9 @@ imageTrace	Outline	轮廓
 @msg	the PCX file is cut short	PCX 文件不完整
 @msg	the PCX file's header is damaged	PCX 文件头已损坏
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	无法读取 {planes} 个平面中含 {bits} 位像素的 PCX 文件
+@msg	the Pixar file is cut short	Pixar 文件不完整
+@msg	the Pixar file's header is damaged	Pixar 文件头已损坏
+@msg	the Pixar file's image data is damaged	Pixar 文件的图像数据已损坏
 @msg	the JPEG 2000 file can't be read	无法读取 JPEG 2000 文件
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 文件包含不受支持的色彩空间或 JPX 内容
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
@@ -5471,7 +5476,9 @@ lighting	Light	光源
 	Effect Gallery	效果库
 	Filters	滤镜
 	Select artwork to apply effects	选择要应用效果的图稿
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	文件的变量和数据集未被读取（变量：{variables}，数据集：{data_sets}）：“变量”面板不会列出它们
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	文件的变量库只读取了一部分（跳过的条目：{_1}）：“变量”面板列出其余部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	无法读取文件的变量库：“变量”面板不会列出它
+@msg	a variable of unknown kind can't be bound to objects	类型未知的变量不能绑定到对象
 # Select by Color (select.color)
 	Select by Color	按颜色选择
 	Move Anchor Point	移动锚点

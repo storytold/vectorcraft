@@ -173,6 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 VariableKind::Visibility => "eye",
                 VariableKind::Image => "image",
                 VariableKind::Graph => "chart-column",
+                VariableKind::Unknown => "square-dashed",
             };
             ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
@@ -539,6 +540,24 @@ mod tests {
             assert!(!shown.contains("refuses") && shown.contains("`%Rate`"), "{}: {shown}", l.code());
             let shown = message(l, &refused);
             assert!(!shown.contains("would read back") && shown.contains("`#Tag`") && shown.contains("`Tag`"), "{}: {shown}", l.code());
+        }
+    }
+
+    /// The notes of a `.ai` whose variable library was read in part, or couldn't be read, are
+    /// translated in every language that translated the note they replace.
+    #[test]
+    fn the_notes_of_an_ai_variable_library_are_translated() {
+        use crate::i18n::{Lang, message};
+        let partly = "the file's variable library was partly read (entries skipped: 7): the Variables panel lists the rest";
+        let unread = "the file's variable library couldn't be read: the Variables panel doesn't list it";
+        let codes = [
+            "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv", "tr",
+            "uk", "vi", "zh-hans", "zh-hant",
+        ];
+        for l in codes.iter().map(|c| Lang::from_code(c).expect("registered")) {
+            let shown = message(l, partly);
+            assert!(shown != partly && shown.contains('7'), "{}: {shown}", l.code());
+            assert_ne!(message(l, unread), unread, "{}", l.code());
         }
     }
 

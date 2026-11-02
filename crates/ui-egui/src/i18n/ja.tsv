@@ -455,6 +455,7 @@ digits	Malayalam	マラヤーラム数字
 	Stroke Weight	線幅
 	Graphic Style	グラフィックスタイル
 	Symbol Instance	シンボルインスタンス
+	Link Block Series	連結ブロックの系列
 	Font Family	フォントファミリー
 	Font Family & Style	フォントファミリー (スタイル)
 	Font Family, Style & Size	フォントファミリー (スタイルとサイズ)
@@ -4305,6 +4306,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a key object sits on that point	そのポイントにはキーオブジェクトがあります
 @msg	no graphic style `{name}`	グラフィックスタイル `{name}` が見つかりません
 @msg	node {_1} is not text	ノード {_1} はテキストではありません
+@msg	node {_1} is on a locked artboard	ノード {_1} はロックされたアートボード上にあります
 @msg	Text Wrap: select a wrap object	テキストの回り込み: 回り込みオブジェクトを選択してください
 @msg	layers can't be wrap objects	レイヤーは回り込みオブジェクトにできません
 @msg	line {line}: value for `{var}` must be true or false	{line} 行目: `{var}` の値には true または false を指定してください
@@ -4790,6 +4792,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PCX file is cut short	PCX ファイルが途中で切れています
 @msg	the PCX file's header is damaged	PCX ファイルのヘッダーが壊れています
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} プレーンに {bits} bit のピクセルを持つ PCX ファイルは読み込めません
+@msg	the Pixar file is cut short	Pixar ファイルが途中で切れています
+@msg	the Pixar file's header is damaged	Pixar ファイルのヘッダーが壊れています
+@msg	the Pixar file's image data is damaged	Pixar ファイルの画像データが壊れています
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ファイルを読み込めません
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ファイルには未対応の色空間または JPX コンテンツがあります
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
@@ -5291,7 +5296,9 @@ lighting	Light	ライト
 	Effect Gallery	効果ギャラリー
 	Filters	フィルター
 	Select artwork to apply effects	効果を適用するグラフィックを選択してください
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ファイルの変数ライブラリは一部だけ読み込まれました (スキップした項目: {_1})。残りは変数パネルに表示されます
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ファイルの変数ライブラリを読み込めませんでした。変数パネルには表示されません
+@msg	a variable of unknown kind can't be bound to objects	種類が不明な変数はオブジェクトにバインドできません
 # Select by Color (select.color)
 	Select by Color	カラーで選択
 	Move Anchor Point	アンカーポイントを移動

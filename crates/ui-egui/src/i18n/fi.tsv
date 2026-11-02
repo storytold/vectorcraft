@@ -423,6 +423,7 @@
 	Stroke Weight	Viivan paksuus
 	Graphic Style	Grafiikkatyyli
 	Symbol Instance	Symbolin ilmentymä
+	Link Block Series	Linkitettyjen lohkojen sarja
 	Font Family	Fonttiperhe
 	Font Family & Style	Fonttiperhe ja tyyli
 	Font Family, Style & Size	Fonttiperhe, tyyli ja koko
@@ -4516,6 +4517,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no user library folder here	täällä ei ole käyttäjäkirjastokansiota
 @msg	no user workspace `{from}`	ei käyttäjän työtilaa `{from}`
 @msg	node {_1} is not text	solmu {_1} ei ole tekstiä
+@msg	node {_1} is on a locked artboard	solmu {_1} on lukitulla piirtoalustalla
 @msg	not a DXF drawing	ei DXF-piirustus
 @msg	not a VectorCraft file: {0}	ei VectorCraft-tiedosto: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	ei VectorCraftin pikanäppäinjoukko (`overrides` puuttuu)
@@ -4889,6 +4891,9 @@ imageTrace	Outline	Ääriviiva
 @msg	the PCX file is cut short	tämä PCX-tiedosto on katkennut
 @msg	the PCX file's header is damaged	PCX-tiedoston otsake on vahingoittunut
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-tiedostoja, joissa on {bits}-bittisiä pikseleitä {planes} tasossa, ei voi lukea
+@msg	the Pixar file is cut short	tämä Pixar-tiedosto on katkennut
+@msg	the Pixar file's header is damaged	Pixar-tiedoston otsake on vahingoittunut
+@msg	the Pixar file's image data is damaged	Pixar-tiedoston kuvadata on vahingoittunut
 @msg	the JPEG 2000 file can't be read	tätä JPEG 2000 -tiedostoa ei voi lukea
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tässä JPEG 2000 -tiedostossa on tukematon väriavaruus tai JPX-sisältö
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	tämä PSD-kuva on liian suuri luettavaksi ({_1} × {_2} pikseliä)
@@ -5597,7 +5602,9 @@ mark-style	Japanese	Japanilainen
 	Effect Gallery	Tehostegalleria
 	Filters	Suodattimet
 	Select artwork to apply effects	Valitse kuvitus, johon tehosteet lisätään
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	tiedoston muuttujia ja tietojoukkoja ei luettu (muuttujia: {variables}, tietojoukkoja: {data_sets}): Muuttujat-paneeli ei näytä niitä
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	tiedoston muuttujakirjasto luettiin vain osittain (ohitettuja kohtia: {_1}): Muuttujat-paneeli näyttää loput
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	tiedoston muuttujakirjastoa ei voitu lukea: Muuttujat-paneeli ei näytä sitä
+@msg	a variable of unknown kind can't be bound to objects	tuntemattoman tyyppistä muuttujaa ei voi sitoa objekteihin
 # Select by Color (select.color)
 	Select by Color	Valitse värin mukaan
 	Angular	Kulma
