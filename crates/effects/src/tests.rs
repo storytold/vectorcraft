@@ -133,6 +133,15 @@ fn geometry_effects_are_deterministic() {
     }
 }
 
+/// The effects that symbol art across 9-slice guides draws once around all its cells are raster
+/// effects that do not reshape it.
+#[test]
+fn nine_slice_painted_effects_are_raster_effects() {
+    for id in vectorcraft_doc::PAINTED_EFFECTS {
+        assert!(is_raster(id) && !is_geometry(id), "{id}");
+    }
+}
+
 #[test]
 fn open_paths_stay_open() {
     let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 20.0), Point::new(100.0, 0.0)], false));

@@ -19,13 +19,16 @@ pub fn text_outliner() -> Outliner<'static> {
     Some(&outline_text)
 }
 
-/// Type outlined, or a symbol instance as its symbol's art (from `doc`) placed by the instance.
+/// Type outlined, or a symbol instance as its symbol's art (from `doc`) placed by the instance,
+/// through the symbol's 9-slice guides when it has them ([`Document::place_symbol_art`], `None`
+/// past its object limit).
 fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
     match &n.kind {
         NodeKind::SymbolInstance { symbol, xf } => {
-            let sym = doc?.symbols.iter().find(|s| s.name == *symbol)?;
-            let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-            art.transform(*xf, false);
+            let doc = doc?;
+            let sym = doc.symbols.iter().find(|s| s.name == *symbol)?;
+            let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+            let art = doc.place_symbol_art(symbol, &art, *xf)?;
             Some(Node::group(n.id, vec![Arc::new(art)]))
         }
         _ => outline_text(n),

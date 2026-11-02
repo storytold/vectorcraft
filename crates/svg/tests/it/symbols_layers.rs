@@ -68,6 +68,148 @@ fn three_instances_give_one_symbol_and_three_uses() {
     assert!(boxes.iter().any(|b| (b.x0 - 90.0).abs() < 1e-3 && (b.y0 - 30.0).abs() < 1e-3), "{boxes:?}");
 }
 
+/// A scaled instance of a symbol with 9-slice guides is written as the canvas draws it, with no
+/// `<use>`: at 200 × 150 its 10 × 10 corner square stays 10 × 10 and its center square becomes
+/// 30 × 20. An instance at the natural size still uses the def.
+#[test]
+fn a_scaled_nine_slice_instance_is_written_as_the_canvas_draws_it() {
+    let mut d = Document::new(300.0, 200.0);
+    let fill = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+    let rects = [
+        (Rect::new(0.0, 0.0, 100.0, 100.0), Color::rgb8(220, 220, 220)),
+        (Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK),
+        (Rect::new(45.0, 45.0, 55.0, 55.0), Color::BLACK),
+    ];
+    let art: Vec<Arc<Node>> = rects.iter().map(|(r, c)| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(*r), fill(*c)))).collect();
+    let group = Node::group(d.alloc_id(), art);
+    d.symbols.push(Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(group) });
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    instance(&mut d, "Panel", Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5));
+    let svg = export(&d, &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 0, "{svg}");
+    let canvas = render_artboard(&d);
+    let dark = |im: &Image, x: u32, y: u32| im.rgba[((y * im.width + x) * 4) as usize] < 60;
+    // The corner square covers 20..30; a plain scale would have stretched it to 20..40 by 20..35.
+    assert!(dark(&canvas, 25, 25) && !dark(&canvas, 35, 32));
+    // The center square covers 105..135 by 85..105; a plain scale would end it at x = 130.
+    assert!(dark(&canvas, 132, 95) && dark(&canvas, 107, 87) && !dark(&canvas, 102, 95));
+    assert_similar(&canvas, &resvg_render(&svg, 300, 200), 24.0, 0.002);
+    // At its natural size the instance is a `<use>` of the symbol.
+    let mut d = d.clone();
+    let l = d.layers[0].id;
+    d.remove(d.children(Some(l)).unwrap()[0].id).unwrap();
+    instance(&mut d, "Panel", Affine::translate((20.0, 20.0)));
+    assert_eq!(export(&d, &ExportOptions::default()).matches("<use ").count(), 1);
+    // A scaled instance of a symbol whose art holds a natural-size "Panel" instance: the scale
+    // reaches the inner instance, so neither is a `<use>` and the corners stay as the canvas
+    // draws them.
+    d.remove(d.children(Some(l)).unwrap()[0].id).unwrap();
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf: Affine::IDENTITY });
+    let outer = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    d.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(outer) });
+    instance(&mut d, "Outer", Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5));
+    let svg = export(&d, &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 0, "{svg}");
+    let canvas = render_artboard(&d);
+    assert!(dark(&canvas, 25, 25) && !dark(&canvas, 35, 32));
+    assert_similar(&canvas, &resvg_render(&svg, 300, 200), 24.0, 0.002);
+}
+
+/// A scaled instance of a symbol with 9-slice guides whose art placed through the guides could
+/// hold more than `MAX_SYMBOL_NODES` objects is left out, as the canvas leaves it out: here a
+/// gradient square in all nine cells, each copy with a disabled opacity mask of 2,251,501 objects.
+/// With a small mask the same instance is written in its nine clip groups.
+#[test]
+fn a_nine_slice_instance_past_the_object_limit_is_left_out() {
+    let doc = |mask_objects: usize| {
+        let mut d = Document::new(300.0, 200.0);
+        let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default()));
+        let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; mask_objects]));
+        let mut mask = vectorcraft_doc::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; mask_objects]), true);
+        (mask.linked, mask.disabled) = (false, true);
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+        let mut square =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(mask));
+        let art = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+        d.symbols.push(Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+        d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        instance(&mut d, "Panel", Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5));
+        d
+    };
+    let svg = export(&doc(2), &ExportOptions::default());
+    assert_eq!(svg.matches("<clipPath").count(), 9, "{svg}");
+    let svg = export(&doc(1_500), &ExportOptions::default());
+    assert_eq!(svg.matches("<clipPath").count(), 0, "{svg}");
+    assert_eq!(svg.matches("<use ").count(), 0, "{svg}");
+}
+
+/// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`
+/// objects, as on the canvas: of two instances whose art placed through the guides could hold
+/// about 9,009,000 objects each (a gradient square in all nine cells, each copy with a disabled
+/// opacity mask of 1,001,001 objects), the first is written in its nine clip groups and the
+/// second is left out. With a small mask both are written. One such instance over a square in a
+/// knockout group is written twice, as itself and in the group's knockout mask, which copies it
+/// with the count it was written with: after another such instance, it is left out of both. Of
+/// two instances of a symbol "Outer" whose art holds one such instance, the first is a `<use>` of
+/// a def holding the instance's nine clip groups, and the second, which the def's art would take
+/// past the limit, is written as its own art without the instance.
+#[test]
+fn nine_slice_instances_share_one_object_limit_in_an_export() {
+    let doc = |mask_objects: usize, plain: &[f64], layout: &str| {
+        let mut d = Document::new(300.0, 200.0);
+        let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default()));
+        let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; mask_objects]));
+        let mut mask = vectorcraft_doc::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; mask_objects]), true);
+        // A linked mask moves with its art, which lets "Outer" share a def.
+        (mask.linked, mask.disabled) = (layout == "outer", true);
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+        let mut square =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(mask));
+        let art = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+        d.symbols.push(Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+        d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        let xf = |x: f64| Affine::translate((x, 20.0)) * Affine::scale_non_uniform(2.0, 1.5);
+        for x in plain {
+            instance(&mut d, "Panel", xf(*x));
+        }
+        let panel = |d: &mut Document, x: f64| Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf: xf(x) });
+        let l = d.layers[0].id;
+        if layout == "knockout" {
+            let below = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 200.0)), Appearance::default());
+            let top = panel(&mut d, 60.0);
+            let mut group = Node::group(d.alloc_id(), vec![below.into(), top.into()]);
+            group.knockout = vectorcraft_doc::Knockout::On;
+            d.insert(Some(l), usize::MAX, group).unwrap();
+        } else if layout == "outer" {
+            let art = Node::group(d.alloc_id(), vec![panel(&mut d, 20.0).into()]);
+            d.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(art) });
+            for y in [0.0, 10.0] {
+                instance(&mut d, "Outer", Affine::translate((0.0, y)));
+            }
+        }
+        d
+    };
+    let svg = export(&doc(2, &[20.0, 40.0], ""), &ExportOptions::default());
+    assert_eq!(svg.matches("<clipPath").count(), 18, "{svg}");
+    let svg = export(&doc(1_000, &[20.0, 40.0], ""), &ExportOptions::default());
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+    assert_eq!(svg.matches("<use ").count(), 0);
+    let svg = export(&doc(1_000, &[], "knockout"), &ExportOptions::default());
+    assert_eq!(svg.matches("<mask").count(), 1);
+    assert_eq!(svg.matches("<clipPath").count(), 18);
+    let svg = export(&doc(1_000, &[20.0], "knockout"), &ExportOptions::default());
+    assert_eq!(svg.matches("<mask").count(), 1);
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+    let svg = export(&doc(2, &[], "outer"), &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 2, "{svg}");
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+    let svg = export(&doc(1_000, &[], "outer"), &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 1);
+    assert_eq!(svg.matches("<clipPath").count(), 9);
+}
+
 #[test]
 fn instances_the_def_cant_stand_for_get_their_own_art() {
     // Rotated: shared (a stroke turns with its path). Scaled: stroke weights don't scale on the
