@@ -4,13 +4,13 @@
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed … colorIndex r g b
 //!   template dimPercent … Lb` (ten operands in the legacy format, without the one before the
 //!   colour index; see `Reader::layer_attrs`), `(name) Ln`, its art, `LB`.
+//! - Multi-layer masks `Mb` <path> `W n` `Md` … `MB`, whose objects can go on past `LB` into the
+//!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Ruler guides: a straight `(N) *` guide path, directly on a layer, that runs across the whole
 //!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
 //!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end.
-//! - Multi-layer masks `Mb` <path> `W n` `Md` … `MB`, whose objects can go on past `LB` into the
-//!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Paths: `m`, `l`/`L`, `c`/`C`, `v`/`V`, `y`/`Y`, painted by `N n F f S s B b` (lower case
 //!   closes), `(op) *` for a guide. Stroke `w J j M d`, fill rule `XR`, overprint `O`/`R`.
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
