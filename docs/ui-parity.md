@@ -400,6 +400,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Live Corners: while a corner widget is pressed or dragged with the Selection or Direct Selection tool, the Up and Down arrows step the corners' kind (round, inverted round, chamfer) with the radius, as one undo step (#2898); scores and estimates unchanged |
 | 2026-11-01 | minor | Keyboard Shortcuts: every Effect menu item (Distort & Transform › Transform…, Stylize › Drop Shadow…, …) is listed under its menu path and takes a shortcut of its own, which the menu shows and which opens that effect's dialog (or applies an effect without options) (#3296); scores and estimates unchanged |
 | 2026-10-31 | minor | Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but unused; scores and estimates unchanged |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
