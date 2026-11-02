@@ -6008,3 +6008,8 @@ breakText	Glyphs	字形
 	Small to Large	从小到大
 	Large to Small	从大到小
 	Distribute Evenly	均匀分布
+# Info panel: the selection's area.
+	Area: {area}	面积：{area}
+	Shape area: {area}	形状面积：{area}
+	Width × height of the selection: the sheet it needs	所选对象的宽 × 高：所需的纸张
+	Area the closed shapes enclose: holes left out, overlaps counted once	闭合形状围成的面积：不含孔洞，重叠部分只计一次

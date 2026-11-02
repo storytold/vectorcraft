@@ -6048,3 +6048,8 @@ breakText	Glyphs	Глифи
 	Small to Large	От малко към голямо
 	Large to Small	От голямо към малко
 	Distribute Evenly	Равномерно разпределение
+# Info panel: the selection's area.
+	Area: {area}	Площ: {area}
+	Shape area: {area}	Площ на формата: {area}
+	Width × height of the selection: the sheet it needs	Ширина × височина на избраното: нужният лист
+	Area the closed shapes enclose: holes left out, overlaps counted once	Площ, оградена от затворените форми: без отворите, припокриванията се броят веднъж

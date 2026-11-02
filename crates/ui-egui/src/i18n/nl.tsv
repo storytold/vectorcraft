@@ -6107,3 +6107,8 @@ breakText	Glyphs	Glyphs
 	Small to Large	Van klein naar groot
 	Large to Small	Van groot naar klein
 	Distribute Evenly	Gelijkmatig verdelen
+# Info panel: the selection's area.
+	Area: {area}	Oppervlakte: {area}
+	Shape area: {area}	Vormoppervlakte: {area}
+	Width × height of the selection: the sheet it needs	Breedte × hoogte van de selectie: het benodigde vel
+	Area the closed shapes enclose: holes left out, overlaps counted once	Oppervlakte binnen de gesloten vormen: gaten weggelaten, overlap één keer geteld

@@ -5751,3 +5751,8 @@ breakText	Glyphs	Glyphen
 	Small to Large	Von klein nach groß
 	Large to Small	Von groß nach klein
 	Distribute Evenly	Gleichmäßig verteilen
+# Info panel: the selection's area.
+	Area: {area}	Fläche: {area}
+	Shape area: {area}	Formfläche: {area}
+	Width × height of the selection: the sheet it needs	Breite × Höhe der Auswahl: der benötigte Bogen
+	Area the closed shapes enclose: holes left out, overlaps counted once	Von den geschlossenen Formen umschlossene Fläche: ohne Löcher, Überlappungen einmal gezählt

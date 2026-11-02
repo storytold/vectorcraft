@@ -6117,3 +6117,8 @@ breakText	Glyphs	Γλύφοι
 	Small to Large	Από μικρό σε μεγάλο
 	Large to Small	Από μεγάλο σε μικρό
 	Distribute Evenly	Ομοιόμορφη κατανομή
+# Info panel: the selection's area.
+	Area: {area}	Εμβαδόν: {area}
+	Shape area: {area}	Εμβαδόν σχήματος: {area}
+	Width × height of the selection: the sheet it needs	Πλάτος × ύψος της επιλογής: το φύλλο που χρειάζεται
+	Area the closed shapes enclose: holes left out, overlaps counted once	Εμβαδόν που περικλείουν τα κλειστά σχήματα: χωρίς οπές, οι επικαλύψεις μετρούν μία φορά

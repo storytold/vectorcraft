@@ -6122,3 +6122,8 @@ breakText	Glyphs	Glifler
 	Small to Large	Küçükten Büyüğe
 	Large to Small	Büyükten Küçüğe
 	Distribute Evenly	Eşit Dağıt
+# Info panel: the selection's area.
+	Area: {area}	Alan: {area}
+	Shape area: {area}	Şekil alanı: {area}
+	Width × height of the selection: the sheet it needs	Seçimin genişliği × yüksekliği: gereken sayfa
+	Area the closed shapes enclose: holes left out, overlaps counted once	Kapalı şekillerin çevrelediği alan: delikler hariç, örtüşmeler bir kez sayılır

@@ -6165,3 +6165,8 @@ breakText	Glyphs	Glyfy
 	Small to Large	Od nejmenšího po největší
 	Large to Small	Od největšího po nejmenší
 	Distribute Evenly	Rozmístit rovnoměrně
+# Info panel: the selection's area.
+	Area: {area}	Plocha: {area}
+	Shape area: {area}	Plocha tvaru: {area}
+	Width × height of the selection: the sheet it needs	Šířka × výška výběru: arch, který potřebuje
+	Area the closed shapes enclose: holes left out, overlaps counted once	Plocha uzavřená tvary: bez otvorů, překryvy počítány jednou

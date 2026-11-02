@@ -1,5 +1,5 @@
-//! Info panel: cursor X/Y, selection W/H, the pointer's distance/angle from the selection, and the
-//! selection's fill and stroke colour values.
+//! Info panel: cursor X/Y, selection W/H and area, the pointer's distance/angle from the selection,
+//! and the selection's fill and stroke colour values.
 
 use egui::{Sense, Ui, vec2};
 use vectorcraft_color::{Color, Paint};
@@ -8,6 +8,39 @@ use super::{current_paints, first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
+use vectorcraft_doc::{NodeId, Unit};
+use vectorcraft_engine::cmd::area::{self, Area, SQUARE_METRES_PER_SQUARE_POINT};
+
+/// An area in square points as people buy print material: square metres (square centimetres
+/// below 0.01 m²), or square feet (square inches below one) when the document measures in inches,
+/// feet or yards.
+pub fn format_area(pt2: f64, unit: Unit) -> String {
+    let m2 = pt2 * SQUARE_METRES_PER_SQUARE_POINT;
+    if matches!(unit, Unit::Inches | Unit::FeetInches | Unit::Feet | Unit::Yards) {
+        let in2 = pt2 / (72.0 * 72.0);
+        return if in2 >= 144.0 { format!("{:.3} ft²", in2 / 144.0) } else { format!("{in2:.2} in²") };
+    }
+    if m2 >= 0.01 { format!("{m2:.3} m²") } else { format!("{:.2} cm²", m2 * 10_000.0) }
+}
+
+/// The selection's area, measured again only when the document or the selection changes.
+fn selection_area(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Area> {
+    type Cached = Option<(usize, Vec<NodeId>, Option<Area>)>;
+    let st = app.session.active()?;
+    if st.selection.objects.is_empty() {
+        return None;
+    }
+    let doc = std::sync::Arc::as_ptr(&st.doc) as usize;
+    if let Some((d, ids, a)) = pstate::<Cached>(ctx, "info-area")
+        && d == doc
+        && ids == st.selection.objects
+    {
+        return a;
+    }
+    let a = area::measure(&st.doc, &st.selection.objects);
+    set_pstate::<Cached>(ctx, "info-area", Some((doc, st.selection.objects.clone(), a)));
+    a
+}
 
 /// Colour values in the colour's own model, like Illustrator's Info panel.
 pub fn color_values(c: &Color) -> Vec<(&'static str, String)> {
@@ -61,6 +94,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         mono(&mut cols[1], format!("W: {w}"));
         mono(&mut cols[1], format!("H: {h}"));
     });
+    if let Some(a) = selection_area(app, ui.ctx()) {
+        let row = |ui: &mut Ui, label: &str, value: f64, hint: &str| {
+            ui.label(egui::RichText::new(crate::i18n::fmt(label, &[("area", &format_area(value, units))])).monospace().color(t.text))
+                .on_hover_text(hint);
+        };
+        row(ui, tl!("Area: {area}"), a.bounds, tl!("Width × height of the selection: the sheet it needs"));
+        if let Some(shape) = a.shape {
+            row(ui, tl!("Shape area: {area}"), shape, tl!("Area the closed shapes enclose: holes left out, overlaps counted once"));
+        }
+    }
     if !pstate::<bool>(ui.ctx(), "info-hide-options")
         && let Some(b) = bounds
     {
@@ -105,6 +148,15 @@ pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn areas_read_in_square_metres_or_feet() {
+        let m = 72.0 / 0.0254;
+        assert_eq!(format_area(2.0 * m * m, Unit::Millimeters), "2.000 m²");
+        assert_eq!(format_area(m * m / 10_000.0, Unit::Centimeters), "1.00 cm²");
+        assert_eq!(format_area(72.0 * 72.0 * 144.0 * 3.0, Unit::Inches), "3.000 ft²");
+        assert_eq!(format_area(72.0 * 72.0 * 6.0, Unit::Inches), "6.00 in²");
+    }
 
     #[test]
     fn values_follow_model() {

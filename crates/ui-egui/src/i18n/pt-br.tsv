@@ -6239,3 +6239,8 @@ swatch	Yellow Green	Verde-amarelado
 	Small to Large	Do menor para o maior
 	Large to Small	Do maior para o menor
 	Distribute Evenly	Distribuir uniformemente
+# Info panel: the selection's area.
+	Area: {area}	Área: {area}
+	Shape area: {area}	Área da forma: {area}
+	Width × height of the selection: the sheet it needs	Largura × altura da seleção: a folha necessária
+	Area the closed shapes enclose: holes left out, overlaps counted once	Área delimitada pelas formas fechadas: sem furos, sobreposições contadas uma vez

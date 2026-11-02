@@ -5785,3 +5785,8 @@ breakText	Glyphs	Glifi
 	Small to Large	Dal più piccolo al più grande
 	Large to Small	Dal più grande al più piccolo
 	Distribute Evenly	Distribuisci uniformemente
+# Info panel: the selection's area.
+	Area: {area}	Area: {area}
+	Shape area: {area}	Area della forma: {area}
+	Width × height of the selection: the sheet it needs	Larghezza × altezza della selezione: il foglio necessario
+	Area the closed shapes enclose: holes left out, overlaps counted once	Area racchiusa dalle forme chiuse: fori esclusi, sovrapposizioni contate una volta

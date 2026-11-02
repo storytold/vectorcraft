@@ -6020,3 +6020,8 @@ breakText	Glyphs	Glify
 	Small to Large	Od najmniejszego do największego
 	Large to Small	Od największego do najmniejszego
 	Distribute Evenly	Rozmieść równomiernie
+# Info panel: the selection's area.
+	Area: {area}	Pole: {area}
+	Shape area: {area}	Pole kształtu: {area}
+	Width × height of the selection: the sheet it needs	Szerokość × wysokość zaznaczenia: arkusz, którego wymaga
+	Area the closed shapes enclose: holes left out, overlaps counted once	Pole wewnątrz zamkniętych kształtów: bez otworów, części nakładające się liczone raz

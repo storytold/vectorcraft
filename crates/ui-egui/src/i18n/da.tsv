@@ -6063,3 +6063,8 @@ breakText	Glyphs	Glyffer
 	Small to Large	Fra lille til stor
 	Large to Small	Fra stor til lille
 	Distribute Evenly	Fordel jævnt
+# Info panel: the selection's area.
+	Area: {area}	Areal: {area}
+	Shape area: {area}	Formens areal: {area}
+	Width × height of the selection: the sheet it needs	Markeringens bredde × højde: det ark, den kræver
+	Area the closed shapes enclose: holes left out, overlaps counted once	Areal inden for de lukkede former: huller udeladt, overlap talt én gang

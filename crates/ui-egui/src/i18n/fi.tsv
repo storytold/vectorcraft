@@ -6195,3 +6195,8 @@ breakText	Glyphs	Merkit
 	Small to Large	Pienestä suureen
 	Large to Small	Suuresta pieneen
 	Distribute Evenly	Jaa tasaisesti
+# Info panel: the selection's area.
+	Area: {area}	Pinta-ala: {area}
+	Shape area: {area}	Muodon pinta-ala: {area}
+	Width × height of the selection: the sheet it needs	Valinnan leveys × korkeus: tarvittava arkki
+	Area the closed shapes enclose: holes left out, overlaps counted once	Suljettujen muotojen rajaama pinta-ala: reiät pois, päällekkäisyydet kerran

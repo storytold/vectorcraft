@@ -6155,3 +6155,8 @@ breakText	Glyphs	Glifs
 	Small to Large	De petit a gran
 	Large to Small	De gran a petit
 	Distribute Evenly	Distribueix uniformement
+# Info panel: the selection's area.
+	Area: {area}	Àrea: {area}
+	Shape area: {area}	Àrea de la forma: {area}
+	Width × height of the selection: the sheet it needs	Amplada × alçada de la selecció: el full que necessita
+	Area the closed shapes enclose: holes left out, overlaps counted once	Àrea que tanquen les formes tancades: sense forats, les superposicions es compten un cop

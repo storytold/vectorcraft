@@ -6080,3 +6080,8 @@ shape	Open	Otvoren
 	Small to Large	Od manjeg prema većem
 	Large to Small	Od većeg prema manjem
 	Distribute Evenly	Rasporedi ravnomjerno
+# Info panel: the selection's area.
+	Area: {area}	Površina: {area}
+	Shape area: {area}	Površina oblika: {area}
+	Width × height of the selection: the sheet it needs	Širina × visina odabira: potreban list
+	Area the closed shapes enclose: holes left out, overlaps counted once	Površina unutar zatvorenih oblika: bez rupa, preklapanja se broje jednom

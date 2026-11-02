@@ -5852,3 +5852,8 @@ breakText	Glyphs	字形
 	Small to Large	小さい順
 	Large to Small	大きい順
 	Distribute Evenly	均等に分布
+# Info panel: the selection's area.
+	Area: {area}	面積：{area}
+	Shape area: {area}	シェイプの面積：{area}
+	Width × height of the selection: the sheet it needs	選択範囲の幅 × 高さ：必要な用紙
+	Area the closed shapes enclose: holes left out, overlaps counted once	閉じたシェイプが囲む面積：穴を除き、重なりは一度だけ数える

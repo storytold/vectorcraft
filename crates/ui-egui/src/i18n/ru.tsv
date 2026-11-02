@@ -6142,3 +6142,8 @@ breakText	Glyphs	Глифы
 	Small to Large	От меньшего к большему
 	Large to Small	От большего к меньшему
 	Distribute Evenly	Распределить равномерно
+# Info panel: the selection's area.
+	Area: {area}	Площадь: {area}
+	Shape area: {area}	Площадь фигуры: {area}
+	Width × height of the selection: the sheet it needs	Ширина × высота выделения: нужный лист
+	Area the closed shapes enclose: holes left out, overlaps counted once	Площадь внутри замкнутых фигур: без отверстий, перекрытия считаются один раз

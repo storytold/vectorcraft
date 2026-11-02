@@ -6154,3 +6154,8 @@ breakText	Glyphs	გლიფები
 	Small to Large	პატარიდან დიდისკენ
 	Large to Small	დიდიდან პატარისკენ
 	Distribute Evenly	თანაბრად განაწილება
+# Info panel: the selection's area.
+	Area: {area}	ფართობი: {area}
+	Shape area: {area}	ფიგურის ფართობი: {area}
+	Width × height of the selection: the sheet it needs	მონიშნულის სიგანე × სიმაღლე: საჭირო ფურცელი
+	Area the closed shapes enclose: holes left out, overlaps counted once	ჩაკეტილი ფიგურებით შემოსაზღვრული ფართობი: ხვრელების გარეშე, გადაფარვები ერთხელ ითვლება

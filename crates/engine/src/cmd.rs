@@ -2,6 +2,7 @@
 
 mod addons;
 pub(crate) mod appearance;
+pub mod area;
 mod assets;
 mod attributes;
 pub mod brushlib;
@@ -283,6 +284,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(tabs::specs());
         v.extend(docmenu::specs());
         v.extend(variablecmds::specs());
+        v.extend(area::specs());
         v.extend(docinfo::specs());
         v.extend(panelcmds::specs());
         v.extend(buildcmds::specs());

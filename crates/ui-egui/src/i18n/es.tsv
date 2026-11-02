@@ -6107,3 +6107,8 @@ breakText	Glyphs	Glifos
 	Small to Large	De menor a mayor
 	Large to Small	De mayor a menor
 	Distribute Evenly	Distribuir uniformemente
+# Info panel: the selection's area.
+	Area: {area}	Área: {area}
+	Shape area: {area}	Área de la forma: {area}
+	Width × height of the selection: the sheet it needs	Ancho × alto de la selección: la hoja que necesita
+	Area the closed shapes enclose: holes left out, overlaps counted once	Área que encierran las formas cerradas: sin agujeros, las superposiciones cuentan una vez

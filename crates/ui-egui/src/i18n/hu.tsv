@@ -6151,3 +6151,8 @@ breakText	Glyphs	Glifák
 	Small to Large	Kicsitől a nagyig
 	Large to Small	Nagytól a kicsiig
 	Distribute Evenly	Egyenletes elosztás
+# Info panel: the selection's area.
+	Area: {area}	Terület: {area}
+	Shape area: {area}	Alakzat területe: {area}
+	Width × height of the selection: the sheet it needs	A kijelölés szélessége × magassága: a szükséges ív
+	Area the closed shapes enclose: holes left out, overlaps counted once	A zárt alakzatok által bezárt terület: lyukak nélkül, az átfedések egyszer számítva
