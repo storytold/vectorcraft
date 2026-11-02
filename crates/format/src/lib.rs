@@ -37,33 +37,23 @@ mod legacy;
 mod stream;
 mod unpack;
 
-use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
-use std::io::{Read as _, Write};
+use std::io::Write;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
+use serde::Serialize;
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
+pub use craft_vectorcraft_format::base64::{decode as base64_decode, encode as base64_encode};
+pub use craft_vectorcraft_format::{
+    BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
+    sniff,
+};
 use stream::{Gz, Indent, KeyScan, Out};
 
-/// v4: large data after the JSON (v1 to v3 files still load).
-pub const VERSION: u32 = 4;
-/// Data this large or larger goes after the JSON (v4), not into it as base64.
-pub const INLINE_MAX: usize = 8 << 10;
-/// What separates the JSON from the data after it (v4).
-pub const BLOB_MAGIC: &[u8] = b"\n\0VCBLOBS\0";
-/// The oldest version [`save_with`] writes.
-pub const MIN_VERSION: u32 = 1;
-/// The first version whose readers open compressed files.
-pub const COMPRESSED_SINCE: u32 = 3;
-/// Most pixels on the longer side of an embedded preview.
-pub const PREVIEW_MAX: u32 = 256;
-pub const EXTENSION: &str = "vectorcraft";
-/// Extension and format name from before the project was renamed (DrawCraft): still opened.
-pub const LEGACY_EXTENSION: &str = "drawcraft";
 /// Most bytes the JSON of a compressed file may unpack to (a guard against decompression bombs,
 /// as are [`MAX_BLOB`] and [`MAX_BLOBS`]). A compressed save refuses a document past any of them,
 /// so every file VectorCraft writes reads back. On wasm32 the cap is a quarter of the native
@@ -72,7 +62,7 @@ pub const LEGACY_EXTENSION: &str = "drawcraft";
 pub const MAX_JSON: u64 = if cfg!(target_arch = "wasm32") { 256 << 20 } else { 1 << 30 };
 /// Most bytes one entry of the data after the JSON (an image, a placed document, the PDF, a
 /// profile) may have in a compressed file.
-pub const MAX_BLOB: u64 = 1 << 30;
+pub const MAX_BLOB: u64 = craft_vectorcraft_format::MAX_ENTRY;
 /// Most bytes the entries after the JSON may have together in a compressed file: 1 GiB in the web
 /// build, whose 4 GiB address space also holds the JSON, the document and the app, so 4 GiB of
 /// entries failed to allocate rather than being refused.
@@ -111,50 +101,14 @@ pub enum FormatError {
     Encode(String),
 }
 
-#[derive(Serialize, Deserialize)]
-struct Image {
-    mime: String,
-    /// The bytes as base64, unless they come after the JSON (`blob`).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    data: String,
-    /// Where the bytes are in the data after the JSON (v4): `[offset, length]`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    blob: Option<[u64; 2]>,
-    /// `data` is a linked image's preview ([`ImageBlob::proxy`]), not the file's bytes.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    proxy: bool,
-}
-
-impl Image {
-    /// Its bytes when they are in the JSON (base64 `data`); `None` when they come after it
-    /// ([`Image::blob`]) or don't decode.
-    fn inline(&self) -> Option<Vec<u8>> {
-        match self.blob {
-            Some(_) => None,
-            None => base64_decode(&self.data),
+impl From<craft_vectorcraft_format::Error> for FormatError {
+    fn from(e: craft_vectorcraft_format::Error) -> Self {
+        match e {
+            craft_vectorcraft_format::Error::Format(format) => FormatError::NotVectorcraft(format!("format is `{format}`")),
+            craft_vectorcraft_format::Error::TooNew(version) => FormatError::TooNew(version),
+            // The crate's other errors (`TooBig`: entries past the data after the JSON) keep their message.
+            e => FormatError::NotVectorcraft(e.to_string()),
         }
-    }
-}
-
-/// Entries written for one file: large bytes go to the data after the JSON when the version keeps
-/// them there (in the order they are added, each at the offset it is given).
-struct Blobs<'a> {
-    /// The bytes, and whether they are compressed already ([`is_packed`]).
-    tail: Vec<(&'a [u8], bool)>,
-    at: u64,
-    outside: bool,
-}
-
-impl<'a> Blobs<'a> {
-    fn image(&mut self, mime: &str, bytes: &'a [u8], proxy: bool) -> Image {
-        if self.outside && bytes.len() >= INLINE_MAX {
-            let len = bytes.len() as u64;
-            let at = self.at;
-            self.at += len;
-            self.tail.push((bytes, is_packed(mime)));
-            return Image { mime: mime.into(), data: String::new(), blob: Some([at, len]), proxy };
-        }
-        Image { mime: mime.into(), data: base64_encode(bytes), blob: None, proxy }
     }
 }
 
@@ -166,52 +120,6 @@ fn is_packed(mime: &str) -> bool {
 /// The MIME type of a preview's bytes (JPEG or PNG).
 fn preview_mime(bytes: &[u8]) -> &'static str {
     if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { vectorcraft_doc::links::PROXY_MIME }
-}
-
-/// The JSON of a native file without the data after it (version 4 keeps images there): a
-/// complete JSON value whose `images` give each image's MIME type and where its data was, without
-/// the data.
-pub fn json_part(file: &[u8]) -> &[u8] {
-    split_tail(file).0
-}
-
-/// The JSON of a file and the data after it (v4), split at [`BLOB_MAGIC`] after the first JSON
-/// value.
-fn split_tail(text: &[u8]) -> (&[u8], &[u8]) {
-    // JSON holds no raw NUL, so the marker (which has one) starts at the first NUL, if the file
-    // has one. The writer puts it right after the JSON's last byte; found there, it is where the
-    // first JSON value ends, without parsing the JSON twice. Anything else takes the parse.
-    let Some(nul) = text.iter().position(|&b| b == 0) else {
-        // No NUL, so no marker: the parse below would find none either.
-        return (text, &[]);
-    };
-    if let Some(at) = nul.checked_sub(1)
-        && text.get(at..).is_some_and(|r| r.starts_with(BLOB_MAGIC))
-        && at.checked_sub(1).and_then(|k| text.get(k)).is_some_and(|b| matches!(b, b'}' | b']' | b'"'))
-    {
-        return (text.get(..at).unwrap_or(text), text.get(at + BLOB_MAGIC.len()..).unwrap_or_default());
-    }
-    let mut values = serde_json::Deserializer::from_slice(text).into_iter::<serde::de::IgnoredAny>();
-    if values.next().is_some_and(|v| v.is_ok()) {
-        let end = values.byte_offset();
-        if let Some(rest) = text.get(end..)
-            && rest.starts_with(BLOB_MAGIC)
-        {
-            return (text.get(..end).unwrap_or(text), rest.get(BLOB_MAGIC.len()..).unwrap_or_default());
-        }
-    }
-    (text, &[])
-}
-
-#[derive(Deserialize)]
-struct File {
-    format: String,
-    version: u32,
-    document: Document,
-    #[serde(default)]
-    images: BTreeMap<String, Image>,
-    #[serde(default)]
-    profiles: BTreeMap<String, Image>,
 }
 
 /// How [`save_with`] writes a document.
@@ -238,9 +146,6 @@ impl Default for SaveOptions {
         Self { pretty: false, compress: false, version: VERSION, preview: None, include_linked: false, profiles: BTreeMap::new(), pdf: None }
     }
 }
-
-/// The MIME type of embedded ICC profiles.
-pub const ICC_MIME: &str = "application/vnd.iccprofile";
 
 impl SaveOptions {
     /// Can a file be written this way (a version [`save_with`] writes, compressed only for readers
@@ -369,7 +274,7 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     let pretty = o.pretty && !o.compress;
     let Body { d, v1, blobs, linked } = body(doc, o)?;
     let entries = Entries { blobs: &blobs, linked: &linked, include_linked: o.include_linked };
-    let mut out_blobs = Blobs { tail: vec![], at: 0, outside: o.version >= 4 };
+    let mut out_blobs = Tail::new(o.version);
     // Images are only referenced by image objects' `key` (wherever the objects are: layers,
     // symbols, patterns, masks, or foreign data). The data after the JSON has the images first,
     // then the profiles and the PDF, which the file lists before the document: with those, the
@@ -382,7 +287,6 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     }
     let profiles: BTreeMap<&str, Image> = o.profiles.iter().map(|(name, icc)| (name.as_str(), out_blobs.image(ICC_MIME, icc, false))).collect();
     let pdf = o.pdf.as_deref().map(|p| out_blobs.image("application/pdf", p, false));
-    let blob = |mime: &str, bytes: &[u8]| Image { mime: mime.into(), data: base64_encode(bytes), blob: None, proxy: false };
     let mut out = if o.compress { Out::Gz(Box::new(Gz::new(w).map_err(encode_err)?)) } else { Out::Plain(w) };
     let mut env = Envelope { pretty, first: true };
     // Older apps only know the name from before the rename.
@@ -390,7 +294,7 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     env.field(&mut out, "version", &o.version)?;
     env.field(&mut out, "generator", &format!("VectorCraft {}", env!("CARGO_PKG_VERSION")))?;
     if let Some(png) = &o.preview {
-        env.field(&mut out, "preview", &blob("image/png", png))?;
+        env.field(&mut out, "preview", &Image::inline("image/png", png))?;
     }
     if !profiles.is_empty() {
         env.field(&mut out, "profiles", &profiles)?;
@@ -412,22 +316,22 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     env.finish(&mut out)?;
     if o.compress {
         let json = out.written().unwrap_or(0);
-        let tail: Vec<u64> = out_blobs.tail.iter().map(|(b, _)| b.len() as u64).collect();
+        let tail: Vec<u64> = out_blobs.parts().iter().map(|p| p.bytes.len() as u64).collect();
         if json > MAX_JSON {
             return Err(FormatError::TooBigToCompress(format!("{} MB of document, at most {} MB", json >> 20, MAX_JSON >> 20)));
         }
         if let Some(big) = tail.iter().find(|&&n| n > MAX_BLOB) {
             return Err(FormatError::TooBigToCompress(format!("an image of {} MB, at most {} MB", big >> 20, MAX_BLOB >> 20)));
         }
-        if out_blobs.at > MAX_BLOBS {
-            return Err(FormatError::TooBigToCompress(format!("{} MB of images, at most {} MB", out_blobs.at >> 20, MAX_BLOBS >> 20)));
+        if out_blobs.len() > MAX_BLOBS {
+            return Err(FormatError::TooBigToCompress(format!("{} MB of images, at most {} MB", out_blobs.len() >> 20, MAX_BLOBS >> 20)));
         }
     }
-    if !out_blobs.tail.is_empty() {
+    if !out_blobs.is_empty() {
         out.write_all(BLOB_MAGIC).map_err(encode_err)?;
-        for &(bytes, packed) in &out_blobs.tail {
-            out.packed(packed).map_err(encode_err)?;
-            out.write_all(bytes).map_err(encode_err)?;
+        for part in out_blobs.parts() {
+            out.packed(is_packed(&part.mime)).map_err(encode_err)?;
+            out.write_all(part.bytes).map_err(encode_err)?;
         }
     }
     out.finish().map_err(encode_err)
@@ -443,7 +347,7 @@ struct Entries<'a> {
 
 impl<'a> Entries<'a> {
     /// The entries of the images named in `used`, in the order of their names.
-    fn images(&self, used: &HashSet<String>, out: &mut Blobs<'a>) -> BTreeMap<&'a str, Image> {
+    fn images(&self, used: &HashSet<String>, out: &mut Tail<'a>) -> BTreeMap<&'a str, Image> {
         self.blobs
             .iter()
             .filter(|(k, _)| used.contains(k.as_str()))
@@ -508,11 +412,6 @@ impl Envelope {
     }
 }
 
-/// Is this gzip data (a compressed file)?
-pub fn is_compressed(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0x1f, 0x8b])
-}
-
 pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
     load_info(bytes).map(|(doc, _)| doc)
 }
@@ -563,22 +462,22 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     let file = unpack::Unpacked::new(bytes)?;
     // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
     // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
-    // fields read before an object's type at `MAX_BUFFERED_VALUES` values.
+    // fields read before an object's type at `MAX_BUFFERED_VALUES` values. The preview and the
+    // PDF are skipped without being kept.
     let read = || {
         vectorcraft_doc::node::with_node_budget(max_nodes, || {
-            vectorcraft_doc::node::with_buffered_value_budget(max_values, || serde_json::from_slice::<File>(file.json()))
+            vectorcraft_doc::node::with_buffered_value_budget(max_values, || Contents::<Document>::read(file.json()))
         })
     };
-    let f: File = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| {
-        let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
-        FormatError::NotVectorcraft(why)
+    let f = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| match e {
+        ReadError::Json(e) => {
+            let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
+            FormatError::NotVectorcraft(why)
+        }
+        ReadError::Envelope(e) => e.into(),
+        e => FormatError::NotVectorcraft(e.to_string()),
     })?;
-    if f.format != EXTENSION && f.format != LEGACY_EXTENSION {
-        return Err(FormatError::NotVectorcraft(format!("format is `{}`", f.format)));
-    }
-    if f.version > VERSION {
-        return Err(FormatError::TooNew(f.version));
-    }
+    let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION };
     // The bytes after the JSON, read in one pass: the images' first, then the profiles'.
     let entries: Vec<[u64; 2]> = f.images.values().chain(f.profiles.values()).filter_map(|i| i.blob).collect();
     let tail = file.entries(&entries)?;
@@ -589,7 +488,7 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     let mut tail = tail.into_iter();
     let mut bytes_of = |img: &Image| match img.blob {
         Some(_) => tail.next().flatten(),
-        None => img.inline().map(Arc::new),
+        None => base64_decode(&img.data).map(Arc::new),
     };
     let mut doc = f.document;
     for (k, img) in f.images {
@@ -652,14 +551,7 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
             }
         })
         .collect::<Result<_, FormatError>>()?;
-    Ok(NativeFile { doc, depth_notes, info: FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }, profiles })
-}
-
-/// The members of a native file besides its document (which is skipped, not decoded).
-#[derive(Deserialize)]
-struct Head {
-    preview: Option<Image>,
-    pdf: Option<Image>,
+    Ok(NativeFile { doc, depth_notes, info, profiles })
 }
 
 /// The bytes of the member of the file's head `pick` picks (only that entry of the data after
@@ -670,7 +562,7 @@ fn head_member(bytes: &[u8], pick: impl FnOnce(Head) -> Option<Image>) -> Option
     let img = pick(head)?;
     match img.blob {
         Some(at) => file.entries(&[at]).ok()?.pop().flatten().map(Arc::unwrap_or_clone),
-        None => img.inline(),
+        None => base64_decode(&img.data),
     }
 }
 
@@ -683,71 +575,6 @@ pub fn preview(bytes: &[u8]) -> Option<Vec<u8>> {
 /// isn't a native file).
 pub fn pdf_content(bytes: &[u8]) -> Option<Vec<u8>> {
     head_member(bytes, |h| h.pdf)
-}
-
-/// Does this look like a `.vectorcraft` file (compressed or not)?
-pub fn sniff(bytes: &[u8]) -> bool {
-    const HEAD: usize = 256;
-    let head: Cow<'_, [u8]> = if is_compressed(bytes) {
-        let mut head = Vec::with_capacity(HEAD);
-        // A damaged stream may still unpack its start: judge what came out.
-        let _ = flate2::read::GzDecoder::new(bytes).take(HEAD as u64).read_to_end(&mut head);
-        Cow::Owned(head)
-    } else {
-        Cow::Borrowed(bytes.get(..HEAD).unwrap_or(bytes))
-    };
-    // The cut may split a character.
-    let s = String::from_utf8_lossy(&head);
-    s.trim_start().starts_with('{') && (s.contains("\"vectorcraft\"") || s.contains("\"drawcraft\""))
-}
-
-const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-pub fn base64_encode(data: &[u8]) -> String {
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for c in data.chunks(3) {
-        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
-        out.push(B64[(n >> 18) as usize & 63] as char);
-        out.push(B64[(n >> 12) as usize & 63] as char);
-        out.push(if c.len() > 1 { B64[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if c.len() > 2 { B64[n as usize & 63] as char } else { '=' });
-    }
-    out
-}
-
-pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
-    let val = |c: u8| B64.iter().position(|&b| b == c).map(|p| p as u32);
-    let clean: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
-    if !clean.len().is_multiple_of(4) {
-        return None;
-    }
-    let mut out = Vec::with_capacity(clean.len() / 4 * 3);
-    let groups = clean.len() / 4;
-    for (i, c) in clean.chunks(4).enumerate() {
-        let mut n = 0u32;
-        let mut pad = 0;
-        for &b in c {
-            n <<= 6;
-            if b == b'=' {
-                pad += 1;
-            } else if pad > 0 {
-                return None;
-            } else {
-                n |= val(b)?;
-            }
-        }
-        if pad > 2 || (pad > 0 && i + 1 != groups) {
-            return None;
-        }
-        out.push((n >> 16) as u8);
-        if pad < 2 {
-            out.push((n >> 8) as u8);
-        }
-        if pad < 1 {
-            out.push(n as u8);
-        }
-    }
-    Some(out)
 }
 
 #[cfg(test)]
@@ -777,6 +604,163 @@ mod tests {
         let v1 = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":1", 1);
         assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false });
         assert!(load_info(v1.as_bytes()).unwrap().1.is_old());
+    }
+
+    /// A file is native when its top-level `format` member names VectorCraft, read as JSON reads
+    /// it; the word elsewhere in the head does not count.
+    #[test]
+    fn sniff_reads_the_format_member() {
+        // `vectorcraft` with its second `c` written as a JSON escape.
+        let escaped = [br#"{"format":"vector\"#.as_slice(), br#"u0063raft","version":4,"document":{}}"#].concat();
+        assert!(sniff(&escaped));
+        assert!(!sniff(br#"{"format":"other","generator":"vectorcraft"}"#));
+        assert!(!sniff(br#"{"names":["vectorcraft"],"format":"svg"}"#));
+    }
+
+    /// Every layout VectorCraft has written puts `format` first: the version 1 and 2 files from
+    /// before the rename (a struct of `format`, `version`, `generator`, `document` and `images`,
+    /// compact or pretty), and each version `save_with` writes, compact, pretty and compressed.
+    #[test]
+    fn sniff_takes_every_layout_written() {
+        let before_rename = [
+            r#"{"format":"drawcraft","version":1,"generator":"DrawCraft 0.1.0","document":{},"images":{}}"#,
+            "{\n  \"format\": \"drawcraft\",\n  \"version\": 2,\n  \"generator\": \"DrawCraft 0.1.0\",\n  \"document\": {},\n  \"images\": {}\n}",
+        ];
+        for text in before_rename {
+            assert!(sniff(text.as_bytes()), "{text}");
+        }
+        let d = Document::new(10.0, 10.0);
+        for version in MIN_VERSION..=VERSION {
+            for (pretty, compress) in [(false, false), (true, false), (false, true)] {
+                let o = SaveOptions { pretty, compress, version, ..SaveOptions::default() };
+                if o.check().is_err() {
+                    continue;
+                }
+                let bytes = save_with(&d, &o).unwrap();
+                assert!(sniff(&bytes), "version {version}, pretty {pretty}, compress {compress}");
+            }
+        }
+    }
+
+    /// An envelope error other than the format and version keeps the crate's message.
+    #[test]
+    fn envelope_errors_keep_their_message() {
+        let e = FormatError::from(craft_vectorcraft_format::Error::TooBig);
+        assert!(matches!(e, FormatError::NotVectorcraft(_)), "{e}");
+        assert!(e.to_string().contains(&craft_vectorcraft_format::Error::TooBig.to_string()), "{e}");
+        let e = FormatError::from(craft_vectorcraft_format::Error::Format("x".into()));
+        assert_eq!(e.to_string(), "not a VectorCraft file: format is `x`");
+        assert!(matches!(FormatError::from(craft_vectorcraft_format::Error::TooNew(9)), FormatError::TooNew(9)));
+    }
+
+    /// `save_to` writes the file member by member and streams the document in. For every version
+    /// it writes, compact, pretty and compressed, its bytes are those of the crate's `File`
+    /// holding the same members, serialized with `serde_json::to_vec` or `to_vec_pretty` and
+    /// followed by the crate's `Tail`.
+    #[test]
+    fn save_to_writes_the_bytes_of_the_crates_file() {
+        use std::io::Read;
+
+        /// The document as `save_to` writes it: its version 1 form, or the document.
+        struct Written<'a>(&'a Body);
+        impl Serialize for Written<'_> {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                match &self.0.v1 {
+                    Some(v) => v.serialize(s),
+                    None => self.0.d.serialize(s),
+                }
+            }
+        }
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        // An image large enough to go after the JSON from version 4, a small one, and one that
+        // nothing uses.
+        let big: Vec<u8> = (0..INLINE_MAX as u32 + 5).map(|i| (i % 251) as u8).collect();
+        for (key, bytes) in [("big", big), ("small", vec![1, 2, 3, 250]), ("unused", vec![9])] {
+            d.images.insert(key.into(), ImageBlob::new("image/png", bytes));
+        }
+        for (i, key) in ["big", "small"].into_iter().enumerate() {
+            let img = d.alloc_id();
+            let im =
+                ImageObject { key: key.into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+            d.insert(Some(l), i + 1, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
+        }
+        let png = vec![0x89, b'P', b'N', b'G'];
+        let icc = vec![7u8; INLINE_MAX];
+        let mut pdf = b"%PDF-1.7\n".to_vec();
+        pdf.resize(INLINE_MAX + 1, b' ');
+        let full = SaveOptions {
+            preview: Some(png.clone()),
+            profiles: [("Gray".to_string(), icc.clone())].into(),
+            pdf: Some(pdf.clone()),
+            ..SaveOptions::default()
+        };
+        let mut checked = 0;
+        for version in MIN_VERSION..=VERSION {
+            for members in [&full, &SaveOptions::default()] {
+                for pretty in [false, true] {
+                    let o = SaveOptions { version, pretty, ..members.clone() };
+                    let b = body(&d, &o).unwrap();
+                    let mut file = craft_vectorcraft_format::File::new(Written(&b));
+                    file.format = if version < 3 { LEGACY_EXTENSION } else { EXTENSION }.into();
+                    file.version = version;
+                    file.generator = Some(format!("VectorCraft {}", env!("CARGO_PKG_VERSION")));
+                    file.preview = o.preview.as_deref().map(|p| Image::inline("image/png", p));
+                    // The images come first in the data after the JSON, then the profiles and the PDF.
+                    let mut tail = file.tail();
+                    for key in ["big", "small"] {
+                        file.images.insert(key.into(), tail.image("image/png", b.blobs[key].bytes.as_slice(), false));
+                    }
+                    for (name, icc) in &o.profiles {
+                        file.profiles.insert(name.clone(), tail.image(ICC_MIME, icc, false));
+                    }
+                    file.pdf = o.pdf.as_deref().map(|p| tail.image("application/pdf", p, false));
+                    let mut expected = if pretty { serde_json::to_vec_pretty(&file) } else { serde_json::to_vec(&file) }.unwrap();
+                    tail.write_to(&mut expected).unwrap();
+                    assert_eq!(tail.is_empty(), version < 4, "version {version}");
+                    assert!(save_with(&d, &o).unwrap() == expected, "version {version}, pretty {pretty}, {} profiles", o.profiles.len());
+                    checked += 1;
+                    if version >= COMPRESSED_SINCE && !pretty {
+                        let gz = save_with(&d, &SaveOptions { compress: true, ..o.clone() }).unwrap();
+                        let mut unpacked = Vec::new();
+                        flate2::read::GzDecoder::new(gz.as_slice()).read_to_end(&mut unpacked).unwrap();
+                        assert!(unpacked == expected, "version {version}, compressed, {} profiles", o.profiles.len());
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(checked, 20);
+    }
+
+    /// Files are read through the crate's `Contents` with the messages VectorCraft gave before,
+    /// and a top-level array holds the format, version, document, images and profiles in that
+    /// order.
+    #[test]
+    fn files_read_through_the_crates_contents_as_before() {
+        let message = |json: &str| load(json.as_bytes()).err().map(|e| e.to_string());
+        assert_eq!(
+            message(r#""x""#).as_deref(),
+            Some(r#"not a VectorCraft file: invalid type: string "x", expected struct File at line 1 column 3"#)
+        );
+        assert!(
+            message(r#"{"format":"vectorcraft","version":4}"#).is_some_and(|m| m.starts_with("not a VectorCraft file: missing field `document`"))
+        );
+        let v: serde_json::Value = serde_json::from_slice(&save(&Document::new(10.0, 10.0), false)).unwrap();
+        let doc = v["document"].to_string();
+        let file = |format: &str, version: u32| format!(r#"{{"format":"{format}","version":{version},"document":{doc}}}"#);
+        assert_eq!(message(&file("svg", 4)).as_deref(), Some("not a VectorCraft file: format is `svg`"));
+        assert_eq!(message(&file("vectorcraft", 9)).as_deref(), Some("file version 9 is newer than this VectorCraft supports (4)"));
+        // A document that does not read is reported first, as before.
+        assert!(
+            message(r#"{"format":"vectorcraft","version":9,"document":7}"#).is_some_and(|m| m.starts_with("not a VectorCraft file: invalid type"))
+        );
+        for json in [format!(r#"["vectorcraft",3,{doc},{{}},{{}}]"#), format!(r#"["vectorcraft",3,{doc}]"#)] {
+            assert_eq!(load(json.as_bytes()).map(|d| d.artboards.len()).ok(), Some(1), "{json}");
+        }
+        assert!(load(format!(r#"["vectorcraft",3,{{}},{doc},{{}}]"#).as_bytes()).is_err());
     }
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};

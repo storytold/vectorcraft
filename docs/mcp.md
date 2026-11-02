@@ -843,7 +843,10 @@ PostScript form, which keeps layers, groups, compound paths and clipping groups 
 of `range` (default all; `{name}-{artboard}.ai` when several, listed in the result's `files`), with
 `transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity or a blending mode,
 `hiddenObjects: "layer"` (default: a hidden layer of each layer's hidden objects), `"omit"` or `"visible"`, and
-`outlineText: true` to write type as outlines instead of text objects. An image that can't be decoded is left out of
+`outlineText: true` to write type as outlines instead of text objects. Type with rotated characters (Character
+Rotation) is always written as outlines, which keep the rotation; without `outlineText: true` this gives the warning "type with rotated characters is
+written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate
+characters)". An image that can't be decoded is left out of
 the file and does not show in art that is flattened or whose raster effects are expanded; `warnings` carries "an image
 couldn't be decoded and is missing from the picture" once for all such images. From the CLI: `vectorcraft-cli convert in.svg
 out.ai --ai-version 7 [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit] [--outline-text]
@@ -1586,7 +1589,8 @@ already walks Image Trace. Short agent entry points:
   a path that names no object. `symbol.instance.reset {ids?}` drops the selected instances' changes (the Properties
   panel's Reset). Redefining the symbol (`symbol.update`) reshapes every instance and keeps each change whose path the
   new art still has; `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own
-  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them.
+  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them, and
+  so does `symbol.replace` with a different symbol (a replace with the instance's own symbol keeps them).
 
 ```json
 {"name":"run_command","arguments":{"command":"symbol.instance.setAppearance","params":{"id":42,"path":[1],"fill":"#d0021b","opacity":80}}}
