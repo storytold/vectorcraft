@@ -241,6 +241,12 @@ impl Style {
         n.opacity = self.opacity;
         n.blend = self.blend;
     }
+    /// The style of a shape drawn inside `n`: its opacity multiplied by `n`'s, and `n`'s blend
+    /// mode when it is not Normal.
+    pub(crate) fn within(self, n: &Node) -> Self {
+        let blend = if n.blend == BlendMode::Normal { self.blend } else { n.blend };
+        Style { opacity: self.opacity * n.opacity, blend, ..self }
+    }
 }
 
 /// All subpaths of a path or compound path node, in document coordinates, with its fill rule.
@@ -295,13 +301,15 @@ fn each_leaf(n: &Node, f: &mut impl FnMut(&Node)) {
 }
 
 /// [`leaves`] as a Pathfinder operation takes them: a compound shape is one shape, the area it
-/// draws painted as it is (its members as they are past a live Pathfinder's budget).
-pub(crate) fn pf_leaves(n: &Node, out: &mut Vec<Node>) {
+/// draws painted as it is, with the symbol instances among its members as their symbols' art from
+/// `d` (its members as they are past a live Pathfinder's budget).
+pub(crate) fn pf_leaves(d: &Document, n: &Node, out: &mut Vec<Node>) {
     match &n.kind {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-            match vectorcraft_render::effects::compound_shape_art(n, vectorcraft_render::effects::text_outliner()) {
+            let hook = |c: &Node| vectorcraft_render::effects::outline_object(Some(d), c);
+            match vectorcraft_render::effects::compound_shape_art(n, Some(&hook)) {
                 Some(art) => out.push(art),
-                None => children.iter().for_each(|c| pf_leaves(c, out)),
+                None => children.iter().for_each(|c| pf_leaves(d, c, out)),
             }
         }
         _ => leaves(n, out),
@@ -309,12 +317,27 @@ pub(crate) fn pf_leaves(n: &Node, out: &mut Vec<Node>) {
 }
 
 /// How many shapes a Pathfinder operation takes from `n` selected alone: its leaf shapes, however
-/// deep its groups nest (an expanded stroke is a group inside the group, #1635).
+/// deep its groups nest (an expanded stroke is a group inside the group, #1635). Inside a compound
+/// shape, a blend, an envelope or another live object and a symbol instance count as one shape
+/// each, as its area takes the art they draw.
 pub fn shape_count(n: &Node) -> usize {
     // Counted without copying the shapes: the panel asks every frame.
-    let mut count = 0;
-    each_leaf(n, &mut |_| count += 1);
-    count
+    fn count(n: &Node, in_shape: bool, total: &mut usize) {
+        match &n.kind {
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                let in_shape = in_shape || n.is_compound_shape();
+                for c in children {
+                    count(c, in_shape, total);
+                }
+            }
+            NodeKind::SymbolInstance { .. } if in_shape => *total += 1,
+            _ if in_shape && vectorcraft_doc::live::is_live(n) => *total += 1,
+            _ => each_leaf(n, &mut |_| *total += 1),
+        }
+    }
+    let mut total = 0;
+    count(n, false, &mut total);
+    total
 }
 
 /// A node for `path`: a plain path for one subpath, else a compound path.
@@ -568,7 +591,7 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
         for id in &roots {
             let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
             let mut lv = vec![];
-            pf_leaves(n, &mut lv);
+            pf_leaves(d, n, &mut lv);
             if lv.is_empty() {
                 continue;
             }
