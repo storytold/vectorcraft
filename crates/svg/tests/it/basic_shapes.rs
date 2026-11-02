@@ -209,3 +209,29 @@ fn circles_import_without_changing_ids_or_style_matches() {
     assert_eq!(img.over_white(30, 30), [0, 0, 255]);
     assert_eq!(img.over_white(130, 30), [255, 0, 0]);
 }
+
+#[test]
+fn circles_import_without_an_id_the_file_names() {
+    // A style sheet's rule for an id no element has does not reach the circle.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+        <style>#vectorcraft-id-0 { fill: #ff0000 }</style>
+        <circle cx="30" cy="30" r="20" fill="#000000"/></svg>"##;
+    let img = render_artboard(&import(svg).unwrap());
+    assert_eq!(img.over_white(30, 30), [0, 0, 0]);
+}
+
+#[test]
+fn circles_import_without_an_id_a_use_names() {
+    // A `<use>` of an id no element has does not show the circle, nor does one that writes the
+    // id with a character reference.
+    for href in ["#vectorcraft-id-0", "#vectorcraft-id-&#48;"] {
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">
+            <circle cx="30" cy="30" r="20" fill="#000000"/>
+            <use xlink:href="{href}" x="100"/></svg>"##
+        );
+        let img = render_artboard(&import(&svg).unwrap());
+        assert_eq!(img.over_white(30, 30), [0, 0, 0], "{href}");
+        assert_eq!(img.over_white(130, 30), [255, 255, 255], "{href}");
+    }
+}

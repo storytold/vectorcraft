@@ -40,8 +40,9 @@ pub(crate) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
-    /// The ids in the file and those made up, read when the first id is made up.
-    taken: Option<HashSet<String>>,
+    /// The numbers `n` of the `{MADE_UP_ID}n` the file names (as an element's id, in a style
+    /// sheet's `#id` selector or in a `#id` link to no element), read when the first id is made up.
+    taken: Option<HashSet<usize>>,
     /// The number the next made-up id is tried with: the numbers below it are made up or taken.
     next: usize,
     /// Declarations added to elements' `style`s, by element: (where they go, whether the element
@@ -55,7 +56,7 @@ impl Edits {
     }
 
     /// The id of element `n` (in `svg`), made up and written in when it has none. A made-up id is
-    /// one no element of the file has.
+    /// one the file does not name ([`named_made_up_ids`]).
     pub(super) fn id(&mut self, svg: &str, n: XNode) -> String {
         if let Some(id) = n.attribute("id").filter(|id| !id.is_empty()) {
             return id.to_string();
@@ -63,15 +64,12 @@ impl Edits {
         if let Some(id) = self.ids.get(&n.id()) {
             return id.clone();
         }
-        let taken = self.taken.get_or_insert_with(|| n.document().descendants().filter_map(|e| e.attribute("id")).map(str::to_string).collect());
-        let id = loop {
-            let id = format!("{MADE_UP_ID}{}", self.next);
+        let taken = self.taken.get_or_insert_with(|| named_made_up_ids(n.document()));
+        while taken.contains(&self.next) {
             self.next += 1;
-            if !taken.contains(&id) {
-                break id;
-            }
-        };
-        taken.insert(id.clone());
+        }
+        let id = format!("{MADE_UP_ID}{}", self.next);
+        self.next += 1;
         self.set(svg, n, "id", &id);
         self.ids.insert(n.id(), id.clone());
         id
@@ -119,6 +117,24 @@ impl Edits {
         out.push_str(svg.get(last..).unwrap_or(""));
         out.into()
     }
+}
+
+/// The number after each [`MADE_UP_ID`] followed by digits in the attribute values and text of
+/// `xml`, read with their character references decoded (numbers too large for a `usize` left out).
+fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
+    fn numbers(s: &str) -> impl Iterator<Item = usize> + '_ {
+        s.match_indices(MADE_UP_ID).filter_map(|(at, _)| {
+            let rest = s.get(at + MADE_UP_ID.len()..)?;
+            let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+            rest.get(..digits)?.parse().ok()
+        })
+    }
+    let mut taken = HashSet::new();
+    for n in xml.descendants() {
+        taken.extend(n.attributes().flat_map(|a| numbers(a.value())));
+        taken.extend(n.text().filter(|_| n.is_text()).into_iter().flat_map(numbers));
+    }
+    taken
 }
 
 /// usvg reads `<a href>` and `<use>` as plain groups, drops what isn't displayed and reads linked
