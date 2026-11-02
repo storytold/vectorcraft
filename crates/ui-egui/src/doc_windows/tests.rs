@@ -60,7 +60,7 @@ fn body_of(app: &VectorcraftApp, i: usize) -> egui::Rect {
 fn window_of(app: &VectorcraftApp, ctx: &egui::Context, i: usize) -> egui::Rect {
     let uid = app.session.documents()[i].uid;
     let w = app.ui.floating.iter().find(|w| w.uid == uid).unwrap();
-    ctx.memory(|m| m.area_rect(egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation)))).unwrap()
+    ctx.memory(|m| m.area_rect(window_id(w))).unwrap()
 }
 
 /// A drag with the primary button from `from` to `to`, then a frame to settle.
@@ -279,7 +279,7 @@ fn closing_a_floating_window_closes_its_document_and_asks_to_save_an_unsaved_one
     let close_button = |app: &VectorcraftApp, i: usize| {
         let uid = app.session.documents()[i].uid;
         let w = app.ui.floating.iter().find(|w| w.uid == uid).unwrap();
-        let area = ctx.memory(|m| m.area_rect(egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation)))).unwrap();
+        let area = ctx.memory(|m| m.area_rect(window_id(w))).unwrap();
         let body = w.body.unwrap();
         (area, body)
     };
@@ -363,7 +363,7 @@ fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
     let layer = |app: &VectorcraftApp, i: usize| {
         let uid = app.session.documents()[i].uid;
         let w = app.ui.floating.iter().find(|w| w.uid == uid).unwrap();
-        egui::LayerId::new(egui::Order::Middle, egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation)))
+        egui::LayerId::new(egui::Order::Middle, window_id(w))
     };
     let top = |ctx: &egui::Context| ctx.memory(|m| m.areas().top_layer_id(egui::Order::Middle));
     assert_eq!(top(&ctx), Some(layer(&app, 1)), "the current document's window is in front");
@@ -378,11 +378,15 @@ fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
 }
 
 /// A stand-in for the window system of the documents' OS windows: it runs each one's frame, asks
-/// each to close while `close` is set, and records the commands the windows were sent.
+/// each to close while `close` is set, and records the commands the windows were sent. Each
+/// window is 500 × 400 points with its top-left corner at `origin` on the screen, and its next
+/// frame takes `events`.
 #[derive(Default)]
 struct Host {
     close: bool,
     commands: Vec<(egui::ViewportId, egui::ViewportCommand)>,
+    origin: Pos2,
+    events: Vec<egui::Event>,
 }
 
 fn native_host() -> std::rc::Rc<std::cell::RefCell<Host>> {
@@ -390,11 +394,25 @@ fn native_host() -> std::rc::Rc<std::cell::RefCell<Host>> {
     let shared = host.clone();
     egui::Context::set_immediate_viewport_renderer(move |ctx, mut viewport| {
         let id = viewport.ids.this;
-        let events = if shared.borrow().close { vec![egui::ViewportEvent::Close] } else { vec![] };
-        let rect = egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0));
-        let info = egui::ViewportInfo { events, inner_rect: Some(rect), outer_rect: Some(rect), focused: Some(false), ..Default::default() };
-        let input =
-            egui::RawInput { viewport_id: id, viewports: std::iter::once((id, info)).collect(), screen_rect: Some(rect), ..Default::default() };
+        let close = if shared.borrow().close { vec![egui::ViewportEvent::Close] } else { vec![] };
+        let size = vec2(500.0, 400.0);
+        let rect = egui::Rect::from_min_size(Pos2::ZERO, size);
+        let on_screen = egui::Rect::from_min_size(shared.borrow().origin, size);
+        let info = egui::ViewportInfo {
+            events: close,
+            inner_rect: Some(on_screen),
+            outer_rect: Some(on_screen),
+            focused: Some(false),
+            ..Default::default()
+        };
+        let events = std::mem::take(&mut shared.borrow_mut().events);
+        let input = egui::RawInput {
+            viewport_id: id,
+            viewports: std::iter::once((id, info)).collect(),
+            screen_rect: Some(rect),
+            events,
+            ..Default::default()
+        };
         let mut full = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
         full.textures_delta.clear();
         let mut host = shared.borrow_mut();
@@ -431,6 +449,188 @@ fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
         "its OS window is kept open: {:?}",
         host.borrow().commands
     );
+}
+
+/// Where the last frame drew the title of `title`'s tab in the tab strip.
+fn tab_at(shapes: &[Shape], title: &str) -> Pos2 {
+    shapes
+        .iter()
+        .find_map(|s| match s {
+            Shape::Text(t) if t.pos.y < 35.0 && t.galley.text().contains(title) => Some(t.pos + vec2(4.0, 4.0)),
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_tab_is_torn_off_only_well_above_or_below_the_strip() {
+    let strip = egui::Rect::from_min_max(pos2(0.0, 40.0), pos2(1200.0, 75.0));
+    assert!(!torn_off(strip, pos2(300.0, 60.0)), "along the strip");
+    assert!(!torn_off(strip, pos2(300.0, 75.0 + TEAR_OFF - 1.0)), "a wobble below the strip");
+    assert!(torn_off(strip, pos2(300.0, 75.0 + TEAR_OFF + 1.0)));
+    assert!(torn_off(strip, pos2(300.0, 40.0 - TEAR_OFF - 1.0)), "dragged up");
+}
+
+#[test]
+fn dragging_a_tab_off_the_strip_floats_its_document_at_the_pointer() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    let title = app.session.documents()[0].title();
+    let tab = tab_at(&shapes, &title);
+    // A short drag, and a drag along the strip, leave the tabs as they are.
+    drag(&mut app, &ctx, tab, tab + vec2(0.0, 35.0 + TEAR_OFF - 10.0 - tab.y));
+    drag(&mut app, &ctx, tab, tab + vec2(300.0, 0.0));
+    assert!(app.ui.floating.is_empty(), "the document stays under its tab");
+    assert_eq!(app.session.active_index(), Some(2), "a drag is not a click");
+    // Dragged well below the strip, it floats in a window under the pointer and becomes current.
+    let to = pos2(300.0, 200.0);
+    drag(&mut app, &ctx, tab, to);
+    assert_eq!(docked(&app), [1, 2]);
+    assert_eq!(app.session.active_index(), Some(0), "the torn-off document is the current one");
+    assert_eq!(app.ui.floating[0].place.min, to - GRAB, "its window opens under the pointer");
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    assert!(!tab_drawn(&shapes, &title), "it has left the strip");
+    let window = window_of(&app, &ctx, 0);
+    assert!(window.contains(to) && (window.min - (to - GRAB)).length() < 1.0, "the pointer is over its window: {window:?}");
+    assert!(body_of(&app, 0).contains_rect(app.canvas_rect.unwrap()), "its window holds the canvas");
+}
+
+#[test]
+fn a_window_dragged_by_its_title_bar_onto_the_strip_goes_back_under_the_tabs() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let title_bar = |app: &VectorcraftApp, i: usize| {
+        let (window, body) = (window_of(app, &ctx, i), body_of(app, i));
+        pos2(window.left() + 60.0, (window.top() + body.top()) / 2.0)
+    };
+    // Moved elsewhere, document 2's window (in front) stays a window.
+    let from = title_bar(&app, 2);
+    drag(&mut app, &ctx, from, from + vec2(40.0, 30.0));
+    assert_eq!(app.ui.floating.len(), 3, "a window moved off the strip still floats");
+    // Dropped on the strip, it goes back under its tab, current; the other windows stay.
+    let from = title_bar(&app, 2);
+    drag(&mut app, &ctx, from, pos2(600.0, 15.0));
+    assert_eq!(docked(&app), [2]);
+    assert_eq!(app.session.active_index(), Some(2));
+    assert_eq!(app.ui.floating.len(), 2);
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    assert!(tab_drawn(&shapes, &app.session.documents()[2].title()), "it has its tab again");
+    assert!(app.views[2].fitted, "it fits the canvas under the tabs");
+    let canvas = app.canvas_rect.unwrap();
+    assert!(canvas.top() >= 35.0 && canvas.width() > 1000.0, "the canvas under the tabs shows it: {canvas:?}");
+    // Torn off again, it opens where its tab is dropped, not where its last window was.
+    let to = pos2(200.0, 300.0);
+    let tab = tab_at(&shapes, &app.session.documents()[2].title());
+    drag(&mut app, &ctx, tab, to);
+    frame(&mut app, &ctx, vec![]);
+    let window = window_of(&app, &ctx, 2);
+    assert!((window.min - (to - GRAB)).length() < 1.0, "its new window is under the pointer: {window:?}");
+}
+
+#[test]
+fn after_touch_input_a_window_dragged_onto_the_strip_still_docks() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    // A touch makes egui move windows by a drag anywhere on them.
+    let touch = egui::Event::Touch {
+        device_id: egui::TouchDeviceId(1),
+        id: egui::TouchId(1),
+        phase: egui::TouchPhase::Start,
+        pos: pos2(1100.0, 700.0),
+        force: None,
+    };
+    frame(&mut app, &ctx, vec![touch]);
+    frame(&mut app, &ctx, vec![]);
+    let (window, body) = (window_of(&app, &ctx, 1), body_of(&app, 1));
+    let from = pos2(window.left() + 60.0, (window.top() + body.top()) / 2.0);
+    drag(&mut app, &ctx, from, pos2(600.0, 15.0));
+    assert_eq!(docked(&app), [1], "document 1 is back under the tabs");
+}
+
+#[test]
+fn a_document_floated_again_after_cascade_opens_where_it_is_asked_to() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.cascade", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.consolidateAllWindows", json!({"index": 1})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let at = pos2(200.0, 300.0);
+    app.run("window.arrange.floatInWindow", json!({"index": 1, "at": [at.x, at.y]})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let window = window_of(&app, &ctx, 1);
+    assert!((window.min - at).length() < 1.0, "its new window opens at {at:?}: {window:?}");
+}
+
+#[test]
+fn float_in_window_and_consolidate_take_a_document() {
+    let mut app = app_with(3);
+    assert_eq!(app.run("window.arrange.floatInWindow", json!({"index": 0, "at": [100, 120]})).unwrap(), json!({"floating": [0]}));
+    assert_eq!(app.session.active_index(), Some(0), "document 0 becomes the current one");
+    assert_eq!(app.ui.floating[0].place.min, pos2(100.0, 120.0));
+    app.run("window.arrange.floatInWindow", json!({"index": 1})).unwrap();
+    assert_eq!(app.run("window.arrange.floatInWindow", json!({"index": 3})), Err("no such document".to_string()));
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({"index": 1})).unwrap(), json!({"tiled": true, "floating": [0, 2]}));
+    assert_eq!(app.session.active_index(), Some(1));
+    assert_eq!(docked(&app), [1], "only document 1 goes back under the tabs");
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({"index": 7})), Err("no such document".to_string()));
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false, "floating": []}));
+}
+
+#[test]
+fn an_os_window_moves_by_its_tab_and_docks_on_the_strip() {
+    let host = native_host();
+    let ctx = egui::Context::default();
+    ctx.set_embed_viewports(false);
+    let mut app = app_with(2);
+    if !native(&app, &ctx) {
+        // Wayland: the windows are inside the main window.
+        return;
+    }
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    // The OS window's top-left corner is at (300, 300) on the screen; the main window's at (0, 0).
+    host.borrow_mut().origin = pos2(300.0, 300.0);
+    frame(&mut app, &ctx, vec![]);
+    let os_drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2| {
+        let steps = [vec![egui::Event::PointerMoved(from)], vec![button(from, true)]]
+            .into_iter()
+            .chain((1..=4).map(|k| vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / 4.0))]))
+            .chain([vec![button(to, false)], vec![]]);
+        for events in steps {
+            host.borrow_mut().events = events;
+            frame(app, &ctx, vec![]);
+        }
+    };
+    // The tab at the top of the window: dragged down and right, the window follows the pointer.
+    let tab = pos2(20.0, 15.0);
+    os_drag(&mut app, tab, tab + vec2(100.0, 50.0));
+    assert!(is_floating(&app, 1), "a window moved off the strip still floats");
+    let w = &app.ui.floating[0];
+    assert_eq!(w.screen.map(|s| s.0), Some(pos2(400.0, 350.0)), "the window moved with the pointer");
+    assert_eq!(w.place.min, pos2(400.0, 350.0), "in the main window's points");
+    // Released over the main window's tab strip (y 0 to 35 on the screen), it docks.
+    os_drag(&mut app, tab, pos2(20.0, -280.0));
+    assert!(app.ui.floating.is_empty(), "the document is back under the tabs");
+    assert_eq!(docked(&app), [0, 1]);
+    assert_eq!(app.session.active_index(), Some(1));
 }
 
 #[test]

@@ -5,11 +5,21 @@
 //! ([`crate::panel_docking`]). The current document's window holds the canvas
 //! ([`crate::canvas::show`]); each other window draws its document as a Tile pane does
 //! ([`crate::canvas::pane`]), and a press in it makes its document the current one.
+//!
+//! A document tab dragged off the tab strip floats its document in a window under the pointer,
+//! and a document window dragged onto the tab strip by its title bar (an OS window by the tab at
+//! its top) goes back under the tabs.
 
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
 
+/// How far above or below the tab strip, in points, a dragged document tab must be released to
+/// float its document.
+pub(crate) const TEAR_OFF: f32 = 24.0;
+/// Where a torn-off document's window opens: this far up and left of the pointer, so the pointer
+/// is over its title bar.
+pub(crate) const GRAB: egui::Vec2 = egui::vec2(40.0, 12.0);
 /// How far apart Cascade sets the windows, down and to the right, in points.
 pub(crate) const CASCADE_STEP: f32 = 30.0;
 /// How far the first cascaded window is from the document area's top-left corner, in points.
@@ -24,6 +34,9 @@ pub struct DocWindow {
     pub uid: u64,
     /// Where the window goes, in the main window's points.
     pub place: egui::Rect,
+    /// The window's own number ([`Windows::opened`]): a document floated again gets a new window,
+    /// which opens where it is asked to, not where its last window was.
+    number: u32,
     /// Counts the moves Cascade gives the window after it opened.
     generation: u32,
     /// The OS window's position on the screen when it opened or last moved, and the generation of
@@ -36,6 +49,9 @@ pub struct DocWindow {
     /// The size of the body its document was last fitted to, and the zoom and center that fit
     /// gave: a window resized while its view is still there fits its document again.
     fit: Option<Fit>,
+    /// While its OS window's tab is dragged: where the pointer is from the window's top-left
+    /// corner, on the screen.
+    grab: Option<egui::Vec2>,
 }
 
 /// [`DocWindow::fit`]: a body size, and a view's zoom and center.
@@ -43,7 +59,7 @@ type Fit = (egui::Vec2, f64, vectorcraft_geom::Point);
 
 impl DocWindow {
     fn new(uid: u64, place: egui::Rect) -> Self {
-        Self { uid, place, generation: 0, screen: None, focused: false, body: None, fit: None }
+        Self { uid, place, number: 0, generation: 0, screen: None, focused: false, body: None, fit: None, grab: None }
     }
 }
 
@@ -57,6 +73,15 @@ pub struct Windows {
     current: Option<u64>,
     /// While Presentation Mode is on: the floating documents (their uids) it has shown.
     presented: Option<Vec<u64>>,
+    /// The main window's tab strip in its last frame, while it was drawn.
+    pub(crate) strip: Option<egui::Rect>,
+    /// Counts the windows opened ([`DocWindow::number`]).
+    opened: u32,
+}
+
+/// Whether a document tab dragged from `strip` to `p` has left it far enough to float.
+pub(crate) fn torn_off(strip: egui::Rect, p: egui::Pos2) -> bool {
+    p.y > strip.bottom() + TEAR_OFF || p.y < strip.top() - TEAR_OFF
 }
 
 /// Whether document `i` is in a floating window.
@@ -125,7 +150,10 @@ fn float(app: &mut VectorcraftApp, docs: &[usize]) {
             continue;
         }
         let place = places.get(first + k).copied().unwrap_or(egui::Rect::from_min_size(egui::Pos2::ZERO, MIN_SIZE));
-        app.ui.floating.push(DocWindow::new(uid, place));
+        app.canvas.windows.opened = app.canvas.windows.opened.wrapping_add(1);
+        let mut w = DocWindow::new(uid, place);
+        w.number = app.canvas.windows.opened;
+        app.ui.floating.push(w);
         if let Some(v) = app.views.get_mut(*i) {
             v.fitted = false;
         }
@@ -140,13 +168,58 @@ fn floating_indices(app: &VectorcraftApp) -> Vec<usize> {
     app.ui.floating.iter().filter_map(|w| app.session.documents().iter().position(|d| d.uid == w.uid)).collect()
 }
 
-/// `window.arrange.floatInWindow`: the current document leaves the tab strip for a floating window
-/// of its own. A document already floating stays where it is. Returns `{floating}`.
-pub(crate) fn float_in_window(app: &mut VectorcraftApp) -> Result<Value, String> {
-    if let Some(i) = app.session.active_index().filter(|i| !is_floating(app, *i)) {
+/// The open document `p`'s `index` names: `Ok(None)` without one.
+fn document_param(app: &VectorcraftApp, p: &Value) -> Result<Option<usize>, String> {
+    match p.get("index") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .and_then(|i| usize::try_from(i).ok())
+            .filter(|i| *i < app.session.documents().len())
+            .map(Some)
+            .ok_or_else(|| "no such document".to_string()),
+    }
+}
+
+/// `window.arrange.floatInWindow`: the current document, or document `index`, leaves the tab strip
+/// for a floating window of its own, with its top-left corner at `at` (`[x, y]` in the main
+/// window's points) when given, else at the next cascade place. A document already floating stays
+/// where it is. Document `index` becomes the current one. Returns `{floating}`.
+pub(crate) fn float_in_window(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let index = document_param(app, p)?;
+    let at = p
+        .get("at")
+        .and_then(Value::as_array)
+        .and_then(|a| Some(egui::pos2(a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32)))
+        .filter(|at| at.is_finite());
+    if let Some(i) = index.or(app.session.active_index()).filter(|i| !is_floating(app, *i)) {
         float(app, &[i]);
+        if let (Some(at), Some(w)) = (at, app.ui.floating.last_mut()) {
+            w.place = egui::Rect::from_min_size(at, w.place.size());
+        }
+    }
+    if let Some(i) = index {
+        crate::chrome::show_document(app, i);
     }
     Ok(json!({ "floating": floating_indices(app) }))
+}
+
+/// `window.arrange.consolidateAllWindows` with an `index`: document `index`, floating or not,
+/// goes back under its tab, fitted there, and becomes the current one; the other windows and Tile
+/// stay as they are. Returns `{tiled, floating}`.
+pub(crate) fn dock(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let Some(i) = document_param(app, p)? else {
+        return Err("no such document".into());
+    };
+    if is_floating(app, i) {
+        let uid = app.session.documents().get(i).map(|d| d.uid);
+        app.ui.floating.retain(|w| Some(w.uid) != uid);
+        if let Some(v) = app.views.get_mut(i) {
+            v.fitted = false;
+        }
+    }
+    crate::chrome::show_document(app, i);
+    Ok(json!({ "tiled": app.ui.tiled, "floating": floating_indices(app) }))
 }
 
 /// `window.arrange.floatAllInWindows`: every document under the tab strip goes to a floating window
@@ -216,10 +289,10 @@ fn viewport_id(uid: u64) -> egui::ViewportId {
     egui::ViewportId::from_hash_of(("vectorcraft-document-window", uid))
 }
 
-/// The id of document window `w` inside the main window: a new one for each Cascade move, so egui
-/// opens it at its new place and size.
+/// The id of document window `w` inside the main window: a new one for each window and each
+/// Cascade move, so egui opens it at its new place and size.
 fn window_id(w: &DocWindow) -> egui::Id {
-    egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation))
+    egui::Id::unique(("vectorcraft-document-window", w.uid, w.number, w.generation))
 }
 
 /// What happened in a document window this frame.
@@ -229,6 +302,10 @@ struct Shown {
     close: bool,
     /// Its document asks to become the current one.
     activate: bool,
+    /// It is being dragged over the main window's tab strip.
+    over_strip: bool,
+    /// It was dropped on the main window's tab strip: its document goes back under the tabs.
+    dock: bool,
     /// Its OS window has the keyboard focus.
     focused: bool,
     /// Where it drew its document.
@@ -297,6 +374,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let blocked = crate::panel_docking::modal_open(app, ctx);
     let mut close = None;
     let mut activate = None;
+    let mut dock = None;
+    let mut over_strip = false;
     for w in app.ui.floating.clone() {
         let Some(i) = app.session.documents().iter().position(|d| d.uid == w.uid) else { continue };
         let shown = if native {
@@ -316,11 +395,21 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             win.body = shown.body;
             win.fit = shown.fit;
         }
+        over_strip |= shown.over_strip;
         if shown.close {
             close = Some(i);
+        } else if shown.dock {
+            dock = Some(i);
         } else if shown.activate && app.session.active_index() != Some(i) {
             activate = Some(i);
         }
+    }
+    // The tab strip a dragged window would go back under shows where it lands.
+    if let Some(strip) = app.canvas.windows.strip.filter(|_| over_strip) {
+        let t = crate::theme::Tokens::get(ctx);
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("vectorcraft-document-dock")));
+        painter.rect_filled(strip, 0.0, t.accent.gamma_multiply(0.12));
+        painter.rect_stroke(strip, 0.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
     }
     if let Some(i) = close {
         // The save prompt opens in the main window.
@@ -328,6 +417,13 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.status(e);
         }
         if native && app.ui.dialog.is_some() {
+            ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+        }
+    } else if let Some(i) = dock {
+        if let Err(e) = app.run("window.arrange.consolidateAllWindows", json!({ "index": i })) {
+            app.status(e);
+        }
+        if native {
             ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
         }
     } else if let Some(i) = activate {
@@ -367,7 +463,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (i, blocked): (usize, bool)
 }
 
 /// Document `i`'s window `w` as an OS window of its own, `blocked` by a modal or not; `raise`
-/// brings it to the front.
+/// brings it to the front. The document's tab is at the top of the window, above its body.
 fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (i, blocked): (usize, bool), raise: bool) -> Shown {
     let vid = viewport_id(w.uid);
     let origin = ctx.input(|inp| inp.viewport().inner_rect.map(|r| r.min)).filter(|p| p.is_finite()).unwrap_or(egui::Pos2::ZERO);
@@ -392,6 +488,8 @@ fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (i, b
     let builder =
         egui::ViewportBuilder::default().with_title(title).with_position(screen).with_inner_size(w.place.size()).with_min_inner_size(MIN_SIZE);
     let mut forwarded = (Vec::new(), None);
+    // The main window's tab strip on the screen.
+    let strip = app.canvas.windows.strip.map(|s| s.translate(origin.to_vec2()));
     let shown = ctx.show_viewport_immediate(vid, builder, |ui, _| {
         let (close, focused) = ui.input(|inp| (inp.viewport().close_requested(), inp.viewport().focused == Some(true)));
         if close {
@@ -399,7 +497,10 @@ fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (i, b
             // or a modal can keep the document open.
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
-        let (activate, rect, fit) = body(app, ui, (i, blocked), w.fit);
+        let tab = crate::chrome::window_tab(app, ui, i);
+        let (over_strip, dock) = if blocked { (false, false) } else { drag_tab(app, ui, (w.uid, origin), &tab, strip) };
+        let (pressed, rect, fit) = body(app, ui, (i, blocked), w.fit);
+        let activate = pressed || (!blocked && (tab.clicked() || tab.drag_started()));
         // Keys the window's widgets left over run the main window's shortcuts and tool keys, as a
         // floating panel's do.
         if !blocked && !ui.memory(|m| m.focused().is_some()) {
@@ -415,12 +516,51 @@ fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (i, b
                 (events, Some(inp.modifiers))
             });
         }
-        Shown { close, activate, focused, body: Some(rect), fit }
+        Shown { close, activate, over_strip, dock, focused, body: Some(rect), fit }
     });
     if !forwarded.0.is_empty() {
         crate::panel_docking::forward_keys(app, ctx, forwarded.0, forwarded.1);
     }
     shown
+}
+
+/// A drag of document window `uid`'s OS window by the `tab` at its top: the window follows the
+/// pointer, and its document goes back under the tabs when the tab is released over the main
+/// window's tab `strip` (on the screen). `origin` is the main window's top-left corner on the
+/// screen. → whether the pointer is over the strip, and whether the tab was released there.
+fn drag_tab(
+    app: &mut VectorcraftApp,
+    ui: &egui::Ui,
+    (uid, origin): (u64, egui::Pos2),
+    tab: &egui::Response,
+    strip: Option<egui::Rect>,
+) -> (bool, bool) {
+    let Some(win) = app.ui.floating.iter_mut().find(|x| x.uid == uid) else {
+        return (false, false);
+    };
+    if !tab.dragged() && !tab.drag_stopped() {
+        win.grab = None;
+        return (false, false);
+    }
+    let (inner, outer, pointer) = ui.input(|inp| (inp.viewport().inner_rect, inp.viewport().outer_rect, inp.pointer.latest_pos()));
+    let (Some(inner), Some(outer), Some(pointer)) = (inner, outer, pointer) else {
+        return (false, false);
+    };
+    let at = inner.min + pointer.to_vec2();
+    // The pointer stays where it pressed the tab, relative to the window.
+    let pressed = ui.input(|inp| inp.pointer.press_origin()).map_or(at, |p| inner.min + p.to_vec2());
+    let grab = *win.grab.get_or_insert(pressed - outer.min);
+    let over = strip.is_some_and(|s| s.contains(at));
+    if tab.drag_stopped() {
+        win.grab = None;
+        return (over, over);
+    }
+    let pos = at - grab;
+    if pos != outer.min {
+        win.screen = Some((pos, win.generation));
+        win.place = egui::Rect::from_min_size(pos - origin.to_vec2(), win.place.size());
+    }
+    (over, false)
 }
 
 /// Document `i`'s window `w` as a window inside the main window, `blocked` by a modal or not;
@@ -449,8 +589,15 @@ fn app_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (i, 
         });
     // A press on its title bar or edges, which brings the window to the front, also makes its
     // document the current one.
-    activate |= shown.is_some_and(|s| s.response.contains_pointer()) && ctx.input(|inp| inp.pointer.any_pressed());
-    Shown { close: !open, activate, focused: false, body: rect, fit }
+    activate |= shown.as_ref().is_some_and(|s| s.response.contains_pointer()) && ctx.input(|inp| inp.pointer.any_pressed());
+    // Moved by its title bar onto the main window's tab strip, it goes back under the tabs.
+    // egui moves a window by the drag of its title bar's own widget, or, where it moves windows by
+    // a drag anywhere (after touch input), by the drag of the window itself.
+    let mover = ctx.read_response(id.with("__title_click")).or_else(|| shown.as_ref().map(|s| s.response.clone()));
+    let moved = mover.map_or((false, false), |r| (r.dragged(), r.drag_stopped()));
+    let pointer = ctx.input(|inp| inp.pointer.latest_pos());
+    let over_strip = !blocked && (moved.0 || moved.1) && app.canvas.windows.strip.zip(pointer).is_some_and(|(strip, p)| strip.contains(p));
+    Shown { close: !open, activate, over_strip, dock: over_strip && moved.1, focused: false, body: rect, fit }
 }
 
 /// The host's rewrites of raw input ([`crate::services::Services::native_input_hook`]) for the

@@ -433,6 +433,7 @@ impl VectorcraftApp {
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
+        self.canvas.windows.strip = None;
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }

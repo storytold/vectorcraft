@@ -3648,7 +3648,12 @@ it is a window inside the app's window, so `ui.click`, `ui.drag` and `ui.screens
 document's window holds the canvas, and a press in another document's window makes its document the current one.
 `window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one document under its tab
 again, floating ones included, and returns `{tiled: false, floating: []}`; Tile brings floating documents back into its
-grid. The arrangement is not saved. `ui.inspect` reports `tiled`, `panes` (each pane's `document` index, `rect` and
+grid. `window.arrange.floatInWindow {index, at: [x, y]}` floats document `index`, makes it the current one and puts its
+window's top-left corner at `at` in the main window's points, as dragging its tab more than 24 pt above or below the tab
+strip does. `window.arrange.consolidateAllWindows {index}` brings only document `index` back under its tab and makes it
+the current one, as dragging its window by the title bar (an OS window by the tab at its top) onto the tab strip does;
+it returns `{tiled, floating}`. An `index` that names no open document fails with "no such document". The arrangement
+is not saved. `ui.inspect` reports `tiled`, `panes` (each pane's `document` index, `rect` and
 whether it is `active`) and `floating`; canvas coordinates map to the current document's pane or window
 (`canvasRect`), in that window's coordinates while it floats.
 
