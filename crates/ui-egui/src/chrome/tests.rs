@@ -1111,9 +1111,19 @@ fn the_zoom_hint_follows_animated_zoom() {
 fn title_test_app(custom_titlebar: bool) -> crate::VectorcraftApp {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.custom_titlebar = custom_titlebar;
+    app.desktop_frame = !custom_titlebar;
     // The preference that makes the shell launch without its own title bar.
     app.run("prefs.set", json!({"key": "systemTitleBar", "value": !custom_titlebar})).unwrap();
     app
+}
+
+/// How many brand marks one frame of the app bar paints.
+fn brand_marks(app: &mut crate::VectorcraftApp) -> usize {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::app_bar(app, ui));
+    out.textures_delta.clear();
+    out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Mesh(m) if m.texture_id == crate::brand::texture_id(&ctx))).count()
 }
 
 #[test]
@@ -1121,6 +1131,31 @@ fn without_the_preference_the_mark_stays() {
     // The default (e.g. the web build): no custom bar, no preference.
     let app = crate::VectorcraftApp::new(Session::new(), Default::default());
     assert!(!super::system_title_bar(&app));
+    // An embedder without a window of its own keeps the mark with the preference on too.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+    assert_eq!(brand_marks(&mut app), 1);
+}
+
+#[test]
+fn a_desktop_frame_hides_the_mark_whatever_the_preference_says() {
+    // Linux on a desktop that draws the frame (KDE, X11): the window has the desktop's title bar
+    // with System Title Bar off.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.desktop_frame = true;
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": false})).unwrap();
+    let hidden = !cfg!(target_os = "macos");
+    assert_eq!(super::system_title_bar(&app), hidden);
+    assert_eq!(brand_marks(&mut app), if hidden { 0 } else { 1 });
+    // The preference applies at the next start: changing it now leaves the window's frame, and the mark, as they are.
+    let mut app = title_test_app(false);
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": false})).unwrap();
+    assert_eq!(super::system_title_bar(&app), hidden);
+    let mut app = title_test_app(true);
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+    assert_eq!(brand_marks(&mut app), 1);
 }
 
 #[test]

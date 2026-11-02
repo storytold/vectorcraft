@@ -184,6 +184,10 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
+    /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
+    /// without a window of their own.
+    pub desktop_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,

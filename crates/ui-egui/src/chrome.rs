@@ -128,13 +128,15 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// Whether the window shows the system's title bar instead of the app drawing its own: Windows
-/// and Linux with Preferences › User Interface › System Title Bar. macOS always has system
-/// decorations, but keeps the in-app brand mark, so it never counts as system mode here; nor
-/// does the web build (the browser tab has no document title), nor an embedder that never
-/// turned the preference on.
+/// Whether the window shows the system's title bar instead of the app drawing its own
+/// ([`VectorcraftApp::desktop_frame`]): Windows with Preferences › User Interface › System Title
+/// Bar, and Linux whenever the desktop draws the frame, with or without the preference. The
+/// preference is read when the app starts, so changing it later does not change this. macOS
+/// always has system decorations, but keeps the in-app brand mark, so it never counts as system
+/// mode here; nor does the web build (the browser tab has no document title), nor an embedder
+/// without a window of its own.
 pub fn system_title_bar(app: &VectorcraftApp) -> bool {
-    !app.custom_titlebar && app.session.prefs.system_title_bar && !cfg!(any(target_os = "macos", target_arch = "wasm32"))
+    app.desktop_frame && !app.custom_titlebar && !cfg!(any(target_os = "macos", target_arch = "wasm32"))
 }
 
 /// The OS window title: the active document's name suffixed with the app name (a `*` prefix
