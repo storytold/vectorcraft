@@ -3,7 +3,9 @@
 //!
 //! Fields: `set` (the index of the set renamed, or of the action's set; none for a new set),
 //! `action` (the index of the action renamed, in `set`; none for a set) and `name`. OK adds the set
-//! and makes it the current one, renames the set, or renames the action (`ui.action.rename`).
+//! and makes it the current one, renames the set, or renames the action (`ui.action.rename`). A
+//! `set` or `action` field that is not the index of a set or action is an error, OK then changes
+//! no set or action, and the dialog stays open.
 
 use serde_json::{Value, json};
 
@@ -61,19 +63,15 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if name.is_empty() {
         return Ok(Value::Null);
     }
-    match (d.fields.get("set").and_then(Value::as_u64), d.fields.get("action").and_then(Value::as_u64)) {
-        (Some(set), Some(action)) => {
-            app.run(crate::panels::actions::RENAME_ACTION, json!({"set": set, "action": action, "name": name}))?;
-        }
-        (Some(set), None) => {
-            if let Some(s) = app.ui.action_sets.get_mut(set as usize) {
-                s.name = name;
-            }
-        }
-        (None, _) => {
-            app.ui.action_sets.push(crate::panels::actions::ActionSet::new(name, vec![]));
-            app.ui.action_set = Some(app.ui.action_sets.len() - 1);
-        }
+    // The fields the dialog holds choose what OK does, as they choose its heading.
+    if d.fields.contains_key("action") {
+        app.run(crate::panels::actions::RENAME_ACTION, json!({"set": d.fields.get("set"), "action": d.fields.get("action"), "name": name}))?;
+    } else if let Some(set) = d.fields.get("set") {
+        let s = set.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| app.ui.action_sets.get_mut(i)).ok_or("no such action set")?;
+        s.name = name;
+    } else {
+        app.ui.action_sets.push(crate::panels::actions::ActionSet::new(name, vec![]));
+        app.ui.action_set = Some(app.ui.action_sets.len() - 1);
     }
     app.ui.dialog = None;
     Ok(Value::Null)
