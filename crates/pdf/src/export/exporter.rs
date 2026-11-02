@@ -45,6 +45,7 @@ impl<'a> Exporter<'a> {
             layers: false,
             layer_index: crate::forms::pdf_layers(doc).iter().enumerate().map(|(i, l)| (address(l.node), i)).collect(),
             in_layer: 0,
+            paper: Rect::ZERO,
             symbol_nodes: 0,
             overprint: false,
             overprinted: false,
