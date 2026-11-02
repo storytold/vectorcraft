@@ -2360,7 +2360,8 @@ characters as its place relative to the Characters row says. To stroke
 some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, align?,
 dash?, dashOffset?, alignDashes?}}`. `text.setStyle {ids?, stroke?, strokeWidth?, start?, end?}` sets the stroke color
 and weight of the characters of each object given (without `start` and `end`: all of its text), with its other keys in
-one undo step; `strokeWidth` is in document points, as `stroke.set` gives the weight of scaled type.
+one undo step; `strokeWidth` is in document points, as `stroke.set` gives the weight of scaled type. A `stroke` color
+without `strokeWidth` gives characters that have no stroke weight 1 pt, as `paint.setStroke` does.
 `align: "inside"|"outside"` keeps the characters' stroke on that side of the
 glyph outlines, drawn at twice the weight and clipped, while the type stays editable (beyond Illustrator); SVG export
 writes the text live and that stroke as glyph outlines over it. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first

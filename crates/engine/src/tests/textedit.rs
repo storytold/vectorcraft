@@ -175,6 +175,23 @@ fn set_style_sets_the_character_stroke() {
     assert!(obj(&s, id).runs.iter().all(|r| (r.style.stroke_width - 1.0).abs() < 1e-9), "{:?}", paints(&s));
 }
 
+/// `text.setStyle {stroke}` without `strokeWidth` gives type with no stroke weight 1 pt, as
+/// `paint.setStroke` does, and keeps a weight the type already has.
+#[test]
+fn set_style_stroke_without_a_weight_draws_1_pt() {
+    use vectorcraft_color::Color;
+    let mut s = session();
+    let id = text(&mut s, "Hello");
+    assert_eq!(obj(&s, id).runs[0].style.stroke_width, 0.0);
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#ff0000"})).unwrap();
+    let st = &obj(&s, id).runs[0].style;
+    assert_eq!((st.stroke.color(), st.stroke_width), (Some(Color::rgb8(255, 0, 0)), 1.0));
+    assert!(st.has_stroke());
+    s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": 3})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#0000ff"})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.stroke_width, 3.0, "an existing weight is kept");
+}
+
 #[test]
 fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let mut s = session();
