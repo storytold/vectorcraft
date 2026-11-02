@@ -145,19 +145,36 @@ impl Default for TraceParams {
     }
 }
 
+/// Paths 100: the tightest fit, the farthest (px) a fitted curve may stray from the edge's points.
+const PATHS_TIGHTEST: f64 = 0.08;
+/// Paths 0: the loosest fit (px).
+const PATHS_LOOSEST: f64 = 0.495;
+/// How the tolerance runs between them: `(1 − Paths/100)` to this power (0.31 px at Paths 50).
+const PATHS_POWER: f64 = 0.85;
+/// Corners 0: the turn (degrees) a bend must make to be a corner (only bends sharper than a
+/// right angle).
+const CORNERS_FEWEST: f64 = 99.2;
+/// Corners 100: the smallest turn that makes a corner.
+const CORNERS_MOST: f64 = 35.0;
+/// How the angle runs between them: `(Corners/100)` to this power (57.9° at Corners 75).
+const CORNERS_POWER: f64 = 1.53;
+
 impl TraceParams {
-    /// How outlines are fitted: Paths sets how closely the curves follow the edge (0.08 px at 100,
-    /// 0.33 px at 50, 0.78 px at 0), Corners the turn that makes a corner (35° at 100, 90° at 0).
-    /// Straight edges are always lines; Snap Curves To Lines also straightens slightly curved ones,
-    /// makes parts of circles true arcs, and makes lines within 2.5° of level or upright exactly so.
+    /// How outlines are fitted. Paths sets how far the curves may stray from the edge: higher is
+    /// tighter, from 0.495 px at 0 through 0.31 px at 50 to 0.08 px at 100, the tightest fit
+    /// (hard, not anti-aliased, edges 2.5 times that). Corners sets the turn that makes a corner:
+    /// higher gives more corners, from 99.2° at 0 (only bends sharper than a right angle) through
+    /// 57.9° at 75 to 35° at 100. Both fall strictly as the value rises. Straight edges are always
+    /// lines; Snap Curves To Lines also straightens slightly curved ones, makes parts of circles
+    /// true arcs, and makes lines within 2.5° of level or upright exactly so.
     pub(crate) fn outline_style(&self) -> logo::Style {
         // Parameters come from users and agents: a NaN or infinity must not reach the geometry.
         let unit = |v: f64, default: f64| if v.is_finite() { (v / 100.0).clamp(0.0, 1.0) } else { default };
         let snap = self.snap_curves_to_lines;
         logo::Style {
             step: 0.25,
-            tol: 0.08 + 0.7 * (1.0 - unit(self.paths, 0.5)).powf(1.5),
-            corner_deg: 90.0 - 55.0 * unit(self.corners, 0.75),
+            tol: PATHS_TIGHTEST + (PATHS_LOOSEST - PATHS_TIGHTEST) * (1.0 - unit(self.paths, 0.5)).powf(PATHS_POWER),
+            corner_deg: CORNERS_FEWEST - (CORNERS_FEWEST - CORNERS_MOST) * unit(self.corners, 0.75).powf(CORNERS_POWER),
             snap: true,
             arcs: snap,
             line_tol: if snap { 0.5 } else { 0.2 },

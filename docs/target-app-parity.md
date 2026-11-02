@@ -19,6 +19,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Image Trace: independent Paths/Corners mappings reconciled with current main and #2588; numeric defaults unchanged but default output changes. No external-output parity claim; owner review pending. Scores and hours unchanged. |
 | 2026-10-31 | minor | Object › Path › Smooth smooths a path along its length before refitting it, so Auto-Smooth takes a shaky line to one smooth curve instead of leaving its jags, and with anchor points direct-selected it smooths only that section; scores unchanged. |
 | 2026-10-31 | minor | New Document: More Settings has the Save Preset button beside the name too, saving its settings (artboard layout included) as a preset (#4893); scores unchanged. |
 | 2026-10-31 | minor | Object › Rasterize in a CMYK document with its CMYK colour model makes a CMYK image of the art's ink amounts (as CMYK exports draw them), so the Properties panel says CMYK and CMYK exports keep its inks; a transparent background becomes the image's opacity mask (#4882); scores unchanged. |

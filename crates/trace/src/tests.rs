@@ -1856,6 +1856,272 @@ fn grayscale_gradients_are_grey() {
     assert!(res.palette.iter().all(|&c| grey(c)), "{:?}", res.palette);
 }
 
+// ---- Paths, Corners and Noise as the controls are documented (see docs/image-trace-adjustments.md) ----
+
+/// A shape drawn in code with its true outline: `r(θ)` around `(cx, cy)`, rendered with 8 × 8
+/// samples a pixel (anti-aliased) or one (hard-edged), black on white.
+fn polar_shape(size: u32, cx: f64, cy: f64, r: &dyn Fn(f64) -> f64, aa: bool) -> (Raster, Vec<Point>) {
+    let n = if aa { 8 } else { 1 };
+    let img = Raster::from_fn(size, size, |x, y| {
+        let mut k = 0;
+        for i in 0..n {
+            for j in 0..n {
+                let (dx, dy) = (f64::from(x) + (f64::from(i) + 0.5) / f64::from(n) - cx, f64::from(y) + (f64::from(j) + 0.5) / f64::from(n) - cy);
+                if dx.hypot(dy) <= r(dy.atan2(dx)) {
+                    k += 1;
+                }
+            }
+        }
+        let v = 255 - (255 * k / (n * n)) as u8;
+        [v, v, v, 255]
+    });
+    let outline = (0..2000)
+        .map(|i| {
+            let t = f64::from(i) / 2000.0 * std::f64::consts::TAU - std::f64::consts::PI;
+            Point::new(cx + r(t) * t.cos(), cy + r(t) * t.sin())
+        })
+        .collect();
+    (img, outline)
+}
+
+/// A shape's radius at each angle.
+type Radius = Box<dyn Fn(f64) -> f64>;
+
+/// The code-drawn shapes the Paths tests sweep: a disc, a wavy blob and a bumpy one, soft and hard.
+fn paths_shapes() -> Vec<(String, Raster, Vec<Point>)> {
+    let mut out = vec![];
+    for aa in [true, false] {
+        let shapes: [(&str, Radius); 3] = [
+            ("disc", Box::new(|_| 15.0)),
+            ("wavy", Box::new(|t: f64| 14.0 * (1.0 + 0.18 * (5.0 * t).sin()))),
+            ("bumpy", Box::new(|t: f64| 14.0 * (1.0 + 0.08 * (9.0 * t).sin() + 0.05 * (3.0 * t).cos()))),
+        ];
+        for (name, r) in shapes {
+            let (img, outline) = polar_shape(40, 20.3, 19.8, &*r, aa);
+            out.push((format!("{name} ({})", if aa { "anti-aliased" } else { "hard" }), img, outline));
+        }
+    }
+    out
+}
+
+fn sweep_params(paths: f64, corners: f64) -> TraceParams {
+    TraceParams { paths, corners, noise: 4, ..bw() }
+}
+
+/// Points along every curve of a trace, `k` a segment.
+fn curve_points(res: &TraceResult, k: usize) -> Vec<Point> {
+    use vectorcraft_geom::ParamCurve;
+    let mut pts = vec![];
+    for p in &res.paths {
+        for sp in &p.path.subpaths {
+            for i in 0..sp.segment_count() {
+                let seg = sp.segment(i);
+                pts.extend((0..k).map(|j| seg.eval(j as f64 / k as f64)));
+            }
+        }
+    }
+    pts
+}
+
+fn segment_count(res: &TraceResult) -> usize {
+    res.paths.iter().flat_map(|p| &p.path.subpaths).map(|sp| sp.segment_count()).sum()
+}
+
+/// The farthest the traced curves stray from the true outline, both ways (px).
+fn max_deviation(res: &TraceResult, outline: &[Point]) -> f64 {
+    let near = |set: &[Point], p: Point| {
+        let n = set.len();
+        (0..n).map(|i| seg_distance(p, set[i], set[(i + 1) % n])).fold(f64::MAX, f64::min)
+    };
+    let traced = curve_points(res, 24);
+    let out = traced.iter().map(|&p| near(outline, p)).fold(0.0, f64::max);
+    let back = outline.iter().step_by(4).map(|&p| near(&traced, p)).fold(0.0, f64::max);
+    out.max(back)
+}
+
+fn seg_distance(p: Point, a: Point, b: Point) -> f64 {
+    let ab = b - a;
+    let l2 = ab.hypot2();
+    let t = if l2 < 1e-18 { 0.0 } else { ((p - a).dot(ab) / l2).clamp(0.0, 1.0) };
+    p.distance(a + ab * t)
+}
+
+#[test]
+fn paths_and_corners_map_strictly_and_paths_100_is_the_tightest_fit() {
+    let style = |paths: f64, corners: f64| TraceParams { paths, corners, ..TraceParams::default() }.outline_style();
+    for v in 0..100 {
+        let (lo, hi) = (f64::from(v), f64::from(v + 1));
+        assert!(style(hi, 75.0).tol < style(lo, 75.0).tol, "Paths {lo} -> {hi}: the fit must get tighter");
+        assert!(style(50.0, hi).corner_deg < style(50.0, lo).corner_deg, "Corners {lo} -> {hi}: more bends must count as corners");
+        // Each control acts alone.
+        assert_eq!(style(lo, 0.0).tol, style(lo, 100.0).tol);
+        assert_eq!(style(0.0, lo).corner_deg, style(100.0, lo).corner_deg);
+    }
+    // The ends: Paths 100 is the tightest fit the tracer makes (0.08 px, as tight as it has ever
+    // been), Paths 0 the loosest; Corners 100 makes the most corners, Corners 0 the fewest.
+    assert_eq!(style(100.0, 75.0).tol, 0.08);
+    assert!((style(0.0, 75.0).tol - 0.495).abs() < 1e-12);
+    assert_eq!(style(50.0, 100.0).corner_deg, 35.0);
+    assert!((style(50.0, 0.0).corner_deg - 99.2).abs() < 1e-12);
+    // Out-of-range values are the ends; a NaN is the default.
+    assert_eq!(style(250.0, 75.0).tol, style(100.0, 75.0).tol);
+    assert_eq!(style(-5.0, 75.0).tol, style(0.0, 75.0).tol);
+    let (nan, default) = (style(f64::NAN, f64::NAN), style(50.0, 75.0));
+    assert_eq!((nan.tol, nan.corner_deg), (default.tol, default.corner_deg));
+}
+
+#[test]
+fn paths_100_gives_the_most_anchors_and_paths_0_the_fewest() {
+    for (name, img, _) in paths_shapes() {
+        let counts: Vec<(usize, usize)> = (0..=100)
+            .map(|v| {
+                let res = trace(&img, &sweep_params(f64::from(v), 75.0));
+                (res.paths.iter().map(|p| p.path.anchor_count()).sum(), segment_count(&res))
+            })
+            .collect();
+        let (first, last) = (counts[0], counts[100]);
+        for (v, &c) in counts.iter().enumerate() {
+            assert!(c.0 <= last.0 && c.1 <= last.1, "{name}: Paths {v} gives more anchors/segments than Paths 100: {c:?} > {last:?}");
+        }
+        assert!(first.1 <= last.1, "{name}: {first:?} at Paths 0, {last:?} at 100");
+    }
+}
+
+/// Where the anchor count does rise with every step of Paths. (Not on every shape: the curve
+/// fitter is greedy, and on the anti-aliased wavy blob a looser fit can split a long span where
+/// a tighter one does not: 17 segments at Paths 0, 11 at Paths 50, 22 at Paths 100.)
+#[test]
+fn a_higher_paths_never_gives_fewer_anchors_on_these_shapes() {
+    for (name, img, _) in paths_shapes().into_iter().filter(|(n, ..)| n.starts_with("disc") || n == "bumpy (hard)") {
+        let mut last = (0, 0);
+        for v in 0..=100 {
+            let res = trace(&img, &sweep_params(f64::from(v), 75.0));
+            let now = (res.paths.iter().map(|p| p.path.anchor_count()).sum(), segment_count(&res));
+            assert!(now.0 >= last.0 && now.1 >= last.1, "{name}, Paths {} -> {v}: anchors/segments {last:?} -> {now:?}", v.max(1) - 1);
+            last = now;
+        }
+    }
+}
+
+/// On anti-aliased art the pixel shape is the drawn outline to a small fraction of a pixel: no
+/// Paths value fits it more closely than Paths 100, and the loosest fit stays near Paths 0's
+/// tolerance of it.
+#[test]
+fn paths_100_strays_least_from_the_drawn_outline() {
+    for (name, img, outline) in paths_shapes().into_iter().filter(|(n, ..)| n.contains("anti-aliased")) {
+        let devs: Vec<f64> = (0..=100).map(|v| max_deviation(&trace(&img, &sweep_params(f64::from(v), 75.0)), &outline)).collect();
+        let tightest = devs[100];
+        for (v, &d) in devs.iter().enumerate() {
+            assert!(d >= tightest - 1e-9, "{name}: Paths {v} strays {d:.3} px, Paths 100 {tightest:.3} px");
+        }
+        let means: Vec<f64> = [0, 50, 100].iter().map(|&v| mean_deviation(&trace(&img, &sweep_params(f64::from(v), 75.0)), &outline)).collect();
+        for w in means.windows(2) {
+            assert!(w[1] <= w[0] + 1e-9, "{name}: mean deviation at Paths 0/50/100: {means:?}");
+        }
+    }
+}
+
+/// Regular polygons (3 to 12 sides: turns of 120° down to 30°), anti-aliased, in a row.
+fn polygons() -> Raster {
+    let sides = [3u32, 4, 5, 6, 8, 12];
+    Raster::from_fn(48 * sides.len() as u32, 48, |x, y| {
+        let Some(&n) = sides.get((x / 48) as usize) else { return WHITE };
+        let (cx, cy) = (f64::from(x / 48 * 48) + 24.2, 23.9);
+        let mut k = 0;
+        for i in 0..8 {
+            for j in 0..8 {
+                let (px, py) = (f64::from(x) + (f64::from(i) + 0.5) / 8.0 - cx, f64::from(y) + (f64::from(j) + 0.5) / 8.0 - cy);
+                // Inside every edge of a polygon of circumradius 19 turned by 0.2 rad.
+                let apothem = 19.0 * (std::f64::consts::PI / f64::from(n)).cos();
+                let inside = (0..n).all(|e| {
+                    let a = 0.2 + (f64::from(e) + 0.5) * std::f64::consts::TAU / f64::from(n);
+                    px * a.cos() + py * a.sin() <= apothem
+                });
+                k += u32::from(inside);
+            }
+        }
+        let v = 255 - (255 * k / 64) as u8;
+        [v, v, v, 255]
+    })
+}
+
+fn corner_points(res: &TraceResult) -> usize {
+    res.paths.iter().flat_map(|p| &p.path.subpaths).flat_map(|sp| &sp.anchors).filter(|a| a.kind == vectorcraft_geom::AnchorKind::Corner).count()
+}
+
+#[test]
+fn a_higher_corners_never_gives_fewer_corner_points() {
+    let img = polygons();
+    for paths in [25.0, 50.0, 75.0] {
+        let mut last = 0;
+        let mut counts = vec![];
+        for v in 0..=100 {
+            let now = corner_points(&trace(&img, &sweep_params(paths, f64::from(v))));
+            assert!(now >= last, "Paths {paths}, Corners {} -> {v}: corner points {last} -> {now}", v - 1);
+            last = now;
+            counts.push(now);
+        }
+        // And the control does something: Corners 100 keeps every polygon's corners, Corners 0
+        // rounds the gentle ones.
+        assert!(counts[100] > counts[0], "Paths {paths}: {counts:?}");
+    }
+}
+
+/// Black specks on white, apart: bars `1 × a` and squares, areas 1 to 120 pixels.
+fn specks() -> (Raster, Vec<usize>) {
+    let mut shapes: Vec<(u32, u32)> = vec![];
+    for a in 1..=40u32 {
+        shapes.push((a, 1)); // a bar of area a
+    }
+    for s in 2..=10u32 {
+        shapes.push((s, s)); // squares of area 4 to 100
+    }
+    for (w, h) in [(11, 10), (12, 10), (10, 3), (25, 4), (30, 3), (7, 7), (8, 13)] {
+        shapes.push((w, h));
+    }
+    let cell = 44;
+    let cols = 10;
+    let rows = shapes.len().div_ceil(cols) as u32;
+    let img = Raster::from_fn(cols as u32 * cell, rows * cell, |x, y| {
+        let i = (y / cell) as usize * cols + (x / cell) as usize;
+        let (lx, ly) = (x % cell, y % cell);
+        match shapes.get(i) {
+            Some(&(w, h)) if (2..2 + w).contains(&lx) && (2..2 + h).contains(&ly) => BLACK,
+            _ => WHITE,
+        }
+    });
+    (img, shapes.iter().map(|&(w, h)| (w * h) as usize).collect())
+}
+
+#[test]
+fn noise_is_an_area_in_pixels_and_more_noise_never_keeps_more() {
+    let (img, areas) = specks();
+    let mut last = usize::MAX;
+    for noise in 0..=120u32 {
+        let res = trace(&img, &TraceParams { noise, ..bw() });
+        // A region is kept when its area is at least Noise (Noise 0 and 1 keep everything),
+        // whatever its shape: a 1 × 16 bar and a 4 × 4 block go at the same Noise.
+        let mut kept: Vec<usize> = res.paths.iter().map(|p| p.pixels).collect();
+        kept.sort_unstable();
+        let mut want: Vec<usize> = areas.iter().copied().filter(|&a| a >= noise.max(1) as usize).collect();
+        want.sort_unstable();
+        assert_eq!(kept, want, "Noise {noise}");
+        assert!(kept.len() <= last, "Noise {noise}: more regions kept than at {}", noise - 1);
+        last = kept.len();
+    }
+}
+
+fn mean_deviation(res: &TraceResult, outline: &[Point]) -> f64 {
+    let near = |set: &[Point], p: Point| {
+        let n = set.len();
+        (0..n).map(|i| seg_distance(p, set[i], set[(i + 1) % n])).fold(f64::MAX, f64::min)
+    };
+    let traced = curve_points(res, 24);
+    let out: f64 = traced.iter().map(|&p| near(outline, p)).sum::<f64>() / traced.len().max(1) as f64;
+    let back: f64 = outline.iter().step_by(4).map(|&p| near(&traced, p)).sum::<f64>() / (outline.len() / 4).max(1) as f64;
+    (out + back) / 2.0
+}
+
 /// `w × h` art of `colours`, anti-aliased: each pixel the mean of the 8 × 8 samples `at` colours.
 fn soft_colours(w: u32, h: u32, colours: &[[u8; 3]], at: impl Fn(f64, f64) -> usize) -> Raster {
     Raster::from_fn(w, h, |x, y| {
@@ -2633,4 +2899,26 @@ fn noise_keeps_a_kept_rare_colours_regions_but_not_its_specks() {
     quantize::denoise_keeping(&mut b, w, h, 16, &[]);
     assert_eq!(a, b);
     assert!(a.iter().all(|&v| v == 0));
+}
+
+#[test]
+#[ignore = "report the generated Paths sweep; run with --ignored --nocapture"]
+fn paths_controls_measurement_report() {
+    for aa in [true, false] {
+        for paths in [0.0, 25.0, 50.0, 75.0, 100.0] {
+            let mut distance = 0.0;
+            let mut segments = 0;
+            let mut anchors = 0;
+            for (name, img, outline) in paths_shapes().into_iter().filter(|(name, ..)| name.contains("anti-aliased") == aa) {
+                let result = trace(&img, &sweep_params(paths, 75.0));
+                distance += mean_deviation(&result, &outline);
+                segments += segment_count(&result);
+                anchors += result.paths.iter().map(|path| path.path.anchor_count()).sum::<usize>();
+                assert!(!result.paths.is_empty(), "{name}");
+            }
+            println!("CONTROL_REPORT,{},{paths},{:.6},{segments},{anchors}", if aa { "aa" } else { "hard" }, distance / 3.0);
+        }
+    }
+    let result = trace(&polygons(), &TraceParams::default());
+    println!("DEFAULT_REPORT,{},{},{}", result.paths.len(), segment_count(&result), corner_points(&result));
 }

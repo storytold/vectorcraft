@@ -1,5 +1,7 @@
 # Image Trace quality
 
+> **Update 2026-11-01:** Paths/Corners reconciled with current main; generated-input sweeps and before/after comparison rerun.
+
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Auto Color keeps rare but distinct colours; earlier: Gradients: grown over noise and soft rims)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: large images trace with a warning; anchor limit raised to 8,000,000; earlier: Gradients: grown over noise and soft rims)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Raster::new returns an error for a buffer of the wrong length; earlier: Gradients: grown over noise and soft rims)
@@ -15,6 +17,72 @@ What Image Trace (`crates/trace`) makes of images whose right answer is known, m
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
 with any other product except the open tracer named under [Yardstick](#4-yardstick).
 
+
+## Paths and Corners as documented
+
+Remeasured 2026-11-01 against main `05d5f99fd`, including the current fitter. The older PR's
+12-image and preset tables are superseded; they were not measurements of this main revision.
+The control values are independent VectorCraft choices informed by the public
+[panel documentation](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html),
+not verified mappings from another application's settings. No Adobe application or output was
+observed for this follow-up. Numeric defaults and preset percentages stay the same, but the
+new mapping changes traces made at those settings.
+
+`paths_controls_measurement_report` uses the same six generated 40 × 40 inputs as the sweep
+regressions: disc, wavy blob and bumpy blob, each at 8 × 8 samples per pixel and hard-edged.
+Black and White, Noise 4, Corners 75, Snap off. Mean is the bidirectional distance to the known
+outline, averaged over three images; segments are summed over those images. Both runs use the
+same native optimized test profile (workspace opt-level 1, debug info off); no timing claim.
+
+| Paths | anti-aliased mean px, before → after | segments | hard-edged mean px, before → after | segments |
+|--:|--:|--:|--:|--:|
+| 0 | 0.083396 → 0.067737 | 46 → 42 | 0.490835 → 0.363445 | 21 → 22 |
+| 25 | 0.068117 → 0.068233 | 43 → 42 | 0.365806 → 0.352153 | 22 → 23 |
+| 50 | 0.066932 → 0.066375 | 36 → 34 | 0.340931 → 0.323518 | 25 → 25 |
+| 75 | 0.054731 → 0.058080 | 36 → 36 | 0.285997 → 0.299467 | 29 → 25 |
+| 100 | 0.047165 → 0.047165 | 49 → 49 | 0.241362 → 0.241362 | 45 → 45 |
+
+Paths 75 is looser on these inputs; Paths 100 is unchanged. The tolerance decreases strictly,
+but greedy fitting does not guarantee monotone segment counts or outline distance at every
+slider step: even this small table shows that limitation. The regular-polygon Default probe
+changes from 92 to 94 segments (seven traced components, 40 corner points in both runs).
+These probes demonstrate changed default output; they do not establish universal improvement.
+
+Reproduce the report and sweeps (baseline: main plus the same measurement-only test helpers):
+
+```text
+cargo test -p vectorcraft-trace --lib
+cargo test -p vectorcraft-trace --lib paths_controls_measurement_report -- --ignored --nocapture
+```
+
+Use separate build directories or clean the tracer package between checkouts; a shared build
+cache must not substitute a previously compiled binary for either comparison.
+
+### Preset accuracy against current main
+
+The full generated-input accuracy harness also passed on both revisions (all sizes and clean,
+aliased, blurred, noisy and scanned variants). Cost sizes were disabled with `TRACE_QUALITY_MP=`;
+these are accuracy measurements, not release-performance or browser measurements. This comparison
+retains main's Limited photo palettes; it does not combine the separate #2699 proposal.
+
+| Preset | edge ΔE, before → after | off mean px | off max px | anchors | kinks |
+|:--|--:|--:|--:|--:|--:|
+| Default | 10.06 → 9.89 | 0.091 → 0.086 | 1.02 → 1.02 | 17 → 18 | 0.4 → 0.3 |
+| 6 Colors | 5.06 → 5.11 | 0.143 → 0.146 | 1.34 → 1.31 | 55 → 50 | 6.4 → 5.6 |
+| 16 Colors | 4.97 → 5.07 | 0.145 → 0.148 | 1.31 → 1.34 | 66 → 62 | 11.0 → 6.4 |
+| Black and White Logo | 9.46 → 9.52 | 0.064 → 0.066 | 1.02 → 1.02 | 27 → 23 | 0.3 → 0.3 |
+| Silhouettes | 19.29 → 19.08 | 0.523 → 0.517 | 2.13 → 2.13 | 13 → 15 | 0.4 → 0.2 |
+| Technical Drawing | 10.88 → 10.89 | 0.126 → 0.127 | 1.46 → 1.46 | 39 → 35 | 0.8 → 0.8 |
+| High Fidelity Photo | 1.94 → 1.94 | – → – | – → – | 8898 → 7784 | – → – |
+| 6 Colors with Shapes | 6.64 → 6.74 | 0.076 → 0.080 | 0.60 → 0.88 | 30 → 30 | – → – |
+
+As with the control probes, these figures show tradeoffs rather than uniform improvement. The
+remaining tables below are historical and have not been replaced by this narrow comparison.
+Reproduce each revision's accuracy report (native optimized test profile):
+
+```text
+TRACE_QUALITY_MP= TRACE_QUALITY_REPORT=report.md cargo test -p vectorcraft-trace --test quality -- --ignored
+```
 
 ## Auto Color keeps rare colours
 
