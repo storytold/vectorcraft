@@ -741,6 +741,31 @@ impl CharChange {
         }
     }
 
+    /// The character alignment, direction and East Asian settings of [`Self::apply`].
+    fn apply_cjk(&self, st: &mut CharStyle) {
+        if let Some(v) = self.char_align {
+            st.char_align = v;
+        }
+        if let Some(v) = self.char_direction {
+            st.char_direction = v;
+        }
+        if let Some(v) = self.proportional_metrics {
+            st.proportional_metrics = v;
+        }
+        if let Some(v) = self.tate_chu_yoko {
+            st.tate_chu_yoko = v;
+        }
+        if let Some(v) = self.tcy_up_down {
+            st.tcy_up_down = v;
+        }
+        if let Some(v) = self.tcy_left_right {
+            st.tcy_left_right = v;
+        }
+        if let Some(v) = self.standard_vertical_roman {
+            st.standard_vertical_roman = v;
+        }
+    }
+
     pub(crate) fn apply(&self, st: &mut CharStyle) {
         self.apply_font(st);
         if let Some(v) = self.size {
@@ -800,27 +825,7 @@ impl CharChange {
         if let Some(v) = self.small_caps {
             st.small_caps = v;
         }
-        if let Some(v) = self.char_align {
-            st.char_align = v;
-        }
-        if let Some(v) = self.char_direction {
-            st.char_direction = v;
-        }
-        if let Some(v) = self.proportional_metrics {
-            st.proportional_metrics = v;
-        }
-        if let Some(v) = self.tate_chu_yoko {
-            st.tate_chu_yoko = v;
-        }
-        if let Some(v) = self.tcy_up_down {
-            st.tcy_up_down = v;
-        }
-        if let Some(v) = self.tcy_left_right {
-            st.tcy_left_right = v;
-        }
-        if let Some(v) = self.standard_vertical_roman {
-            st.standard_vertical_roman = v;
-        }
+        self.apply_cjk(st);
         if let Some(v) = self.no_break {
             st.no_break = v;
         }
