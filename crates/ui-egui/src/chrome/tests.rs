@@ -866,6 +866,18 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     assert!(title(&s).ends_with("(RGB/Preview)"));
 }
 
+/// #3797: each document's tab names its own Outline or Preview.
+#[test]
+fn only_the_outlined_documents_tab_reads_outline() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.run("view.outline", json!({})).unwrap();
+    let titles: Vec<String> = app.session.documents().iter().enumerate().map(|(i, d)| super::tabs::doc_tab_title(&app, i, d)).collect();
+    assert!(titles[0].ends_with("(RGB/Preview)"), "{titles:?}");
+    assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
+}
+
 /// One headless frame of the Control bar; returns the isolation button's rectangle, if it shows.
 fn isolation_button(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Option<egui::Rect> {
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));

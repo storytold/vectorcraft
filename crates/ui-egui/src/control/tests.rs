@@ -22,6 +22,24 @@ fn ui_set_turns_the_image_trace_preview_off_and_on() {
     }
 }
 
+/// #3797: `ui.set` `outline` sets the active document's view; without a document it is an error
+/// and sets nothing else either.
+#[test]
+fn ui_set_outline_sets_the_active_documents_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    for params in [json!({"outline": false}), json!({"outline": true, "grid": true})] {
+        let r = input_request(&mut app, "ui.set", params);
+        assert_eq!(r["ok"], false, "{r}");
+    }
+    assert!(!app.ui.view.grid, "nothing is set");
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = input_request(&mut app, "ui.set", json!({"outline": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.outline_view());
+    assert_eq!(app.views.iter().map(|v| v.outline).collect::<Vec<_>>(), [false, true], "the other document stays in Preview");
+}
+
 #[test]
 fn the_image_trace_preview_is_a_command() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());

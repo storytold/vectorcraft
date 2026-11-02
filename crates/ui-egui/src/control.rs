@@ -593,6 +593,10 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
 fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // Outline is a setting of the active document's view: without one, nothing is set.
+    if p.get("outline").is_some_and(Value::is_boolean) && app.session.active().is_none() {
+        return err("no document");
+    }
     let mut r = Ok(Value::Null);
     if let Some(b) = s("brightness") {
         r = app.run("window.brightness", json!({"brightness": b}));
@@ -613,7 +617,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
         if let Some(want) = p.get(k).and_then(Value::as_bool) {
             let cur = match k {
                 "rulers" => app.ui.view.rulers,
-                "outline" => app.ui.view.outline,
+                "outline" => app.outline_view(),
                 "grid" => app.ui.view.grid,
                 "smartGuides" => app.ui.view.smart_guides,
                 _ => app.ui.view.bounding_box,
