@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose characters use one included, with the patterns they use; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose characters use one included, hidden fills and strokes and strokes with no width left out, with the patterns they use; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -352,7 +352,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(k) = paint_kind(paint) {
                     *counts.entry(k).or_default() += 1;
                 }
-                if let Paint::Pattern { pattern, .. } = paint {
+                // A hidden fill or stroke, or a stroke with no width, paints nothing.
+                let paints = item.visible() && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0);
+                if paints && let Paint::Pattern { pattern, .. } = paint {
                     patterns.insert(pattern.clone());
                     if !used_patterns.contains(&pattern.as_str()) {
                         used_patterns.push(pattern);
@@ -364,10 +366,12 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     spot.insert(name.clone());
                 }
             }
-            // A type object's characters carry their own fill and stroke.
+            // A type object's characters carry their own fill and stroke. An inline graphic does not
+            // take its run's paint, and a stroke with no width paints nothing.
             if let NodeKind::Text(t) = &n.kind {
-                for run in &t.runs {
-                    for paint in [&run.style.fill, &run.style.stroke] {
+                for run in t.runs.iter().filter(|r| r.inline.is_none()) {
+                    let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
+                    for paint in std::iter::once(&run.style.fill).chain(stroke) {
                         if let Paint::Pattern { pattern, .. } = paint {
                             patterns.insert(pattern.clone());
                             if !used_patterns.contains(&pattern.as_str()) {
@@ -673,6 +677,14 @@ mod tests {
         let t = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [t], "swatch": "Dots"})).unwrap();
         s.execute("layer.setProps", &json!({"id": t, "name": "Type"})).unwrap();
+        // A hidden pattern fill and a pattern stroke with no width paint nothing, so neither object is listed.
+        let (d, e) = (square(&mut s, 100.0), square(&mut s, 200.0));
+        s.execute("paint.setStroke", &json!({"ids": [d], "none": true})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [d], "swatch": "Dots"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [d], "index": 0, "visible": false})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [e], "none": true})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [e], "swatch": "Dots"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [e], "index": 1, "weight": 0})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
         assert_eq!(
             i["patternObjects"],

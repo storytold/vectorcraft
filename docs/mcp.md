@@ -4190,8 +4190,8 @@ objects' strokes use), `repeatObjects` (`[{id, name, type, instances, rows?, col
 groups and in other repeats included, with its type `radial`, `grid` or `mirror` and the number of instances it makes,
 and a grid's `rows` and `cols`; with `selectionOnly`, the Repeat objects in the selection), `patternObjects`
 (`[{id, name, patterns}]`: every object filled or stroked with a pattern, once each, those in groups and type objects
-whose characters use a pattern included, with the patterns it uses, which the patterns category lists as Pattern
-Objects; with `selectionOnly`, those in the selection),
+whose characters use a pattern included, hidden fills and strokes and strokes with no width left out, with the
+patterns it uses, which the patterns category lists as Pattern Objects; with `selectionOnly`, those in the selection),
 `patternNames` (the patterns those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
 out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
 `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?, selectionOnly?, category?}`:
