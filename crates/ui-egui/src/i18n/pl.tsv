@@ -2083,6 +2083,7 @@ digits	Malayalam	Malajalam
 	Color Mode:	Tryb koloru:
 	Convert	Konwertuj
 	Global	Globalny
+	Global Adjust	Dopasowanie globalne
 	Green	Zielony
 	Shifts the tints of global and spot colors; other colors stay.	Przesuwa tinty kolorów globalnych i dodatkowych; pozostałe kolory bez zmian.
 	Tint	Tinta
@@ -4122,6 +4123,7 @@ imageTrace	Outline	Kontur
 @msg	`library` is a library id or name (see {list})	`library` to identyfikator lub nazwa biblioteki (patrz {list})
 @msg	`mode` applies to freeform gradients	`mode` dotyczy gradientów dowolnych
 @msg	`preserve` must be an object	`preserve` musi być obiektem
+@msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
 @msg	`stops` must be an array	`stops` musi być tablicą
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musi być obiektem opcji SVG (patrz document.formats)

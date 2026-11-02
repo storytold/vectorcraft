@@ -1281,6 +1281,7 @@ font-technology	Variable	Variables
 	Get Preferences	Obtenir les préférences
 	Get Text Range	Obtenir une plage de texte
 	Global	Globale
+	Global Adjust	Réglage global
 	Global Brush Dimensions	Dimensions globales des formes
 	Global Process Color	Couleur quadrichromique globale
 	Global Process Color, CMYK	Couleur quadrichromique globale, CMJN
@@ -3982,6 +3983,7 @@ axis	Both	Les deux
 @msg	`library` is a library id or name (see {list})	`library` est l’identifiant ou le nom d’une bibliothèque (voir {list})
 @msg	`mode` applies to freeform gradients	`mode` s’applique aux dégradés de forme libre
 @msg	`preserve` must be an object	`preserve` doit être un objet
+@msg	`globalAdjust` must be an object	`globalAdjust` doit être un objet
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` doit valoir 1, 3 ou 5
 @msg	`stops` must be an array	`stops` doit être un tableau
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` doit être un objet d’options SVG (voir document.formats)

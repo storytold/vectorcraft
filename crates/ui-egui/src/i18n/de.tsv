@@ -1268,6 +1268,7 @@ file-filter	Templates	Vorlagen
 	Get Preferences	Voreinstellungen abrufen
 	Get Text Range	Textbereich abrufen
 	Global	Global
+	Global Adjust	Globale Anpassung
 	Global Brush Dimensions	Globale Pinselabmessungen
 	Global Process Color	Globale Prozessfarbe
 	Global Process Color, CMYK	Globale Prozessfarbe, CMYK
@@ -3906,6 +3907,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
 @msg	`preserve` must be an object	`preserve` muss ein Objekt sein
+@msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)

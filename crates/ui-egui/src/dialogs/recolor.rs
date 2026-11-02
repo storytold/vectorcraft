@@ -13,7 +13,9 @@
 //! library file and limits to it; a library's colours apply as its swatches: a spot colour stays a
 //! spot colour, and joins the document's swatches). Edit tab: a hue and
 //! saturation wheel with a marker per new colour (drag one; with linked handles they all turn and
-//! scale together), a brightness slider and the harmony rules. The preset menu sets up a 1, 2 or 3
+//! scale together), a brightness slider, the harmony rules, and the color sliders with their mode
+//! menu, whose Global Adjust shows Saturation, Brightness, Temperature and Luminosity (-100% to
+//! 100%, 0% changes nothing), which change every new color at once. The preset menu sets up a 1, 2 or 3
 //! colour job or a library. Opened on a colour group (Edit or Apply Color Group), OK also rewrites
 //! the group with the new colours (renamed by `groupName`); without art only the group changes.
 //! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
@@ -24,13 +26,15 @@
 //! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
 //! `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 //! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
-//! a gray and Tint for a spot color). Changing `colors`, a preserve flag or `limitTo` reduces the
-//! rows again.
+//! a gray and Tint for a spot color; `global`: Global Adjust, on the Edit tab), `globalAdjust`
+//! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
+//! `globalAdjust` in every slider mode). Changing `colors`, a preserve flag or `limitTo` reduces
+//! the rows again.
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::harmony::{Harmony, move_on_wheel};
-use vectorcraft_color::recolor::{ColorKey, Method};
+use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method};
 use vectorcraft_color::{Color, keep_model};
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
@@ -70,9 +74,18 @@ const NEW_CHIP: &str = "recolor-new";
 /// The color modes of the sliders under the rows; a row whose new color is a spot color of the
 /// library also has Tint.
 const SLIDER_MODES: [Mode; 4] = [Mode::Hsb, Mode::Rgb, Mode::Cmyk, Mode::Lab];
-/// Widths of a color slider and of its number field.
+/// Widths of a color slider's label, of the slider and of its number field.
+const SLIDER_LABEL_W: f32 = 12.0;
 const SLIDER_W: f32 = 170.0;
 const SLIDER_FIELD_W: f32 = 48.0;
+/// The `sliderMode` of the Edit tab's Global Adjust sliders, and the menu's name for it.
+const GLOBAL: &str = "global";
+const GLOBAL_ADJUST: &str = "Global Adjust";
+/// The `globalAdjust` field's keys (and `recolor.apply`'s), in the order of the sliders.
+const ADJUSTS: [&str; 4] = ["saturation", "brightness", "temperature", "luminosity"];
+/// Widths of a Global Adjust slider's label and of the slider.
+const GLOBAL_LABEL_W: f32 = 76.0;
+const GLOBAL_SLIDER_W: f32 = 110.0;
 /// The slider values last shown: `{row, key, mode, v}` (HSB keeps its hue at no saturation).
 const COMPS: &str = "__comps";
 
@@ -260,6 +273,11 @@ fn apply_params(d: &Dialog) -> Value {
     });
     // A row edited with the sliders carries `model: "new"`: its art takes the mode they showed.
     let mut p = json!({"map": rs, "method": d.str("method"), "limitTo": d.str("limitTo")});
+    // The Global Adjust amounts, kept while the sliders show another mode; at 0% they are left out.
+    let values = adjust_values(d);
+    if values.iter().any(|v| *v != 0.0) {
+        p["globalAdjust"] = Value::Object(ADJUSTS.iter().zip(values).map(|(k, v)| (k.to_string(), json!(v))).collect());
+    }
     if let (Some(Value::Object(g)), Some(p)) = (group, p.as_object_mut()) {
         p.extend(g.into_iter().filter(|(_, v)| !v.is_null()));
     }
@@ -288,7 +306,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     ui.add_space(4.0);
     let mut rs = rows(d);
     let top = ui.cursor().top();
-    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
+    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(app, ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
     if d.str("tab") != "edit" {
         ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
     }
@@ -335,7 +353,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
     if d.bool("__newGroup") {
-        let colors: Vec<Value> = rows(&d).into_iter().filter(|r| !excluded(r)).map(|r| r["to"].clone()).collect();
+        // The new colors with the Global Adjust, as `recolor.apply` gives them to a group.
+        let adjust = global_adjust(adjust_values(&d));
+        let colors: Vec<Value> = rows(&d)
+            .into_iter()
+            .filter(|r| !excluded(r))
+            .map(|r| to_color(&r).filter(|_| !adjust.is_identity()).map_or_else(|| r["to"].clone(), |c| key(&adjust.apply(c))))
+            .collect();
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
@@ -529,7 +553,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             }
         }
         let target = SliderTarget::of(app, d, rows);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| mode_menu(ui, d, &target));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| mode_menu(ui, d, &target, false));
     });
     ui.add_space(6.0);
     changed |= sliders(app, ui, d, rows);
@@ -686,30 +710,84 @@ impl SliderTarget {
     }
 }
 
-/// The color mode menu of the sliders (HSB, RGB, CMYK, Lab, and Tint for a spot color), drawn
-/// right to left: the menu, then its label.
-fn mode_menu(ui: &mut Ui, d: &mut Dialog, target: &SliderTarget) {
+/// The color mode menu of the sliders (HSB, RGB, CMYK, Lab, Tint for a spot color, and with
+/// `global` Global Adjust), drawn right to left: the menu, then its label.
+fn mode_menu(ui: &mut Ui, d: &mut Dialog, target: &SliderTarget, global: bool) {
     let t = Tokens::get(ui.ctx());
     let mut labels: Vec<&str> = SLIDER_MODES.iter().map(|m| m.label()).collect();
     if target.spot.is_some() {
         labels.push("Tint");
     }
-    let current = target.mode(d).map_or("Tint", Mode::label);
+    if global {
+        labels.push(GLOBAL_ADJUST);
+    }
+    let adjusting = global && d.str("sliderMode") == GLOBAL;
+    let current = if adjusting { GLOBAL_ADJUST } else { target.mode(d).map_or("Tint", Mode::label) };
     // The label is drawn after the menu (right-to-left), so it cannot name it by adjacency.
     let chosen = ui
-        .add_enabled_ui(target.color.is_some(), |ui| {
-            widgets::dropdown_named(ui, "recolor-slider-mode", Some(tl!("Color Mode:")), current, &labels, 90.0)
+        .add_enabled_ui(target.color.is_some() || global, |ui| {
+            widgets::dropdown_named(ui, "recolor-slider-mode", Some(tl!("Color Mode:")), current, &labels, if global { 110.0 } else { 90.0 })
         })
         .inner;
     if let Some(i) = chosen {
-        d.fields.insert("sliderMode".into(), json!(SLIDER_MODES.get(i).map_or_else(|| "tint".to_string(), |m| mode_id(*m))));
+        let id = match SLIDER_MODES.get(i) {
+            Some(m) => mode_id(*m),
+            None if labels.get(i) == Some(&GLOBAL_ADJUST) => GLOBAL.to_string(),
+            None => "tint".to_string(),
+        };
+        d.fields.insert("sliderMode".into(), json!(id));
     }
     ui.label(egui::RichText::new(tl!("Color Mode:")).color(t.text_dim));
 }
 
-/// One color slider in the grid: its label, its rail with `track` and its number field, showing
-/// `shown` with `suffix`. Returns the whole number in `shown`'s range that a drag, a key or the
-/// field sets.
+/// The Global Adjust amounts, in percent from -100 to 100, of `ADJUSTS`' keys in the
+/// `globalAdjust` field (0 for one it lacks).
+fn adjust_values(d: &Dialog) -> [f64; 4] {
+    let given = d.fields.get("globalAdjust");
+    ADJUSTS.map(|k| given.and_then(|g| g.get(k)).and_then(Value::as_f64).unwrap_or(0.0).clamp(-100.0, 100.0))
+}
+
+/// The Global Adjust of `values` (percent, in the order of `ADJUSTS`).
+fn global_adjust(values: [f64; 4]) -> GlobalAdjust {
+    let [saturation, brightness, temperature, luminosity] = values.map(|v| (v / 100.0) as f32);
+    GlobalAdjust { saturation, brightness, temperature, luminosity }
+}
+
+/// The Global Adjust sliders, two to a line: Saturation, Brightness, Temperature and Luminosity,
+/// each from -100% to 100% (0% changes nothing). They change every new color at once, so they
+/// edit no row; each rail shows its amounts on `sample`.
+fn global_sliders(ui: &mut Ui, d: &mut Dialog, sample: Color) {
+    let labels = [tl!("Saturation"), tl!("Brightness"), tl!("Temperature"), tl!("Luminosity")];
+    let values = adjust_values(d);
+    let mut set: Option<(usize, f64)> = None;
+    egui::Grid::new("recolor-global-adjust").num_columns(6).spacing([6.0, 4.0]).show(ui, |ui| {
+        for (n, lbl) in labels.iter().enumerate() {
+            let shown = widgets::SliderValue::field(values[n], -100.0..=100.0, "%", 0);
+            // The rail: `sample` with this slider's amount alone.
+            let track = |x: f32| {
+                let mut one = [0.0; 4];
+                one[n] = f64::from(x) * 200.0 - 100.0;
+                c32(&global_adjust(one).apply(sample))
+            };
+            if let Some(v) = slider_cell(ui, ("global", n), lbl, shown, "%", &track, GLOBAL_LABEL_W, GLOBAL_SLIDER_W) {
+                set = Some((n, v));
+            }
+            if n % 2 == 1 {
+                ui.end_row();
+            }
+        }
+    });
+    if let Some((n, v)) = set {
+        let mut values = values;
+        values[n] = v;
+        d.fields.insert("globalAdjust".into(), Value::Object(ADJUSTS.iter().zip(values).map(|(k, v)| (k.to_string(), json!(v))).collect()));
+    }
+}
+
+/// One color slider in the grid: its label `label_w` wide, its rail with `track` `slider_w` wide
+/// and its number field, showing `shown` with `suffix`. Returns the whole number in `shown`'s
+/// range that a drag, a key or the field sets.
+#[allow(clippy::too_many_arguments)]
 fn slider_cell(
     ui: &mut Ui,
     id: impl std::hash::Hash + Copy,
@@ -717,13 +795,15 @@ fn slider_cell(
     shown: widgets::SliderValue,
     suffix: &str,
     track: &dyn Fn(f32) -> egui::Color32,
+    label_w: f32,
+    slider_w: f32,
 ) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let (lo, hi) = (*shown.range.start(), *shown.range.end());
     let value = shown.value;
-    ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new(label).size(12.5).color(t.text)));
+    ui.add_sized(vec2(label_w, 22.0), egui::Label::new(egui::RichText::new(label).size(12.5).color(t.text)));
     let unit = ((value - lo) / (hi - lo)) as f32;
-    let (dragged, _, keyed) = widgets::color_slider_stepped(ui, ("recolor-slider", id), label, Some(shown), unit, SLIDER_W, track);
+    let (dragged, _, keyed) = widgets::color_slider_stepped(ui, ("recolor-slider", id), label, Some(shown), unit, slider_w, track);
     let typed = widgets::plain_field_named(ui, ("recolor-slider-field", id), Some(label), value, suffix, 0, SLIDER_FIELD_W);
     dragged.map(|x| (lo + f64::from(x) * (hi - lo)).round()).or(keyed).or(typed).map(|v| v.clamp(lo, hi)).filter(|v| (v - value).abs() > 1e-6)
 }
@@ -746,7 +826,7 @@ fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]
                 let gray = move |_: f32| input;
                 for (n, lbl) in mode.labels().iter().enumerate() {
                     let shown = widgets::SliderValue::field(0.0, f64::from(mode.min(n))..=f64::from(mode.max(n)), mode.suffix(n), 0);
-                    slider_cell(ui, n, lbl, shown, mode.suffix(n), &gray);
+                    slider_cell(ui, n, lbl, shown, mode.suffix(n), &gray, SLIDER_LABEL_W, SLIDER_W);
                     if n % 2 == 1 {
                         ui.end_row();
                     }
@@ -757,7 +837,7 @@ fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]
                 // Tint of the spot color, and its name.
                 let tint = f64::from(row_tint(&rows[i])) * 100.0;
                 let shown = widgets::SliderValue::field(tint, 0.0..=100.0, "%", 0);
-                if let Some(v) = slider_cell(ui, usize::MAX, "T", shown, "%", &|x| c32(&spot_tinted(app, c, x))) {
+                if let Some(v) = slider_cell(ui, usize::MAX, "T", shown, "%", &|x| c32(&spot_tinted(app, c, x)), SLIDER_LABEL_W, SLIDER_W) {
                     rows[i]["tint"] = json!(v);
                     changed = true;
                 }
@@ -769,7 +849,8 @@ fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]
             for (n, lbl) in mode.labels().iter().enumerate() {
                 let v = comps.get(n).copied().unwrap_or(0.0);
                 let shown = widgets::SliderValue::field(f64::from(v), f64::from(mode.min(n))..=f64::from(mode.max(n)), mode.suffix(n), 0);
-                if let Some(nv) = slider_cell(ui, n, lbl, shown, mode.suffix(n), &|x| c32(&track_color(mode, &comps, n, x))) {
+                if let Some(nv) = slider_cell(ui, n, lbl, shown, mode.suffix(n), &|x| c32(&track_color(mode, &comps, n, x)), SLIDER_LABEL_W, SLIDER_W)
+                {
                     let mut c2 = comps.clone();
                     c2[n] = nv as f32;
                     set = Some(c2);
@@ -845,13 +926,14 @@ fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
 const DRAG: &str = "__drag";
 
 /// The Edit tab. Returns true when the rows changed.
-fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
+fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
     let top = ui.cursor().top();
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let linked = d.bool("linked");
     let active = active_rows(rows);
     let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
+    let target = SliderTarget::of(app, d, rows);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Harmony Rules:")).color(t.text_dim));
         let rule = Harmony::parse(&d.str("rule")).unwrap_or(Harmony::Complementary);
@@ -870,6 +952,10 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
             if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0).clicked() {
                 d.fields.insert("linked".into(), json!(!linked));
             }
+            ui.add_space(8.0);
+            // The mode of the color sliders under the wheel: the selected new color in a color
+            // mode, or Global Adjust for all of them.
+            mode_menu(ui, d, &target, true);
         });
     });
     ui.add_space(8.0);
@@ -899,6 +985,12 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
         d.fields.remove(DRAG);
     }
     ui.add_space(6.0);
+    if d.str("sliderMode") == GLOBAL {
+        let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
+        global_sliders(ui, d, sample);
+    } else {
+        changed |= sliders(app, ui, d, rows);
+    }
     // The new colours: click one to make it the base colour.
     let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
     super::modal::scrolled_rows(ui, "recolor-edit-colors", |ui| {
@@ -955,6 +1047,33 @@ mod tests {
         let d = app.ui.dialog.as_ref().unwrap();
         assert!(!d.fields.contains_key("model"));
         assert!(apply_params(d).get("model").is_none());
+    }
+
+    /// `recolor.apply` gets the Global Adjust amounts only when one of them is not 0%, whatever
+    /// mode the sliders show.
+    #[test]
+    fn apply_params_send_global_adjust_only_when_it_changes_colors() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": ["#ff8000"]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(apply_params(d).get("globalAdjust").is_none(), "no field");
+        d.fields.insert("globalAdjust".into(), json!({"saturation": 0, "brightness": 0}));
+        assert!(apply_params(d).get("globalAdjust").is_none(), "all 0%");
+        d.fields.insert("globalAdjust".into(), json!({"temperature": 25, "luminosity": 500}));
+        d.fields.insert("sliderMode".into(), json!("hsb"));
+        assert_eq!(
+            apply_params(d)["globalAdjust"],
+            json!({"saturation": 0.0, "brightness": 0.0, "temperature": 25.0, "luminosity": 100.0}),
+            "every amount, clamped to 100%"
+        );
+        // Colors opened alone become a new color group with the adjustment.
+        d.fields.insert("globalAdjust".into(), json!({"saturation": -100}));
+        let d = d.clone();
+        confirm(&mut app, &d).unwrap();
+        let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("a new color group");
+        let c = g.swatches[0].paint.color().unwrap();
+        assert!(c.to_hsb()[1] < 1e-3, "{c:?}");
     }
 
     #[test]

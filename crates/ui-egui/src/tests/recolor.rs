@@ -572,8 +572,73 @@ fn switching_tabs_or_slider_modes_keeps_the_dialog_height() {
         h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", "recolor")))).unwrap().height()
     };
     let assign = height(&mut h, "sliderMode", json!("cmyk"));
-    for (k, v) in [("sliderMode", json!("hsb")), ("sliderMode", json!("lab")), ("tab", json!("edit")), ("tab", json!("assign"))] {
+    for (k, v) in [
+        ("sliderMode", json!("hsb")),
+        ("sliderMode", json!("lab")),
+        ("tab", json!("edit")),
+        ("sliderMode", json!("global")),
+        ("sliderMode", json!("rgb")),
+        ("tab", json!("assign")),
+    ] {
         assert_eq!(height(&mut h, k, v.clone()), assign, "{k} {v}");
+    }
+}
+
+/// The fills of the document's objects, in order.
+fn fills(app: &VectorcraftApp) -> Vec<Option<Color>> {
+    let d = &app.session.doc().unwrap().doc;
+    d.layers[0].children().unwrap().iter().map(|n| d.node(n.id).unwrap().appearance.fill_paint().color()).collect()
+}
+
+/// The Edit tab's color mode menu offers Global Adjust: Saturation, Brightness, Temperature and
+/// Luminosity open at 0%, which changes nothing; one slider changes every recolored color at once
+/// (the rows keep their new colors) and the art previews it; back at 0% the art has its own colors
+/// again; the amounts stay while the tab or the mode changes; OK keeps the change as one undo step
+/// and Cancel leaves the art as it was.
+#[test]
+fn global_adjust_changes_every_color_at_once() {
+    for confirm in [true, false] {
+        let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+        let before = fills(h.state());
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Color Mode:").click();
+        h.run_steps(2);
+        h.get_by_label("Global Adjust").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "sliderMode"), json!("global"));
+        for name in ["Saturation", "Temperature", "Luminosity"] {
+            assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, name).is_some(), "{name}");
+        }
+        // Global Adjust's Brightness and the wheel's.
+        assert_eq!(h.get_all_by_role_and_label(egui::accesskit::Role::Slider, "Brightness").count(), 2);
+        assert_eq!(fills(h.state()), before, "at 0% the art keeps its colors");
+        let rows = field(h.state(), "rows");
+        click_slider(&mut h, "Saturation", 0.0);
+        assert_eq!(field(h.state(), "globalAdjust")["saturation"], json!(-100.0));
+        assert_eq!(field(h.state(), "rows"), rows, "the rows keep their new colors");
+        let gray = |app: &VectorcraftApp| fills(app).iter().all(|c| c.is_some_and(|c| c.to_hsb()[1] < 1e-3));
+        assert!(gray(h.state()), "every color previews gray: {:?}", fills(h.state()));
+        click_slider(&mut h, "Saturation", 0.5);
+        assert_eq!(field(h.state(), "globalAdjust")["saturation"], json!(0.0));
+        assert_eq!(fills(h.state()), before, "back at 0% the art has its own colors");
+        click_slider(&mut h, "Saturation", 0.0);
+        for (k, v) in [("tab", json!("assign")), ("tab", json!("edit")), ("sliderMode", json!("hsb")), ("sliderMode", json!("global"))] {
+            set(h.state_mut(), k, v);
+            h.run_steps(3);
+        }
+        assert_eq!(field(h.state(), "globalAdjust")["saturation"], json!(-100.0), "the amount stays");
+        assert!(gray(h.state()), "and still applies");
+        h.get_by_label(if confirm { "OK" } else { "Cancel" }).click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        let app = h.state();
+        if confirm {
+            assert!(gray(app), "OK keeps the change: {:?}", fills(app));
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        } else {
+            assert_eq!(fills(app), before, "Cancel leaves the art unchanged");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "and records no undo step");
+        }
     }
 }
 

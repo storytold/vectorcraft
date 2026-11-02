@@ -1929,7 +1929,7 @@ the objects `select.all` takes, which leaves out hidden and locked art, and the 
 and locked objects inside a group are left out too, also in isolation mode.
 `recolor.reduce {colors?, method?, preserve?, limitTo?, ids?}` groups those colours into rows of similar colours (k-means in Lab, weighted by use;
 tints of a global swatch share its row; White and Black are preserved by default) and returns a map of rows
-`[{from: [keys], to: key}]` to edit and pass to `recolor.apply {map, method?, model?, limitTo?, group?, groupColors?, rename?}`.
+`[{from: [keys], to: key}]` to edit and pass to `recolor.apply {map, method?, model?, limitTo?, group?, groupColors?, rename?, globalAdjust?}`.
 For scripts and MCP, `model` selects the replacement color model: `keep` (default) retains each
 original color's model, `new` takes the replacement's model, and `document` converts replacements
 and edited color groups to the document's model. A row's own `model` (the same values) takes the
@@ -1953,11 +1953,26 @@ is linked to a swatch rewritten with another color keeps its row's new color, ev
 linked to the swatch, as does art whose color the row converts into the art's own color model. Without `group`,
 the swatch keeps its color and the recolored art is no longer linked to it.
 
+`globalAdjust: {saturation?, brightness?, temperature?, luminosity?}` is the dialog's Global Adjust: each amount is a
+percentage from -100 to 100 (0 when left out), and all four at 0 change nothing. Every color that a row which is not
+excluded recolors takes the same change after its row's new color, in this order: saturation multiplies HSB
+saturation by 1 + saturation/100; brightness moves HSB brightness that share of the way to full brightness (above 0)
+or to black (below 0); temperature adds 0.2 × temperature/100 to red and subtracts it from blue; luminosity moves Lab
+lightness that share of the way to 100 or to 0 and keeps Lab a and b, so the hue stays. Each color keeps its own
+model, and a changed color is no longer linked to its swatch. The colors a `group` is rewritten with take the same
+change. With `limitTo`, each row's new color takes the change before it snaps to the library, so the art still takes
+the library's colors. Colors that no row holds, such as preserved White and Black, and excluded rows stay as they are.
+
+```json
+{"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#ff0000","#0000ff":"#0000ff"},"globalAdjust":{"saturation":-40,"temperature":25}}}}
+```
+
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the
 error for an unknown library or method. Other wrong-form parameters get an error that names them.
 `includeImages`, `includePatterns`, a row's `exclude`, `order`, `saturationBrightness` and the `white`, `black` and
 `grays` switches of `preserve` must be true or false; `colors` and `seed` must be whole numbers; `group` and `rename`
-must be strings, `groupColors` must be an array and `preserve` must be an object. Each refusal leaves the document unchanged and records no undo step. A `null`
+must be strings, `groupColors` must be an array, `preserve` must be an object, and `globalAdjust` must be an object
+whose amounts are numbers from -100 to 100. Each refusal leaves the document unchanged and records no undo step. A `null`
 counts as a value left out except for `recolor.apply`'s `model` and a `map` row's `model`, which must be strings when given.
 
 ```json

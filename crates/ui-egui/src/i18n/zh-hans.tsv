@@ -1236,6 +1236,7 @@ file-filter	Templates	模板
 	Get Preferences	获取首选项
 	Get Text Range	获取文本范围
 	Global	全局
+	Global Adjust	全局调整
 	Global Brush Dimensions	全局画笔尺寸
 	Global Process Color	全局印刷色
 	Global Process Color, CMYK	全局印刷色，CMYK
@@ -3878,6 +3879,7 @@ imageTrace	Outline	轮廓
 @msg	`groupColors` must be an array	`groupColors` 必须是数组
 @msg	`mode` applies to freeform gradients	`mode` 仅适用于任意形状渐变
 @msg	`preserve` must be an object	`preserve` 必须是对象
+@msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标

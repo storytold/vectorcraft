@@ -1503,6 +1503,7 @@ file-filter	Templates	Mẫu
 	Glass	Kính
 	Glass…	Kính…
 	Global	Toàn cục
+	Global Adjust	Điều chỉnh toàn cục
 	Global Brush Dimensions	Kích thước cọ toàn cục
 	Global Process Color	Màu xử lý toàn cục
 	Global Process Color, CMYK	Màu xử lý toàn cục, CMYK
@@ -4173,6 +4174,7 @@ theme	Appearance	Giao diện
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng
+@msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
 @msg	`stops` must be an array	`stops` phải là một mảng
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` phải là đối tượng tùy chọn SVG (xem document.formats)

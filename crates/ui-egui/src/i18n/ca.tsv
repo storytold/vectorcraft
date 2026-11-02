@@ -1699,6 +1699,7 @@ digits	Malayalam	Malaiàlam
 	Glass	Vidre
 	Glass…	Vidre…
 	Global	Global
+	Global Adjust	Ajust global
 	Global Brush Dimensions	Dimensions globals del pinzell
 	Global Edit Options	Opcions globals d’edició
 	Global Process Color	Color de procés global
@@ -4776,6 +4777,7 @@ digits	Malayalam	Malaiàlam
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
 @msg	`preserve` must be an object	`preserve` ha de ser un objecte
+@msg	`globalAdjust` must be an object	`globalAdjust` ha de ser un objecte
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser cert o fals
 @msg	`stops` must be an array	`stops` ha de ser una matriu

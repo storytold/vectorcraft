@@ -1298,6 +1298,7 @@ file-filter	Templates	Modelli
 	Get Preferences	Ottieni preferenze
 	Get Text Range	Ottieni intervallo di testo
 	Global	Globale
+	Global Adjust	Regolazione globale
 	Global Brush Dimensions	Dimensioni pennello globali
 	Global Process Color	Colore quadricromia globale
 	Global Process Color, CMYK	Colore quadricromia globale, CMYK
@@ -4033,6 +4034,7 @@ axis	Both	Entrambi
 @msg	`library` is a library id or name (see {list})	`library` è l'id o il nome di una libreria (vedi {list})
 @msg	`mode` applies to freeform gradients	`mode` si applica alle sfumature a forma libera
 @msg	`preserve` must be an object	`preserve` deve essere un oggetto
+@msg	`globalAdjust` must be an object	`globalAdjust` deve essere un oggetto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve essere 1, 3 o 5
 @msg	`stops` must be an array	`stops` deve essere un array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve essere un oggetto di opzioni SVG (vedi document.formats)

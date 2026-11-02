@@ -1870,6 +1870,7 @@ digits	Malayalam	მალაიალამური
 	Color Mode:	ფერის რეჟიმი:
 	Convert	გარდაქმნა
 	Global	გლობალური
+	Global Adjust	გლობალური კორექცია
 	Green	მწვანე
 	Shifts the tints of global and spot colors; other colors stay.	ცვლის გლობალური და სპოტ-ფერების ტონირებებს; სხვა ფერები უცვლელი რჩება.
 	Tint	ტონირება
@@ -3778,6 +3779,7 @@ font-technology	Variable	ცვლადი
 @msg	`library` is a library id or name (see {list})	`library` არის ბიბლიოთეკის id ან სახელი (იხ. {list})
 @msg	`mode` applies to freeform gradients	`mode` ეხება თავისუფალი ფორმის გრადიენტებს
 @msg	`preserve` must be an object	`preserve` უნდა იყოს ობიექტი
+@msg	`globalAdjust` must be an object	`globalAdjust` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
 @msg	`stops` must be an array	`stops` უნდა იყოს მასივი
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` უნდა იყოს SVG-ის პარამეტრების ობიექტი (იხ. document.formats)

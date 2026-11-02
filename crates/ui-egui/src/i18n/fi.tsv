@@ -2125,6 +2125,7 @@ digits	Malayalam	Malajalam
 	Color Mode:	Väritila:
 	Convert	Muunna
 	Global	Globaali
+	Global Adjust	Yleissäätö
 	Green	Vihreä
 	Shifts the tints of global and spot colors; other colors stay.	Siirtää globaalien värien ja spottivärien sävyjä; muut värit säilyvät.
 	Tint	Sävy
@@ -4213,6 +4214,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`library` is a library id or name (see {list})	`library` on kirjaston tunnus tai nimi (ks. {list})
 @msg	`mode` applies to freeform gradients	`mode` koskee vapaamuotoisia liukuvärejä
 @msg	`preserve` must be an object	`preserve` on oltava objekti
+@msg	`globalAdjust` must be an object	`globalAdjust` on oltava objekti
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` on oltava 1, 3 tai 5
 @msg	`stops` must be an array	`stops` on oltava taulukko
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` on oltava SVG-asetusten objekti (ks. document.formats)

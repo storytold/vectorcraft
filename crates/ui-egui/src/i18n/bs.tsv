@@ -2138,6 +2138,7 @@ digits	Malayalam	Malajalam
 	Color Mode:	Način boja:
 	Convert	Pretvori
 	Global	Globalno
+	Global Adjust	Globalno podešavanje
 	Green	Zelena
 	Shifts the tints of global and spot colors; other colors stay.	Pomjera nijanse globalnih i spot boja; ostale boje ostaju.
 	Tint	Preliv
@@ -4260,6 +4261,7 @@ imageTrace	Outline	Obris
 @msg	`library` is a library id or name (see {list})	`library` je ID ili naziv biblioteke (vidi {list})
 @msg	`mode` applies to freeform gradients	`mode` se primjenjuje na gradijente slobodnog oblika
 @msg	`preserve` must be an object	`preserve` mora biti objekat
+@msg	`globalAdjust` must be an object	`globalAdjust` mora biti objekat
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` mora biti 1, 3 ili 5
 @msg	`stops` must be an array	`stops` mora biti niz
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` mora biti objekat SVG opcija (vidi document.formats)

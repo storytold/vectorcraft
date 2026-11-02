@@ -7,7 +7,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use serde_json::{Value, json};
-use vectorcraft_color::recolor::{ColorKey, Method, Preserve, Rng, RowMap, cluster};
+use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method, Preserve, Rng, RowMap, cluster};
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::swatches::{node_colors, node_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept), tint?: 100 (percent; with limitTo, art linked to the global or spot swatch the new color is takes this share of its tint)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model)}",
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept), tint?: 100 (percent; with limitTo, art linked to the global or spot swatch the new color is takes this share of its tint)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true, globalAdjust?: {saturation?: 0, brightness?: 0, temperature?: 0, luminosity?: 0} (Global Adjust: percent from -100 to 100, 0 changes nothing; every colour a row that isn't excluded recolours, and the group's new colours, take the same change after the row's new colour: saturation scales HSB saturation by 1 + saturation/100, brightness moves HSB brightness that share of the way to full or to black, temperature adds 0.2 × temperature/100 to red and takes it from blue, luminosity moves Lab lightness that share of the way to 100 or 0 keeping a and b; with limitTo each row's new colour takes the change before it snaps to the library)} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model)}",
             has_doc,
             apply
         ),
@@ -224,6 +224,30 @@ fn reduce(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"map": map, "preserved": kept.iter().map(|u| key_str(&u.color)).collect::<Vec<_>>(), "method": method.id()}))
 }
 
+/// The `globalAdjust` parameter: `{saturation?, brightness?, temperature?, luminosity?}`, each a
+/// percentage from -100 to 100 (0 when left out or null), as amounts from -1 to 1.
+fn adjust_param(p: &Value, cmd: &str) -> Result<GlobalAdjust> {
+    let given = match p.get("globalAdjust") {
+        None | Some(Value::Null) => return Ok(GlobalAdjust::default()),
+        Some(v @ Value::Object(_)) => v,
+        Some(_) => return Err(bad(cmd, "`globalAdjust` must be an object")),
+    };
+    let amount = |key: &str| -> Result<f32> {
+        let x = super::number_or(given, key, 0.0, cmd)?;
+        let (min, max) = (-100, 100);
+        if !(f64::from(min)..=f64::from(max)).contains(&x) {
+            return Err(bad(cmd, format!("`{key}` must be between {min} and {max} (got {x})")));
+        }
+        Ok((x / 100.0) as f32)
+    };
+    Ok(GlobalAdjust {
+        saturation: amount("saturation")?,
+        brightness: amount("brightness")?,
+        temperature: amount("temperature")?,
+        luminosity: amount("luminosity")?,
+    })
+}
+
 /// A current colour of a row: an exact colour, or every colour shown as a hex.
 enum Match {
     Key(ColorKey),
@@ -370,15 +394,25 @@ struct ColorMap {
     hexes: HashMap<String, usize>,
     /// Set when a colour took a new colour of another model in its own model.
     converted: std::cell::Cell<bool>,
+    /// The Global Adjust every mapped colour takes after its row's new colour.
+    adjust: GlobalAdjust,
 }
 
 impl ColorMap {
     /// `links`: the swatch of each of `rows`' new colours (as many as `rows`, or none); `group`: the
     /// global swatches of the color group being rewritten; `model`: the model rule of a row without
-    /// its own.
-    fn new(rows: &[Row], method: Method, model: ModelRule, links: &[Option<Link>], group: Vec<GroupSwatch>) -> Self {
-        let mut out =
-            Self { rows: vec![], links: vec![], tos: vec![], group, keys: HashMap::new(), hexes: HashMap::new(), converted: Default::default() };
+    /// its own; `adjust`: the Global Adjust of each mapped colour.
+    fn new(rows: &[Row], method: Method, model: ModelRule, links: &[Option<Link>], group: Vec<GroupSwatch>, adjust: GlobalAdjust) -> Self {
+        let mut out = Self {
+            rows: vec![],
+            links: vec![],
+            tos: vec![],
+            group,
+            keys: HashMap::new(),
+            hexes: HashMap::new(),
+            converted: Default::default(),
+            adjust,
+        };
         for (n, r) in rows.iter().enumerate().filter(|(_, r)| !r.from.is_empty()) {
             let Some(to) = r.new_color() else { continue };
             let i = out.rows.len();
@@ -387,7 +421,8 @@ impl ColorMap {
             // Colors that can't link to the swatch take the row's tint of it too.
             let mapped = link.as_ref().filter(|l| l.global && l.tint < 1.0).map_or(to, |l| to.tinted(l.tint));
             out.rows.push(RowMap::new(method, &colors, mapped).with_own_model(r.model.unwrap_or(model) != ModelRule::Keep));
-            out.tos.push(to);
+            // Compared with the group's new colours, which take the adjustment too.
+            out.tos.push(adjust.apply(to));
             out.links.push(link);
             for m in &r.from {
                 match m {
@@ -409,7 +444,7 @@ impl ColorMap {
         if r.converts(c) {
             self.converted.set(true);
         }
-        r.map(c)
+        self.adjust.apply(r.map(c))
     }
 
     /// Recolour a colour that can link to a swatch: a row whose new colour is a global or spot
@@ -448,7 +483,7 @@ impl ColorMap {
                 if row.converts(*c) {
                     self.converted.set(true);
                 }
-                row.map(*c)
+                self.adjust.apply(row.map(*c))
             }
         };
         // A color its row leaves as it is still loses its link to a swatch of the rewritten group
@@ -468,9 +503,13 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let method = method_param(p, C, Method::Exact)?;
     let palette = super::swatchlib::limit_param(s, p, C)?;
     let mut rows = parse_rows(p, C)?;
+    let adjust = adjust_param(p, C)?;
+    // With Limit to Library a row's new colour takes the Global Adjust before it snaps, so the art
+    // still takes the library's colours; otherwise every colour the rows map takes it.
+    let mapped_adjust = if palette.is_some() { GlobalAdjust::default() } else { adjust };
     if let Some(pl) = &palette {
         for r in &mut rows {
-            r.to = r.to.map(|c| pl.nearest(c));
+            r.to = r.to.map(|c| pl.nearest(adjust.apply(c)));
         }
     }
     // With Limit to Library, a row's new colour is a swatch of the library: the art takes that
@@ -510,11 +549,12 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             .iter()
             .map(|v| {
                 color_value(v)
+                    .map(|c| adjust.apply(c))
                     .map(|c| in_doc_model(palette.as_ref().map_or(c, |pl| pl.nearest(c))))
                     .ok_or_else(|| bad(C, format!("bad colour {v} in groupColors")))
             })
             .collect::<Result<_>>()?,
-        None => rows.iter().filter_map(Row::new_color).collect(),
+        None => rows.iter().filter_map(Row::new_color).map(|c| mapped_adjust.apply(c)).collect(),
     };
     let rename = text_param(p, "rename", C)?;
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
@@ -553,7 +593,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
                     .collect()
             })
             .unwrap_or_default();
-        let map = ColorMap::new(&rows, method, model, &links, kept);
+        let map = ColorMap::new(&rows, method, model, &links, kept, mapped_adjust);
         let f = |c: Color| map.map(c);
         let lf = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| map.map_link(c, link, tint);
         let changed = Recolor::with_links(scope, &f, &lf).run(d, &ids);

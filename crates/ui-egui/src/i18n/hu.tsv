@@ -1602,6 +1602,7 @@ file-filter	Templates	Sablonok
 	Glass	Üveg
 	Glass…	Üveg…
 	Global	Globális
+	Global Adjust	Globális beállítás
 	Global Brush Dimensions	Globális ecsetméretek
 	Global Process Color	Globális skálaszín
 	Global Process Color, CMYK	Globális skálaszín, CMYK
@@ -4521,6 +4522,7 @@ imageTrace	Outline	Körvonal
 @msg	`library` is a library id or name (see {list})	a `library` könyvtárazonosító vagy -név lehet (lásd: {list})
 @msg	`mode` applies to freeform gradients	a `mode` a szabad formájú színátmenetekre vonatkozik
 @msg	`preserve` must be an object	`preserve`: objektum kell
+@msg	`globalAdjust` must be an object	`globalAdjust`: objektum kell
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize`: 1, 3 vagy 5 kell
 @msg	`stops` must be an array	`stops`: tömb kell
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`: SVG-beállításokat tartalmazó objektum kell (lásd: document.formats)
