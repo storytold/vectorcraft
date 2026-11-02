@@ -26,8 +26,9 @@
 //! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
 //!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
 //!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
-//! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
-//!   gives how many variables and data sets it has ([`VariableLibrary`]).
+//! - Variables: the variable library, XML nodes of the `/Document` dictionary: its variables, data
+//!   sets, active data set and lock, without bindings; a note gives how many entries were left out
+//!   ([`VariableRead`]).
 //! - Objects on Path: a group whose objects' dictionaries carry ids, and a record of the
 //!   `/Document` dictionary naming them, read by [`on_path`].
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
@@ -109,7 +110,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
+pub use document::{PaletteSwatches, VariableRead, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
@@ -204,8 +205,8 @@ struct Reader<'a> {
     custom_more: Option<bool>,
     /// The header ended (`%%EndComments`).
     header_done: bool,
-    /// The variables and data sets of the `/Document` dictionary's variable library.
-    variables: VariableLibrary,
+    /// The `/Document` dictionary's variable library.
+    variables: VariableRead,
     /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
     on_path: on_path::OnPath,
     gradients: HashMap<String, Gradient>,
@@ -364,7 +365,7 @@ impl<'a> Reader<'a> {
             custom_colors: Vec::new(),
             custom_more: None,
             header_done: false,
-            variables: VariableLibrary::default(),
+            variables: VariableRead::default(),
             on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),
             gradient_def: None,

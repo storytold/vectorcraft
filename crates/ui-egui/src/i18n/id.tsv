@@ -5216,6 +5216,9 @@ mark-style	Japanese	Jepang
 	Path Length	Panjang jalur
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	lapisan file tidak terbaca ({_1}): file masuk sebagai halamannya, dalam satu lapisan
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	lapisan file tidak terbaca dari data pengeditannya ({_1}): lapisannya berasal dari bagian PDF file
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	pustaka variabel file hanya terbaca sebagian (entri yang dilewati: {_1}): panel Variabel menampilkan sisanya
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	pustaka variabel file tidak dapat dibaca: panel Variabel tidak menampilkannya
+@msg	a variable of unknown kind can't be bound to objects	variabel bertipe tidak dikenal tidak dapat diikat ke objek
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka

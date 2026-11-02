@@ -203,6 +203,7 @@ fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, line: 
         VariableKind::Graph if t.len() <= MAX_GRAPH_CSV => DataValue::Graph(t.to_string()),
         VariableKind::Graph => return Err(bad(cmd, format!("line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
         VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, line, cmd)?),
+        VariableKind::Unknown => return Err(bad(cmd, format!("line {line}: value for `{var}` must match its variable kind"))),
     }))
 }
 
@@ -220,7 +221,7 @@ fn export_header(v: &Variable) -> String {
     match v.kind {
         VariableKind::Visibility => format!("#{}", v.name),
         VariableKind::Image => format!("@{}", v.name),
-        VariableKind::Text | VariableKind::Graph => v.name.clone(),
+        VariableKind::Text | VariableKind::Graph | VariableKind::Unknown => v.name.clone(),
     }
 }
 
