@@ -57,6 +57,22 @@ impl<'a> Reader<'a> {
         self.end_layer_in_mask()
     }
 
+    /// A placed file's `` ` ``: its matrix, box and path; a second one, or operands of another
+    /// shape, leave it unreadable.
+    fn place_tick(&mut self, vals: &[V], hidden: bool) {
+        let unseen = hidden || self.gs.hidden || !self.shown();
+        let p = self.place.get_or_insert_with(|| Place { hidden: unseen, ..Place::default() });
+        if p.ticked {
+            p.broken = true;
+        } else {
+            p.ticked = true;
+            match tick(vals) {
+                Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
+                None => p.broken = true,
+            }
+        }
+    }
+
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
         if self.blend_record.is_some() {
             self.end_blend();
@@ -291,19 +307,7 @@ impl<'a> Reader<'a> {
             // `[a b c d tx ty] llx lly urx ury (path) `` ` ``, three more numbers before the path in
             // newer files: the version 7 form has no `%AI5_BeginPlace` before it. Before the art,
             // the setup's procedures run.
-            "`" if self.place.is_some() || !self.frames.is_empty() => {
-                let unseen = hidden || self.gs.hidden || !self.shown();
-                let p = self.place.get_or_insert_with(|| Place { hidden: unseen, ..Place::default() });
-                if p.ticked {
-                    p.broken = true;
-                } else {
-                    p.ticked = true;
-                    match tick(&vals) {
-                        Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
-                        None => p.broken = true,
-                    }
-                }
-            }
+            "`" if self.place.is_some() || !self.frames.is_empty() => self.place_tick(&vals, hidden),
             "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
             "To" => self.begin_text(&vals, hidden),
