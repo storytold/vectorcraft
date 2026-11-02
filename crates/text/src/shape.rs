@@ -30,7 +30,7 @@ pub(crate) struct SGlyph {
     pub run: usize,
     /// Advance in points (tracking, manual kerning and horizontal scale applied).
     pub adv: f64,
-    /// Offset from the pen position, y down.
+    /// Offset from the pen position, y down (right to left, manual kerning applied).
     pub dx: f64,
     pub dy: f64,
     /// Outline scale (font units -> points).
@@ -621,8 +621,9 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
         let Some(left_style) = runs.get(left.run).map(|(_, s)| *s) else { continue };
         let em = left.sx * left.face.upem / (left_style.h_scale / 100.0);
         let tracking = left_style.tracking / 1000.0 * em;
-        let manual = left_style.kerning.unwrap_or(0.0) / 1000.0 * em;
-        let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv).sum::<f64>() - tracking - manual;
+        // A manual kerning value on the left glyph is part of its advance and, right to left, of
+        // its offset too (it spaces the left glyph from its left neighbor): it is not taken off.
+        let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv).sum::<f64>() - tracking;
         let key = [
             u64::from(left.face.id()),
             u64::from(left.gid),
@@ -1110,12 +1111,21 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
+        let mut dx = xo as f64 * k * hs;
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
-        } else if last_in_cluster {
-            let tracking = gst.tracking / 1000.0 * size;
+        } else {
             let manual_kern = gst.kerning.map(|v| v / 1000.0 * size).unwrap_or(0.0);
-            adv += tracking + manual_kern;
+            // Manual kerning spaces a character from the next one in reading order. Right to left,
+            // that one is drawn to its left: the cluster's glyphs move right by the value, so that
+            // the space its last glyph's advance gains is at the cluster's left.
+            if level.is_rtl() && !feats.vertical {
+                dx += manual_kern;
+            }
+            if last_in_cluster {
+                let tracking = gst.tracking / 1000.0 * size;
+                adv += tracking + manual_kern;
+            }
         }
         out.push(SGlyph {
             face: face.clone(),
@@ -1124,7 +1134,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             len: end.saturating_sub(cl).max(1),
             run,
             adv,
-            dx: xo as f64 * k * hs,
+            dx,
             dy: -(yo as f64) * k * vs,
             sx: k * hs,
             sy: k * vs,
