@@ -2155,6 +2155,8 @@ digits	Malayalam	Malayalam
 	Preserve Overprints and Spot Colors	Pertahankan overprint dan warna spot
 	Rasters	Raster
 	Replaces the saved preset of that name.	Mengganti preset tersimpan dengan nama tersebut.
+	Save As Preset…	Simpan sebagai Preset…
+	Save Changes	Simpan Perubahan
 	Save Preset…	Simpan preset…
 	Vectors	Vektor
 	A saved copy of the selected preset	Salinan tersimpan dari preset terpilih
@@ -4543,6 +4545,13 @@ imageTrace	Outline	Kontur
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ini bukan logo dengan warna rata ({_1}% area solidnya cocok dengan beberapa warna rata), jadi mode Logo Rata akan mengubah gradiennya menjadi patch: gunakan mode Warna sebagai gantinya
 @msg	`{what}` closes nothing	`{what}` tidak menutup apa pun
 @msg	`{what}` closes something it didn't open	`{what}` menutup sesuatu yang tidak dibukanya
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` adalah nama preset dari document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	tidak ada preset ekspor `{n}` (lihat document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	tidak ada preset ekspor tersimpan untuk diekspor (sebutkan yang bawaan di `names`)
+@msg	not an export presets file (format `{_1}`)	bukan file preset ekspor (format `{_1}`)
+@msg	not an export presets file: {e}	bukan file preset ekspor: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` harus berupa objek
 @msg	a path has too many points	sebuah jalur memiliki terlalu banyak titik
 @msg	it ends inside a group or compound path	berakhir di dalam grup atau jalur majemuk
 @msg	it ends inside a layer	berakhir di dalam lapisan
@@ -4920,6 +4929,7 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
 file-filter	PDF-compatible .ai	.ai kompatibel PDF
 file-filter	VectorCraft Template	Templat VectorCraft
@@ -5276,6 +5286,10 @@ swatch	Bright Violet	Violet cerah
 	Delete Export Preset	Hapus preset ekspor
 	Export Presets	Daftar preset ekspor
 	Save Export Preset	Simpan preset ekspor
+	Export Export Presets	Ekspor preset ekspor
+	Export Preset…	Ekspor preset…
+	Import Export Presets	Impor preset ekspor
+	Import Preset…	Impor preset…
 	Export Layer	Ekspor lapisan
 	Export Selection	Ekspor seleksi
 	All in One Folder	Semua dalam satu folder

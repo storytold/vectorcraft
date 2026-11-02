@@ -2169,6 +2169,8 @@ digits	Malayalam	Malayalam
 	Preserve Overprints and Spot Colors	Overprints en spotkleuren behouden
 	Rasters	Rasters
 	Replaces the saved preset of that name.	Vervangt de opgeslagen voorinstelling met die naam.
+	Save As Preset…	Opslaan als voorinstelling…
+	Save Changes	Wijzigingen opslaan
 	Save Preset…	Voorinstelling opslaan…
 	Vectors	Vectoren
 	A saved copy of the selected preset	Een opgeslagen kopie van de geselecteerde voorinstelling
@@ -4555,6 +4557,13 @@ imageTrace	Outline	Contour
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dit is geen logo met effen kleuren ({_1}% van de effen vlakken komt overeen met enkele effen kleuren), dus de modus Effen logo zou de verlopen in vlakken veranderen: gebruik in plaats daarvan de modus Kleur
 @msg	`{what}` closes nothing	`{what}` sluit niets
 @msg	`{what}` closes something it didn't open	`{what}` sluit iets dat het niet heeft geopend
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` is de naam van een voorinstelling uit document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	geen exportvoorinstelling `{n}` (zie document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	geen opgeslagen exportvoorinstellingen om te exporteren (noem ingebouwde in `names`)
+@msg	not an export presets file (format `{_1}`)	geen bestand met exportvoorinstellingen (indeling `{_1}`)
+@msg	not an export presets file: {e}	geen bestand met exportvoorinstellingen: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` moet een object zijn
 @msg	a path has too many points	een pad heeft te veel punten
 @msg	it ends inside a group or compound path	het eindigt binnen een groep of samengesteld pad
 @msg	it ends inside a layer	het eindigt binnen een laag
@@ -4932,6 +4941,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai
 file-filter	VectorCraft Template	VectorCraft-sjabloon
@@ -5284,6 +5294,10 @@ swatch	Bright Violet	Felviolet
 	Delete Export Preset	Exportvoorinstelling verwijderen
 	Export Presets	Exportvoorinstellingen
 	Save Export Preset	Exportvoorinstelling opslaan
+	Export Export Presets	Exportvoorinstellingen exporteren
+	Export Preset…	Voorinstelling exporteren…
+	Import Export Presets	Exportvoorinstellingen importeren
+	Import Preset…	Voorinstelling importeren…
 	Export Layer	Laag exporteren
 	Export Selection	Selectie exporteren
 	All in One Folder	Alles in één map

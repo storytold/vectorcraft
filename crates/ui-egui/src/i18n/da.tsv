@@ -2155,6 +2155,8 @@ digits	Malayalam	Malayalam
 	Preserve Overprints and Spot Colors	Bevar overtryk og spotfarver
 	Rasters	Rasterbilleder
 	Replaces the saved preset of that name.	Erstatter den gemte forudindstilling med det navn.
+	Save As Preset…	Gem som forudindstilling…
+	Save Changes	Gem ændringer
 	Save Preset…	Gem forudindstilling…
 	Vectors	Vektorer
 	A saved copy of the selected preset	En gemt kopi af den valgte forudindstilling
@@ -4543,6 +4545,13 @@ imageTrace	Outline	Kontur
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dette er ikke et logo med flade farver ({_1}% af de ensfarvede områder matcher nogle få flade farver), så tilstanden Fladt logo ville omdanne dets gradienter til pletter: brug tilstanden Farve i stedet
 @msg	`{what}` closes nothing	`{what}` lukker intet
 @msg	`{what}` closes something it didn't open	`{what}` lukker noget, den ikke åbnede
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` er navnet på en forudindstilling fra document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	ingen eksportforudindstilling `{n}` (se document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	ingen gemte eksportforudindstillinger at eksportere (angiv de indbyggede i `names`)
+@msg	not an export presets file (format `{_1}`)	ikke en fil med eksportforudindstillinger (format `{_1}`)
+@msg	not an export presets file: {e}	ikke en fil med eksportforudindstillinger: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` skal være et objekt
 @msg	a path has too many points	en sti har for mange punkter
 @msg	it ends inside a group or compound path	den slutter inde i en gruppe eller en sammensat kurve
 @msg	it ends inside a layer	den slutter inde i et lag
@@ -4920,6 +4929,7 @@ file-filter	Swatch libraries	Farveprøvebiblioteker
 file-filter	Flattener presets	Flattener-forudindstillinger
 file-filter	PDF presets	PDF-forudindstillinger
 file-filter	Print presets	Printforudindstillinger
+file-filter	Export presets	Eksportforudindstillinger
 file-filter	SVG Compressed	Komprimeret SVG
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	VectorCraft Template	VectorCraft-skabelon
@@ -5276,6 +5286,10 @@ swatch	Bright Violet	Kraftig violet
 	Delete Export Preset	Slet eksportforudindstilling
 	Export Presets	Eksportforudindstillinger
 	Save Export Preset	Gem eksportforudindstilling
+	Export Export Presets	Eksportér eksportforudindstillinger
+	Export Preset…	Eksportér forudindstilling…
+	Import Export Presets	Importér eksportforudindstillinger
+	Import Preset…	Importér forudindstilling…
 	Export Layer	Eksportér lag
 	Export Selection	Eksportér markering
 	All in One Folder	Alt i én mappe
