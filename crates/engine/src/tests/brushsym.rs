@@ -1,9 +1,9 @@
 //! Brushes and symbols: commands, tools, rendering and persistence.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{AngleProfile, Document, Node, NodeKind, PressureProfile};
 use vectorcraft_geom::Rect;
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind};
 
 use crate::*;
 
@@ -666,20 +666,120 @@ fn continuing_a_stroke_joins_its_pressure() {
     assert_eq!(p.at(1.0), vectorcraft_doc::PressureProfile::MID, "the old part had no pressure");
 }
 
+/// The pen's tilt, bearing and barrel rotation recorded on the stroke `id`.
+fn pose_of(s: &Session, id: NodeId) -> (Option<PressureProfile>, Option<AngleProfile>, Option<AngleProfile>) {
+    let st = node(s, id).appearance.stroke().cloned().unwrap();
+    (st.tilt, st.bearing, st.rotation)
+}
+
+/// #764: `path.freehand` points carry the pen's tilt and barrel rotation; the stroke keeps how far
+/// the pen leaned (0 upright to 1 flat), which way (counter-clockwise on the page) and how far its
+/// barrel turned (counter-clockwise), and a continued stroke joins them.
+#[test]
+fn freehand_points_record_the_pens_tilt_bearing_and_rotation() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    // Leaning 30° to the right, the barrel turned 90° clockwise.
+    let id = draw(&mut s, json!([[0, 50, 0.5, 30, 0, 90], [100, 50, 0.5, 30, 0, 90]]));
+    let (tilt, bearing, rotation) = pose_of(&s, id);
+    assert!((tilt.unwrap().at(0.5) - 1.0 / 3.0).abs() < 1e-3);
+    assert!(bearing.unwrap().at(0.5).abs() < 1e-6);
+    assert!((rotation.unwrap().at(0.5) + 90.0).abs() < 1e-6, "counter-clockwise");
+    // Leaning down the page (towards the user) is −90°; no rotation axis, no rotation.
+    let id = draw(&mut s, json!([[0, 150, 0.5, 0, 30, null], {"x": 100, "y": 150, "pressure": 0.5, "tiltY": 30}]));
+    let (_, bearing, rotation) = pose_of(&s, id);
+    assert!((bearing.unwrap().at(0.5) + 90.0).abs() < 1e-6);
+    assert_eq!(rotation, None);
+    // Upright, the pen leans no way: the bearing it leaned before.
+    let id = draw(&mut s, json!([[0, 250, 0.5, 0, -40], [50, 250, 0.5, 0.2, 0.2], [100, 250, 0.5, 0, 0]]));
+    let (tilt, bearing, _) = pose_of(&s, id);
+    let bearing = bearing.unwrap();
+    assert!((bearing.at(1.0) - 90.0).abs() < 1e-6 && tilt.unwrap().at(1.0) < 1e-6, "{bearing:?}");
+    // Pressure alone, or nothing: no pen pose.
+    let id = draw(&mut s, json!([[0, 350, 0.5], [100, 350, 0.5]]));
+    assert_eq!(pose_of(&s, id), (None, None, None));
+    // Continued at its end: the old part keeps its rotation, the new part has none (unturned).
+    let id = draw(&mut s, json!([[0, 450, 0.5, 30, 0, 90], [100, 450, 0.5, 30, 0, 90]]));
+    s.execute("path.freehand", &json!({"points": [[100, 450], [200, 450]], "style": "brush", "extend": {"id": id.0, "end": "end"}})).unwrap();
+    let (tilt, _, rotation) = pose_of(&s, id);
+    let rotation = rotation.unwrap();
+    assert!((rotation.at(0.25) + 90.0).abs() < 1e-6 && rotation.at(0.9).abs() < 1e-6, "{rotation:?}");
+    assert_eq!(tilt.unwrap().at(0.9), vectorcraft_doc::PressureProfile::MID, "half way over without one");
+}
+
+/// #764: a stroke that connects two paths joins the pen's tilt, bearing and rotation of both, the
+/// connected path's after the stroke's.
+#[test]
+fn connecting_two_strokes_joins_their_pens_rotation() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    let a = draw(&mut s, json!([[0, 50, 0.5, 30, 0, 90], [100, 50, 0.5, 30, 0, 90]]));
+    let b = draw(&mut s, json!([[200, 50, 0.5, 30, 0, 45], [300, 50, 0.5, 30, 0, 45]]));
+    let connect =
+        json!({"points": [[100, 50], [200, 50]], "style": "brush", "extend": {"id": a.0, "end": "end"}, "connect": {"id": b.0, "end": "start"}});
+    s.execute("path.freehand", &connect).unwrap();
+    assert!(s.doc().unwrap().doc.node(b).is_none(), "joined on");
+    let (_, _, rotation) = pose_of(&s, a);
+    let rotation = rotation.unwrap();
+    assert!((rotation.at(0.1) + 90.0).abs() < 1e-6, "{rotation:?}");
+    assert!(rotation.at(0.5).abs() < 1e-6, "the stroke is unturned: {rotation:?}");
+    assert!((rotation.at(0.9) + 45.0).abs() < 1e-6, "the connected path's: {rotation:?}");
+}
+
+/// #764: the Paintbrush records a pen's tilt, bearing and rotation on the stroke, a brush with
+/// Roundness on Tilt draws it, and it lasts through saving; a mouse stroke records none.
+#[test]
+fn paintbrush_records_the_pens_tilt_on_the_stroke() {
+    let mut s = session();
+    let params = json!({"angle": 0, "roundness": 50, "size": 10, "variation": [0, 50, 0], "modes": ["fixed", "tilt", "fixed"]});
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": params})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "3 pt. Round"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    let strokes = |s: &mut Session, y: f64, pen: Option<PenPose>| {
+        for (k, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 120.0), (PointerKind::Drag, 220.0), (PointerKind::Up, 320.0)] {
+            s.pointer(&PointerEvent { pen, ..PointerEvent::new(k, x, y) }, v).unwrap();
+        }
+        let id = s.doc().unwrap().selection.objects[0];
+        select(s, &[]);
+        id
+    };
+    let pen = strokes(&mut s, 60.0, Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(30.0) }));
+    let (tilt, bearing, rotation) = pose_of(&s, pen);
+    assert_eq!(tilt.as_ref().map(|t| t.at(0.5)), Some(0.0), "upright");
+    assert!(bearing.is_some() && (rotation.unwrap().at(0.5) + 30.0).abs() < 1e-6);
+    let mouse = strokes(&mut s, 200.0, None);
+    assert_eq!(pose_of(&s, mouse), (None, None, None), "a mouse reads no tilt");
+    // Drawn: upright, the nib is round (10 pt); without a tilt, roundness 50 (5 pt).
+    assert!((brushed_bounds(&s, pen).height() - 10.0).abs() < 0.1, "{:?}", brushed_bounds(&s, pen));
+    assert!((brushed_bounds(&s, mouse).height() - 5.0).abs() < 0.1, "{:?}", brushed_bounds(&s, mouse));
+    // Saved and reopened as it was.
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(pen).unwrap().appearance.stroke(), doc.node(pen).unwrap().appearance.stroke());
+}
+
 /// Pen pressure belongs to its path: new art, graphic styles and Brush Options' edits leave it.
 #[test]
 fn pressure_stays_with_its_own_path() {
     let mut s = session();
     s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
-    let r = s.execute("brush.freehand", &json!({"points": [[0, 50, 0.2], [100, 50, 0.9]], "style": "brush", "brush": "3 pt. Round"})).unwrap();
+    let points = json!([[0, 50, 0.2, 30, 10, 45], [100, 50, 0.9, 20, 0, 90]]);
+    let r = s.execute("brush.freehand", &json!({"points": points, "style": "brush", "brush": "3 pt. Round"})).unwrap();
     let id = NodeId(r["id"].as_u64().unwrap());
     assert!(pressure_of(&s, id).is_some());
+    assert!(matches!(pose_of(&s, id), (Some(_), Some(_), Some(_))));
     select(&mut s, &[id]);
     s.execute("graphicStyle.new", &json!({"name": "Inked"})).unwrap();
     let style = s.doc().unwrap().doc.graphic_style("Inked").unwrap().appearance.clone();
-    assert!(style.stroke().is_some_and(|st| st.pressure.is_none()));
+    assert!(style.stroke().is_some_and(|st| st.pressure.is_none() && st.tilt.is_none() && st.bearing.is_none() && st.rotation.is_none()));
     let other = rect(&mut s, 10.0, 100.0, 50.0, 50.0);
     assert_eq!(pressure_of(&s, other), None, "new art takes the look, not the pressure");
+    assert_eq!(pose_of(&s, other), (None, None, None), "nor the tilt, bearing or rotation");
     pressure_round(&mut s);
     assert!(pressure_of(&s, id).is_some(), "editing the brush keeps the strokes' pressure");
 }
@@ -692,10 +792,18 @@ fn brush_options_set_variation_modes() {
     let b = s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap();
     assert_eq!(b["modes"], json!(["fixed", "fixed", "pressure"]));
     assert_eq!(b["variation"], json!([0.0, 0.0, 3.0]));
-    for bad in [json!({"modes": ["fixed", "fixed", "tilt"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})] {
+    for bad in [json!({"modes": ["fixed", "fixed", "wobble"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})]
+    {
         assert!(s.execute("brush.options", &json!({"name": "3 pt. Round", "params": bad})).is_err(), "{bad}");
     }
     assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap(), b, "a refused edit changes nothing");
+    // #764: Tilt, Bearing and Rotation, on a Calligraphic and a Scatter brush.
+    let modes = json!(["tilt", "bearing", "rotation"]);
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": {"modes": modes}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap()["modes"], modes);
+    let modes = json!(["tilt", "bearing", "rotation", "pressure"]);
+    s.execute("brush.options", &json!({"name": "Dots", "params": {"modes": modes}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "Dots"})).unwrap()["modes"], modes);
 }
 
 /// The bounds of the brush art `id`'s strokes draw.
@@ -753,7 +861,7 @@ fn scatter_art_and_pattern_brush_options_update_strokes() {
     );
     assert!(brushed_bounds(&s, id).is_finite());
     for (name, bad) in [
-        ("Dots", json!({"modes": ["fixed", "tilt", "fixed", "fixed"]})),
+        ("Dots", json!({"modes": ["fixed", "wobble", "fixed", "fixed"]})),
         ("Dots", json!({"modes": ["fixed"]})),
         ("Dots", json!({"colorization": {"method": "sparkle"}})),
         ("Arrow", json!({"direction": "diagonal"})),
