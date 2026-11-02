@@ -151,7 +151,7 @@ fn consolidate_all_windows_shows_one_document_again() {
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0.len(), 2);
-    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false}));
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false, "floating": []}));
     frame(&mut app, &ctx, vec![]);
     assert!(panes(&app).0.is_empty() && app.canvas.panes.shown.is_empty());
     assert_eq!(app.canvas_rect, Some(tabbed), "the current document fills the document area again");

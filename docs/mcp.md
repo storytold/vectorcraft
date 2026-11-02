@@ -3639,10 +3639,18 @@ the current one.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
 area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
 its pane; it returns `{tiled, panes}`. The current document's pane is the canvas, and a press in another pane makes its
-document the current one. `window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one
-document under its tab again and returns `{tiled: false}`. The arrangement is not saved. `ui.inspect` reports `tiled`
-and `panes` (each pane's `document` index, `rect` and whether it is `active`); canvas coordinates map to the current
-document's pane (`canvasRect`).
+document the current one. `window.arrange.floatInWindow` (Window › Arrange › Float in Window) moves the current document
+out of the tab strip into a floating window of its own, `window.arrange.floatAllInWindows` (Float All in Windows) does
+so for every tabbed document, and `window.arrange.cascade` (Cascade) floats every document and stacks the windows 30 pt
+apart from the upper left of the document area; each returns `{floating}`, the floating documents' indices. On the
+desktop each window is an OS window; on the web, on Wayland and while the control channel is attached (`--control`),
+it is a window inside the app's window, so `ui.click`, `ui.drag` and `ui.screenshot` reach it. The current
+document's window holds the canvas, and a press in another document's window makes its document the current one.
+`window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one document under its tab
+again, floating ones included, and returns `{tiled: false, floating: []}`; Tile brings floating documents back into its
+grid. The arrangement is not saved. `ui.inspect` reports `tiled`, `panes` (each pane's `document` index, `rect` and
+whether it is `active`) and `floating`; canvas coordinates map to the current document's pane or window
+(`canvasRect`), in that window's coordinates while it floats.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}

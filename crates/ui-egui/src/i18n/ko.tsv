@@ -641,6 +641,7 @@ digits	Malayalam	말라얄람어
 	Cascade	계단식 배열
 	Tile	바둑판식 배열
 	Float in Window	창에 플로팅
+	Float All in Windows	모두 창에 플로팅
 	Consolidate All Windows	모든 창 통합
 	Workspace	작업 영역
 	Reset Essentials	Essentials 재설정

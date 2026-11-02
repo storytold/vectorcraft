@@ -19,6 +19,12 @@ pub(super) fn doc_tab_title(app: &VectorcraftApp, i: usize, d: &vectorcraft_engi
     tab_title(d, zoom, view.is_some_and(|v| v.outline), app.session.prefs.display_print_size)
 }
 
+/// The title of document `i`'s floating window ([`crate::doc_windows`]): its tab's title.
+pub(crate) fn document_window_title(app: &VectorcraftApp, i: usize) -> Option<String> {
+    let d = app.session.documents().get(i)?;
+    Some(doc_tab_title(app, i, d))
+}
+
 /// Whether a document tab's × comes before its title (macOS) rather than after it (Windows,
 /// Linux and the web).
 pub(super) const CLOSE_BEFORE_TITLE: bool = cfg!(target_os = "macos");
@@ -37,6 +43,8 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
 /// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
 /// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
 /// right end, which lists every open document, and the active tab is always in view (#746).
+/// Documents in floating windows have no tab ([`crate::doc_windows`]); while the current document
+/// is in one, the tab of the document the strip shows is the highlighted one.
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// The width of the » button.
     const MORE: f32 = 30.0;
@@ -46,15 +54,16 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.painter().rect_filled(strip, 0.0, t.tab_strip);
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     // On the Home screen no tab is the current one.
-    let active = app.session.active_index().filter(|_| app.ui.home.is_none());
-    let tabs: Vec<(String, std::sync::Arc<egui::Galley>)> = app
-        .session
-        .documents()
+    let shown = crate::doc_windows::tab_document(app).filter(|_| app.ui.home.is_none());
+    // The documents under the tabs, by index; `active` is the position of the highlighted one.
+    let docked = crate::doc_windows::docked(app);
+    let active = docked.iter().position(|i| Some(*i) == shown);
+    let tabs: Vec<(String, std::sync::Arc<egui::Galley>)> = docked
         .iter()
-        .enumerate()
+        .filter_map(|i| Some((*i, app.session.documents().get(*i)?)))
         .map(|(i, d)| {
             let title = doc_tab_title(app, i, d);
-            let color = if Some(i) == active { t.text_strong } else { t.text_dim };
+            let color = if Some(i) == shown { t.text_strong } else { t.text_dim };
             (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })
         .collect();
@@ -66,11 +75,12 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut activate = None;
     let mut close = None;
     let mut hovering_art = false;
-    for (i, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
-        if x + w > strip.left() + room && Some(i) != active {
+    for (k, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+        if x + w > strip.left() + room && Some(k) != active {
             break;
         }
-        let is_active = Some(i) == active;
+        let Some(&i) = docked.get(k) else { break };
+        let is_active = Some(k) == active;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(*w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.scope_id().with(("tab", i)), Sense::click());
         if is_active {
@@ -95,10 +105,12 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         x += w;
     }
     crate::document_drag::finish_tabs(ui.ctx(), hovering_art);
-    // The » button: every open document, the active one checked. The list scrolls once it
-    // reaches the bottom of the window, so every document of a large session stays reachable
-    // (#4017).
+    // The » button: every open document, floating ones included, the active one checked. The list
+    // scrolls once it reaches the bottom of the window, so every document of a large session stays
+    // reachable (#4017).
     if overflow {
+        let current = app.session.active_index().filter(|_| app.ui.home.is_none());
+        let titles: Vec<String> = (0..app.session.documents().len()).map(|i| document_window_title(app, i).unwrap_or_default()).collect();
         let more = egui::Rect::from_min_max(egui::pos2(strip.right() - MORE, strip.top()), egui::pos2(strip.right(), strip.bottom() - 1.0));
         let resp = ui.interact(more, ui.scope_id().with("tabs-more"), Sense::click());
         ui.painter().rect_filled(more, 0.0, if resp.hovered() { t.hover.gamma_multiply(0.4) } else { t.tab_strip });
@@ -106,8 +118,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let resp = resp.on_hover_text(tl!("Show all open documents"));
         egui::Popup::menu(&resp).show(|ui| {
             widgets::menu_scroll(ui, |ui| {
-                for (i, (title, _)) in tabs.iter().enumerate() {
-                    if widgets::menu_item_name(ui, title, true, Some(i) == active) {
+                for (i, title) in titles.iter().enumerate() {
+                    if widgets::menu_item_name(ui, title, true, Some(i) == current) {
                         activate = Some(i);
                         ui.close();
                     }

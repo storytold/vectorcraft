@@ -85,6 +85,7 @@ impl VectorcraftApp {
                 hover_cursor: None,
                 presented: None,
                 panes: Default::default(),
+                windows: Default::default(),
             },
             perf: Perf::default(),
             dock_rt: Default::default(),
@@ -427,18 +428,31 @@ impl VectorcraftApp {
     }
 
     /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
-    /// Window › Arrange › Tile is on) and the isolation bar over it.
+    /// Window › Arrange › Tile is on) and the isolation bar over it. While the current document is
+    /// in a floating window, the tab strip's document draws as a pane.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
+        self.canvas.windows.area = Some(ui.available_rect_before_wrap());
+        let floats = crate::doc_windows::current_floats(self);
         if !canvas::tiled_area(self, ui) {
-            canvas::show(self, ui);
+            if floats {
+                let rect = ui.available_rect_before_wrap();
+                if let Some(i) = crate::doc_windows::tab_document(self)
+                    && canvas::pane(self, ui, i, rect)
+                {
+                    chrome::show_document(self, i);
+                }
+            } else {
+                canvas::show(self, ui);
+            }
         }
         // Over the canvas inside the rulers, so the rulers and scroll bars stay uncovered.
         if self.ui.screen_mode < 3
+            && !floats
             && !menus::home_showing(self)
             && let Some(area) = self.canvas_rect
         {
@@ -510,6 +524,7 @@ impl VectorcraftApp {
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);

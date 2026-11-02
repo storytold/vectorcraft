@@ -594,6 +594,7 @@
 	Cascade	Kaskadowo
 	Tile	Sąsiadująco
 	Float in Window	Pływające w oknie
+	Float All in Windows	Wszystkie pływające w oknach
 	Consolidate All Windows	Scal wszystkie okna
 	Workspace	Obszar roboczy
 	Reset Essentials	Resetuj Essentials

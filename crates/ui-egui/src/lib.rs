@@ -34,6 +34,7 @@ pub mod credits;
 pub mod cursors;
 mod custom_toolbars;
 pub mod dialogs;
+pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
 pub mod export_progress;

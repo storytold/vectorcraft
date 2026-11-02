@@ -648,6 +648,7 @@ digits	Malayalam	マラヤーラム数字
 	Cascade	重ねて表示
 	Tile	並べて表示
 	Float in Window	ウィンドウを分離
+	Float All in Windows	すべてをウィンドウに分離
 	Consolidate All Windows	すべてのウィンドウを統合
 	Workspace	ワークスペース
 	Reset Essentials	初期設定をリセット

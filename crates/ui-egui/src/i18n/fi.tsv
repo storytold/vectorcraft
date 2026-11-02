@@ -627,6 +627,7 @@
 	Cascade	Porrasta
 	Tile	Vierekkäin
 	Float in Window	Kelluta ikkunassa
+	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
 	Workspace	Työtila
 	Reset Essentials	Palauta Essentials

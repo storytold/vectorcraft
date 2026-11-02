@@ -582,16 +582,34 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.list", "List Workspaces", "", "{}"),
     ("window.newWindow", "New Window", "", "{}"),
     (
+        "window.arrange.cascade",
+        "Cascade",
+        "",
+        "{} put every open document in a floating window of its own and stack the windows from the upper left of the document area to its lower right, 30 pt apart, in tab order, each fitted to its window, the current document's in front; on the desktop each is an OS window, on the web and Wayland a window inside the app's window; returns {floating} (document indices)",
+    ),
+    (
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; returns {tiled: true, panes}",
+        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; documents in floating windows come back under the tabs first; returns {tiled: true, panes}",
+    ),
+    (
+        "window.arrange.floatInWindow",
+        "Float in Window",
+        "",
+        "{} move the current document out of the tab strip into a floating window of its own, fitted to it; the window holding the current document takes the tools, a click in another document's window makes its document the current one; a document already floating stays where it is; returns {floating} (document indices)",
+    ),
+    (
+        "window.arrange.floatAllInWindows",
+        "Float All in Windows",
+        "",
+        "{} move every document under the tab strip into a floating window of its own, at the next places of a cascade; returns {floating} (document indices)",
     ),
     (
         "window.arrange.consolidateAllWindows",
         "Consolidate All Windows",
         "",
-        "{} show one document at a time again, under its tab, after Tile; returns {tiled: false}",
+        "{} show one document at a time again, under its tab, after Tile, Float in Window, Float All in Windows or Cascade; returns {tiled: false, floating: []}",
     ),
     (
         "window.nextDocument",
