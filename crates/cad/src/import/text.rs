@@ -62,10 +62,8 @@ fn until_semicolon(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Stri
     arg
 }
 
-/// `\U+XXXX` Unicode escapes (how files before DXF 2007 hold characters outside their code page)
-/// and caret escapes: `^ ` is a caret, `^I` a tab; other control characters are dropped. In
-/// multiline text (`mtext`) `\\` is an escaped backslash and is kept as is, so that a `U+` after
-/// it stays literal, and the `^` in a stacked fraction `\Snum^den;` is left for the caller.
+/// The character a `\U+XXXX` escape writes (`after` is the text just after its backslash), with
+/// the escape's length; a UTF-16 surrogate pair written as two escapes is one character.
 fn unicode_escape(after: &str) -> Option<(char, usize)> {
     let hex = after.strip_prefix("U+").or_else(|| after.strip_prefix("u+"))?.get(..4)?;
     if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -91,6 +89,10 @@ fn unicode_escape(after: &str) -> Option<(char, usize)> {
     char::from_u32(value).map(|ch| (ch, 6))
 }
 
+/// `\U+XXXX` Unicode escapes (how files before DXF 2007 hold characters outside their code page)
+/// and caret escapes: `^ ` is a caret, `^I` a tab; other control characters are dropped. In
+/// multiline text (`mtext`) `\\` is an escaped backslash and is kept as is, so that a `U+` after
+/// it stays literal, and the `^` in a stacked fraction `\Snum^den;` is left for the caller.
 fn escapes(s: &str, mtext: bool) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;
