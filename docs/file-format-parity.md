@@ -108,7 +108,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | WebP | export (Export for Screens) | yes | yes (lossless only; lossy written lossless with a warning) | |
 | HEIC / HEIF | open, place | no | no | |
 | PCX | open, place | yes (1 bit in the header palette's first two colors, black and white without them; 1 bit in two to four planes and 4 bits with up to 16 colors; 2 bits in the CGA colors the header's CGA palette settings pick; 8 bits with the 256-color palette, gray without one; 24-bit color in three planes) | no | the header's HDpi and VDpi size the image; a file of another depth or plane count, cut short or past the pixel allowance is refused with a message; tests in `crates/engine/src/cmd/fileio/tests_pcxread.rs` and `crates/engine/tests/import_fuzz.rs` |
-| JPEG 2000 | open, place | yes (JP2 and raw codestream images; multiple codestreams and JPX composition or layers are refused) | no | `.jpf`, `.jpx`, `.jp2`, `.j2k`, `.j2c`, `.jpc`; resolution uses the last valid `resc` or `resd` value on each axis, or 72 ppi; bounded decoding; `tests_jp2read.rs` |
+| JPEG 2000 | open, place | yes (JP2 and raw codestream images; multiple codestreams and JPX composition or layers are refused) | no | `.jpf`, `.jpx`, `.jp2`, `.j2k`, `.j2c`, `.jpc`; resolution uses the valid `resd` (display) value on each axis, or else the valid `resc` (capture) value, or 72 ppi; bounded decoding; `tests_jp2read.rs` |
 | PICT, Pixar PXR | open, place (legacy) | no | no | rarely used |
 | FreeHand `.fh*` | open (legacy) | no | no | |
 | CorelDRAW `.cdr` | open | no | no | |

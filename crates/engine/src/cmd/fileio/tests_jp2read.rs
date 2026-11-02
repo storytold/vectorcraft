@@ -76,7 +76,7 @@ fn signatures_and_every_extension() {
 }
 
 #[test]
-fn resolution_boxes_use_last_valid_axis_and_72_fallback() {
+fn resolution_boxes_prefer_display_then_last_valid_axis_and_72_fallback() {
     let check = |children: &[Vec<u8>], want: (f64, f64)| {
         let file = with_resolution(children);
         let got = ppi::resolution(&file).unwrap();
@@ -90,7 +90,10 @@ fn resolution_boxes_use_last_valid_axis_and_72_fallback() {
     check(&[res(b"resc", 30000, 30000)], (300.0, 300.0));
     check(&[res(b"resd", 15000, 15000)], (150.0, 150.0));
     check(&[res(b"resc", 30000, 30000), res(b"resd", 15000, 15000)], (150.0, 150.0));
-    check(&[res(b"resd", 15000, 15000), res(b"resc", 30000, 30000)], (300.0, 300.0));
+    check(&[res(b"resd", 15000, 15000), res(b"resc", 30000, 30000)], (150.0, 150.0));
+    check(&[res(b"resd", 30000, 15000), res(b"resc", 7500, 7500)], (150.0, 300.0));
+    check(&[res(b"resd", 0, 15000), res(b"resc", 30000, 30000)], (150.0, 300.0));
+    check(&[res(b"resc", 30000, 30000), res(b"resd", 0, 15000)], (150.0, 300.0));
     check(&[res(b"resc", 30000, 15000)], (150.0, 300.0));
     assert_eq!(ppi::resolution(RAW), Some((72.0, 72.0)));
     assert!((ppi::resolution(PPI300).unwrap().0 - 300.0).abs() < 0.01);
