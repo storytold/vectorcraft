@@ -617,6 +617,31 @@ mod tests {
         assert!(!sniff(br#"{"names":["vectorcraft"],"format":"svg"}"#));
     }
 
+    /// Every layout VectorCraft has written puts `format` first: the version 1 and 2 files from
+    /// before the rename (a struct of `format`, `version`, `generator`, `document` and `images`,
+    /// compact or pretty), and each version `save_with` writes, compact, pretty and compressed.
+    #[test]
+    fn sniff_takes_every_layout_written() {
+        let before_rename = [
+            r#"{"format":"drawcraft","version":1,"generator":"DrawCraft 0.1.0","document":{},"images":{}}"#,
+            "{\n  \"format\": \"drawcraft\",\n  \"version\": 2,\n  \"generator\": \"DrawCraft 0.1.0\",\n  \"document\": {},\n  \"images\": {}\n}",
+        ];
+        for text in before_rename {
+            assert!(sniff(text.as_bytes()), "{text}");
+        }
+        let d = Document::new(10.0, 10.0);
+        for version in MIN_VERSION..=VERSION {
+            for (pretty, compress) in [(false, false), (true, false), (false, true)] {
+                let o = SaveOptions { pretty, compress, version, ..SaveOptions::default() };
+                if o.check().is_err() {
+                    continue;
+                }
+                let bytes = save_with(&d, &o).unwrap();
+                assert!(sniff(&bytes), "version {version}, pretty {pretty}, compress {compress}");
+            }
+        }
+    }
+
     /// An envelope error other than the format and version keeps the crate's message.
     #[test]
     fn envelope_errors_keep_their_message() {
