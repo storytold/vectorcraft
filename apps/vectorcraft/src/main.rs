@@ -1,7 +1,10 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>]... [--automation-write-root <dir>]...]
-//! [--in-window-menus] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//! [--in-window-menus] [--new-instance] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//!
+//! Files given while VectorCraft already runs open in that window, unless `--new-instance` is given
+//! (Windows and Linux; `single_instance`).
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
 //! macOS instead of the macOS menu bar (`mac_menu`).
@@ -15,14 +18,8 @@
 //! keyboard isn't confined.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
-#[cfg(all(feature = "windows7", any(feature = "wgpu", feature = "accessibility")))]
-compile_error!("windows7 requires --no-default-features (wgpu and accessibility must be disabled)");
-#[cfg(all(windows, feature = "windows7", not(target_vendor = "win7")))]
-compile_error!("windows7 requires --target x86_64-win7-windows-msvc; the ordinary Windows target still imports newer APIs");
-#[cfg(all(target_vendor = "win7", not(feature = "windows7")))]
-compile_error!("the win7 target requires --no-default-features --features windows7");
-
 mod automation_args;
+mod caps_lock;
 mod clipboard;
 #[cfg(feature = "wgpu")]
 mod compositor_gpu;
@@ -33,6 +30,8 @@ mod gpu;
 #[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
+#[cfg(all(target_os = "macos", feature = "wgpu"))]
+mod mac_color_space;
 #[cfg(target_os = "macos")]
 mod mac_fonts;
 #[cfg(target_os = "macos")]
@@ -50,11 +49,15 @@ mod open_documents;
 mod portal_save;
 mod prefs_dir;
 mod printing;
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(not(target_os = "macos"))]
+mod single_instance;
+#[cfg(windows)]
 mod system_fonts;
 mod tablet;
 mod window;
 mod window_frame;
+#[cfg(windows)]
+mod windows_cores;
 mod windows_stylus;
 mod xwayland;
 
@@ -92,6 +95,7 @@ use titlebar::{custom_titlebar, native_options};
 
 struct App {
     app: VectorcraftApp,
+    host_caps_lock: caps_lock::HostCapsLock,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
@@ -123,7 +127,9 @@ Options:
                                  (may be given more than once)
   --in-window-menus              Keep the menus inside the window on macOS
                                  (or VECTORCRAFT_IN_WINDOW_MENUS=1)
-  --version                      Print the version and exit
+  --new-instance                 Open the files in a new window even when VectorCraft
+                                 already runs (Windows and Linux)
+  --version                     Print the version and exit
   -h, --help                     Print this help and exit
 
 Without a window (converting, scripting, the MCP server), use vectorcraft-cli:
@@ -133,7 +139,7 @@ Without a window (converting, scripting, the MCP server), use vectorcraft-cli:
 fn main() -> std::process::ExitCode {
     // Windows: the update helper is a copy of this program started with `--finish-update`.
     #[cfg(windows)]
-    if let Some(result) = craft_update::self_update::finish(&craft_update::suite::VECTORCRAFT, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
+    if let Some(result) = craft_update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
         std::process::exit(i32::from(result.is_err()));
     }
     // Before any thread starts: the pointer must find a cursor theme on Wayland (#2450).
@@ -147,6 +153,7 @@ fn main() -> std::process::ExitCode {
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
+    let mut new_instance = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match roots_args.consume(&a, &mut args).and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) }) {
@@ -159,6 +166,7 @@ fn main() -> std::process::ExitCode {
         }
         match a.as_str() {
             "--in-window-menus" => in_window_menus = true,
+            "--new-instance" => new_instance = true,
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
                 return std::process::ExitCode::SUCCESS;
@@ -188,9 +196,21 @@ fn main() -> std::process::ExitCode {
     };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
+    // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
+    // the log file is attached: a launch that hands its files over leaves the running app's log be.
+    #[cfg(not(target_os = "macos"))]
+    let instance = match single_instance::start(control_port.is_some(), new_instance, &files) {
+        single_instance::Start::Forwarded => return std::process::ExitCode::SUCCESS,
+        single_instance::Start::Running(primary) => primary,
+    };
+    #[cfg(target_os = "macos")]
+    let _ = new_instance;
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
+    // Before the first render: the cores the process may run on.
+    #[cfg(windows)]
+    windows_cores::install();
     // Before the first font scan (the app's start): the fonts font services load (#579).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();
@@ -270,15 +290,15 @@ fn main() -> std::process::ExitCode {
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
-    // and X11 (XWayland) When a Pen Is Attached does so when a pen is attached, where the pen draws (#2028).
+    // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
         if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
-                if pref == Some("x11WithPen") {
-                    log::info!("pen found: opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+                if pref != Some("x11") {
+                    log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
                 } else {
                     log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
                 }
@@ -295,7 +315,7 @@ fn main() -> std::process::ExitCode {
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
     // button held, and writes the pen's end into the pen feed (`windows_stylus`).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     let options = {
         use winit::platform::windows::EventLoopBuilderExtWindows as _;
         let mut options = options;
@@ -318,21 +338,23 @@ fn main() -> std::process::ExitCode {
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
-            create.instance_descriptor.backends =
-                left_out.backends(gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some()));
+            let env_set = std::env::var_os("WGPU_BACKEND").is_some();
+            let opengl = cfg!(windows) && !env_set && gpu::windows_opengl(&left_out);
+            create.instance_descriptor.backends = left_out.backends(gpu::backends(create.instance_descriptor.backends, env_set, opengl));
             // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
             // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
             create.instance_descriptor.backend_options.dx12.shader_compiler =
                 eframe::wgpu::Dx12Compiler::from_env().unwrap_or(eframe::wgpu::Dx12Compiler::Fxc);
-            // The window's surface may be as large as the adapter allows, not eframe's fixed
-            // 8192 px: a window stretched over several monitors, or grown by a display scale
-            // change, otherwise fails to configure its surface and the app closes (#1459).
+            // The device asks for no more than the adapter offers, so a GPU short of one of
+            // eframe's limits still gets a device (#2105). The window's surface may be as large as
+            // the adapter allows, not eframe's fixed 8192 px: a window stretched over several
+            // monitors, or grown by a display scale change, otherwise fails to configure its
+            // surface and the app closes (#1459).
             let device = create.device_descriptor.clone();
             create.device_descriptor = std::sync::Arc::new(move |adapter: &eframe::wgpu::Adapter| {
                 let mut descriptor = device(adapter);
-                let limit = &mut descriptor.required_limits.max_texture_dimension_2d;
-                *limit = gpu::surface_limit(*limit, adapter.limits().max_texture_dimension_2d);
+                descriptor.required_limits = gpu::device_limits(descriptor.required_limits, &adapter.limits());
                 descriptor
             });
         }
@@ -436,10 +458,6 @@ fn main() -> std::process::ExitCode {
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
-                #[cfg(feature = "windows7")]
-                {
-                    app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
-                }
                 app.custom_titlebar = custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
@@ -460,7 +478,10 @@ fn main() -> std::process::ExitCode {
                     }
                 }
                 #[cfg(not(target_os = "macos"))]
-                let _ = in_window_menus;
+                {
+                    let _ = in_window_menus;
+                    single_instance::set_ui(&cc.egui_ctx);
+                }
                 app.services.native_input_hook = native_input_hook(&app);
                 file_access::unconfined(|| open_files(&mut app, files));
                 // The first frame is due from now (`gpu::watch_first_frame`).
@@ -469,6 +490,7 @@ fn main() -> std::process::ExitCode {
                 // The content and the pointer stay aligned on Windows (#1758).
                 let window_frame = window_frame::service(cc, custom_titlebar);
                 Ok(Box::new(App {
+                    host_caps_lock: caps_lock::HostCapsLock::new(winit_window.as_deref()),
                     app,
                     graphics_loss,
                     graphics_lost: false,
@@ -481,6 +503,10 @@ fn main() -> std::process::ExitCode {
             }),
         )
     });
+    // The window is gone: later launches start their own app, including the one a graphics
+    // failure starts again below.
+    #[cfg(not(target_os = "macos"))]
+    drop(instance);
     #[cfg(feature = "wgpu")]
     let outcome = gpu::finish(outcome, &startup);
     #[cfg(not(feature = "wgpu"))]
@@ -492,6 +518,29 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::FAILURE
         }
     }
+}
+
+/// Tests only: while a test starts another program, the child briefly holds a copy of every file
+/// this process has open, until it runs that program. A file lock held through such a copy outlives
+/// its own handle, so a GPU start test that released the start file and opened it again found it
+/// still locked, as if another copy of the app were running, and failed. A test that starts a
+/// program holds [`spawning`]; a test that depends on the start file's lock holds [`no_spawns`].
+#[cfg(all(
+    test,
+    any(feature = "wgpu", any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))
+))]
+static CHILD_SPAWN: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+/// Held while a test starts another program (see [`CHILD_SPAWN`]).
+#[cfg(all(test, any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
+fn spawning() -> std::sync::RwLockWriteGuard<'static, ()> {
+    CHILD_SPAWN.write().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Held by a test that releases a locked file and opens it again (see [`CHILD_SPAWN`]).
+#[cfg(all(test, feature = "wgpu"))]
+fn no_spawns() -> std::sync::RwLockReadGuard<'static, ()> {
+    CHILD_SPAWN.read().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[cfg(all(test, feature = "wgpu"))]

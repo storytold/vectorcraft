@@ -55,7 +55,7 @@ pub(crate) fn is_word_space(g: &SGlyph) -> bool {
 
 /// A glyph letter spacing follows: a visible glyph followed by another one in the same word.
 fn letter_gap(g: &SGlyph, next: Option<&SGlyph>) -> bool {
-    !g.is_space() && g.inline.is_none() && next.is_some_and(|n| !n.is_space())
+    !g.is_space() && g.ch != '\u{2028}' && g.inline.is_none() && next.is_some_and(|n| !n.is_space() && n.ch != '\u{2028}')
 }
 
 /// The width of a word space in `g`'s font and size: what letter spacing is a share of.
@@ -83,7 +83,7 @@ pub(crate) fn apply_desired(sg: &mut [SGlyph], j: &JustificationOptions, scale_g
             f.word = (base * (w_max - w_des).max(0.0), base * (w_des - w_min).max(0.0));
             continue;
         }
-        if g.is_space() || g.inline.is_some() {
+        if g.is_space() || g.inline.is_some() || g.ch == '\u{2028}' {
             continue;
         }
         let base = g.adv;

@@ -137,8 +137,9 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[t("zoom", "Zoom Tool", Some("Z"), "tool-zoom")],
 ];
 
+/// Every tool: the toolbar's, then the add-ons' ([`crate::addons::GROUPS`]).
 pub fn all_tools() -> impl Iterator<Item = &'static ToolInfo> {
-    TOOL_GROUPS.iter().flat_map(|g| g.iter())
+    TOOL_GROUPS.iter().chain(crate::addons::GROUPS).flat_map(|g| g.iter())
 }
 
 pub fn tool_info(id: &str) -> Option<&'static ToolInfo> {
@@ -163,7 +164,7 @@ pub fn is_selection_tool(id: &str) -> bool {
 /// The tools that show a selected path's anchors and handles as Direct Selection does, and drag
 /// them: a Cmd drag with one of them is a Direct Selection drag until a selection tool is chosen.
 pub fn edits_anchors(id: &str) -> bool {
-    matches!(id, "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "anchorPoint" | "curvature")
+    matches!(id, "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "anchorPoint" | "curvature" | crate::addons::smart_pen::ID)
 }
 
 #[cfg(test)]

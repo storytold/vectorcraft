@@ -12,7 +12,7 @@ use vectorcraft_geom::FillRule;
 
 use super::appearance::{ItemTarget, item_target};
 use super::edit::selected_roots;
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, f64_or, has_doc, ids_param, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

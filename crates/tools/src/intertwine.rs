@@ -7,7 +7,9 @@
 //! which member is drawn on top there.
 //!
 //! The Intertwine tool is what `object.intertwine.make` and `object.intertwine.edit` leave the
-//! canvas in: hovering highlights the overlap area under the pointer, a click arranges it, a drag
+//! canvas in: hovering highlights the overlap area under the pointer (where three or more members
+//! overlap, the outline of the member nearest to the pointer, which the right-click menu
+//! arranges: [`menu_target`]), a click arranges it, a drag
 //! draws a path around overlap areas (Shift: a rectangle) and arranges every one inside it.
 //! Esc or Enter goes back to the tool chosen before. Behaviour:
 //! <https://helpx.adobe.com/illustrator/using/intertwine-objects.html>.
@@ -16,7 +18,7 @@ use std::sync::Arc;
 
 use kurbo::BezPath;
 use serde_json::{Value, json};
-use vectorcraft_doc::intertwine::over_area;
+use vectorcraft_doc::intertwine::tier_at;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
 use vectorcraft_effects as effects;
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath, shapes};
@@ -101,8 +103,18 @@ pub struct Face {
 
 /// Every overlap area of `children`.
 pub fn faces(children: &[Arc<Node>]) -> Vec<Face> {
+    faces_of(&painted_areas(children))
+}
+
+/// What each of `children` paints ([`painted_area`]), by child index.
+pub fn painted_areas(children: &[Arc<Node>]) -> Vec<Option<PathData>> {
+    children.iter().map(|c| painted_area(c)).collect()
+}
+
+/// Every overlap area of the members that paint `areas` ([`painted_areas`]).
+pub fn faces_of(areas: &[Option<PathData>]) -> Vec<Face> {
     let shapes: Vec<po::Shape> =
-        children.iter().enumerate().filter_map(|(i, c)| Some(po::Shape::new(painted_area(c)?, FillRule::NonZero, i as u64))).collect();
+        areas.iter().enumerate().filter_map(|(i, a)| Some(po::Shape::new(a.clone()?, FillRule::NonZero, i as u64))).collect();
     let key = |k: usize| shapes.get(k).map(|s| s.key as usize);
     po::regions(&shapes)
         .into_iter()
@@ -124,13 +136,35 @@ pub fn faces_in(faces: &[Face], lasso: &PathData) -> Vec<Face> {
     faces.iter().filter(|f| contains(lasso, f.inside)).cloned().collect()
 }
 
-/// The members of `face` in the order they are drawn there, bottom first: those drawn in their
-/// own order, then those drawn over the others there, each run in the group's order.
+/// The members of `face` in the order they are drawn there, bottom first: by their tier there
+/// ([`tier_at`]), and members of one tier in the group's order.
 pub fn drawn_order(children: &[Arc<Node>], face: &Face) -> Vec<usize> {
-    let over = |i: &usize| children.get(*i).and_then(|c| over_area(c)).is_some_and(|a| contains(a, face.inside));
+    let tier = |i: usize| children.get(i).map_or(0, |c| tier_at(c, face.inside));
     let mut order = face.members.clone();
-    order.sort_by_key(|i| (over(i), *i));
+    order.sort_by_cached_key(|i| (tier(*i), *i));
     order
+}
+
+/// The fewest members an overlap area needs for the right-click menu that arranges one of them.
+pub const MENU_MEMBERS: usize = 3;
+
+/// The member of `face` whose outline (what it paints, `areas` from [`painted_areas`]) is nearest
+/// to `p`.
+pub fn nearest_member(areas: &[Option<PathData>], face: &Face, p: Point) -> Option<usize> {
+    let dist = |i: usize| areas.get(i).and_then(Option::as_ref).map(|a| vectorcraft_geom::hit::distance_to_outline(&a.to_bezpath(), p));
+    face.members.iter().filter_map(|i| Some((*i, dist(*i)?))).filter(|(_, d)| d.is_finite()).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(i, _)| i)
+}
+
+/// What a right-click at `p` arranges with the Intertwine tool: the Intertwine group of the
+/// selection, and the member nearest to `p` (by id) in the overlap area under `p`, when
+/// [`MENU_MEMBERS`] or more members overlap there.
+pub fn menu_target(doc: &Document, selected: &[NodeId], p: Point) -> Option<(NodeId, NodeId)> {
+    let g = selected_group(doc, selected)?;
+    let children = doc.node(g)?.children()?;
+    let areas = painted_areas(children);
+    let face = face_at(&faces_of(&areas), p).filter(|f| f.members.len() >= MENU_MEMBERS)?;
+    let m = nearest_member(&areas, &face, p)?;
+    Some((g, children.get(m)?.id))
 }
 
 /// The Intertwine group the selection is in, or is (the innermost one around the first selected
@@ -149,6 +183,8 @@ pub fn is_intertwine(n: &Node) -> bool {
 struct Found {
     revision: (u64, u64),
     group: NodeId,
+    /// What each member paints, by child index.
+    areas: Arc<Vec<Option<PathData>>>,
     faces: Arc<Vec<Face>>,
 }
 
@@ -159,7 +195,8 @@ pub struct IntertwineTool {
     prev: Option<String>,
     /// The overlap areas of the group, for the document revision they were found in.
     cache: Option<Found>,
-    /// The overlap area under the pointer.
+    /// What the pointer highlights: the overlap area under it, or where [`MENU_MEMBERS`] or more
+    /// members overlap, the outline of the member nearest to it.
     hover: Option<BezPath>,
     /// A drag's points (document space); the first is where it started.
     points: Vec<Point>,
@@ -170,17 +207,31 @@ pub struct IntertwineTool {
 
 impl IntertwineTool {
     fn faces(&mut self, cx: &ToolContext) -> Option<(NodeId, Arc<Vec<Face>>)> {
+        self.found(cx).map(|c| (c.group, c.faces.clone()))
+    }
+
+    /// The overlap areas of the selection's group, found again when the document changed.
+    fn found(&mut self, cx: &ToolContext) -> Option<&Found> {
         let g = selected_group(cx.doc, &cx.selection.objects)?;
-        if let Some(c) = &self.cache
-            && c.revision == cx.revision
-            && c.group == g
-        {
-            return Some((g, c.faces.clone()));
+        if !self.cache.as_ref().is_some_and(|c| c.revision == cx.revision && c.group == g) {
+            let children = cx.doc.node(g)?.children()?;
+            let areas = painted_areas(children);
+            let faces = Arc::new(faces_of(&areas));
+            self.cache = Some(Found { revision: cx.revision, group: g, areas: Arc::new(areas), faces });
         }
-        let children = cx.doc.node(g)?.children()?;
-        let f = Arc::new(faces(children));
-        self.cache = Some(Found { revision: cx.revision, group: g, faces: f.clone() });
-        Some((g, f))
+        self.cache.as_ref()
+    }
+
+    /// What hovering `p` highlights ([`IntertwineTool::hover`]).
+    fn highlight(&mut self, cx: &ToolContext, p: Point) -> Option<BezPath> {
+        let found = self.found(cx)?;
+        let face = face_at(&found.faces, p)?;
+        if face.members.len() >= MENU_MEMBERS
+            && let Some(a) = nearest_member(&found.areas, &face, p).and_then(|m| found.areas.get(m)).and_then(Option::as_ref)
+        {
+            return Some(a.to_bezpath());
+        }
+        Some(face.path.to_bezpath())
     }
 
     /// The closed path the drag drew.
@@ -209,7 +260,7 @@ impl Tool for IntertwineTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Move => {
-                self.hover = self.faces(cx).and_then(|(_, f)| face_at(&f, p)).map(|f| f.path.to_bezpath());
+                self.hover = self.highlight(cx, p);
                 vec![]
             }
             PointerKind::Down => {
@@ -330,6 +381,43 @@ mod tests {
         let kids = vec![Arc::new(a), square(2, 5.0)];
         let f = faces(&kids);
         assert_eq!(drawn_order(&kids, &f[0]), [1, 0]);
+    }
+
+    #[test]
+    fn members_drawn_at_higher_tiers_are_drawn_later() {
+        // Three squares over one another; the bottom one at tier 2, the middle one at tier 1.
+        let over = || shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        let mut a = (*square(1, 0.0)).clone();
+        a.extras_mut().intertwine_tiers = vec![over()];
+        let mut b = (*square(2, 0.0)).clone();
+        b.extras_mut().intertwine = Some(Box::new(over()));
+        let kids = vec![Arc::new(a), Arc::new(b), square(3, 0.0)];
+        let f = faces(&kids);
+        assert_eq!(f.len(), 1);
+        assert_eq!(drawn_order(&kids, &f[0]), [2, 1, 0]);
+    }
+
+    #[test]
+    fn the_member_nearest_to_the_pointer_is_picked_where_three_overlap() {
+        // Squares 20 wide from x = 0, 4 and 8: all three overlap from x = 8 to 20.
+        let wide =
+            |id: u64, x: f64| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default_art()));
+        let kids = vec![wide(1, 0.0), wide(2, 4.0), wide(3, 8.0)];
+        let areas = painted_areas(&kids);
+        let all = faces_of(&areas);
+        let face = face_at(&all, Point::new(14.0, 10.0)).unwrap();
+        assert_eq!(face.members, [0, 1, 2]);
+        // By the left edge of the third square, then by the right edge of the first one.
+        assert_eq!(nearest_member(&areas, &face, Point::new(8.5, 10.0)), Some(2));
+        assert_eq!(nearest_member(&areas, &face, Point::new(19.5, 10.0)), Some(0));
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let g = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(g, NodeKind::Intertwine { children: kids })).unwrap();
+        assert_eq!(menu_target(&d, &[g], Point::new(8.5, 10.0)), Some((g, NodeId(3))));
+        assert_eq!(menu_target(&d, &[g], Point::new(19.5, 10.0)), Some((g, NodeId(1))));
+        assert_eq!(menu_target(&d, &[g], Point::new(6.0, 10.0)), None, "only two overlap there");
+        assert_eq!(menu_target(&d, &[], Point::new(8.5, 10.0)), None, "no Intertwine group selected");
     }
 
     #[test]

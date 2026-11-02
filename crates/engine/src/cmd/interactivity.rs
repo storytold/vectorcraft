@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, MAX_SVG_SCRIPTS, NodeId, SVG_EVENTS};
 
 use super::overprint::edit_counted;
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, str_param, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

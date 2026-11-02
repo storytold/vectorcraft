@@ -1,7 +1,7 @@
 use super::face::{FontBytes, FontFace, Variation};
 use super::names::{name, norm};
 use super::traits::FaceStyle;
-use super::*;
+use super::{HashMap, Location, MetadataProvider, NEXT_ID, Ordering, Size, StringId, Tag};
 
 /// `face` at the axis settings `variations` (user units), as face `id`: its names, kind, italic
 /// and file, and its weight the `wght` setting when there is one.

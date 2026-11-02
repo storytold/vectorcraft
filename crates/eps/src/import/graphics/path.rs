@@ -1,5 +1,8 @@
 use super::state::{ccw_turn, turn};
-use super::*;
+use super::{
+    Affine, BezPath, Dash, FillRule, HAIRLINE, Interp, Key, MAX_GSAVE, MAX_NEST, MAX_PATH, Obj, Op, PathEl, Point, PsError, Rect, Res, Shape,
+    StrokeLayer, Vec2, deep_clips, ps_err,
+};
 
 impl Interp<'_> {
     /// User space → document space.

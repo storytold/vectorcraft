@@ -1,7 +1,7 @@
 use super::build::{Builder, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
 use super::rings::{MAX_SOLID_POINTS, rings, signed_area};
-use super::*;
+use super::{Facet, FillRule, Inflate, MAX_FACES, PathData, Point, Rect, V3, Vec2, View};
 
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
 struct Puff {

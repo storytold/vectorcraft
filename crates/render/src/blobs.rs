@@ -1,4 +1,5 @@
-use super::*;
+use super::{Affine, Arc, BezPath, Ink, Node, Pixmap, Shape, images, ink, paint};
+use vectorcraft_doc::{AppearanceItem, NodeKind};
 
 /// `key`'s pixels in the shared image store; `touch` marks them used.
 pub(crate) fn lookup(key: &images::ImageKey, touch: bool) -> Option<Arc<Pixmap>> {
@@ -11,8 +12,16 @@ pub(crate) fn lookup(key: &images::ImageKey, touch: bool) -> Option<Arc<Pixmap>>
 pub(crate) fn blob_key(blob: &vectorcraft_doc::ImageBlob) -> (images::ImageKey, Option<Arc<ink::InkLut>>, Option<(u16, u16)>) {
     let id = images::blob_id(blob);
     let lut = id.cmyk.then(ink::display_lut);
-    let key =
-        images::ImageKey { content: id.content, adjust: None, grey: false, ink: Ink::Display, luts: (lut.as_ref().map_or(0, |l| l.1), 0), mip: 0 };
+    let key = images::ImageKey {
+        content: id.content,
+        adjust: None,
+        grey: false,
+        tint: None,
+        ink: Ink::Display,
+        luts: (lut.as_ref().map_or(0, |l| l.1), 0),
+        plates: 0,
+        mip: 0,
+    };
     (key, lut.map(|l| l.0), id.size)
 }
 
@@ -90,12 +99,64 @@ pub(crate) fn plain_image(n: &Node, im: &vectorcraft_doc::ImageObject, region: &
     if !(n.visible && n.has_default_transparency() && n.appearance.items.is_empty() && n.appearance.effects.is_empty()) {
         return false;
     }
+    inside_frame(im, region, 1.0)
+}
+
+/// Is `region` inside image `im`'s frame (within `slack` pixels)?
+fn inside_frame(im: &vectorcraft_doc::ImageObject, region: &BezPath, slack: f64) -> bool {
     let det = im.xf.determinant();
     if !(det.abs() > 1e-12 && det.is_finite()) {
         return false;
     }
     let b = im.xf.inverse().transform_rect_bbox(region.bounding_box());
-    b.x0 >= -1.0 && b.y0 >= -1.0 && b.x1 <= im.width as f64 + 1.0 && b.y1 <= im.height as f64 + 1.0
+    b.x0 >= -slack && b.y0 >= -slack && b.x1 <= im.width as f64 + slack && b.y1 <= im.height as f64 + slack
+}
+
+/// Can image node `n` (`im`), whose opacity mask is one plain white path with Clip on (see
+/// [`white_shape_mask`]) shaped like `region`, be painted straight into the region: the mask shows
+/// the image fully inside the shape and hides it outside, as a clipping path does. The region must
+/// lie inside the image's frame, since outside the frame the mask shows nothing.
+pub(crate) fn shape_masked_image(n: &Node, im: &vectorcraft_doc::ImageObject, region: &BezPath) -> bool {
+    n.visible
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.knockout == vectorcraft_doc::Knockout::Neutral
+        && !n.knockout_shape
+        && n.appearance.items.is_empty()
+        && n.appearance.effects.is_empty()
+        && inside_frame(im, region, 1e-6)
+}
+
+/// Is opacity mask `m` one path filled with opaque white and nothing else, with Clip on and
+/// Invert off (each piece of an envelope's distorted image with Preserve Shape Using
+/// Transparency)?
+pub(crate) fn white_shape_mask(m: &vectorcraft_doc::OpacityMask) -> bool {
+    use vectorcraft_color::{BlendMode, Color, Paint};
+    let a = &m.art;
+    let shows = |p: &Paint| !matches!(p, Paint::None);
+    let white = |p: &Paint| matches!(p, Paint::Solid { color, tint, .. } if *color == Color::WHITE && *tint >= 1.0);
+    let mut fills = 0;
+    for i in &a.appearance.items {
+        match i {
+            AppearanceItem::Fill(f) if f.visible && shows(&f.paint) => {
+                if !(white(&f.paint) && f.opacity >= 1.0 && f.blend == BlendMode::Normal && f.effects.is_empty()) {
+                    return false;
+                }
+                fills += 1;
+            }
+            AppearanceItem::Stroke(s) if s.visible && shows(&s.paint) => return false,
+            _ => {}
+        }
+    }
+    m.clip
+        && !m.invert
+        && !m.disabled
+        && fills == 1
+        && a.visible
+        && a.has_default_transparency()
+        && a.appearance.effects.is_empty()
+        && matches!(a.kind, NodeKind::Path { guide: false, .. })
 }
 
 /// Opacity-mask coverage of one premultiplied pixel: luminance, with the area outside the mask

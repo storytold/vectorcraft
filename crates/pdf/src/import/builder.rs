@@ -1,7 +1,15 @@
 use super::cid::{CidText, FontInfo, comparable, font_chars, identify_glyph, matching_face, replacement, unify_radical};
-use super::entry::{MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE};
+use super::entry::{
+    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
+    UNNAMED_CHARACTERS_NOTE, max_objects,
+};
 use super::state::{Builder, Frame, FrameKind, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
+    FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
+    PathData, PathDrawMode, Pattern, PatternDef, Placement, Rect, Scan, Shape, SoftMask, StrokeProps, TextAs, TextLine, TextOverprint, TilingPattern,
+    Upright, Walked, clipped, contains, fold_stop_opacity, function_paint, gradient_shape, is_rectangle, luminance, mask_spec, shading_gradient,
+};
 
 impl<'p> Builder<'p> {
     pub(super) fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
@@ -36,16 +44,15 @@ impl<'p> Builder<'p> {
             pattern_keys: HashMap::new(),
             function_paints: HashMap::new(),
             function_budget: FunctionBudget::new(),
+            objects_left: max_objects(),
             taken: vec![],
             scan: Scan::default(),
             tag_at: 0,
-            group_at: 0,
             paint_at: 0,
             aligned: true,
             route,
             unsure: false,
             marked: vec![],
-            pending: false,
             nested: 0,
             white_images: false,
             last_fill: None,
@@ -61,6 +68,9 @@ impl<'p> Builder<'p> {
 
     /// A deep copy of `node` with fresh ids.
     fn reid(&mut self, node: &Node) -> Node {
+        // Each copy counts against the import's objects: once they are spent nothing more is
+        // drawn through a mask, so the copying stops too.
+        self.objects_left = self.objects_left.saturating_sub(1);
         let mut n = node.clone();
         n.id = self.id();
         if let Some(ch) = n.children_mut() {
@@ -91,8 +101,7 @@ impl<'p> Builder<'p> {
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
-        self.pending = false;
-        (self.scan, self.tag_at, self.group_at, self.aligned, self.paint_at) = (scan, 0, 0, true, 0);
+        (self.scan, self.tag_at, self.aligned, self.paint_at) = (scan, 0, true, 0);
         if self.scan.overprints && self.scan.zero_mode {
             self.warn(OVERPRINT_ZERO_MODE);
         }
@@ -186,7 +195,15 @@ impl<'p> Builder<'p> {
         }
     }
 
+    /// Add `n`, drawn now, to the art: left out (with a warning) once the import's objects are
+    /// spent ([`TOO_MANY_OBJECTS`]).
     pub(super) fn push_node(&mut self, mut n: Node) {
+        let Some(left) = self.objects_left.checked_sub(1) else {
+            self.lines.remove(&n.id);
+            self.warn(TOO_MANY_OBJECTS);
+            return;
+        };
+        self.objects_left = left;
         if self.blend != BlendMode::Normal && !n.is_container() {
             n.blend = self.blend;
         }
@@ -458,14 +475,12 @@ impl<'p> Builder<'p> {
             blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
-            pending: std::mem::take(&mut self.pending),
         };
         self.nested += 1;
         read(self);
         let art = self.close_frames();
         self.nested -= 1;
-        (self.stack, self.root_groups, self.blend, self.mask, self.page, self.pending) =
-            (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page, saved.pending);
+        (self.stack, self.root_groups, self.blend, self.mask, self.page) = (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page);
         Some(art)
     }
 
@@ -641,8 +656,9 @@ impl<'p> Builder<'p> {
     }
 
     /// Mesh shadings filling `region` (document space): gradient meshes, clipped to the region
-    /// when they reach past it.
-    pub(super) fn draw_meshes(&mut self, meshes: Vec<vectorcraft_doc::live::GradientMesh>, region: &BezPath, opacity: f32) {
+    /// when they reach past it, or always (`clip`: a stroke's outline, which a mesh can lie
+    /// within the box of without filling it).
+    pub(super) fn draw_meshes(&mut self, meshes: Vec<vectorcraft_doc::live::GradientMesh>, region: &BezPath, opacity: f32, clip: bool) {
         let nodes: Vec<Arc<Node>> = meshes.into_iter().map(|m| Arc::new(Node::new(self.id(), NodeKind::Mesh(m)))).collect();
         let Some(art) = bounds(&nodes) else { return };
         let mut content = match <[Arc<Node>; 1]>::try_from(nodes) {
@@ -650,7 +666,7 @@ impl<'p> Builder<'p> {
             Err(all) => Node::group(self.id(), all),
         };
         content.opacity *= opacity;
-        if !contains(region.bounding_box().inflate(0.5, 0.5), art) {
+        if clip || !contains(region.bounding_box().inflate(0.5, 0.5), art) {
             let clip = self.clip_node(region, FillRule::NonZero);
             content = clipped(clip, content, self.id());
         }

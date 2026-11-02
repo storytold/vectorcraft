@@ -28,7 +28,7 @@ fn symbol_doc(stroke: f64, xfs: &[Affine]) -> Document {
     let mut d = Document::new(200.0, 120.0);
     let ap = Appearance::basic(Paint::solid(Color::rgb8(30, 90, 220)), Paint::solid(Color::BLACK), stroke);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), ap);
-    d.symbols.push(Symbol { name: "My Mark".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "My Mark".into(), art: Arc::new(art) });
     for xf in xfs {
         instance(&mut d, "My Mark", *xf);
     }
@@ -50,7 +50,7 @@ fn three_instances_give_one_symbol_and_three_uses() {
     assert_eq!(svg.matches("<use ").count(), 3, "{svg}");
     assert!(svg.contains("<symbol id=\"My_Mark\"") && svg.contains("xlink:href=\"#My_Mark\""), "{svg}");
     // The art is written once.
-    assert_eq!(svg.matches("<path").count(), 1, "{svg}");
+    assert_eq!(svg.matches("<rect").count(), 1, "{svg}");
     assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.002);
     // Read back (since SVG import keeps symbols: as the symbol and three instances): the three
     // squares are where the instances are.
@@ -108,7 +108,7 @@ fn pattern_paints_in_symbols_stay_on_the_page() {
     d.patterns.push(def);
     let art =
         Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
-    d.symbols.push(Symbol { name: "Tiles".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Tiles".into(), art: Arc::new(art) });
     instance(&mut d, "Tiles", Affine::translate((10.0, 10.0)));
     instance(&mut d, "Tiles", Affine::translate((105.0, 37.0)));
     let svg = export(&d, &ExportOptions::default());
@@ -143,7 +143,7 @@ fn masks_in_symbols_move_with_the_art_when_linked() {
         let mut mask = vectorcraft_doc::OpacityMask::new(shape, true);
         mask.linked = linked;
         art.extras_mut().mask = Some(Box::new(mask));
-        d.symbols.push(Symbol { name: "Half".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Half".into(), art: Arc::new(art) });
         instance(&mut d, "Half", Affine::translate((10.0, 10.0)));
         instance(&mut d, "Half", Affine::translate((15.0, 50.0)));
         let svg = export(&d, &ExportOptions::default());
@@ -160,7 +160,7 @@ fn symbols_inside_themselves_end() {
     let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Loop".into(), xf: Affine::translate((5.0, 0.0)) });
     let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(inner)], clip: false });
     g.name = Some("g".into());
-    d.symbols.push(Symbol { name: "Loop".into(), art: Arc::new(g) });
+    d.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(g) });
     instance(&mut d, "Loop", Affine::translate((20.0, 20.0)));
     let svg = export(&d, &ExportOptions::default());
     assert!(import(&svg).is_ok(), "{svg}");
@@ -185,14 +185,14 @@ fn layered() -> Document {
 fn hidden_layers_are_kept_hidden_when_asked() {
     let d = layered();
     let plain = export(&d, &ExportOptions::default());
-    assert!(!plain.contains("Notes") && plain.matches("<path").count() == 1, "{plain}");
+    assert!(!plain.contains("Notes") && plain.matches("<rect").count() == 1, "{plain}");
     // Page isolation wraps the layers in one more group.
     let mut isolated = d.clone();
     isolated.page_isolate = true;
     let styles = [vectorcraft_svg::Styling::PresentationAttributes, vectorcraft_svg::Styling::InlineStyle, vectorcraft_svg::Styling::InternalCss];
     for (d, styling) in styles.iter().map(|s| (&d, *s)).chain([(&isolated, vectorcraft_svg::Styling::InternalCss)]) {
         let kept = export(d, &ExportOptions { hidden_layers: true, styling, ..Default::default() });
-        assert!(kept.contains("id=\"Notes\"") && kept.contains("display") && kept.matches("<path").count() == 2, "{kept}");
+        assert!(kept.contains("id=\"Notes\"") && kept.contains("display") && kept.matches("<rect").count() == 2, "{kept}");
         // Viewers don't show it.
         assert_eq!(resvg_render(&kept, 100, 100).pixel(70, 70), [255, 255, 255, 255], "{kept}");
         // It reopens as a hidden layer with its art.

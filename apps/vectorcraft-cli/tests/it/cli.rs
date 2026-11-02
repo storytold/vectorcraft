@@ -447,113 +447,158 @@ fn mcp_protocol_over_stdio() {
     let mut stdin = child.stdin.take().unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let mut notes = vec![];
-
-    fn send(stdin: &mut std::process::ChildStdin, v: Value) {
-        writeln!(stdin, "{v}").unwrap();
+    exercise_mcp_core(&mut stdin, &mut lines, &mut notes);
+    exercise_mcp_resource_errors(&mut stdin, &mut lines, &mut notes);
+    exercise_mcp_document_resources(&mut stdin, &mut lines, &mut notes);
+    exercise_mcp_logging(&mut stdin, &mut lines, &mut notes);
+    exercise_mcp_parse_error(&mut stdin, &mut lines, &mut notes);
+    drop(stdin);
+    for line in lines {
+        let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        assert_eq!(v["jsonrpc"], "2.0", "{v}");
+        notes.push(v);
     }
-    // Next reply with this id; notifications (no id) are stashed for later.
-    fn recv(lines: &mut std::io::Lines<BufReader<std::process::ChildStdout>>, notes: &mut Vec<Value>, id: u64) -> Value {
-        loop {
-            let line = lines.next().unwrap().unwrap();
-            let v: Value = serde_json::from_str(&line).unwrap();
-            assert_eq!(v["jsonrpc"], "2.0", "{v}");
-            if v.get("id").and_then(|i| i.as_u64()) == Some(id) {
-                return v;
-            }
-            notes.push(v);
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("panicked"));
+    let messages = notes.iter().filter(|n| n["method"] == "notifications/message").count();
+    assert!(messages > 0, "no log records after logging/setLevel: {notes:?}");
+}
+
+fn mcp_send(stdin: &mut std::process::ChildStdin, v: Value) {
+    writeln!(stdin, "{v}").unwrap();
+}
+
+fn mcp_recv(lines: &mut std::io::Lines<std::io::BufReader<std::process::ChildStdout>>, notes: &mut Vec<Value>, id: u64) -> Value {
+    loop {
+        let line = lines.next().unwrap().unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["jsonrpc"], "2.0", "{v}");
+        if v.get("id").and_then(|i| i.as_u64()) == Some(id) {
+            return v;
         }
+        notes.push(v);
     }
+}
 
-    send(
-        &mut stdin,
+fn exercise_mcp_core(
+    stdin: &mut std::process::ChildStdin,
+    lines: &mut std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    notes: &mut Vec<Value>,
+) {
+    mcp_send(
+        stdin,
         json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
     );
-    let r = recv(&mut lines, &mut notes, 1);
+    let r = mcp_recv(lines, notes, 1);
     assert_eq!(r["result"]["serverInfo"]["name"], "vectorcraft");
     assert!(r["result"]["capabilities"]["prompts"].is_object(), "{r}");
-    send(&mut stdin, json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+    mcp_send(stdin, json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
 
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":2,"method":"prompts/list","params":{}}));
-    let r = recv(&mut lines, &mut notes, 2);
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":2,"method":"prompts/list","params":{}}));
+    let r = mcp_recv(lines, notes, 2);
     assert!(r["result"]["prompts"].as_array().is_some_and(|p| !p.is_empty()), "{r}");
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"poster","arguments":{"brief":"a jazz festival"}}}));
-    let r = recv(&mut lines, &mut notes, 3);
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"poster","arguments":{"brief":"a jazz festival"}}}));
+    let r = mcp_recv(lines, notes, 3);
     assert!(r["result"]["messages"][0]["content"]["text"].as_str().is_some_and(|t| t.contains("a jazz festival")), "{r}");
 
-    send(
-        &mut stdin,
+    mcp_send(
+        stdin,
         json!({"jsonrpc":"2.0","id":4,"method":"completion/complete","params":{"ref":{"type":"ref/prompt","name":"export-set"},"argument":{"name":"formats","value":"sv"}}}),
     );
-    let r = recv(&mut lines, &mut notes, 4);
+    let r = mcp_recv(lines, notes, 4);
     assert!(r["result"]["completion"]["values"].as_array().is_some_and(|v| v.contains(&json!("svg"))), "{r}");
 
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}));
-    assert!(recv(&mut lines, &mut notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 3));
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":6,"method":"resources/templates/list","params":{}}));
-    assert!(recv(&mut lines, &mut notes, 6)["result"]["resourceTemplates"].as_array().is_some_and(|v| v.len() >= 4));
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}));
+    assert!(mcp_recv(lines, notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 3));
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":6,"method":"resources/templates/list","params":{}}));
+    assert!(mcp_recv(lines, notes, 6)["result"]["resourceTemplates"].as_array().is_some_and(|v| v.len() >= 4));
 
-    send(
-        &mut stdin,
+    mcp_send(
+        stdin,
         json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"draw_shape","arguments":{"shape":"rectangle","x":10,"y":10,"width":60,"height":40}}}),
     );
-    let r = recv(&mut lines, &mut notes, 7);
+    let r = mcp_recv(lines, notes, 7);
     assert_eq!(r["result"]["isError"], false, "{r}");
     let id: i64 = serde_json::from_str::<Value>(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap()["id"].as_i64().unwrap();
 
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":8,"method":"resources/read","params":{"uri": format!("vectorcraft://object/{id}")}}));
-    let r = recv(&mut lines, &mut notes, 8);
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":8,"method":"resources/read","params":{"uri": format!("vectorcraft://object/{id}")}}));
+    let r = mcp_recv(lines, notes, 8);
     let body: Value = serde_json::from_str(r["result"]["contents"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(body["id"].as_i64(), Some(id), "{body}");
+}
 
+fn exercise_mcp_resource_errors(
+    stdin: &mut std::process::ChildStdin,
+    lines: &mut std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    notes: &mut Vec<Value>,
+) {
     // Unknown resources (-32002) and bad template values (-32602) stay apart.
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":9,"method":"resources/read","params":{"uri":"vectorcraft://nope" }}));
-    assert_eq!(recv(&mut lines, &mut notes, 9)["error"]["code"], -32002);
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":10,"method":"resources/read","params":{"uri":"vectorcraft://object/"}}));
-    assert_eq!(recv(&mut lines, &mut notes, 10)["error"]["code"], -32602);
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":9,"method":"resources/read","params":{"uri":"vectorcraft://nope" }}));
+    assert_eq!(mcp_recv(lines, notes, 9)["error"]["code"], -32002);
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":10,"method":"resources/read","params":{"uri":"vectorcraft://object/"}}));
+    assert_eq!(mcp_recv(lines, notes, 10)["error"]["code"], -32602);
+}
 
+fn exercise_mcp_document_resources(
+    stdin: &mut std::process::ChildStdin,
+    lines: &mut std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    notes: &mut Vec<Value>,
+) {
     // Large containers slice through run_command document.node: a truncated level reports
     // childCount, and a bad limit is a tool error, not a crash or a full read.
-    send(
-        &mut stdin,
+    mcp_send(
+        stdin,
         json!({"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"draw_shape","arguments":{"shape":"ellipse","x":90,"y":10,"width":30,"height":30}}}),
     );
-    assert_eq!(recv(&mut lines, &mut notes, 20)["result"]["isError"], false);
-    let run = |id: u64, command: &str, params: Value| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":"run_command","arguments":{"command":command,"params":params}}});
-    send(&mut stdin, run(21, "select.all", json!({})));
-    recv(&mut lines, &mut notes, 21);
-    send(&mut stdin, run(22, "object.group", json!({})));
-    let r = recv(&mut lines, &mut notes, 22);
+    assert_eq!(mcp_recv(lines, notes, 20)["result"]["isError"], false);
+    mcp_send(stdin, run_command(21, "select.all", json!({})));
+    mcp_recv(lines, notes, 21);
+    mcp_send(stdin, run_command(22, "object.group", json!({})));
+    let r = mcp_recv(lines, notes, 22);
     let group = serde_json::from_str::<Value>(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap()["id"].clone();
-    send(&mut stdin, run(23, "document.node", json!({"id": group, "summary": true, "childLimit": 1})));
-    let r = recv(&mut lines, &mut notes, 23);
+    mcp_send(stdin, run_command(23, "document.node", json!({"id": group, "summary": true, "childLimit": 1})));
+    let r = mcp_recv(lines, notes, 23);
     let sliced: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(sliced["children"].as_array().map(Vec::len), Some(1), "{sliced}");
     assert_eq!(sliced["childCount"], 2, "{sliced}");
-    send(&mut stdin, run(24, "document.node", json!({"id": group, "summary": true, "depth": -1})));
-    assert_eq!(recv(&mut lines, &mut notes, 24)["result"]["isError"], true);
+    mcp_send(stdin, run_command(24, "document.node", json!({"id": group, "summary": true, "depth": -1})));
+    assert_eq!(mcp_recv(lines, notes, 24)["result"]["isError"], true);
 
     // Skeleton then drill: a depth-0 inspect is the layer skeleton with counts, and
     // document.find locates nodes without dumping the tree.
-    send(&mut stdin, run(25, "document.inspect", json!({"depth": 0})));
-    let r = recv(&mut lines, &mut notes, 25);
+    mcp_send(stdin, run_command(25, "document.inspect", json!({"depth": 0})));
+    let r = mcp_recv(lines, notes, 25);
     let skel: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert!(skel["layers"][0].get("children").is_none(), "{skel}");
     assert!(skel["artboards"].as_array().is_some_and(|a| !a.is_empty()), "{skel}");
-    send(&mut stdin, run(26, "document.find", json!({"kind": "ellipse"})));
-    let r = recv(&mut lines, &mut notes, 26);
+    mcp_send(stdin, run_command(26, "document.find", json!({"kind": "ellipse"})));
+    let r = mcp_recv(lines, notes, 26);
     let found: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(found["total"], 1, "{found}");
     assert!(found["matches"][0]["path"].as_array().is_some_and(|p| !p.is_empty()), "{found}");
-    send(&mut stdin, run(27, "document.find", json!({})));
-    assert_eq!(recv(&mut lines, &mut notes, 27)["result"]["isError"], true);
+    mcp_send(stdin, run_command(27, "document.find", json!({})));
+    assert_eq!(mcp_recv(lines, notes, 27)["result"]["isError"], true);
+}
 
+fn exercise_mcp_logging(
+    stdin: &mut std::process::ChildStdin,
+    lines: &mut std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    notes: &mut Vec<Value>,
+) {
     // The binary installed its logger: records arrive as notifications/message, and only
     // after the client asked for them.
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":11,"method":"logging/setLevel","params":{"level":"debug"}}));
-    assert!(recv(&mut lines, &mut notes, 11).get("error").is_none());
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":12,"method":"tools/list","params":{}}));
-    assert!(recv(&mut lines, &mut notes, 12)["result"]["tools"].as_array().is_some_and(|v| !v.is_empty()));
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":11,"method":"logging/setLevel","params":{"level":"debug"}}));
+    assert!(mcp_recv(lines, notes, 11).get("error").is_none());
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":12,"method":"tools/list","params":{}}));
+    assert!(mcp_recv(lines, notes, 12)["result"]["tools"].as_array().is_some_and(|v| !v.is_empty()));
+}
 
+fn exercise_mcp_parse_error(
+    stdin: &mut std::process::ChildStdin,
+    lines: &mut std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    notes: &mut Vec<Value>,
+) {
     // Malformed input is a parse error, and the server keeps serving afterwards.
     stdin.write_all(b"{not json\n").unwrap();
     let parse_err: Value = loop {
@@ -566,21 +611,12 @@ fn mcp_protocol_over_stdio() {
     };
     assert_eq!(parse_err["error"]["code"], -32700);
     assert!(parse_err["id"].is_null(), "{parse_err}");
-    send(&mut stdin, json!({"jsonrpc":"2.0","id":13,"method":"ping","params":{}}));
-    assert!(recv(&mut lines, &mut notes, 13).get("error").is_none());
-    drop(stdin);
-    // Drain whatever the debug window queued; every line off the protocol stream parses.
-    for line in lines.by_ref() {
-        let line = line.unwrap();
-        let v: Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(v["jsonrpc"], "2.0", "{v}");
-        notes.push(v);
-    }
-    let out = child.wait_with_output().unwrap();
-    assert!(out.status.success());
-    assert!(!String::from_utf8_lossy(&out.stderr).contains("panicked"));
-    let messages = notes.iter().filter(|n| n["method"] == "notifications/message").count();
-    assert!(messages > 0, "no log records after logging/setLevel: {notes:?}");
+    mcp_send(stdin, json!({"jsonrpc":"2.0","id":13,"method":"ping","params":{}}));
+    assert!(mcp_recv(lines, notes, 13).get("error").is_none());
+}
+
+fn run_command(id: u64, command: &str, params: Value) -> Value {
+    json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":"run_command","arguments":{"command":command,"params":params}}})
 }
 
 /// `vectorcraft-cli commands | head -1` panicked with "failed printing to

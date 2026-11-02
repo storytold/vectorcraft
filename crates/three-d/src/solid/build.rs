@@ -1,5 +1,5 @@
 use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, rings, signed_area};
-use super::*;
+use super::{Bevel, Extrude, Facet, FillRule, MAX_FACES, PathData, Point, Rect, Revolve, V3, View, eye_distance, perspective_scale};
 
 /// Turns 3D points into document points and shades faces for one view.
 pub(super) struct Camera {

@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use kurbo::{ParamCurve, Point, Rect, Shape as _};
-use vectorcraft_geom::{FillRule, PathData, SubPath};
+use vectorcraft_geom::{AnchorKind, FillRule, PathData, SubPath};
 use vectorcraft_pathops::*;
 
 const NZ: FillRule = FillRule::NonZero;
@@ -295,6 +295,28 @@ fn offset_rect_joins() {
 }
 
 #[test]
+fn offset_of_an_open_path_whose_ends_meet_is_the_closed_shape_offset() {
+    // Issue #3773: an open path whose last anchor sits on its first offsets like the closed shape,
+    // not as a ring around its outline.
+    let corners = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(20.0, 10.0), Point::new(0.0, 10.0), Point::new(0.0, 0.0)];
+    let r = PathData::single(SubPath::polyline(&corners, false));
+    let grown = offset_path(&r, 2.0, Join::Miter, 4.0);
+    assert!(close(ar(&grown), 24.0 * 14.0, 1e-6), "{}", ar(&grown));
+    assert_eq!(grown.subpaths.len(), 1);
+    assert_eq!(grown.anchor_count(), 4);
+    assert!(close(ar(&offset_path(&r, -2.0, Join::Miter, 4.0)), 16.0 * 6.0, 1e-6));
+    // A curved outline: the last anchor's in-handle shapes the closing curve.
+    let mut sp = circle(0.0, 0.0, 10.0).subpaths.remove(0);
+    let first = sp.anchors[0];
+    sp.anchors.push(vectorcraft_geom::Anchor::with_handles(first.p, first.h_in, first.p));
+    sp.anchors[0].h_in = first.p;
+    sp.closed = false;
+    let o = offset_path(&PathData::single(sp), 3.0, Join::Round, 4.0);
+    assert!(close(ar(&o), PI * 169.0, 2e-3), "{}", ar(&o));
+    assert_eq!(o.subpaths.len(), 1);
+}
+
+#[test]
 fn outline_stroke_of_line() {
     let l = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(30.0, 40.0)], false));
     let o = outline_stroke(&l, 4.0, Cap::Butt, Join::Miter, 4.0);
@@ -406,6 +428,67 @@ fn smooth_rounds_corners() {
     assert!(s.anchors().all(|(_, _, a)| a.has_in() && a.has_out()));
     let same = smooth(&rect(0.0, 0.0, 10.0, 10.0), 0.0);
     assert_eq!(same, rect(0.0, 0.0, 10.0, 10.0));
+}
+
+/// Object › Path › Smooth: a rectangle, whose corners no curve rounds within the tolerance, stays as
+/// it is even at maximum smoothing; a polygon of 16 sides becomes a closed curve of fewer anchors once the tolerance
+/// passes its 0.96 pt sagitta, smooth all round.
+#[test]
+fn smooth_level_keeps_corners_it_cannot_round_and_curves_polygons() {
+    let r = rect(0.0, 0.0, 100.0, 50.0);
+    assert_eq!(smooth_level(&r, 100.0), r);
+    let pts: Vec<Point> = (0..16).map(|i| Point::new(50.0 * (f64::from(i) * PI / 8.0).cos(), 50.0 * (f64::from(i) * PI / 8.0).sin())).collect();
+    let polygon = PathData::single(SubPath::polyline(&pts, true));
+    let s = smooth_level(&polygon, SMOOTH_AUTO_LEVEL);
+    assert!(s.subpaths.len() == 1 && s.subpaths[0].closed && s.anchor_count() < 8, "{}", s.anchor_count());
+    assert!(s.subpaths[0].anchors.iter().all(|a| a.kind == AnchorKind::Smooth), "no kink, its start included: {s:?}");
+    assert_eq!(smooth_level(&polygon, 0.0), polygon, "0.1 pt is less than the sagitta");
+}
+
+/// The largest distance from a point of `a` to `b` (sampled on `a`, exact on `b`).
+fn one_way_distance(a: &PathData, b: &PathData) -> f64 {
+    use kurbo::ParamCurveNearest;
+    let mut worst = 0.0_f64;
+    for sa in &a.subpaths {
+        for i in 0..sa.segment_count() {
+            let c = sa.segment(i);
+            for k in 0..=64 {
+                let q = c.eval(f64::from(k) / 64.0);
+                let d = b
+                    .subpaths
+                    .iter()
+                    .flat_map(|sb| (0..sb.segment_count()).map(move |j| sb.segment(j).nearest(q, 1e-9).distance_sq))
+                    .fold(f64::INFINITY, f64::min);
+                worst = worst.max(d.sqrt());
+            }
+        }
+    }
+    worst
+}
+
+/// Object › Path › Smooth at level 0 keeps a closed path within 0.1 % of its longer side, a sharp
+/// corner where the path starts included (a drop with a 90° tip at its first anchor).
+#[test]
+fn smooth_level_0_keeps_a_closed_paths_start_corner_within_tolerance() {
+    let n = 24;
+    let step = 1.5 * PI / f64::from(n);
+    let at = |t: f64| {
+        let (r, dr) = (100.0 * (2.0 * t / 3.0).sin(), 200.0 / 3.0 * (2.0 * t / 3.0).cos());
+        (Point::new(r * t.cos(), r * t.sin()), kurbo::Vec2::new(dr * t.cos() - r * t.sin(), dr * t.sin() + r * t.cos()))
+    };
+    let anchors = (0..n)
+        .map(|i| {
+            let (p, d_out) = at(f64::from(i) * step);
+            let d_in = if i == 0 { at(1.5 * PI).1 } else { d_out };
+            vectorcraft_geom::Anchor::with_handles(p, p - d_in * (step / 3.0), p + d_out * (step / 3.0))
+        })
+        .collect();
+    let p = PathData::single(SubPath::new(anchors, true));
+    let b = p.bounds().unwrap();
+    let limit = 0.001 * b.width().max(b.height());
+    let s = smooth_level(&p, 0.0);
+    let moved = one_way_distance(&p, &s).max(one_way_distance(&s, &p));
+    assert!(moved <= limit, "level 0 moved the path by {moved} pt, more than {limit} pt: {:?}", s.subpaths[0].anchors[0]);
 }
 
 #[test]

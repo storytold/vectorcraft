@@ -1,5 +1,13 @@
-use super::prefs::save_prefs;
-use super::*;
+#[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
+use super::gpu;
+use super::prefs::{save_prefs, save_prefs_soon};
+#[cfg(not(target_os = "macos"))]
+use super::single_instance;
+#[cfg(all(windows, not(target_vendor = "win7")))]
+use super::windows_stylus;
+use super::{App, VectorcraftApp, file_access, window};
+#[cfg(target_os = "macos")]
+use super::{mac_menu, mac_window, open_documents};
 
 /// The parts of [`App::raw_input_hook`] that every window needs, for the OS windows of floating
 /// panels: a click or Escape that closes the macOS menu bar's open menu, and the pen barrel
@@ -10,12 +18,12 @@ pub(crate) fn native_input_hook(app: &VectorcraftApp) -> Option<vectorcraft_ui_e
     app.services.native_menu.is_some().then(|| std::sync::Arc::new(mac_menu::raw_input_hook) as vectorcraft_ui_egui::NativeInputHook)
 }
 
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(windows)]
 pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egui::NativeInputHook> {
     Some(std::sync::Arc::new(windows_stylus::raw_input_hook))
 }
 
-#[cfg(not(any(target_os = "macos", all(windows, not(target_vendor = "win7")))))]
+#[cfg(not(any(target_os = "macos", windows)))]
 pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egui::NativeInputHook> {
     None
 }
@@ -41,9 +49,13 @@ impl eframe::App for App {
             mac_menu::raw_input_hook(raw);
         }
         // A pen contact with the barrel button held presses the secondary button (Windows Ink).
-        #[cfg(all(windows, not(target_vendor = "win7")))]
+        #[cfg(windows)]
         windows_stylus::raw_input_hook(raw);
         file_access::unconfined(|| self.app.raw_input_hook(ctx, raw));
+        // A mouse-up that never reached the window (#4326) is delivered once AppKit reports
+        // that no mouse button is down.
+        #[cfg(target_os = "macos")]
+        self.app.release_lost_buttons(ctx, raw, objc2_app_kit::NSEvent::pressedMouseButtons() != 0);
     }
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
@@ -53,11 +65,20 @@ impl eframe::App for App {
             let inset = mac_window::center_buttons(frame, ui.ctx().zoom_factor(), bar);
             self.app.titlebar_inset = inset.unwrap_or(mac_window::DEFAULT_INSET);
         }
+        // macOS converts the frame from sRGB to the display's profile (#2249).
+        #[cfg(all(target_os = "macos", feature = "wgpu"))]
+        super::mac_color_space::tag(ui);
+        if let Some(on) = self.host_caps_lock.read_transition() {
+            self.app.set_caps_lock(on);
+        }
         file_access::unconfined(|| self.app.ui(ui));
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
         if self.app.take_prefs_changed() {
             file_access::unconfined(|| save_prefs(&self.app));
+        } else {
+            // The workspace, panels and other UI settings change without the dialog (#4625).
+            file_access::unconfined(|| save_prefs_soon(&self.app));
         }
         // Not while a file dialog's sheet has the keyboard: its name field's composition would go.
         #[cfg(target_os = "macos")]
@@ -65,14 +86,9 @@ impl eframe::App for App {
             discard_marked_text();
         }
     }
-    #[cfg(not(feature = "windows7"))]
     fn on_exit(&mut self) {
         file_access::unconfined(|| save_prefs(&self.app));
         end_before_teardown(self.frames);
-    }
-    #[cfg(feature = "windows7")]
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        file_access::unconfined(|| save_prefs(&self.app));
     }
 }
 
@@ -94,11 +110,13 @@ impl App {
             vectorcraft_ui_egui::background::wait_all(&mut self.app);
             return;
         }
-        // Files from the Finder and the Dock wait while a file dialog is open: what asked for it runs
-        // again on its document when it answers.
-        #[cfg(target_os = "macos")]
+        // Files from the Finder and the Dock (macOS) or from later launches (#4892) wait while a file
+        // dialog is open: what asked for it runs again on its document when it answers.
         if !self.app.file_dialog_open() {
+            #[cfg(target_os = "macos")]
             let files = open_documents::take();
+            #[cfg(not(target_os = "macos"))]
+            let files = single_instance::take();
             if !files.is_empty() {
                 bring_window_forward(ctx);
             }
@@ -136,15 +154,15 @@ fn end_before_teardown(frames: u64) {
     }
 }
 
-/// Show the window when files are opened from the Finder or the Dock: a minimized window comes back
-/// out of the Dock and the app takes focus, as a document-based Mac app does (#3769).
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// Show the window when files are opened from the Finder or the Dock, or handed over by a later
+/// launch (#4892): a minimized window comes back and the app takes focus, as a document-based app
+/// does (#3769).
 pub(crate) fn bring_window_forward(ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
 }
 
-/// Open files handed to the app (command line, macOS Finder and Dock) as documents. A file that
+/// Open files handed to the app (command line, macOS Finder and Dock, later launches) as documents. A file that
 /// can't be opened is reported to the user and on stderr; the others still open.
 pub(crate) fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
     for f in files {

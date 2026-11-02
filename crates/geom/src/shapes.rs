@@ -191,9 +191,12 @@ pub fn arc_segment(anchor: Point, reference: usize, length_x: f64, length_y: f64
     arc(a, b, slope, closed, base_along_x)
 }
 
-/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open, x-axis base when `base_along_x`).
-/// `slope` is −100…100 (concave…convex); 0 is a straight chord.
-pub fn arc(a: Point, b: Point, slope: f64, closed: bool, base_along_x: bool) -> PathData {
+/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open). `slope` is −100…100
+/// (concave…convex); 0 is a straight chord. A convex arc bulges toward the corner `(b.x, a.y)`,
+/// and a closed arc closes through the corner `(a.x, b.y)`, so a closed arc at slope 100 is the
+/// quarter-ellipse sector. The shape does not depend on `_base_along_x`: for a Y-base arc,
+/// [`arc_segment`] passes ends on the box mirrored top to bottom.
+pub fn arc(a: Point, b: Point, slope: f64, closed: bool, _base_along_x: bool) -> PathData {
     let t = slope.clamp(-100.0, 100.0) / 100.0;
     let corner = if t >= 0.0 { Point::new(b.x, a.y) } else { Point::new(a.x, b.y) };
     let k = KAPPA * t.abs();
@@ -202,27 +205,32 @@ pub fn arc(a: Point, b: Point, slope: f64, closed: bool, base_along_x: bool) -> 
     let mut anchors =
         vec![Anchor { p: a, h_in: a, h_out: h1, kind: AnchorKind::Corner }, Anchor { p: b, h_in: h2, h_out: b, kind: AnchorKind::Corner }];
     if closed {
-        let o = if base_along_x { Point::new(a.x, b.y) } else { Point::new(b.x, a.y) };
-        anchors.push(Anchor::corner(o));
+        anchors.push(Anchor::corner(Point::new(a.x, b.y)));
     }
     PathData::single(SubPath::new(anchors, closed))
 }
 
-/// Archimedean-style spiral approximating Illustrator's Spiral tool (decay-based, `segments` quarter turns).
+/// Logarithmic spiral approximating the reference app's Spiral tool (decay-based, `segments` quarter turns).
 pub fn spiral(center: Point, radius: f64, decay_percent: f64, segments: u32, clockwise: bool) -> PathData {
     let decay = (decay_percent / 100.0).clamp(0.05, 0.9999);
     let dir = if clockwise { 1.0 } else { -1.0 };
+    // The radius shrinks by `decay` each quarter turn: r(φ) = radius · e^(kφ) after turning φ.
+    let k = decay.ln() / (PI / 2.0);
+    // Handle lengths per unit of the derivative below, at a segment's outer and inner end: √r
+    // changes evenly with the curve's parameter along each quarter turn. Both are KAPPA when the
+    // radius does not shrink, and the curve stays within 0.8% of the spiral's radius at 20% decay.
+    let outer = 2.0 * KAPPA * (decay.sqrt() - 1.0) / decay.ln();
+    let inner = outer / decay.sqrt();
     let mut anchors = Vec::new();
     let mut r = radius;
     for i in 0..=segments {
         let a = dir * (i as f64) * PI / 2.0;
         let p = Point::new(center.x + r * a.cos(), center.y + r * a.sin());
-        // Tangent direction for a quarter arc of radius r.
-        let t = Vec2::new(-a.sin(), a.cos()) * dir;
-        let r_prev = r / decay;
-        let r_next = r * decay;
-        let h_in = p - t * (KAPPA * (r + r_prev) / 2.0);
-        let h_out = p + t * (KAPPA * (r + r_next) / 2.0);
+        // The spiral's derivative by the angle turned: the radius changes along the radial
+        // direction while the point turns along the circle's tangent.
+        let d = Vec2::new(a.cos(), a.sin()) * (r * k) + Vec2::new(-a.sin(), a.cos()) * (r * dir);
+        let h_in = p - d * inner;
+        let h_out = p + d * outer;
         anchors.push(Anchor { p, h_in: if i == 0 { p } else { h_in }, h_out: if i == segments { p } else { h_out }, kind: AnchorKind::Smooth });
         r *= decay;
     }
@@ -458,6 +466,34 @@ mod tests {
         assert!(!p.subpaths[0].closed);
     }
 
+    /// #3437: every segment stays on the spiral through its anchors, whose radius shrinks by
+    /// `decay` each quarter turn, for strong and weak decay and both directions.
+    #[test]
+    fn spiral_segments_follow_the_spiral() {
+        let center = Point::new(40.0, -25.0);
+        for decay in [20.0, 30.0, 50.0, 80.0, 95.0] {
+            for clockwise in [true, false] {
+                let p = spiral(center, 100.0, decay, 8, clockwise);
+                let anchors = &p.subpaths[0].anchors;
+                let k = (decay / 100.0_f64).ln() / (PI / 2.0);
+                let mut worst = 0.0_f64;
+                for pair in anchors.windows(2) {
+                    let c = kurbo::CubicBez::new(pair[0].p, pair[0].h_out, pair[1].h_in, pair[1].p);
+                    let r0 = (pair[0].p - center).hypot();
+                    let a0 = (pair[0].p - center).atan2();
+                    for step in 1..20 {
+                        let q = kurbo::ParamCurve::eval(&c, f64::from(step) / 20.0) - center;
+                        // The angle turned from the segment's start, toward the outer end.
+                        let turned = (q.atan2() - a0 + 3.0 * PI).rem_euclid(TAU) - PI;
+                        let want = r0 * (-k * turned.abs()).exp();
+                        worst = worst.max((q.hypot() - want).abs() / want);
+                    }
+                }
+                assert!(worst < 0.008, "decay {decay} clockwise {clockwise}: radius off by {:.2}%", worst * 100.0);
+            }
+        }
+    }
+
     #[test]
     fn grids() {
         let r = Rect::new(0.0, 0.0, 10.0, 10.0);
@@ -542,6 +578,37 @@ mod tests {
                 assert!(ring.subpaths[0].signed_area() * ring.subpaths[1].signed_area() < 0.0);
                 assert!(ring.subpaths[0].signed_area().abs() > ring.subpaths[1].signed_area().abs());
             }
+        }
+    }
+
+    /// An arc with Base Along Y, open or closed, convex or concave, is the arc with Base Along X in
+    /// the same box mirrored top to bottom, anchor for anchor and handle for handle.
+    #[test]
+    fn a_y_base_arc_is_the_x_base_arc_mirrored_top_to_bottom() {
+        let mirror = |p: Point| Point::new(p.x, 20.0 + 70.0 - p.y);
+        for closed in [false, true] {
+            for slope in [100.0, 50.0, -50.0, -100.0] {
+                let x = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, true, slope, closed);
+                let y = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, false, slope, closed);
+                let (xs, ys) = (&x.subpaths[0], &y.subpaths[0]);
+                assert_eq!(ys.closed, closed);
+                assert_eq!(xs.anchors.len(), ys.anchors.len(), "slope {slope}, closed {closed}");
+                for (i, (p, q)) in xs.anchors.iter().zip(&ys.anchors).enumerate() {
+                    for (u, v) in [(p.p, q.p), (p.h_in, q.h_in), (p.h_out, q.h_out)] {
+                        assert!(mirror(u).distance(v) < 1e-9, "slope {slope}, closed {closed}, anchor {i}: {u:?} mirrored is not {v:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// A closed convex arc is the quarter-ellipse sector of its box with either base: its area is
+    /// a quarter of the ellipse's, π/4 of the box's.
+    #[test]
+    fn a_closed_convex_arc_is_a_quarter_ellipse_sector_with_either_base() {
+        for base_along_x in [true, false] {
+            let a = arc_segment(Point::ZERO, 0, 100.0, 50.0, base_along_x, 100.0, true).subpaths[0].signed_area().abs();
+            assert!((a / (100.0 * 50.0) - PI / 4.0).abs() < 0.01, "base along x {base_along_x}: area {a}");
         }
     }
 

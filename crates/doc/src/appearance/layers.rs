@@ -1,6 +1,6 @@
 use super::profile::{PressureProfile, WidthProfile};
 use super::stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
-use super::*;
+use super::{BlendMode, Deserialize, Paint, Serialize};
 
 /// A live effect in an appearance stack. Parameters are interpreted by `vectorcraft-effects`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

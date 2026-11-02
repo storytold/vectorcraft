@@ -30,11 +30,6 @@ based in part on the work of the Independent JPEG Group.
 WebAssembly plug-ins run in the wasmi interpreter (MIT OR Apache-2.0); its wasmparser dependency is
 under the Apache License 2.0 with the LLVM exception.
 
-The experimental Windows 7 build (packaging/windows/windows7.ps1) compiles a modified copy of the
-windows-link crate 0.2.1 (vendor/windows-link; Microsoft, MIT OR Apache-2.0) that binds CoTaskMemFree
-through ole32.dll. Its license texts are in vendor/windows-link and ship in that build's ZIP; every
-other build uses the unmodified crate from crates.io.
-
 Builds made with craft-fonts (the CRAFT_FONTS_DIR build option; all official releases) embed the
 fonts listed in https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md (BIZ UDPGothic,
 Shippori Mincho, BIZ UDMincho, Noto Sans CJK SC and Noto Sans Arabic in the current manifest;

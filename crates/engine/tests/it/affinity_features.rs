@@ -702,3 +702,21 @@ fn objects_beyond_the_document_range_are_left_out() {
     assert!(names.iter().any(|n| n == "Magenta box") && !names.iter().any(|n| n == "Far box"), "{names:?}");
     assert!(loaded.warnings.iter().any(|w| w.contains("beyond the document range")), "{:?}", loaded.warnings);
 }
+
+#[test]
+fn test_af_g_symbol_fill_is_white() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test.af");
+    let Ok(bytes) = std::fs::read(&path) else {
+        return;
+    };
+    let loaded = vectorcraft_engine::cmd::fileio::load("test.af", &bytes).unwrap();
+    assert!(!loaded.preview_only, "{:?}", loaded.warnings);
+    let d = &loaded.doc;
+    // The visible "g41" group holds the "g" symbol (path43).
+    let g41 = all(d).into_iter().find(|n| n.visible && n.name.as_deref() == Some("g41")).expect("visible g41 group must be present");
+    let path43 = g41.children().and_then(|c| c.iter().find(|n| n.name.as_deref() == Some("path43"))).expect("path43 inside g41 must be present");
+    let Some(AppearanceItem::Fill(fill)) = path43.appearance.items.first() else {
+        panic!("path43 has no fill: {:?}", path43.appearance);
+    };
+    assert_eq!(fill.paint, Paint::solid(Color::rgb(1.0, 1.0, 1.0)), "The 'g' symbol must have a white fill in test.af, got {:?}", fill.paint);
+}

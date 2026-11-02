@@ -1,5 +1,5 @@
 use super::face::FontFace;
-use super::*;
+use super::{BezPath, OutlinePen};
 
 /// Is glyph `gid` of `face` (as `font`) drawn from an SVG document, if it has one: the face has
 /// SVG glyphs, and the glyph no COLR layers, which come first.

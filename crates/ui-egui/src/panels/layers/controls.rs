@@ -1,5 +1,8 @@
 use super::model::{ObjectKind, RowState, names, parse_names, toggled};
-use super::*;
+use super::{
+    Document, HashSet, LayersDrag, Node, NodeId, NodeKind, PanelDrag, Sense, Stroke, StrokeKind, Ui, Value, VectorcraftApp, View, json,
+    last_selected, see_selection, vec2, widgets,
+};
 
 /// The Filter button, lit while a filter is on, and its popup: Clear All, the object kinds under
 /// By Object and the row states under By Layer, each ticked or not. A tick, or Clear All, runs
@@ -64,10 +67,13 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
             actions.push(("layer.delete".into(), json!({})));
         }
     }
-    // Create New Layer: Alt asks for its options first, Ctrl/Cmd puts it on top of every layer.
+    // Create New Layer: Alt asks for its options first, Ctrl/Cmd puts it on top of every layer,
+    // and Ctrl/Cmd+Alt puts it directly below the current layer.
     let new_layer = widgets::icon_button(&mut child, "file-plus", tl!("Create New Layer"), false, 24.0);
     if new_layer.clicked() {
-        if m.alt {
+        if m.alt && m.command {
+            actions.push(("layer.new".into(), json!({"below": true})));
+        } else if m.alt {
             actions.push(("ui.newLayer".into(), json!({})));
         } else {
             actions.push(("layer.new".into(), json!({"top": m.command})));
@@ -87,8 +93,14 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
             child.painter().rect_stroke(button.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
         }
     }
+    // Create New Sublayer: Alt asks for its options first, and Ctrl/Cmd+Alt puts it under the
+    // layer's contents.
     if widgets::icon_button(&mut child, "plus", tl!("Create New Sublayer"), false, 24.0).clicked() {
-        actions.push(if m.alt { ("ui.newLayer".into(), json!({"sublayer": true})) } else { ("layer.newSublayer".into(), json!({})) });
+        actions.push(match (m.alt, m.command) {
+            (true, true) => ("layer.newSublayer".into(), json!({"bottom": true})),
+            (true, false) => ("ui.newLayer".into(), json!({"sublayer": true})),
+            _ => ("layer.newSublayer".into(), json!({})),
+        });
     }
     if widgets::icon_button(&mut child, "frame", tl!("Make/Release Clipping Mask"), false, 24.0).clicked() {
         actions.push(("layer.clippingMask.toggle".into(), json!({})));

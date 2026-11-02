@@ -15,6 +15,9 @@ use vectorcraft_doc::LinkInfo;
 use super::{Edits, depth, href};
 use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
 
+/// Most nested SVG images an imported SVG may decode (#3564).
+pub const MAX_NESTED_SVG_IMAGES: usize = 256;
+
 /// The files an SVG's images link to.
 #[derive(Default)]
 pub(in crate::import) struct Files {
@@ -36,6 +39,10 @@ pub(in crate::import) struct Files {
     too_deep: AtomicBool,
     /// An SVGZ image was left out for unpacking past what the SVGZ images may.
     too_big: AtomicBool,
+    /// How many nested SVG images were decoded so far.
+    svg_images: AtomicUsize,
+    /// SVG images were left out for exceeding [`MAX_NESTED_SVG_IMAGES`].
+    too_many_svg_images: AtomicBool,
 }
 
 /// How usvg holds the bytes of a raster of one format (`ImageKind::PNG`…).
@@ -214,6 +221,9 @@ impl Files {
         if self.too_big.load(Ordering::Relaxed) {
             notes.push(format!("SVGZ images were left out: together they unpack to more than {} MB", MAX_SVGZ >> 20));
         }
+        if self.too_many_svg_images.load(Ordering::Relaxed) {
+            notes.push(format!("SVG images were left out: more than {MAX_NESTED_SVG_IMAGES} nested SVG images"));
+        }
         notes
     }
 
@@ -268,14 +278,19 @@ impl Files {
     /// can't read, when it isn't SVG or when its elements nest deeper than the SVGs around it
     /// leave: usvg reads it while it reads them, on the same stack.
     fn svg(&self, text: &str, opts: &usvg::Options) -> Option<ImageKind> {
+        if self.svg_images.fetch_add(1, Ordering::Relaxed) >= MAX_NESTED_SVG_IMAGES {
+            return leave_out(&self.too_many_svg_images, true);
+        }
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
         if depth::xml_deeper_than(text, left) {
             return leave_out(&self.too_deep, true);
         }
-        let height = depth::height(&super::parse(text).ok()?, left);
-        let Some(height) = height else { return leave_out(&self.too_deep, true) };
+        let xml = super::parse(text).ok()?;
+        let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
+        // usvg's parser would overflow on it, as on the SVG holding it (`import`).
+        super::convolve_matrices_ok(&xml).ok()?;
         self.note_text(text);
         self.depth.store(used + height, Ordering::Relaxed);
         let tree = usvg::Tree::from_data_nested(text.as_bytes(), opts);
@@ -447,6 +462,22 @@ mod tests {
         assert_eq!(read(1, MAX_ELEMENT_DEPTH - 2), (true, 0));
         assert_eq!(read(2, MAX_ELEMENT_DEPTH - 2), (false, 1));
         assert_eq!(read(MAX_ELEMENT_DEPTH, 0), (false, 1));
+    }
+
+    /// An SVG image with a `feConvolveMatrix` order usvg's multiply overflows is left out before
+    /// usvg reads it, as the SVG holding it would be refused.
+    #[test]
+    fn svg_images_with_an_overflowing_convolve_order_are_left_out() {
+        let read = |order: &str| {
+            let svg = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><filter id="f"><feConvolveMatrix order="{order}" kernelMatrix="1"/></filter><rect width="4" height="4" filter="url(#f)"/></svg>"#
+            );
+            let files = Files::default();
+            let resolver = files.resolver(1);
+            matches!((resolver.resolve_data)("image/svg+xml", Arc::new(svg.into_bytes()), &usvg::Options::default()), Some(ImageKind::SVG(_)))
+        };
+        assert!(!read("2147483647"));
+        assert!(read("1"));
     }
 
     #[test]

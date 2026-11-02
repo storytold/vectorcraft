@@ -72,7 +72,7 @@ fn save_as_svg_opens_svg_options_then_writes_svg() {
     // The save panel offers every save format, the document's own first.
     let pick = &picks.borrow()[0];
     let labels: Vec<&str> = pick.filters.iter().map(|f| f.0.as_str()).collect();
-    assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai"]);
+    assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai", "EPS"]);
     assert_eq!(pick.name, "Untitled-1.vectorcraft");
     let d = dialog(&app);
     assert_eq!((d.kind.as_str(), d.str("path").as_str(), d.str("mode").as_str()), ("svgOptions", "art.svg", "save"));
@@ -331,4 +331,62 @@ fn save_as_pdf_asks_with_the_save_pdf_dialog_and_remembers_its_options() {
     app.run("file.saveCopy", json!({"format": "pdf"})).unwrap();
     assert_eq!(dialog(&app).str("compatibility"), "1.5");
     assert_eq!(dialog(&app).str("__save"), "file.saveCopy");
+}
+
+#[test]
+fn eps_save_as_keeps_page_options_and_writes_eps_without_export_only_switches() {
+    let (mut app, written, _) = desktop("art.eps");
+    app.run("file.saveAs", json!({})).unwrap();
+    let names: Vec<_> = shown(fileio::format("eps").unwrap()).map(|option| option.name).collect();
+    assert!(!names.contains(&"useArtboards") && !names.contains(&"selectedOnly"));
+    assert!(names.contains(&"previewFormat"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let saved = written.borrow();
+    assert_eq!(saved[0].0, "art.eps");
+    assert!(vectorcraft_eps::native(&saved[0].1).is_some());
+    assert_eq!(app.session.active().unwrap().format, "eps");
+}
+
+/// #4931: a native file's Version is a menu of the versions VectorCraft writes, the current one
+/// first and chosen, each named by the releases that read it. An older version without
+/// compression saves plain, whatever Use Compression held.
+#[test]
+fn native_version_is_a_menu_of_the_versions_vectorcraft_writes() {
+    let listed: Vec<u32> = NATIVE_VERSIONS.iter().map(|(n, _)| *n).collect();
+    let writable: Vec<u32> = (vectorcraft_format::MIN_VERSION..=vectorcraft_format::VERSION).rev().collect();
+    assert_eq!(listed, writable, "every version VectorCraft writes, newest first");
+    let (mut app, written, _) = desktop("art.vectorcraft");
+    assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+    assert!(text.contains("VectorCraft 0.8 and later (version 4)"), "{text}");
+    assert_eq!(native_version_of(dialog(&app)), vectorcraft_format::VERSION);
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("version".into(), json!(2));
+    d.fields.insert("compress".into(), json!(true));
+    assert!(uncompressed(d));
+    frame(&mut app, true);
+    assert!(app.ui.dialog.is_none(), "saved: {}", app.ui.status);
+    let (_, bytes) = written.borrow()[0].clone();
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(200)]).to_string();
+    assert!(head.contains("\"version\": 2") || head.contains("\"version\":2"), "{head}");
+}
+
+/// #4933: a save refused before anything is written (here a version agents can still set) says
+/// so in the "Can't save" alert, in the reason's words without the command's, and writes nothing.
+#[test]
+fn a_refused_save_says_so_in_an_alert() {
+    let (mut app, written, _) = desktop("art.vectorcraft");
+    assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+    app.ui.dialog.as_mut().unwrap().fields.insert("version".into(), json!(55));
+    frame(&mut app, false);
+    frame(&mut app, true);
+    let d = dialog(&app);
+    assert_eq!(
+        (d.kind.as_str(), d.str("message").as_str(), d.str("detail").as_str()),
+        (crate::dialogs::confirm::MESSAGE, "Can't save “art.vectorcraft”.", "can't save version 55: VectorCraft writes versions 1 to 4")
+    );
+    assert!(written.borrow().is_empty());
+    let st = app.session.active().unwrap();
+    assert!(st.is_dirty() && st.path.is_none(), "not saved");
 }

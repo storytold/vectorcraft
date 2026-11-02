@@ -106,9 +106,14 @@ fn nearest_edge<'a>(edges: impl IntoIterator<Item = &'a Arc<Node>>, p: Point, to
 
 /// The visible Live Paint group with a face under `p` that is not hidden (front-most in paint order).
 pub fn live_paint_at(doc: &Document, p: Point) -> Option<NodeId> {
+    live_paint_at_where(doc, p, |id| doc.is_visible(id))
+}
+
+/// [`live_paint_at`] among the Live Paint groups for which `takes` is true.
+pub(super) fn live_paint_at_where(doc: &Document, p: Point, takes: impl Fn(NodeId) -> bool) -> Option<NodeId> {
     let mut hit = None;
     doc.walk(|n| {
-        if is_live_paint(n) && doc.is_visible(n.id) && visible_face_at(n, p).is_some() {
+        if is_live_paint(n) && visible_face_at(n, p).is_some() && takes(n.id) {
             hit = Some(n.id);
         }
     });
@@ -121,28 +126,48 @@ pub fn leaf_shapes<'a>(n: &'a Node, out: &mut Vec<&'a Node>) {
     collect_leaves(n, false, out);
 }
 
-/// [`leaf_shapes`]; with `filled_faces`, a Live Paint group contributes only its filled faces and
-/// its stroked edges.
-fn collect_leaves<'a>(n: &'a Node, filled_faces: bool, out: &mut Vec<&'a Node>) {
-    if !n.visible {
+/// [`leaf_shapes`]; with `builder` (the Shape Builder's inputs), a Live Paint group contributes
+/// only its filled faces and its stroked edges, and locked objects contribute nothing.
+fn collect_leaves<'a>(n: &'a Node, builder: bool, out: &mut Vec<&'a Node>) {
+    collect_members(n, builder, out);
+    if builder {
+        out.retain(|m| m.visible && !m.locked);
+    }
+}
+
+/// The leaves the Shape Builder takes from `n` ([`collect_leaves`]), in paint order, with each
+/// hidden or locked object it skips in its place.
+pub fn builder_members(n: &Node) -> Vec<&Node> {
+    let mut out = vec![];
+    collect_members(n, true, &mut out);
+    out
+}
+
+/// [`collect_leaves`] with, for `builder`, each hidden or locked object in place of what it holds.
+fn collect_members<'a>(n: &'a Node, builder: bool, out: &mut Vec<&'a Node>) {
+    if !n.visible && !builder {
+        return;
+    }
+    if builder && (!n.visible || n.locked) {
+        out.push(n);
         return;
     }
     if n.extras().shaper.is_some() {
         for c in n.children().into_iter().flatten().skip(1) {
-            collect_leaves(c, filled_faces, out);
+            collect_members(c, builder, out);
         }
         return;
     }
     match &n.kind {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => {}
         NodeKind::Path { .. } | NodeKind::Compound { .. } => out.push(n),
-        NodeKind::Group { .. } if filled_faces && is_live_paint(n) => {
-            out.extend(faces(n).into_iter().filter(|f| f.visible && !f.appearance.fill_paint().is_none()).map(|f| &**f));
-            out.extend(edges(n).into_iter().filter(|e| e.visible && !e.appearance.stroke_paint().is_none()).map(|e| &**e));
+        NodeKind::Group { .. } if builder && is_live_paint(n) => {
+            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || !f.appearance.fill_paint().is_none()).map(|f| &**f));
+            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || !e.appearance.stroke_paint().is_none()).map(|e| &**e));
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children {
-                collect_leaves(c, filled_faces, out);
+                collect_members(c, builder, out);
             }
         }
         _ => {}
@@ -191,13 +216,15 @@ pub fn shapes_for<'a>(doc: &'a Document, roots: &[NodeId]) -> (Vec<po::Shape>, V
     shapes_of(doc, roots, false)
 }
 
-/// [`shapes_for`]; with `filled_faces`, a Live Paint group contributes only its filled faces and
-/// its stroked edges.
-fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], filled_faces: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
+/// [`shapes_for`]; with `builder`, the leaves [`collect_leaves`] takes for the Shape Builder, and
+/// nothing from a root in a locked or hidden group or layer.
+fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], builder: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let mut lv = vec![];
     for id in roots {
-        if let Some(n) = doc.node(*id) {
-            collect_leaves(n, filled_faces, &mut lv);
+        if let Some(n) = doc.node(*id)
+            && (!builder || doc.is_editable(*id))
+        {
+            collect_leaves(n, builder, &mut lv);
         }
     }
     let mut shapes = vec![];
@@ -219,7 +246,8 @@ fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], filled_faces: bool) -> (Ve
 /// `open_filled_as_closed`. Unfilled open paths and straight lines stay open and cut the regions
 /// they cross, and so do filled open paths without `open_filled_as_closed`. A Live Paint group
 /// contributes its filled faces as shapes and its stroked edges as open lines; its unfilled faces
-/// and its edges without a stroke are left out.
+/// and its edges without a stroke are left out. Locked objects, and objects in a locked group or
+/// layer, give nothing.
 pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_of(doc, roots, true);
     for (s, l) in shapes.iter_mut().zip(&leaves) {

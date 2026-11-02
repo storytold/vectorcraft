@@ -3,7 +3,7 @@ use super::handlers::{
     Args, absolute_path, add_text, answer_dialog, apply_paint, draw_path, draw_shape, exec, image_result, max_side, need_ui, req_str, screenshot,
     select_ids, transform,
 };
-use super::*;
+use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, format, json, save_reads_option, writable_format};
 
 /// The `menu` argument of the command listings.
 pub(super) const MENU_FILTER: &str =
@@ -140,6 +140,9 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             let mut p = json!({"events": events});
             if let Some(m) = a.get("mods") {
                 p["mods"] = m.clone();
+            }
+            if let Some(backquote) = a.get("backquote") {
+                p["backquote"] = backquote.clone();
             }
             j(b.call("ui.pointer", p)?)
         }

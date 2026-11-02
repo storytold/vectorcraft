@@ -10,7 +10,7 @@
 //! still held: at 45° steps from where it was). Space held during a convert- or handle-drag moves
 //! the anchor, handles and all, as while drawing with the Pen. Blend spine points and handles
 //! follow the same conversions (#2544).
-//! Scissors: click a path to split it there.
+//! Scissors: click a path to split it there (Alt = add, as the Add Anchor Point tool does).
 
 use serde_json::json;
 use vectorcraft_doc::NodeId;
@@ -19,7 +19,7 @@ use vectorcraft_geom::Point;
 use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
 use crate::direct::hit_handle;
 use crate::guides::HandleSnap;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use vectorcraft_geom::constrain_angle_from;
 
 #[derive(Clone, Copy, Debug)]
@@ -296,6 +296,30 @@ impl Tool for AnchorTool {
     fn busy(&self) -> bool {
         !matches!(self.state, State::Idle)
     }
+    /// Escape during an Anchor Point drag (an anchor pulled into a smooth point or moved, a
+    /// handle, a segment, a blend spine's point, handle or segment) cancels it: what it moved goes
+    /// back and the release does nothing. Escape after a press that has not moved yet drops the
+    /// press, so its release converts nothing.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape || matches!(self.state, State::Idle) {
+            return vec![];
+        }
+        let began = matches!(
+            self.state,
+            State::Convert { began: true, .. }
+                | State::Move { began: true, .. }
+                | State::SpineMove { began: true, .. }
+                | State::Handle { began: true, .. }
+                | State::SpineConvert { began: true, .. }
+                | State::SpineHandle { began: true, .. }
+                | State::Reshape { began: true, .. }
+        );
+        self.state = State::Idle;
+        self.guides.clear();
+        self.measure = None;
+        self.space_resume = None;
+        if began { vec![Action::Cancel] } else { vec![] }
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
         // Anchors and handle ends are picked from a little further than segments.
@@ -316,6 +340,9 @@ impl Tool for AnchorTool {
                 }
             }
             ("scissors", PointerKind::Down) => {
+                if ev.mods.alt {
+                    return Self::add(cx, p);
+                }
                 if let Some((id, si, ai)) = hit_anchor(cx, p, point) {
                     return vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))];
                 }
@@ -554,6 +581,7 @@ impl Tool for AnchorTool {
             "addAnchor" => Cursor::PenDelete,
             "deleteAnchor" if !m.alt => Cursor::PenDelete,
             "deleteAnchor" => Cursor::PenAdd,
+            "scissors" if m.alt => Cursor::PenAdd,
             "scissors" => {
                 if hit_segment(cx, p, cx.pick_tol()).is_some() {
                     Cursor::Scissors

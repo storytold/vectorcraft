@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Appearance, Arc, Beside, Cap, Color, Document, EngineError, FillRule, Join, Node, NodeId, NodeKind, Paint, PathData, Point, PressureProfile,
+    Rect, Result, Selection, Session, SubPath, Value, Vec2, bad, index, json, number_or, po,
+};
+use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
 
 // ---------- helpers ----------
 
@@ -59,6 +63,36 @@ pub(super) fn stroke_pressure(samples: &[(Point, Option<f64>)]) -> Option<Pressu
         })
         .collect();
     PressureProfile::from_samples(along.into_iter().map(|(s, p)| (if at > 1e-9 { s / at } else { 0.0 }, p)))
+}
+
+/// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`, with
+/// `sizeVariation` in points): the stroke's pen pressure along it and the variation, `None` for
+/// Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the size.
+pub(super) fn size_pressure(p: &Value, samples: &[(Point, Option<f64>)], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+    match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
+        None | Some(Ok("fixed")) => Ok(None),
+        Some(Ok("pressure")) => {
+            let variation = number_or(p, "sizeVariation", 0.0, cmd)?;
+            if !(variation.is_finite() && variation >= 0.0) {
+                return Err(bad(cmd, "sizeVariation must be 0 or more"));
+            }
+            Ok(stroke_pressure(samples).filter(|_| variation > 0.0).map(|prof| (prof, variation)))
+        }
+        Some(Ok(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not `{other}`"))),
+        Some(Err(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not {other}"))),
+    }
+}
+
+/// The area a stroke along `spine` covers with Size set to Pressure: as wide at each point as
+/// [`vectorcraft_tools::draw2::pressure_size`] gives for the pressure `prof` records there, with
+/// round ends and joins, its overlaps united into one outline.
+pub(super) fn pressure_region(spine: &PathData, size: f64, variation: f64, prof: &PressureProfile) -> Result<PathData> {
+    let widest = size + variation;
+    let width = |t: f64| vectorcraft_tools::draw2::pressure_size(size, variation, prof.at(t)) / widest;
+    let profile = WidthProfile { points: prof.points.iter().map(|&(t, _)| (t, width(t), width(t))).collect() };
+    let round = StrokeLayer { cap: LineCap::Round, join: LineJoin::Round, ..StrokeLayer::new(Paint::None, widest) };
+    let outline = PathData::from_bezpath(&vectorcraft_render::width_outline(&spine.to_bezpath(), widest, &profile, &round, 0.05));
+    po::try_unite_all(&[(&outline, FillRule::NonZero)]).map_err(|e| EngineError::Other(e.to_string()))
 }
 
 /// The length of a subpath.
@@ -163,6 +197,33 @@ pub(super) fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<N
     let editable = doc.editable();
     out.retain(|id| editable(*id));
     out
+}
+
+/// [`target_paths`] for the tools that cut fills, with each target's geometry and fill rule: the
+/// members of a compound path whose members are all closed paths give the compound path itself,
+/// once, so its fill (holes included) is cut as one shape under its own fill rule.
+pub(super) fn fill_targets(doc: &Document, sel: &Selection, area: Rect) -> Result<Vec<(NodeId, PathData, FillRule)>> {
+    let closed_compound = |n: &Node| {
+        matches!(&n.kind, NodeKind::Compound { children, .. }
+            if children.iter().all(|c| matches!(&c.kind, NodeKind::Path { path, .. } if path.is_closed())))
+    };
+    let editable = doc.editable();
+    let mut out: Vec<(NodeId, PathData, FillRule)> = vec![];
+    for id in target_paths(doc, sel, area) {
+        let compound = doc.parent_of(id).and_then(|p| doc.node(p)).filter(|p| closed_compound(p) && editable(p.id));
+        let target = compound.map_or(id, |c| c.id);
+        if out.iter().any(|t| t.0 == target) {
+            continue;
+        }
+        let (pd, rule) = match compound.map(|c| &c.kind) {
+            Some(NodeKind::Compound { children, rule }) => {
+                (PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.clone()).collect()), *rule)
+            }
+            _ => path_of(doc, id)?,
+        };
+        out.push((target, pd, rule));
+    }
+    Ok(out)
 }
 
 /// The members of a compound path with geometry `pd`: one path per subpath, with fresh ids.

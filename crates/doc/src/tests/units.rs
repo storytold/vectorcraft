@@ -144,3 +144,10 @@ fn mixed_mul_div() {
     assert_eq!(Unit::Points.parse("10*2/5"), Some(4.0));
     assert_eq!(Unit::Points.parse("10*2/5 px"), Some(Unit::Pixels.to_pt(4.0)));
 }
+
+#[test]
+fn readout_has_no_negative_zero() {
+    assert_eq!(Unit::Points.readout(-0.001), "0.00 pt");
+    assert_eq!(Unit::Points.readout(-0.0), "0.00 pt");
+    assert_eq!(Unit::Points.readout(-12.5), "-12.50 pt");
+}

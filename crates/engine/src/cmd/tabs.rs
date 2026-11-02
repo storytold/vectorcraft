@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeKind, TabAlign, TabStop};
 
 use super::typecmd::{TextRange, para_span, refresh_bounds, text_targets};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, has_selection};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

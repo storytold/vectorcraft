@@ -218,3 +218,27 @@ fn damaged_files_never_panic_when_reading_the_owner_password() {
         assert_eq!(crate::encrypt::user_password(junk, "own"), None);
     }
 }
+
+#[test]
+fn the_same_file_and_passwords_get_fresh_keys_each_time() {
+    // Same document, same passwords, same second: the salts and the file key still differ.
+    let mut opts = PdfOptions::default();
+    opts.settings.compatibility = Compatibility::Pdf20;
+    let plain = export(&doc(), &opts).unwrap();
+    opts.settings.security = security("pw", "own");
+    let a = protect(plain.clone(), &opts.settings).unwrap();
+    let b = protect(plain, &opts.settings).unwrap();
+    assert_ne!(encrypt_dict(&a), encrypt_dict(&b));
+    for bytes in [&a, &b] {
+        assert_eq!(shapes_of(bytes, Some("pw")), 1);
+        assert_eq!(shapes_of(bytes, Some("own")), 1);
+    }
+}
+
+#[test]
+fn the_file_key_is_seeded_from_the_os_random_source() {
+    // `RandomState` is no CSPRNG and its keys are fixed on the web: the seed must come from the OS.
+    let src = include_str!("../encrypt.rs");
+    assert!(!src.contains("RandomState"), "encrypt.rs seeds its keys from RandomState");
+    assert!(src.contains("getrandom::fill"), "encrypt.rs doesn't seed its keys from the OS random source");
+}

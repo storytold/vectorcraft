@@ -1,6 +1,6 @@
 //! The platform features, menu commands and later syntax the analysis recognises.
 
-use super::*;
+use super::{Analyzer, FeatureId, NEWER, OutsideId, Pending, Sig, T, catalog, is, member_mark, newer_number, report, unquote, word};
 
 /// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
 pub(super) fn platform_name(n: &str) -> bool {

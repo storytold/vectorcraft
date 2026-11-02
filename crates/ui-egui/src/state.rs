@@ -21,11 +21,15 @@ pub struct View {
     /// Size show it.
     #[serde(default)]
     pub artboard: usize,
+    /// View › Outline: the document's art is drawn as outlines. Each document has its own, and a
+    /// document opens in Preview.
+    #[serde(default)]
+    pub outline: bool,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0 }
+        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0, outline: false }
     }
 }
 
@@ -45,6 +49,7 @@ impl View {
             fitted: true,
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
             artboard: 0,
+            outline: false,
         })
     }
 }
@@ -66,7 +71,7 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
-use super::*;
+use super::{ControlResponse, Sender};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
@@ -197,6 +202,11 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
+    (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
+    (crate::addons::color::ID, "Color Effects", "sun"),
+    (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
+    (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
+    (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.
@@ -227,7 +237,6 @@ pub struct ViewFlags {
     pub guides: bool,
     pub smart_guides: bool,
     pub bounding_box: bool,
-    pub outline: bool,
     pub pixel_preview: bool,
     pub snap_to_grid: bool,
     pub snap_to_point: bool,
@@ -266,7 +275,6 @@ impl Default for ViewFlags {
             guides: true,
             smart_guides: true,
             bounding_box: true,
-            outline: false,
             pixel_preview: false,
             snap_to_grid: false,
             snap_to_point: true,
@@ -352,6 +360,13 @@ pub struct UiState {
     /// saved.
     #[serde(skip)]
     pub context_locked: Option<(u64, Vec<vectorcraft_doc::NodeId>)>,
+    /// What the last right-click on the canvas with the Intertwine tool arranges, with the
+    /// document's `uid`: the Intertwine group, the point and the object nearest to it where three
+    /// or more objects overlap ([`vectorcraft_tools::intertwine::menu_target`]). The context menu
+    /// lists Bring to Front, Bring Forward, Send Backward and Send to Back for that object while it
+    /// is open. Not saved.
+    #[serde(skip)]
+    pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
     /// Last tool shown in each toolbar slot (keyed by the slot's first tool id).
     #[serde(default)]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -377,6 +392,9 @@ pub struct UiState {
     pub docking: Option<craft_ui::docking::Layout<String>>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub docking_hidden: std::collections::BTreeMap<String, craft_ui::docking::Location<String>>,
+    /// Tabs closed together by panel shortcuts, kept with their workspace return locations.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docking_hidden_groups: Vec<Vec<String>>,
     /// Panels dropped on the icon column, in older files (read only, like [`Self::floating_panels`]).
     #[serde(default, skip_serializing)]
     pub docking_icons: std::collections::BTreeSet<String>,
@@ -433,6 +451,10 @@ pub struct UiState {
     /// with New Set): a recording goes into it and Set Options renames it. Not saved.
     #[serde(skip)]
     pub action_set: Option<usize>,
+    /// The sets selected in the Actions panel, in index order: the current set and the sets a
+    /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
+    #[serde(skip)]
+    pub action_sets_selected: Vec<usize>,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
@@ -483,6 +505,11 @@ pub struct UiState {
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
     pub color_guide_limit: String,
+    /// Color Guide panel: the base color, set by a color chosen in the Color panel, the Swatches
+    /// panel or the Color Picker and by the panel's base chip (none: the current color). Not
+    /// saved.
+    #[serde(skip)]
+    pub color_guide_base: Option<vectorcraft_color::Color>,
     /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
@@ -510,6 +537,10 @@ pub struct UiState {
     /// dialog is open.
     #[serde(skip)]
     pub dialog_file: Option<std::sync::Arc<crate::dialogs::import_pdf::DialogFile>>,
+    /// Pending new style highlights: document uid, paragraph-style flag, and name. Each document
+    /// and style kind has at most one pending highlight.
+    #[serde(skip)]
+    pub made_text_style: Vec<(u64, bool, String)>,
     /// The documents (uids) whose Missing Fonts dialog waits until no dialog is open, the next one to
     /// show first ([`crate::dialogs::settle`]).
     #[serde(skip)]
@@ -536,6 +567,13 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
+    #[serde(default)]
+    pub average_join: Value,
+    /// The Recolor Artwork Preserve checkboxes confirmed last (`preserveWhite`, `preserveBlack`,
+    /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
+    #[serde(default)]
+    pub recolor_preserve: Value,
     /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
     /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
     /// of the Simplify slider.
@@ -550,6 +588,9 @@ pub struct UiState {
     /// them (#1732).
     #[serde(default)]
     pub transform_each: Value,
+    /// The spacing used the last time Rearrange All Artboards was confirmed.
+    #[serde(default)]
+    pub rearrange_artboards_spacing: Value,
     /// The DXF Import Options chosen last (fit, scaleLineweights, center, mergeLayers; null:
     /// never used).
     #[serde(default)]
@@ -810,6 +851,7 @@ impl Default for UiState {
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
             context_locked: None,
+            context_intertwine: None,
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),
@@ -818,6 +860,7 @@ impl Default for UiState {
             floating_panels: vec![],
             docking: None,
             docking_hidden: Default::default(),
+            docking_hidden_groups: Vec::new(),
             docking_icons: Default::default(),
             docking_collapsed: Default::default(),
             docking_generation: 0,
@@ -840,6 +883,7 @@ impl Default for UiState {
             about: false,
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
+            action_sets_selected: vec![],
             recording: None,
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),
@@ -855,6 +899,7 @@ impl Default for UiState {
             library_panels: vec![],
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
+            color_guide_base: None,
             align_to: Default::default(),
             align_spacing: 0.0,
             color_mode: None,
@@ -862,6 +907,7 @@ impl Default for UiState {
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,
+            made_text_style: vec![],
             pending_fonts: vec![],
             fonts_dialog: None,
             dialog_search: None,
@@ -869,9 +915,12 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            average_join: Value::Null,
+            recolor_preserve: Value::Null,
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
+            rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
             home: None,
             trace_hold_source: None,

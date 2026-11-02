@@ -1,4 +1,4 @@
-use super::*;
+use super::{Anchor, BezPath, CubicBez, PI, ParamCurve, PathData, Point, SubPath};
 
 // =====================================================================================
 // Warp maps (shared with vectorcraft-effects' Warp effects)

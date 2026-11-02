@@ -1,5 +1,5 @@
+use super::TRANSPARENT;
 use super::rare::RARE_ISLAND;
-use super::*;
 
 /// Merge whole 4-connected regions, smallest first, into their most common neighbouring label.
 /// The merge order does not depend on `min_area`: a higher threshold continues the same sequence

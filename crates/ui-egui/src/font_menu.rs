@@ -452,6 +452,34 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     Listed { st, rows, current: current.to_string(), enter, keyed, opening }
 }
 
+/// The disclosure triangle of a family with several styles; whether the pointer is on it.
+fn disclosure(p: &egui::Painter, resp: &egui::Response, tri: egui::Rect, open: bool, t: &Tokens) -> bool {
+    p.text(tri.center(), egui::Align2::CENTER_CENTER, if open { "▾" } else { "▸" }, egui::FontId::proportional(11.0), t.text_dim);
+    resp.interact_pointer_pos().is_some_and(|pos| tri.contains(pos))
+}
+
+/// The star at the end of a family's row, shown when it is a favourite, hovered or highlighted; whether the pointer is
+/// on it.
+fn star_cell(p: &egui::Painter, resp: &egui::Response, star: egui::Rect, (on, highlighted): (bool, bool), t: &Tokens) -> bool {
+    let hot = resp.hover_pos().is_some_and(|pos| star.contains(pos));
+    if on || hot || highlighted {
+        let color = if on { t.accent } else { t.text_dim };
+        p.text(star.center(), egui::Align2::CENTER_CENTER, if on { "★" } else { "☆" }, egui::FontId::proportional(12.0), color);
+    }
+    resp.interact_pointer_pos().is_some_and(|pos| star.contains(pos))
+}
+
+/// A heading row (Recent Fonts, Fonts), which cannot preview or apply a font.
+fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
+    // Existing translated menu labels; the heading cannot preview or apply a font.
+    let label = match label {
+        "Recent Fonts" => tl!("Recent Fonts"),
+        _ => tl!("Fonts"),
+    };
+    ui.painter_at(rect).text(rect.left_center() + vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(11.0), t.text_dim);
+}
+
 /// The rows of the open menu in `range`, the ones in view: the menu's one scrolling part, under
 /// the search field and filters (#555).
 fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
@@ -490,19 +518,7 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
     for i in range {
         let Some(row) = rows.get(i) else { continue };
         if let Row::Heading(label) = row {
-            let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
-            // Existing translated menu labels; the heading cannot preview or apply a font.
-            let label = match *label {
-                "Recent Fonts" => tl!("Recent Fonts"),
-                _ => tl!("Fonts"),
-            };
-            ui.painter_at(rect).text(
-                rect.left_center() + vec2(4.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                label,
-                egui::FontId::proportional(11.0),
-                t.text_dim,
-            );
+            heading_row(ui, row_h, label, &t);
             continue;
         }
         let Some(family) = row.family() else { continue };
@@ -523,8 +539,7 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
             && db.styles(f).len() > 1
         {
             let open = st.expanded.iter().any(|e| e.eq_ignore_ascii_case(f));
-            p.text(tri.center(), egui::Align2::CENTER_CENTER, if open { "▾" } else { "▸" }, egui::FontId::proportional(11.0), t.text_dim);
-            on_triangle = resp.interact_pointer_pos().is_some_and(|pos| tri.contains(pos));
+            on_triangle = disclosure(&p, &resp, tri, open, &t);
             if resp.clicked() && on_triangle {
                 toggled = Some(f.to_lowercase());
             }
@@ -534,12 +549,7 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         let mut on_star = false;
         if let Row::Family(f) = row {
             let on = favorite(f);
-            let hot = resp.hover_pos().is_some_and(|pos| star.contains(pos));
-            if on || hot || st.highlight == Some(i) {
-                let color = if on { t.accent } else { t.text_dim };
-                p.text(star.center(), egui::Align2::CENTER_CENTER, if on { "★" } else { "☆" }, egui::FontId::proportional(12.0), color);
-            }
-            on_star = resp.interact_pointer_pos().is_some_and(|pos| star.contains(pos));
+            on_star = star_cell(&p, &resp, star, (on, st.highlight == Some(i)), &t);
             if resp.clicked() && on_star {
                 starred = Some(f.clone());
             }

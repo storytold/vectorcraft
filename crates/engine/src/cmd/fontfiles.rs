@@ -12,7 +12,7 @@ use vectorcraft_doc::Document;
 use vectorcraft_text::{FontDb, FontMatch, WantedFont, WantedFonts};
 
 use super::findfiles::{self, Limits, Visitor};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc};
 use crate::DocState;
 
 /// The most fonts listed, or looked for at once.

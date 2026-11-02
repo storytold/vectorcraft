@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, absolute_path, bad, json, named,
+    read_file_head, str_param, variables_unlocked,
+};
 
 /// Caps on a variable library (paths and MCP payloads are untrusted): its size, its XML nodes, how
 /// deep its elements nest, and the entities, variables and data sets it declares.
@@ -246,7 +249,8 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
 }
 
 /// Load Variable Library: replace the document's variables and data sets with a variable library's
-/// ([`parse_library`]) in one undo step. Every variable of the document is deleted with its bindings
+/// ([`parse_library`]) in one undo step, or none when the document already holds what the library
+/// gives. Every variable of the document is deleted with its bindings
 /// and values, and every data set is deleted. The library's text variables are then defined,
 /// unbound, and its data sets are added. The library's variables of other kinds are left out, named
 /// in `skipped` and in a warning.
@@ -265,18 +269,17 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let added: Vec<Variable> = lib.text.iter().map(|n| Variable { name: n.clone(), kind: VariableKind::Text }).collect();
     let names: Vec<String> = lib.datasets.iter().map(|d| d.name.clone()).collect();
-    s.edit("Load Variable Library", |d, _| {
-        d.variables.prune(&deleted);
-        d.variables.variables.extend(added);
-        d.variables.datasets = lib.datasets;
-        d.variables.active_dataset = None;
+    // A load that leaves the variables and data sets as they were adds no undo step.
+    super::edit_variables(s, "Load Variable Library", |vars| {
+        vars.prune(&deleted);
+        vars.variables.extend(added);
+        vars.datasets = lib.datasets;
+        vars.active_dataset = None;
         Ok(())
     })?;
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
-    if st.variables_highlight.as_ref().is_some_and(|h| st.doc.variables.variable(h).is_none()) {
-        st.variables_highlight = None;
-    }
+    st.drop_stale_variables_highlight();
     st.revision += 1;
     let skipped: Vec<Value> = lib.other.iter().map(|(name, t)| json!({"name": name, "trait": t})).collect();
     let mut out = json!({

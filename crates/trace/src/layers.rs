@@ -3,7 +3,12 @@ use super::pipeline::TracedPath;
 #[cfg(test)]
 use super::pipeline::{bw_tones, left_out};
 use super::raster::Raster;
-use super::*;
+use super::{
+    AtomicUsize, Crack, Loop, Ordering, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, centerline, contour, fit, logo, shapes,
+    trace_mask,
+};
+#[cfg(test)]
+use super::{denoise, quantize};
 
 /// What tracing one colour layer needs.
 pub(crate) struct Layers<'a> {

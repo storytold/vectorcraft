@@ -24,7 +24,7 @@ fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
     match &n.kind {
         NodeKind::SymbolInstance { symbol, xf } => {
             let sym = doc?.symbols.iter().find(|s| s.name == *symbol)?;
-            let mut art = (*sym.art).clone();
+            let mut art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
             art.transform(*xf, false);
             Some(Node::group(n.id, vec![Arc::new(art)]))
         }

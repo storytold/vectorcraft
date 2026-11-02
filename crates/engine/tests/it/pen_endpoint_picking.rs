@@ -303,57 +303,61 @@ fn another_path_join_keeps_snapped_target_when_raw_pointer_misses() {
 
 fn snapped_only_continue(preselected: bool) {
     for first in [true, false] {
-        let mut s = session();
-        let mut prefs = s.prefs.clone();
-        prefs.gridline_every = 100.0;
-        prefs.grid_subdivisions = 1;
-        s.apply_prefs(prefs);
-        assert_eq!(s.doc().unwrap().doc.grid.spacing, 100.0);
-        assert_eq!(s.doc().unwrap().doc.grid.subdivisions, 1);
-        let id = line(&mut s, (100.0, 300.0), (200.0, 300.0));
-        let original = node(&s, id).clone();
-        s.execute("select.set", &json!({"ids": if preselected { vec![id.0] } else { vec![] }})).unwrap();
-        let v = ViewInfo { snap_to_grid: true, ..view() };
-        s.select_tool("pen", v).unwrap();
-        let at = if first { (63.0, 303.0) } else { (237.0, 303.0) };
-        let end = if first { Point::new(100.0, 300.0) } else { Point::new(200.0, 300.0) };
-        assert_eq!(s.cursor(end, Mods::default(), v), Cursor::PenContinue, "the endpoint is eligible");
-        assert_eq!(s.cursor(Point::new(at.0, at.1), Mods::default(), v), Cursor::Pen, "the raw pointer misses both ends");
-        let journal_start = s.journal.len();
-        let before_continue = s.doc().unwrap().history.undo.len();
-        gesture(&mut s, v, &[at], Mods::default());
-
-        assert_eq!(path_ids(&s), vec![id], "snapped-only continuation must keep one original path: selected={preselected}, first={first}");
-        assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
-        let expected = if first { [(200.0, 300.0), (100.0, 300.0)] } else { [(100.0, 300.0), (200.0, 300.0)] };
-        assert_eq!(points(&s, id), expected, "continue from the snapped end: selected={preselected}, first={first}");
-        assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
-        assert!(!s.in_interaction() && !s.tool_busy());
-        assert_eq!(s.doc().unwrap().history.undo.len(), before_continue + usize::from(first));
-        let continued = node(&s, id).clone();
-        if !first {
-            assert_eq!(continued, original, "continuing from the last end does not edit the path");
-        }
-
-        let before_append = s.doc().unwrap().history.undo.len();
-        let next = if first { (0.0, 300.0) } else { (300.0, 300.0) };
-        gesture(&mut s, v, &[next], Mods::default());
-        assert_eq!(path_ids(&s), vec![id]);
-        assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
-        assert_eq!(points(&s, id), [expected[0], expected[1], next]);
-        assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
-        assert!(!s.in_interaction() && !s.tool_busy());
-        assert_eq!(s.doc().unwrap().history.undo.len(), before_append + 1);
-        let extended = node(&s, id).clone();
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(path_ids(&s), vec![id]);
-        assert_eq!(node(&s, id), &continued);
-        assert_eq!(s.doc().unwrap().history.undo.len(), before_append);
-        s.execute("edit.redo", &json!({})).unwrap();
-        assert_eq!(path_ids(&s), vec![id]);
-        assert_eq!(node(&s, id), &extended);
-        assert_eq!(s.doc().unwrap().history.undo.len(), before_append + 1);
+        snapped_only_case(preselected, first);
     }
+}
+
+fn snapped_only_case(preselected: bool, first: bool) {
+    let mut s = session();
+    let mut prefs = s.prefs.clone();
+    prefs.gridline_every = 100.0;
+    prefs.grid_subdivisions = 1;
+    s.apply_prefs(prefs);
+    assert_eq!(s.doc().unwrap().doc.grid.spacing, 100.0);
+    assert_eq!(s.doc().unwrap().doc.grid.subdivisions, 1);
+    let id = line(&mut s, (100.0, 300.0), (200.0, 300.0));
+    let original = node(&s, id).clone();
+    s.execute("select.set", &json!({"ids": if preselected { vec![id.0] } else { vec![] }})).unwrap();
+    let v = ViewInfo { snap_to_grid: true, ..view() };
+    s.select_tool("pen", v).unwrap();
+    let at = if first { (63.0, 303.0) } else { (237.0, 303.0) };
+    let end = if first { Point::new(100.0, 300.0) } else { Point::new(200.0, 300.0) };
+    assert_eq!(s.cursor(end, Mods::default(), v), Cursor::PenContinue, "the endpoint is eligible");
+    assert_eq!(s.cursor(Point::new(at.0, at.1), Mods::default(), v), Cursor::Pen, "the raw pointer misses both ends");
+    let journal_start = s.journal.len();
+    let before_continue = s.doc().unwrap().history.undo.len();
+    gesture(&mut s, v, &[at], Mods::default());
+
+    assert_eq!(path_ids(&s), vec![id], "snapped-only continuation must keep one original path: selected={preselected}, first={first}");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    let expected = if first { [(200.0, 300.0), (100.0, 300.0)] } else { [(100.0, 300.0), (200.0, 300.0)] };
+    assert_eq!(points(&s, id), expected, "continue from the snapped end: selected={preselected}, first={first}");
+    assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
+    assert!(!s.in_interaction() && !s.tool_busy());
+    assert_eq!(s.doc().unwrap().history.undo.len(), before_continue + usize::from(first));
+    let continued = node(&s, id).clone();
+    if !first {
+        assert_eq!(continued, original, "continuing from the last end does not edit the path");
+    }
+
+    let before_append = s.doc().unwrap().history.undo.len();
+    let next = if first { (0.0, 300.0) } else { (300.0, 300.0) };
+    gesture(&mut s, v, &[next], Mods::default());
+    assert_eq!(path_ids(&s), vec![id]);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    assert_eq!(points(&s, id), [expected[0], expected[1], next]);
+    assert!(!s.journal.since(journal_start).iter().any(|(command, _)| command == "path.create"));
+    assert!(!s.in_interaction() && !s.tool_busy());
+    assert_eq!(s.doc().unwrap().history.undo.len(), before_append + 1);
+    let extended = node(&s, id).clone();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path_ids(&s), vec![id]);
+    assert_eq!(node(&s, id), &continued);
+    assert_eq!(s.doc().unwrap().history.undo.len(), before_append);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(path_ids(&s), vec![id]);
+    assert_eq!(node(&s, id), &extended);
+    assert_eq!(s.doc().unwrap().history.undo.len(), before_append + 1);
 }
 
 #[test]

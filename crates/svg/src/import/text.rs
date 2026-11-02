@@ -162,6 +162,7 @@ pub(super) struct PendingText {
 }
 
 /// The texts [`prepare`] replaced, by placeholder index.
+#[derive(Default)]
 pub(super) struct TextSlots {
     prefix: String,
     pub texts: Vec<PendingText>,

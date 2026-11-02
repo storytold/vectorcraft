@@ -154,7 +154,7 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 
 fn typography(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
-    let langs: Vec<(&str, &str)> = LANGUAGES.iter().map(|(l, _)| (*l, *l)).collect();
+    let langs: Vec<(&str, &str)> = LANGUAGES.iter().map(|(l, _, _)| (*l, *l)).collect();
     let before = d.str("language");
     choice(ui, d, "language", tl!("Language:"), &langs);
     // A language brings its quotes.

@@ -403,6 +403,58 @@ fn new_layers_go_above_the_current_one_at_its_level() {
     assert_eq!(unique.len(), names.len(), "{names:?}");
 }
 
+/// `below` puts a new layer directly below the current layer, at its level, and `bottom` puts a
+/// new sublayer under the parent's contents, each in one undo step.
+#[test]
+fn new_layers_go_below_the_current_one_and_sublayers_under_the_contents() {
+    let mut s = session();
+    let (layer, sub, a, g, _, c) = tree(&mut s);
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let before = undos(&s);
+    let n = id(&run(&mut s, "layer.new", json!({"below": true})));
+    assert_eq!(children(&s, layer), vec![c, n, sub], "a sublayer directly below the current sublayer");
+    assert_eq!(undos(&s), before + 1);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![n]);
+    assert_eq!(s.doc().unwrap().current_layer(), Some(n));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(children(&s, layer), vec![c, sub]);
+    // At the top level: below the current layer, above the layers under it.
+    let top = id(&run(&mut s, "layer.new", json!({"top": true, "name": "Top"})));
+    let middle = id(&run(&mut s, "layer.new", json!({"below": true, "name": "Middle", "locked": true})));
+    let order = s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    assert_eq!(order, vec![layer, middle, top]);
+    assert!(node(&s, middle).locked, "options as without `below`");
+    run(&mut s, "layer.setCurrent", json!({"id": layer.0}));
+    let bottom = id(&run(&mut s, "layer.new", json!({"below": true})));
+    assert_eq!(s.doc().unwrap().doc.layers[0].id, bottom, "below the bottom layer");
+    // Sublayers: on top of the parent's contents, or under them with `bottom`.
+    let before = undos(&s);
+    let under = id(&run(&mut s, "layer.newSublayer", json!({"parent": sub.0, "bottom": true})));
+    assert_eq!(children(&s, sub), vec![under, a, g]);
+    assert_eq!(undos(&s), before + 1);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![under]);
+    let over = id(&run(&mut s, "layer.newSublayer", json!({"parent": sub.0, "bottom": false})));
+    assert_eq!(children(&s, sub), vec![under, a, g, over]);
+    // Bad values change nothing.
+    let count = s.doc().unwrap().doc.node_count();
+    for (cmd, p) in [
+        ("layer.new", json!({"below": true, "top": true})),
+        ("layer.new", json!({"below": "yes"})),
+        ("layer.newSublayer", json!({"parent": sub.0, "bottom": 1})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+    }
+    assert_eq!(s.doc().unwrap().doc.node_count(), count);
+    // In a clipping layer the clipping path stays at the bottom.
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let (back, front) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
+    run(&mut s, "layer.clippingMask.toggle", json!({"id": layer.0}));
+    assert_eq!(children(&s, layer), vec![front, back], "the top object clips");
+    let under = id(&run(&mut s, "layer.newSublayer", json!({"parent": layer.0, "bottom": true})));
+    assert_eq!(children(&s, layer), vec![front, under, back]);
+}
+
 #[test]
 fn rows_move_above_below_and_into_layers_and_groups() {
     let mut s = session();
@@ -470,6 +522,60 @@ fn moves_are_validated() {
     assert!(s.execute("node.move", &json!({"id": layer.0, "parent": sub.0, "index": 0})).is_err());
     run(&mut s, "node.move", json!({"id": sub.0, "index": 5}));
     assert_eq!(parent(&s, sub), None);
+}
+
+/// The Layers panel's commands refuse a switch given as text or as another value that is not true
+/// or false, and leave the document, the selection, the highlighted rows and the undo history as
+/// they were; true, false and null still work.
+#[test]
+fn layer_commands_refuse_a_switch_given_as_text() {
+    let fixture = || {
+        let mut s = session();
+        let (layer, sub, a, g, _, c) = tree(&mut s);
+        run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+        (s, layer, sub, a, g, c)
+    };
+    let (_, layer, sub, a, g, _) = fixture();
+    let mut unexpected = vec![];
+    for (cmd, p, key) in [
+        ("layer.new", json!({"top": "true"}), "top"),
+        ("layer.new", json!({"top": 1, "name": "Top"}), "top"),
+        ("layer.newSublayer", json!({"top": "false"}), "top"),
+        ("layer.selectAll", json!({"id": layer.0, "add": "true"}), "add"),
+        ("layer.target", json!({"id": layer.0, "add": 1}), "add"),
+        ("layer.move", json!({"ids": [a.0], "target": layer.0, "copy": "true"}), "copy"),
+        ("layer.move", json!({"ids": [a.0], "target": g.0, "copy": {}}), "copy"),
+        ("layer.template", json!({"ids": [layer.0], "on": "false"}), "on"),
+        ("layer.pasteRemembersLayers", json!({"on": "false"}), "on"),
+        ("layer.pasteRemembersLayers", json!({"on": 0}), "on"),
+        ("layer.releaseToLayers", json!({"id": sub.0, "build": [true]}), "build"),
+    ] {
+        // Each call on a fresh copy of the same tree, so one that goes through does not change the next.
+        let (mut s, l, sl, o, gr, _) = fixture();
+        assert_eq!((l, sl, o, gr), (layer, sub, a, g), "the same ids");
+        let before = layer_target_snapshot(&s);
+        let r = s.execute(cmd, &p);
+        let want = format!("`{key}` must be true or false");
+        if !matches!(&r, Err(EngineError::BadParams { cmd: got, msg }) if got == cmd && *msg == want) {
+            unexpected.push(format!("{cmd} {p}: {r:?}"));
+        } else if layer_target_snapshot(&s) != before {
+            unexpected.push(format!("{cmd} {p}: refused, but the document, selection, rows or history changed"));
+        }
+    }
+    assert!(unexpected.is_empty(), "not refused: {}", unexpected.join("; "));
+    let (mut s, layer, sub, a, g, c) = fixture();
+    // A null reads as the key left out.
+    let n = id(&run(&mut s, "layer.new", json!({"top": null})));
+    assert_eq!(parent(&s, n), Some(layer), "beside the current sublayer");
+    run(&mut s, "layer.selectAll", json!({"id": sub.0, "add": null}));
+    run(&mut s, "layer.selectAll", json!({"id": c.0, "add": true}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, g, c]);
+    run(&mut s, "layer.move", json!({"ids": [a.0], "target": g.0, "copy": false}));
+    assert_eq!(parent(&s, a), Some(g));
+    assert_eq!(run(&mut s, "layer.template", json!({"ids": [layer.0], "on": null}))["on"], true);
+    assert_eq!(run(&mut s, "layer.template", json!({"ids": [layer.0], "on": false}))["on"], false);
+    assert_eq!(run(&mut s, "layer.pasteRemembersLayers", json!({"on": null}))["on"], true, "null toggles");
+    assert_eq!(ids(&run(&mut s, "layer.releaseToLayers", json!({"id": g.0, "build": null}))).len(), 2);
 }
 
 /// `node.move` into a hidden or locked layer deselects the object it moves, here the key object.

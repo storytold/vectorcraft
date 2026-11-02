@@ -109,7 +109,7 @@ fn screen_readers_name_the_tool_buttons_and_the_active_tool() {
     let name = |id| tool_info(id).map(tip).unwrap_or_default();
     assert_eq!(role_and_state(&tree, &name("pen")), (Role::Button, Some(Toggled::True)));
     assert_eq!(role_and_state(&tree, &name("selection")), (Role::Button, Some(Toggled::False)));
-    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (,)", "Gradient (.)", "None (/)"] {
+    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (, or Shift+,)", "Gradient (. or Shift+.)", "None (/)"] {
         assert_eq!(role_and_state(&tree, label), (Role::Button, None), "{label}");
     }
 }
@@ -175,6 +175,34 @@ fn double_clicking_a_tool_button_opens_its_options() {
     let o = app.session.prefs.eyedropper;
     assert!(o.pick_up.appearance.transparency && !o.apply.appearance.transparency && o.apply.appearance.fill.color);
     assert!(app.run("tool.options", json!({"tool": "lasso"})).is_err());
+}
+
+/// A click on the Blend tool's button while the Blend tool holds a first pick finishes the
+/// blend: the tool stays chosen, and the next click on the canvas picks a new first object
+/// instead of blending with the first.
+#[test]
+fn clicking_the_active_blend_tool_button_finishes_the_blend() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui.toolbar_advanced = true;
+    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    for x in [0, 200] {
+        app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 40, "height": 40})).unwrap();
+    }
+    app.select_tool("blend");
+    let index = slots(&app).iter().position(|(_, tools)| tools.contains(&"blend")).expect("a toolbar slot");
+    let ctx = egui::Context::default();
+    let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
+    let down = |x, y| vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
+    let view = app.view_info();
+    app.session.pointer(&down(20.0, 20.0), view).unwrap();
+    assert!(app.session.tool_busy(), "the first rectangle is picked");
+    let layers = app.session.active().unwrap().doc.layers.clone();
+    click_in(&mut app, &ctx, 1.0, at, PointerButton::Primary, 2000.0);
+    assert_eq!(app.session.tool_id(), "blend");
+    assert!(!app.session.tool_busy(), "the click on the button drops the pick");
+    app.session.pointer(&down(220.0, 20.0), view).unwrap();
+    assert!(app.session.tool_busy(), "the second rectangle is a new first pick");
+    assert_eq!(app.session.active().unwrap().doc.layers, layers, "no blend was made");
 }
 
 /// A double-click on the Type on a Path or Vertical Type on a Path tool opens Type on a Path
@@ -610,6 +638,35 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
 }
 
+/// A click on the Gradient button applies the last gradient; Cmd/Ctrl-click resets the active
+/// proxy's gradient to the linear White, Black gradient instead, as one undo step.
+#[test]
+fn cmd_click_on_the_gradient_button_resets_to_the_linear_white_black_gradient() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"kind": "radial", "stops": stops}})).unwrap();
+    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+    let fill = |app: &VectorcraftApp| match crate::panels::current_paints(app).0 {
+        Paint::Gradient(g) => (g.gradient.kind, g.gradient.stops.iter().map(|s| s.color.to_hex()).collect::<Vec<_>>()),
+        p => panic!("expected a gradient fill, got {p:?}"),
+    };
+    let ctx = egui::Context::default();
+    frame_in(&mut app, &ctx, 0.0, vec![], 900.0);
+    let gradient = widget_rects(&ctx, vec2(11.0, 11.0))[1].center();
+    click_in(&mut app, &ctx, 1.0, gradient, PointerButton::Primary, 900.0);
+    assert_eq!(fill(&app), (vectorcraft_color::GradientKind::Radial, vec!["#ff0000".into(), "#0000ff".into()]), "the last gradient");
+    let m = egui::Modifiers::COMMAND;
+    let b = |pressed| Event::PointerButton { pos: gradient, button: PointerButton::Primary, pressed, modifiers: m };
+    frame_in(&mut app, &ctx, 2.0, vec![Event::ModifiersChanged(m), Event::PointerMoved(gradient), b(true)], 900.0);
+    frame_in(&mut app, &ctx, 2.05, vec![b(false)], 900.0);
+    frame_in(&mut app, &ctx, 2.1, vec![Event::ModifiersChanged(egui::Modifiers::NONE)], 900.0);
+    assert_eq!(fill(&app), (vectorcraft_color::GradientKind::Linear, vec!["#ffffff".into(), "#000000".into()]));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(fill(&app).0, vectorcraft_color::GradientKind::Radial, "one undo step");
+}
+
 /// How many columns of tool buttons `rects` make.
 fn columns(rects: &[egui::Rect]) -> usize {
     let mut lefts: Vec<i32> = rects.iter().map(|r| r.left().round() as i32).collect();
@@ -937,4 +994,52 @@ fn screen_readers_name_a_flyouts_rows_and_a_floating_strips_buttons() {
     assert_eq!(role_and_state(&strip, &name("star")), (Role::Button, Some(Toggled::True)));
     assert_eq!(role_and_state(&strip, "Put back in the toolbar"), (Role::Button, None));
     assert_eq!(role_and_state(&strip, "Drag to move"), (Role::Button, None));
+}
+
+/// Tab goes through the tool buttons and does not stop on the Tools panel's grip, a flyout's
+/// tear-off bar or a floating strip's bar, which only the pointer drags.
+#[test]
+fn tab_skips_the_grip_and_the_tear_off_bars() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let group: Vec<String> = ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec();
+    let tools: Vec<String> = ["polygon", "star"].map(String::from).to_vec();
+    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |events: Vec<Event>| {
+        time += 0.05;
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0)));
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
+            app.ui.flyout = Some(0);
+            ui.data_mut(|d| d.insert_temp(egui::Id::unique("flyout-tools"), group.clone()));
+            show(&mut app, ui);
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    frame(vec![]);
+    // The grip: the 6 pt strip under the title bar that senses drags and no clicks.
+    let grip = ctx.viewport(|vp| {
+        vp.prev_pass
+            .widgets
+            .layers()
+            .flat_map(|(_, w)| w.iter())
+            .find(|w| w.rect.height() == 6.0 && w.sense.senses_drag() && !w.sense.senses_click())
+            .map(|w| w.id)
+    });
+    let grip = grip.expect("the Tools panel's grip");
+    // The Tools panel's tool buttons: 36 by 29 pt.
+    let buttons: Vec<egui::Id> = ctx.viewport(|vp| {
+        vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == vec2(36.0, PITCH - 1.0)).map(|w| w.id).collect()
+    });
+    assert!(!buttons.is_empty(), "the Tools panel's buttons are drawn");
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 120, frame);
+    assert!(stops.iter().any(|id| buttons.contains(id)), "Tab reaches the Tools panel's buttons: {stops:?}");
+    let close = egui::Id::unique(("tool-flyout-close", "polygon"));
+    assert!(stops.contains(&close), "Tab reaches the strip's Put back in the toolbar button: {stops:?}");
+    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id("rectangle")), ("the strip's bar", bar_id("polygon"))] {
+        assert!(!stops.contains(&id), "Tab stops on {name}: {stops:?}");
+    }
 }

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, Arc, BezPath, BlendMode, Color, FillRule, GradientStop, HashMap, Node, Point, XNode, roxmltree};
 
 /// `n` with every object id (its descendants' and its mask art's too) zeroed, to compare art.
 pub(super) fn without_ids(n: &Node) -> Node {

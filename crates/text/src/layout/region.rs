@@ -1,4 +1,6 @@
-use super::*;
+#[cfg(test)]
+use super::PathData;
+use super::{BezPath, LayoutOptions, PathEl, Point, Rect, Shape};
 
 /// A flattened text wrap shape: (polygons, offset, invert).
 pub(super) type FlatWrap = (Vec<Vec<Point>>, f64, bool);
@@ -137,14 +139,19 @@ impl Region {
         let max = vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS;
         let (rows, cols) = (opts.rows.clamp(1, max), opts.columns.clamp(1, max));
         let gutter = opts.gutter.max(0.0);
+        let row_gutter = opts.row_gutter.unwrap_or(opts.gutter).max(0.0);
         let cw = ((bbox.width() - gutter * (cols - 1) as f64) / cols as f64).max(0.0);
-        let rh = ((bbox.height() - gutter * (rows - 1) as f64) / rows as f64).max(0.0);
+        let rh = ((bbox.height() - row_gutter * (rows - 1) as f64) / rows as f64).max(0.0);
         let mut out = Vec::with_capacity(rows * cols);
-        // Text flows down each column, then across (Illustrator's default "by columns").
-        for c in 0..cols {
-            for r in 0..rows {
+        // Text Flow: down each column, then across (by columns, the default), or across each row,
+        // then down (by rows).
+        let by_rows = opts.flow == vectorcraft_doc::TextFlow::Rows;
+        let (outer, inner) = if by_rows { (rows, cols) } else { (cols, rows) };
+        for o in 0..outer {
+            for i in 0..inner {
+                let (r, c) = if by_rows { (o, i) } else { (i, o) };
                 let x0 = bbox.x0 + c as f64 * (cw + gutter);
-                let y0 = bbox.y0 + r as f64 * (rh + gutter);
+                let y0 = bbox.y0 + r as f64 * (rh + row_gutter);
                 let cell = if rows * cols == 1 { bbox } else { Rect::new(x0, y0, x0 + cw, y0 + rh) };
                 out.push(Region { cell, inset: opts.inset.max(0.0), polys: polys.clone(), rect, wraps: wraps.clone(), shift: 0.0, gap: 0.0 });
             }

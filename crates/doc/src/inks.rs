@@ -109,15 +109,18 @@ fn visit_paint(p: &mut Paint, f: &mut ColorVisitor) {
     }
 }
 
-/// Visit every colour of a node tree (fills, strokes, gradient stops, text runs, mesh points, not
-/// opacity masks) with its swatch link and tint. Mesh points have no link: changes to it are
-/// dropped.
+/// Visit every colour of a node tree (fills, strokes, gradient stops, text runs, mesh points, an
+/// image's colorize color, not opacity masks) with its swatch link and tint. Mesh points have no
+/// link: changes to it are dropped.
 pub fn visit_node_colors(n: &mut Node, f: &mut ColorVisitor) {
     for it in &mut n.appearance.items {
         match it {
             AppearanceItem::Fill(l) => visit_paint(&mut l.paint, f),
             AppearanceItem::Stroke(l) => visit_paint(&mut l.paint, f),
         }
+    }
+    if let Some(p) = n.extras.0.as_deref_mut().and_then(|e| e.colorize.as_deref_mut()) {
+        visit_paint(p, f);
     }
     match &mut n.kind {
         NodeKind::Text(t) => {

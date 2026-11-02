@@ -1,4 +1,4 @@
-use super::*;
+use super::{MetadataProvider, StringId};
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Default)]

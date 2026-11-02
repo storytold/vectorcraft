@@ -9,7 +9,7 @@ use vectorcraft_doc::{
 
 use super::appearance::{ItemTarget, edit_items, item_target};
 use super::paint::painted;
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, ok, str_param};
 use crate::DocState;
 use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke, scale_layer};
 

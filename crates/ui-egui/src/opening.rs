@@ -29,12 +29,14 @@ pub struct Opening {
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
-/// save/export with a label, a file opening or being read for Place off the UI thread, or a heavy plug-in filter)?
+/// save/export with a label, a file opening or being read for Place off the UI thread, a heavy plug-in filter, or an
+/// Image Trace)?
 pub fn long_operation_busy(app: &VectorcraftApp) -> bool {
     app.background.jobs.iter().any(|j| !j.label.is_empty() && !j.cancelled())
         || !app.opening.pending.is_empty()
         || !app.plugin_runs.running.is_empty()
         || !app.placing.pending.is_empty()
+        || !app.trace_runs.running.is_empty()
 }
 
 /// Does opening happen off the UI thread here? Not on wasm (no threads), in unit tests (they look

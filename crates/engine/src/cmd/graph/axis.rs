@@ -1,4 +1,4 @@
-use super::*;
+use super::Value;
 
 pub(super) const LABEL_SIZE: f64 = 9.0;
 

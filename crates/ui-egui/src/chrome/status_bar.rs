@@ -1,5 +1,5 @@
 use super::tabs::artboard_list;
-use super::*;
+use super::{Arc, ROTATE_VIEW_ANGLES, Sense, Stroke, Tokens, Ui, VectorcraftApp, ZOOM_STOPS, json, theme, vec2, widgets, zoom_label};
 
 /// Draw the status message, bounded readouts and artboard navigation controls.
 pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {

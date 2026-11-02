@@ -11,6 +11,7 @@ pub mod blend;
 pub mod cancel;
 pub mod clipnest;
 pub mod cmyk;
+pub mod compound_shape;
 pub mod corners;
 pub mod depth;
 pub mod dimension;
@@ -23,11 +24,13 @@ pub mod intertwine;
 pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
+pub mod symbol_overrides;
 mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{SYMBOL_NINE_SLICE, SymbolNineSlice};
+pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -42,7 +45,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::MAX_RASTER_ALLOC;
+pub use pixels::{GraySource, MAX_RASTER_ALLOC};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod profiles;
@@ -76,6 +79,7 @@ pub use appearance::{
     StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
+pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
@@ -102,10 +106,12 @@ pub use selection::{AnchorRef, SegmentRef, Selection};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
+pub use text::FontHeightReference;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
-    RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign, WrapShape,
+    RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign,
+    WrapShape,
 };
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
@@ -117,6 +123,7 @@ use vectorcraft_color::{Swatch, SwatchGroup};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 mod artboard;
+mod canvas_range;
 mod document;
 mod document_ext;
 mod document_guides;
@@ -127,6 +134,7 @@ mod records;
 mod units;
 
 pub use artboard::{Artboard, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
+pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
 pub use graphic_style::{DEFAULT_GRAPHIC_STYLE, GraphicStyle};
@@ -134,7 +142,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
-pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol};
+pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -214,6 +222,10 @@ pub struct Document {
     /// still read so files saved mid-edit by older versions load without the editing layer.
     #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
+    /// Symbol editing mode, while active. Never saved (see [`Document::without_edit_modes`]): the
+    /// symbol already holds the art of its editing layer.
+    #[serde(default, skip_serializing)]
+    pub symbol_edit: Option<SymbolEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.
     #[serde(default, skip_serializing_if = "skip::is_empty_map")]

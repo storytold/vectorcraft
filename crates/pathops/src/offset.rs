@@ -94,13 +94,15 @@ pub fn stroke_region(outlines: &[BezPath]) -> PathData {
 
 /// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
 /// Closed subpaths are treated as a non-zero filled region; open subpaths are outlined with a
-/// stroke of width `2|delta|` (butt caps).
+/// stroke of width `2|delta|` (butt caps). An open subpath whose last anchor sits on its first is
+/// offset as a closed one.
 pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData {
     if !delta.is_finite() || path.is_empty() {
         return PathData::default();
     }
-    let closed = PathData::new(path.subpaths.iter().filter(|s| s.closed && s.anchors.len() > 1).cloned().collect());
-    let open: Vec<SubPath> = path.subpaths.iter().filter(|s| !s.closed && s.anchors.len() > 1).cloned().collect();
+    let subpaths: Vec<SubPath> = path.subpaths.iter().map(close_if_ends_meet).collect();
+    let closed = PathData::new(subpaths.iter().filter(|s| s.closed && s.anchors.len() > 1).cloned().collect());
+    let open: Vec<SubPath> = subpaths.into_iter().filter(|s| !s.closed && s.anchors.len() > 1).collect();
     let d = delta.abs();
     let fill = fill_bezpath(&closed);
     let ring = if d > 0.0 { stroke_bez(&closed.to_bezpath(), 2.0 * d, Cap::Butt, join, miter_limit) } else { BezPath::new() };
@@ -126,6 +128,23 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     }
     let keep = (0..spurious.len()).filter(|&i| !has_marked_ancestor(&c, i, &spurious)).map(ContourIdx);
     contours_to_path(&c, keep, &Tidy::free(DEFAULT_PRECISION))
+}
+
+/// An open subpath of three or more anchors whose last anchor lies within 1e-6 of its first (the
+/// test Object → Path → Join applies to one path) as a closed subpath: the last anchor is merged
+/// into the first, which takes its in-handle. Any other subpath is returned unchanged.
+fn close_if_ends_meet(sp: &SubPath) -> SubPath {
+    let mut sp = sp.clone();
+    if !sp.closed
+        && sp.anchors.len() > 2
+        && sp.anchors.first().zip(sp.anchors.last()).is_some_and(|(f, l)| f.p.distance(l.p) < 1e-6)
+        && let Some(last) = sp.anchors.pop()
+        && let Some(first) = sp.anchors.first_mut()
+    {
+        first.h_in = last.h_in;
+        sp.closed = true;
+    }
+    sp
 }
 
 fn has_marked_ancestor(c: &Contours, mut i: usize, marked: &[bool]) -> bool {

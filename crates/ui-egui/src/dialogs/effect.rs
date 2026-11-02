@@ -161,12 +161,23 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
     let changed = match vectorcraft_plugins::effect::installed(&id) {
         Some(plugin) => form::schema_fields(app, ui, d, plugin.manifest()),
-        None if vectorcraft_effects::is_adjustment(&id) => adjust_fields(ui, d),
+        // The Color Effects add-on's take the plain form of their parameters.
+        None if vectorcraft_effects::is_adjustment(&id) && !vectorcraft_effects::addons::color::is_color_effect(&id) => adjust_fields(ui, d),
+        None if id == vectorcraft_effects::addons::halftone::HALFTONE => {
+            super::halftone::screen_fields(ui, d);
+            values_changed(d)
+        }
+        None if id == vectorcraft_effects::addons::duotone::DUOTONE => {
+            super::duotone::fields(app, ui, d);
+            values_changed(d)
+        }
         None if id == GLASS => glass_fields(app, ui, d, GLASS),
         None if id == TEXTURIZER => glass_fields(app, ui, d, TEXTURIZER),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
         None if id == SCRIBBLE => scribble_fields(ui, d, app.session.general_unit()),
-        None if id == ZIG_ZAG => zig_zag_fields(ui, d, app.session.general_unit()),
+        None if id == ZIG_ZAG || id == ROUGHEN => size_fields(ui, d, &id, app.session.general_unit()),
+        None if id == PUCKER_BLOAT => pucker_bloat_fields(ui, d),
+        None if id == TWEAK => tweak_fields(ui, d, app.session.general_unit()),
         None if id == DROP_SHADOW => drop_shadow_fields(ui, d, app.session.general_unit()),
         None if id == "artistic.filmGrain" => film_grain_fields(ui, d),
         None if id == free_distort::FREE_DISTORT => {
@@ -318,7 +329,7 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("stylize.dropShadow", "shade") => Some(SHADES),
         ("path.offsetPath", "joins") => Some(&[("Miter", "miter"), ("Round", "round"), ("Bevel", "bevel")]),
         ("distort.roughen" | "distort.zigZag", "points") => Some(&[("Smooth", "smooth"), ("Corner", "corner")]),
-        _ => None,
+        _ => crate::addons::pathtools::effect_choices(effect, key),
     }
 }
 
@@ -447,7 +458,10 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.fields.contains_key("points") {
         ui.horizontal(|ui| {
             ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
-            curve_graph(ui, d);
+            let mut pts = vectorcraft_effects::curve_points(d.fields.get("points"));
+            if curve_graph(ui, &mut pts, 255.0) {
+                d.fields.insert("points".into(), json!(points_text(&pts, 255.0)));
+            }
         });
     }
     for (key, label, width) in [("points", tl!("Points"), 220.0), ("color", tl!("Color"), 120.0)] {
@@ -559,54 +573,108 @@ fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
 /// The Zig Zag effect (Effect › Distort & Transform › Zig Zag…).
 const ZIG_ZAG: &str = "distort.zigZag";
 
-/// Zig Zag's dialog (#1133): Size and Ridges per segment as sliders with their fields, Relative or
-/// Absolute and the Points as radio buttons. Returns whether the values differ from those last
-/// previewed.
-fn zig_zag_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
-    const LABEL_W: f32 = 124.0;
-    const FIELD_W: f32 = 70.0;
+/// The Roughen effect (Effect › Distort & Transform › Roughen…).
+const ROUGHEN: &str = "distort.roughen";
+
+/// The Pucker & Bloat effect (Effect › Distort & Transform › Pucker & Bloat…).
+const PUCKER_BLOAT: &str = "distort.puckerBloat";
+
+/// The second slider of [`size_fields`]: Zig Zag's Ridges per segment, Roughen's Detail (per inch),
+/// as (key, label, default, suffix).
+fn second_slider(effect: &str) -> (&'static str, &'static str, f64, &'static str) {
+    if effect == ROUGHEN { ("detail", "Detail:", 10.0, "/in") } else { ("ridges", "Ridges per segment:", 4.0, "") }
+}
+
+/// Zig Zag's and Roughen's dialog (#1133, #4488): Size and Ridges per segment (Roughen: Detail) as
+/// sliders with their fields, Relative or Absolute and the Points as radio buttons. Returns
+/// whether the values differ from those last previewed.
+/// The label column and field width of [`relative_rows`] and the sliders under them.
+const DISTORT_LABEL_W: f32 = 124.0;
+const DISTORT_FIELD_W: f32 = 70.0;
+
+/// A slider with its field for each of `rows` (key, label, default), each a share of the object's
+/// size with Relative or a distance with Absolute, then the Relative and Absolute radio buttons.
+fn relative_rows(ui: &mut egui::Ui, d: &mut Dialog, rows: &[(&str, &str, f64)], unit: vectorcraft_doc::Unit) {
     let rail = Tokens::get(ui.ctx()).input_border;
     let track = move |_| rail;
     let relative = d.bool("relative");
-    widgets::subheader(ui, tl!("Options"));
-    // Size is a share of the object's size (Relative) or a distance (Absolute).
-    widgets::label_row(ui, tl!("Size:"), LABEL_W, |ui| {
-        let shown = if relative {
-            Some(widgets::SliderValue::field(d.f64("size", 10.0).clamp(0.0, 100.0), 0.0..=100.0, "%", 0))
-        } else {
-            form::length_value(d, "size", unit, 0.0..=100.0)
-        };
-        form::slider_rail_valued(ui, d, "size", tl!("Size:"), 0.0..=100.0, shown, &track);
-        if !relative {
-            form::length(ui, d, "size", unit, FIELD_W);
-        } else if let Some(n) = widgets::range_field(ui, ("zz", "size"), d.f64("size", 10.0), 0.0..=100.0, "%", 0, FIELD_W) {
-            d.fields.insert("size".into(), json!(n));
-        }
-    });
+    for &(key, label, default) in rows {
+        widgets::label_row(ui, tl!(label), DISTORT_LABEL_W, |ui| {
+            let shown = if relative {
+                Some(widgets::SliderValue::field(d.f64(key, default).clamp(0.0, 100.0), 0.0..=100.0, "%", 0))
+            } else {
+                form::length_value(d, key, unit, 0.0..=100.0)
+            };
+            form::slider_rail_valued(ui, d, key, tl!(label), 0.0..=100.0, shown, &track);
+            if !relative {
+                form::length(ui, d, key, unit, DISTORT_FIELD_W);
+            } else if let Some(n) = widgets::range_field(ui, ("zz", key), d.f64(key, default), 0.0..=100.0, "%", 0, DISTORT_FIELD_W) {
+                d.fields.insert(key.into(), json!(n));
+            }
+        });
+    }
     ui.horizontal(|ui| {
-        ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
+        ui.add_space(DISTORT_LABEL_W + ui.spacing().item_spacing.x);
         for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
             if widgets::radio(ui, label, relative == on, true) {
                 d.fields.insert("relative".into(), json!(on));
             }
         }
     });
-    widgets::label_row(ui, tl!("Ridges per segment:"), LABEL_W, |ui| {
-        form::slider_rail_named(ui, d, "ridges", tl!("Ridges per segment:"), 0.0..=100.0, &track);
-        if let Some(n) = widgets::range_field(ui, ("zz", "ridges"), d.f64("ridges", 4.0), 0.0..=100.0, "", 0, FIELD_W) {
-            d.fields.insert("ridges".into(), json!(n));
+}
+
+fn size_fields(ui: &mut egui::Ui, d: &mut Dialog, effect: &str, unit: vectorcraft_doc::Unit) -> bool {
+    const LABEL_W: f32 = DISTORT_LABEL_W;
+    const FIELD_W: f32 = DISTORT_FIELD_W;
+    let rail = Tokens::get(ui.ctx()).input_border;
+    let track = move |_| rail;
+    let size = if effect == ROUGHEN { 5.0 } else { 10.0 };
+    widgets::subheader(ui, tl!("Options"));
+    // Size is a share of the object's size (Relative) or a distance (Absolute).
+    relative_rows(ui, d, &[("size", "Size:", size)], unit);
+    let (key, label, default, suffix) = second_slider(effect);
+    widgets::label_row(ui, tl!(label), LABEL_W, |ui| {
+        form::slider_rail_named(ui, d, key, tl!(label), 0.0..=100.0, &track);
+        if let Some(n) = widgets::range_field(ui, ("zz", key), d.f64(key, default), 0.0..=100.0, suffix, 0, FIELD_W) {
+            d.fields.insert(key.into(), json!(n));
         }
     });
     ui.add_space(4.0);
     widgets::subheader(ui, crate::i18n::tr_ctx(crate::i18n::current(), "effect", "Points"));
     let points = d.str("points");
     ui.horizontal(|ui| {
-        for (label, value) in choices(ZIG_ZAG, "points").unwrap_or_default() {
+        for (label, value) in choices(effect, "points").unwrap_or_default() {
             if widgets::radio(ui, crate::i18n::tr_ctx(crate::i18n::current(), "effect", label), points == *value, true) {
                 d.fields.insert("points".into(), json!(value));
             }
         }
     });
+    values_changed(d)
+}
+
+/// The Tweak effect (Effect › Distort & Transform › Tweak…).
+const TWEAK: &str = "distort.tweak";
+
+/// Tweak's dialog (#4488): Horizontal and Vertical as sliders with their fields (a share of the
+/// object's size with Relative, a distance with Absolute), then which points it moves. Returns
+/// whether the values differ from those last previewed.
+fn tweak_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
+    widgets::subheader(ui, tl!("Amount"));
+    relative_rows(ui, d, &[("h", "Horizontal:", 10.0), ("v", "Vertical:", 10.0)], unit);
+    ui.add_space(4.0);
+    widgets::subheader(ui, tl!("Modify"));
+    form::check(ui, d, "anchors", tl!("Anchor Points"));
+    form::check(ui, d, "in", tl!("\"In\" Control Points"));
+    form::check(ui, d, "out", tl!("\"Out\" Control Points"));
+    values_changed(d)
+}
+
+/// Pucker & Bloat's dialog (#4488): its amount as a slider from Pucker (−200 %) to Bloat (200 %)
+/// with its field. Returns whether the value differs from the one last previewed.
+fn pucker_bloat_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let rail = Tokens::get(ui.ctx()).input_border;
+    form::slider(ui, d, "amount", tl!("Amount:"), -200.0..=200.0, "%", &move |_| rail);
+    form::slider_ends(ui, form::SLIDER_LABEL, (tl!("Pucker"), tl!("Bloat")));
     values_changed(d)
 }
 
@@ -653,15 +721,15 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
     values_changed(d)
 }
 
-/// Curves' graph of its `points` (input across, output up, 0..255): drag a point to move it
-/// between its neighbours, press on the graph away from the points to add one there, drag one
-/// off the graph to remove it (two always stay).
-fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
+/// A curve's graph of its points `pts` (0..1 each; input across, output up), as Curves and
+/// Duotone's tones edit them on a scale of 0..`max`: drag a point to move it between its
+/// neighbours, press on the graph away from the points to add one there, drag one off the graph
+/// to remove it (two always stay). Returns whether the points changed.
+pub(super) fn curve_graph(ui: &mut egui::Ui, pts: &mut Vec<(f32, f32)>, max: f32) -> bool {
     const SIZE: f32 = 200.0;
     /// How near (screen points) a press must be to take a point.
     const GRAB: f32 = 8.0;
     let t = Tokens::get(ui.ctx());
-    let mut pts = vectorcraft_effects::curve_points(d.fields.get("points"));
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(SIZE, SIZE), egui::Sense::click_and_drag());
     let screen = |(x, y): (f32, f32)| egui::pos2(rect.left() + x * SIZE, rect.bottom() - y * SIZE);
     let unit = |p: egui::Pos2| (((p.x - rect.left()) / SIZE).clamp(0.0, 1.0), ((rect.bottom() - p.y) / SIZE).clamp(0.0, 1.0));
@@ -691,7 +759,7 @@ fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
             pts.remove(i.min(pts.len() - 1));
             grabbed = None;
         } else {
-            let step = 1.0 / 255.0;
+            let step = 1.0 / max;
             let lo = if i == 0 { 0.0 } else { pts.get(i - 1).map_or(0.0, |a| a.0 + step) };
             let hi = pts.get(i + 1).map_or(1.0, |a| a.0 - step);
             let (x, y) = unit(p);
@@ -715,17 +783,19 @@ fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
         painter.line_segment([screen((0.0, f)), screen((1.0, f))], faint);
     }
     painter.line_segment([screen((0.0, 0.0)), screen((1.0, 1.0))], faint);
-    let curve: Vec<egui::Pos2> = (0..=64).map(|k| k as f32 / 64.0).map(|x| screen((x, vectorcraft_effects::curve_at(&pts, x)))).collect();
+    let curve: Vec<egui::Pos2> = (0..=64).map(|k| k as f32 / 64.0).map(|x| screen((x, vectorcraft_effects::curve_at(pts.as_slice(), x)))).collect();
     painter.add(egui::Shape::line(curve, egui::Stroke::new(1.5, t.text)));
     for (i, q) in pts.iter().enumerate() {
         let fill = if Some(i) == grabbed { t.accent } else { t.panel };
         painter.circle(screen(*q), 4.0, fill, egui::Stroke::new(1.5, t.text));
     }
     painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    if changed {
-        let text: Vec<String> = pts.iter().map(|(x, y)| format!("{},{}", (x * 255.0).round(), (y * 255.0).round())).collect();
-        d.fields.insert("points".into(), json!(text.join(" ")));
-    }
+    changed
+}
+
+/// Curve points `pts` (0..1) as the `"x,y x,y …"` text of a curve on a scale of 0..`max`.
+pub(super) fn points_text(pts: &[(f32, f32)], max: f32) -> String {
+    pts.iter().map(|(x, y)| format!("{},{}", (x * max).round(), (y * max).round())).collect::<Vec<_>>().join(" ")
 }
 
 /// What OK runs: `effect.setParams` on the edited effect (`__index`), else `effect.apply` of the

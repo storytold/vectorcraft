@@ -82,7 +82,9 @@ fn main() -> ExitCode {
 
 /// Workspace root (parent of the xtask crate).
 pub fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("xtask has a parent dir").to_path_buf()
+    // The repository root, as a clean path (`join("..")` would print as `…/xtask/..`).
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest.parent().unwrap_or(manifest).to_path_buf()
 }
 
 /// Tracked and untracked (not ignored) files that exist, relative to `root`.
@@ -292,7 +294,7 @@ fn cmd_ci() -> Result<(), String> {
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
-        ("i18n-report", Box::new(cmd_i18n_report)),
+        ("i18n-report", Box::new(cmd_ci_i18n_report)),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];
@@ -346,4 +348,14 @@ fn cmd_i18n_report() -> Result<(), String> {
     let mut c = cargo();
     c.args(["test", "-p", "vectorcraft-ui-egui", "--lib", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
     run(c, "cargo test -p vectorcraft-ui-egui --lib -- i18n::tests::untranslated_report --exact --nocapture")
+}
+
+/// [`cmd_i18n_report`] in `ci`, selecting the packages and targets the test stage did so it
+/// reuses that build: with `-p vectorcraft-ui-egui --lib` alone cargo resolves features
+/// differently and recompiled for about 3.5 minutes. Every other test binary runs with no test
+/// matching the filter.
+fn cmd_ci_i18n_report() -> Result<(), String> {
+    let mut c = cargo();
+    c.args(["test", "--workspace", "--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
+    run(c, "cargo test --workspace --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture")
 }

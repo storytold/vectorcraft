@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use vectorcraft_doc::{CharPosition, CharStyle, Justify, ParaDirection, ParaStyle, ScriptMetrics, TextRun};
 
 use super::text::{self, Story};
-use super::*;
+use super::{Paint, Result, bad, fileio};
 
 /// RTF files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {
@@ -108,7 +108,12 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<Story> {
                 match next {
                     b'*' => starred = true,
                     b'\'' => {
-                        if let Some(v) = bytes.get(i..i + 2).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                        if let Some(v) = bytes
+                            .get(i..i + 2)
+                            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+                            .and_then(|h| std::str::from_utf8(h).ok())
+                            .and_then(|h| u8::from_str_radix(h, 16).ok())
+                        {
                             i += 2;
                             r.byte(v);
                         }
@@ -648,6 +653,13 @@ mod tests {
         assert_eq!(text_of(&read(r"{\rtf1\uc1\u233\bin1 ?X}")), "éX", "binary data is one fallback character");
         let mac = read(r"{\rtf1\mac \'8e\'a5}");
         assert_eq!(text_of(&mac), "é•", "Mac Roman");
+    }
+
+    #[test]
+    fn hex_escapes_need_two_hex_digits() {
+        assert_eq!(text_of(&read(r"{\rtf1\ansi A\'+1B}")), "A+1B");
+        assert_eq!(text_of(&read(r"{\rtf1\ansi A\'-1B}")), "A-1B");
+        assert_eq!(text_of(&read(r"{\rtf1\ansi A\'g0B}")), "Ag0B");
     }
 
     #[test]

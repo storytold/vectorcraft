@@ -1,4 +1,4 @@
-use super::blobs::{blob_key, blob_pixmap, image_mip, lookup, mask_value, mip_level, plain_image};
+use super::blobs::{blob_key, blob_pixmap, image_mip, lookup, mask_value, mip_level, plain_image, shape_masked_image, white_shape_mask};
 use super::clock::now;
 use super::frame::{
     ClipEntry, ClipPaintEntry, Frame, FrameStats, GeomEntry, MAX_INLINE_DEPTH, MISSING_INLINE_LOGGED, PlacedEntry, PlacedKey, PtrMap, SliceEntry,
@@ -12,7 +12,11 @@ use super::options::{AntiAlias, ISOLATION_DIM, MAX_CONTEXT_SIDE, RenderOptions, 
 use super::paint::{SUBSTITUTED, blend_mode, fill_rule};
 use super::text_geom::{TextGeom, text_geom, text_geom_snapped};
 use super::threads::{default_threads, single_threaded_context};
-use super::*;
+use super::{
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, Compose, Composite, Document, FillRule, FrameCache, HashMap, Ink, Mix, Node, NodeId, NodeKind,
+    Pixmap, Rect, RenderContext, Renderer, Resources, Shape, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject, TraceView, brush_fx, effects, fx,
+    group, ink, kurbo, live, lru, peniko, proof, vello_cpu,
+};
 
 mod images;
 mod nodes;
@@ -57,6 +61,7 @@ impl Renderer {
             blends: PtrMap::default(),
             clip_paths: vec![],
             picture: None,
+            image_left_out: None,
             offscreen_live: 0,
             offscreen_budget: 0,
             symbol_nodes: 0,
@@ -111,12 +116,19 @@ impl Renderer {
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen };
+        let plates = proof::plate_lut(opts);
+        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, plates: plates.as_deref() };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
-            let pixels = self.mask_values(&frame, m, w, h).into_iter().flat_map(|v| [v, v, v, 255]).collect();
+            let pixels = self
+                .mask_values(&frame, m, w, h)
+                .unwrap_or_else(|| vec![0; w as usize * h as usize])
+                .into_iter()
+                .flat_map(|v| [v, v, v, 255])
+                .collect();
             self.end_frame();
+            self.stats.symbol_art = symbols.art_measured();
             self.stats.micros = now().saturating_sub(start);
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
@@ -140,6 +152,7 @@ impl Renderer {
         if !inks {
             proof::post(&mut pixels, opts);
         }
+        self.stats.symbol_art = symbols.art_measured();
         self.stats.micros = now().saturating_sub(start);
         Rendered { width: w as u32, height: h as u32, pixels }
     }
@@ -300,7 +313,7 @@ impl Renderer {
         let mut ctx = single_threaded_context(w, h);
         let opts = RenderOptions::default();
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts: &opts, ink: Ink::Display };
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts: &opts, ink: Ink::Display, plates: None };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
@@ -334,22 +347,24 @@ impl Renderer {
         self.check_plugins();
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
-        let s = (size as f64 - 2.0) / b.width().max(b.height()).max(1e-6);
-        let view = Affine::translate((size as f64 / 2.0, size as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let w = size.clamp(1, MAX_CONTEXT_SIDE) as u16;
+        // A 1-pixel margin on each side, unless the thumbnail is too small to keep one.
+        let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
+        let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let mut ctx = single_threaded_context(w, w);
         if let Some(bg) = background {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
         }
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display };
+        let frame =
+            Frame { mt: false, doc, symbols: &symbols, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display, plates: None };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
-        self.draw_node(&mut ctx, &frame, n, true);
+        self.draw_forced_arc(&mut ctx, &frame, &Arc::new(n.clone()));
         let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
         self.end_frame();
-        Some(Rendered { width: size, height: size, pixels: pm.data_as_u8_slice().to_vec() })
+        Some(Rendered { width: w as u32, height: w as u32, pixels: pm.data_as_u8_slice().to_vec() })
     }
 }
