@@ -264,6 +264,8 @@ pub(super) fn build_from(
             doc.text_threads.push(thread.iter().map(|(_, _, id)| *id).collect());
         }
     }
+    // Area type flows around the wrap objects above it before it is compared with the page.
+    resolve_text_wrap(&mut doc)?;
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -324,8 +326,45 @@ pub(super) fn build_from(
     doc.limit_depth_noting(&mut notes);
     if small.is_some() {
         scale_document(&mut doc, unit);
+        relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
+const MAX_WRAP_WORK: usize = 2_000_000;
+
+/// [`relayout_wrapped`], or an error when the wrap shapes would hold more than [`MAX_WRAP_WORK`]
+/// anchors.
+fn resolve_text_wrap(doc: &mut Document) -> Result<(), String> {
+    if has_wraps(doc) && vectorcraft_doc::text::wrap_work(doc) > MAX_WRAP_WORK {
+        return Err("it has too many text objects".into());
+    }
+    relayout_wrapped(doc);
+    Ok(())
+}
+
+/// Does an object of `doc` have text wrap options, or a text object wrap shapes?
+fn has_wraps(doc: &Document) -> bool {
+    let mut wraps = false;
+    doc.walk(|n| wraps |= n.extras().wrap.is_some() || matches!(&n.kind, NodeKind::Text(t) if !t.wrap.is_empty()));
+    wraps
+}
+
+/// Resolve the wrap shapes of the area type in `doc` that has wrap objects above it (see
+/// [`vectorcraft_doc::text::resolve_wrap`]); the type whose shapes changed is laid out again.
+/// Nothing is resolved when the shapes would hold more than [`MAX_WRAP_WORK`] anchors (such a
+/// file isn't read from its layers: see [`resolve_text_wrap`]).
+fn relayout_wrapped(doc: &mut Document) {
+    if !has_wraps(doc) || vectorcraft_doc::text::wrap_work(doc) > MAX_WRAP_WORK {
+        return;
+    }
+    for id in vectorcraft_doc::text::resolve_wrap(None, doc) {
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
+        }
+    }
 }
 
 /// A visible page node, with its source order and subtree range.
@@ -811,6 +850,10 @@ fn elsewhere(doc: &Document, placed: &[(NodeId, Affine)]) -> Option<Document> {
             moved = true;
         }
     }
+    // Area type wrapped around a moved image flows around it where it now is.
+    if moved {
+        relayout_wrapped(&mut doc);
+    }
     moved.then_some(doc)
 }
 
@@ -987,13 +1030,31 @@ fn scale_document(doc: &mut Document, k: f64) {
     let a = Affine::scale(k);
     let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
     for layer in &mut doc.layers {
-        Arc::make_mut(layer).transform(a, scaling);
+        let layer = Arc::make_mut(layer);
+        layer.transform(a, scaling);
+        scale_wrap_offsets(layer, k);
     }
     for board in &mut doc.artboards {
         board.rect = a.transform_rect_bbox(board.rect);
     }
     for guide in &mut doc.guides {
         guide.pos *= k;
+    }
+}
+
+/// The text wrap offsets of `n` and what it holds, times `k` (within the -1000 to 1000 points
+/// they may be).
+fn scale_wrap_offsets(n: &mut Node, k: f64) {
+    if let Some(w) = n.extras_if_any().and_then(|e| e.wrap.as_mut()) {
+        let v = w.offset * k;
+        if !v.is_nan() {
+            w.offset = v.clamp(-1000.0, 1000.0);
+        }
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            scale_wrap_offsets(Arc::make_mut(c), k);
+        }
     }
 }
 
@@ -1077,6 +1138,8 @@ pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Doc
     let mut with = view.colour_difference(doc, rect);
     let mut removed = 0;
     for (id, bounds) in found {
+        // A removal before it can have let its area type flow differently.
+        let bounds = if removed > 0 { doc.node(id).and_then(|n| n.visual_bounds()) } else { bounds };
         if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
             continue;
         }
@@ -1084,9 +1147,12 @@ pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Doc
         if !take_out(&mut without.layers, id, true) {
             continue;
         }
+        // Area type that wrapped around the text object flows without it.
+        relayout_wrapped(&mut without);
         let d = view.colour_difference(&without, rect);
         if d - with <= UNSEEN_MARGIN {
             take_out(&mut doc.layers, id, false);
+            relayout_wrapped(doc);
             with = d;
             removed += 1;
         }
@@ -1099,6 +1165,115 @@ mod candidate_tests {
     use super::*;
 
     use vectorcraft_doc::{ImageBlob, ImageObject};
+
+    /// Layers read in the units of a page scaled up to points take their wrap offsets with their art,
+    /// within ±1000 points.
+    #[test]
+    fn scaling_the_document_scales_its_wrap_offsets() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut ids = vec![];
+        for (x, offset) in [(0.0, 6.0), (20.0, 200.0), (40.0, -150.0)] {
+            let id = doc.alloc_id();
+            let mut n = Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Default::default());
+            n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset, invert: true });
+            doc.insert(Some(doc.layers[0].id), 0, n).unwrap();
+            ids.push(id);
+        }
+        scale_document(&mut doc, 10.0);
+        let offsets: Vec<_> = ids.iter().map(|id| doc.node(*id).and_then(|n| n.extras().wrap)).collect();
+        let wrap = |offset| Some(vectorcraft_doc::TextWrap { offset, invert: true });
+        assert_eq!(offsets, [wrap(60.0), wrap(1000.0), wrap(-1000.0)]);
+    }
+
+    /// Area type in `doc`'s first layer at `index`, in the frame `r`.
+    fn insert_area(doc: &mut Document, index: usize, r: Rect) -> NodeId {
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Wrapped", Default::default());
+        t.kind = vectorcraft_doc::TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(r) };
+        let id = doc.alloc_id();
+        doc.insert(Some(doc.layers[0].id), index, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap()
+    }
+
+    /// A wrap object on top of `doc`'s first layer: a closed path of `anchors` anchors in `r`.
+    fn insert_wrap(doc: &mut Document, r: Rect, anchors: usize) -> NodeId {
+        let mut bp = kurbo::BezPath::new();
+        bp.move_to((r.x0, r.y0));
+        for i in 1..anchors {
+            let t = i as f64 / anchors as f64;
+            bp.line_to((r.x0 + r.width() * t, if i % 2 == 0 { r.y0 } else { r.y1 }));
+        }
+        bp.close_path();
+        let id = doc.alloc_id();
+        let mut n = Node::path(id, PathData::from_bezpath(&bp), Default::default());
+        n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+        let top = doc.layers[0].children().map_or(0, Vec::len);
+        doc.insert(Some(doc.layers[0].id), top, n).unwrap()
+    }
+
+    fn wrap_shapes(doc: &Document, id: NodeId) -> usize {
+        match doc.node(id).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.wrap.len(),
+            _ => panic!("area type"),
+        }
+    }
+
+    /// A file whose wrap shapes would copy more than `MAX_WRAP_WORK` anchors isn't read from its
+    /// layers; one below that is.
+    #[test]
+    fn wrap_shapes_of_too_many_text_objects_are_refused() {
+        for (texts, ok) in [(150, true), (250, false)] {
+            let mut doc = Document::new(100.0, 100.0);
+            let ids: Vec<NodeId> = (0..texts).map(|_| insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0))).collect();
+            insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 10_000);
+            assert!(vectorcraft_doc::text::wrap_work(&doc) >= texts * 10_000);
+            assert_eq!(resolve_text_wrap(&mut doc).is_ok(), ok, "{texts} text objects");
+            // Nor is anything copied on the way, as the placed files' other placement does.
+            relayout_wrapped(&mut doc);
+            assert!(ids.iter().all(|id| wrap_shapes(&doc, *id) == usize::from(ok)), "{texts} text objects");
+        }
+    }
+
+    /// Area type that wrapped around an object taken out of the layers flows without it.
+    #[test]
+    fn wrap_shapes_go_with_their_wrap_object() {
+        let mut doc = Document::new(100.0, 100.0);
+        let text = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0));
+        let wrap = insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 4);
+        resolve_text_wrap(&mut doc).unwrap();
+        assert_eq!(wrap_shapes(&doc, text), 1);
+        doc.remove(wrap).unwrap();
+        relayout_wrapped(&mut doc);
+        assert_eq!(wrap_shapes(&doc, text), 0);
+    }
+
+    /// Area type wrapped around a placed image flows around it at the image's other placement.
+    #[test]
+    fn wrap_shapes_follow_an_image_to_its_other_placement() {
+        let mut doc = Document::new(100.0, 100.0);
+        let text = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0));
+        let image = doc.alloc_id();
+        let mut n = Node::new(
+            image,
+            NodeKind::Image(Box::new(ImageObject {
+                key: "k".into(),
+                width: 10,
+                height: 10,
+                xf: Affine::translate(Vec2::new(10.0, 10.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+        doc.insert(Some(doc.layers[0].id), 1, n).unwrap();
+        resolve_text_wrap(&mut doc).unwrap();
+        let x0 = |d: &Document| match d.node(text).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.wrap.first().and_then(|w| w.path.bounds()).map(|b| b.x0),
+            _ => None,
+        };
+        assert_eq!(x0(&doc), Some(10.0));
+        let moved = elsewhere(&doc, &[(image, Affine::translate(Vec2::new(50.0, 0.0)))]).unwrap();
+        assert_eq!(x0(&moved), Some(60.0));
+    }
 
     /// A page image with a different proxy keeps its editing layer and original blob.
     #[test]

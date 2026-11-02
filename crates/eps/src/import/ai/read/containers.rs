@@ -2,6 +2,7 @@ use super::document::slot_of;
 use super::ops::{paints_apart, path_rule};
 use super::types::{Frame, GState, Kind, MAX_DEPTH, MAX_NODES, PendingEnvelope};
 use super::{AppearanceItem, Arc, BezPath, BlendMode, FillRule, HashSet, LayerColor, Node, NodeId, NodeKind, Obj, Paint, PathEl, Rc, Reader, V, obj};
+use vectorcraft_doc::TextWrap;
 
 impl<'a> Reader<'a> {
     // ---- frames ----------------------------------------------------------------------------
@@ -77,11 +78,12 @@ impl<'a> Reader<'a> {
         let f = match what {
             "U" => self.close(what, |k| matches!(k, Kind::Group))?,
             "*U" => self.close(what, |k| matches!(k, Kind::Compound))?,
+            "*W" => self.close(what, |k| matches!(k, Kind::Wrap))?,
             _ => self.close(what, |k| matches!(k, Kind::Clip))?,
         };
         let Frame {
             kind,
-            children: kids,
+            children: mut kids,
             gs,
             clips,
             hidden: opened_hidden,
@@ -95,6 +97,15 @@ impl<'a> Reader<'a> {
             self.gs = gs.clone();
             self.pending_unread_fill = pending_unread_fill;
             self.pending_unread_stroke = pending_unread_stroke;
+        }
+        // Wraparound text: every object in it other than type is a wrap object, before the text or
+        // after it, with no offset (the format gives none) unless its dictionary gives its options.
+        // One before the text is below it, so the text flows around it only once it is moved above.
+        if matches!(kind, Kind::Wrap) {
+            let graphics = kids.iter_mut().filter(|k| !matches!(k.kind, NodeKind::Text(_)) && slot_of(k.name.as_deref()).is_none());
+            for k in graphics.filter(|k| k.extras().wrap.is_none()) {
+                k.extras_mut().wrap = Some(TextWrap { offset: 0.0, invert: false });
+            }
         }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
         // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
@@ -412,7 +423,7 @@ impl<'a> Reader<'a> {
     /// Mark the first object container below the innermost layer.
     pub(super) fn mark_unread(&mut self, what: String) -> bool {
         let Some(layer) = self.frames.iter().rposition(|f| matches!(f.kind, Kind::Layer(_))) else { return false };
-        let Some(frame) = self.frames.get_mut(layer + 1).filter(|f| matches!(f.kind, Kind::Group | Kind::Compound | Kind::Clip)) else {
+        let Some(frame) = self.frames.get_mut(layer + 1).filter(|f| matches!(f.kind, Kind::Group | Kind::Wrap | Kind::Compound | Kind::Clip)) else {
             return false;
         };
         if !frame.unread.contains(&what) {
@@ -432,11 +443,9 @@ impl<'a> Reader<'a> {
             self.unreadable(what, false);
             return Ok(None);
         }
-        let in_container = self
-            .frames
-            .iter()
-            .rposition(|f| matches!(f.kind, Kind::Layer(_)))
-            .is_some_and(|layer| self.frames.get(layer + 1).is_some_and(|f| matches!(f.kind, Kind::Group | Kind::Compound | Kind::Clip)));
+        let in_container = self.frames.iter().rposition(|f| matches!(f.kind, Kind::Layer(_))).is_some_and(|layer| {
+            self.frames.get(layer + 1).is_some_and(|f| matches!(f.kind, Kind::Group | Kind::Wrap | Kind::Compound | Kind::Clip))
+        });
         if !super::art::sane(bounds) || bounds.area() <= 0.0 {
             self.unsupported.insert(what.into());
             return Ok(None);

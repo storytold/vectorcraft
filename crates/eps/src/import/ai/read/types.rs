@@ -132,6 +132,9 @@ pub(super) struct LayerAttrs {
 pub(super) enum Kind {
     Layer(Box<LayerAttrs>),
     Group,
+    /// Wraparound text (`*w` … `*W`, version 7 specification §15.4.2): a group whose objects other
+    /// than its type are wrap objects.
+    Wrap,
     Compound,
     Clip,
     Mask,

@@ -4315,6 +4315,8 @@ font-technology	Variable	ცვლადი
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ეს ერთფეროვანი ლოგო არ არის (მისი მყარი არეების {_1}% რამდენიმე ერთგვაროვან ფერს ემთხვევა), ამიტომ Flat Logo რეჟიმი მის გრადიენტებს ლაქებად აქცევდა: გამოიყენეთ Color რეჟიმი
 @msg	`{what}` closes nothing	`{what}` არაფერს ხურავს
 @msg	`{what}` closes something it didn't open	`{what}` ხურავს იმას, რაც არ გაუხსნია
+@msg	`{w}` takes no operands	`{w}` ოპერანდებს არ იღებს
+@msg	a wraparound group is inside a compound path	ტექსტის გარსშემოვლების ჯგუფი შედგენილი ტრაექტორიის შიგნითაა
 @msg	a path has too many points	ტრაექტორიას ზედმეტად ბევრი წერტილი აქვს
 @msg	it ends inside a layer	ის შრის შიგნით მთავრდება
 @msg	it has art outside its layers	მას შრეების გარეთ ნახატი აქვს

@@ -4240,6 +4240,8 @@ theme	Appearance	외관
 @msg	unknown command `{0}`; did you mean `{1}`?	알 수 없는 명령 `{0}`: `{1}`을(를) 의미하셨습니까?
 @msg	`{what}` closes nothing	`{what}`이(가) 닫는 항목이 없습니다
 @msg	`{what}` closes something it didn't open	`{what}`이(가) 열지 않은 항목을 닫습니다
+@msg	`{w}` takes no operands	`{w}`은(는) 피연산자를 받지 않습니다
+@msg	a wraparound group is inside a compound path	문자 감싸기 그룹이 컴파운드 패스 안에 있습니다
 @msg	a path has too many points	패스의 점이 너무 많습니다
 @msg	it ends inside a layer	레이어 안에서 끝납니다
 @msg	it has art outside its layers	레이어 밖에 아트웍이 있습니다

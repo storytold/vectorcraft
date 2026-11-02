@@ -5,7 +5,7 @@ use super::{
     Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure,
     Swatch, Unit, V, obj,
 };
-use vectorcraft_doc::{Guide, ImageBlob, PatternDef};
+use vectorcraft_doc::{Guide, ImageBlob, PatternDef, TextWrap};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -220,6 +220,23 @@ fn variable_sets_node(data: &[u8]) -> Option<&[u8]> {
     }
 }
 
+/// The text wrap options an object's dictionary gives: its offset in points (`AI11TextWrapOffset`,
+/// times `scale`, the factor that takes the art onto the document) and Invert Wrap
+/// (`AI11TextWrapInvert`). The outline the file may keep with them (`AI11TextWrapPath`) is not
+/// read: the object's own shape gives it. A value that isn't a number is left at its default, and
+/// a dictionary without a readable entry gives none.
+fn text_wrap(o: &Obj, scale: f64) -> Option<TextWrap> {
+    let num = |key: &str| o.get(key).and_then(|v| v.iter().find_map(V::num)).filter(|v| v.is_finite());
+    let offset = num("AI11TextWrapOffset");
+    let invert = num("AI11TextWrapInvert").filter(|v| *v == 0.0 || *v == 1.0);
+    if offset.is_none() && invert.is_none() && o.get("AI11TextWrapPath").is_none() {
+        return None;
+    }
+    let default = TextWrap::default();
+    let offset = offset.map(|v| v * scale).filter(|v| !v.is_nan()).map_or(default.offset, |v| v.clamp(-1000.0, 1000.0));
+    Some(TextWrap { offset, invert: invert == Some(1.0) })
+}
+
 impl<'a> Reader<'a> {
     /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
     /// opacity mask it may carry.
@@ -262,6 +279,12 @@ impl<'a> Reader<'a> {
             } else if mask.nums("Disabled").first().copied() != Some(1.0) {
                 self.unreadable("opacity masks without readable art", false);
             }
+        }
+        // Text wrap: area type below the object in its layer flows around it.
+        if let Some(wrap) = text_wrap(o, self.large_canvas.unwrap_or(1.0))
+            && let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. }))
+        {
+            n.extras_mut().wrap = Some(wrap);
         }
         let name = match o.text("AIArtName") {
             Some(name) => name,

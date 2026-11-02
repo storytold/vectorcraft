@@ -4560,6 +4560,8 @@ axis	Both	Les deux
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	ce n’est pas un logo en aplats ({_1} % de ses zones pleines correspondent à quelques couleurs unies), donc le mode Logo en aplats transformerait ses dégradés en taches : utilisez le mode Couleur
 @msg	`{what}` closes nothing	`{what}` ne ferme rien
 @msg	`{what}` closes something it didn't open	`{what}` ferme quelque chose qu’il n’a pas ouvert
+@msg	`{w}` takes no operands	`{w}` n’accepte aucun opérande
+@msg	a wraparound group is inside a compound path	un groupe d’habillage de texte se trouve dans un tracé transparent
 @msg	a path has too many points	un tracé a trop de points
 @msg	it ends inside a layer	elles se terminent à l’intérieur d’un calque
 @msg	it has art outside its layers	elles contiennent des illustrations hors de leurs calques

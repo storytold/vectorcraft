@@ -3417,6 +3417,37 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
     ]
 }
 
+/// Text wrap in editing data: an object's dictionary with the wrap options in any order, missing,
+/// repeated or of the wrong type, with numbers that aren't finite, nested dictionaries and the kept
+/// outline's art; and wraparound groups (`*w` … `*W`), unmatched or nested.
+fn arb_ai_wrap_entry() -> impl Strategy<Value = String> {
+    let value = prop_oneof![
+        arb_num(),
+        Just("nan".to_string()),
+        Just("inf".to_string()),
+        Just("-1e999".to_string()),
+        Just("1e-999".to_string()),
+        Just("(far)".to_string()),
+        Just("/Name".to_string()),
+        Just("[ 1 2 ]".to_string()),
+    ];
+    let ty = prop::sample::select(vec!["/Real", "/Bool", "/Int", "/String", ""]);
+    let key = prop::sample::select(vec!["AI11TextWrapOffset", "AI11TextWrapInvert", "AI11TextWrapPath", "AI11TextWrapBeingComputed"]);
+    let entry = (value, ty, key).prop_map(|(v, t, k)| format!("%_{v} {t} ({k}) ,"));
+    let art = prop::sample::select(vec![
+        "%_X=\n%_0 0 m\n%_0 9 L\n%_9 9 L\n%_f\n%_X+\n%_ (AI11TextWrapPath) ,",
+        "%_X=\n%_X=\n%_0 0 m\n%_f\n%_X+\n%_ (AI11TextWrapPath) ,",
+        "%_X+\n%_ (AI11TextWrapPath) ,",
+        "%_/Dictionary :\n%_6 /Real (AI11TextWrapOffset) ,\n%_; (Nested) ,",
+        "%_/Dictionary :\n%_1 /Bool (AI11TextWrapInvert) ,",
+    ])
+    .prop_map(str::to_string);
+    let dictionary = prop::collection::vec(prop_oneof![3 => entry, 1 => art], 0..6)
+        .prop_map(|entries| format!("\n%_/ArtDictionary :\n{}\n%_;\n%_\n", entries.join("\n")));
+    let group = prop::sample::select(vec!["*w", "*W", "*w *w", "*W *W", "*w u", "U *W", "*w 1 To", "TO *W"]).prop_map(str::to_string);
+    prop_oneof![2 => dictionary, 1 => group]
+}
+
 /// The testkit's sample editing data, compressed as older `.ai` files compress it.
 fn ai_sample_compressed() -> Vec<u8> {
     [&b"%AI12_CompressedData"[..], &deflated(&vectorcraft_testkit::ai::sample_data())].concat()
@@ -3436,7 +3467,7 @@ proptest! {
     /// Hostile editing data in Illustrator EPS and `.ai` files: operators in any order with any
     /// operands, sections and dictionaries left open, images of any size.
     #[test]
-    fn ai_hostile_editing_data_never_panics(tokens in prop::collection::vec(arb_ai_token(), 0..80)) {
+    fn ai_hostile_editing_data_never_panics(tokens in prop::collection::vec(prop_oneof![8 => arb_ai_token(), 1 => arb_ai_wrap_entry()], 0..80)) {
         use vectorcraft_testkit::ai;
         let data = ai::editing_data(200.0, 100.0, &format!("%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n{}\nLB\n", tokens.join(" ")));
         survive("hostile editing data", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;

@@ -4876,6 +4876,8 @@ imageTrace	Outline	Obrys
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	nejde o logo s plnými barvami ({_1} % jeho plných ploch odpovídá několika plným barvám), takže režim Ploché logo by z jeho přechodů udělal skvrny: použijte místo toho režim Barva
 @msg	`{what}` closes nothing	`{what}` nic neuzavírá
 @msg	`{what}` closes something it didn't open	`{what}` uzavírá něco, co neotevřel
+@msg	`{w}` takes no operands	`{w}` nepřijímá žádné operandy
+@msg	a wraparound group is inside a compound path	skupina obtékání textu je uvnitř složené cesty
 @msg	a path has too many points	cesta má příliš mnoho bodů
 @msg	it ends inside a layer	končí uvnitř vrstvy
 @msg	it has art outside its layers	má kresbu mimo své vrstvy

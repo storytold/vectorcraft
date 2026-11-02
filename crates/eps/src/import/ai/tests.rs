@@ -2949,6 +2949,131 @@ fn a_blend_record_is_read_to_its_length() {
     assert!(matches!(blend.kind, NodeKind::Blend { .. }), "{warnings:?}");
 }
 
+/// An object's dictionary with the text wrap `entries` (each a `values (key) ,` line).
+fn wrap_dictionary(entries: &[&str]) -> String {
+    let lines: String = entries.iter().map(|e| format!("%_{e}\n")).collect();
+    format!("%_/ArtDictionary :\n{lines}%_;\n%_\n")
+}
+
+/// The wrap outline a file may keep beside the options: art, then its key.
+const WRAP_PATH: &str = "X=\n%_4 As\n%_0 0 m\n%_0 20 L\n%_20 20 L\n%_20 0 L\n%_f\n%_X+\n%_ (AI11TextWrapPath) ,";
+
+fn wrap_of(n: &Node) -> Option<vectorcraft_doc::TextWrap> {
+    n.extras().wrap
+}
+
+#[test]
+fn wrap_dictionary_path() {
+    let dict = wrap_dictionary(&[WRAP_PATH, "0 /Bool (AI11TextWrapInvert) ,", "12.5 /Real (AI11TextWrapOffset) ,"]);
+    let r = read_ok(&layer(&format!("{RED}{}f\n{dict}", rect_path(10.0, 10.0, 50.0, 50.0))));
+    let kids = art(&r.doc);
+    assert_eq!(kids.len(), 1, "the kept outline isn't art: {:?}", r.warnings);
+    assert_eq!(wrap_of(&kids[0]), Some(vectorcraft_doc::TextWrap { offset: 12.5, invert: false }));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
+fn wrap_dictionary_invert_and_default() {
+    let inverted = wrap_dictionary(&["12.5 /Real (AI11TextWrapOffset) ,", "1 /Bool (AI11TextWrapInvert) ,"]);
+    let default = wrap_dictionary(&["0 /Bool (AI11TextWrapInvert) ,"]);
+    let plain = wrap_dictionary(&["(Plain) /String (AIArtName) ,"]);
+    let r = read_ok(&layer(&format!(
+        "{RED}{}f\n{inverted}{}f\n{default}{}f\n{plain}",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(20.0, 0.0, 30.0, 10.0),
+        rect_path(40.0, 0.0, 50.0, 10.0)
+    )));
+    let kids = art(&r.doc);
+    assert_eq!(kids.len(), 3);
+    assert_eq!(wrap_of(&kids[0]), Some(vectorcraft_doc::TextWrap { offset: 12.5, invert: true }));
+    assert_eq!(wrap_of(&kids[1]), Some(vectorcraft_doc::TextWrap::default()), "6 pt when the offset isn't given");
+    assert_eq!(wrap_of(&kids[2]), None, "an object without wrap options isn't a wrap object");
+    assert_eq!(kids[2].name.as_deref(), Some("Plain"));
+}
+
+#[test]
+fn wrap_dictionary_bad_offset() {
+    let offsets = ["nan /Real", "1e308 /Real", "(far) /String", "2000 /Real", "-2000 /Real"];
+    let mut body = RED.to_string();
+    for (i, offset) in offsets.iter().enumerate() {
+        let x = 20.0 * i as f64;
+        body += &format!("{}f\n", rect_path(x, 0.0, x + 10.0, 10.0));
+        body += &wrap_dictionary(&[&format!("{offset} (AI11TextWrapOffset) ,"), "1 /Bool (AI11TextWrapInvert) ,"]);
+    }
+    // An offset that isn't a number, with nothing else of the options, isn't a wrap object.
+    body += &format!("{}f\n", rect_path(200.0, 0.0, 210.0, 10.0));
+    body += &wrap_dictionary(&["(far) /String (AI11TextWrapOffset) ,", "7 /Bool (AI11TextWrapInvert) ,"]);
+    let r = read_ok(&layer(&body));
+    let offsets: Vec<Option<f64>> = art(&r.doc).iter().map(|n| wrap_of(n).map(|w| w.offset)).collect();
+    assert_eq!(offsets, [Some(6.0), Some(1000.0), Some(6.0), Some(1000.0), Some(-1000.0), None]);
+    assert!(art(&r.doc).iter().take(5).all(|n| wrap_of(n).is_some_and(|w| w.invert)));
+}
+
+#[test]
+fn wrap_dictionary_group() {
+    let dict = wrap_dictionary(&["6 /Real (AI11TextWrapOffset) ,", "0 /Bool (AI11TextWrapInvert) ,"]);
+    let r = read_ok(&layer(&format!("u\n{RED}{}f\n{}f\nU\n{dict}", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0))));
+    let kids = art(&r.doc);
+    assert_eq!(kids.len(), 1);
+    assert_eq!(wrap_of(&kids[0]), Some(vectorcraft_doc::TextWrap::default()));
+    let NodeKind::Group { children, .. } = &kids[0].kind else { panic!("a group: {:?}", kids[0].kind) };
+    assert_eq!(children.len(), 2);
+    assert!(children.iter().all(|c| wrap_of(c).is_none() && matches!(c.kind, NodeKind::Path { .. })));
+}
+
+/// Wraparound text in the version 7 format (§15.4.2): `*w`, objects, the area text, the objects it
+/// wraps around, `*W`.
+#[test]
+fn legacy_wrap_group() {
+    let text = format!("1 To\n1 0 0 1 0 0 0 Tp\n{}n\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Around) Tx\nTO\n", rect_path(0.0, 0.0, 100.0, 80.0));
+    // The last object's own dictionary gives its options.
+    let own = wrap_dictionary(&["3 /Real (AI11TextWrapOffset) ,", "1 /Bool (AI11TextWrapInvert) ,"]);
+    let body = format!(
+        "*w\n{RED}{}f\n{text}{}f\n{}f\n{own}*W\n",
+        rect_path(0.0, 0.0, 5.0, 5.0),
+        rect_path(30.0, 30.0, 50.0, 50.0),
+        rect_path(60.0, 30.0, 70.0, 50.0)
+    );
+    let r = read_ok(&layer(&body));
+    let kids = art(&r.doc);
+    assert_eq!(kids.len(), 1, "{:?}", r.warnings);
+    let NodeKind::Group { children, clip: false } = &kids[0].kind else { panic!("a group: {:?}", kids[0].kind) };
+    let wraps: Vec<(bool, bool)> = children.iter().map(|c| (matches!(c.kind, NodeKind::Text(_)), wrap_of(c).is_some())).collect();
+    assert_eq!(wraps, [(false, true), (true, false), (false, true), (false, true)], "objects before the text are wrap objects too: {:?}", r.warnings);
+    let none = Some(vectorcraft_doc::TextWrap { offset: 0.0, invert: false });
+    assert_eq!(wrap_of(&children[0]), none, "no offset");
+    assert_eq!(wrap_of(&children[2]), none, "no offset");
+    assert_eq!(wrap_of(&children[3]), Some(vectorcraft_doc::TextWrap { offset: 3.0, invert: true }));
+    assert!(!r.warnings.iter().any(|w| w.contains("*w") || w.contains("*W")), "{:?}", r.warnings);
+}
+
+/// A wraparound group with no type in it: each of its objects is a wrap object, with no offset.
+#[test]
+fn legacy_wrap_group_without_text() {
+    let body = format!("*w\n{RED}{}f\n{}f\n*W\n", rect_path(0.0, 0.0, 5.0, 5.0), rect_path(30.0, 30.0, 50.0, 50.0));
+    let r = read_ok(&layer(&body));
+    let kids = art(&r.doc);
+    assert_eq!(kids.len(), 1, "{:?}", r.warnings);
+    let NodeKind::Group { children, clip: false } = &kids[0].kind else { panic!("a group: {:?}", kids[0].kind) };
+    let wraps: Vec<_> = children.iter().map(|c| wrap_of(c)).collect();
+    assert_eq!(wraps, [Some(vectorcraft_doc::TextWrap { offset: 0.0, invert: false }); 2]);
+}
+
+/// `*w` and `*W` take no operands, and a wraparound group can't be an element of a compound path.
+#[test]
+fn legacy_wrap_group_errors() {
+    let square = format!("{RED}{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    for (body, error) in [
+        (format!("1 *w\n{square}*W\n"), "`*w` takes no operands"),
+        (format!("*w\n{square}0 *W\n"), "`*W` takes no operands"),
+        (format!("*u\n*w\n{square}*W\n*U\n"), "a wraparound group is inside a compound path"),
+        (format!("*u\nu\n*w\n{square}*W\nU\n*U\n"), "a wraparound group is inside a compound path"),
+    ] {
+        let e = read(stream(&layer(&body)).as_bytes()).unwrap_err();
+        assert!(e.contains(error), "{body:?}: {e}");
+    }
+}
+
 /// The printer's crop marks Illustrator draws after the last layer (`%AI3_BeginCrops`, inside
 /// `userdict /AI3_noCropMarks known not { … } if`) aren't art outside the layers: the file reads
 /// from its layers, without them (the crop area is `%AI3_Cropmarks`).

@@ -214,6 +214,8 @@ pub(super) fn fill_slots(
             let frame = ai::slot_frame(n.name.as_deref());
             let state = (n.opacity, n.blend, n.isolate, n.knockout);
             let transparent = see_through(n);
+            // A text object that is a wrap object stays one.
+            let wrap = n.extras().wrap;
             // An art style read onto the slot (fills, strokes and effects round the characters) is the type's.
             let styled = (!n.appearance.items.is_empty() || !n.appearance.effects.is_empty()).then(|| n.appearance.clone());
             let replacement = match content.next() {
@@ -257,6 +259,17 @@ pub(super) fn fill_slots(
                             parts.push(Arc::new(group));
                         }
                     }
+                    // A wrap object stays one: the page's parts of it in a group, when there are several.
+                    if wrap.is_some() {
+                        if parts.len() > 1 {
+                            let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
+                            group.visible = visible;
+                            parts.push(Arc::new(group));
+                        }
+                        for p in &mut parts {
+                            Arc::make_mut(p).extras_mut().wrap = wrap;
+                        }
+                    }
                     let n = parts.len();
                     nodes.splice(i..=i, parts);
                     i += n;
@@ -277,6 +290,9 @@ pub(super) fn fill_slots(
                     text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
                     // The type takes the slot's transparency.
                     (text.opacity, text.blend, text.isolate, text.knockout) = state;
+                    if wrap.is_some() {
+                        text.extras_mut().wrap = wrap;
+                    }
                     if let Some(slot) = nodes.get_mut(i) {
                         *slot = Arc::new(*text);
                     }
@@ -476,4 +492,34 @@ pub(super) fn covered(object: &[Arc<Node>], content: &[Content], keep: impl Fn(u
 /// The box round `parts`.
 pub(super) fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A text slot that is a wrap object, filled with the page's type in two parts, stays one
+    /// wrap object: a group of the parts.
+    #[test]
+    fn a_wrapped_slot_filled_from_the_page_stays_one_wrap_object() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = Node::group(doc.alloc_id(), vec![]);
+        slot.name = Some("\u{0}text0:0".into());
+        let wrap = vectorcraft_doc::TextWrap { offset: 3.0, invert: true };
+        slot.extras_mut().wrap = Some(wrap);
+        let part = |doc: &mut Document, x: f64| {
+            let t = vectorcraft_doc::TextObject::point(Point::new(x, 50.0), "Part", Default::default());
+            Arc::new(Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t))))
+        };
+        let parts = vec![part(&mut doc, 10.0), part(&mut doc, 60.0)];
+        let mut nodes = vec![Arc::new(slot)];
+        let mut content = vec![Content::Page(parts)].into_iter();
+        let (mut empty, mut made) = (0, vec![]);
+        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![]);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].extras().wrap, Some(wrap));
+        let NodeKind::Group { children, .. } = &nodes[0].kind else { panic!("a group: {:?}", nodes[0].kind) };
+        assert_eq!(children.len(), 2);
+        assert!(children.iter().all(|c| c.extras().wrap.is_none() && matches!(c.kind, NodeKind::Text(_))));
+    }
 }

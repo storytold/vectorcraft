@@ -4485,6 +4485,8 @@ theme	Appearance	Erscheinungsbild
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dies ist kein Logo aus flächigen Farben ({_1} % seiner einfarbigen Bereiche entsprechen wenigen flächigen Farben), daher würde der Modus „Flaches Logo“ seine Verläufe in Flecken zerlegen: Verwenden Sie stattdessen den Modus „Farbe“
 @msg	`{what}` closes nothing	`{what}` schließt nichts
 @msg	`{what}` closes something it didn't open	`{what}` schließt etwas, das es nicht geöffnet hat
+@msg	`{w}` takes no operands	`{w}` nimmt keine Operanden
+@msg	a wraparound group is inside a compound path	eine Textumfluss-Gruppe liegt in einem zusammengesetzten Pfad
 @msg	a path has too many points	ein Pfad hat zu viele Punkte
 @msg	it ends inside a layer	es endet innerhalb einer Ebene
 @msg	it has art outside its layers	es enthält Grafik außerhalb seiner Ebenen
