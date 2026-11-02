@@ -3016,11 +3016,21 @@ the Align To choice, and while there is a key object or a key guide they send th
 `spacing`. Edit › Keyboard Shortcuts lists them under Align, with no default shortcut, and
 `shortcuts.set {id, shortcut}` gives one a shortcut.
 
-Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with a menu path and no default shortcut when its
-params doc has a required field (one with no `?` and no `=` default), no item of the menu bar runs it without params,
-and it opens no dialog when run without them, such as `document.setUnits {units}` (File › Document Setup › Units).
+Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
+run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
+
+- a query with a menu path, such as `swatch.unused`;
+- a command with a menu path whose params doc has a required field (one with no `?` and no `=` default), such as
+  `document.setUnits {units}` (File › Document Setup › Units);
+- a command that sets nothing or fails without a param: `transparency.set`, `transparency.setOpacityMask`,
+  `stroke.set`, `layer.setProps`, `object.align`, `object.distribute`, `swatch.delete`, `swatch.move`,
+  `swatch.spotOptions`, `edit.colors.adjustBalance`, `swatch.library.load`, `graphicStyle.loadLibrary`,
+  `symbol.loadLibrary`, `brush.loadLibrary`, `dataset.import` and `variable.loadLibrary`.
+
 They list such a command while the user has changed its shortcut (`overridden: true` in `shortcuts.list`), and
-`shortcuts.set` can change or clear it.
+`shortcuts.set` can change or clear it. When every menu bar item that runs a command gives it the same params, a
+shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
+Find and Replace… open their dialogs.
 
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
 `object.distribute`, `object.distributeSpacing` and `select.allOnArtboard` calls it runs without `artboard`, as it does
