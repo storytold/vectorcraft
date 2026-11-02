@@ -391,7 +391,7 @@ fn set_options(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(o.json(match_count(s)))
 }
 
-/// How many objects Start Global Edit would take now with the session's options (the Result(s)
+/// How many objects Start Global Edit would take now with the session's options (the Results
 /// line of the options): 0 unless one supported object is selected.
 pub fn match_count(s: &Session) -> usize {
     match s.active() {
