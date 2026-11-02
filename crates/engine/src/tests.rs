@@ -135,6 +135,7 @@ mod recolor;
 mod recovery;
 mod reflecthit;
 mod registration;
+mod repeat_edit;
 mod save;
 mod saveoptions;
 mod scalestrokes;
