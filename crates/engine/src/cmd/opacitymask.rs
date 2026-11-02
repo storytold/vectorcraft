@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped if several; a layer among several stands for its art, so the topmost object of a layer on top is the mask). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask; one target (an object or a layer) is refused in isolation mode and in pattern editing mode → {id, editing}",
+            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped if several; a layer among several stands for its art, so the topmost object of a layer on top is the mask; an object in `ids` that is hidden, locked or on a locked artboard is refused). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask; one target (an object or a layer) is refused in isolation mode and in pattern editing mode → {id, editing}",
             can_make,
             make
         ),
@@ -185,19 +185,26 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     if d.mask_edit.is_some() {
         return Err(bad(C, "stop editing the opacity mask first"));
     }
+    // A layer among several targets stands for its art that can be edited: visible and unlocked,
+    // with every layer it is in, and not on a locked artboard. A hidden, locked or template layer
+    // gives none. An object among the targets, or named in `ids` inside another one, must be
+    // editable in the same way.
+    let editable = d.editable();
+    let check = |ids: &[NodeId]| match ids.iter().find(|id| d.node(**id).is_some_and(|n| !n.is_layer()) && !editable(**id)) {
+        Some(id) => Err(bad(C, format!("object {} is hidden or locked, or on a locked artboard", id.0))),
+        None => Ok(()),
+    };
     let mut ids = match ids_param(p, "ids") {
         Some(ids) => {
             if let Some(id) = ids.iter().find(|id| d.node(**id).is_none()) {
                 return Err(EngineError::NoNode(*id));
             }
+            check(&ids)?;
             super::edit::outermost(d, Selection { objects: ids, ..Default::default() }.in_paint_order(d))
         }
         None => super::appearance::subject_roots(s)?,
     };
-    // A layer among several targets stands for its art that can be edited: visible and unlocked,
-    // with every layer it is in, and not on a locked artboard. A hidden, locked or template layer
-    // gives none.
-    let editable = d.editable();
+    check(&ids)?;
     let art_of = |id: NodeId| match d.node(id) {
         Some(n) if n.is_layer() && (!n.visible || n.locked || n.is_template()) => vec![],
         Some(n) if n.is_layer() => n.layer_art(true).into_iter().filter(|c| editable(*c)).collect(),
@@ -632,6 +639,30 @@ mod tests {
         assert_eq!(n.id, NodeId(a));
         assert_eq!(n.extras().mask.as_ref().unwrap().art.id, NodeId(off));
         assert_eq!(d.parent_of(NodeId(on)), Some(NodeId(l3)), "the object on the locked artboard stays");
+    }
+
+    #[test]
+    fn make_refuses_objects_given_by_ids_that_cannot_be_edited() {
+        let (mut s, a, b) = session_with_two();
+        let off = s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let inner = s.execute("shape.rectangle", &json!({"x": 300, "y": 40, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+        select(&mut s, &[inner]);
+        s.execute("object.lock", &json!({})).unwrap();
+        select(&mut s, &[b]);
+        s.execute("object.lock", &json!({})).unwrap();
+        let before = s.doc().unwrap().doc.layers.clone();
+        // A locked object is neither the mask, nor masked, nor given an empty mask, also when it is
+        // named with the group that holds it.
+        for ids in [vec![a, b], vec![b, off], vec![b], vec![a, g, inner]] {
+            assert!(s.execute("transparency.makeOpacityMask", &json!({ "ids": ids })).is_err(), "{ids:?}");
+            assert_eq!(s.doc().unwrap().doc.layers, before, "{ids:?}: nothing changes");
+        }
+        // Art on a locked artboard acts as locked.
+        s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+        let before = s.doc().unwrap().doc.layers.clone();
+        assert!(s.execute("transparency.makeOpacityMask", &json!({ "ids": [off, a] })).is_err());
+        assert_eq!(s.doc().unwrap().doc.layers, before, "the object on the locked artboard stays");
     }
 
     #[test]
