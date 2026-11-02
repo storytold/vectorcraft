@@ -226,6 +226,49 @@ fn each_check_finds_and_fixes_its_issue_and_leaves_clean_art_alone() {
     }
 }
 
+/// The pixel at (100, 100) of the document drawn on white.
+fn pixel(s: &Session) -> [u8; 4] {
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 300, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(100, 100)
+}
+
+/// A clipping path hides the art outside it: empty type that clips a group, and type off every
+/// artboard that clips a layer, stay, and the art stays hidden.
+#[test]
+fn clipping_type_stays_with_the_art_it_hides() {
+    const WHITE: [u8; 4] = [255, 255, 255, 255];
+    let mut s = session();
+    let art = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 60, "y": 80, "text": "  ", "size": 40})).unwrap());
+    select(&mut s, &[art, t]);
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    select(&mut s, &[]);
+    assert_eq!(pixel(&s), WHITE);
+    assert_eq!(found(&mut s, "emptyText", "document"), 0);
+    assert_eq!(s.execute("addon.cleanup.fix", &json!({"scope": "document"})).unwrap()["total"], 0);
+    select(&mut s, &[t]);
+    assert_eq!(found(&mut s, "emptyText", "selection"), 0, "the clipping path selected");
+    assert_eq!(s.execute("addon.cleanup.fix", &json!({"scope": "selection"})).unwrap()["total"], 0);
+    assert!(node(&s, t).is_some());
+    assert_eq!(pixel(&s), WHITE);
+
+    let mut s = session();
+    rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": -300, "y": -300, "text": "Clip", "size": 40})).unwrap());
+    s.execute("layer.clippingMask.toggle", &json!({})).unwrap();
+    select(&mut s, &[]);
+    assert_eq!(pixel(&s), WHITE);
+    assert_eq!(found(&mut s, "offArtboard", "document"), 0);
+    assert_eq!(s.execute("addon.cleanup.fix", &json!({"scope": "document"})).unwrap()["total"], 0);
+    select(&mut s, &[t]);
+    assert_eq!(found(&mut s, "offArtboard", "selection"), 0, "the clipping path selected");
+    assert_eq!(s.execute("addon.cleanup.fix", &json!({"scope": "selection"})).unwrap()["total"], 0);
+    assert!(node(&s, t).is_some());
+    assert_eq!(pixel(&s), WHITE);
+}
+
 /// Type set twice in the same place (from a PDF, or for a fake bold) is a duplicate within a point:
 /// Show selects the upper copy and Fix removes it. Other text, or the same text further off, stays.
 #[test]

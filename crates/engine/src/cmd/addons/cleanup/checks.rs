@@ -120,12 +120,12 @@ impl Kind {
         let removable = !place.clips && !is_guide_or_clip(n);
         let gone = |is: bool| is.then(Vec::new);
         match self {
-            Kind::EmptyText => gone(matches!(&n.kind, NodeKind::Text(t) if t.plain_text().trim().is_empty())),
+            Kind::EmptyText => gone(removable && matches!(&n.kind, NodeKind::Text(t) if t.plain_text().trim().is_empty())),
             Kind::StrayPoints => gone(removable && matches!(&n.kind, NodeKind::Path { path, .. } if path.anchor_count() <= 1)),
             Kind::Unpainted => gone(removable && !place.in_compound && is_shape(n) && !is_painted(&n.appearance)),
             Kind::ZeroOpacity => gone(removable && !place.in_compound && n.opacity <= 0.0),
             Kind::DuplicateObjects => gone(removable && duplicates_the_one_below(cx.d, n)),
-            Kind::OffArtboard => gone(place.top && !is_guide_or_clip(n) && off_artboards(cx, n)),
+            Kind::OffArtboard => gone(place.top && removable && off_artboards(cx, n)),
             Kind::NeedlessGroups => needless_group(n),
             Kind::NeedlessCompounds => needless_compound(n),
             Kind::NeedlessClipGroups => needless_clip_group(cx, n),
@@ -175,7 +175,9 @@ fn objects<'a>(d: &'a Document, scope: &Scope) -> Vec<(&'a Node, Place)> {
     let top = Place { top: true, ..Place::default() };
     match scope {
         Scope::Document => d.layers.iter().for_each(|l| visit(l, top, &mut out)),
-        Scope::Objects(ids) => ids.iter().filter_map(|id| d.node(*id)).for_each(|n| visit(n, top, &mut out)),
+        Scope::Objects(ids) => {
+            ids.iter().filter_map(|id| d.node(*id)).for_each(|n| visit(n, Place { clips: is_clipping_path(d, n.id), ..top }, &mut out))
+        }
     }
     let editable = d.editable();
     out.retain(|(n, _)| editable(n.id));
@@ -200,6 +202,11 @@ fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
         }
         _ => out.push((n, place)),
     }
+}
+
+/// Is `id` the clipping path of its group or layer?
+fn is_clipping_path(d: &Document, id: NodeId) -> bool {
+    d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips))
 }
 
 /// A group that stands for live or generated art: its members aren't loose art to clean.
