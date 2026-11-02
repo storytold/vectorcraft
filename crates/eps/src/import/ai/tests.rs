@@ -3087,22 +3087,6 @@ fn an_objects_on_path_record_that_doesnt_fit_leaves_a_plain_group() {
     }
 }
 
-/// The copy of the drawn group that follows it as versioned content is skipped: the group opens once,
-/// live.
-#[test]
-fn an_objects_on_path_group_in_versioned_content_opens_once() {
-    use vectorcraft_testkit::ai::{on_path_options, on_path_record};
-    let record = on_path_record(ALIGN_ON_PATH, &ON_PATH_IDS, &on_path_options(4, 4, 0.0, ""));
-    let group = on_path_group(OPEN_PATH, &ON_PATH_IDS, 0.0);
-    let copy = group.replace("/ConstraintGroup :\n128 /GroupType ,\n;\n", "");
-    let versioned = format!("%AI17_Begin_Content_if_version_gt:24 14\n{group}%AI17_Alternate_Content\n{copy}%AI17_End_Versioned_Content\n");
-    let doc = read_ok(&format!("{record}{}", layer(&versioned))).doc;
-    let kids = art(&doc);
-    assert_eq!(kids.len(), 1);
-    assert_eq!(kids[0].children().unwrap().len(), 5);
-    assert!(kids[0].extras().objects_on_path.is_some());
-}
-
 /// The path and objects of a group are measured once however many records name it: a thousand
 /// copies of a record open about as fast as one copy followed by 999 records whose path id is
 /// missing, when the group opens live, when its long path has no length, and when its first object
@@ -3149,4 +3133,20 @@ fn repeated_objects_on_path_records_dont_measure_the_objects_again() {
         }
         assert!(fastest_many < fastest_one * 5, "{why}: one copy: {fastest_one:?}, 1000 copies: {fastest_many:?}");
     }
+}
+
+/// The copy of the drawn group that follows it as versioned content is skipped: the group opens once,
+/// live.
+#[test]
+fn an_objects_on_path_group_in_versioned_content_opens_once() {
+    use vectorcraft_testkit::ai::{on_path_options, on_path_record};
+    let record = on_path_record(ALIGN_ON_PATH, &ON_PATH_IDS, &on_path_options(4, 4, 0.0, ""));
+    let group = on_path_group(OPEN_PATH, &ON_PATH_IDS, 0.0);
+    let copy = group.replace("/ConstraintGroup :\n128 /GroupType ,\n;\n", "");
+    let versioned = format!("%AI17_Begin_Content_if_version_gt:24 14\n{group}%AI17_Alternate_Content\n{copy}%AI17_End_Versioned_Content\n");
+    let doc = read_ok(&format!("{record}{}", layer(&versioned))).doc;
+    let kids = art(&doc);
+    assert_eq!(kids.len(), 1);
+    assert_eq!(kids[0].children().unwrap().len(), 5);
+    assert!(kids[0].extras().objects_on_path.is_some());
 }
