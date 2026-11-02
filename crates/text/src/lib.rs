@@ -34,7 +34,7 @@ pub mod thread;
 
 pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
-pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
+pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use file_font::{FILE_FONT_UPEM, FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 pub use fontdb::{
     FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, MAX_FILE_FACES, PlatformFontFiles, WantedFont, WantedFonts,
@@ -64,6 +64,9 @@ pub struct LayoutOptions {
     pub columns: usize,
     /// Gutter between rows/columns in points.
     pub gutter: f64,
+    /// Gutter between rows in points when it differs from [`LayoutOptions::gutter`], which is then
+    /// the gutter between columns.
+    pub row_gutter: Option<f64>,
     /// Inset from the frame edges in points.
     pub inset: f64,
     pub first_baseline: FirstBaseline,
@@ -87,6 +90,7 @@ impl Default for LayoutOptions {
             rows: 1,
             columns: 1,
             gutter: 18.0,
+            row_gutter: None,
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,

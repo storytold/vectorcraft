@@ -47,7 +47,8 @@ fn export_type_param(p: &Value, cmd: &str) -> Result<Option<SymbolExportType>> {
 
 /// `nineSlice` (bool) and `nineSliceGuides` ([left, top, right, bottom] fractions of the natural
 /// size): `None` leaves the symbol alone, `Some(None)` turns 9-slice off, `Some(Some(g))` turns it
-/// on with guides `g` (the symbol's current ones, else the centre third, when none are given).
+/// on with guides `g` (the symbol's current ones, else a quarter in from each edge, when none are
+/// given).
 fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> Result<Option<Option<SymbolNineSlice>>> {
     let on = match p.get("nineSlice") {
         None | Some(Value::Null) => None,
@@ -95,14 +96,7 @@ pub(crate) fn normalize(mut art: Node) -> Result<(Node, (f64, f64), Point)> {
     Ok((art, (w, h), c))
 }
 
-/// After the art of symbol `name` changed: each of its instances keeps its appearance changes to
-/// the objects the art still has.
-pub(crate) fn fit_instances_of(d: &mut Document, name: &str) {
-    let ids = instances_of(d, Some(name));
-    fit_overrides(d, &ids);
-}
-
-pub(crate) fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
+fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
     let mut v = vec![];
     d.walk(|n| {
         if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
@@ -346,7 +340,8 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The plain art of instance `inst` in document space (fresh ids), with the instance's own
-/// appearance changes to a dynamic symbol's art when `own`.
+/// appearance changes to a dynamic symbol's art when `own`, placed through its symbol's 9-slice
+/// guides when it has them.
 fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
@@ -356,7 +351,7 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     {
         brush::tint_node(&mut art, &c, f.opacity);
     }
-    art.transform(*xf, false);
+    let art = d.place_symbol_art(symbol, &art, *xf)?;
     let mut art = d.reid(&art);
     if inst.opacity < 1.0 || inst.blend != vectorcraft_color::BlendMode::Normal {
         if !matches!(art.kind, NodeKind::Group { .. }) {
@@ -369,9 +364,31 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     Some(art)
 }
 
+/// The most objects [`expanded_instance`] makes of instance `inst` in `d` (`own` as there): its
+/// symbol's object count with the art of its opacity masks, or
+/// [`vectorcraft_doc::NineSliceMap::most_placed`] when it is placed through 9-slice guides, plus
+/// the group that opacity or a blending mode adds. 0 for any other object.
+fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
+    let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return 0 };
+    let Some(sym) = d.symbols.iter().find(|s| &s.name == symbol) else { return 0 };
+    let dynamic = own && !inst.extras().symbol_overrides.is_empty();
+    let most = match d.symbol_slice_map(symbol, *xf) {
+        Some(m) if dynamic => m.most_placed(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst), d),
+        Some(m) => m.most_placed(&sym.art, d),
+        None if dynamic => vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst).count_with_masks() as u64,
+        None => sym.art.count_with_masks() as u64,
+    };
+    most.saturating_add(1)
+}
+
 /// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
-/// art's ids.
+/// art's ids. Fails before any edit when the instances together would make more than
+/// [`MAX_EXPAND_NODES`] objects.
 fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId>> {
+    let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, own)));
+    if total > MAX_EXPAND_NODES as u64 {
+        return Err(EngineError::Other("Too many pieces to make at once".into()));
+    }
     let mut out = vec![];
     for id in ids {
         let Some(inst) = d.node(*id).cloned() else { continue };
@@ -384,6 +401,9 @@ fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId
     }
     Ok(out)
 }
+
+/// How many objects [`break_links`] may make at once.
+const MAX_EXPAND_NODES: usize = 1_000_000;
 
 pub(super) fn selected_instances(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
@@ -590,13 +610,18 @@ pub(super) fn symbol_replace(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Replace Symbol", |d, _| {
         let new = natural_size(d, &name);
         for id in &ids {
-            let old = match d.node(*id).map(|n| &n.kind) {
-                Some(NodeKind::SymbolInstance { symbol, .. }) => natural_size(d, symbol),
+            let (old, other) = match d.node(*id).map(|n| &n.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => (natural_size(d, symbol), *symbol != name),
                 _ => continue,
             };
-            if let Some(NodeKind::SymbolInstance { symbol, xf }) = d.node_mut(*id).map(|n| &mut n.kind) {
+            let Some(n) = d.node_mut(*id) else { continue };
+            if let NodeKind::SymbolInstance { symbol, xf } = &mut n.kind {
                 *symbol = name.clone();
                 *xf *= Affine::scale_non_uniform(new.0 / old.0, new.1 / old.1);
+            }
+            // An override's path names an object of the old symbol's art.
+            if other && !n.extras().symbol_overrides.is_empty() {
+                n.extras_mut().symbol_overrides.clear();
             }
         }
         fit_overrides(d, &ids);

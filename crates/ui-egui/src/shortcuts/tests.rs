@@ -225,6 +225,26 @@ fn presses_follow_the_users_shortcuts() {
     assert!(runs_a_shortcut("=", "Equal", cmd()), "the defaults again");
 }
 
+/// A user's shortcut for a command whose menu bar item gives params runs what a click on that item
+/// runs: Clean Up…, Print Ink Fixes… and Find and Replace… open their dialogs instead of running
+/// without the values the dialog asks for.
+#[test]
+fn a_shortcut_runs_what_its_menu_item_runs() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    for id in ["object.path.cleanUp", "addon.color.printFixes", "edit.findReplace"] {
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), Default::default());
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, "Cmd+Alt+Shift+F9");
+        app.ui.status.clear();
+        frame(&mut app, chord.clone());
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{id} opens its dialog: {}", app.ui.status));
+        assert_eq!(d.fields["__command"], json!(id), "{:?}", d.fields);
+    }
+}
+
 /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
 /// tool's Shift+O), with the Selection tool or while the Type tool edits the text.
 #[test]
@@ -1986,4 +2006,118 @@ fn all_registered_shortcuts_parse() {
             assert!(parse(c.2).is_some(), "{} has unparsable shortcut {}", c.0, c.2);
         }
     }
+}
+
+/// #3296: each Effect menu item can be given a shortcut of its own (`effect:<id>`): the editor
+/// lists it under its menu path, the menu shows the shortcut, and pressing it opens that effect's
+/// dialog for the selection.
+#[test]
+fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
+    let entry = crate::shortcut_editor::entries().iter().find(|e| e.key == "effect:distort.transform").expect("Transform is listed");
+    assert_eq!(entry.group, "Effect › Distort & Transform");
+    assert_eq!(crate::keymap::command_of("effect:distort.transform").id, "effect.dialog");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Alt+Shift+F11");
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({"effect": "distort.transform"})), Some("Cmd+Alt+Shift+F11"));
+    let f11 =
+        egui::Event::Key { key: Key::F11, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT };
+    frame(&mut app, vec![f11]);
+    let d = app.ui.dialog.as_ref().expect("the effect's dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "{:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// #3296 review: an effect bound to Cmd+Enter runs the effect; the Selection tool doesn't take the
+/// Enter first and open its Move dialog.
+#[test]
+fn cmd_enter_bound_to_an_effect_runs_the_effect_not_the_tool() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Enter");
+    crate::shortcut_editor::sync(&app.ui);
+    assert!(
+        crate::shortcuts::all_shortcuts()
+            .iter()
+            .any(|(sc, c, p)| sc.logical_key == Key::Enter && *c == "effect.dialog" && p["effect"] == "distort.transform"),
+        "the effect's chord is among the command shortcuts"
+    );
+    frame(&mut app, press(Key::Enter, cmd()));
+    let d = app.ui.dialog.as_ref().expect("a dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "the effect's, not Move: {:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// #2898 review: Up and Down change the corner kind only while a corner widget is pressed. With
+/// none pressed, a plain Up still nudges the selected rectangle and leaves its corners alone; with
+/// one pressed, Up steps the kind and the rectangle stays where it is.
+#[test]
+fn a_plain_up_nudges_unless_a_corner_widget_is_pressed() {
+    use vectorcraft_doc::{LiveShape, NodeId, NodeKind};
+    use vectorcraft_geom::shapes::CornerKind;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(id);
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&[id], false).unwrap();
+        let NodeKind::Path { live: Some(l), .. } = &st.doc.node(id).unwrap().kind else { panic!("not live") };
+        let LiveShape::Rectangle { kinds, .. } = &**l else { panic!("not a rectangle") };
+        ((b.x0, b.y0), kinds[0])
+    };
+    let ((x, y), kind) = state(&app);
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    let ((x1, y1), kind1) = state(&app);
+    assert_eq!(x1, x, "no sideways move");
+    assert!((y1 - y).abs() > 0.5, "a plain Up nudges the rectangle: {y} → {y1}");
+    assert_eq!(kind1, kind, "and leaves its corners alone");
+    // Press a corner widget: now Up steps the corner kind and the rectangle stays put.
+    let view = app.view_info();
+    let st = app.session.active().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, view.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), view).unwrap();
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), view).unwrap();
+    let ((x2, y2), kind2) = state(&app);
+    assert_eq!((x2, y2), (x1, y1), "no nudge while the widget is pressed");
+    assert_eq!(kind2, CornerKind::InvertedRound, "Up stepped the kind");
+}
+
+/// #5218: the status bar navigator's four buttons are commands of their own, listed in Edit ›
+/// Keyboard Shortcuts without a default key, so a user can give them one (Page Up and Page Down
+/// here) and step through the artboards from the keyboard.
+#[test]
+fn artboard_navigation_commands_can_be_given_keys() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    for id in ["view.firstArtboard", "view.previousArtboard", "view.nextArtboard", "view.lastArtboard"] {
+        let list = app.run("shortcuts.list", json!({ "query": id })).unwrap();
+        assert!(list.as_array().unwrap().iter().any(|e| e["id"] == id), "{id} is listed: {list}");
+        assert_eq!(crate::shortcut_editor::default_command_shortcut(id), None, "{id} has no default key");
+    }
+    let at = |app: &VectorcraftApp| app.view().unwrap().artboard;
+    assert_eq!(app.run("view.lastArtboard", json!({})), Ok(json!({"index": 2})));
+    assert_eq!(app.run("view.nextArtboard", json!({})), Ok(json!({"index": 2})), "the last artboard stays");
+    assert_eq!(app.run("view.firstArtboard", json!({})), Ok(json!({"index": 0})));
+    assert_eq!(app.run("view.previousArtboard", json!({})), Ok(json!({"index": 0})), "the first artboard stays");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.nextArtboard", "PageDown");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.previousArtboard", "PageUp");
+    let press = |key| vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }];
+    frame(&mut app, press(Key::PageDown));
+    assert_eq!(at(&app), 1, "Page Down goes to the next artboard");
+    frame(&mut app, press(Key::PageDown));
+    assert_eq!(at(&app), 2);
+    frame(&mut app, press(Key::PageUp));
+    assert_eq!(at(&app), 1, "Page Up goes to the previous artboard");
 }

@@ -26,94 +26,236 @@ fn dashes_aligned_to_corners_keep_the_drawn_look() {
     assert!(!art_styles(data)["Stitches"].plain);
 }
 
-#[test]
-fn a_drop_shadow_offset_down_points_down() {
-    // GUARDS: the document has y down; flipping `vert` like an art-space y would turn the dialog's
-    // default shadow (7 pt right, 7 pt down) upwards.
-    let data = b"/KnownStyle :\n(Shade) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n7 /Real (horz) ,\n7 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(data);
-    let [shadow] = styles["Shade"].effects.as_slice() else { panic!("{:?}", styles["Shade"]) };
-    assert_eq!((shadow.params["x"].as_f64(), shadow.params["y"].as_f64()), (Some(7.0), Some(7.0)));
-}
-
 /// The style `Shade`: a Drop Shadow whose dictionary holds `keys`.
 fn shadow_style(keys: &str) -> ArtStyle {
+    effect_style("Adobe Drop Shadow", keys)
+}
+
+/// The style `Fx`: an effect `name` on the whole object, its dictionary holding `keys`.
+fn effect_style(name: &str, keys: &str) -> ArtStyle {
     let data = format!(
-        "/KnownStyle :\n(Shade) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{keys}; /Dict ;\n /Part ,\n;\n"
+        "/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+            /BasicFilter :\n({name}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{keys}; /Dict ;\n /Part ,\n;\n"
     );
-    art_styles(data.as_bytes()).remove("Shade").unwrap_or_default()
+    art_styles(data.as_bytes()).remove("Fx").unwrap_or_default()
+}
+
+/// A colour entry `key`: a fill style in RGB `r g b`.
+fn color_entry(key: &str, rgb: &str) -> String {
+    format!("/FillStyle : 0 O\n0 0 0 0 {rgb} Xa\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Def ;\n ({key}) ,\n")
+}
+
+/// A Drop Shadow's dictionary: every setting, with Color or Darkness set by `shade`.
+fn shadow_keys(shade: &str) -> String {
+    format!(
+        "2 /Int (blnd) ,\n0.43 /Real (opac) ,\n37 /Real (dark) ,\n-13 /Real (vert) ,\n11 /Real (horz) ,\n17 /Real (blur) ,\n{}{shade}",
+        color_entry("sclr", "0 1 0")
+    )
+}
+
+/// `style`'s one effect on the whole object.
+fn only_effect(style: &ArtStyle) -> &Effect {
+    assert!(style.plain, "{style:?}");
+    let [e] = style.effects.as_slice() else { panic!("{style:?}") };
+    e
+}
+
+/// `params[key]`, a number within rounding of `want`.
+fn near(params: &serde_json::Value, key: &str, want: f64) {
+    let got = params[key].as_f64();
+    assert!(got.is_some_and(|v| (v - want).abs() < 1e-9), "{key}: {got:?}, not {want}: {params}");
+}
+
+#[test]
+fn a_drop_shadow_reads_its_settings() {
+    // GUARDS: `vert` read as an art-space y would flip a shadow offset down to up.
+    let style = shadow_style(&shadow_keys("0 /Int (csrc) ,\n"));
+    let shadow = only_effect(&style);
+    let p = &shadow.params;
+    assert_eq!(
+        (shadow.id.as_str(), &p["mode"], &p["color"]),
+        ("stylize.dropShadow", &json!("Screen"), &json!(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0)))
+    );
+    for (key, want) in [("x", 11.0), ("y", -13.0), ("blur", 34.0), ("opacity", 43.0)] {
+        near(p, key, want);
+    }
+    assert_eq!((p.get("shade"), p.get("darkness")), (None, None));
 }
 
 #[test]
 fn a_drop_shadow_with_darkness_reads_its_darkness() {
-    // GUARDS: a `csrc` other than 0 made the style not plain, and the object came in as its drawn look.
-    let style = shadow_style("1 /Int (blnd) ,\n0.75 /Real (opac) ,\n5 /Real (blur) ,\n1 /Int (csrc) ,\n50 /Real (dark) ,\n");
-    assert!(style.plain, "{style:?}");
-    let [shadow] = style.effects.as_slice() else { panic!("{style:?}") };
-    let p = &shadow.params;
+    let shadow = only_effect(&shadow_style(&shadow_keys("1 /Int (csrc) ,\n"))).clone();
+    assert_eq!((&shadow.params["shade"], &shadow.params["darkness"]), (&json!("darkness"), &json!(37.0)));
+}
+
+#[test]
+fn a_drop_shadow_with_settings_not_read_keeps_the_drawn_look() {
+    // GUARDS: an unknown `csrc` was read as Darkness, `blnd` was cast to a mode, a missing setting
+    // took a default and an unknown key was skipped: each became an editable shadow the file doesn't draw.
+    let full = shadow_keys("0 /Int (csrc) ,\n");
+    let cases = [
+        full.replace("0 /Int (csrc)", "99 /Int (csrc)"),
+        full.replace("2 /Int (blnd)", "99 /Int (blnd)"),
+        full.replace("2 /Int (blnd)", "2.5 /Int (blnd)"),
+        full.replace("0 /Int (csrc)", "0.5 /Int (csrc)"),
+        full.replace("11 /Real (horz)", "11 /Int (horz)"),
+        full.replace("37 /Real (dark)", "37 /Int (dark)"),
+        full.replace("2 /Int (blnd)", "2 /Real (blnd)"),
+        full.replace("0.43 /Real (opac)", "1.5 /Real (opac)"),
+        full.replace("11 /Real (horz) ,\n", ""),
+        full.replace(&color_entry("sclr", "0 1 0"), ""),
+        full.replace("0 1 0 0 0 Xy", "2 0.5 0 0 0 Xy"),
+        format!("{full}1 /Real (spread) ,\n"),
+        format!("{full}0 /Bool (pair) ,\n"),
+        format!("{full}(x) /String (note) ,\n"),
+        format!("{full}3 4 /RealPointRelToROrigin (spot) ,\n"),
+        shadow_keys("1 /Int (csrc) ,\n").replace("37 /Real (dark)", "250 /Real (dark)"),
+        shadow_keys("1 /Int (csrc) ,\n").replace("37 /Real (dark)", "(fifty) /Real (dark)"),
+    ];
+    for keys in cases {
+        assert!(!shadow_style(&keys).plain, "{keys}");
+    }
+    let observed = format!("{full}1 /Bool (pair) ,\n1 /Bool (usePSLBlur) ,\n16 /Int (Adobe Effect Expand Before Version) ,\n");
+    assert!(shadow_style(&observed).plain);
+}
+
+#[test]
+fn an_inner_glow_reads_its_settings() {
+    let keys =
+        |gtyp: &str| format!("10 /Int (blnd) ,\n0.41 /Real (opac) ,\n13 /Real (blur) ,\n{}{gtyp} /Int (gtyp) ,\n", color_entry("gclr", "1 0 0"));
+    let style = effect_style("Adobe Inner Glow", &keys("0"));
+    let glow = only_effect(&style);
+    let p = &glow.params;
     assert_eq!(
-        (shadow.id.as_str(), &p["shade"], &p["darkness"], &p["opacity"], &p["blur"]),
-        ("stylize.dropShadow", &json!("darkness"), &json!(50.0), &json!(75.0), &json!(10.0))
+        (glow.id.as_str(), &p["mode"], &p["source"], &p["color"]),
+        ("stylize.innerGlow", &json!("Difference"), &json!("center"), &json!(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))
     );
+    near(p, "opacity", 41.0);
+    near(p, "blur", 13.0);
+    assert!(style.simple);
+    assert_eq!(only_effect(&effect_style("Adobe Inner Glow", &keys("1"))).params["source"], json!("edge"));
+    assert!(!effect_style("Adobe Inner Glow", &keys("2")).plain);
 }
 
 #[test]
-fn a_drop_shadow_darkness_is_100_percent_when_missing_and_kept_within_0_to_100() {
-    for (dark, want) in [("", 100.0), ("(fifty) /Real (dark) ,\n", 100.0), ("250 /Real (dark) ,\n", 100.0), ("-5 /Real (dark) ,\n", 0.0)] {
-        let style = shadow_style(&format!("1 /Int (csrc) ,\n{dark}"));
-        assert!(style.plain, "{dark:?}: {style:?}");
-        let [shadow] = style.effects.as_slice() else { panic!("{dark:?}: {style:?}") };
-        assert_eq!((&shadow.params["shade"], &shadow.params["darkness"]), (&json!("darkness"), &json!(want)), "{dark:?}");
+fn an_outer_glow_reads_its_settings_and_keeps_the_drawn_look_for_others() {
+    let keys = format!(
+        "16 /Int (Adobe Effect Expand Before Version) ,\n10 /Int (blnd) ,\n0.42 /Real (opac) ,\n19 /Real (blur) ,\n{}1 /Bool (usePSLBlur) ,\n",
+        color_entry("sclr", "0 0 1")
+    );
+    let glow = only_effect(&effect_style("Adobe Outer Glow", &keys)).clone();
+    assert_eq!((glow.id.as_str(), &glow.params["mode"]), ("stylize.outerGlow", &json!("Difference")));
+    near(&glow.params, "opacity", 42.0);
+    near(&glow.params, "blur", 38.0);
+    for other in [
+        format!("{keys}1 /Real (spread) ,\n"),
+        keys.replace("19 /Real (blur)", "19 /Int (blur)"),
+        keys.replace("1 /Bool (usePSLBlur)", "0 /Bool (usePSLBlur)"),
+    ] {
+        assert!(!effect_style("Adobe Outer Glow", &other).plain, "{other}");
     }
 }
 
 #[test]
-fn a_drop_shadow_with_color_keeps_its_params() {
-    // GUARDS: a `csrc` of 0, or none, is Color; its shadow has neither `shade` nor `darkness`.
-    for csrc in ["", "0 /Int (csrc) ,\n50 /Real (dark) ,\n"] {
-        let style = shadow_style(&format!("2 /Int (blnd) ,\n0.5 /Real (opac) ,\n{csrc}"));
-        assert!(style.plain, "{csrc:?}: {style:?}");
-        let [shadow] = style.effects.as_slice() else { panic!("{csrc:?}: {style:?}") };
-        let want = json!({"mode": "Screen", "opacity": 50.0, "blur": 10.0, "x": 7.0, "y": 7.0, "color": vectorcraft_color::Color::BLACK});
-        assert_eq!(shadow.params, want, "{csrc:?}");
+fn a_feather_reads_its_radius() {
+    // GUARDS: Feather was looked for under another name and key, so the files' Feather kept the drawn look.
+    let style = effect_style("Adobe Fuzzy Mask", "14 /Real (Radius) ,\n");
+    let feather = only_effect(&style);
+    assert_eq!((feather.id.as_str(), feather.params["radius"].as_f64()), ("stylize.feather", Some(14.0)));
+    assert!(style.simple);
+    for other in ["14 /Real (radius) ,\n", "", "-1 /Real (Radius) ,\n"] {
+        assert!(!effect_style("Adobe Fuzzy Mask", other).plain, "{other}");
     }
 }
 
 #[test]
-fn a_feather_reads_its_radius_from_rad() {
-    let data = b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n12 /Real (rad) ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(data);
-    let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
-    assert_eq!((feather.id.as_str(), feather.params["radius"].as_f64()), ("stylize.feather", Some(12.0)));
+fn round_corners_read_their_radius() {
+    let style = effect_style("Adobe Round Corners", "21 /Real (radius) ,\n");
+    let round = only_effect(&style);
+    assert_eq!((round.id.as_str(), round.params["radius"].as_f64()), ("stylize.roundCorners", Some(21.0)));
+    assert!(style.simple);
+    for other in ["21 /Real (Radius) ,\n", "21 /Int (radius) ,\n", "-1 /Real (radius) ,\n"] {
+        assert!(!effect_style("Adobe Round Corners", other).plain, "{other}");
+    }
+}
+
+/// A Scribble's dictionary with every setting.
+const SCRIBBLE_KEYS: &str = "0.8 /Real (SpacingVariation) ,\n0.23 /Real (ScribbleVariation) ,\n4 /Real (EdgeOverlapVariation) ,\n67 /Real (Angle) ,\n\
+    2.3 /Real (StrokeWidth) ,\n-7 /Real (EdgeOverlap) ,\n0.17 /Real (Scribbliness) ,\n13 /Real (Spacing) ,\n";
+
+#[test]
+fn a_scribble_reads_its_settings() {
+    let style = effect_style("Adobe Scribble Fill", SCRIBBLE_KEYS);
+    let scribble = only_effect(&style);
+    assert_eq!(scribble.id, "stylize.scribble");
+    let want = [
+        ("angle", 67.0),
+        ("overlap", -7.0),
+        ("overlapVariation", 4.0),
+        ("strokeWidth", 2.3),
+        ("curviness", 17.0),
+        ("curvinessVariation", 23.0),
+        ("spacing", 13.0),
+        ("spacingVariation", 0.8),
+    ];
+    for (key, v) in want {
+        near(&scribble.params, key, v);
+    }
+    assert!(style.simple);
 }
 
 #[test]
-fn a_feather_falls_back_to_radius_and_defaults_to_five_points() {
-    let with_name = b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n3 /Real (radius) ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(with_name);
-    let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
-    assert_eq!(feather.params["radius"].as_f64(), Some(3.0));
+fn a_scribble_with_a_colour_or_settings_not_read_keeps_the_drawn_look() {
+    let cases = [
+        format!("{SCRIBBLE_KEYS}{}", color_entry("sclr", "0 1 0")),
+        format!("{SCRIBBLE_KEYS}0.5 /Real (MinDensity) ,\n"),
+        SCRIBBLE_KEYS.replace("13 /Real (Spacing) ,\n", ""),
+        SCRIBBLE_KEYS.replace("0.17 /Real (Scribbliness)", "17 /Real (Scribbliness)"),
+    ];
+    for keys in cases {
+        assert!(!effect_style("Adobe Scribble Fill", &keys).plain, "{keys}");
+    }
+}
 
-    let bare = b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-            /BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n;\n";
-    let styles = art_styles(bare);
-    let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
-    assert_eq!(feather.params["radius"].as_f64(), Some(5.0));
+#[test]
+fn effects_on_the_object_keep_their_order() {
+    let data = format!(
+        "/KnownStyle :\n(Two) /Name ,\n/ActiveStyle :\n{}",
+        compound(
+            "Chain Style Filter",
+            &[basic("Adobe Round Corners", "10 /Real (radius) ,\n"), basic("Adobe Drop Shadow", &shadow_keys("0 /Int (csrc) ,\n"))]
+        )
+    );
+    let st = &art_styles(data.as_bytes())["Two"];
+    assert!(st.plain && st.simple, "{st:?}");
+    assert_eq!(st.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.roundCorners", "stylize.dropShadow"]);
+}
+
+#[test]
+fn a_glow_on_one_fill_stays_on_that_fill() {
+    // An ordinary object keeps the drawn look (`simple` is false); type takes the fill's glow.
+    let glow = basic(
+        "Adobe Inner Glow",
+        &format!("2 /Int (blnd) ,\n0.75 /Real (opac) ,\n5 /Real (blur) ,\n{}1 /Int (gtyp) ,\n", color_entry("gclr", "1 1 1")),
+    );
+    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), glow]);
+    let data =
+        format!("/KnownStyle :\n(Lit) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+    let st = &art_styles(data.as_bytes())["Lit"];
+    assert!(st.plain && !st.simple, "{st:?}");
+    assert!(st.effects.is_empty());
+    assert_eq!(st.looks[0].effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.innerGlow"]);
 }
 
 #[test]
 fn art_styles_clear_operands_beyond_the_cap() {
     let mut data = Vec::from(
-        b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n",
+        b"/KnownStyle :\n(Soft) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Adobe Fuzzy Mask) 1 0 /Filter ,\n1 /Visible ,\n",
     );
     for _ in 0..80 {
         data.extend_from_slice(b"1 ");
     }
-    data.extend_from_slice(b"/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n;\n");
+    data.extend_from_slice(b"/Dictionary : /NotRecorded ,\n5 /Real (Radius) ,\n; /Dict ;\n /Part ,\n;\n");
     let styles = art_styles(&data);
     let [feather] = styles["Soft"].effects.as_slice() else { panic!() };
     assert_eq!(feather.params["radius"].as_f64(), Some(5.0));
@@ -121,7 +263,8 @@ fn art_styles_clear_operands_beyond_the_cap() {
 
 #[test]
 fn art_styles_ignore_filters_beyond_the_cap() {
-    const UNIT: &[u8] = b"/BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n";
+    const UNIT: &[u8] =
+        b"/BasicFilter :\n(Adobe Fuzzy Mask) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n1 /Real (Radius) ,\n; /Dict ;\n /Part ,\n";
     let mut data =
         Vec::from(b"/KnownStyle :\n(Capped) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n");
     for _ in 0..MAX_FILTERS + 16 {
@@ -130,6 +273,19 @@ fn art_styles_ignore_filters_beyond_the_cap() {
     data.extend_from_slice(b";\n");
     let style = art_styles(&data).remove("Capped").unwrap_or_default();
     assert!(style.effects.len() <= MAX_FILTERS);
+}
+
+#[test]
+fn a_style_list_keeps_its_strings_in_order() {
+    let list = art_style_list(b"(A)\n(B\\)C)\n(D(E))\n/Name 3 x\n(Caf\\303\\251)\n(F");
+    let want: [&[u8]; 4] = [b"A", b"B)C", b"D(E)", "Caf\u{e9}".as_bytes()];
+    assert_eq!(list, want, "the string the data ends inside is left out");
+    assert!(art_style_list(b"").is_empty());
+    let unended: [&[u8]; 1] = [b"A"];
+    assert_eq!(art_style_list(b"(A)\n(B\\)"), unended, "an escaped `)` doesn't end the string");
+    assert_eq!(art_style_list(b"(A)\n(B(C)"), unended, "nor does one that closes a nested pair");
+    assert_eq!(art_style_list(format!("({})", "x".repeat(MAX_LISTED_NAME + 1)).as_bytes()), Vec::<Vec<u8>>::new());
+    assert_eq!(art_style_list("(x)\n".repeat(MAX_LISTED + 5).as_bytes()).len(), MAX_LISTED);
 }
 
 #[test]
@@ -309,10 +465,132 @@ fn contents_above_some_items_count_them() {
 
 #[test]
 fn an_effect_not_read_here_keeps_the_drawn_look() {
-    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Adobe Scribble Fill", "")]);
+    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Adobe Zig Zag", "")]);
     let data =
         format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
+}
+
+fn stroke(paint: &str) -> String {
+    basic("Stroke Style Filter", &format!("/StrokeStyle : 0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d0 XR\n{paint}\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n"))
+}
+
+fn offset(ofst: f64, jntp: i64, mlim: f64) -> String {
+    basic("Adobe Offset Path", &format!("{ofst} /Real (ofst) ,\n{mlim} /Real (mlim) ,\n{jntp} /Int (jntp) ,\n"))
+}
+
+/// Style `Fx`: `effects` on the whole object over a stack of a fill (with `on_fill` before its
+/// fill style, `after_fill` after it) and a stroke (with `on_stroke` and `after_stroke`).
+fn path_style(effects: &[String], on_fill: &[String], after_fill: &[String], on_stroke: &[String], after_stroke: &[String]) -> ArtStyle {
+    let item = |before: &[String], paint: String, after: &[String]| {
+        if before.is_empty() && after.is_empty() {
+            return paint;
+        }
+        compound("Chain Style Filter", &[before.concat(), paint, after.concat()])
+    };
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            item(on_stroke, stroke("0 0 0 1 0 0 0 XA"), after_stroke),
+            item(on_fill, fill("0 0 0 0 1 0 0 Xa"), after_fill),
+            basic("Conduit Filter", ""),
+        ],
+    );
+    let root = compound("Chain Style Filter", &[effects.concat(), stack]);
+    let data = format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}");
+    art_styles(data.as_bytes()).remove("Fx").unwrap()
+}
+
+fn ids(effects: &[Effect]) -> Vec<&str> {
+    effects.iter().map(|e| e.id.as_str()).collect()
+}
+
+#[test]
+fn offset_path_on_the_object_is_read_with_its_settings() {
+    // GUARDS: an object with Offset Path kept its drawn look, and the effect was read only on type.
+    let st = path_style(&[offset(4.0, 1, 6.0)], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let [e] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
+    assert_eq!((e.id.as_str(), &e.params), ("path.offsetPath", &json!({"offset": 4.0, "joins": "bevel", "miterLimit": 6.0})));
+    assert!(e.visible);
+    for (jntp, joins) in [(0, "round"), (2, "miter")] {
+        let st = path_style(&[offset(-5.0, jntp, 7.0)], &[], &[], &[], &[]);
+        assert_eq!((&st.effects[0].params["joins"], &st.effects[0].params["offset"]), (&json!(joins), &json!(-5.0)));
+    }
+}
+
+#[test]
+fn outline_object_and_outline_stroke_are_read_with_no_settings() {
+    // GUARDS: `Adobe Outline Type` and `Adobe Outline Stroke` weren't read, so the style kept its drawn look.
+    let outline = basic("Adobe Outline Type", "");
+    let outline_stroke = basic("Adobe Outline Stroke", "");
+    let st = path_style(&[outline.clone(), outline_stroke.clone()], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    assert_eq!(ids(&st.effects), ["path.outlineObject", "path.outlineStroke"]);
+    // No `width`: the stroke gives it.
+    assert!(st.effects.iter().all(|e| e.params == json!({})), "{:?}", st.effects);
+    // On a fill and on a stroke: Outline Object before the item's own style, Outline Stroke after it.
+    let (before, after) = (std::slice::from_ref(&outline), std::slice::from_ref(&outline_stroke));
+    let st = path_style(&[], before, after, before, after);
+    assert!(st.plain && !st.simple, "{st:?}");
+    // Bottom first: the fill, then the stroke.
+    assert!(matches!(st.items.as_slice(), [StyleItem::Fill(_), StyleItem::Stroke { .. }]), "{:?}", st.items);
+    for look in &st.looks {
+        assert_eq!(ids(&look.effects), ["path.outlineObject", "path.outlineStroke"]);
+    }
+}
+
+#[test]
+fn path_effects_keep_their_order_and_visibility() {
+    let hidden = offset(3.0, 0, 4.0).replacen("1 /Visible", "0 /Visible", 1);
+    let st = path_style(&[hidden, offset(6.0, 1, 4.0)], &[], &[], &[], &[]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let offsets: Vec<_> = st.effects.iter().map(|e| (e.params["offset"].as_f64(), e.visible)).collect();
+    assert_eq!(offsets, [(Some(3.0), false), (Some(6.0), true)]);
+    // On a fill and a stroke, with another effect after it.
+    let transform = basic("Adobe Transform", "2 /Int (numCopies) ,\n");
+    let after = std::slice::from_ref(&transform);
+    let st = path_style(&[], &[offset(2.0, 2, 4.0)], after, &[offset(-1.0, 0, 4.0)], after);
+    assert!(st.plain, "{st:?}");
+    assert_eq!(ids(&st.looks[0].effects), ["path.offsetPath", "distort.transform"]);
+    assert_eq!(ids(&st.looks[1].effects), ["path.offsetPath", "distort.transform"]);
+    assert_eq!((st.looks[0].effects[0].params["offset"].as_f64(), st.looks[1].effects[0].params["offset"].as_f64()), (Some(2.0), Some(-1.0)));
+}
+
+#[test]
+fn offset_path_with_settings_not_read_keeps_the_drawn_look() {
+    // GUARDS: a missing setting was read as 10 pt, miter or 4, and an out-of-range one was clamped.
+    let complete = "4 /Real (ofst) ,\n1 /Int (jntp) ,\n6 /Real (mlim) ,\n";
+    let bodies = [
+        String::new(),
+        "4 /Real (ofst) ,\n".into(),
+        "1 /Int (jntp) ,\n".into(),
+        "4 /Real (ofst) ,\n1 /Int (jntp) ,\n".into(),
+        format!("{complete}1 /Int (later) ,\n"),
+        format!("{complete}(x) /UnicodeString (DisplayString) ,\n"),
+        complete.replace("/Int (jntp)", "/Real (jntp)"),
+        complete.replace("4 /Real (ofst)", "(4) /Real (ofst)"),
+        complete.replace("4 /Real (ofst)", "1e999 /Real (ofst)"),
+        complete.replace("4 /Real (ofst)", "100001 /Real (ofst)"),
+        complete.replace("6 /Real (mlim)", "0.5 /Real (mlim)"),
+        complete.replace("6 /Real (mlim)", "501 /Real (mlim)"),
+        complete.replace("1 /Int (jntp)", "3 /Int (jntp)"),
+        complete.replace("1 /Int (jntp)", "-1 /Int (jntp)"),
+        complete.replace("1 /Int (jntp)", "0.5 /Int (jntp)"),
+    ];
+    for body in &bodies {
+        let filter = basic("Adobe Offset Path", body);
+        let one = std::slice::from_ref(&filter);
+        for st in [path_style(one, &[], &[], &[], &[]), path_style(&[], one, &[], &[], &[])] {
+            assert!(!st.plain, "{body:?}: {st:?}");
+        }
+    }
+    assert!(path_style(&[basic("Adobe Offset Path", complete)], &[], &[], &[], &[]).plain);
+    // The outline effects have no settings.
+    for name in ["Adobe Outline Type", "Adobe Outline Stroke"] {
+        assert!(!path_style(&[basic(name, "1 /Real (width) ,\n")], &[], &[], &[], &[]).plain, "{name}");
+        assert!(!path_style(&[basic(name, "/Array : 1 /Real , ; (width) ,\n")], &[], &[], &[], &[]).plain, "{name}");
+    }
 }
 
 #[test]
@@ -325,4 +603,140 @@ fn a_hidden_fill_comes_in_hidden() {
     let st = &art_styles(data.as_bytes())["Hidden"];
     assert!(st.plain, "{st:?}");
     assert_eq!(st.looks.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
+}
+
+/// A Convert to Shape filter whose dictionary holds `keys`.
+fn shape(keys: &str) -> String {
+    basic("Adobe Shape Effects", &format!("(Shape) /UnicodeString (DisplayString) ,\n{keys}"))
+}
+
+/// The style `Boxed`: a fill and a stroke, and `effects` on the whole object after them.
+fn shape_style(effects: &[String]) -> ArtStyle {
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            basic("Stroke Style Filter", "/StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n"),
+            fill("0 0 0 0 1 1 1 Xa"),
+        ],
+    );
+    let mut kids = vec![stack];
+    kids.extend_from_slice(effects);
+    let data = format!("/KnownStyle :\n(Boxed) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &kids));
+    art_styles(data.as_bytes()).remove("Boxed").unwrap_or_default()
+}
+
+/// Every setting of a Relative or Absolute size, with a corner radius.
+const SIZES: &str = "150 /Real (AbsWidth) ,\n40 /Real (AbsHeight) ,\n20 /Real (RelWidth) ,\n6 /Real (RelHeight) ,\n15 /Real (CornerRadius) ,\n";
+
+#[test]
+fn convert_to_shape_comes_in_live_with_its_settings() {
+    // GUARDS: `Adobe Shape Effects` wasn't read, so an object with it kept its drawn look.
+    for (keys, id, want) in [
+        (
+            format!("0 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0}),
+        ),
+        (
+            format!("1 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.roundedRectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0, "radius": 15.0}),
+        ),
+        (
+            format!("2 /Int (Shape) ,\n1 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.ellipse",
+            json!({"relative": false, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0}),
+        ),
+        (
+            format!("0 /Int (Shape) ,\n1 /Real (Absolute) ,\n{SIZES}"),
+            "convertToShape.rectangle",
+            json!({"relative": false, "extraW": 40.0, "extraH": 12.0, "width": 150.0, "height": 40.0}),
+        ),
+        // A relative size alone, and one that shrinks the shape: each is added to every side.
+        (
+            "0 /Int (Shape) ,\n0 /Real (Absolute) ,\n20 /Real (RelWidth) ,\n6 /Real (RelHeight) ,\n".to_string(),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 12.0, "width": 36.0, "height": 36.0}),
+        ),
+        (
+            "0 /Int (Shape) ,\n0 /Real (Absolute) ,\n-10 /Real (RelWidth) ,\n-4 /Real (RelHeight) ,\n".to_string(),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": -20.0, "extraH": -8.0, "width": 36.0, "height": 36.0}),
+        ),
+        // Missing sizes: 18 pt a side, 36 pt, and a 9 pt radius.
+        (
+            "0 /Int (Shape) ,\n0 /Real (Absolute) ,\n20 /Real (RelWidth) ,\n".to_string(),
+            "convertToShape.rectangle",
+            json!({"relative": true, "extraW": 40.0, "extraH": 36.0, "width": 36.0, "height": 36.0}),
+        ),
+        (
+            "1 /Int (Shape) ,\n1 /Real (Absolute) ,\n".to_string(),
+            "convertToShape.roundedRectangle",
+            json!({"relative": false, "extraW": 36.0, "extraH": 36.0, "width": 36.0, "height": 36.0, "radius": 9.0}),
+        ),
+    ] {
+        let st = shape_style(&[shape(&keys)]);
+        assert!(st.plain && st.simple, "{keys}: {st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{keys}: {:?}", st.effects) };
+        assert_eq!((e.id.as_str(), &e.params, e.visible), (id, &want, true), "{keys}");
+        assert_eq!(st.items.len(), 2, "{keys}");
+    }
+}
+
+#[test]
+fn convert_to_shape_keeps_its_place_among_effects_and_its_visibility() {
+    let offset = basic("Adobe Offset Path", "2 /Int (jntp) ,\n4 /Real (mlim) ,\n4 /Real (ofst) ,\n");
+    let st = shape_style(&[shape(&format!("0 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}")), offset.clone()]);
+    assert!(st.plain, "{st:?}");
+    let ids: Vec<_> = st.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(ids, ["convertToShape.rectangle", "path.offsetPath"]);
+    // Offset Path is read on any object too.
+    assert!(st.simple);
+    // A hidden one stays, hidden, with its settings.
+    let hidden = shape(&format!("1 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}")).replacen("1 /Visible", "0 /Visible", 1);
+    let st = shape_style(&[hidden]);
+    assert!(st.plain && st.simple, "{st:?}");
+    let [e] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
+    assert_eq!(
+        (e.id.as_str(), e.visible, &e.params["radius"], &e.params["extraW"]),
+        ("convertToShape.roundedRectangle", false, &json!(15.0), &json!(40.0))
+    );
+}
+
+#[test]
+fn convert_to_shape_settings_that_arent_read_keep_the_drawn_look() {
+    let valid = format!("0 /Int (Shape) ,\n0 /Real (Absolute) ,\n{SIZES}");
+    assert!(shape_style(&[shape(&valid)]).plain);
+    for keys in [
+        // Another shape, a shape that isn't a whole number or an /Int, and a missing one.
+        valid.replace("0 /Int (Shape)", "3 /Int (Shape)"),
+        valid.replace("0 /Int (Shape)", "0.5 /Int (Shape)"),
+        valid.replace("0 /Int (Shape)", "0 /Real (Shape)"),
+        valid.replace("0 /Int (Shape) ,\n", ""),
+        // A mode other than 0 and 1, or a missing one.
+        valid.replace("0 /Real (Absolute)", "2 /Real (Absolute)"),
+        valid.replace("0 /Real (Absolute) ,\n", ""),
+        valid.replace("0 /Real (Absolute)", "0 /Int (Absolute)"),
+        // Sizes that aren't finite numbers, negative absolute sizes and radii, and huge ones.
+        valid.replace("20 /Real (RelWidth)", "NaN /Real (RelWidth)"),
+        valid.replace("6 /Real (RelHeight)", "1e999 /Real (RelHeight)"),
+        valid.replace("6 /Real (RelHeight)", "(x) /Real (RelHeight)"),
+        valid.replace("150 /Real (AbsWidth)", "-150 /Real (AbsWidth)"),
+        valid.replace("15 /Real (CornerRadius)", "-1 /Real (CornerRadius)"),
+        valid.replace("20 /Real (RelWidth)", "1e6 /Real (RelWidth)"),
+        valid.replace("40 /Real (AbsHeight)", "40 /Int (AbsHeight)"),
+        // A key that isn't read.
+        format!("{valid}1 /Real (Future) ,\n"),
+        format!("{valid}(x) /String (Future) ,\n"),
+        // A relative Ellipse.
+        valid.replace("0 /Int (Shape)", "2 /Int (Shape)"),
+    ] {
+        let st = shape_style(&[shape(&keys)]);
+        assert!(!st.plain, "{keys}: {st:?}");
+    }
+    // On one fill: the drawn look, for type too.
+    let item = compound("Chain Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), shape(&valid)]);
+    let data =
+        format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
+    assert!(!art_styles(data.as_bytes())["Odd"].plain);
 }

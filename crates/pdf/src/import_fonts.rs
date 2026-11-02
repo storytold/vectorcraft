@@ -19,6 +19,19 @@ use vectorcraft_text::{FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font
 /// a CJK document uses a few thousand characters).
 const MAX_GLYPHS: usize = 200_000;
 
+/// The licence flags (OS/2 `fsType`) of `a` and `b` that allow less: a restricted font beats one
+/// that may be embedded whole, which beats one that may be embedded as a subset. A font without
+/// flags reads as print and preview (4), as a font built from it does.
+fn stricter(a: Option<u16>, b: Option<u16>) -> Option<u16> {
+    use vectorcraft_text::embed::Embedding;
+    let rank = |f: Option<u16>| match Embedding::from_fs_type(f.unwrap_or(4)) {
+        Embedding::Subset => 0,
+        Embedding::Whole => 1,
+        Embedding::Forbidden => 2,
+    };
+    if rank(b) > rank(a) { b } else { a }
+}
+
 /// The glyphs gathered so far.
 #[derive(Default)]
 pub(crate) struct FileFontGlyphs {
@@ -42,6 +55,11 @@ impl FileFontGlyphs {
     /// The font of `family` and `style` (made with `info` the first time): its index.
     pub fn font(&mut self, family: &str, style: &str, info: impl FnOnce() -> FileFontInfo) -> usize {
         if let Some(&i) = self.index.get(&(family.to_string(), style.to_string())) {
+            // Two programs of one family and style share one font here: it takes the stricter
+            // of their licence flags, so a restricted one's glyphs never read as permitted.
+            if let Some(g) = self.fonts.get_mut(i) {
+                g.info.fs_type = stricter(g.info.fs_type, info().fs_type);
+            }
             return i;
         }
         let i = self.fonts.len();
@@ -100,4 +118,31 @@ pub(crate) fn program_facts(data: &[u8], index: u32) -> (Option<u16>, Option<(f6
     let (ascent, descent) = (f64::from(m.ascent) * k, f64::from(m.descent) * k);
     let metrics = (ascent.is_finite() && descent.is_finite() && ascent > 0.0 && descent <= 0.0).then_some((ascent, descent));
     (fs_type, metrics)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Two programs of one family and style are one font here, and its flags are the stricter
+    /// of theirs whichever came first (CodeRabbit, #4569).
+    #[test]
+    fn two_programs_of_one_font_keep_the_stricter_licence() {
+        for (first, second, want) in [
+            (Some(4), Some(2), Some(2)),
+            (Some(2), Some(4), Some(2)),
+            (None, Some(0x0200), Some(0x0200)),
+            (Some(4), Some(0x0108), Some(0x0108)),
+            (Some(0x0108), Some(2), Some(2)),
+            (Some(8), Some(4), Some(8)),
+            (None, None, None),
+        ] {
+            let mut g = FileFontGlyphs::default();
+            let info = |fs_type| move || FileFontInfo { family: "F".into(), style: "R".into(), postscript: "F-R".into(), ascent: 800.0, descent: -200.0, fs_type };
+            let a = g.font("F", "R", info(first));
+            let b = g.font("F", "R", info(second));
+            assert_eq!(a, b);
+            assert_eq!(g.fonts[a].info.fs_type, want, "{first:?} then {second:?}");
+        }
+    }
 }

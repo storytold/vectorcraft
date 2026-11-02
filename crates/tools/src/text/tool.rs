@@ -636,9 +636,15 @@ impl Tool for TypeTool {
             (Some(_), Some(held)) => held,
             _ => self.acting(m),
         };
-        if mode != Mode::Type && Self::path_at(cx, p, mode == Mode::Area).is_some() {
-            return Cursor::Crosshair;
+        // While type is being edited a click on a path only ends the editing.
+        let in_path = if self.editing.is_some() { None } else { Self::in_path(cx, p, mode) };
+        match (in_path, vertical) {
+            (Some((_, false)), false) => Cursor::TypeArea,
+            (Some((_, false)), true) => Cursor::TypeAreaVertical,
+            (Some((_, true)), false) => Cursor::TypeOnPath,
+            (Some((_, true)), true) => Cursor::TypeOnPathVertical,
+            (None, false) => Cursor::Text,
+            (None, true) => Cursor::TypeVertical,
         }
-        if vertical { Cursor::TypeVertical } else { Cursor::Text }
     }
 }

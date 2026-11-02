@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::state::{Dialog, DockTab, FloatingFlyout, FloatingPanels, UiState};
+use crate::state::{CustomToolbar, Dialog, DockTab, FloatingFlyout, FloatingPanels, UiState};
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
@@ -57,6 +57,9 @@ pub struct Workspace {
     /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
+    /// The toolbars made with New Toolbar in this workspace (built-in workspaces: none).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toolbars: Vec<CustomToolbar>,
 }
 
 impl Default for Workspace {
@@ -142,7 +145,8 @@ pub fn builtins() -> Vec<Workspace> {
 
 /// Preferences › Devices › Enable Touch Workspace (#394): on, a touch screen switches to the Touch
 /// workspace; off, or when no touch screen is reported, the workspace before that switch is
-/// restored if Touch was entered automatically.
+/// restored if Touch was entered automatically. Each switch keeps the layout it leaves and brings
+/// back the one it returns to as it was left, as Window › Workspace does.
 pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
     let auto = app.session.prefs.touch_workspace && touch_screen;
     if auto {
@@ -150,15 +154,13 @@ pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
             if app.ui.touch_workspace_restore.is_none() {
                 app.ui.touch_workspace_restore = Some(app.ui.workspace.clone());
             }
-            if let Some(w) = find(&app.ui, TOUCH) {
-                apply(&mut app.ui, &w);
-            }
+            // Touch is built in, so the switch finds it.
+            let _ = switch(&mut app.ui, TOUCH);
         }
     } else if app.ui.touch_workspace_restore.is_some() && app.ui.workspace == TOUCH {
         let back = app.ui.touch_workspace_restore.take().filter(|n| find(&app.ui, n).is_some()).unwrap_or_else(|| ESSENTIALS.to_string());
-        if let Some(w) = find(&app.ui, &back) {
-            apply(&mut app.ui, &w);
-        }
+        // `back` names a workspace that exists (or Essentials), so the switch finds it.
+        let _ = switch(&mut app.ui, &back);
     } else if !auto {
         app.ui.touch_workspace_restore = None;
     }
@@ -192,6 +194,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
         dock_width: ui.dock_width,
+        toolbars: ui.custom_toolbars.clone(),
     }
 }
 
@@ -217,6 +220,12 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.toolbar_pos = w.toolbar_pos;
     ui.dock_width = w.dock_width;
     crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
+    ui.custom_toolbars = w.toolbars.clone();
+    crate::custom_toolbars::sanitize(&mut ui.custom_toolbars);
+    // The drawer edits a toolbar of the workspace left: it closes.
+    if ui.drawer_toolbar.take().is_some() {
+        ui.tools_drawer = false;
+    }
     ui.flyout = None;
     ui.workspace = w.name.clone();
 }
@@ -246,8 +255,24 @@ pub fn switch(ui: &mut UiState, name: &str) -> Result<String, String> {
 pub fn reset(ui: &mut UiState) -> String {
     let w = find_saved(ui, &ui.workspace.clone()).unwrap_or_default();
     ui.workspace_changes.retain(|x| !x.name.eq_ignore_ascii_case(&w.name));
+    // The toolbars made with New Toolbar stay in the workspace they were made in.
+    let toolbars = std::mem::take(&mut ui.custom_toolbars);
     apply(ui, &w);
+    ui.custom_toolbars = toolbars;
     w.name
+}
+
+/// Keep the toolbars made with New Toolbar in the current workspace's changes, and nothing else of
+/// its layout that its changes do not already hold.
+fn keep_toolbars(ui: &mut UiState) {
+    let Some(saved) = find_saved(ui, &ui.workspace.clone()) else { return };
+    if let Some(w) = ui.workspace_changes.iter_mut().find(|x| x.name.eq_ignore_ascii_case(&saved.name)) {
+        w.toolbars = ui.custom_toolbars.clone();
+    } else if saved.toolbars != ui.custom_toolbars {
+        ui.workspace_changes.push(Workspace { toolbars: ui.custom_toolbars.clone(), ..saved });
+        let over = ui.workspace_changes.len().saturating_sub(64);
+        ui.workspace_changes.drain(..over);
+    }
 }
 
 /// A workspace by name as saved (user workspaces shadow nothing: names are unique across both lists).
@@ -279,7 +304,11 @@ pub fn save_as(ui: &mut UiState, name: &str) -> Result<(), String> {
         return Err(format!("`{name}` is a built-in workspace; choose another name"));
     }
     // The changes go into the workspace saved, which starts with none; the one left keeps the
-    // changes it had (none of these).
+    // changes it had (none of these), and the toolbars made with New Toolbar, which the workspace
+    // saved starts with a copy of.
+    if !ui.workspace.eq_ignore_ascii_case(name) {
+        keep_toolbars(ui);
+    }
     // A user workspace of that name in another case is replaced, as `find_saved` would find it.
     let w = capture(ui, name);
     match ui.custom_workspaces.iter_mut().find(|x| x.name.eq_ignore_ascii_case(name)) {
