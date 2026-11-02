@@ -150,15 +150,20 @@ pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
 /// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
 /// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
 /// too few for a low Fidelity to follow the hand (#3328). With `release`, the moves stop at that
-/// button's button-up in this frame, if it came: the moves after it are hover, and the last move
-/// before it is the pointer's position.
+/// button's button-up in this frame, if it came: the moves after it are hover, and the button-up's
+/// position is the pointer's. The last move before it is left out only when it is at that
+/// position; its tilt and rotation come second either way.
 pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<egui::PointerButton>) -> (Vec<FrameMove>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
-        // How many of the frame's moves came before the button-up, if it came.
+        // How many of the frame's moves came before the button-up, and where it came, if it came.
         let before_up = release.and_then(|b| {
-            let up = i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button, pressed: false, .. } if *button == b))?;
-            Some(i.events.iter().take(up).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count())
+            i.events.iter().enumerate().find_map(|(k, e)| match e {
+                egui::Event::PointerButton { pos, button, pressed: false, .. } if *button == b => {
+                    Some((i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count(), *pos))
+                }
+                _ => None,
+            })
         });
         let mut moves = vec![];
         if i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
@@ -181,10 +186,19 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
             moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None, None)) } else { None }).collect();
         }
         // Cut after pairing: the feed's samples pair with every move of the frame.
-        if let Some(n) = before_up {
-            moves.truncate(n);
-        }
-        let last_pose = moves.pop().and_then(|(_, _, q)| q);
+        // The pointer's position is the button-up's: a last move before it that is elsewhere
+        // stays a move. Its tilt and rotation are still the pose.
+        let last_pose = match before_up {
+            Some((n, up_at)) => {
+                moves.truncate(n);
+                let pose = moves.last().and_then(|&(_, _, q)| q);
+                if moves.last().is_some_and(|&(p, _, _)| p == up_at) {
+                    moves.pop();
+                }
+                pose
+            }
+            None => moves.pop().and_then(|(_, _, q)| q),
+        };
         // A burst of events (a stalled frame) is thinned to a bounded count.
         const MAX: usize = 64;
         if moves.len() > MAX {

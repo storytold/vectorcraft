@@ -6636,6 +6636,27 @@ fn frame_moves_stop_at_the_button_up() {
     assert_eq!(moves, [(a, None, None), (b, None, None), (c, None, None)], "without a release every move counts");
 }
 
+/// A button-up away from the last move before it keeps that move: the release takes only its own
+/// position, and the pose is still the last move's.
+#[test]
+fn frame_moves_keep_the_last_move_when_the_button_went_up_elsewhere() {
+    let ctx = egui::Context::default();
+    let (a, b, up_at, c) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(25.0, 35.0), pos2(30.0, 40.0));
+    let up = egui::Event::PointerButton { pos: up_at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c)];
+    let feed = StylusFeed::default();
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, PenPose::default())] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let release = Some(egui::PointerButton::Primary);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), release));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.4), Some(PenPose::default())), (b, Some(0.6), Some(at_b))], "the move before the button-up is kept");
+    assert_eq!(last, Some(at_b), "the pose is the last move's before the button-up");
+}
+
 #[test]
 fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let ctx = egui::Context::default();
