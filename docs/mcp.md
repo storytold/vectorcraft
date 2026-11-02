@@ -1643,9 +1643,10 @@ already walks Image Trace. Short agent entry points:
   line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
   rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
   a prefix defines a text variable. `dataset.export` writes a visibility variable's header as `#Shown` and an image
-  variable's as `@Photo`, and a text or graph variable's as its name alone. Its reply's `warning` names the text
-  variables whose names start with `#`, `@` or `%` and the graph variables, which an import into a document without
-  them does not read back with their kind. Export is refused, naming both variables, when a variable's header is
+  variable's as `@Photo`, and a text or graph variable's as its name alone. Its reply's `warning` names the variables
+  whose header or values make an import into a document without them refuse the file (a `%` header, a `#` header
+  whose values aren't true or false). Otherwise it names the variables that such an import does not read back with
+  their kind: text variables whose names start with `#` or `@`, and graph variables. Export is refused, naming both variables, when a variable's header is
   another variable's name (a visibility variable `Show` next to a text variable `#Show`). A prefixed cell whose name
   is already a variable of the prefix's kind names it;
   one whose name is a variable of another kind fails the import. A `%` cell that isn't a variable's exact name (graph

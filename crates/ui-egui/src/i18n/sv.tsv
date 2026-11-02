@@ -4381,6 +4381,7 @@ axis	Both	Båda
 @msg	variables are locked	variablerna är låsta
 @msg	variables that aren't text were left out: {kinds}	variabler som inte är text utelämnades: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	ett nytt dokument läser inte tillbaka dessa variabler med deras typ: {names}
+@msg	a new document refuses this file because of these variables: {names}	ett nytt dokument avvisar den här filen på grund av dessa variabler: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	rubriken `{header}` för `{name}` skulle läsas som variabeln `{other}`: byt namn på en av dem
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` och `options.{key}: {inner}` stämmer inte överens: ange alternativet bara en gång
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	filer i version {0} kan inte komprimeras: endast version {COMPRESSED_SINCE} och senare kan öppna komprimerade filer

@@ -4788,6 +4788,7 @@ imageTrace	Outline	Obrys
 @msg	variables are locked	proměnné jsou zamčené
 @msg	variables that aren't text were left out: {kinds}	proměnné, které nejsou textové, byly vynechány: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	nový dokument tyto proměnné nenačte zpět s jejich druhem: {names}
+@msg	a new document refuses this file because of these variables: {names}	nový dokument tento soubor kvůli těmto proměnným odmítne: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	záhlaví `{header}` pro `{name}` by se načetlo jako proměnná `{other}`: jednu z nich přejmenujte
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` a `options.{key}: {inner}` si odporují: zadejte volbu jen jednou
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	soubory verze {0} nelze komprimovat: komprimované soubory otevírá až verze {COMPRESSED_SINCE} a novější

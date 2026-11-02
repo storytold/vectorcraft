@@ -1313,12 +1313,39 @@ fn datasets_csv_export_marks_visibility_and_image_columns() {
     assert_eq!(value("Show"), Some(vectorcraft_doc::DataValue::Visible(false)));
     assert_eq!(value("Photo"), Some(vectorcraft_doc::DataValue::Image("a.png".into())));
 
-    for (name, kind) in [("#Tag", "text"), ("Chart", "graph"), ("@Note", "text"), ("%Rate", "text")] {
+    for (name, kind) in [("#Tag", "text"), ("Chart", "graph"), ("@Note", "text")] {
         s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
     }
     let out = s.execute("dataset.export", &json!({})).unwrap();
-    assert_eq!(out["warning"], "a new document won't read these variables back with their kind: `#Tag`, `Chart`, `@Note`, `%Rate`");
-    assert!(out["csv"].as_str().unwrap().starts_with("name,Name,#Show,@Photo,#Tag,Chart,@Note,%Rate\n"), "{out}");
+    assert_eq!(out["warning"], "a new document won't read these variables back with their kind: `#Tag`, `Chart`, `@Note`");
+    assert!(out["csv"].as_str().unwrap().starts_with("name,Name,#Show,@Photo,#Tag,Chart,@Note\n"), "{out}");
+}
+
+/// The export's `warning` names the variables whose column a document without the variables
+/// refuses, so it doesn't import the file: a `%` header, a `#` header whose values aren't true or
+/// false, and a header that names a variable an earlier column defined with another kind. A
+/// header that names such a variable with its kind is read with that kind, and is listed as one
+/// read back with another kind.
+#[test]
+fn datasets_csv_export_warns_of_headers_a_new_document_refuses() {
+    let export = |vars: &[(&str, &str)], values: Value| {
+        let mut s = session();
+        for (name, kind) in vars {
+            s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+        }
+        s.execute("dataset.new", &json!({"name": "A", "values": values})).unwrap();
+        let out = s.execute("dataset.export", &json!({})).unwrap();
+        let refused = session().execute("dataset.import", &json!({"csv": out["csv"]})).is_err();
+        (out["warning"].as_str().unwrap_or("").to_string(), refused)
+    };
+    let refuses = |names: &str| format!("a new document refuses this file because of these variables: {names}");
+    let loses = |names: &str| format!("a new document won't read these variables back with their kind: {names}");
+
+    assert_eq!(export(&[("%Rate", "text"), ("Chart", "graph")], json!({})), (refuses("`%Rate`"), true));
+    assert_eq!(export(&[("#Tag", "text")], json!({"#Tag": "hello"})), (refuses("`#Tag`"), true));
+    assert_eq!(export(&[("#Tag", "text")], json!({"#Tag": "yes"})), (loses("`#Tag`"), false));
+    assert_eq!(export(&[("#Seen", "text"), ("Seen", "image")], json!({})), (refuses("`Seen`"), true));
+    assert_eq!(export(&[("#Seen", "text"), ("Seen", "text")], json!({})), (loses("`#Seen`, `Seen`"), false));
 }
 
 /// `dataset.export` is refused, naming both variables, when a variable's header is another

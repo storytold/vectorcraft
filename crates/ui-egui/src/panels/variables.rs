@@ -489,9 +489,10 @@ mod tests {
         }
     }
 
-    /// Export Data Sets…'s warning about variables a new document doesn't read back with their
-    /// kind shows in the status bar, and so does its refusal of a header that is another
-    /// variable's name; both are translated in every language but English.
+    /// Export Data Sets…'s warnings about variables a new document doesn't read back with their
+    /// kind and about variables that make it refuse the file show in the status bar, and so does
+    /// its refusal of a header that is another variable's name; all three are translated in every
+    /// language but English.
     #[test]
     fn the_export_data_sets_warning_shows_in_the_status_bar() {
         use crate::i18n::{Lang, message};
@@ -503,6 +504,11 @@ mod tests {
         app.run("dataset.export", json!({"path": path})).unwrap();
         assert_eq!(app.ui.status, "a new document won't read these variables back with their kind: `#Tag`");
         let warning = app.ui.status.clone();
+        app.run("variable.define", json!({"name": "%Rate", "kind": "text"})).unwrap();
+        app.run("dataset.export", json!({"path": path})).unwrap();
+        assert_eq!(app.ui.status, "a new document refuses this file because of these variables: `%Rate`");
+        let refuses = app.ui.status.clone();
+        app.run("variable.delete", json!({"names": ["%Rate"]})).unwrap();
         app.run("variable.define", json!({"name": "Tag", "kind": "visibility"})).unwrap();
         assert!(app.run("dataset.export", json!({"path": path})).is_err());
         let refused = app.ui.status.clone();
@@ -513,6 +519,8 @@ mod tests {
         for l in langs {
             let shown = message(l, &warning);
             assert!(!shown.contains("won't read") && shown.contains("`#Tag`"), "{}: {shown}", l.code());
+            let shown = message(l, &refuses);
+            assert!(!shown.contains("refuses") && shown.contains("`%Rate`"), "{}: {shown}", l.code());
             let shown = message(l, &refused);
             assert!(!shown.contains("would read back") && shown.contains("`#Tag`") && shown.contains("`Tag`"), "{}: {shown}", l.code());
         }

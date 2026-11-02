@@ -4748,6 +4748,7 @@ imageTrace	Outline	Obris
 @msg	variables are locked	varijable su zaključane
 @msg	variables that aren't text were left out: {kinds}	izostavljene su varijable koje nisu tekst: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	novi dokument neće ponovo učitati ove varijable s njihovom vrstom: {names}
+@msg	a new document refuses this file because of these variables: {names}	novi dokument odbija ovu datoteku zbog ovih varijabli: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	zaglavlje `{header}` za `{name}` učitalo bi se kao varijabla `{other}`: preimenujte jednu od njih
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` i `options.{key}: {inner}` se ne slažu: navedite opciju jednom
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	datoteke verzije {0} ne mogu se komprimirati: komprimirane datoteke otvaraju samo verzija {COMPRESSED_SINCE} i novije

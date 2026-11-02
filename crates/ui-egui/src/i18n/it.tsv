@@ -4523,6 +4523,7 @@ axis	Both	Entrambi
 @msg	variables are locked	le variabili sono bloccate
 @msg	variables that aren't text were left out: {kinds}	le variabili che non sono di testo sono state escluse: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	un nuovo documento non rileggerà queste variabili con il loro tipo: {names}
+@msg	a new document refuses this file because of these variables: {names}	un nuovo documento rifiuta questo file a causa di queste variabili: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	l’intestazione `{header}` di `{name}` verrebbe riletta come la variabile `{other}`: rinomina una delle due
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` e `options.{key}: {inner}` non coincidono: indicare l'opzione una sola volta
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	i file della versione {0} non possono essere compressi: solo la versione {COMPRESSED_SINCE} e successive aprono file compressi

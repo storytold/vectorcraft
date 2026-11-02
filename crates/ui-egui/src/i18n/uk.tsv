@@ -4507,6 +4507,7 @@ axis	Both	Обидві
 @msg	variables are locked	змінні заблоковані
 @msg	variables that aren't text were left out: {kinds}	змінні, що не є текстовими, пропущено: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	новий документ не прочитає ці змінні назад з їхнім видом: {names}
+@msg	a new document refuses this file because of these variables: {names}	новий документ відхиляє цей файл через ці змінні: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заголовок `{header}` для `{name}` буде прочитано як змінну `{other}`: перейменуйте одну з них
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` і `options.{key}: {inner}` суперечать одне одному: вкажіть параметр лише один раз
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файли версії {0} не можуть бути стиснуті: тільки версія {COMPRESSED_SINCE} і новіші відкривають стислі файли

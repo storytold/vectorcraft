@@ -733,7 +733,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then one column per variable: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the text variables whose names start with #, @ or % and the graph variables: a document without them doesn't read them back with their kind",
+            "{path?} write every dataset as CSV (header: name, then one column per variable: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
             has_doc,
             dataset_export
         ),
