@@ -183,3 +183,23 @@ fn circles_and_ellipses_import_as_the_ellipse_drawn() {
     let far = &back[3].subpaths[0].anchors;
     assert!(far.len() == 4 && far[0].p.distance(Point::new(40_000_400.0, 0.0)) < 8.0, "{far:?}");
 }
+
+#[test]
+fn circles_import_without_changing_ids_or_style_matches() {
+    // The file's own ids stay unique: the `<use>` shows the rectangle, not the circle.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">
+        <circle cx="30" cy="30" r="20" fill="#0000ff"/>
+        <defs><rect id="vectorcraft-id-0" width="40" height="40" fill="#ff0000"/></defs>
+        <use xlink:href="#vectorcraft-id-0" x="120" y="120"/></svg>"##;
+    let img = render_artboard(&import(svg).unwrap());
+    assert_eq!(img.over_white(30, 30), [0, 0, 255]);
+    assert_eq!(img.over_white(140, 140), [255, 0, 0]);
+    // A style sheet's `[id]` selector still matches only the circle that has an id.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+        <style>circle[id] { fill: #ff0000 }</style>
+        <circle cx="30" cy="30" r="20" fill="#0000ff"/>
+        <circle id="named" cx="130" cy="30" r="20" fill="#0000ff"/></svg>"##;
+    let img = render_artboard(&import(svg).unwrap());
+    assert_eq!(img.over_white(30, 30), [0, 0, 255]);
+    assert_eq!(img.over_white(130, 30), [255, 0, 0]);
+}

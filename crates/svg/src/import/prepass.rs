@@ -40,6 +40,8 @@ pub(crate) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
+    /// The ids in the file and those made up, read when the first id is made up.
+    taken: Option<HashSet<String>>,
     /// Declarations added to elements' `style`s, by element: (where they go, whether the element
     /// has a `style` attribute, the declarations, XML-escaped).
     styles: HashMap<roxmltree::NodeId, (usize, bool, String)>,
@@ -50,7 +52,8 @@ impl Edits {
         self.list.push((at..at, text));
     }
 
-    /// The id of element `n` (in `svg`), made up and written in when it has none.
+    /// The id of element `n` (in `svg`), made up and written in when it has none. A made-up id is
+    /// one no element of the file has.
     pub(super) fn id(&mut self, svg: &str, n: XNode) -> String {
         if let Some(id) = n.attribute("id").filter(|id| !id.is_empty()) {
             return id.to_string();
@@ -58,7 +61,16 @@ impl Edits {
         if let Some(id) = self.ids.get(&n.id()) {
             return id.clone();
         }
-        let id = format!("{MADE_UP_ID}{}", self.ids.len());
+        let taken = self.taken.get_or_insert_with(|| n.document().descendants().filter_map(|e| e.attribute("id")).map(str::to_string).collect());
+        let mut i = self.ids.len();
+        let id = loop {
+            let id = format!("{MADE_UP_ID}{i}");
+            if !taken.contains(&id) {
+                break id;
+            }
+            i += 1;
+        };
+        taken.insert(id.clone());
         self.set(svg, n, "id", &id);
         self.ids.insert(n.id(), id.clone());
         id
@@ -119,7 +131,8 @@ impl Edits {
 ///   ([`user_events`]), and the `<script>` links are recorded ([`linked_scripts`]);
 /// * so do objects with attributes in other applications' namespaces ([`foreign`]);
 /// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
-///   number of curves, and they come back as the ellipse VectorCraft draws;
+///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
+///   style sheet has an `[id` selector);
 /// * linked files are read ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
@@ -134,7 +147,8 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
     let not = markers.contains(":not(");
     let events = SVG_EVENTS.iter().any(|e| markers.contains(e));
     let foreign_attrs = markers.contains("xmlns:") && has_foreign_attributes(xml);
-    let ellipses = ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
+    // An id would change what a style sheet's `[id]` selector matches: such files keep usvg's curves.
+    let ellipses = !markers.contains("[id") && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
     if !css_transform
         && !not
         && !events
