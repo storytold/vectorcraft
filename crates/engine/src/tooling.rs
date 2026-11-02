@@ -366,16 +366,22 @@ impl Session {
     /// Escape, as during a drag, for most tools), and a release returns the tool to rest. Of what
     /// the tool asks for along the way, only a cancel and a notify run, so a marquee selects
     /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
-    /// when the press began, and none of the press's changes to them are stored.
+    /// when the press began, and none of the press's changes to them are stored. The freeform
+    /// gradient point selected once the tool took the press is selected again.
     pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
         // Nothing to roll back without a document; the tool still drops the press and gets the release.
         let _ = self.cancel_interaction();
         let before = self.press_options.take();
+        let point = self.press_point.take();
         let mut acts = self.with_tool_cx(view, |t, cx| t.drop_press(cx));
         acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
         let dropped = self.take_tool_panic().and_then(|()| self.apply_actions(acts));
         let up = PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None };
         let r = dropped.and(self.pointer_event(&up, view, false));
+        // A drag out of the object previews the point's removal, which deselects it.
+        if let Some(p) = point {
+            self.freeform_point = p;
+        }
         if let Some((id, opts)) = before
             && id == self.tool.id()
         {
@@ -428,6 +434,11 @@ impl Session {
             }
             self.apply_actions(acts)
         });
+        match ev.kind {
+            PointerKind::Down => self.press_point = Some(self.freeform_point),
+            PointerKind::Up => self.press_point = None,
+            _ => {}
+        }
         if ev.kind == PointerKind::Up {
             self.give_back_tool(view)?;
         }

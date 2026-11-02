@@ -274,10 +274,11 @@ pub(super) fn release(cx: &ToolContext, a: Option<&Annotator>, g: Gesture, lines
     }
 }
 
-/// Escape during a drag: the point a drag-out deselected is selected again.
+/// Escape during a drag: the point a drag-out deselected is selected again, also when the drag
+/// came back inside the object.
 pub(super) fn cancel(g: &Gesture) -> Vec<Action> {
     match g.grab {
-        Grab::Point(i) if g.out => vec![Action::Cancel, select(Some(i))],
+        Grab::Point(i) if g.left => vec![Action::Cancel, select(Some(i))],
         _ => vec![Action::Cancel],
     }
 }
@@ -498,6 +499,11 @@ mod tests {
         // Escape mid-drag restores the point and its selection.
         t.pointer(&cx, &ev(PointerKind::Down, 120.0, 120.0));
         t.pointer(&cx, &ev(PointerKind::Drag, 60.0, 60.0));
+        assert_eq!(t.key(&cx, ToolKey::Escape, Default::default()), vec![Action::Cancel, select(Some(0))]);
+        // Also after the drag came back inside.
+        t.pointer(&cx, &ev(PointerKind::Down, 120.0, 120.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 60.0, 60.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 110.0, 110.0));
         assert_eq!(t.key(&cx, ToolKey::Escape, Default::default()), vec![Action::Cancel, select(Some(0))]);
     }
 

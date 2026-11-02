@@ -206,6 +206,9 @@ pub struct Session {
     /// The id and persistent options of the tool when the press under way began, which a dropped
     /// press puts back ([`Session::drop_tool_press`]).
     pub(crate) press_options: Option<(String, serde_json::Map<String, serde_json::Value>)>,
+    /// The freeform gradient point selected once the tool took the press under way, which a
+    /// dropped press selects again ([`Session::drop_tool_press`]).
+    pub(crate) press_point: Option<Option<(usize, cmd::gradient::StopOwner)>>,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
     /// Which selected type overflows its frame, for the ports every tool but the Type tools shows.
