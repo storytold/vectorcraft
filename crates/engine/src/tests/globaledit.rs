@@ -434,11 +434,15 @@ fn a_shift_click_on_a_highlighted_object_leaves_it_out() {
     let mut s = session();
     let [a, b, c, ..] = squares(&mut s);
     start(&mut s, a, json!({}));
-    // A Shift-drag that starts on the copy moves the selection and leaves the copy in.
+    // A Shift-drag that starts on the copy selects it and moves it with the selection, and leaves
+    // the copy in.
     shift_drag(&mut s, (350.0, 50.0), (390.0, 50.0));
     assert_eq!(members(&s), Some(vec![a, b, c]), "a drag leaves nothing out");
+    assert_eq!(s.doc().unwrap().selection.objects, [a, b]);
     assert!(bounds(&s, a).x0 > 0.0, "the selection moved: {:?}", bounds(&s, a));
+    assert!(bounds(&s, b).x0 > 300.0, "the copy moved with it: {:?}", bounds(&s, b));
     s.execute("edit.undo", &json!({})).unwrap();
+    sel(&mut s, &[a]);
     shift_click(&mut s, 350.0, 50.0);
     assert_eq!(members(&s), Some(vec![a, c]), "the copy is left out");
     assert_eq!(s.doc().unwrap().selection.objects, [a], "and not selected");

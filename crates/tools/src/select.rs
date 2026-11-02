@@ -74,9 +74,11 @@ enum State {
         /// guides: released without a drag, it becomes the key object that Align aligns to if
         /// `can_be_key` allows it (the key again: no key).
         key: Option<NodeId>,
-        /// Shift-pressed on this highlighted object of the Global Edit: released without a drag,
-        /// it leaves the Global Edit (`select.globalEditExclude`).
-        exclude: Option<NodeId>,
+        /// Shift-pressed on this highlighted object of the Global Edit, and the object the press
+        /// hit: released without a drag, the first leaves the Global Edit
+        /// (`select.globalEditExclude`); a drag selects the second and moves it with the
+        /// selection.
+        exclude: Option<(NodeId, NodeId)>,
     },
     Scaling {
         handle: Handle,
@@ -755,8 +757,8 @@ impl Tool for SelectionTool {
                     }
                 }
             }
-            (PointerKind::Drag, State::Moving { start, press, hold, began, .. }) => {
-                self.drag_moving(cx, p, m, ev.backquote, (start, press, hold, began))
+            (PointerKind::Drag, State::Moving { start, press, hold, began, exclude, .. }) => {
+                self.drag_moving(cx, p, m, ev.backquote, (start, press, hold, began), exclude)
             }
             (PointerKind::Drag, State::Scaling { handle, bx, areas }) => {
                 self.last_backquote = ev.backquote;
@@ -979,12 +981,12 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
 
 /// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object out of the selection
 /// when it is released, and a Shift-drag moves the selection, constrained. On an object of the
-/// Global Edit that is highlighted, the release leaves that object out of the edit instead.
-/// Returns the object to deselect and the object to leave out on release; adds to `out` the
-/// action that selects `top` at once.
-fn shift_press(cx: &ToolContext, h: &Hit, top: NodeId, out: &mut Vec<Action>) -> (Option<NodeId>, Option<NodeId>) {
+/// Global Edit that is highlighted, the release leaves that object out of the edit instead, and a
+/// drag selects `top` when it starts. Returns the object to deselect and the object to leave out
+/// on release (with `top`); adds to `out` the action that selects `top` at once.
+fn shift_press(cx: &ToolContext, h: &Hit, top: NodeId, out: &mut Vec<Action>) -> (Option<NodeId>, Option<(NodeId, NodeId)>) {
     if let Some(member) = global_edit_member(cx, h) {
-        (None, Some(member))
+        (None, Some((member, top)))
     } else if cx.selection.contains(top) {
         (Some(top), None)
     } else {
@@ -1088,14 +1090,14 @@ impl SelectionTool {
         began: bool,
         deselect: Option<NodeId>,
         key: Option<NodeId>,
-        exclude: Option<NodeId>,
+        exclude: Option<(NodeId, NodeId)>,
     ) -> Vec<Action> {
         self.state = State::Idle;
         self.measure = None;
         self.guides.clear();
         self.moving = None;
         // A Shift-click (no drag) on a highlighted object of the Global Edit leaves it out.
-        if let (false, Some(id)) = (began, exclude) {
+        if let (false, Some((id, _))) = (began, exclude) {
             self.last_move = None;
             return vec![Action::Exec("select.globalEditExclude".into(), json!({ "id": id.0 }))];
         }
@@ -1305,13 +1307,22 @@ impl SelectionTool {
         m: Mods,
         backquote: bool,
         (start, press, hold, began): (Point, Point, Point, bool),
+        exclude: Option<(NodeId, NodeId)>,
     ) -> Vec<Action> {
         let mut out = vec![];
         if !began {
             if p.distance(press) < Self::drag_threshold(cx) {
                 return out;
             }
+            // A Shift-drag from a highlighted object of the Global Edit selects it and moves it
+            // with the selection. `cx` still holds the selection without it, so the snap targets
+            // are gathered at the next drag event.
+            if let Some((_, top)) = exclude {
+                out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
+            }
             out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
+            self.moving = exclude.is_none().then(|| MoveSnap::new(cx));
+        } else if self.moving.is_none() {
             self.moving = Some(MoveSnap::new(cx));
         }
         let mut d = move_delta(start, p, m.shift, cx.constrain_angle);
