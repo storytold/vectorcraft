@@ -3771,6 +3771,8 @@ effect	Regular	Normalny
 	In the selected objects	W zaznaczonych obiektach
 	Find in Folder…	Znajdź w folderze…
 	Replace With Font	Zastąp czcionką
+	Replace With Font From	Zastąp czcionką z
+	System	System
 	  — substituted by {style}	  — zastąpiona przez {style}
 	  — {n} characters from another font	  — znaki z innej czcionki: {n}
 	All Scripts	Wszystkie skrypty

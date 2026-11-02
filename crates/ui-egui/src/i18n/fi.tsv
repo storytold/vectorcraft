@@ -3850,6 +3850,8 @@ effect	Regular	Normaali
 	In the selected objects	Valituissa objekteissa
 	Find in Folder…	Etsi kansiosta…
 	Replace With Font	Korvaa fontilla
+	Replace With Font From	Korvaavan fontin lähde
+	System	Järjestelmä
 	  — substituted by {style}	  — korvattu tyylillä {style}
 	  — {n} characters from another font	  — {n} merkkiä toisesta fontista
 	All Scripts	Kaikki kirjoitusjärjestelmät
