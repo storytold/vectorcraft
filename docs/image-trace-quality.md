@@ -1,5 +1,7 @@
 # Image Trace quality
 
+> **Update 2026-11-01:** photo preset provenance and desktop/WASM cost limits clarified; historical measurements retained.
+
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Auto Color keeps rare but distinct colours; earlier: Gradients: grown over noise and soft rims)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: large images trace with a warning; anchor limit raised to 8,000,000; earlier: Gradients: grown over noise and soft rims)
 > **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-17 · **Change:** minor (Image Trace: Raster::new returns an error for a buffer of the wrong length; earlier: Gradients: grown over noise and soft rims)
@@ -15,6 +17,43 @@ What Image Trace (`crates/trace`) makes of images whose right answer is known, m
 compared with the numbers before each change. Nothing here is a judgement by eye, and nothing is compared
 with any other product except the open tracer named under [Yardstick](#4-yardstick).
 
+
+## Photo presets in Full Tone
+
+High Fidelity Photo and Low Fidelity Photo used the Limited palette with 64 and 20 colours.
+This PR selects Full Tone at Colors 85 and 20
+(see [image-trace-adjustments.md](image-trace-adjustments.md)), with
+the same Paths, Corners, Noise and Method. Full Tone ignores the colour count: the colours follow the
+image's tones. Before → after, on code-drawn photo-like inputs; the tables further down are from before
+this change.
+
+Two 1000 × 1000 pictures (a two-way gradient with a soft glow and sensor noise; soft-edged shaded
+objects on a gradient backdrop with texture and noise), release build, 4 cores, best of 7:
+
+| image | preset | colours | paths | anchors | time |
+|:--|:--|--:|--:|--:|--:|
+| gradient with glow | High Fidelity Photo | 64 → 138 | 2833 → 6541 | 100266 → 212325 | 621 → 953 ms |
+| gradient with glow | Low Fidelity Photo | 20 → 12 | 233 → 101 | 15887 → 8513 | 268 → 224 ms |
+| photo-like | High Fidelity Photo | 58 → 112 | 2031 → 4175 | 141681 → 290192 | 733 → 1248 ms |
+| photo-like | Low Fidelity Photo | 20 → 28 | 228 → 475 | 20947 → 35850 | 317 → 405 ms |
+
+The historical quality harness (section 1's gradient and photo-like inputs, all sizes and variants; section 5's cost):
+
+| preset | ΔE | edge ΔE | paths | anchors | photo-like 1 MP | photo-like 4 MP |
+|:--|--:|--:|--:|--:|--:|--:|
+| High Fidelity Photo | 1.74 → 1.66 | 1.96 → 1.88 | 121.0 → 203.6 | 9931 → 16752 | 0.66 → 1.24 s, 116245 → 267193 anchors | 2.47 → 5.91 s, 334305 → 1074267 anchors, 136 → 137 MB |
+| Low Fidelity Photo | 2.44 → 3.43 | 2.68 → 3.64 | 37.1 → 18.8 | 2141 → 1214 | 0.40 → 0.31 s, 23061 → 18066 anchors | 1.32 → 1.31 s, 61753 → 72386 anchors, 136 → 135 MB |
+
+High Fidelity Photo follows the tones more closely (ΔE 1.74 to 1.66) at about twice the anchors and
+time; Low Fidelity Photo is coarser on smooth gradients (fewer colours where the tones are close, ΔE
+2.44 to 3.43) and keeps more colours where they are far apart. Flat art traced with either preset is
+unchanged on curved, plain and askew shapes, with slightly fewer anchors on polygons (17 to 16) and thin lines (348 to 320).
+
+
+These are historical pre-merge measurements from the original PR, not new measurements against
+current main. The Full Tone palette is an independent VectorCraft choice, not established by the
+tutorial's numbers. WASM retains the 2,000,000-anchor limit; desktop retains 8,000,000. Larger
+Full Tone traces may reach the guard sooner. No browser performance measurements are claimed.
 
 ## Auto Color keeps rare colours
 

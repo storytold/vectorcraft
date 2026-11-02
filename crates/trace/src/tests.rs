@@ -1247,7 +1247,8 @@ fn the_bands_of_a_gradient_stay_apart() {
 
 #[test]
 fn a_noisy_gradient_keeps_its_tones_without_specks() {
-    // Tones 0–255 across with noise larger than High Fidelity Photo's 64 steps are apart.
+    // Full Tone at Colors 85 spans about 21 channel levels per colour; the noisy 0–255
+    // ramp must retain at least 12 tones rather than meeting a fixed palette count.
     let img = Raster::from_fn(256, 96, |x, y| {
         let c = |k: u32| (f64::from(x) + 5.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
         [c(0), c(1), c(2), 255]
@@ -1257,7 +1258,7 @@ fn a_noisy_gradient_keeps_its_tones_without_specks() {
     // Smoothed first, the noise mixes fewer neighbouring tones into one (`quantize` alone works
     // on the picture as it is), and leaves no specks.
     let unsmoothed = quantize(&img, &params).palette.len();
-    assert!(res.palette.len() > unsmoothed && res.palette.len() >= 24, "{} colours, {unsmoothed} unsmoothed", res.palette.len());
+    assert!(res.palette.len() > unsmoothed && res.palette.len() >= 12, "{} colours, {unsmoothed} unsmoothed", res.palette.len());
     assert!(res.paths.len() <= 2 * res.palette.len(), "{} paths of {} colours", res.paths.len(), res.palette.len());
 }
 
@@ -2633,4 +2634,21 @@ fn noise_keeps_a_kept_rare_colours_regions_but_not_its_specks() {
     quantize::denoise_keeping(&mut b, w, h, 16, &[]);
     assert_eq!(a, b);
     assert!(a.iter().all(|&v| v == 0));
+}
+
+#[test]
+fn the_photo_presets_trace_in_full_tone() {
+    // Full Tone at Colors 85 (High Fidelity) and 20 (Low Fidelity), with their own Paths,
+    // Corners, Noise and Method; the enhanced versions keep the palette.
+    for (name, detail, paths, corners, noise) in [("High Fidelity Photo", 85.0, 90.0, 25.0, 4), ("Low Fidelity Photo", 20.0, 60.0, 50.0, 12)] {
+        for p in [preset(name).unwrap(), enhanced_preset(name).unwrap()] {
+            assert_eq!((p.mode, p.palette, p.color_detail), (Mode::Color, Palette::FullTone, detail), "{name}");
+            assert_eq!((p.paths, p.corners, p.noise, p.method), (paths, corners, noise, Method::Overlapping), "{name}");
+        }
+    }
+    // More detail, more colours: High Fidelity keeps more of a gradient's tones than Low Fidelity.
+    let img = gradient();
+    let high = trace(&img, &preset("High Fidelity Photo").unwrap()).palette.len();
+    let low = trace(&img, &preset("Low Fidelity Photo").unwrap()).palette.len();
+    assert!(high > low && low >= 2, "{high} vs {low} colours");
 }

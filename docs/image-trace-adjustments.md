@@ -26,6 +26,27 @@ so Undo also restores the panel values before its next frame. View can show the 
 Use **Expand** when finished to turn the result into ordinary editable vector objects;
 after expanding, the tracing settings are no longer available. **Release** restores the source.
 
+**Photo presets.** High Fidelity Photo and Low Fidelity Photo use Color / Full Tone at Colors
+85 and 20, with Paths 90 / 60, Corners 25 / 50, Noise 4 / 12 and Overlapping. These are
+VectorCraft's independent defaults for continuous-tone images, not verified values of another
+application's presets. Full Tone lets the image determine the colour count; its Colors setting
+controls tonal variability. In VectorCraft each colour box spans at most
+`96 − 88 × Colors/100` channel levels (about 21 at 85 and 78 at 20).
+
+The public [panel-options documentation](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html)
+describes Full Tone and its variability control. A [public tutorial](https://www.designbuckle.com/how-to-trace-an-image-in-illustrator/)
+mentions 85 and 20 but does **not** establish which palette those presets use. The choice of
+Full Tone here is ours; the tutorial is context, not proof of preset parity. No Adobe software,
+installed presets or Adobe output measurements were used for this update. Validation uses
+code-drawn inputs traced only by VectorCraft.
+
+High Fidelity can produce roughly twice as many anchors and take 50–70% longer on the historical
+1 MP inputs in [the quality report](image-trace-quality.md#photo-presets-in-full-tone). Those timings
+are historical native measurements, not browser measurements or a current-head benchmark.
+The existing memory guard remains **8,000,000 anchors on desktop and 2,000,000 on WASM**.
+Full Tone can reach it sooner; a refused trace should be retried with lower Colors or Paths,
+higher Noise, a smaller source image, or Low Fidelity Photo.
+
 **Auto Color** (the Automatic palette) counts flat art's colours by area, and also keeps colours too
 rare for that count when they are distinct and drawn as regions of their own (a stem, a highlight, a
 white beside a cream), at most six; scattered specks of a colour add none. Adobe does not document how
@@ -80,7 +101,9 @@ color is averaged down further: the factor doubles until at most 150,000 remain 
 most 16,384 pixels (at most six times). A trace that would
 make more than 8,000,000 anchor points (2,000,000 on the web) is refused to protect memory, with advice:
 raise Noise, lower Paths or Colors, or pick a lower-fidelity preset. A trace keeps
-about 90 bytes an anchor; a 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million.
+about 90 bytes an anchor. The earlier 1.9-million-anchor example for a 4000 × 3000 photo
+was measured with the Limited-palette High Fidelity Photo preset; it is not an estimate for the
+Full Tone default. See the historical cost comparisons above.
 **Tracing in the background.** On the desktop a trace runs on a thread of its own, so the window
 keeps answering while a photo or a large image is traced (#3098). Make, Make and Expand, the task
 bar's Image Trace and the panel's Trace and presets start it. The status bar says "Tracing the

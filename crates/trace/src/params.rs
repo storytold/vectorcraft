@@ -218,8 +218,11 @@ pub fn preset(name: &str) -> Option<TraceParams> {
         // many as its tones need where it is not.
         // (Color detail 85: a colour on a hundredth of the picture is still one of its colours.)
         "auto color" => TraceParams { palette: Palette::Automatic, color_detail: 85.0, ..color(6, 65.0, 60.0, 16, Method::Abutting) },
-        "high fidelity photo" => color(64, 90.0, 25.0, 4, Method::Overlapping),
-        "low fidelity photo" => color(20, 60.0, 50.0, 12, Method::Overlapping),
+        // VectorCraft choices for continuous tones, not verified values from another application.
+        // Public panel documentation describes Full Tone; the numeric tutorial alone does not
+        // establish a preset's palette. See docs/image-trace-adjustments.md for provenance.
+        "high fidelity photo" => TraceParams { palette: Palette::FullTone, color_detail: 85.0, ..color(64, 90.0, 25.0, 4, Method::Overlapping) },
+        "low fidelity photo" => TraceParams { palette: Palette::FullTone, color_detail: 20.0, ..color(20, 60.0, 50.0, 12, Method::Overlapping) },
         "3 colors" => color(3, 60.0, 60.0, 20, Method::Abutting),
         "6 colors" => color(6, 65.0, 60.0, 16, Method::Abutting),
         "16 colors" => color(16, 70.0, 55.0, 10, Method::Abutting),
