@@ -28,7 +28,7 @@
 //! layer's hidden objects go to a hidden layer of their own just above it, with `omit` they are
 //! left out, with `visible` they show where they are. Type is written as text the format's reader
 //! lays out again, in the fonts it names; `outlineText` writes its outlines instead (as type that
-//! 8-bit text can't hold always is).
+//! 8-bit text can't hold and type with rotated characters always are).
 
 use std::sync::Arc;
 

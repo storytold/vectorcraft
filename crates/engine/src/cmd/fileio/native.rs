@@ -121,7 +121,7 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "outlineText",
         ty: "boolean",
         default: "false",
-        description: "with aiVersion 7, type as its outlines instead of text (which apps reading the file set in the fonts it names: they need them installed); type 8-bit text can't hold (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is always outlines",
+        description: "with aiVersion 7, type as its outlines instead of text (which apps reading the file set in the fonts it names: they need them installed); type 8-bit text can't hold (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) and type with rotated characters are always outlines",
     },
 ];
 

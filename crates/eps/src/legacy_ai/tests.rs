@@ -1150,6 +1150,72 @@ fn type_8_bit_text_cant_hold_and_type_asked_for_as_outlines_are_outlines() {
     assert!(!out.warnings.iter().any(|w| w == TYPE), "{:?}", out.warnings);
 }
 
+/// A legacy `.ai` text object has no character rotation: point type and area type with a rotated
+/// character between ordinary ones (turned either way, shifted off the baseline and scaled) are
+/// written as their outlines, with the warning, and read back as paths where the laid-out glyphs
+/// are, the rotated character turned. A full turn writes text.
+#[test]
+fn type_with_rotated_characters_is_outlines_that_keep_the_rotation() {
+    use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
+    let typed = |turn: f64, area: bool| {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "HE", style(30.0, red()));
+        let turned = CharStyle { rotation: turn, baseline_shift: 4.0, h_scale: 120.0, v_scale: 80.0, ..style(30.0, red()) };
+        t.runs.push(TextRun::new("L", turned));
+        t.runs.push(TextRun::new("TH", style(30.0, red())));
+        if area {
+            t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)) };
+            t.xf = Affine::translate((20.0, 40.0));
+        }
+        t
+    };
+    // Each run's laid-out glyphs' box, in the document.
+    let boxes = |t: &TextObject| -> Vec<kurbo::Rect> {
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        (0..t.runs.len())
+            .map(|i| {
+                let mut bp = kurbo::BezPath::new();
+                for g in lay.glyphs.iter().filter(|g| g.run == i) {
+                    bp.extend(g.outline.iter());
+                }
+                bp.apply_affine(t.xf);
+                bp.bounding_box()
+            })
+            .collect()
+    };
+    let near = |a: kurbo::Rect, b: kurbo::Rect| (a.x0 - b.x0).abs().max((a.y0 - b.y0).abs()).max((a.x1 - b.x1).abs()).max((a.y1 - b.y1).abs());
+    for (turn, area) in [(30.0, false), (-45.0, true)] {
+        let t = typed(turn, area);
+        assert!(rotated(&t));
+        let want = boxes(&t);
+        let unturned = boxes(&typed(0.0, area));
+        assert!(near(want[1], unturned[1]) > 1.0, "the turn moves the glyph: {:?} {:?}", want[1], unturned[1]);
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == ROTATED_TYPE), "{:?}", out.warnings);
+        assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+        assert!(!String::from_utf8_lossy(&out.bytes).contains(" To\n"), "not a text object");
+        let back = crate::import(&out.bytes).unwrap().document;
+        assert!(texts(&back).is_empty(), "no type reads back");
+        let parts = children(&children(&back.layers[0])[0]);
+        assert_eq!(parts.len(), 3, "one compound path for each run");
+        for (i, part) in parts.iter().enumerate() {
+            let b = part.visual_bounds().unwrap();
+            assert!(near(b, want[i]) < 0.05, "run {i} at {turn}°: {b:?}, laid out at {:?}", want[i]);
+        }
+    }
+    // A full turn draws the character upright: text.
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(typed(360.0, false))));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    assert!(String::from_utf8_lossy(&out.bytes).contains(" To\n"), "a text object");
+    assert!(!out.warnings.iter().any(|w| w == ROTATED_TYPE), "{:?}", out.warnings);
+}
+
 /// Ruby (furigana), which a text object can't hold, makes type 8-bit text could hold outlines,
 /// with the reading's glyphs among them, where the canvas draws them (the file prints as the
 /// document draws).
