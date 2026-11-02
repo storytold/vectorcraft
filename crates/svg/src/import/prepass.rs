@@ -42,6 +42,8 @@ pub(crate) struct Edits {
     ids: HashMap<roxmltree::NodeId, String>,
     /// The ids in the file and those made up, read when the first id is made up.
     taken: Option<HashSet<String>>,
+    /// The number the next made-up id is tried with: the numbers below it are made up or taken.
+    next: usize,
     /// Declarations added to elements' `style`s, by element: (where they go, whether the element
     /// has a `style` attribute, the declarations, XML-escaped).
     styles: HashMap<roxmltree::NodeId, (usize, bool, String)>,
@@ -62,13 +64,12 @@ impl Edits {
             return id.clone();
         }
         let taken = self.taken.get_or_insert_with(|| n.document().descendants().filter_map(|e| e.attribute("id")).map(str::to_string).collect());
-        let mut i = self.ids.len();
         let id = loop {
-            let id = format!("{MADE_UP_ID}{i}");
+            let id = format!("{MADE_UP_ID}{}", self.next);
+            self.next += 1;
             if !taken.contains(&id) {
                 break id;
             }
-            i += 1;
         };
         taken.insert(id.clone());
         self.set(svg, n, "id", &id);
@@ -414,4 +415,26 @@ pub(super) fn labels(xml: &roxmltree::Document) -> HashMap<String, String> {
             Some((id.to_string(), name.to_string()))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A file that already holds the made-up ids does not make each new id try them all again:
+    /// 5,000 ids made up past 50,000 taken ones take a moment, not 250 million tries.
+    #[test]
+    fn made_up_ids_skip_the_taken_ones_once() {
+        let taken: String = (0..50_000).map(|i| format!("<g id=\"{MADE_UP_ID}{i}\"/>")).collect();
+        let bare = "<rect/>".repeat(5_000);
+        let svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{taken}{bare}</svg>");
+        let doc = roxmltree::Document::parse(&svg).unwrap();
+        let rects: Vec<XNode> = doc.descendants().filter(|n| n.has_tag_name("rect")).collect();
+        let mut edits = Edits::default();
+        let start = std::time::Instant::now();
+        let ids: Vec<String> = rects.iter().map(|n| edits.id(&svg, *n)).collect();
+        assert!(start.elapsed() < std::time::Duration::from_secs(1), "{:?}", start.elapsed());
+        assert_eq!(ids.first().map(String::as_str), Some(format!("{MADE_UP_ID}50000").as_str()));
+        assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
+    }
 }
