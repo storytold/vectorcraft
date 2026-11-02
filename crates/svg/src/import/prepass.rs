@@ -28,6 +28,9 @@ pub(super) struct Found {
     pub(super) scripts: Vec<String>,
     /// Ids of the `<g>` elements marked as layers ([`marked_layer`]).
     pub(super) sublayers: HashSet<String>,
+    /// Ids of the `<circle>` and `<ellipse>` elements, which come back as the ellipse VectorCraft
+    /// draws ([`drawn_ellipse`](super::convert::drawn_ellipse)).
+    pub(super) ellipses: HashSet<String>,
     pub(super) warnings: Vec<String>,
 }
 
@@ -115,6 +118,8 @@ impl Edits {
 /// * objects with event attributes get an id when they have none, recorded with them
 ///   ([`user_events`]), and the `<script>` links are recorded ([`linked_scripts`]);
 /// * so do objects with attributes in other applications' namespaces ([`foreign`]);
+/// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
+///   number of curves, and they come back as the ellipse VectorCraft draws;
 /// * linked files are read ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
@@ -129,10 +134,12 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
     let not = markers.contains(":not(");
     let events = SVG_EVENTS.iter().any(|e| markers.contains(e));
     let foreign_attrs = markers.contains("xmlns:") && has_foreign_attributes(xml);
+    let ellipses = ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
     if !css_transform
         && !not
         && !events
         && !foreign_attrs
+        && !ellipses
         && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode", "script"]
             .iter()
             .any(|t| markers.contains(t))
@@ -168,6 +175,11 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
             if !events.is_empty() {
                 found.events.insert(edits.id(svg, e), events);
             }
+        }
+    }
+    if ellipses {
+        for e in elements().filter(|e| matches!(e.tag_name().name(), "circle" | "ellipse")) {
+            found.ellipses.insert(edits.id(svg, e));
         }
     }
     if markers.contains("script") {
