@@ -52,9 +52,9 @@ impl Homography {
 
     /// Map a point; `None` when it lands on or beyond the horizon (w at most 1e-9 times the largest
     /// magnitude in the map's `w` row, so the answer is the same at any scale of the map), or when
-    /// it does not map to a finite page point.
+    /// it does not map to a finite page point. The point is mapped through [`Self::upscaled`].
     pub fn apply(&self, p: Point) -> Option<Point> {
-        let m = &self.0;
+        let m = self.upscaled();
         let x = m[0][0] * p.x + m[0][1] * p.y + m[0][2];
         let y = m[1][0] * p.x + m[1][1] * p.y + m[1][2];
         let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
@@ -64,6 +64,15 @@ impl Homography {
         }
         let q = Point::new(x / w, y / w);
         q.is_finite().then_some(q)
+    }
+
+    /// The entries, multiplied by the power of two that brings the largest magnitude to at least
+    /// 1/2 and below 1 when every entry is below 1/2 in magnitude (an exact step that keeps a map
+    /// at a tiny scale from losing precision to subnormal products), and unchanged otherwise.
+    fn upscaled(&self) -> [[f64; 3]; 3] {
+        let largest = self.0.iter().flatten().fold(0.0_f64, |k, v| k.max(v.abs()));
+        let e = frexp(largest).1.min(0);
+        self.0.map(|row| row.map(|v| ldexp(v, -e)))
     }
 
     pub fn det(&self) -> f64 {
@@ -252,7 +261,7 @@ impl Homography {
     /// The affine map that matches `self` to first order at `p` (its derivative there), `None`
     /// beyond the horizon or when the derivative is not finite.
     pub fn affine_at(&self, p: Point) -> Option<Affine> {
-        let m = &self.0;
+        let m = self.upscaled();
         let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
         let q = self.apply(p)?;
         // d(x/w) = (dx − (x/w)·dw) / w, and the same for y.
@@ -551,6 +560,27 @@ mod tests {
                     assert!((v - want).abs() <= 1e-12 * size, "{f}: {id:?}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn a_map_at_a_tiny_scale_maps_points_as_at_unit_scale() {
+        for f in [5e-324, 1e-300] {
+            let h = Homography(Homography::IDENTITY.0.map(|row| row.map(|v| v * f)));
+            assert_eq!(Homography::from_array(h.to_array()), Some(h), "{f}");
+            for p in [Point::new(0.5, 0.5), Point::new(1e-20, 1e-20)] {
+                let q = h.apply(p).unwrap_or_else(|| panic!("{f}: {p:?}"));
+                assert!((q.x - p.x).abs() <= 1e-12 * p.x && (q.y - p.y).abs() <= 1e-12 * p.y, "{f}: {p:?} -> {q:?}");
+            }
+        }
+        // A perspective map whose entries are exact at 2^-1060 times their size, so the scaled
+        // copy holds the same map.
+        let unit = Homography([[1.0, 0.0, 2.0], [0.0, 1.0, 3.0], [0.5, 0.25, 1.0]]);
+        let tiny = Homography(unit.0.map(|row| row.map(|v| v * pow2(-1022) * pow2(-38))));
+        let p = Point::new(0.3, 0.7);
+        let (a, b) = (tiny.affine_at(p).unwrap(), unit.affine_at(p).unwrap());
+        for (u, v) in a.as_coeffs().iter().zip(b.as_coeffs()) {
+            assert!((u - v).abs() <= 1e-12 * v.abs().max(1.0), "{a:?} {b:?}");
         }
     }
 
