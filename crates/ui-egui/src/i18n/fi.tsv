@@ -5691,6 +5691,9 @@ axis	Y Axis	Y-akseli
 	New Set	Uusi sarja
 	Set Options…	Sarjan asetukset…
 	Set Options	Sarjan asetukset
+	Action Options…	Toiminnon asetukset…
+	Action Options	Toiminnon asetukset
+	Rename Action	Nimeä toiminto uudelleen
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset

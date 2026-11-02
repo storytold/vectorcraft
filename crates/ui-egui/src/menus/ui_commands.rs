@@ -1114,6 +1114,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Package for the saved document (dialog `package`: folder, name, copyLinks, linksFolder, relink, copyFonts, report; a document never saved asks to Save As first); OK saves unsaved changes, runs file.package (the web downloads the zip) and offers file.showPackage",
     ),
     (
+        crate::panels::actions::RENAME_ACTION,
+        "Rename Action",
+        "",
+        "{set: index, action: index, name} rename the Actions panel's action at action in set (0 is the top set) to name, with spaces trimmed from both ends; its steps stay. The panel menu's Action Options… (dialog `actionSetOptions` with set, action and name) runs this for the selected action. An index past the last set or action, or an empty name, is an error and renames nothing → {name}",
+    ),
+    (
         "ui.batchDialog",
         "Batch…",
         "",
