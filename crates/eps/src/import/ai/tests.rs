@@ -1035,6 +1035,173 @@ fn previewless_placement_records_box_corner_as_alternative() {
     assert_ne!(r.unread_elsewhere[0].1, r.doc.node(r.unread[0].0).unwrap().visual_bounds().unwrap());
 }
 
+/// Editing data in the version 7 format (§2): art size 200 × 100 around the template box's centre
+/// (0, 0), then `body`.
+fn stream7(body: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: test\n%%BoundingBox: 0 0 200 100\n%AI5_FileFormat 2.0\n%AI5_ArtSize: 200 100\n\
+         %AI3_TemplateBox: 0 0 0 0\n%%EndComments\n%%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{body}\n\
+         %%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n"
+    )
+}
+
+/// One layer of the version 7 format (ten operands before `Lb`), showing or not, holding `art`.
+fn layer7(visible: bool, art: &str) -> String {
+    format!("%AI5_BeginLayer\n{} 1 1 1 0 0 1 79 128 255 Lb\n(L) Ln\n0 A\n{art}\nLB\n%AI5_EndLayer--\n", u8::from(visible))
+}
+
+fn read7(visible: bool, art: &str) -> Result<Structure, String> {
+    read(stream7(&layer7(visible, art)).as_bytes())
+}
+
+/// The placed file's box (`llx lly urx ury`) taken by `matrix` into the document: where the
+/// version 7 format puts it (§16.1).
+fn placed_box(r: &Structure, matrix: [f64; 6], b: [f64; 4]) -> Rect {
+    (r.to_doc * kurbo::Affine::new(matrix)).transform_rect_bbox(Rect::new(b[0], b[1], b[2], b[3]))
+}
+
+/// The placeholder's bounds and the other bounds [`Structure::unread_elsewhere`] keeps for it.
+fn placeholder_boxes(r: &Structure) -> Vec<Rect> {
+    let id = r.unread[0].0;
+    let mut boxes = vec![r.doc.node(id).unwrap().visual_bounds().unwrap()];
+    boxes.extend(r.unread_elsewhere.iter().filter(|(o, _)| *o == id).map(|(_, b)| *b));
+    boxes
+}
+
+fn near(a: Rect, b: Rect) -> bool {
+    [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|d| d.abs() < 1e-6)
+}
+
+#[test]
+fn version7_placed_files_are_read_without_a_begin_place() {
+    // `~` was an operator the reader didn't know, so the file's layers weren't read.
+    let matrices = [
+        [1.0, 0.0, 0.0, 1.0, 10.0, 20.0],
+        [2.0, 0.0, 0.0, 0.5, -5.0, 3.0],
+        [-1.29904, 0.75, 0.375, 0.649519, 125.8461, 159.7668],
+        [-1.0, 0.0, 0.0, 1.0, 100.0, 0.0],
+    ];
+    for m in matrices {
+        for extra in ["", " 4 4 0"] {
+            let [a, b, c, d, e, f] = m;
+            let body = format!(
+                "[{a} {b} {c} {d} {e} {f}] 10 20 50 50{extra} (art.eps) `\n%%IncludeFile: art.eps\n~\n{RED}{}f",
+                rect_path(0.0, 0.0, 5.0, 5.0)
+            );
+            let r = read7(true, &body).unwrap_or_else(|e| panic!("{m:?}{extra}: {e}"));
+            assert_eq!(art_kinds(&r.doc), ["path", "path"], "{m:?}{extra}: a placeholder, then the path after it");
+            assert_unread(&r, "placed files");
+            let want = placed_box(&r, m, [10.0, 20.0, 50.0, 50.0]);
+            assert!(placeholder_boxes(&r).iter().any(|b| near(*b, want)), "{m:?}{extra}: {:?} {want:?}", placeholder_boxes(&r));
+        }
+    }
+}
+
+/// The kinds of the first layer's objects.
+fn art_kinds(doc: &Document) -> Vec<&'static str> {
+    art(doc)
+        .iter()
+        .map(|n| match n.kind {
+            NodeKind::Group { .. } => "group",
+            NodeKind::Path { .. } => "path",
+            NodeKind::Image(_) => "image",
+            _ => "other",
+        })
+        .collect()
+}
+
+#[test]
+fn version7_placed_file_included_whole_is_read() {
+    // The included document's operators, a `~`, a nested document and counted data in it aren't
+    // the editing data's.
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor frobnicate ~\n\
+               %%BeginDocument: inner.eps\n~\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n%%EOF\n";
+    let body = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
+    let r = read7(true, &body).unwrap();
+    assert_eq!(art_kinds(&r.doc), ["path"]);
+    assert_unread(&r, "placed files");
+    // One that doesn't end leaves the layer without its end.
+    let cut = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}~\n");
+    assert!(read7(true, &cut).is_err());
+}
+
+#[test]
+fn version7_placed_file_without_a_file_is_read() {
+    // `` ` `` followed by `~`: a placed file whose file isn't there.
+    let r = read7(true, "[1 0 0 1 10 20] 10 20 50 50 (gone.eps) `\n~\n").unwrap();
+    assert_unread(&r, "placed files");
+    // In a hidden layer it is left out, with a note.
+    let r = read7(false, "[1 0 0 1 10 20] 10 20 50 50 (gone.eps) `\n%%IncludeFile: gone.eps\n~\n").unwrap();
+    assert!(r.unread.is_empty() && art(&r.doc).is_empty());
+    assert!(r.hidden_unread.contains("placed files"), "{:?}", r.hidden_unread);
+}
+
+#[test]
+fn version7_placed_file_in_a_group_keeps_its_place() {
+    // In a group, the group is what isn't read.
+    let body = format!("u\n{RED}{}f\n[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%IncludeFile: art.eps\n~\nU\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let r = read7(true, &body).unwrap();
+    assert_eq!(art_kinds(&r.doc), ["group"]);
+    assert_eq!(r.unread.iter().map(|(id, kinds)| (*id, kinds.clone())).collect::<Vec<_>>(), [(art(&r.doc)[0].id, vec!["placed files".to_string()])]);
+    // A locked one keeps its lock.
+    let r = read7(true, "1 A\n[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%IncludeFile: art.eps\n~\n").unwrap();
+    assert_unread(&r, "placed files");
+    assert!(r.doc.node(r.unread[0].0).unwrap().locked);
+}
+
+#[test]
+fn placed_file_operands_of_another_shape_arent_read() {
+    for operands in [
+        // Five numbers in the matrix, three box numbers, two extra numbers, no path, a name for the
+        // path, a number that isn't finite.
+        "[1 0 0 1 10] 10 20 50 50 (a.eps)",
+        "[1 0 0 1 10 20] 10 20 50 (a.eps)",
+        "[1 0 0 1 10 20] 10 20 50 50 4 4 (a.eps)",
+        "[1 0 0 1 10 20] 10 20 50 50",
+        "[1 0 0 1 10 20] 10 20 50 50 /a.eps",
+        "[1 0 0 1 10 20] 10 20 50 1e999 (a.eps)",
+    ] {
+        // Without a box to put a placeholder in, the file isn't read.
+        let e = read7(true, &format!("{operands} `\n~\n")).err().unwrap_or_default();
+        assert!(e.contains("placed files"), "{operands}: {e}");
+    }
+}
+
+#[test]
+fn a_placed_file_with_a_zero_area_box_or_a_second_tick_isnt_read() {
+    for body in [
+        "[1 0 0 1 10 20] 10 20 10 50 (a.eps) `\n~\n",
+        // The operands of a second `` ` `` before `~` don't take the first one's place.
+        "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `\n[1 0 0 1 0 0] 0 0 5 5 (b.eps) `\n~\n",
+    ] {
+        let e = read7(true, body).err().unwrap_or_default();
+        assert!(e.contains("placed files"), "{body}: {e}");
+    }
+    // A `%AI5_BeginPlace` while one is open: the open one isn't read either.
+    let body = "%AI5_BeginPlace\n[1 0 0 1 10 20] 10 20 50 50 (a.eps) `\n%AI5_BeginPlace\n[1 0 0 1 0 0] 0 0 5 5 (b.eps) `\n~\n%AI5_EndPlace\n";
+    assert!(read7(true, body).err().unwrap_or_default().contains("placed files"));
+    let r = read7(false, body).unwrap();
+    assert!(r.hidden_unread.contains("placed files") && art(&r.doc).is_empty());
+    // One that no `~` ends isn't read; a hidden one, or one on a layer that doesn't show, is left
+    // out with a note.
+    let open = "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `\n";
+    assert!(read7(true, &format!("%AI5_BeginPlace\n{open}")).err().unwrap_or_default().contains("placed files"));
+    assert!(read7(true, open).err().unwrap_or_default().contains("placed files"));
+    for (visible, art) in [(true, format!("%_%AI5_BeginPlace\n%_{open}")), (true, format!("%_{open}")), (false, open.to_string())] {
+        let r = read7(visible, &art).unwrap_or_else(|e| panic!("{art}: {e}"));
+        assert!(r.hidden_unread.contains("placed files"), "{art}: {:?}", r.hidden_unread);
+    }
+}
+
+#[test]
+fn a_tilde_without_a_placed_file_is_an_unknown_operator() {
+    let e = read7(true, "~\n").err().unwrap_or_default();
+    assert!(e.contains('~'), "{e}");
+    // An apostrophe isn't the placed file's operator.
+    let e = read7(true, "[1 0 0 1 10 20] 10 20 50 50 (a.eps) '\n~\n").err().unwrap_or_default();
+    assert!(e.contains('\''), "{e}");
+}
+
 /// A previewless locked placement keeps its edit lock on the page-art placeholder.
 #[test]
 fn previewless_placement_placeholder_inherits_lock() {

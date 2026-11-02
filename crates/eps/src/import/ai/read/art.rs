@@ -503,7 +503,11 @@ impl<'a> Reader<'a> {
     /// without a preview, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
         let (m, b, path, png, w, h) = match self.place.take() {
-            Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)) }) if !path.is_empty() => (m, b, path, png, w, h),
+            Some(Place { broken: true, .. }) => {
+                self.unreadable("placed files", hidden);
+                return Ok(());
+            }
+            Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)), .. }) if !path.is_empty() => (m, b, path, png, w, h),
             other => {
                 let boxed = other.as_ref().and_then(|p| Some((p.matrix?, p.bounds?))).filter(|(_, b)| sane(*b) && b.area() > 0.0);
                 let mut have_bounds = false;

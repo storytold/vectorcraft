@@ -312,7 +312,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 }
                 continue;
             }
-            Tok::Comment(_) | Tok::Data(_) | Tok::Preview(_) => {}
+            Tok::Comment(_) | Tok::Data(_) | Tok::Preview(_) | Tok::Document(_) => {}
         }
         if operands.len() > 64 {
             operands.clear();

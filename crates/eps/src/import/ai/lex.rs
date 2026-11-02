@@ -8,6 +8,9 @@
 //!   line starts a comment that is skipped.
 //! - The binary image data after `%%BeginData:` is one [`Tok::Data`]; the binary preview of a placed
 //!   file is one [`Tok::Preview`].
+//! - A document included whole (`%%BeginDocument:` … `%%EndDocument` lines, DSC 3.0 p. 68, nested
+//!   ones counted, the counted payloads of `%%BeginData:` and `%%BeginBinary:` inside skipped) is
+//!   one [`Tok::Document`].
 
 use super::super::lex::{find, hex_decode};
 
@@ -29,6 +32,9 @@ pub(super) enum Tok<'a> {
     Data(&'a [u8]),
     /// A placed file's preview: what is between `%AI26_BeginPlacedObjectPreview` and its end.
     Preview(&'a [u8]),
+    /// A document included whole: what is between `%%BeginDocument:`'s line and the line of the
+    /// `%%EndDocument` that ends it, or `None` when none does (the rest of the data is skipped).
+    Document(Option<&'a [u8]>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -42,7 +48,7 @@ pub(super) struct Token<'a> {
 const PREVIEW: (&[u8], &[u8]) = (b"%AI26_BeginPlacedObjectPreview", b"%AI26_EndPlacedObjectPreview");
 /// A placed file's markers, which a hidden one has on `%_` lines.
 const PLACE: [&[u8]; 2] = [b"%AI5_BeginPlace", b"%AI5_EndPlace"];
-/// A binary section skipped whole: (begin, end) markers.
+/// A document included whole: (begin, end) markers.
 const DOCUMENT: (&[u8], &[u8]) = (b"%%BeginDocument", b"%%EndDocument");
 
 fn is_space(b: u8) -> bool {
@@ -87,6 +93,18 @@ impl<'a> Lexer<'a> {
         let n = rest.iter().position(|b| is_eol(*b)).unwrap_or(rest.len());
         self.pos += n;
         rest.get(..n).unwrap_or_default()
+    }
+
+    /// [`Self::line`], the position moved past its end too (`\r`, `\n` or `\r\n`).
+    fn whole_line(&mut self) -> &'a [u8] {
+        let line = self.line();
+        if self.peek() == Some(b'\r') {
+            self.pos += 1;
+        }
+        if self.peek() == Some(b'\n') {
+            self.pos += 1;
+        }
+        line
     }
 
     /// Where the next token is looked for.
@@ -180,13 +198,15 @@ impl<'a> Lexer<'a> {
     /// The token a comment line stands for when it starts a section read differently: image data
     /// (`%%BeginData:` followed by `XI`), a placed file's preview and skipped binary sections.
     fn special(&mut self, line: &'a [u8]) -> Option<Token<'a>> {
-        if let Some((_, end)) = [PREVIEW, DOCUMENT].iter().find(|(b, _)| line.starts_with(b)) {
+        if line.starts_with(PREVIEW.0) {
             let from = self.pos;
-            let after = find(self.rest(), end).map_or(self.src.len(), |i| self.pos + i);
+            let after = find(self.rest(), PREVIEW.1).map_or(self.src.len(), |i| self.pos + i);
             self.pos = after;
             self.line();
-            let tok = if *end == PREVIEW.1 { Tok::Preview(self.slice(from, after)) } else { Tok::Comment(line.get(1..).unwrap_or_default()) };
-            return Some(Token { tok, hidden: false });
+            return Some(Token { tok: Tok::Preview(self.slice(from, after)), hidden: false });
+        }
+        if line.starts_with(DOCUMENT.0) {
+            return Some(Token { tok: Tok::Document(self.document()), hidden: false });
         }
         let n = line.strip_prefix(b"%%BeginData:")?;
         let n: usize = std::str::from_utf8(n).ok()?.split_whitespace().next()?.parse().ok()?;
@@ -219,6 +239,55 @@ impl<'a> Lexer<'a> {
         let samples = self.src.get(data..end).unwrap_or_default();
         let samples = if hidden { samples.strip_suffix(b"%_").unwrap_or(samples) } else { samples };
         Some(Token { tok: Tok::Data(samples), hidden: false })
+    }
+
+    /// After a `%%BeginDocument:` line: the document up to the start of the `%%EndDocument` line
+    /// that ends it, the position moved past that line. A `%%BeginDocument:` line inside starts a
+    /// nested document, and the bytes a `%%BeginData:` or `%%BeginBinary:` line inside counts are
+    /// skipped (DSC 3.0 pp. 68 and 72): a marker in them ends nothing. `None` when no line ends it:
+    /// the position moves to the end of the data.
+    fn document(&mut self) -> Option<&'a [u8]> {
+        // The rest of the `%%BeginDocument:` line is its end; the line after the document starts
+        // tokens afresh (not hidden unless it starts with `%_`).
+        self.whole_line();
+        self.hidden = false;
+        let from = self.pos;
+        let mut depth = 0usize;
+        while self.pos < self.src.len() {
+            let start = self.pos;
+            // A hidden object's document is on `%_` lines.
+            let line = self.whole_line();
+            let line = line.strip_prefix(b"%_").unwrap_or(line);
+            if line.starts_with(DOCUMENT.1) {
+                if depth == 0 {
+                    return Some(self.slice(from, start));
+                }
+                depth -= 1;
+            } else if line.starts_with(DOCUMENT.0) {
+                depth = depth.saturating_add(1);
+            } else if let Some(n) = line.strip_prefix(b"%%BeginData:").or_else(|| line.strip_prefix(b"%%BeginBinary:")) {
+                self.skip_counted(n);
+            }
+        }
+        None
+    }
+
+    /// Skip what a `%%BeginData:` or `%%BeginBinary:` comment counts (`n`, its text after the
+    /// colon): `count [type [Bytes|Lines]]`, bytes unless it says `Lines`.
+    fn skip_counted(&mut self, n: &[u8]) {
+        let mut words = std::str::from_utf8(n).unwrap_or_default().split_whitespace();
+        let Some(count) = words.next().and_then(|c| c.parse::<usize>().ok()) else { return };
+        if words.nth(1).is_some_and(|unit| unit.eq_ignore_ascii_case("lines")) {
+            for _ in 0..count {
+                if self.pos >= self.src.len() {
+                    break;
+                }
+                self.whole_line();
+            }
+        } else {
+            // The count starts after the comment's line end, which `document` has passed.
+            self.pos = self.pos.saturating_add(count).min(self.src.len());
+        }
     }
 
     /// A regular token's characters.
@@ -367,9 +436,36 @@ mod tests {
         let toks = all(b"%AI26_BeginPlacedObjectPreview\r\n2 1 (\x00\xff\r\n%AI26_EndPlacedObjectPreview\r\nN\r\n");
         assert_eq!(toks, vec![t(Tok::Preview(b"\r\n2 1 (\x00\xff\r\n"), false), t(Tok::Word(b"N"), false)]);
         let toks = all(b"%%BeginDocument: a.eps\n(\x00 frobnicate\n%%EndDocument\nN\n");
-        assert_eq!(toks, vec![t(Tok::Comment(b"%BeginDocument: a.eps"), false), t(Tok::Word(b"N"), false)]);
+        assert_eq!(toks, vec![t(Tok::Document(Some(b"(\x00 frobnicate\n")), false), t(Tok::Word(b"N"), false)]);
         // One that doesn't end takes the rest.
         assert_eq!(all(b"%AI26_BeginPlacedObjectPreview\r1 (").len(), 1);
+    }
+
+    #[test]
+    fn an_included_document_ends_at_its_own_end_line() {
+        // A nested document, `%%EndDocument` later in a line and in counted data end nothing; `\r\n`,
+        // `\r` and `\n` lines alike.
+        let body = b"1 0 0 setrgbcolor\r\n%%BeginDocument: inner.eps\r(%%EndDocument) pop\r%%EndDocument\r\n\
+            %%BeginData: 14 Binary Bytes\n%%EndDocument\n%%BeginBinary: 14\n%%EndDocument\n\
+            %%BeginData: 1 Hex Lines\n%%EndDocument\n";
+        let mut src = b"%%BeginDocument: outer.eps\r\n".to_vec();
+        src.extend_from_slice(body);
+        src.extend_from_slice(b"%%EndDocument\r\n~\r\n");
+        assert_eq!(all(&src), vec![t(Tok::Document(Some(body)), false), t(Tok::Word(b"~"), false)]);
+        // On a hidden object's `%_` lines.
+        let toks = all(b"%_%%BeginDocument: a.eps\r%_1 0 0 setrgbcolor\r%_%%EndDocument\r%_~\r");
+        assert_eq!(toks, vec![t(Tok::Document(Some(b"%_1 0 0 setrgbcolor\r")), true), t(Tok::Word(b"~"), true)]);
+        // The line after it is hidden only when it starts with `%_`.
+        let toks = all(b"%_%%BeginDocument: a.eps\r%_%%EndDocument\rN\r");
+        assert_eq!(toks, vec![t(Tok::Document(Some(b"")), true), t(Tok::Word(b"N"), false)]);
+    }
+
+    #[test]
+    fn an_included_document_that_doesnt_end_takes_the_rest() {
+        for src in [&b"%%BeginDocument: a.eps\n%%BeginDocument: b.eps\n%%EndDocument\n~\n"[..], b"%%BeginDocument: a.eps\n%%BeginData: 99999999999\n"]
+        {
+            assert_eq!(all(src), vec![t(Tok::Document(None), false)]);
+        }
     }
 
     #[test]

@@ -3140,6 +3140,19 @@ proptest! {
         let text = mutate_text(NAMED_PROLOG_AI, cut, &edits);
         survive("mutated PostScript-form .ai", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
     }
+
+    /// The same file with placed EPS files in the version 7 form (no `%AI5_BeginPlace`), one
+    /// linked and one included whole with a nested document and counted data in it, damaged.
+    #[test]
+    fn ps_form_ai_with_placed_files_never_panics(cut in 0usize..1_600, edits in prop::collection::vec((0usize..1_600, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', '`', '~', 'E', 'D'])), 0..12)) {
+        let placed = "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `\n%%IncludeFile: a.eps\n~\n\
+            [-1 0 0 1 100 0] 10 20 50 50 4 4 0 (b.eps) `\n%%BeginDocument: b.eps\n%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n\
+            %%BeginDocument: c.eps\n~\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n0 0 1 setrgbcolor 10 20 40 30 rectfill\n%%EndDocument\n~\n";
+        let fixture = NAMED_PROLOG_AI.replacen("S\nu\n", &format!("S\n{placed}u\n"), 1);
+        prop_assert!(fixture.contains("(b.eps)"));
+        let text = mutate_text(&fixture, cut, &edits);
+        survive("mutated PostScript-form .ai with placed files", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
+    }
 }
 
 /// An operand of a layer's options (`Lb`): a flag, a colour index or component, a percentage, or
@@ -3341,6 +3354,16 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "[1e308 0 0 1e308 0 0] 0 0 -1e308 1e308 4 4 0 (a.png) `",
             "`",
             "~",
+            // The version 7 form (§16): an 11-value `` ` `` with no `%AI5_BeginPlace`, its file
+            // linked or included whole, a nested document and counted data in that.
+            "[1 0 0 1 10 20] 10 20 50 50 (a.eps) `",
+            "[0 0 0 0 0 0] 0 0 0 0 (a.eps) `",
+            "\n%%IncludeFile: a.eps\n",
+            "\n%%BeginDocument: a.eps\n",
+            "\n%%EndDocument\n",
+            "\n%%BeginData: 14 Binary Bytes\n",
+            "\n%%BeginBinary: 99999999999\n",
+            "\n%%BeginData: 3 Hex Lines\n",
             "\n%AI5_EndPlace\n",
             "Xm",
             "50 -50 -100 -100 5000 -2000 Xm",
