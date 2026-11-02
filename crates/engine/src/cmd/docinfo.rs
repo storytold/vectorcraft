@@ -562,7 +562,7 @@ mod tests {
     /// Document Info › Repeat Objects lists each Repeat object by name with its kind and the number
     /// of instances it makes (for a grid, its rows and columns, followed by the number it draws when
     /// that is fewer), one in a group included. With Selection Only it lists the Repeat objects in
-    /// the selection.
+    /// the selection, each once when the selection holds a group and a Repeat object inside it.
     #[test]
     fn info_lists_the_repeat_objects() {
         let mut s = Session::new();
@@ -600,6 +600,11 @@ mod tests {
         };
         s.execute("select.set", &json!({"ids": [grid, group]})).unwrap();
         assert_eq!(names(&mut s), ["Tiles", "<Mirror Repeat>"]);
+        // A selection that holds the group and the Repeat object inside it lists that object once.
+        for ids in [json!([group, mirror]), json!([mirror, group])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            assert_eq!(names(&mut s), ["<Mirror Repeat>"], "{ids}");
+        }
         s.execute("select.set", &json!({"ids": [radial]})).unwrap();
         assert_eq!(names(&mut s), ["<Radial Repeat>"]);
         s.execute("select.set", &json!({"ids": [d]})).unwrap();
