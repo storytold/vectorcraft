@@ -4505,6 +4505,8 @@ axis	Both	Обидві
 @msg	unknown workspace (one of {_1})	невідоме робоче середовище (одна з: {_1})
 @msg	unsupported: {0}	не підтримується: {0}
 @msg	variables are locked	змінні заблоковані
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	більше ніж {MAX_CSV_ROWS} наборів даних: «Імпортувати набори даних» читає не більше {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	більше ніж {MAX_CSV_COLS} змінних: «Імпортувати набори даних» читає не більше {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	змінні, що не є текстовими, пропущено: {kinds}
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` і `options.{key}: {inner}` суперечать одне одному: вкажіть параметр лише один раз
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файли версії {0} не можуть бути стиснуті: тільки версія {COMPRESSED_SINCE} і новіші відкривають стислі файли

@@ -4480,6 +4480,8 @@ axis	Both	Ambos
 @msg	unknown workspace (one of {_1})	espacio de trabajo desconocido (uno de estos: {_1})
 @msg	unsupported: {0}	no compatible: {0}
 @msg	variables are locked	las variables están bloqueadas
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	más de {MAX_CSV_ROWS} conjuntos de datos: Importar conjuntos de datos lee como máximo {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	más de {MAX_CSV_COLS} variables: Importar conjuntos de datos lee como máximo {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	se omitieron las variables que no son de texto: {kinds}
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` y `options.{key}: {inner}` no coinciden: indique la opción una sola vez
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	los archivos de la versión {0} no se pueden comprimir: solo la versión {COMPRESSED_SINCE} y posteriores abren archivos comprimidos
