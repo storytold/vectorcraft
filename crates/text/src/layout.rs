@@ -181,6 +181,7 @@ impl Ctx<'_> {
         tab.gid = 0;
         tab.dx = 0.0;
         tab.dy = 0.0;
+        tab.kern_shift = 0.0;
         tab.tcy = None;
         tab.vpal = None;
         let pen = para.left_indent + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
@@ -229,8 +230,9 @@ impl Ctx<'_> {
             Some(ib) => Affine::translate((-lead, -g.bshift)) * ib.xf,
             // Baseline shift moves the glyph across its line, and Character Rotation then turns it
             // about its shifted pen position, so the shift is across the line at any rotation.
+            // Right-to-left manual kerning moves that pen position along the line.
             None => {
-                Affine::translate((0.0, -g.bshift))
+                Affine::translate((g.kern_shift, -g.bshift))
                     * Affine::rotate(-g.rotation.to_radians())
                     * Affine::translate((g.dx - lead, g.dy))
                     * Affine::scale_non_uniform(g.sx, g.sy)
@@ -238,7 +240,7 @@ impl Ctx<'_> {
         };
         // The turning point in font units, which later moves of the glyph's transform keep.
         let pivot = match local.determinant() {
-            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(0.0, -g.bshift),
+            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(g.kern_shift, -g.bshift),
             _ => Point::ZERO,
         };
         let unturned = if g.inline.is_none() && g.rotation != 0.0 && g.sx != 0.0 && g.sy != 0.0 {
@@ -332,6 +334,7 @@ impl Ctx<'_> {
         k.adv = t;
         k.dx = 0.0;
         k.dy = 0.0;
+        k.kern_shift = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
