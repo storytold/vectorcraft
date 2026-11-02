@@ -390,6 +390,20 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{index: 0-based number | \"first\" | \"previous\" | \"next\" | \"last\"} make that artboard the status bar navigator's (the one Fit Artboard in Window and Actual Size show) and fit it in the window → {index}",
     ),
+    (
+        "view.firstArtboard",
+        "First Artboard",
+        "",
+        "{} the status bar navigator's First Artboard button: view.goToArtboard {index: \"first\"} → {index}",
+    ),
+    (
+        "view.previousArtboard",
+        "Previous Artboard",
+        "",
+        "{} the navigator's Previous Artboard button: view.goToArtboard {index: \"previous\"} → {index}",
+    ),
+    ("view.nextArtboard", "Next Artboard", "", "{} the navigator's Next Artboard button: view.goToArtboard {index: \"next\"} → {index}"),
+    ("view.lastArtboard", "Last Artboard", "", "{} the navigator's Last Artboard button: view.goToArtboard {index: \"last\"} → {index}"),
     ("view.edges", "Hide Edges", "Cmd+H", "{}"),
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
     (

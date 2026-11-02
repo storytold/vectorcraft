@@ -2093,3 +2093,31 @@ fn a_plain_up_nudges_unless_a_corner_widget_is_pressed() {
     assert_eq!((x2, y2), (x1, y1), "no nudge while the widget is pressed");
     assert_eq!(kind2, CornerKind::InvertedRound, "Up stepped the kind");
 }
+
+/// #5218: the status bar navigator's four buttons are commands of their own, listed in Edit ›
+/// Keyboard Shortcuts without a default key, so a user can give them one (Page Up and Page Down
+/// here) and step through the artboards from the keyboard.
+#[test]
+fn artboard_navigation_commands_can_be_given_keys() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    for id in ["view.firstArtboard", "view.previousArtboard", "view.nextArtboard", "view.lastArtboard"] {
+        let list = app.run("shortcuts.list", json!({ "query": id })).unwrap();
+        assert!(list.as_array().unwrap().iter().any(|e| e["id"] == id), "{id} is listed: {list}");
+        assert_eq!(crate::shortcut_editor::default_command_shortcut(id), None, "{id} has no default key");
+    }
+    let at = |app: &VectorcraftApp| app.view().unwrap().artboard;
+    assert_eq!(app.run("view.lastArtboard", json!({})), Ok(json!({"index": 2})));
+    assert_eq!(app.run("view.nextArtboard", json!({})), Ok(json!({"index": 2})), "the last artboard stays");
+    assert_eq!(app.run("view.firstArtboard", json!({})), Ok(json!({"index": 0})));
+    assert_eq!(app.run("view.previousArtboard", json!({})), Ok(json!({"index": 0})), "the first artboard stays");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.nextArtboard", "PageDown");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.previousArtboard", "PageUp");
+    let press = |key| vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }];
+    frame(&mut app, press(Key::PageDown));
+    assert_eq!(at(&app), 1, "Page Down goes to the next artboard");
+    frame(&mut app, press(Key::PageDown));
+    assert_eq!(at(&app), 2);
+    frame(&mut app, press(Key::PageUp));
+    assert_eq!(at(&app), 1, "Page Up goes to the previous artboard");
+}

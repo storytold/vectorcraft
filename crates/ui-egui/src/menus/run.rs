@@ -375,6 +375,12 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "view.goToArtboard" => go_to_artboard(app, p),
+        // The navigator's four buttons as commands of their own, so Edit › Keyboard Shortcuts lists
+        // them (view.goToArtboard needs an index, so a key alone can't run it).
+        "view.firstArtboard" => go_to_artboard(app, &json!({ "index": "first" })),
+        "view.previousArtboard" => go_to_artboard(app, &json!({ "index": "previous" })),
+        "view.nextArtboard" => go_to_artboard(app, &json!({ "index": "next" })),
+        "view.lastArtboard" => go_to_artboard(app, &json!({ "index": "last" })),
         "view.presentation" => {
             app.ui.screen_mode = if app.ui.screen_mode == 3 { 0 } else { 3 };
             Ok(json!(app.ui.screen_mode))
