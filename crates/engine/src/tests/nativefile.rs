@@ -1,4 +1,5 @@
-//! Native files: `document.save {compress, version, preview}`, the Use Compression preference,
+//! Native files: `document.save {compress, version, preview}`, the Use Compression and Embed
+//! Preview preferences,
 //! atomic writes, unused images left out, keys from newer versions and colour profiles kept.
 
 use std::path::PathBuf;
@@ -128,7 +129,24 @@ fn preview_is_at_most_256_pixels() {
     let png = vectorcraft_format::preview(&bytes).expect("a preview");
     let img = image::load_from_memory(&png).unwrap();
     assert_eq!((img.width(), img.height()), (256, 128), "the 400×200 artboard fitted into 256 px");
-    assert!(vectorcraft_format::preview(&saved(&mut s, json!({}))).is_none(), "off by default");
+}
+
+#[test]
+fn embed_preview_preference_sets_the_default() {
+    let mut s = session();
+    assert!(vectorcraft_format::preview(&saved(&mut s, json!({}))).is_some(), "on by default");
+    assert!(vectorcraft_format::preview(&saved(&mut s, json!({"preview": false}))).is_none(), "the param wins");
+    // Every version carries it.
+    assert!(vectorcraft_format::preview(&saved(&mut s, json!({"version": 1}))).is_some());
+    s.execute("prefs.set", &json!({"key": "embedPreview", "value": false})).unwrap();
+    assert!(vectorcraft_format::preview(&saved(&mut s, json!({}))).is_none(), "turned off");
+    assert!(vectorcraft_format::preview(&saved(&mut s, json!({"preview": true}))).is_some(), "the param wins");
+    s.execute("prefs.set", &json!({"key": "embedPreview", "value": true})).unwrap();
+    let options = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+    assert_eq!(options["options"]["preview"]["value"], json!(true), "{options}");
+    // Exports write what they're told.
+    let r = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap();
+    assert!(vectorcraft_format::preview(&bytes_of(&r)).is_none());
 }
 
 #[test]
