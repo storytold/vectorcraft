@@ -1036,7 +1036,7 @@ pub(crate) fn is_threadable(n: &vectorcraft_doc::Node) -> bool {
 /// Does a double-click or the Control bar's Isolate Selected Object button isolate an object of
 /// this kind? A group, a compound path or a single path, image, mesh or placed file does. Blends,
 /// envelopes, repeats and symbol instances do not; they have editing modes of their own (a
-/// double-click on a repeat isolates it to edit its source art).
+/// repeat's is isolation of the repeat itself, to edit its source art).
 pub fn isolates(kind: &vectorcraft_doc::NodeKind) -> bool {
     use vectorcraft_doc::NodeKind as K;
     matches!(kind, K::Group { .. } | K::Compound { .. } | K::Path { .. } | K::Image(_) | K::Mesh(_) | K::PlacedDocument(_))
@@ -1201,7 +1201,10 @@ impl SelectionTool {
             }
             // A repeat: its source art is edited in isolation mode, where the repeat follows each
             // edit (#5054), as the reference app's Repeat does.
-            if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_))) && cx.isolation != Some(top) {
+            if cx.double_click_isolate
+                && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_)))
+                && cx.isolation != Some(top)
+            {
                 return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
             }
             // An object that [`isolates`], not the one already isolated.
