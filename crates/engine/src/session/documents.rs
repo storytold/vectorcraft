@@ -182,6 +182,8 @@ impl Session {
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
     pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+        // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
+        vectorcraft_text::FontDb::global().keep_file_fonts(&doc.images);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let trees = doc.layers.iter_mut().chain(doc.symbols.iter_mut().map(|s| &mut s.art));

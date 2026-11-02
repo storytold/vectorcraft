@@ -1,5 +1,6 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
+use super::file_fonts::{FileFont, MAX_FILE_FONTS, text_hash};
 use super::para_style::ParaStyle;
 use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
 use super::tabs_lists::ParaList;
@@ -88,6 +89,7 @@ impl TextObject {
             system_layout: false,
             fractional_widths: true,
             list_count: 0,
+            file_fonts: None,
             cached_bounds: None,
             cached_baselines: Vec::new(),
         }
@@ -95,6 +97,17 @@ impl TextObject {
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
     }
+    /// The fonts the file this type came from carried ([`FileFonts`]) while its text is still the
+    /// file's (at most [`MAX_FILE_FONTS`]); none once it was edited, and for other type.
+    pub fn file_fonts_in_use(&self) -> &[FileFont] {
+        match self.file_fonts.as_deref() {
+            Some(f) if f.text == text_hash(self.runs.iter().map(|r| r.text.as_str())) => {
+                f.fonts.get(..f.fonts.len().min(MAX_FILE_FONTS)).unwrap_or_default()
+            }
+            _ => &[],
+        }
+    }
+
     /// Clamp the ruby spans to the plain text, drop empty/empty-reading ones and sort them.
     ///
     /// Called after loading and editing text: ranges from a file or an edit are untrusted, and a

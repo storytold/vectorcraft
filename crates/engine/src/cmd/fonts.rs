@@ -107,10 +107,22 @@ pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
 /// The fonts (family, style, version) of the type in the layers and symbols of `d` and in `art`
 /// (art read from a file, its resources in `d`).
 pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
+    fonts_of(d, art, false)
+}
+
+/// [`art_fonts`]; `drawn`: only those the type is drawn in, not the fonts of runs drawn in a font
+/// their file carried ([`in_file_fonts`]).
+fn fonts_of(d: &Document, art: &[Node], drawn: bool) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
-            fonts.extend(t.runs.iter().map(|r| (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone())));
+            let file = if drawn { in_file_fonts(t) } else { vec![] };
+            fonts.extend(
+                t.runs
+                    .iter()
+                    .filter(|r| !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str())))
+                    .map(|r| (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone())),
+            );
         }
     };
     d.walk(&mut add);
@@ -230,12 +242,16 @@ impl Printed<'_> {
             }
         }
         match &n.kind {
-            NodeKind::Text(_) => {
+            NodeKind::Text(t) => {
                 if overflows && self.own {
                     self.overflow.insert(n.id);
                 }
+                let file = in_file_fonts(t);
                 for r in runs {
-                    self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                    // Drawn in a font its file carried: printed as the file drew it.
+                    if !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str())) {
+                        self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                    }
                     // Inline graphics draw their symbols' art.
                     if let Some(art) = &r.inline {
                         self.symbol(&art.symbol);
@@ -311,9 +327,18 @@ fn drawn_runs(t: &vectorcraft_doc::TextObject) -> (Vec<&TextRun>, bool) {
 
 /// What an export that draws type (as outlines, embedded fonts or pixels) says when `d` uses font
 /// families that aren't available (their type is drawn in the fallback font, not the font it
-/// names) or styles that its family doesn't have (the closest style is drawn).
+/// names) or styles that its family doesn't have (the closest style is drawn). Type drawn in a
+/// font its file carried isn't substituted.
 pub(super) fn substitution_warning(d: &Document) -> Option<String> {
-    substitution_warning_of(used_fonts(d))
+    substitution_warning_of(fonts_of(d, &[], true))
+}
+
+/// The families and styles of the runs of `t` drawn in a font its file carried
+/// ([`vectorcraft_text::FontDb::file_faces`]): drawn as the file drew them, not in a substitute,
+/// though the font they name isn't available.
+fn in_file_fonts(t: &vectorcraft_doc::TextObject) -> Vec<(&str, &str)> {
+    let faces = vectorcraft_text::FontDb::global().file_faces(t);
+    t.runs.iter().zip(faces).filter(|(_, f)| f.is_some()).map(|(r, _)| (r.style.font_family.as_str(), r.style.font_style.as_str())).collect()
 }
 
 /// [`substitution_warning`] for type set in `fonts`.

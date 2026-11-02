@@ -190,8 +190,29 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
     s
 }
 
+/// `t` with the runs a font its file carried draws ([`FontDb::file_faces`]) set in that font;
+/// `None` when none is.
+fn in_file_fonts(db: &FontDb, t: &TextObject) -> Option<TextObject> {
+    let faces = db.file_faces(t);
+    if faces.is_empty() {
+        return None;
+    }
+    let mut out = t.clone();
+    for (r, face) in out.runs.iter_mut().zip(faces) {
+        let Some(face) = face else { continue };
+        r.style.font_family = format!("{}{}", crate::fontdb::FILE_FONT_FAMILY, face.id());
+        r.style.font_style = face.style.clone();
+        r.style.font_version = None;
+        r.style.font_axes.clear();
+    }
+    Some(out)
+}
+
 /// One layout pass, without fitting.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    // The runs a font the file carried draws take that font (the type's own runs keep naming theirs).
+    let file = in_file_fonts(db, t);
+    let t = file.as_ref().unwrap_or(t);
     let text = t.plain_text();
     let mut runs = Vec::with_capacity(t.runs.len());
     let mut inlines = Vec::with_capacity(t.runs.len());

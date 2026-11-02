@@ -137,7 +137,8 @@ pub struct Symbol {
     pub dynamic: bool,
 }
 
-/// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects.
+/// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects, and the fonts files carried for
+/// type ([`crate::FileFonts`], MIME [`crate::FILE_FONT_MIME`]), which save and travel the same way.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImageBlob {
     pub mime: String,

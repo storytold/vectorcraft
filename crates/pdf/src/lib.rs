@@ -50,6 +50,7 @@ mod forms;
 mod images;
 mod import;
 mod import_color;
+mod import_fonts;
 mod import_image;
 mod import_lines;
 mod import_mask;

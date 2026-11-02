@@ -409,3 +409,30 @@ fn auto_alignment_saves_readable_by_older_builds() {
     // Files from before the flag keep their alignment.
     assert_eq!(serde_json::from_str::<ParaStyle>(r#"{"justify":"Center"}"#).unwrap().justify, Justify::Center);
 }
+
+#[test]
+fn file_fonts_draw_type_only_while_its_text_is_the_files() {
+    use super::file_fonts::*;
+    use super::*;
+    // The hash is the same everywhere and in every version (saved files carry it).
+    assert_eq!(text_hash([""]), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(text_hash(["Ham", "burg"]), text_hash(["Hamburg"]));
+    assert_ne!(text_hash(["Hamburg"]), text_hash(["Hamburh"]));
+    let font = FileFont { family: "Source Serif 9".into(), style: "Regular".into(), key: "k".into() };
+    let mut t = TextObject::point(Point::ZERO, "Ham", CharStyle::default());
+    t.runs.push(TextRun::new("burg", CharStyle::default()));
+    assert!(t.file_fonts_in_use().is_empty());
+    t.file_fonts = Some(Box::new(FileFonts::new(vec![font.clone()], "Hamburg")));
+    assert_eq!(t.file_fonts_in_use(), std::slice::from_ref(&font));
+    // Saved and read back.
+    let json = serde_json::to_string(&t).unwrap();
+    assert!(json.contains(r#""fileFonts":{"fonts":[{"family":"Source Serif 9","style":"Regular","key":"k"}]"#), "{json}");
+    assert_eq!(serde_json::from_str::<TextObject>(&json).unwrap(), t);
+    // Edited: none.
+    t.runs[1].text.push('s');
+    assert!(t.file_fonts_in_use().is_empty());
+    // A file's list past the cap: the first ones.
+    t.runs[1].text.pop();
+    t.file_fonts.as_mut().unwrap().fonts = vec![font; MAX_FILE_FONTS + 5];
+    assert_eq!(t.file_fonts_in_use().len(), MAX_FILE_FONTS);
+}

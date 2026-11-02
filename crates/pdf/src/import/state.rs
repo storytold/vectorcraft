@@ -3,6 +3,7 @@ use super::{
     Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
     LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine,
 };
+use crate::import_fonts::FileFontGlyphs;
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
 pub(super) type Decoded = (Vec<u8>, u32, u32, (f32, f32));
@@ -95,6 +96,11 @@ pub(super) struct Builder<'p> {
     pub(super) font_names: HashMap<u128, FontInfo>,
     pub(super) families: Option<Families>,
     pub(super) missing_fonts: Vec<String>,
+    /// The glyphs drawn in fonts the file carries for families that aren't available, for the
+    /// fonts kept with the document ([`crate::import_fonts`]).
+    pub(super) file_glyphs: FileFontGlyphs,
+    /// Font (cache key) → its font among `file_glyphs`; `None`: its type takes the font it names.
+    pub(super) file_fonts: HashMap<u128, Option<usize>>,
     /// Font (cache key) → its characters by glyph, for CID-keyed fonts embedded without a
     /// ToUnicode map.
     pub(super) cid_text: HashMap<u128, Option<Arc<CidText>>>,

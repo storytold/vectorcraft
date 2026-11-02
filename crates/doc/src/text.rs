@@ -8,6 +8,7 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 
 mod area;
 mod char_style;
+mod file_fonts;
 mod object;
 mod para_style;
 mod runs;
@@ -16,6 +17,7 @@ mod tabs_lists;
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
 pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, ScriptMetrics};
+pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFonts, MAX_FILE_FONTS, text_hash};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,
     ParaStyle, SingleWordJustify,
@@ -94,6 +96,10 @@ pub struct TextObject {
     /// file saves the count only when it is not 0.
     #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
     pub list_count: u32,
+    /// The fonts the file this type came from carried for fonts that aren't available here,
+    /// which draw it until its text is edited ([`FileFonts`]); `None` for other type.
+    #[serde(default, rename = "fileFonts", skip_serializing_if = "Option::is_none")]
+    pub file_fonts: Option<Box<FileFonts>>,
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]
     pub cached_bounds: Option<Rect>,

@@ -126,6 +126,10 @@ fn node_refs(n: &Node, f: Visit) {
                 for s in t.para_styles().filter_map(|pa| pa.style_name.as_ref()) {
                     f(Ref::Name(Res::ParaStyle, s));
                 }
+                // The fonts its file carried travel with it, as images do.
+                for ff in t.file_fonts.iter().flat_map(|ff| &ff.fonts) {
+                    f(Ref::Name(Res::Image, &ff.key));
+                }
             }
             NodeKind::Image(im) => f(Ref::Name(Res::Image, &im.key)),
             NodeKind::PlacedDocument(pl) => f(Ref::Name(Res::Image, &pl.key)),
@@ -541,6 +545,9 @@ impl Relink {
                         self.name(Res::ParaStyle, s);
                     }
                 }
+                for ff in t.file_fonts.iter_mut().flat_map(|ff| &mut ff.fonts) {
+                    self.name(Res::Image, &mut ff.key);
+                }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),
             NodeKind::PlacedDocument(pl) => self.name(Res::Image, &mut pl.key),
@@ -730,6 +737,11 @@ impl Clipboard {
             let p = existing(key, d.images.keys().map(String::as_str), same_doc, |k| d.images.get(k) == Some(blob)).unwrap_or_else(|| {
                 let k = unique_name(key, |n| d.images.contains_key(n));
                 d.images.insert(k.clone(), blob.clone());
+                // A font a file carried draws its pasted type (one that can't be read leaves it in
+                // the font it names).
+                if blob.mime == vectorcraft_doc::FILE_FONT_MIME {
+                    let _ = vectorcraft_text::FontDb::global().keep_file_font(&k, blob.bytes.clone());
+                }
                 Placed::added(key, k)
             });
             out.placed(Res::Image, key, &p);
