@@ -1987,3 +1987,49 @@ fn all_registered_shortcuts_parse() {
         }
     }
 }
+
+/// #3296: each Effect menu item can be given a shortcut of its own (`effect:<id>`): the editor
+/// lists it under its menu path, the menu shows the shortcut, and pressing it opens that effect's
+/// dialog for the selection.
+#[test]
+fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
+    let entry = crate::shortcut_editor::entries().iter().find(|e| e.key == "effect:distort.transform").expect("Transform is listed");
+    assert_eq!(entry.group, "Effect › Distort & Transform");
+    assert_eq!(crate::keymap::command_of("effect:distort.transform").id, "effect.dialog");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Alt+Shift+F11");
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({"effect": "distort.transform"})), Some("Cmd+Alt+Shift+F11"));
+    let f11 =
+        egui::Event::Key { key: Key::F11, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT };
+    frame(&mut app, vec![f11]);
+    let d = app.ui.dialog.as_ref().expect("the effect's dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "{:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// #3296 review: an effect bound to Cmd+Enter runs the effect; the Selection tool doesn't take the
+/// Enter first and open its Move dialog.
+#[test]
+fn cmd_enter_bound_to_an_effect_runs_the_effect_not_the_tool() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Enter");
+    crate::shortcut_editor::sync(&app.ui);
+    assert!(
+        crate::shortcuts::all_shortcuts()
+            .iter()
+            .any(|(sc, c, p)| sc.logical_key == Key::Enter && *c == "effect.dialog" && p["effect"] == "distort.transform"),
+        "the effect's chord is among the command shortcuts"
+    );
+    frame(&mut app, press(Key::Enter, cmd()));
+    let d = app.ui.dialog.as_ref().expect("a dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "the effect's, not Move: {:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}

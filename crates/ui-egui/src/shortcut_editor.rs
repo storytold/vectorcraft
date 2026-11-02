@@ -362,6 +362,13 @@ pub fn entries() -> &'static [Entry] {
             group: "Window".into(),
             is_tool: false,
         }));
+        // Each effect of the Effect menu, by its own key: they all run `effect.dialog` (#3296).
+        v.extend(effect_items().iter().map(|e| Entry {
+            key: format!("effect:{}", e.effect),
+            label: e.label.clone(),
+            group: e.group.clone(),
+            is_tool: false,
+        }));
         for (id, label, sc, params) in menus::UI_COMMANDS {
             if !seen.insert(id) || (sc.is_empty() && !params.starts_with("{}") && !params.starts_with("{path")) {
                 continue;
@@ -370,6 +377,55 @@ pub fn entries() -> &'static [Entry] {
         }
         v
     })
+}
+
+/// One Effect menu item a shortcut can be given (#3296): the effect's id, the command its item runs
+/// (`effect.dialog`, or `effect.apply` for an effect without options), its label and its menu path.
+#[derive(Clone, Debug)]
+pub struct EffectItem {
+    pub effect: String,
+    pub command: &'static str,
+    pub label: String,
+    pub group: String,
+}
+
+/// The Effect menu's effect items, in menu order, each once.
+pub fn effect_items() -> &'static [EffectItem] {
+    static E: OnceLock<Vec<EffectItem>> = OnceLock::new();
+    E.get_or_init(|| {
+        fn walk(items: &[menus::Item], path: &mut Vec<String>, seen: &mut HashSet<String>, out: &mut Vec<EffectItem>) {
+            for it in items {
+                match it {
+                    menus::Item::Cmd(label, id @ ("effect.dialog" | "effect.apply"), p) => {
+                        if let Some(effect) = p.get("effect").and_then(serde_json::Value::as_str)
+                            && seen.insert(effect.to_string())
+                        {
+                            out.push(EffectItem { effect: effect.to_string(), command: id, label: label.to_string(), group: path.join(" › ") });
+                        }
+                    }
+                    menus::Item::Sub(name, children) => {
+                        path.push(name.to_string());
+                        walk(children, path, seen, out);
+                        path.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut out = vec![];
+        let mut seen = HashSet::new();
+        for (name, items) in menus::menu_tree() {
+            if name == "Effect" {
+                walk(&items, &mut vec![name.to_string()], &mut seen, &mut out);
+            }
+        }
+        out
+    })
+}
+
+/// Effective shortcut of the Effect menu item of `effect` (`effect:<id>`).
+pub fn effect_shortcut(effect: &str) -> Option<&'static str> {
+    effective(&format!("effect:{effect}"))
 }
 
 /// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").

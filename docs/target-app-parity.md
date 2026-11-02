@@ -1464,10 +1464,15 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Color Effects › Find Nearest Swatch… lists each colour of the selection (fills and strokes, as ticked; solid colours and gradient stops, inside groups and type) with the three swatches of the chosen library closest to it by CIEDE2000 difference, with that difference (`addon.color.nearestSwatch`, #4923). The library is the document's swatches, a built-in library, or a library or colour book the user saved or loaded (no colour book data ships with VectorCraft). Apply gives each colour its nearest swatch as one undo step (`addon.color.applyNearestSwatch`): global and spot swatches link, and a library's swatches the colours take are added to the document first, so a spot colour stays spot. Remaining: typing a colour to look up in the dialog (the command takes `color`), and applying a match other than the nearest. Tests: `cmd::addons::color::nearest::tests` (engine), `addons::color::nearest::tests::find_nearest_swatch_lists_the_matches_and_applies_the_nearest` (ui-egui).
 
+## Keyboard shortcuts for Effect menu items (2026-11-01)
+
+Edit › Keyboard Shortcuts lists every item of the Effect menu under its menu path (Effect › Distort & Transform › Transform…) and gives each one a shortcut of its own (stored as `effect:<id>`; they all run `effect.dialog {effect}`, or `effect.apply` for an effect without options, so a shortcut on the command alone couldn't tell them apart). The menu shows the shortcut, and pressing it opens that effect's dialog for the selection (#3296). Test: `shortcuts::tests::an_effect_menu_item_takes_a_shortcut_of_its_own`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Shortcuts for Effect menu items (#3296); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); evidence added; scores unchanged. |
