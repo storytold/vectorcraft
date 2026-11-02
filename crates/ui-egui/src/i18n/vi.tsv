@@ -4872,6 +4872,7 @@ theme	Appearance	Giao diện
 @msg	there are no objects to release	không có đối tượng nào để giải phóng
 @msg	there are no printer settings to open here	không có cài đặt máy in để mở ở đây
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tệp này được lưu không có tương thích PDF, và dữ liệu chỉnh sửa không thể đọc được ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	không đọc được phần PDF ({_1}): tệp được mở từ dữ liệu chỉnh sửa
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript của tệp này không thể đọc được ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	định dạng này chứa một bảng vẽ: xuất nhiều bảng vẽ dưới dạng PDF hoặc với document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	đây là bản vẽ DWG, không thể đọc: lưu từ ứng dụng CAD dưới dạng ASCII DXF và mở tệp đó

@@ -1,4 +1,4 @@
-use super::build::{Page, build, build_from};
+use super::build::{Page, build, build_from, build_on_page};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -214,6 +214,16 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
     build(&data, None, Page::Artboard, false, false, 1.0)
+}
+
+/// [`ai_alone`] for a `.ai` whose PDF part can't be read, its first page `page` (width and height)
+/// points large in units of `unit` points (its `UserUnit`): editing data whose first artboard, or
+/// whose art's box, has the page's size in those units, and not in points, comes in `unit` times as
+/// large, as [`layered_ai`] reads it. A page turned a quarter (`/Rotate 90`) is measured either
+/// way round.
+pub fn ai_alone_on_page(private: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
+    let data = ai::decode_private(private)?;
+    build_on_page(&data, page, unit)
 }
 
 /// Does the editing data (or a program in the legacy format) have layers?

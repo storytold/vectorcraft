@@ -4330,6 +4330,7 @@ font-technology	Variable	ცვლადი
 @msg	an image whose data is cut short was left out	გამოსახულება, რომლის მონაცემებიც შეკვეცილია, გამოტოვებულია
 @msg	its editing data doesn't say where its art is	მისი რედაქტირების მონაცემები არ მიუთითებს, სად არის მისი ნახატი
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ეს ფაილი PDF-თავსებადობის გარეშეა შენახული და მისი რედაქტირების მონაცემების წაკითხვა ვერ ხერხდება ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF ნაწილის წაკითხვა ვერ მოხერხდა ({_1}): ფაილი რედაქტირების მონაცემებიდან გაიხსნა
 @msg	No fonts are missing in this document	ამ დოკუმენტში შრიფტები არ აკლია
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft არ ეძებს სხვა აპების ან სისტემის საქაღალდეებში: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft არ ეძებს Users-ის Shared ან Public საქაღალდეში: {path}

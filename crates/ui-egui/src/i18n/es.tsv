@@ -4587,6 +4587,7 @@ axis	Both	Ambos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	el texto de área en marcos demasiado bajos para una línea de la fuente en que se muestra recibió marcos más altos ({_1}): de otro modo no se vería
 @msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este archivo se guardó sin compatibilidad con PDF y sus datos de edición no se pueden leer ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	no se pudo leer la parte PDF ({_1}): el archivo se abrió desde sus datos de edición
 @msg	No fonts are missing in this document	No faltan fuentes en este documento
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no busca en carpetas de otras aplicaciones ni del sistema: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft no busca en las carpetas Shared ni Public de Users: {path}

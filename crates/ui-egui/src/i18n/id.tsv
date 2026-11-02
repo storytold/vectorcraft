@@ -4545,6 +4545,7 @@ imageTrace	Outline	Kontur
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	teks area dalam bingkai yang terlalu pendek untuk satu baris font yang ditampilkannya mendapat bingkai yang lebih tinggi ({_1}): tanpa itu teksnya tidak akan tampil
 @msg	its editing data doesn't say where its art is	data pengeditannya tidak menyatakan di mana karya seninya berada
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	berkas ini disimpan tanpa kompatibilitas PDF, dan data pengeditannya tidak dapat dibaca ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	bagian PDF tidak dapat dibaca ({_1}): file dibuka dari data pengeditannya
 @msg	No fonts are missing in this document	Tidak ada font yang hilang dalam dokumen ini
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft tidak mencari di folder aplikasi lain atau folder sistem: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft tidak mencari di folder Shared atau Public di Users: {path}

@@ -3842,6 +3842,7 @@ imageTrace	Outline	轮廓
 @msg	the document has no artboard	文档没有画板
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	此格式只能包含一个画板：要导出多个画板，请导出为 PDF 或使用 document.exportForScreens
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	此文件保存时未启用 PDF 兼容性，且无法读取其编辑数据 ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	无法读取 PDF 部分 ({_1})：已从其编辑数据打开文件
 @msg	the export wrote no file	导出未写入任何文件
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} 文件可以打开，但不能写入 (请参阅 document.formats)
 @msg	{_1} files are written by file.saveAsTemplate	{_1} 文件由 file.saveAsTemplate 写入

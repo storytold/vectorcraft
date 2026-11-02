@@ -5541,6 +5541,7 @@ digits	Malayalam	Malaiàlam
 @msg	there are no printer settings to open here	aquí no hi ha cap configuració d’impressora per obrir
 @msg	thickness must be from 0.01 to 5000 pt	el gruix ha de ser d’entre 0,01 i 5000 pt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	aquest fitxer s’ha desat sense compatibilitat amb PDF i les seves dades d’edició no es poden llegir ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	no s’ha pogut llegir la part PDF ({_1}): el fitxer s’ha obert a partir de les seves dades d’edició
 @msg	this file's PostScript couldn't be read ({why}): {what}	no s’ha pogut llegir el PostScript d’aquest fitxer ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	aquest format admet un sol tauler: exporta’n diversos com a PDF o amb document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	aquest és un dibuix DWG, que no es pot llegir: desa’l des de l’aplicació CAD com a DXF ASCII i obre’l

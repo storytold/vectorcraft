@@ -49,6 +49,27 @@ pub(super) fn build(
     build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
 }
 
+/// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
+/// (width and height, either way round) points large in units of `unit` points: the document is
+/// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
+/// those units and not in points, as [`build_from`] decides with a page.
+pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
+    let structure = ai::read(data, false)?;
+    let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
+    let art = structure.bbox.map(|[a, b, c, d]| structure.to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
+    let (w, h) = page;
+    let fits = |r: Option<Rect>, k: f64| {
+        r.is_some_and(|r| [(w, h), (h, w)].iter().any(|(a, b)| (r.width() - a / k).abs() <= 0.5 && (r.height() - b / k).abs() <= 0.5))
+    };
+    let in_units = |r: Option<Rect>| unit.is_finite() && unit > 1.0 && fits(r, unit) && !fits(r, 1.0);
+    let scale = in_units(board) || (!fits(board, 1.0) && in_units(art));
+    let (mut doc, notes) = build_from(structure, data, None, Page::Artboard, false, false, 1.0)?;
+    if scale {
+        scale_document(&mut doc, unit);
+    }
+    Ok((doc, notes))
+}
+
 /// [`build`] from `structure`, the editing copy `data` already read.
 pub(super) fn build_from(
     structure: Structure,

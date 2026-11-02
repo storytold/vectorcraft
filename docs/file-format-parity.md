@@ -51,6 +51,9 @@ private editing data. VectorCraft:
   A PDF saved with its editing data (`AIPDFPrivateData`) opens the same way.
   The swatches of a version 7 `.ai` palette, which carry no names, come in named by their spot color, gradient or
   values.
+  When the PDF part of either can't be read (a stream the import refuses), the file opens from its editing
+  data alone, with the PDF part's error as its first warning, and without the bleed and File Info the PDF
+  part would give (part of #4366).
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
 - **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the

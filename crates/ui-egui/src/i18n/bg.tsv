@@ -4451,6 +4451,7 @@ axis	Both	И двете
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF частта не можа да бъде прочетена ({_1}): файлът беше отворен от данните си за редактиране
 @msg	No fonts are missing in this document	В този документ няма липсващи шрифтове
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не търси в папките на други приложения или на системата: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не търси в папките Shared или Public в Users: {path}

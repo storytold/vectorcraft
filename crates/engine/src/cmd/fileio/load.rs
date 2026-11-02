@@ -200,6 +200,20 @@ fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(D
     )
 }
 
+/// A `.ai`, or a PDF saved with the editing data, whose PDF part can't be read (`e`, the import's
+/// error) from the editor's own copy of its art alone, as a file saved without PDF compatibility
+/// is read, its first note saying why: `None` when pages are picked, layers or the editing data
+/// are off, or the file has no editing data that reads. Its type is outlines when `opts` asks.
+fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: &EngineError) -> Option<(Document, Vec<String>)> {
+    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
+        return None;
+    }
+    let private = vectorcraft_pdf::illustrator_data_without_pdf_part(bytes, opts.password.as_deref())?;
+    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit).ok()?;
+    let notes = std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
+    Some(outlined_if_asked(doc, notes, opts))
+}
+
 /// Is `w` a note on the PDF part as a page, which says nothing was skipped: that the art off the
 /// artboards is in the editing data alone, or that art past the page was clipped to it?
 fn is_page_note(w: &str) -> bool {
@@ -255,22 +269,29 @@ fn every_page(bytes: &[u8], opts: &LoadOptions) -> bool {
     vectorcraft_pdf::info(bytes, opts.password.as_deref()).is_ok_and(|i| parse_range(range, i.pages.len()).is_ok_and(|p| p.len() == i.pages.len()))
 }
 
-/// A page read from a PDF or `.ai` (`read`, as [`super::page_document`] reads it) → (document,
-/// notes, false); for a `.ai` saved without PDF compatibility (its page only a placeholder), the
-/// file `name` read as `document.open` reads it with `password`, from its editing copy alone →
-/// (document, notes, true).
+/// Page `page_index` (0-based) read from a PDF or `.ai` (`read`, as [`super::page_document`] reads
+/// it) → (document, notes, false); for a `.ai` saved without PDF compatibility (its page only a
+/// placeholder), the file `name` read as `document.open` reads it with `opts`' password, from its
+/// editing copy alone → (document, notes, true). So too, read with `opts` but every page, for the
+/// first page of a `.ai` or PDF whose PDF part can't be read and whose editing copy reads; the
+/// error of any other page stays.
 pub(crate) fn page_or_editing_data(
     name: &str,
     bytes: &[u8],
-    password: Option<&str>,
+    opts: &LoadOptions,
+    page_index: usize,
     read: Result<(Document, Vec<String>)>,
 ) -> Result<(Document, Vec<String>, bool)> {
     match read {
         Ok((doc, notes)) => Ok((doc, notes, false)),
         Err(e) if is_placeholder(&e) => {
-            let l = load_with(name, bytes, &LoadOptions { password: password.map(str::to_string), ..Default::default() })?;
+            let l = load_with(name, bytes, &LoadOptions { password: opts.password.clone(), ..Default::default() })?;
             Ok((l.doc, l.warnings, true))
         }
+        Err(e) if page_index == 0 => match load_with(name, bytes, &LoadOptions { pages: None, ..opts.clone() }) {
+            Ok(l) if l.editing_data => Ok((l.doc, l.warnings, true)),
+            _ => Err(e),
+        },
         Err(e) => Err(e),
     }
 }
@@ -345,7 +366,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
                         .inspect(|_| editing_data = true)
                 }
-                Err(e) => Err(e),
+                // A PDF part that can't be read (a stream the import refuses): the editing copy
+                // alone where it reads, else the error.
+                Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
             })?
         }
         "dxf" => {

@@ -4719,6 +4719,7 @@ imageTrace	Outline	Kontur
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst akapitowy w ramkach niższych niż wiersz wyświetlanej czcionki otrzymał wyższe ramki ({_1}): inaczej tekst nie byłby widoczny
 @msg	its editing data doesn't say where its art is	jego dane edycyjne nie określają położenia kompozycji
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ten plik zapisano bez zgodności z PDF, a jego danych edycyjnych nie można odczytać ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	nie udało się odczytać części PDF ({_1}): plik otwarto z jego danych edycyjnych
 @msg	No fonts are missing in this document	W tym dokumencie nie brakuje czcionek
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft nie przeszukuje folderów innych aplikacji ani systemowych: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft nie przeszukuje folderu Shared ani Public w Users: {path}

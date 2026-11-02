@@ -4893,6 +4893,7 @@ imageTrace	Outline	Obrys
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	text v oblasti v rámcích příliš nízkých pro řádek písma, ve kterém se zde zobrazuje, dostal vyšší rámce ({_1}): jinak by nebyl vidět
 @msg	its editing data doesn't say where its art is	z jeho dat pro úpravy není zřejmé, kde je kresba
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tento soubor byl uložen bez kompatibility s PDF a jeho data pro úpravy nelze přečíst ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	část PDF nelze přečíst ({_1}): soubor byl otevřen z jeho dat pro úpravy
 @msg	No fonts are missing in this document	V tomto dokumentu nechybí žádná písma
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft neprohledává složky jiných aplikací ani systému: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft neprohledává složku Shared ani Public ve složce Users: {path}

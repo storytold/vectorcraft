@@ -5212,6 +5212,7 @@ imageTrace	Outline	Körvonal
 @msg	there are no objects to release	nincs felszabadítható objektum
 @msg	there are no printer settings to open here	itt nincsenek megnyitható nyomtatóbeállítások
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ezt a fájlt PDF-kompatibilitás nélkül mentették, a szerkesztési adatai nem olvashatók ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	a PDF-rész nem olvasható ({_1}): a fájl a szerkesztési adataiból nyílt meg
 @msg	this file's PostScript couldn't be read ({why}): {what}	a fájl PostScript-tartalma nem olvasható ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	ez a formátum egy rajztáblát tárol: többet PDF-ként vagy a document.exportForScreens paranccsal exportálj
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	ez DWG-rajz, amely nem olvasható: mentsd ASCII DXF-ként a CAD-alkalmazásból, és azt nyisd meg

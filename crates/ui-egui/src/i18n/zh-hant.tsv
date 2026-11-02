@@ -1767,6 +1767,7 @@ file-filter	Templates	範本
 @msg	the document has no artboard	文件沒有工作區域
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	此格式只能容納一個工作區域：若要匯出多個，請匯出為 PDF 或使用 document.exportForScreens
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	此檔案儲存時未啟用 PDF 相容性，且無法讀取其編輯資料 ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	無法讀取 PDF 部分 ({_1})：已從其編輯資料開啟檔案
 @msg	the export wrote no file	匯出未寫入任何檔案
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} 檔案可以開啟，但無法寫入 (請參閱 document.formats)
 @msg	{_1} files are written by file.saveAsTemplate	{_1} 檔案由 file.saveAsTemplate 寫入

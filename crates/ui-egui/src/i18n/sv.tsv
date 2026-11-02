@@ -4486,6 +4486,7 @@ axis	Both	Båda
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	områdestext i ramar som var för låga för en rad i det typsnitt den visas med fick högre ramar ({_1}): annars skulle texten inte synas
 @msg	its editing data doesn't say where its art is	dess redigeringsdata anger inte var dess grafik finns
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	den här filen sparades utan PDF-kompatibilitet och dess redigeringsdata kan inte läsas ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF-delen kunde inte läsas ({_1}): filen öppnades från dess redigeringsdata
 @msg	No fonts are missing in this document	Inga typsnitt saknas i det här dokumentet
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft söker inte i andra appars eller systemets mappar: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft söker inte i mappen Shared eller Public under Users: {path}

@@ -4038,6 +4038,7 @@ theme	Appearance	외관
 @msg	the document has no artboard	문서에 아트보드가 없습니다
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	이 형식은 아트보드를 하나만 담을 수 있습니다. 여러 개는 PDF로 내보내거나 document.exportForScreens를 사용하세요
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	이 파일은 PDF 호환성 없이 저장되어 편집 데이터를 읽을 수 없습니다({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF 부분을 읽지 못했습니다({_1}). 편집 데이터에서 파일을 열었습니다
 @msg	the export wrote no file	내보내기에서 파일이 만들어지지 않았습니다
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} 파일은 열 수 있지만 쓸 수 없습니다(document.formats 참조)
 @msg	{_1} files are written by file.saveAsTemplate	{_1} 파일은 file.saveAsTemplate로 기록합니다

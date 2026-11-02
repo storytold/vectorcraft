@@ -4502,6 +4502,7 @@ theme	Appearance	Erscheinungsbild
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	der PDF-Teil konnte nicht gelesen werden ({_1}): die Datei wurde aus ihren Bearbeitungsdaten geöffnet
 @msg	No fonts are missing in this document	In diesem Dokument fehlen keine Schriften
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft durchsucht keine Ordner anderer Apps oder des Systems: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft durchsucht nicht den Ordner „Shared“ oder „Public“ unter „Users“: {path}

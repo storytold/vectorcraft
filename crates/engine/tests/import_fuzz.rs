@@ -2678,6 +2678,39 @@ fn zstd(text: &str) -> Vec<u8> {
     ruzstd::encoding::compress_to_vec(text.as_bytes(), ruzstd::encoding::CompressionLevel::Fastest)
 }
 
+/// A one-page `.ai` whose page's content stream has decode parameters the import refuses (#4366),
+/// carrying `private` in one stream with the entries `filter`, under the key `{key}1` of its
+/// `PieceInfo`; with an object stream of entries `object_stream` when they aren't empty.
+fn refused_ai(private: &[u8], key: &str, filter: &str, object_stream: &str) -> Vec<u8> {
+    let stream = |dict: &str, data: &[u8]| [format!("<< {dict} /Length {} >>\nstream\n", data.len()).as_bytes(), data, b"\nendstream"].concat();
+    let mut objects: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /PieceInfo << /Illustrator << /Private << /{key}1 5 0 R /NumBlock 1 >> >> >> >>")
+            .into_bytes(),
+        stream("/DecodeParms << /Predictor 12 /Columns 0 >>", b"0 g 10 10 20 20 re f"),
+        stream(filter, private),
+    ];
+    if !object_stream.is_empty() {
+        objects.push(stream(object_stream, b"8 0 << >>"));
+    }
+    let mut out = b"%PDF-1.5\n".to_vec();
+    let mut offsets = vec![];
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend(format!("{} 0 obj\n", i + 1).bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).bytes());
+    for off in offsets {
+        out.extend(format!("{off:010} 00000 n \n").bytes());
+    }
+    out.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).bytes());
+    out
+}
+
 /// An EPS drawing a square whose private data holds `editing`.
 fn editing_eps(editing: &str) -> Vec<u8> {
     let lines: Vec<String> = ascii85(&zstd(editing)).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
@@ -3002,6 +3035,55 @@ proptest! {
             }
         }
         survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// A `.ai` whose PDF part can't be read (#4366), its private data damaged or hostile, under
+    /// any key and filter: it opens from its editing data, or with the error of its PDF part.
+    #[test]
+    fn ai_whose_pdf_part_cant_be_read_never_panics(
+        cut in 0usize..3_000,
+        edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '(', ')', '/', '%', 'u', 'U', 'L'])), 0..8),
+        junk in prop::collection::vec(any::<u8>(), 0..64),
+        key in prop::sample::select(vec!["AIPrivateData", "AIPDFPrivateData", "AIPrivateData2", "Other"]),
+        filter in prop::sample::select(vec!["", "/Filter /FlateDecode", "/Filter /Bogus", "/Filter [/FlateDecode /FlateDecode]", "/DP << /Predictor 2 >>", "/Filter 7"]),
+    ) {
+        let text = mutate_text(&editing_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text), &junk].concat();
+        let bytes = refused_ai(&private, key, filter, "");
+        let plain = vectorcraft_engine::cmd::fileio::LoadOptions { editing_data: false, ..Default::default() };
+        let page_error = vectorcraft_engine::cmd::fileio::load_with("x.ai", &bytes, &plain).err().map(|e| e.to_string());
+        prop_assert!(page_error.is_some());
+        let _ = catch_quiet(|| vectorcraft_pdf::illustrator_data_without_pdf_part(&bytes, None)).expect("the private data read panicked");
+        let mut opened = None;
+        survive("a .ai whose PDF part can't be read", || {
+            let l = vectorcraft_engine::cmd::fileio::load("x.ai", &bytes);
+            opened = Some(l.as_ref().map(|l| l.editing_data).map_err(|e| e.to_string()));
+            l.ok().map(|l| l.doc)
+        })?;
+        match opened {
+            Some(Ok(editing)) => prop_assert!(editing),
+            Some(Err(e)) => prop_assert_eq!(Some(e), page_error),
+            None => {}
+        }
+    }
+
+    /// The same file with a damaged table of objects and an object stream the reader would fail
+    /// on: refused, as before.
+    #[test]
+    fn ai_with_a_hostile_object_stream_is_refused(damage in prop::collection::vec((0usize..200, any::<u8>()), 0..6)) {
+        let private = [&b"%AI12_CompressedData"[..], &deflated(&vectorcraft_testkit::ai::sample_data())].concat();
+        let mut bytes = refused_ai(&private, "AIPrivateData", "/Filter /FlateDecode", "/Type /ObjStm /N 1 /First 4 /DecodeParms << /Predictor 12 /Columns 0 >>");
+        let table = bytes.windows(5).rposition(|w| w == b"xref\n").unwrap_or(0);
+        for (at, b) in damage {
+            let n = bytes.len() - table;
+            if let Some(x) = bytes.get_mut(table + at % n) {
+                *x = b;
+            }
+        }
+        let read = catch_quiet(|| vectorcraft_pdf::illustrator_data_without_pdf_part(&bytes, None)).expect("the private data read panicked");
+        prop_assert!(read.is_none());
+        let opened = catch_quiet(|| vectorcraft_engine::cmd::fileio::load("x.ai", &bytes).is_ok()).expect("the open panicked");
+        prop_assert!(!opened);
     }
 
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning

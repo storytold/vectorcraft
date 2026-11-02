@@ -4535,6 +4535,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	οι περιοχές κειμένου με πλαίσια πολύ μικρά για μία γραμμή της γραμματοσειράς τους απέκτησαν μεγαλύτερο ύψος ({_1}), διαφορετικά το κείμενο δεν θα εμφανιζόταν
 @msg	its editing data doesn't say where its art is	τα δεδομένα επεξεργασίας του δεν προσδιορίζουν τη θέση του σχεδίου
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	το αρχείο αποθηκεύτηκε χωρίς συμβατότητα PDF και τα δεδομένα επεξεργασίας του δεν μπορούν να διαβαστούν ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	το τμήμα PDF δεν μπόρεσε να διαβαστεί ({_1}): το αρχείο άνοιξε από τα δεδομένα επεξεργασίας του
 @msg	No fonts are missing in this document	Δεν λείπουν γραμματοσειρές από αυτό το έγγραφο
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	Το VectorCraft δεν αναζητά στους φακέλους άλλων εφαρμογών ή του συστήματος: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	Το VectorCraft δεν αναζητά στους φακέλους Shared ή Public των Χρηστών: {path}

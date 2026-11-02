@@ -4111,6 +4111,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the document has no artboard	ドキュメントにアートボードがありません
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	この形式で書き出せるアートボードは 1 つだけです: 複数のアートボードは PDF として書き出すか、document.exportForScreens を使用してください
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	このファイルは PDF 互換性なしで保存されており、編集データを読み込めません ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF 部分を読み込めませんでした ({_1})。編集データからファイルを開きました
 @msg	the export wrote no file	書き出しでファイルが作成されませんでした
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} ファイルは開けますが、保存や書き出しはできません (document.formats を参照してください)
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ファイルは file.saveAsTemplate で保存します
