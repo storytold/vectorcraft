@@ -43,6 +43,8 @@ private editing data. VectorCraft:
   write) is its own editing data: it opens through the layers its program has, compared with its page
   when the program runs, from the layers alone when it names its prolog without including it (#1027), and with its art on one
   layer when it has no layers (Illustrator 3, and image editors' exported paths: storytold/photocraft#6036).
+  A multi-layer mask (`Mb` … `Md` … `MB`) comes in as a clipping group in each layer it covers, each
+  clipped by a copy of the mask's path.
   RGB in the PDF page's `ICCBased` spaces keeps the file's numbers in a `.ai` (the `uncalibrated_rgb`
   import option, on for editor documents, off for PDFs), so `.ai` files tagged with a non-sRGB RGB profile
   open with different, unconverted RGB colours than before.

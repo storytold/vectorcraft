@@ -4036,11 +4036,16 @@ imageTrace	Outline	轮廓
 @msg	unknown command `{0}`; did you mean `{1}`?	未知命令 `{0}`；您是否想输入 `{1}`？
 @msg	`{what}` closes nothing	`{what}` 没有可结束的内容
 @msg	`{what}` closes something it didn't open	`{what}` 结束了并非由它开始的内容
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	覆盖多个图层的蒙版会在其覆盖的每个图层中作为剪切组导入
 @msg	a graph's records don't end where they should: its art was read as it is	图表的记录没有在应有的位置结束：其图稿按原样读取
 @msg	`{w}` takes no operands	`{w}` 不接受操作数
 @msg	a wraparound group is inside a compound path	文本绕排组位于复合路径内
 @msg	a path has too many points	某条路径的点过多
 @msg	it ends inside a layer	它在图层内部结束
+@msg	it ends inside a multi-layer mask	它在跨图层蒙版内部结束
+@msg	a multi-layer mask's operators are out of order	跨图层蒙版的运算符顺序错误
+@msg	a multi-layer mask needs one clipping path	跨图层蒙版需要一条剪切路径
+@msg	a group crosses a multi-layer mask	编组跨越了跨图层蒙版
 @msg	it has art outside its layers	它有位于图层之外的图稿
 @msg	it has more than {MAX_NODES} objects	它包含超过 {MAX_NODES} 个对象
 @msg	it has no layers	它没有图层

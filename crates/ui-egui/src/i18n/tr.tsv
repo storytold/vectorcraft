@@ -4303,11 +4303,16 @@ axis	Both	Her İkisi
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	bu düz renkli bir logo değildir (düz alanların %{_1}'si birkaç düz renkle eşleşir), dolayısıyla Düz Logo modu degradelerini yamalara dönüştürür: bunun yerine Renk modunu kullanın
 @msg	`{what}` closes nothing	`{what}` hiçbir şeyi kapatmaz
 @msg	`{what}` closes something it didn't open	`{what}` açmadığı bir şeyi kapatıyor
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	birkaç katmanı kaplayan bir maske, kapladığı her katmana bir kırpma grubu olarak gelir
 @msg	a graph's records don't end where they should: its art was read as it is	bir grafiğin kayıtları bitmesi gereken yerde bitmiyor: resmi olduğu gibi okundu
 @msg	`{w}` takes no operands	`{w}` işlenen almaz
 @msg	a wraparound group is inside a compound path	bir metin kaydırma grubu bileşik bir yolun içinde
 @msg	a path has too many points	bir yolun çok fazla noktası var
 @msg	it ends inside a layer	bir katmanın içinde bitiyor
+@msg	it ends inside a multi-layer mask	çok katmanlı bir maskenin içinde bitiyor
+@msg	a multi-layer mask's operators are out of order	çok katmanlı bir maskenin işleçleri yanlış sırada
+@msg	a multi-layer mask needs one clipping path	çok katmanlı bir maskenin bir kırpma yoluna ihtiyacı var
+@msg	a group crosses a multi-layer mask	bir grup çok katmanlı bir maskeyi kesiyor
 @msg	it has art outside its layers	katmanlarının dışında sanat var
 @msg	it has more than {MAX_NODES} objects	{MAX_NODES}'den daha fazla nesneye sahip
 @msg	it has no layers	katmanı yok
