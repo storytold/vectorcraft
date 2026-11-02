@@ -6048,7 +6048,6 @@ breakText	Glyphs	字形
 	Divide into Dashes…	分割为短划线…
 	Divide into Dashes	分割为短划线
 	Dash:	短划线：
-	Gap:	间隙：
 	Fit to Corners and Ends	适合转角和端点
 	Remove Gaps	移除间隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	这会产生过多片段（最多 100000 个）：请加长短划线

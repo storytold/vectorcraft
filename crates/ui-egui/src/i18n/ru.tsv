@@ -6184,7 +6184,6 @@ breakText	Glyphs	Глифы
 	Divide into Dashes…	Разделить на штрихи…
 	Divide into Dashes	Разделить на штрихи
 	Dash:	Тире:
-	Gap:	Зазор:
 	Fit to Corners and Ends	Подогнать к углам и концам
 	Remove Gaps	Убрать зазоры
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так получится слишком много частей (не более 100000): удлините штрихи

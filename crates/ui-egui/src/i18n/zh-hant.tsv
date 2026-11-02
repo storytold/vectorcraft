@@ -5845,7 +5845,6 @@ breakText	Glyphs	字符
 	Divide into Dashes…	分割為短破折號…
 	Divide into Dashes	分割為短破折號
 	Dash:	短破折號：
-	Gap:	間隙：
 	Fit to Corners and Ends	符合轉角和端點
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號

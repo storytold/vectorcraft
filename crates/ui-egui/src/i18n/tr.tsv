@@ -6162,7 +6162,6 @@ breakText	Glyphs	Glifler
 	Divide into Dashes…	Tirelere Böl…
 	Divide into Dashes	Tirelere Böl
 	Dash:	Tire:
-	Gap:	Boşluk:
 	Fit to Corners and Ends	Köşelere ve Uçlara Uydur
 	Remove Gaps	Boşlukları Kaldır
 @msg	that makes too many pieces (at most 100000): make the dashes longer	bu çok fazla parça oluşturur (en fazla 100000): tireleri uzatın

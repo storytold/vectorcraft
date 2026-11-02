@@ -6237,7 +6237,6 @@ breakText	Glyphs	Merkit
 	Divide into Dashes…	Jaa viivoiksi…
 	Divide into Dashes	Jaa viivoiksi
 	Dash:	Ajatusviiva:
-	Gap:	Väli:
 	Fit to Corners and Ends	Sovita kulmiin ja päihin
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja

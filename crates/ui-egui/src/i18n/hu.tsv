@@ -6191,7 +6191,6 @@ breakText	Glyphs	Glifák
 	Divide into Dashes…	Felosztás szaggatásokra…
 	Divide into Dashes	Felosztás szaggatásokra
 	Dash:	Gondolatjel:
-	Gap:	Hézag:
 	Fit to Corners and Ends	Illesztés a sarkokhoz és végekhez
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat

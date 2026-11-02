@@ -6202,7 +6202,6 @@ breakText	Glyphs	Glyphes
 	Divide into Dashes…	Diviser en tirets…
 	Divide into Dashes	Diviser en tirets
 	Dash:	Tiret :
-	Gap:	Écart :
 	Fit to Corners and Ends	Ajuster aux angles et aux extrémités
 	Remove Gaps	Supprimer les écarts
 @msg	that makes too many pieces (at most 100000): make the dashes longer	cela donne trop de morceaux (100000 au plus) : allongez les tirets

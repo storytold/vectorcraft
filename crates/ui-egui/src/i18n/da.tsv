@@ -6079,7 +6079,6 @@ breakText	Glyphs	Glyffer
 	Divide into Dashes…	Opdel i streger…
 	Divide into Dashes	Opdel i streger
 	Dash:	Tankestreg:
-	Gap:	Afstand:
 	Fit to Corners and Ends	Tilpas til hjørner og ender
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere

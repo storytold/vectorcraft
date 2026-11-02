@@ -6195,7 +6195,6 @@ breakText	Glyphs	გლიფები
 	Divide into Dashes…	ტირეებად დაყოფა…
 	Divide into Dashes	ტირეებად დაყოფა
 	Dash:	ტირე:
-	Gap:	ღრეჩო:
 	Fit to Corners and Ends	კუთხეებსა და ბოლოებზე მორგება
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე

@@ -6207,7 +6207,6 @@ breakText	Glyphs	Glyfy
 	Divide into Dashes…	Rozdělit na čárky…
 	Divide into Dashes	Rozdělit na čárky
 	Dash:	Pomlčka:
-	Gap:	Mezera:
 	Fit to Corners and Ends	Přizpůsobit rohům a koncům
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky

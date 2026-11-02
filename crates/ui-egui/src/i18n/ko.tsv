@@ -5788,7 +5788,6 @@ breakText	Glyphs	글리프
 	Divide into Dashes…	대시로 나누기…
 	Divide into Dashes	대시로 나누기
 	Dash:	대시:
-	Gap:	간격:
 	Fit to Corners and Ends	모퉁이와 끝에 맞추기
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오

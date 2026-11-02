@@ -6062,7 +6062,6 @@ breakText	Glyphs	Glify
 	Divide into Dashes…	Podziel na kreski…
 	Divide into Dashes	Podziel na kreski
 	Dash:	Myślnik:
-	Gap:	Odstęp:
 	Fit to Corners and Ends	Dopasuj do narożników i końców
 	Remove Gaps	Usuń odstępy
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje za dużo części (najwyżej 100000): wydłuż kreski

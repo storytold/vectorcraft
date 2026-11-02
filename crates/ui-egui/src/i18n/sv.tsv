@@ -6259,7 +6259,6 @@ breakText	Glyphs	Glyfer
 	Divide into Dashes…	Dela upp i streck…
 	Divide into Dashes	Dela upp i streck
 	Dash:	Tankstreck:
-	Gap:	Mellanrum:
 	Fit to Corners and Ends	Anpassa till hörn och ändar
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre

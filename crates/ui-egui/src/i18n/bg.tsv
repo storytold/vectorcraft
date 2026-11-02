@@ -6064,7 +6064,6 @@ breakText	Glyphs	Глифи
 	Divide into Dashes…	Разделяне на тирета…
 	Divide into Dashes	Разделяне на тирета
 	Dash:	Тире:
-	Gap:	Разстояние:
 	Fit to Corners and Ends	Напасване към ъгли и краища
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата

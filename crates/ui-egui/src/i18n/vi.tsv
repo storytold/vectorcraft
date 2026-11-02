@@ -5808,7 +5808,6 @@ breakText	Glyphs	Glyph
 	Divide into Dashes…	Chia thành nét đứt…
 	Divide into Dashes	Chia thành nét đứt
 	Dash:	Gạch ngang:
-	Gap:	Khoảng hở:
 	Fit to Corners and Ends	Khớp với góc và đầu mút
 	Remove Gaps	Gỡ các khoảng hở
 @msg	that makes too many pieces (at most 100000): make the dashes longer	như vậy tạo ra quá nhiều mảnh (tối đa 100000): hãy kéo dài nét

@@ -5793,7 +5793,6 @@ breakText	Glyphs	Glyphen
 	Divide into Dashes…	In Striche aufteilen…
 	Divide into Dashes	In Striche aufteilen
 	Dash:	Strich:
-	Gap:	Abstand:
 	Fit to Corners and Ends	An Ecken und Enden anpassen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger

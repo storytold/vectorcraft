@@ -5827,7 +5827,6 @@ breakText	Glyphs	Glifi
 	Divide into Dashes…	Dividi in trattini…
 	Divide into Dashes	Dividi in trattini
 	Dash:	Trattino:
-	Gap:	Distanza:
 	Fit to Corners and Ends	Adatta ad angoli ed estremità
 	Remove Gaps	Rimuovi le distanze
 @msg	that makes too many pieces (at most 100000): make the dashes longer	così si ottengono troppi pezzi (al massimo 100000): allunga i trattini

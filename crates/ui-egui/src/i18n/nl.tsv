@@ -6123,7 +6123,6 @@ breakText	Glyphs	Glyphs
 	Divide into Dashes…	Verdelen in streepjes…
 	Divide into Dashes	Verdelen in streepjes
 	Dash:	Streepje:
-	Gap:	Tussenruimte:
 	Fit to Corners and Ends	Passend maken op hoeken en uiteinden
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer

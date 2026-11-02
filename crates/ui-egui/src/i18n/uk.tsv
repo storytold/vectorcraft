@@ -5807,7 +5807,6 @@ breakText	Glyphs	Гліфи
 	Divide into Dashes…	Розділити на штрихи…
 	Divide into Dashes	Розділити на штрихи
 	Dash:	Тире:
-	Gap:	Проміжок:
 	Fit to Corners and Ends	Припасувати до кутів і кінців
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи

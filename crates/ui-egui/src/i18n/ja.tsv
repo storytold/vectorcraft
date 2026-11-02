@@ -5892,7 +5892,6 @@ breakText	Glyphs	字形
 	Divide into Dashes…	ダッシュに分割…
 	Divide into Dashes	ダッシュに分割
 	Dash:	ダッシュ:
-	Gap:	間隔:
 	Fit to Corners and Ends	コーナーと端に合わせる
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
