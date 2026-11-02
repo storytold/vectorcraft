@@ -60,6 +60,13 @@
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
 //!
+//! - Graphic styles: the style list (`%AI9_BeginArtStyleList`), one `(name)` per style in the
+//!   panel's order, each the name of an art style. The listed styles whose appearance reads
+//!   ([`appearance_from_art_style`](ops::appearance_from_art_style)) replace the default graphic
+//!   styles, and an object read as itself with a listed style (`1 (name) XW`) that has the
+//!   style's appearance and transparency is linked to it. A `1` naming a style the list doesn't
+//!   have is the object's own appearance, not a link.
+//!
 //! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
 //! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
 //! it doesn't know are errors.
@@ -140,6 +147,8 @@ pub struct Structure {
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
+    /// The document's graphic styles are those of the file's style list, in place of the defaults.
+    pub styles_read: bool,
     pub warnings: Vec<String>,
 }
 
@@ -277,6 +286,11 @@ struct Reader<'a> {
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
     styles: HashMap<String, super::style::ArtStyle>,
+    /// The style list (`%AI9_BeginArtStyleList`): the Graphic Styles panel's names, in its order.
+    style_list: Vec<Vec<u8>>,
+    /// The objects read as themselves with the style their `1 (style) XW` names: their id and the
+    /// style's name, as written.
+    style_links: Vec<(NodeId, String)>,
     /// The swatches (`%AI5_BeginPalette`).
     palette: super::palette::Palette,
     /// See [`Structure::restyled`].
@@ -394,6 +408,8 @@ impl<'a> Reader<'a> {
             layer_state: None,
             mesh_undo: None,
             styles: HashMap::new(),
+            style_list: vec![],
+            style_links: vec![],
             palette: super::palette::Palette::default(),
             restyled: vec![],
             placed_elsewhere: vec![],
