@@ -56,7 +56,7 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
-    crate::community::links(app, ui);
+    crate::community::links(app, ui, app.ui.show_discord_button);
 }
 
 /// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and
