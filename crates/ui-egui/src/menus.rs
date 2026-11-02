@@ -62,7 +62,7 @@ pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
-pub use entries::{MenuEntry, Row, context_entries, entry, menu_entries, pretty_shortcut};
+pub use entries::{MenuEntry, Row, context_entries, entry, menu_entries, pretty_shortcut, shown_shortcut};
 pub(crate) use invoke::graph_dialog;
 pub use invoke::{click_target, invoke, invoke_from_system_menu};
 #[cfg(test)]

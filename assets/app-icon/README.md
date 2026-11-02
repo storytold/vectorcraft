@@ -16,9 +16,7 @@ head-and-shoulders portrait on a full-bleed field, no frame or roundel, with the
 **Tile:** `viewBox="0 0 512 512"`, a rounded square with `rx=112`, clipped. The macOS files add Apple's
 transparent margin (tile = 824/1024 of the canvas); Windows and Linux use the tile edge to edge.
 
-**Provenance:** the owner's original ArtCraft drawing (2880 px, keyed to the palette), vectorised with
-craftrules `assets/logo-options/_tools/vectorize_tile.py`. The drawing is kept in craftrules at
-`craftrules/assets/app-icons/vectorcraft/source.png`, not here. `vectorcraft.svg` is the canonical
+**Provenance:** the owner's original ArtCraft drawing, vectorised. `vectorcraft.svg` is the canonical
 artwork. Licence: see `LICENSE.txt`.
 
 ## Files

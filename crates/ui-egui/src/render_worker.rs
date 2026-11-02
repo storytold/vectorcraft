@@ -1,6 +1,7 @@
 //! Background rendering (native): heavy documents render off the UI thread while the canvas shows
-//! the previous frame reprojected to the current view. Light documents render synchronously so
-//! edits never lag behind overlays.
+//! the previous frame reprojected to the current view. A second worker renders a low-resolution
+//! frame for the parts that frame does not reach (`canvas::fill_uncovered`). Light documents
+//! render synchronously so edits never lag behind overlays.
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};

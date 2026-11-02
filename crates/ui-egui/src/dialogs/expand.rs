@@ -24,9 +24,20 @@ const OPTIONS: [(&str, &str); 3] = [("object", "Object"), ("fill", "Fill"), ("st
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Expand").into(), body, confirm, min_width: 260.0, ..DialogSpec::FORM };
 
-/// Open Expand for the selection, every option on (as `object.expand {}` does).
+/// Why Object › Expand… is dimmed: the selection has appearance attributes, which Expand Appearance
+/// turns into plain art first (#3089).
+pub(crate) fn appearance_first() -> &'static str {
+    tl!("Expand Appearance first (Object › Expand Appearance)")
+}
+
+/// Open Expand for the selection, every option on (as `object.expand {}` does). A selection with
+/// appearance attributes (effects, several fills or strokes…) refuses with [`appearance_first`]:
+/// the menu item is dimmed for it.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let info = app.session.execute("object.expand.info", &json!({})).map_err(|e| e.to_string())?;
+    if info["appearance"] == json!(true) {
+        return Err(appearance_first().into());
+    }
     let mut fields = json!({"object": true, "fill": true, "stroke": true, "gradient": "objects", "steps": DEFAULT_STEPS});
     for (key, _) in OPTIONS {
         fields[format!("__{key}")] = info[key].clone();
@@ -168,5 +179,50 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         let st = app.session.doc().unwrap();
         assert!(matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::Path { live: None, .. }));
+    }
+
+    /// A line with a stroke and a Zig Zag effect is selected (#3089).
+    fn zig_zag_line(app: &mut VectorcraftApp) {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("path.create", json!({"d": "M 20 100 L 180 100"})).unwrap();
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 10, "ridges": 6, "relative": false}})).unwrap();
+    }
+
+    #[test]
+    fn expand_waits_for_expand_appearance_on_a_line_with_an_effect() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        zig_zag_line(&mut app);
+        assert!(!crate::menus::enabled(&app, "ui.expandDialog"), "Expand… is dimmed for the Zig Zag effect");
+        assert!(crate::menus::enabled(&app, "effect.expandAppearance"));
+        // A shortcut or the command palette doesn't open it either; the status bar says why.
+        let before = app.session.doc().unwrap().doc.clone();
+        crate::menus::invoke(&mut app, "object.expand", json!({}));
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.ui.status, appearance_first());
+        assert_eq!(app.run("ui.expandDialog", json!({})).unwrap_err(), appearance_first());
+        assert_eq!(app.session.doc().unwrap().doc, before, "the line is left as it was");
+        // Expand Appearance first: the line stays a stroked line, and Expand… is available for it.
+        crate::menus::invoke(&mut app, "effect.expandAppearance", json!({}));
+        let st = app.session.doc().unwrap();
+        let line = st.doc.node(st.selection.objects[0]).unwrap();
+        assert!(line.appearance.effects.is_empty() && !line.appearance.stroke_paint().is_none());
+        assert!(crate::menus::enabled(&app, "ui.expandDialog"));
+        crate::menus::invoke(&mut app, "object.expand", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+    }
+
+    #[test]
+    fn expand_is_dimmed_for_two_fills_but_not_for_a_plain_rectangle() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60})).unwrap();
+        assert!(crate::menus::enabled(&app, "ui.expandDialog"), "a basic appearance");
+        app.run("appearance.addFill", json!({})).unwrap();
+        assert!(!crate::menus::enabled(&app, "ui.expandDialog"), "two fills");
+        // Nothing selected: dimmed as before.
+        app.run("select.none", json!({})).unwrap();
+        assert!(!crate::menus::enabled(&app, "ui.expandDialog"));
     }
 }

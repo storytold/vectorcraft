@@ -342,14 +342,37 @@ fn top_level_commas(list: &str) -> impl Iterator<Item = &str> {
 
 /// Rules from every `<style>` element, in source order.
 fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
-    // Drop comments.
+    // Drop comments outside strings.
     let mut text = String::with_capacity(css.len());
-    let mut rest = css;
-    while let Some(i) = rest.find("/*") {
-        text.push_str(&rest[..i]);
-        rest = rest[i + 2..].find("*/").map_or("", |j| &rest[i + 2 + j + 2..]);
+    let mut chars = css.chars().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+    while let Some(c) = chars.next() {
+        if let Some(q) = quote {
+            text.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == q {
+                quote = None;
+            }
+        } else if c == '\'' || c == '"' {
+            quote = Some(c);
+            text.push(c);
+        } else if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            let mut prev_star = false;
+            for c in chars.by_ref() {
+                if prev_star && c == '/' {
+                    break;
+                }
+                prev_star = c == '*';
+            }
+        } else {
+            text.push(c);
+        }
     }
-    text.push_str(rest);
     let mut s = text.as_str();
     loop {
         s = s.trim_start();

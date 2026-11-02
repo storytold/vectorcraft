@@ -1,5 +1,5 @@
 use super::edit::regenerate;
-use super::*;
+use super::{Arc, Document, GraphDesign, GraphSpec, Result, Session, Value, bad, json, ok, str_param};
 
 /// The document's graph design names, in order.
 pub(super) fn design_names(d: &Document) -> Vec<String> {

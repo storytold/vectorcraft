@@ -1,7 +1,7 @@
 use super::drag::{drag_id, drop_press};
-use super::*;
+use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
-/// Fit the view (View → Fit Artboard / Fit All / Actual Size).
+/// Fit the view (View → Fit Artboard / Fit All / Actual Size, Arrange Tools › Zoom to Selection).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(rect) = app.canvas_rect else {
         if let Some(v) = app.view_mut() {
@@ -15,6 +15,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         "view.fitAll" => {
             st.doc.art_bounds().map(|a| st.doc.artboards.iter().fold(a, |r, ab| r.union(ab.rect))).or(st.doc.artboards.first().map(|a| a.rect))
         }
+        crate::addons::arrange::ZOOM => st.doc.bounds_of(&st.selection.objects, true),
         // The navigator's artboard (the first if it has gone).
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
@@ -64,7 +65,8 @@ pub(super) const HOLD_DELAY: f32 = 0.3;
 pub(super) const HOLD_ZOOM: f64 = std::f64::consts::LN_2;
 
 /// Performance › Animated Zoom, which needs GPU Performance as in Illustrator: the Zoom tool zooms
-/// as it is dragged sideways or held, instead of zooming to the area dragged across.
+/// as it is dragged sideways or held, instead of zooming to the area dragged across, and a wheel
+/// notch's zoom glides in ([`wheel`]).
 pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
     p.animated_zoom && p.gpu_performance
 }
@@ -336,11 +338,19 @@ struct ThumbDrag {
 /// a zoom factor (about the pointer) and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
 /// on the Mac) zoom. With General › Zoom with Mouse Wheel (`wheel_zooms`) the wheel and Alt-wheel
 /// zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. `line` and `page`: points
-/// per wheel line and page. `turn`: kept by the caller across frames. A mouse wheel's notches zoom
-/// in a glide over a few frames, as scrolling does (#888); a trackpad's fine steps at once.
-pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, turn: &mut WheelTurn) -> (f64, egui::Vec2) {
+/// per wheel line and page. `turn`: kept by the caller across frames. With Performance › Animated
+/// Zoom (`animate`) a mouse wheel's notches zoom in a glide over a few frames, as scrolling does
+/// (#888); off, each notch zooms on the frame it arrives (#4283). A trackpad's fine steps zoom at
+/// once either way.
+pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, animate: bool, line: f32, page: f32, turn: &mut WheelTurn) -> (f64, egui::Vec2) {
     // Fingers on a touch screen pan the content with them (a trackpad sends scrolls instead).
     let pan = i.multi_touch().map_or(egui::Vec2::ZERO, |t| t.translation_delta);
+    // A wheel event's motion in points.
+    let points = |unit: &egui::MouseWheelUnit, delta: egui::Vec2| match unit {
+        egui::MouseWheelUnit::Point => delta,
+        egui::MouseWheelUnit::Line => delta * line,
+        egui::MouseWheelUnit::Page => delta * page,
+    };
     if !wheel_zooms {
         // egui makes Cmd-wheel (and a pinch) its zoom and the rest a scroll it spreads over a few
         // frames: the rest of an Alt-wheel turn zooms too, however soon Alt is let go.
@@ -348,6 +358,17 @@ pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f3
             turn.alt = m.alt && !m.command;
         }
         let (zoom, scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
+        if turn.alt && !animate {
+            // Without Animated Zoom, Alt-wheel zooms by the wheel events themselves, on the frame
+            // they arrive; the rest of egui's spread scroll is dropped.
+            let d: f32 = i
+                .events
+                .iter()
+                .filter_map(|e| if let egui::Event::MouseWheel { unit, delta, .. } = e { Some(points(unit, *delta)) } else { None })
+                .map(|d| d.x + d.y)
+                .sum();
+            return (zoom * (f64::from(d) * WHEEL_ZOOM).exp(), pan);
+        }
         return if turn.alt && scroll != egui::Vec2::ZERO {
             (zoom * (f64::from(scroll.x + scroll.y) * WHEEL_ZOOM).exp(), pan)
         } else {
@@ -360,16 +381,12 @@ pub(super) fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f3
     for e in &i.events {
         match e {
             egui::Event::MouseWheel { unit, delta, modifiers, .. } => {
-                let d = match unit {
-                    egui::MouseWheelUnit::Point => *delta,
-                    egui::MouseWheelUnit::Line => *delta * line,
-                    egui::MouseWheelUnit::Page => *delta * page,
-                };
+                let d = points(unit, *delta);
                 if modifiers.command {
                     scroll.x += d.x + d.y;
                 } else if modifiers.shift {
                     scroll.y += d.x + d.y;
-                } else if *unit == egui::MouseWheelUnit::Point {
+                } else if *unit == egui::MouseWheelUnit::Point || !animate {
                     zoom *= (f64::from(d.y) * WHEEL_ZOOM).exp();
                     scroll.x += d.x;
                 } else {

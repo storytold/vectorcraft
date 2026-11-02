@@ -11,7 +11,7 @@ use vectorcraft_scriptcheck::{Limits, Loaded, Loader, Report};
 /// The ids a reply can hold, for the windows that show it.
 pub use vectorcraft_scriptcheck::{IncludeStatus, Need, OUTSIDE, PROBLEMS};
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param};
 
 /// The extensions of the scripts File › Open shows a check for.
 pub const EXTS: &[&str] = &["jsx", "jsxinc", "jsxbin"];

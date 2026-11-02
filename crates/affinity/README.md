@@ -17,7 +17,7 @@ Affinity files.
 | Curves (`PCrv`): cubic subpaths, closed flags, live corners (`CnrD`) | paths (multi-subpath curves fill even-odd) |
 | Rectangles with corner radii (relative or absolute, locked or per corner) and round or straight corners, ellipses, polygons (smooth too), stars, square stars, pies, triangles, trapezoids | paths |
 | Compound shapes (`Comp`, add and subtract) | one even-odd path |
-| A shape or curve with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
+| A shape, curve or text with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
 | Vector masks (`AdCh` curves and shapes) | clip group |
 | Pixel masks (`MRst`, attached or as a layer in a group) | opacity mask |
 | Solid fills: RGBA, HSLA, CMYK, grey, Lab (D50) | fill appearance (alpha as fill opacity) |

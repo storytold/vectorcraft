@@ -1,5 +1,5 @@
 use super::char_style::CharStyle;
-use super::*;
+use super::{Affine, Deserialize, PathData, Point, Rect, Serialize, Vec2, yes};
 
 /// A named character or paragraph style: the attributes it sets (a subset of [`CharStyle`] or
 /// [`ParaStyle`] fields, by their serialized names). Text using it records the name.

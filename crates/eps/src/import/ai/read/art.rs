@@ -1,13 +1,19 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
-use super::types::{FLIP, IMAGE_TOO_LARGE, LINKED_PREVIEWS, MAX_PIXELS, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, Place};
-use super::*;
+use super::types::{
+    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
+    NON_NATIVE_ART_UNREAD, Place,
+};
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node, NodeId,
+    NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
+};
 
 impl<'a> Reader<'a> {
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
     pub(super) fn text_slot(&mut self, o: &Obj) -> Result<(), String> {
         if self.pattern.is_some() {
-            self.unreadable("type in a pattern");
+            self.unreadable("type in a pattern", false);
         }
         // `1 /FreeUndo`: the type in the drawn look of a text object that has an appearance. Its
         // story is one of another text document (`/AI11UndoFreeTextDocument`), which counts its
@@ -157,6 +163,10 @@ impl<'a> Reader<'a> {
         if op.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
             close(&mut bp);
         }
+        let line = match bp.elements() {
+            [PathEl::MoveTo(a), PathEl::LineTo(b)] => Some((*a, *b)),
+            _ => None,
+        };
         let to_doc = self.space();
         let path = PathData::from_bezpath(&(to_doc * bp));
         let gs = self.gs.clone();
@@ -166,6 +176,8 @@ impl<'a> Reader<'a> {
             "b" => (true, true),
             _ => (false, false),
         };
+        // A gradient instance's paint replaces the missing pattern.
+        let unread = (fill && self.pending_unread_fill && fill_paint.is_none()) || (stroke && self.pending_unread_stroke && stroke_paint.is_none());
         let mut items = Vec::new();
         if fill && !clip {
             items.push(AppearanceItem::Fill(FillLayer {
@@ -184,6 +196,19 @@ impl<'a> Reader<'a> {
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
+        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        if guide
+            && op == "N"
+            && !hidden
+            && !gs.hidden
+            && !clip
+            && self.pattern.is_none()
+            && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
+            && let Some((a, b)) = line
+            && [a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite())
+        {
+            self.ruler_guides.insert(node.id, (a, b));
+        }
         node.appearance = Appearance { items, ..Appearance::default() }.into();
         node.opacity = gs.opacity;
         node.blend = gs.blend;
@@ -207,7 +232,28 @@ impl<'a> Reader<'a> {
             .into();
             copy
         });
+        let unread_bounds = unread.then(|| node.visual_bounds()).flatten();
+        let unread_id = node.id;
         self.add(node, hidden)?;
+        if unread && self.pattern.is_some() {
+            // Art in a pattern's definition painted with a pattern it doesn't have: the tile can't be read.
+            self.unsupported.insert("pattern fills".into());
+        } else if unread && ((hidden && !self.in_mask()) || gs.hidden || !self.shown()) {
+            self.hidden_unread.insert("pattern fills".into());
+        } else if unread && self.in_mask() {
+            self.unreadable("pattern fills", false);
+        } else if unread {
+            match unread_bounds {
+                Some(b) if sane(b) && b.area() > 0.0 => {
+                    if !self.mark_unread("pattern fills".into()) {
+                        self.unread.push((unread_id, vec!["pattern fills".into()]));
+                    }
+                }
+                _ => {
+                    self.unsupported.insert("pattern fills".into());
+                }
+            }
+        }
         if let Some(copy) = copy {
             self.clip_fills.insert(copy.id);
             self.add(copy, hidden)?;
@@ -219,7 +265,7 @@ impl<'a> Reader<'a> {
     pub(super) fn end_mesh(&mut self) -> Result<(), String> {
         let Some((m, hidden)) = self.mesh.take() else { return Ok(()) };
         if m.unread || m.patches.is_empty() {
-            self.unreadable("gradient meshes it can't read");
+            self.unreadable("gradient meshes it can't read", hidden && self.pattern.is_none());
             return Ok(());
         }
         let gs = self.gs.clone();
@@ -230,7 +276,9 @@ impl<'a> Reader<'a> {
                 let mut node = self.new_node(NodeKind::Mesh(one), &gs);
                 node.opacity = gs.opacity;
                 node.blend = gs.blend;
-                return self.add(node, hidden);
+                self.add(node, hidden)?;
+                self.mesh_ended = true;
+                return Ok(());
             }
             Err(crate::import::ai::mesh::NotOne::Unjoined) => {
                 self.warn("a gradient mesh whose patches don't join up comes in as a group of its patches")
@@ -244,7 +292,9 @@ impl<'a> Reader<'a> {
         };
         node.opacity = gs.opacity;
         node.blend = gs.blend;
-        self.add(node, hidden)
+        self.add(node, hidden)?;
+        self.mesh_ended = true;
+        Ok(())
     }
 
     /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
@@ -452,19 +502,56 @@ impl<'a> Reader<'a> {
     /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
     /// without a preview, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
-        let Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)) }) = self.place.take().filter(|p| !p.path.is_empty())
-        else {
-            self.unreadable("placed files");
-            return Ok(());
+        let (m, b, path, png, w, h) = match self.place.take() {
+            Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)) }) if !path.is_empty() => (m, b, path, png, w, h),
+            other => {
+                let boxed = other.as_ref().and_then(|p| Some((p.matrix?, p.bounds?))).filter(|(_, b)| sane(*b) && b.area() > 0.0);
+                let mut have_bounds = false;
+                if self.shown()
+                    && !self.gs.hidden
+                    && !hidden
+                    && let Some((m, b)) = boxed
+                {
+                    let centre = self.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
+                    let origin = centre.map_or(b.origin(), |(x, y)| Point::new(CANVAS_CENTRE - x, CANVAS_CENTRE + y));
+                    let box_at_canvas = Rect::new(origin.x, origin.y, origin.x + b.width(), origin.y + b.height());
+                    let bounds = (self.space() * m).transform_rect_bbox(box_at_canvas);
+                    have_bounds = sane(bounds) && bounds.area() > 0.0;
+                    if have_bounds {
+                        let placeholder_id = self.unread_box("placed files", bounds, hidden)?;
+                        if let Some(placeholder_id) = placeholder_id.filter(|_| self.unread_elsewhere.len() < MAX_PLACED_ELSEWHERE) {
+                            let corner = (self.space() * m).transform_rect_bbox(b);
+                            if sane(corner) && corner.area() > 0.0 && corner != bounds {
+                                self.unread_elsewhere.push((placeholder_id, corner));
+                            }
+                        }
+                        return Ok(());
+                    }
+                }
+                if self.shown() && !self.gs.hidden && !hidden && !have_bounds {
+                    self.unsupported.insert("placed files".into());
+                } else {
+                    self.unreadable("placed files", hidden);
+                }
+                return Ok(());
+            }
         };
         // The file's pixels (y down) start at the canvas point of art space's origin (the box's own
         // corner when the file doesn't say where the canvas is); the preview's are spread over them.
         let centre = self.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
         let origin = centre.map_or(b.origin(), |(x, y)| Point::new(CANVAS_CENTRE - x, CANVAS_CENTRE + y));
-        let over_file = Affine::translate(origin.to_vec2()) * Affine::scale_non_uniform(b.width() / f64::from(w), b.height() / f64::from(h));
+        let (sx, sy) = (b.width() / f64::from(w), b.height() / f64::from(h));
+        let over_file = Affine::translate(origin.to_vec2()) * Affine::scale_non_uniform(sx, sy);
+        // Many files put the pixels at the box's own corner instead: that placement is kept for
+        // when the layers don't draw as the page does with this one (a move in the preview's
+        // pixels, which later moves of the image keep).
+        let to_corner = b.origin() - origin;
+        let elsewhere = (to_corner.hypot() > 0.01 && sx.abs() > 1e-12 && sy.abs() > 1e-12)
+            .then(|| Affine::translate((to_corner.x / sx, to_corner.y / sy)))
+            .filter(|a| a.as_coeffs().iter().all(|v| v.is_finite()));
         let xf = self.space() * m * over_file;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
-            self.unreadable("placed files");
+            self.unreadable("placed files", hidden);
             return Ok(());
         }
         // The preview is all the document has of the file: what a missing link shows.
@@ -473,6 +560,11 @@ impl<'a> Reader<'a> {
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PREVIEWS);
+        if let Some(shift) = elsewhere
+            && self.placed_elsewhere.len() < MAX_PLACED_ELSEWHERE
+        {
+            self.placed_elsewhere.push((NodeId(self.doc.peek_next_id()), shift));
+        }
         self.add_image(
             ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None },
             hidden,
@@ -501,7 +593,9 @@ pub(super) fn elements<'o>(o: &'o Obj, name: &'o str) -> impl Iterator<Item = &'
 /// a space), then `h` rows of `rowBytes` bytes, premultiplied ARGB. `None` when it isn't that, is
 /// larger than [`MAX_PIXELS`] or is cut short.
 pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
-    let mut rest = data.trim_ascii_start();
+    // A placed file's copy on `%_` lines has its header on one too: `%_512 256 2048 32 17 `.
+    let data = data.trim_ascii_start();
+    let mut rest = data.strip_prefix(b"%_").unwrap_or(data);
     let mut head = [0usize; 5];
     for v in &mut head {
         let n = rest.iter().position(|b| *b == b' ')?;
@@ -557,7 +651,7 @@ fn cmyk_rgb([c, m, y, k]: [u8; 4]) -> [u8; 3] {
 }
 
 /// `a`, `a and b`, `a, b and c`.
-pub(super) fn join_and(items: &[&str]) -> String {
+pub(crate) fn join_and(items: &[&str]) -> String {
     match items {
         [] => String::new(),
         [one] => (*one).to_string(),

@@ -1,5 +1,5 @@
 use super::entries::{Drawn, Inputs, Made, raster_bytes};
-use super::*;
+use super::{Affine, Document, EdgeMode, Filter, FilterPrimitive, Ink, RasterFx, Rect, RenderContext, Vec2, effects, peniko};
 
 pub(super) fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -> Filter {
     Filter::from_primitive(FilterPrimitive::DropShadowOnly {
@@ -11,19 +11,9 @@ pub(super) fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -
     })
 }
 
-/// The layer filter of a drop shadow with Darkness: the object's own pixels blurred.
+/// The layer filter of a drop shadow with Darkness: source paints are adjusted before blur.
 pub(super) fn shade_filter(blur: f64) -> Filter {
     Filter::from_primitive(FilterPrimitive::GaussianBlur { std_deviation: (blur / 2.0).max(0.0) as f32, edge_mode: EdgeMode::None })
-}
-
-/// How much darker (0..1) a drop shadow with Darkness `darkness` makes the values `ink` paints:
-/// black added leaves the cyan, magenta and yellow plane of a CMYK document as it is and scales
-/// the complemented black plane, as it scales screen colors, by 1 − `darkness`.
-pub(super) fn shade(ink: Ink, darkness: f32) -> f32 {
-    match ink {
-        Ink::Cmy => 0.0,
-        Ink::K | Ink::Display | Ink::RichBlack => darkness,
-    }
 }
 
 /// What a shadow or glow raster is made from ([`Made::pixels`]): the silhouette's alpha, or its
@@ -99,7 +89,7 @@ pub(crate) struct PixelEntry {
     pub(super) anchor: vectorcraft_geom::Point,
     pub(super) rel: (f64, f64),
     pub(super) k: f64,
-    pub(super) image: std::sync::Arc<vello_cpu::Pixmap>,
+    pub(crate) image: std::sync::Arc<vello_cpu::Pixmap>,
     /// For a raster of the content's whole reach at full size, `None`: it draws after a pan too.
     /// For one cropped to the view, or made at a lower resolution, the view and the rect it was
     /// made for: it draws only there, so dragging other art over the object keeps it (a wide blur,
@@ -117,6 +107,9 @@ pub(crate) struct PixelEntry {
     /// ([`crate::paint::decode_failures`]): each frame that draws the raster counts them
     /// again ([`crate::paint::add_decode_failures`]).
     pub(super) failed: u64,
+    /// Whether an image in the content failed to draw while the raster was made: each frame that
+    /// draws the raster inside opacity-mask art notes it again.
+    pub(crate) image_left_out: bool,
     pub(crate) stamp: u64,
 }
 

@@ -536,6 +536,24 @@ fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
     assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
 }
 
+/// The text object `id`.
+fn text_at(s: &Session, id: u64) -> vectorcraft_doc::text::TextObject {
+    match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    }
+}
+
+/// How many list markers text object `id` draws.
+fn marker_count(s: &Session, id: u64) -> usize {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text_at(s, id)).markers.len()
+}
+
+/// The tab stops of paragraph `k` of text object `id`.
+fn tab_stops(s: &Session, id: u64, k: usize) -> Vec<(f64, vectorcraft_doc::TabAlign, String)> {
+    text_at(s, id).para_at(k).tabs.iter().map(|t| (t.position, t.align, t.leader.clone())).collect()
+}
+
 /// The glyphs the layout of type `id` draws, each with its glyph, where it is drawn and the
 /// transform it is drawn with (in thousandths), from the top line down and left to right.
 fn drawn_glyphs(s: &Session, id: u64) -> Vec<(u32, i64, i64, [i64; 6])> {
@@ -566,13 +584,7 @@ fn convert_to_text_writes_the_markers_where_they_were_drawn() {
     use vectorcraft_doc::text::{Bullet, ParaList};
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-        NodeKind::Text(t) => (**t).clone(),
-        _ => panic!("text"),
-    };
-    let markers = |s: &Session, id: u64| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.len();
-    let tabs =
-        |s: &Session, id: u64, k: usize| text(s, id).para_at(k).tabs.iter().map(|t| (t.position, t.align, t.leader.clone())).collect::<Vec<_>>();
+    let (text, markers, tabs) = (text_at, marker_count, tab_stops);
     let long = "The quick brown fox jumps over the lazy dog and runs far away into the woods beyond the hill";
     let id = s
         .execute("text.create", &json!({"x": 10, "y": 10, "text": format!("One\n{long}\n\nFour\nFive"), "area": {"width": 200, "height": 400}}))
@@ -691,14 +703,19 @@ fn convert_to_text_writes_the_markers_where_they_were_drawn() {
         s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
         assert_eq!((text(&s, id).plain_text().as_str(), tabs(&s, id, 1)), (text_after, stop), "{size} pt");
     }
+    point_and_vertical_type_convert(&mut s);
+}
+
+/// Point type and vertical type convert too, and type with no list paragraph has nothing to convert.
+fn point_and_vertical_type_convert(s: &mut Session) {
     // Point type and vertical type.
     for vertical in [false, true] {
         let id = s.execute("text.create", &json!({"x": 400, "y": 700, "vertical": vertical, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
         s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
-        let before = drawn_glyphs(&s, id);
+        let before = drawn_glyphs(s, id);
         s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
-        assert_eq!(drawn_glyphs(&s, id), before, "vertical {vertical}");
-        assert_eq!(text(&s, id).plain_text(), "1.\tOne\n2.\tTwo");
+        assert_eq!(drawn_glyphs(s, id), before, "vertical {vertical}");
+        assert_eq!(text_at(s, id).plain_text(), "1.\tOne\n2.\tTwo");
     }
     // Type with no list paragraph: nothing to convert and no undo step.
     let plain = s.execute("text.create", &json!({"x": 10, "y": 700, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
@@ -1189,6 +1206,44 @@ fn tate_chu_yoko_is_a_character_attribute_saved_only_when_on() {
     assert!(runs(&s).iter().all(|r| !r.style.tate_chu_yoko));
 }
 
+/// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
+/// attribute, off by default and saved only when on. Documents written before it read as off; a
+/// character style captured from the characters carries it.
+#[test]
+fn standard_vertical_roman_is_a_character_attribute_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ABC年"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(!runs(&s)[0].style.standard_vertical_roman);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("standardVerticalRoman").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"standardVerticalRoman": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.standard_vertical_roman));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["standardVerticalRoman"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!runs(&s)[0].style.standard_vertical_roman);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "standardVerticalRoman": true})).unwrap();
+    let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman)).collect();
+    assert_eq!(on, [("ABC".to_string(), true), ("年".to_string(), false)]);
+    let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert!(old.get("standardVerticalRoman").is_none());
+    assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().standard_vertical_roman);
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman)).collect();
+    assert_eq!(reopened, on);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["standardVerticalRoman"], true);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["standardVerticalRoman"], false);
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "standardVerticalRoman": "true"})).is_err());
+    s.execute("text.setFormat", &json!({"standardVerticalRoman": false})).unwrap();
+    assert!(runs(&s).iter().all(|r| !r.style.standard_vertical_roman));
+}
+
 /// No Break is a character attribute, saved only when on.
 #[test]
 fn no_break_is_a_character_attribute_saved_only_when_on() {
@@ -1249,6 +1304,193 @@ fn digits_are_a_character_attribute_saved_only_when_set() {
     s.execute("text.setRangeStyle", &json!({"id": id, "start": 9, "end": 11, "digits": "farsi"})).unwrap();
     let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.digits)).collect();
     assert_eq!(set, [("صفحة ".to_string(), Digits::Default), ("12".to_string(), Digits::Farsi)]);
+}
+
+/// Font height reference (Character panel › Set Font Height Reference): a character attribute,
+/// saved only when not the em box; the type is laid out again at the em size it gives, so 20 pt
+/// type measuring a 0.7 em cap height grows by 1 / 0.7, and a leading step from Auto starts at
+/// 120% of that em size.
+#[test]
+fn font_height_reference_is_a_character_attribute_saved_only_when_not_the_em_box() {
+    use vectorcraft_doc::FontHeightReference as R;
+    use vectorcraft_text::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hx Hx", "font": HEIGHT_FAMILY, "size": 20})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.clone(),
+        _ => panic!("text"),
+    };
+    let height = |s: &Session| text(s).cached_bounds.unwrap().height();
+    let em_box = height(&s);
+    assert_eq!(text(&s).runs[0].style.font_height_reference, R::EmBox);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (key, want) in [("capHeight", R::CapHeight), ("xHeight", R::XHeight), ("icfBox", R::IcfBox), ("emBox", R::EmBox)] {
+        s.execute("text.setFormat", &json!({"fontHeightReference": key})).unwrap();
+        assert!(text(&s).runs.iter().all(|r| r.style.font_height_reference == want && r.style.size == 20.0));
+        let saved = serde_json::to_value(&text(&s).runs[0].style).unwrap();
+        assert_eq!(saved.get("fontHeightReference").and_then(|v| v.as_str()), (want != R::EmBox).then_some(key));
+    }
+    s.execute("text.setFormat", &json!({"fontHeightReference": "capHeight"})).unwrap();
+    let grown = height(&s) / em_box;
+    assert!((grown - 1000.0 / f64::from(HEIGHT_CAP)).abs() < 1e-6, "{grown}");
+    // A leading step from Auto starts at the leading the lines are set with: 120% of the em size
+    // (the paragraph's Auto Leading).
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let stepped = text(&s).runs[0].style.leading.unwrap();
+    assert!((stepped - (1.2 * 20.0 * 1000.0 / f64::from(HEIGHT_CAP) + 2.0)).abs() < 1e-9, "{stepped}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(text(&s).runs[0].style.font_height_reference, R::EmBox);
+    assert!((height(&s) - em_box).abs() < 1e-9);
+    let err = s.execute("text.setFormat", &json!({"fontHeightReference": "baseline"})).unwrap_err().to_string();
+    assert!(err.contains("`fontHeightReference` must be"), "{err}");
+    // Characters selected with the Type tool: only the range takes it.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 5, "fontHeightReference": "xHeight"})).unwrap();
+    let set: Vec<_> = text(&s).runs.iter().map(|r| (r.text.clone(), r.style.font_height_reference)).collect();
+    assert_eq!(set, [("Hx ".to_string(), R::EmBox), ("Hx".to_string(), R::XHeight)]);
+}
+
+/// A leading step from Auto starts at the leading each paragraph's lines are set with, its
+/// Auto Leading share of the em size: 20 pt type in paragraphs at 120% and 150% steps from 24 pt
+/// and from 30 pt.
+#[test]
+fn a_leading_step_from_auto_starts_at_each_paragraphs_auto_leading() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab\nCd", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"id": id, "start": 3, "end": 5, "autoLeading": 150})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else {
+        panic!("text");
+    };
+    let leading: Vec<_> = t.runs.iter().map(|r| (r.text.as_str(), r.style.leading)).collect();
+    assert_eq!(leading, [("Ab\n", Some(26.0)), ("Cd", Some(32.0))]);
+}
+
+/// An inline graphic keeps its size whatever the font height reference, so a leading step from
+/// Auto starts at 120% of that size: 20 pt Cap Height type steps from 120% of 20 / 0.7 pt and
+/// the graphic in it from 24 pt.
+#[test]
+fn a_leading_step_from_auto_starts_at_an_inline_graphics_own_size() {
+    use vectorcraft_text::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 300, "y": 300, "width": 10, "height": 10})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Dot"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hx", "font": HEIGHT_FAMILY, "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.insertInline", &json!({"id": id, "at": 2, "symbol": "Dot"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"fontHeightReference": "capHeight"})).unwrap();
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else {
+        panic!("text");
+    };
+    let leading: Vec<_> = t.runs.iter().map(|r| (r.inline.is_some(), r.style.leading.unwrap())).collect();
+    let text = 1.2 * 20.0 * 1000.0 / f64::from(HEIGHT_CAP) + 2.0;
+    assert_eq!(leading.len(), 2, "{leading:?}");
+    assert!(leading.iter().all(|&(inline, l)| (l - if inline { 26.0 } else { text }).abs() < 1e-9), "{leading:?}");
+}
+
+/// The Indic digits (#4942): each set by its id through text.setFormat and text.setRangeStyle,
+/// saved under it, kept by save and reopen and by character styles; the text stays as typed.
+#[test]
+fn indic_digits_round_trip_through_the_commands_and_the_file() {
+    use vectorcraft_doc::Digits;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "page 12"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let indic = [
+        Digits::Devanagari,
+        Digits::Bengali,
+        Digits::Gurmukhi,
+        Digits::Gujarati,
+        Digits::Odia,
+        Digits::Tamil,
+        Digits::Telugu,
+        Digits::Kannada,
+        Digits::Malayalam,
+    ];
+    for d in indic {
+        s.execute("text.setFormat", &json!({"digits": d.id()})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.digits == d), "{d:?}");
+        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["digits"], d.id());
+        assert_eq!(runs(&s).iter().map(|r| r.text.as_str()).collect::<String>(), "page 12");
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+        assert!(t.runs.iter().all(|r| r.style.digits == d), "{d:?} after reopening");
+    }
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 5, "end": 7, "digits": "gujarati"})).unwrap();
+    let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.digits)).collect();
+    assert_eq!(set, [("page ".to_string(), Digits::Malayalam), ("12".to_string(), Digits::Gujarati)]);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["digits"], "gujarati");
+    s.execute("charStyle.new", &json!({"name": "Tamil digits", "attrs": {"digits": "tamil"}})).unwrap();
+    let listed = s.execute("charStyle.list", &json!({})).unwrap();
+    let tamil = listed["styles"].as_array().unwrap().iter().find(|st| st["name"] == "Tamil digits").unwrap();
+    assert_eq!(tamil["attrs"]["digits"], "tamil");
+    for wrong in [json!("oriya"), json!("Devanagari"), json!(3)] {
+        let err = s.execute("text.setFormat", &json!({ "digits": wrong })).unwrap_err().to_string();
+        assert!(err.contains("`digits` must be one of") && err.contains("\"malayalam\""), "{err}");
+    }
+}
+
+/// Language (Character panel, #4946): a character attribute set by name or tag, saved as the tag
+/// only when set, kept by save and reopen and by character styles; new type takes the document's.
+#[test]
+fn language_is_a_character_attribute_saved_only_when_set() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "fi i fikir"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let set = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.language.clone())).collect::<Vec<_>>();
+    assert_eq!(runs(&s)[0].style.language, None);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("language").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"language": "Turkish"})).unwrap();
+    assert_eq!(set(&s), [("fi i fikir".to_string(), Some("tr".to_string()))]);
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["language"], "tr");
+    for wrong in [json!("Klingon"), json!(5)] {
+        let err = s.execute("text.setFormat", &json!({ "language": wrong })).unwrap_err().to_string();
+        assert!(err.contains("language"), "{err}");
+    }
+    // Characters selected with the Type tool: only the range takes it; the default is none.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "language": "en-US"})).unwrap();
+    assert_eq!(set(&s), [("fi".to_string(), None), (" i fikir".to_string(), Some("tr".to_string()))]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(set(&s), [("fi i fikir".to_string(), Some("tr".to_string()))]);
+    s.execute("edit.redo", &json!({})).unwrap();
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.language.clone())).collect();
+    assert_eq!(reopened, set(&s));
+    // A character style captured from the characters carries it, the default included; one given
+    // a language by name stores its tag.
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["language"], "tr");
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("language"), Some(&serde_json::Value::Null));
+    s.execute("charStyle.new", &json!({"name": "Marathi", "attrs": {"language": "Marathi"}})).unwrap();
+    let listed = s.execute("charStyle.list", &json!({})).unwrap();
+    let marathi = listed["styles"].as_array().unwrap().iter().find(|st| st["name"] == "Marathi").unwrap();
+    assert_eq!(marathi["attrs"]["language"], "mr");
+    assert!(s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"language": "Klingon"}})).is_err());
+    // New type in a Turkish document is in Turkish.
+    s.execute("document.setup", &json!({"language": "Turkish"})).unwrap();
+    let id2 = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "fikir"})).unwrap()["id"].as_u64().unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id2)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs[0].style.language.as_deref(), Some("tr"));
 }
 
 /// Variable Font settings (Character panel › Variable Font): a character attribute, saved only

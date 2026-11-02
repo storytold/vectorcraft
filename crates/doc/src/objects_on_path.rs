@@ -337,7 +337,7 @@ mod tests {
         // The art is a 40 × 10 box to the right of and below the origin, not the 20 × 20 square
         // around it that instances are measured by without the symbols.
         let mut d = crate::Document::new(400.0, 400.0);
-        d.symbols.push(crate::Symbol { name: "Bar".into(), art: Arc::new(rect(9, Rect::new(0.0, 0.0, 40.0, 10.0))) });
+        d.symbols.push(crate::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(rect(9, Rect::new(0.0, 0.0, 40.0, 10.0))) });
         let line = Node::path(NodeId(1), shapes::line(Point::new(100.0, 300.0), Point::new(300.0, 300.0)), Default::default());
         let instance = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
         let other = rect(3, Rect::new(0.0, 0.0, 10.0, 10.0));

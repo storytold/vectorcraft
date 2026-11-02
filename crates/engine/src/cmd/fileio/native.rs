@@ -12,7 +12,7 @@ use vectorcraft_color::cms;
 use vectorcraft_doc::Document;
 use vectorcraft_format::{PREVIEW_MAX, SaveOptions};
 
-use super::super::*;
+use super::super::{EngineError, Result, bad};
 use super::{Format, FormatOption};
 
 /// The options `document.save` and the native encoder read.

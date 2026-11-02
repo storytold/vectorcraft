@@ -430,6 +430,17 @@ fn offset_rect_grows_bounds() {
     assert!(close(bounds(&s, r[0]), Rect::new(105.0, 105.0, 145.0, 135.0), 1e-2));
 }
 
+/// #3773: an open path whose last anchor sits on its first is offset as the closed shape, not as a
+/// ring around its outline.
+#[test]
+fn offset_open_path_whose_ends_meet_grows_the_shape() {
+    let mut s = session();
+    s.execute("path.create", &json!({"d": "M0 0 L40 0 L40 40 L0 40 L0 0"})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": 2, "joins": "miter"})).unwrap());
+    assert!((area_of(&s, r[0]) - 44.0 * 44.0).abs() < 1e-3, "{}", area_of(&s, r[0]));
+    assert_eq!(path_of(&s, r[0]).0.subpaths.len(), 1);
+}
+
 #[test]
 fn outline_stroke_of_line() {
     let mut s = session();
@@ -1281,4 +1292,19 @@ fn pathfinder_journal_entries_replay_with_the_options_they_used() {
     assert_eq!(doc(&replay), doc(&s));
     // Options given as params are checked as object.pathfinder.options checks them.
     assert!(s.execute("object.pathfinder.divide", &json!({"precision": 20})).is_err());
+}
+
+/// A single group containing multiple overlapping paths is accepted by Crop.
+#[test]
+fn crop_operates_on_a_single_selected_group_of_paths() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.len(), 1);
+    let out = s.execute("object.pathfinder.crop", &json!({})).unwrap();
+    let cropped_ids = ids(&out);
+    assert!(!cropped_ids.is_empty());
 }

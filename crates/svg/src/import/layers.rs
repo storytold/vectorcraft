@@ -1,6 +1,6 @@
 use super::convert::made_up;
 use super::importer::{CSS_PX_PER_IN, PT_PER_IN};
-use super::*;
+use super::{Affine, Arc, FromStr, HashSet, Node, NodeId, NodeKind, Rect, Unit, XNode, roxmltree};
 
 /// What marks a nested `<g>` as a sublayer rather than a group: our export writes it on the layers
 /// it writes inside layers. (Inkscape's `inkscape:groupmode="layer"` counts too.)

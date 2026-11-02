@@ -69,9 +69,14 @@ fn two_fills_and_an_offset_stroke_become_three_paths_that_look_the_same() {
     let ch = n.children().expect("a group of the fills and the stroke");
     assert_eq!(ch.len(), 3);
     assert!(ch.iter().all(|c| matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && c.appearance.items.len() == 1));
-    // In paint order: red fill, the outlined stroke (a filled ring 10 pt out), the green fill.
-    assert!(ch.iter().all(|c| c.appearance.items[0].is_fill() && c.appearance.items[0].effects().is_empty()));
+    // In paint order: red fill, the stroke on the path offset 10 pt out (still a 4 pt stroke, which
+    // Object › Expand would outline, #3089), the green fill.
+    assert!(ch.iter().all(|c| c.appearance.items[0].effects().is_empty()));
+    assert!(ch[0].appearance.items[0].is_fill() && !ch[1].appearance.items[0].is_fill() && ch[2].appearance.items[0].is_fill());
+    assert_eq!(ch[1].appearance.stroke_width(), 4.0);
     let ring = ch[1].geometric_bounds().unwrap();
+    assert!((ring.width() - 120.0).abs() < 0.5, "{ring:?}");
+    let ring = ch[1].visual_bounds().unwrap();
     assert!((ring.width() - 124.0).abs() < 0.5, "{ring:?}");
     assert!((ch[2].opacity - 0.5).abs() < 1e-6, "the fill's opacity is the path's own");
     assert!(ch[2].appearance.is_basic());
@@ -149,11 +154,11 @@ fn expanded_art_keeps_the_random_transforms_the_canvas_drew() {
             art = (*art.children().unwrap()[0]).clone();
             assert_eq!((&r["ids"][0], &r["ids"][1]), (&json!(id.0), &json!(art.id.0)), "{case}");
         }
-        // No object keeps an effect, and in the copies cases no object keeps a stroke: every copy
-        // is expanded.
+        // No object keeps an effect, and in the copies cases every object has a basic appearance:
+        // every copy is expanded (its stroke a stroked path of its own, #3089).
         art.walk(&mut |n| {
-            let stroked = case.ends_with("copies") && n.appearance.stroke().is_some_and(|st| !st.paint.is_none());
-            assert!(n.appearance.effects.is_empty() && !stroked, "{case}: {n:?}");
+            let unexpanded = case.ends_with("copies") && !n.appearance.is_basic();
+            assert!(n.appearance.effects.is_empty() && !unexpanded, "{case}: {n:?}");
         });
     }
     assert_eq!(differ, RANDOM_CASES.map(|case| (case, 0)));
@@ -276,8 +281,13 @@ fn a_targeted_layer_with_a_fill_expands_into_art_among_its_members() {
     let ch = l.children().unwrap();
     assert_eq!(ch.len(), 2, "the square, then the layer's stroke above it");
     assert_eq!(ch[0].id, a);
-    // The layer's stroke is outlined: a filled path.
-    assert!(ch[1].appearance.items.iter().all(|i| i.is_fill()));
+    // The layer's stroke stays a stroke, on a path of its own (#3089).
+    let mut six = 0;
+    ch[1].walk(&mut |n| {
+        assert!(n.appearance.items.iter().all(|i| !i.is_fill()), "{n:?}");
+        six += usize::from(n.appearance.stroke_width() == 6.0);
+    });
+    assert!(six > 0, "the layer's 6 pt stroke: {:?}", ch[1]);
     let after = render(&s);
     assert!(differing(&before, &after, 8) < 200, "{} pixels differ", differing(&before, &after, 8));
 }
@@ -330,4 +340,64 @@ fn a_blurred_layer_keeps_its_image_as_its_only_member() {
     assert!(l.is_layer() && !l.clips() && l.appearance.effects.is_empty());
     let ch = l.children().unwrap();
     assert!(ch.len() == 1 && matches!(ch[0].kind, NodeKind::Image(_)));
+}
+
+/// A selected open curve with no fill, stroked in blue with `stroke` (stroke.set's params) and
+/// given a Zig Zag (#3089).
+fn zig_zag_curve(s: &mut Session, stroke: Value) -> NodeId {
+    let id = NodeId(run(s, "path.create", json!({"d": "M 30 100 C 70 40 130 160 170 100"}))["id"].as_u64().unwrap());
+    run(s, "paint.setFill", json!({"none": true}));
+    run(s, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(s, "stroke.set", stroke);
+    run(s, "effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 8, "ridges": 5, "relative": false}}));
+    id
+}
+
+#[test]
+fn a_stroke_stays_a_stroke_with_its_dashes_arrowheads_alignment_and_width_profile() {
+    for stroke in [
+        json!({"weight": 4, "cap": "round", "join": "round", "dash": [10, 5]}),
+        json!({"weight": 3, "startArrow": "Arrow", "endArrow": "Circle"}),
+        json!({"weight": 8, "profile": "lens"}),
+        json!({"weight": 6, "align": "inside"}),
+    ] {
+        let mut s = session();
+        let id = zig_zag_curve(&mut s, stroke.clone());
+        let was = node(&s, id).appearance.stroke().unwrap().clone();
+        let before = render(&s);
+        run(&mut s, "effect.expandAppearance", json!({}));
+        // The zig-zag is baked into the path, which keeps the very same stroke and no fill: no outline.
+        let n = node(&s, id);
+        assert!(matches!(n.kind, NodeKind::Path { .. }), "{stroke}: a path, not a group: {:?}", n.kind);
+        assert!(n.appearance.effects.is_empty() && n.appearance.is_basic(), "{stroke}");
+        assert_eq!(n.appearance.stroke(), Some(&was), "{stroke}: the stroke's attributes stay");
+        assert!(n.appearance.fill().is_none_or(|f| f.paint.is_none()), "{stroke}: no fill");
+        assert!(n.path_data().unwrap().anchors().count() > 4, "{stroke}: the zig-zag is baked");
+        let after = render(&s);
+        assert!(differing(&before, &after, 8) < 40, "{stroke}: {} pixels differ", differing(&before, &after, 8));
+        assert!(!expandable(&s), "{stroke}: nothing left for Expand Appearance");
+    }
+}
+
+#[test]
+fn several_strokes_become_stroked_paths_in_appearance_order() {
+    let mut s = session();
+    let id = square(&mut s);
+    // [red fill, 4 pt blue stroke, 12 pt green stroke] with a Zig Zag on the object.
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "stroke.set", json!({"item": 2, "weight": 12}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#00ff00"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 6, "ridges": 4, "relative": false}}));
+    let items = node(&s, id).appearance.items.clone();
+    let before = render(&s);
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    let ch = n.children().expect("a group of the fill and the two strokes");
+    assert_eq!(ch.len(), 3);
+    for (c, item) in ch.iter().zip(&items) {
+        assert!(matches!(c.kind, NodeKind::Path { .. }) && c.appearance.items.len() == 1, "{:?}", c.kind);
+        assert_eq!(&c.appearance.items[0], item, "each piece keeps its own fill or stroke, in appearance order");
+    }
+    let after = render(&s);
+    assert!(differing(&before, &after, 8) < 60, "{} pixels differ", differing(&before, &after, 8));
 }

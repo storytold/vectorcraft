@@ -1307,6 +1307,21 @@ fn search_in_a_loop_runs_out_of_the_budget() {
     runs_out_of_budget(&format!("{make} {{ h n search {{ pop pop pop }} {{ pop }} ifelse }} loop"));
 }
 
+/// #3584: operators that touch up to 4 MiB or 100,000 objects are charged for it, so a loop of them
+/// runs out of the operation budget instead of keeping the importer busy for hours.
+#[test]
+fn big_operators_in_a_loop_run_out_of_the_budget() {
+    let strings = "/a 4194304 string def /b 4194304 string def";
+    for body in [
+        format!("{strings} {{ a 0 b putinterval }} loop"),
+        format!("{strings} {{ b a copy pop }} loop"),
+        "99990 { 0 } repeat { 99990 1 roll } loop".to_string(),
+        "mark 99990 { 0 } repeat { counttomark pop } loop".to_string(),
+    ] {
+        runs_out_of_budget(&body);
+    }
+}
+
 /// #3568: an image dictionary with more data sources than colour components is a `rangecheck`.
 #[test]
 fn an_image_with_more_data_sources_than_components_is_refused() {

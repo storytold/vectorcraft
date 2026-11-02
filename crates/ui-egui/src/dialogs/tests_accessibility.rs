@@ -39,16 +39,16 @@ fn strict(app: VectorcraftApp) -> Harness {
     h
 }
 
-/// Export for Screens names its three text fields and exposes no raw widget ids.
+/// Export for Screens names its range and prefix fields and exposes no raw widget ids.
 #[test]
 fn export_for_screens_names_the_form_text_fields() {
     let mut app = app();
     app.run("file.exportForScreens", json!({})).unwrap();
     let h = strict(app);
-    for name in ["File Name:", "Prefix:", "Start at:"] {
+    for name in ["Range:", "Prefix:"] {
         let _ = h.get_by_role_and_label(Role::TextInput, name);
     }
-    assert!(h.query_by_role_and_label(Role::TextInput, "name").is_none(), "no internal widget id");
+    assert!(h.query_by_role_and_label(Role::TextInput, "range").is_none(), "no internal widget id");
     assert!(h.query_by_role_and_label(Role::TextInput, "prefix").is_none(), "no internal widget id");
 }
 

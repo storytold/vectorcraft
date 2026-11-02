@@ -233,7 +233,8 @@ impl RasterFormat {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Preserve {
     /// Type becomes glyph outlines; strokes a plain CAD line can't draw (aligned inside or
-    /// outside, width profiles, arrowheads, fitted dashes) become their filled outlines; brush
+    /// outside, width profiles, arrowheads, fitted dashes, dashes offset into their pattern)
+    /// become their filled outlines; brush
     /// strokes become their brush art.
     #[default]
     Appearance,
@@ -277,7 +278,9 @@ pub struct DxfOptions {
     pub colors: ColorDepth,
     pub raster: RasterFormat,
     pub preserve: Preserve,
-    /// Alter Paths for Appearance: every stroke is written as the filled area it paints.
+    /// Alter Paths for Appearance: a stroke a CAD line can't draw (one [`Preserve::Appearance`]
+    /// outlines, one wider than the widest lineweight, or any stroke in R13 and R14, which have
+    /// no lineweights) is written as the filled area it paints.
     pub alter_paths: bool,
     /// Type is written as glyph outlines (always with [`Preserve::Appearance`]).
     pub outline_text: bool,

@@ -1,4 +1,4 @@
-use super::*;
+use super::{GeometryStamp, InputGeneration, VectorcraftApp, canvas};
 
 impl VectorcraftApp {
     /// The host iteration count: one increment per `App::logic`/`App::ui` iteration (or a

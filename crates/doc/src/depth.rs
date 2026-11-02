@@ -485,7 +485,7 @@ mod tests {
     #[test]
     fn symbols_and_patterns_are_limited_too() {
         let mut d = Document::new(10.0, 10.0);
-        d.symbols.push(crate::Symbol { name: "s".into(), art: nested(MAX_DEPTH + 3) });
+        d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: nested(MAX_DEPTH + 3) });
         assert!(d.too_deep(None));
         assert!(d.limit_depth());
         assert!(!d.too_deep(None));
@@ -504,7 +504,7 @@ mod tests {
             for _ in 0..levels {
                 art = Arc::new(Node::group(NodeId(3), vec![art]));
             }
-            d.symbols.push(crate::Symbol { name: format!("s{i}"), art });
+            d.symbols.push(crate::Symbol { dynamic: false, name: format!("s{i}"), art });
         }
         d
     }
@@ -573,7 +573,7 @@ mod tests {
         };
         let through_a_symbol = |d: &mut Document| {
             d.patterns.push(crate::PatternDef::new("p", vec![instance(2, "s")]));
-            d.symbols.push(crate::Symbol { name: "s".into(), art: painted(3, "p") });
+            d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: painted(3, "p") });
         };
         for make in [&itself as &dyn Fn(&mut Document), &each_other, &through_a_symbol] {
             let mut d = doc(painted(1, "p"));

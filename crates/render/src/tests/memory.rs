@@ -6,6 +6,7 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 
+use crate::blobs::blob_key;
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
 
@@ -131,6 +132,96 @@ fn kept_mips_draw_without_decoding_the_full_pixels_again() {
     let frame = r.render(&moved, 32, 16, quarter, &on);
     assert!(images::store().peek(&full).is_none(), "the full pixels were decoded again");
     assert!(frame.pixels == Renderer::new().render(&moved, 32, 16, quarter, &on).pixels);
+}
+
+/// With `kept_images_only` (the canvas's low-resolution fill), an image the store holds no pixels
+/// of draws as a light gray box and is not decoded. Once decoded, it draws from the pixels the
+/// store holds: the full pixels, when the mip for its size is not kept, and that mip is not made.
+#[test]
+fn kept_images_only_draw_from_the_store_without_decoding() {
+    let _fonts = fonts_steady();
+    let d = doc_with_image("img", png(64, 64, 105), 64, 64);
+    let kept = RenderOptions { kept_images_only: true, image_mips: true, ..Default::default() };
+    let quarter = Affine::scale(0.25);
+    let full = blob_key(&d.images["img"]).0;
+    let mut r = Renderer::new();
+    let boxed = r.render(&d, 16, 16, quarter, &kept);
+    assert!(images::store().peek(&full).is_none(), "not decoded");
+    assert!(boxed.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 40), "a light box where the image is");
+    // A frame at full size decodes the full pixels and makes no mip.
+    let _ = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions { image_mips: true, ..Default::default() });
+    let quarter_mip = images::ImageKey { mip: 2, ..full.clone() };
+    assert!(images::store().peek(&full).is_some() && images::store().peek(&quarter_mip).is_none());
+    let drawn = r.render(&d, 16, 16, quarter, &kept);
+    assert!(images::store().peek(&quarter_mip).is_none(), "no mip made");
+    assert!(drawn.pixels == Renderer::new().render(&d, 16, 16, quarter, &RenderOptions::default()).pixels, "the full pixels, drawn small");
+}
+
+/// With `kept_images_only`, a blur on an image the store holds no pixels of blurs the light gray
+/// box. Once the image is decoded, the same renderer blurs the image's pixels and does not draw
+/// the blurred box again from its raster cache.
+#[test]
+fn kept_images_only_make_effect_rasters_again_once_the_image_is_decoded() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(64.0, 64.0);
+    d.images.insert("img".into(), ImageBlob::new("image/png", png(64, 64, 107)));
+    let (id, layer) = (d.alloc_id(), d.layers[0].id);
+    let im = ImageObject { key: "img".into(), width: 64, height: 64, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    n.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 2.0})));
+    d.insert(Some(layer), 0, n).unwrap();
+    let kept = RenderOptions { kept_images_only: true, image_mips: true, dragging: true, ..Default::default() };
+    let quarter = Affine::scale(0.25);
+    let full = blob_key(&d.images["img"]).0;
+    let mut r = Renderer::new();
+    let boxed = r.render(&d, 16, 16, quarter, &kept);
+    assert!(images::store().peek(&full).is_none(), "not decoded");
+    let _ = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions { image_mips: true, ..Default::default() });
+    let drawn = r.render(&d, 16, 16, quarter, &kept);
+    assert!(drawn.pixels != boxed.pixels, "the image's pixels, not the box");
+    assert!(drawn.pixels == Renderer::new().render(&d, 16, 16, quarter, &kept).pixels, "as a new renderer draws it");
+}
+
+/// With `kept_images_only`, an image still to be decoded draws as a light gray box, not crossed
+/// with `mark_undecoded_images`. An image the store notes as undecodable is not tried again and
+/// draws without that box: as it draws with the option off,
+/// nothing, or the crossed box with `mark_undecoded_images`. A blur on such an image, cached while
+/// the image was still to be decoded, is made again once the image is noted.
+#[test]
+fn kept_images_only_leave_out_an_image_noted_as_undecodable() {
+    let _fonts = fonts_steady();
+    let mut cut = png(64, 64, 109);
+    cut.truncate(cut.len() / 2);
+    let d = doc_with_image("cut", cut.clone(), 64, 64);
+    let mut blurred = Document::new(64.0, 64.0);
+    blurred.images.insert("cut".into(), ImageBlob::new("image/png", cut));
+    let (id, layer) = (blurred.alloc_id(), blurred.layers[0].id);
+    let im = ImageObject { key: "cut".into(), width: 64, height: 64, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    n.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 2.0})));
+    blurred.insert(Some(layer), 0, n).unwrap();
+    let kept = RenderOptions { kept_images_only: true, image_mips: true, dragging: true, ..Default::default() };
+    let marked = RenderOptions { mark_undecoded_images: true, ..kept.clone() };
+    let quarter = Affine::scale(0.25);
+    let attempts = || crate::paint::DECODE_ATTEMPTS.with(std::cell::Cell::get);
+    let tried = attempts();
+    let (mut r, mut rb) = (Renderer::new(), Renderer::new());
+    let boxed = r.render(&d, 16, 16, quarter, &kept);
+    assert!(boxed.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 40), "a light box while it is still to be decoded");
+    assert!(r.render(&d, 16, 16, quarter, &marked).pixels == boxed.pixels, "with mark_undecoded_images too, and not crossed");
+    let blurred_box = rb.render(&blurred, 16, 16, quarter, &kept);
+    assert!(blurred_box.pixels.iter().any(|&b| b > 0), "the blurred box");
+    assert_eq!(attempts(), tried, "not tried");
+    // The frame for the view tries it once and notes it.
+    let _ = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions { image_mips: true, ..Default::default() });
+    let tried = attempts();
+    assert!(rb.render(&blurred, 16, 16, quarter, &kept).pixels.iter().all(|&b| b == 0), "no blurred box from the raster cache");
+    assert!(r.render(&d, 16, 16, quarter, &kept).pixels.iter().all(|&b| b == 0), "no box");
+    let off = RenderOptions { mark_undecoded_images: true, image_mips: true, dragging: true, ..Default::default() };
+    let crossed = Renderer::new().render(&d, 16, 16, quarter, &off);
+    assert!(crossed.pixels != boxed.pixels, "the crossed box is not the light box");
+    assert!(r.render(&d, 16, 16, quarter, &marked).pixels == crossed.pixels, "the crossed box, as with the option off");
+    assert_eq!(attempts(), tried, "not tried again");
 }
 
 /// A document of `n` point type objects reading `word`, in rows.
@@ -298,7 +389,7 @@ fn type_with_an_inline_graphic_draws_its_symbols_new_size() {
     for i in 0..4 {
         let mut d = Document::new(200.0, 100.0);
         let art = symbol_art(&mut d);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
         let style = CharStyle { size: 24.0, ..Default::default() };
         let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), "A", style.clone());
         t.runs.push(TextRun::inline(InlineArt::new("S"), style.clone()));
@@ -337,7 +428,7 @@ fn symbol_art(d: &mut Document) -> Node {
 fn symbol_doc() -> Document {
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let l = d.layers[0].id;
     let xfs = [
         Affine::translate((30.0, 30.0)),
@@ -488,9 +579,9 @@ fn art_placed_again_in_every_frame_keeps_one_outline_per_stroke() {
     if let Some(c) = art.children_mut() {
         c.push(Arc::new(image));
     }
-    d.symbols.push(vectorcraft_doc::Symbol { name: "I".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "I".into(), art: Arc::new(art) });
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let l = d.layers[0].id;
     let instance = |d: &mut Document, symbol: &str, x: f64, y: f64| {
         let id = d.alloc_id();
@@ -616,7 +707,7 @@ fn strokes_of_brush_art_draw_as_a_new_renderer_does() {
     // Three instances show symbol `B`, a group of a wave. A fourth wave is a path of the document,
     // and a Mirror repeat draws a fifth wave and its reflection.
     let art = Node::group(d.alloc_id(), vec![Arc::new(wave(&mut d, (0.0, 0.0)))]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "B".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "B".into(), art: Arc::new(art) });
     let l = d.layers[0].id;
     for at in [(50.0, 30.0), (150.0, 30.0), (50.0, 70.0)] {
         let id = d.alloc_id();
@@ -664,10 +755,10 @@ fn brushed_copies_doc() -> Document {
     use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
     let mut d = Document::new(200.0, 100.0);
     let line = brushed_line(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Line".into(), art: Arc::new(line) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Line".into(), art: Arc::new(line) });
     let line = brushed_line(&mut d);
     let held = Node::group(d.alloc_id(), vec![Arc::new(line)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Held".into(), art: Arc::new(held) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Held".into(), art: Arc::new(held) });
     let l = d.layers[0].id;
     for (symbol, at) in [("Line", (20.0, 15.0)), ("Line", (60.0, 15.0)), ("Line", (100.0, 15.0)), ("Held", (20.0, 45.0)), ("Held", (60.0, 45.0))] {
         let id = d.alloc_id();
@@ -765,7 +856,7 @@ fn brush_art_draws_edits_of_the_symbols_and_patterns_it_shows() {
     let doc = |dot_brushed: bool, fill_brushed: bool| {
         let mut d = Document::new(200.0, 100.0);
         let dot = art(&mut d, Paint::solid(Color::rgb(0.0, 0.0, 1.0)), dot_brushed);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(dot) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
         let fill = art(&mut d, Paint::solid(Color::rgb(0.0, 0.6, 0.0)), fill_brushed);
         let mut def = PatternDef::new("Fill", vec![Arc::new(fill)]);
         def.tile = Rect::new(-6.0, -6.0, 6.0, 6.0);
@@ -826,7 +917,7 @@ fn brush_art_draws_renamed_symbols_and_patterns_it_shows() {
             [("Dot", Paint::solid(Color::rgb(0.0, 0.0, 1.0)), false), ("Other", Paint::solid(Color::rgb(1.0, 0.0, 0.0)), true)]
         {
             let a = art(&mut d, paint, brushed);
-            d.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: Arc::new(a) });
+            d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(a) });
         }
         for (name, paint, brushed) in
             [("Fill", Paint::solid(Color::rgb(0.0, 0.6, 0.0)), false), ("Spare", Paint::solid(Color::rgb(1.0, 0.0, 0.0)), true)]
@@ -887,7 +978,7 @@ fn live_objects_in_brush_art_keep_their_evaluations_between_frames() {
     };
     let held = bent(&mut d, (-60.0, 0.0), (60.0, 0.0));
     let held = Node::group(d.alloc_id(), vec![Arc::new(held)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Wave".into(), art: Arc::new(held) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Wave".into(), art: Arc::new(held) });
     let path = bent(&mut d, (20.0, 25.0), (180.0, 25.0));
     let l = d.layers[0].id;
     d.insert(Some(l), usize::MAX, path).unwrap();
@@ -915,7 +1006,7 @@ fn editing_an_instance_or_a_symbol_places_only_its_art_again() {
     let green = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
     let square = Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(-5.0, -5.0, 5.0, 5.0)), green);
     let t = Node::group(d.alloc_id(), vec![Arc::new(square)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "T".into(), art: Arc::new(t) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "T".into(), art: Arc::new(t) });
     let (l, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "T".into(), xf: Affine::translate((30.0, 80.0)) })).unwrap();
     let opts = RenderOptions::default();
@@ -965,7 +1056,7 @@ fn instances_of_art_outside_the_square_follow_their_symbols_art() {
     // the one from x 200 lies from (40, 40) to (60, 60), in it. The 20 × 20 square around the
     // origin lies from (-170, 30) to (-150, 50), left of the view.
     let (off, on) = (square_at(&mut d, 100.0), square_at(&mut d, 200.0));
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: off.clone() });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: off.clone() });
     let (l, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-160.0, 40.0)) })).unwrap();
     let opts = RenderOptions::default();
@@ -1007,7 +1098,7 @@ fn draws_as_new(d: &mut Document, before: &RenderOptions, after: &RenderOptions,
 /// `d` with symbol `Holder` (a group of `members`) shown by one instance at (100, 50).
 fn holder_doc(mut d: Document, members: Vec<Node>) -> Document {
     let holder = Node::group(d.alloc_id(), members.into_iter().map(Arc::new).collect());
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Holder".into(), art: Arc::new(holder) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(holder) });
     let (l, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Holder".into(), xf: Affine::translate((100.0, 50.0)) })).unwrap();
     d
@@ -1022,7 +1113,7 @@ fn art_showing_another_symbol_draws_its_edits() {
     use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let style = CharStyle { size: 24.0, ..Default::default() };
     let mut t = TextObject::point(vectorcraft_geom::Point::new(-60.0, 10.0), "A", style.clone());
     t.runs.push(TextRun::inline(InlineArt::new("S"), style.clone()));
@@ -1143,7 +1234,7 @@ fn live_objects_in_symbol_art_keep_their_evaluations_between_frames() {
     for (name, art, at) in
         [("Bent", bent, (40.0, 25.0)), ("Envelope", envelope, (100.0, 25.0)), ("Blend", blend, (160.0, 25.0)), ("Grid", grid, (20.0, 60.0))]
     {
-        d.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
         let id = d.alloc_id();
         d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::translate(at) })).unwrap();
     }
@@ -1207,7 +1298,7 @@ fn live_objects_in_symbol_art_draw_symbol_and_pattern_edits() {
         for bricks in [false, true] {
             let mut d = Document::new(200.0, 100.0);
             let art = symbol_art(&mut d);
-            d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+            d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
             let xf = Affine::translate((10.0, 10.0)) * Affine::scale(0.5);
             let dot = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf });
             let mut dots = PatternDef::new("Dots", vec![Arc::new(dot)]);
@@ -1216,7 +1307,7 @@ fn live_objects_in_symbol_art_draw_symbol_and_pattern_edits() {
             let band = filled(&mut d, rectangle(Rect::new(-80.0, -30.0, 80.0, 30.0)), pattern_paint("Dots"), vec![]);
             let envelope = arc_envelope(&mut d, vec![band], true);
             let art = if grouped { Node::group(d.alloc_id(), vec![Arc::new(envelope)]) } else { envelope };
-            d.symbols.push(vectorcraft_doc::Symbol { name: "Bent".into(), art: Arc::new(art) });
+            d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
             let (l, id) = (d.layers[0].id, d.alloc_id());
             d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Bent".into(), xf: Affine::translate((100.0, 50.0)) })).unwrap();
             let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
@@ -1310,7 +1401,7 @@ fn live_objects_draw_symbol_and_pattern_art_edits() {
     let with_s = || {
         let mut d = Document::new(200.0, 100.0);
         let art = symbol_art(&mut d);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
         d
     };
     let red_bar = |d: &mut Document| {
@@ -1324,7 +1415,7 @@ fn live_objects_draw_symbol_and_pattern_art_edits() {
     let mut d = with_s();
     let shown = instance(&mut d, "S", Affine::IDENTITY);
     let a = Node::group(d.alloc_id(), vec![Arc::new(shown)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "A".into(), art: Arc::new(a) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "A".into(), art: Arc::new(a) });
     let a = instance(&mut d, "A", Affine::translate((100.0, 50.0)) * Affine::scale(2.0));
     let envelope = arc_envelope(&mut d, vec![a], false);
     edit_draws_as_new(with_art(d, vec![envelope]), red_bar);
@@ -1339,7 +1430,7 @@ fn live_objects_draw_symbol_and_pattern_art_edits() {
     let mut d = Document::new(200.0, 100.0);
     d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
     let band = filled(&mut d, rectangle(Rect::new(-80.0, -30.0, 80.0, 30.0)), pattern_paint("Checks"), vec![]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Banded".into(), art: Arc::new(band) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Banded".into(), art: Arc::new(band) });
     let banded = instance(&mut d, "Banded", Affine::translate((100.0, 50.0)));
     let envelope = arc_envelope(&mut d, vec![banded], true);
     edit_draws_as_new(with_art(d, vec![envelope]), |d| {
@@ -1366,7 +1457,7 @@ fn symbol_in_live_and_effect_art() -> Document {
     use vectorcraft_geom::shapes::rectangle;
     let mut d = Document::new(500.0, 100.0);
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let bent = |d: &mut Document, x: f64| {
         let xf = Affine::translate((x, 50.0)) * Affine::scale(2.0);
         let s = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf });
@@ -1379,7 +1470,7 @@ fn symbol_in_live_and_effect_art() -> Document {
     group.appearance.effects.push(drop_shadow());
     let copy = symbol_art(&mut d);
     let art = arc_envelope(&mut d, vec![copy], false);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Bent".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
     let xf = Affine::translate((250.0, 50.0)) * Affine::scale(2.0);
     let symbol = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bent".into(), xf });
     let mask = bent(&mut d, 350.0);
@@ -1512,7 +1603,7 @@ fn objects_with_plugin_effects_follow_the_plugins_installed() {
     let mut d = Document::new(200.0, 100.0);
     let art = square(&mut d, -20.0, -20.0, vec![]);
     let art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((100.0, 50.0)) });
     plugin_change_draws_as_new(with_art(d, vec![instance]), ID, small.clone(), big);
     // Left of the view, the square is culled until the plug-in draws it in the view.
@@ -1525,7 +1616,7 @@ fn objects_with_plugin_effects_follow_the_plugins_installed() {
     // effects in the art paint past the art, which the plug-in's first shape does not.
     let mut d = Document::new(200.0, 100.0);
     let art = square(&mut d, -20.0, -20.0, vec![]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((-30.0, 50.0)) });
     plugin_change_draws_as_new(with_art(d, vec![instance]), ID, Some(triangle(-15.0, -15.0, 10.0)), Some(triangle(0.0, 0.0, 150.0)));
 }
@@ -1585,7 +1676,7 @@ fn effect_art_follows_the_plugins_installed() {
     plugin_change_draws_as_new(group(vec![feather]), ID, small.clone(), big.clone());
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((100.0, 50.0)) });
     instance.appearance.effects.push(plugin());
     plugin_change_draws_as_new(with_art(d, vec![instance]), ID, small.clone(), big.clone());
@@ -1620,7 +1711,7 @@ fn live_objects_follow_the_plugins_installed() {
     // Symbol `Shaped` is a square with the plug-in effect.
     let mut d = Document::new(200.0, 100.0);
     let art = black(&mut d, Rect::new(-20.0, -20.0, 20.0, 20.0));
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((100.0, 50.0)) });
     let envelope = arc_envelope(&mut d, vec![instance], true);
     plugin_change_draws_as_new(with_art(d, vec![envelope]), ID, small.clone(), big.clone());
@@ -1662,7 +1753,7 @@ fn pattern_and_symbol_art_with_plugin_effects_follow_the_plugins_installed() {
     // the instance's box, from (80, 30) to (120, 70).
     let mut d = Document::new(200.0, 100.0);
     let art = filled(&mut d, rectangle(Rect::new(-20.0, -20.0, 20.0, 20.0)), Paint::solid(Color::BLACK), vec![plugin()]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Shaped".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: Affine::translate((100.0, 50.0)) });
     let mut group = Node::group(d.alloc_id(), vec![Arc::new(instance)]);
     group.appearance.effects.push(drop_shadow());
@@ -1748,7 +1839,7 @@ fn pattern_tiles_draw_edits_to_what_their_art_shows() {
     let doc = |pattern: &str, effects: Vec<vectorcraft_doc::Effect>| {
         let mut d = Document::new(200.0, 100.0);
         let art = symbol_art(&mut d);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
         let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((10.0, 10.0)) });
         d.patterns.push(tile("Stamps", shown));
         d.patterns.push(checks(Color::rgb(1.0, 0.0, 0.0)));
@@ -1799,10 +1890,10 @@ fn rasters_draw_symbol_brush_and_image_edits() {
     // A group of an instance of symbol `A`, whose art shows symbol `S`, and a green square.
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::IDENTITY });
     let a = Node::group(d.alloc_id(), vec![Arc::new(shown)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "A".into(), art: Arc::new(a) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "A".into(), art: Arc::new(a) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "A".into(), xf: Affine::translate((50.0, 50.0)) });
     let green = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 0.8, 0.0)), Paint::None, 0.0);
     let square = Node::path(d.alloc_id(), rectangle(Rect::new(120.0, 30.0, 160.0, 70.0)), green);
@@ -1976,7 +2067,7 @@ fn proof_doc() -> Document {
     let spot = filled(&mut d, rectangle(Rect::new(110.0, 10.0, 150.0, 50.0)), spot, vec![blur]);
     let yellow = filled(&mut d, rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), Paint::solid(Color::cmyk(0.0, 0.0, 1.0, 0.0)), vec![]);
     let art = Node::group(d.alloc_id(), vec![Arc::new(yellow)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((175.0, 75.0)) });
     with_art(d, vec![cyan, circle, white, spot, instance])
 }
@@ -2137,7 +2228,7 @@ fn symbol_instances_draw_as_groups_of_their_placed_art() {
     let circle = vectorcraft_geom::shapes::ellipse(Rect::new(-6.0, -6.0, 6.0, 6.0));
     let ap = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(1.0, 0.8, 0.0)), Paint::solid(Color::BLACK), 1.0);
     let circle = Node::path(d.alloc_id(), circle, ap);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "U".into(), art: Arc::new(circle) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "U".into(), art: Arc::new(circle) });
     let id = d.alloc_id();
     d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "U".into(), xf: Affine::translate((175.0, 25.0)) })).unwrap();
     // `groups` holds the same art in place of the instances: groups, and the circle as a path.
@@ -2181,7 +2272,7 @@ fn inline_graphics_keep_their_placed_art_between_frames() {
     use vectorcraft_doc::text::{CharStyle, InlineArt, TextObject, TextRun};
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     let style = CharStyle { size: 24.0, ..Default::default() };
     let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), "A", style.clone());
     t.runs.push(TextRun::inline(InlineArt::new("S"), style.clone()));

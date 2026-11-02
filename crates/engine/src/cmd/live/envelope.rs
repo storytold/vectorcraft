@@ -1,6 +1,10 @@
 use super::common::{fix_ids, ids_json, is_envelope, roots_param, selected_of, wrap};
 use super::mesh::{handle_param, index_param, whole};
-use super::*;
+use super::{
+    Affine, Appearance, Arc, Beside, Color, Document, EngineError, EnvelopeKind, EnvelopeMap, EnvelopeOptions, Node, NodeId, NodeKind, Paint,
+    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, check_switches, f64_or, f64_req, id_param, json, live, ok, str_param,
+    switch_or,
+};
 
 // ---------- Envelope ----------
 

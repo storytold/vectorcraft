@@ -70,6 +70,18 @@ fn clicking_a_library_swatch_adds_and_applies_it_in_one_step() {
     assert!(last_open(&app.ui).is_none());
 }
 
+/// A color clicked in a swatch library becomes the Color Guide's base color (#3137).
+#[test]
+fn a_clicked_library_color_becomes_the_color_guides_base() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap();
+    app.ui.color_guide_base = Some(vectorcraft_color::Color::WHITE);
+    click(&mut app, &ctx, "Pastel Teal", Modifiers::NONE, 0.0);
+    let teal = app.session.doc().unwrap().doc.swatch("Pastel Teal").and_then(|w| w.paint.color()).unwrap();
+    assert_eq!(crate::panels::color_guide::base_color(&app), teal);
+}
+
 #[test]
 fn modifier_clicks_select_and_add_to_swatches_adds_the_selection() {
     let mut app = app();

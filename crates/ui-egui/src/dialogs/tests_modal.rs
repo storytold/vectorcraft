@@ -118,6 +118,36 @@ fn dialogs_move_by_their_heading_stay_on_screen_and_where_they_were_moved() {
     }
 }
 
+/// Tab goes through a dialog's controls and does not stop on the band that moves the window.
+#[test]
+fn tab_skips_the_band_that_moves_a_dialog() {
+    let opens: [(&str, Open, egui::Id); 4] = [
+        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::unique(("dialog", "offsetPath"))),
+        ("New Document", open_new_document, egui::Id::unique(("dialog", "newDocument"))),
+        ("Preferences", |app| crate::prefs_dialog::open(app, None), egui::Id::unique("dialog-preferences")),
+        ("Keyboard Shortcuts", crate::shortcut_editor::open, egui::Id::unique("dialog-shortcuts")),
+    ];
+    for (name, open, id) in opens {
+        let (ctx, mut app) = (ctx(), app_with_selection());
+        open(&mut app);
+        settle(&ctx, &mut app);
+        let band = modal::handle(id);
+        assert!(ctx.read_response(band).is_some(), "{name}: the band is drawn");
+        let window = ctx.memory(|m| m.area_rect(id)).unwrap_or_else(|| panic!("{name}: the window is drawn"));
+        let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 30, |events| {
+            frame(&ctx, &mut app, events);
+        });
+        let inside = |s: &egui::Id| ctx.read_response(*s).is_some_and(|r| r.rect.is_positive() && window.contains_rect(r.rect));
+        assert!(stops.iter().any(inside), "{name}: Tab reaches a control in the dialog: {stops:?}");
+        let backdrop: Vec<egui::Id> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().filter(|(l, _)| **l == modal::backdrop()).flat_map(|(_, w)| w.iter()).map(|w| w.id).collect()
+        });
+        assert!(!backdrop.is_empty(), "{name}: the backdrop is drawn");
+        assert!(!stops.iter().any(|id| backdrop.contains(id)), "{name}: Tab stops on the backdrop: {stops:?}");
+        assert!(!stops.contains(&band), "{name}: {stops:?}");
+    }
+}
+
 /// Open the dialog of a plug-in of `kind` (`effect` or `filter`) with `count` number settings over a
 /// selection, settle it and `check` it, given its window and heading. The other tests share the
 /// plug-in registry, and the plug-in is removed after.
@@ -511,6 +541,38 @@ fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path()
     confirm(&mut app).unwrap();
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
     kept(&app, "the dialog");
+}
+
+/// Object › Path › Smooth opens its slider (#4115) at the Auto-Smooth level, previewing that
+/// result; moving it previews the level, Auto-Smooth (the strip's only button) moves it back, and a
+/// click outside keeps the result as one undo step.
+#[test]
+fn smooth_slider_previews_auto_smooth_and_keeps_the_result() {
+    let ctx = ctx();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let anchors: Vec<_> =
+        (0..=60).map(|i| json!({"x": 20 + i * 5, "y": 150.0 + 40.0 * (f64::from(i) / 10.0).sin() + f64::from(i % 2) * 3.0})).collect();
+    app.run("path.create", json!({"anchors": anchors})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    assert!(app.run("ui.smoothAuto", json!({})).is_err(), "the slider is not open");
+    crate::menus::invoke(&mut app, "object.path.smooth", json!({}));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| (d.kind.as_str(), d.f64("level", -1.0))), Some((smooth_slider::KIND, 50.0)));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 50.0}));
+    assert!(anchor_count(&app) < 61 / 4, "the preview smooths the jags: {}", anchor_count(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(0));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
+    let strip = rect_of(&ctx, egui::Id::unique(("dialog", smooth_slider::KIND)));
+    click(&ctx, &mut app, Pos2::new(strip.left() + 8.0 + 14.0, strip.center().y));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("level", 0.0), 50.0);
+    assert_eq!(simplify_preview(&app), json!({"auto": true}));
+    click(&ctx, &mut app, Pos2::new(20.0, 20.0));
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    assert_ne!(app.session.doc().unwrap().doc, before);
 }
 
 /// More Options opens the Simplify dialog at the slider's tolerance. With "Open this dialog with

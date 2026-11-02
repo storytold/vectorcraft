@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    Color, Color32, Entry, GradientKind, Paint, Rect, Response, Sense, Shape, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, icons, pos2, vec2,
+};
 
 /// A pattern swatch drawn as a rendered tile (cached by the definition's identity and size).
 pub(super) fn pattern_thumb(app: &VectorcraftApp, ui: &Ui, r: Rect, paint: &Paint) {

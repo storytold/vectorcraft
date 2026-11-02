@@ -247,7 +247,7 @@ fn a_file_with_type_sizes_out_of_range_opens_with_them_in_range() {
     (h.size, h.h_scale, h.v_scale, h.baseline_shift, h.leading) = (f64::MAX, f64::MAX, f64::MAX, f64::MAX, Some(f64::MAX));
     (k.size, k.h_scale, k.v_scale, k.baseline_shift, k.leading) = (0.001, 0.5, 0.5, 5000.0, Some(0.0));
     let art = d.node(id).unwrap().clone();
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Lines".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Lines".into(), art: Arc::new(art) });
     let attrs = json!({"size": 0, "h_scale": 1e9, "v_scale": -1, "baseline_shift": -1e9, "leading": -1});
     d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Broken".into(), attrs: attrs.as_object().unwrap().clone() });
     let attrs = json!({"size": 40, "leading": null});

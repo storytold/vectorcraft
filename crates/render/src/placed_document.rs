@@ -386,7 +386,7 @@ impl Renderer {
             if blob.is_proxy()
                 && let Some(im) = p.preview_image(&blob.bytes)
             {
-                self.draw_image(ctx, f, &im);
+                self.draw_image(ctx, f, &im, None);
             }
             return;
         };

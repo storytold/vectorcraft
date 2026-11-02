@@ -522,7 +522,8 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
 pub struct NativeFile {
     pub doc: Document,
     /// What was done to bring the document within the nesting caps
-    /// ([`Document::limit_depth_noting`]: a file saved before them, or a damaged one).
+    /// ([`Document::limit_depth_noting`]: a file saved before them, or a damaged one) and within
+    /// the canvas ([`Document::drop_beyond_canvas`]: a damaged or hand-made file).
     pub depth_notes: Vec<String>,
     pub info: FileInfo,
     /// ICC files by profile name (saved with Embed ICC Profiles; undecodable ones are left out).
@@ -552,10 +553,22 @@ pub fn load_info(bytes: &[u8]) -> Result<(Document, FileInfo), FormatError> {
 
 /// [`load`], with everything else the file carries.
 pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
+    load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+}
+
+/// [`load_file`] reading at most `max_nodes` objects and buffering at most `max_values` values
+/// before objects' types, so a test can exercise the budgets without documents that large
+/// ([`vectorcraft_doc::node::MAX_READ_NODES`], [`vectorcraft_doc::node::MAX_BUFFERED_VALUES`]).
+fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
     let file = unpack::Unpacked::new(bytes)?;
-    // The JSON reader stops at 128 levels (a document's objects use three each), and the paths
-    // read at `MAX_READ_ANCHORS` anchors together.
-    let read = || serde_json::from_slice::<File>(file.json());
+    // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
+    // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
+    // fields read before an object's type at `MAX_BUFFERED_VALUES` values.
+    let read = || {
+        vectorcraft_doc::node::with_node_budget(max_nodes, || {
+            vectorcraft_doc::node::with_buffered_value_budget(max_values, || serde_json::from_slice::<File>(file.json()))
+        })
+    };
     let f: File = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| {
         let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
         FormatError::NotVectorcraft(why)
@@ -605,6 +618,17 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     doc.raster_effects.add_around = doc.raster_effects.add_around.clamp(0.0, vectorcraft_doc::rastersettings::MAX_ADD_AROUND);
     let mut depth_notes = vec![];
     doc.limit_depth_noting(&mut depth_notes);
+    // Untrusted: nothing beyond the canvas, where no edit may leave anything (after the depth
+    // limit: the walk recurses). A file whose artboards all lie there has no page to show (#3575).
+    let had_artboards = !doc.artboards.is_empty();
+    let beyond = doc.drop_beyond_canvas();
+    if had_artboards && doc.artboards.is_empty() {
+        return Err(FormatError::NotVectorcraft(format!(
+            "its artboards all lie beyond the canvas (more than {} pt from the origin)",
+            vectorcraft_doc::MAX_COORD
+        )));
+    }
+    depth_notes.extend(beyond.note());
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();
@@ -774,6 +798,55 @@ mod tests {
         assert_eq!(back.node_count(), d.node_count());
         assert_eq!(back.images["k"].bytes.as_slice(), &[1, 2, 3, 250]);
         assert_eq!(back.node(id).unwrap().path_data(), d.node(id).unwrap().path_data());
+    }
+
+    /// #3587: objects are read within a budget. A compressed file of many small objects stays
+    /// small on disk while they take far more memory once read, so past the budget it is refused
+    /// with a message naming it, before the rest of the document is read.
+    #[test]
+    fn a_documents_objects_are_capped() {
+        assert_eq!(vectorcraft_doc::node::MAX_READ_NODES, if cfg!(target_arch = "wasm32") { 512 << 10 } else { 4 << 20 });
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        for i in 0..200 {
+            let id = d.alloc_id();
+            d.insert(Some(l), i, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        }
+        let n = d.node_count();
+        let bytes = save_with(&d, &SaveOptions { compress: true, ..SaveOptions::default() }).unwrap();
+        assert!(is_compressed(&bytes));
+        assert_eq!(
+            load_file_within(&bytes, n, vectorcraft_doc::node::MAX_BUFFERED_VALUES).unwrap().doc.node_count(),
+            n,
+            "a document of exactly the budget opens"
+        );
+        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+            panic!("one object past the budget must be refused")
+        };
+        assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
+        assert_eq!(load(&bytes).unwrap().node_count(), n, "the real budget opens ordinary documents");
+    }
+
+    /// #3587: a reordered file (its objects' fields before their `type`, as a JSON tool that
+    /// sorts keys writes them) still opens; one whose fields before a `type` hold more values than
+    /// the budget, such as a long array of numbers, is refused as they are read.
+    #[test]
+    fn values_buffered_before_an_objects_type_are_capped() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        // Through `serde_json::Value`, whose objects sort their keys: `children` before `type`.
+        let sorted = serde_json::to_vec(&serde_json::from_slice::<serde_json::Value>(&save(&d, false)).unwrap()).unwrap();
+        assert_eq!(load(&sorted).unwrap().node_count(), d.node_count());
+        let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let zeros = vec![0; 1000];
+        v["document"]["layers"][0]["kind"]["children"] = serde_json::json!([{"id": 90, "kind": {"children": zeros, "type": "group"}}]);
+        let bomb = serde_json::to_vec(&v).unwrap();
+        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bomb, vectorcraft_doc::node::MAX_READ_NODES, 100) else {
+            panic!("past the budget must be refused")
+        };
+        assert!(why.contains("more than 100 values before its type"), "{why}");
     }
 
     #[test]

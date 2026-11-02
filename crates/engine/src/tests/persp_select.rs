@@ -4,7 +4,7 @@
 use serde_json::json;
 use vectorcraft_geom::{Point, Rect, Vec2};
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind, ToolKey};
 
 use crate::*;
 
@@ -109,6 +109,297 @@ fn alt_drag_copies_and_the_copy_stays_attached() {
     }
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.doc().unwrap().doc.node(copy).is_none());
+}
+
+#[test]
+fn shift_drag_moves_on_a_plane_axis() {
+    let (mut s, id) = persp_session();
+    s.select_tool("perspectiveSelection", ViewInfo::default()).unwrap();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let start = bounds_of(&before).center();
+    let (from, to) = (h.apply(start).unwrap(), h.apply(start + Vec2::new(80.0, 20.0)).unwrap());
+    let n = undo_len(&s);
+    drag(&mut s, &[from, to, to], Mods { shift: true, ..Default::default() });
+    assert_eq!(undo_len(&s), n + 1);
+    for (a, b) in before.iter().zip(plane_pts(&s, id, Plane::Right, 0.0)) {
+        assert!((b - *a - Vec2::new(80.0, 0.0)).hypot() < 1e-6, "shift move: {a:?} → {b:?}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before);
+}
+
+/// An attached rectangle with a horizontal edge close enough to a gridline to be pulled by snapping.
+fn near_gridline_session() -> (Session, NodeId) {
+    let (mut s, id) = persp_session();
+    let g = grid(&s);
+    let b = bounds_of(&plane_pts(&s, id, Plane::Right, 0.0));
+    let dy = (b.y0 / g.cell).round() * g.cell + g.cell * 0.1 - b.y0;
+    let h = g.homography(Plane::Right).unwrap();
+    let from = h.apply(b.center()).unwrap();
+    let to = h.apply(b.center() + Vec2::new(0.0, dy)).unwrap();
+    s.execute("perspective.move", &json!({"ids": [id.0], "from": [from.x, from.y], "to": [to.x, to.y], "snap": false})).unwrap();
+    s.execute("perspective.grid.snap", &json!({"on": true})).unwrap();
+    (s, id)
+}
+
+fn shift_move_near_gridline(diagonal: bool, copy: bool) {
+    let (mut s, id) = near_gridline_session();
+    s.select_tool("perspectiveSelection", ViewInfo::default()).unwrap();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let start = bounds_of(&before).center();
+    let raw = if diagonal { Vec2::new(40.0, 50.0) } else { Vec2::new(80.0, 20.0) };
+    let from = h.apply(start).unwrap();
+    let to = h.apply(start + raw).unwrap();
+    drag(&mut s, &[from, to, to], Mods { shift: true, alt: copy, ..Default::default() });
+    let target = if copy { *s.doc().unwrap().selection.objects.first().unwrap() } else { id };
+    assert!(!copy || target != id);
+    let after = plane_pts(&s, target, Plane::Right, 0.0);
+    for (a, b) in before.iter().zip(after) {
+        let d = b - *a;
+        if diagonal {
+            assert!((d.x - d.y).abs() < 1e-6, "diagonal move left its line: {d:?}");
+        } else {
+            assert!(d.y.abs() < 1e-6, "axis move left its line: {d:?}");
+        }
+    }
+    if copy {
+        assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before);
+    }
+}
+
+#[test]
+fn shift_axis_move_stays_on_axis_with_grid_snap() {
+    shift_move_near_gridline(false, false);
+}
+
+#[test]
+fn shift_axis_copy_stays_on_axis_with_grid_snap() {
+    shift_move_near_gridline(false, true);
+}
+
+#[test]
+fn shift_diagonal_move_stays_on_diagonal_with_grid_snap() {
+    shift_move_near_gridline(true, false);
+}
+
+#[test]
+fn shift_diagonal_copy_stays_on_diagonal_with_grid_snap() {
+    shift_move_near_gridline(true, true);
+}
+
+#[test]
+fn constrained_move_command_stays_on_axis_with_grid_snap() {
+    let (mut s, id) = near_gridline_session();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let start = bounds_of(&before).center();
+    let from = h.apply(start).unwrap();
+    let to = h.apply(start + Vec2::new(80.0, 0.0)).unwrap();
+    s.execute("perspective.move", &json!({"ids": [id.0], "from": [from.x, from.y], "to": [to.x, to.y], "constrain": true})).unwrap();
+    for (a, b) in before.iter().zip(plane_pts(&s, id, Plane::Right, 0.0)) {
+        assert!((b.y - a.y).abs() < 1e-6, "constrained command left axis: {a:?} to {b:?}");
+    }
+}
+
+#[test]
+fn diagonal_shift_snap_lands_an_edge_on_a_gridline() {
+    let (mut s, id) = near_gridline_session();
+    let g = grid(&s);
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let b = bounds_of(&before);
+    let (raw, correction) = (1..200)
+        .map(|n| {
+            let raw = Vec2::new(n as f64 * g.cell * 0.05, n as f64 * g.cell * 0.05);
+            (raw, g.snap_offset(b, raw) - raw)
+        })
+        .find(|(_, fix)| fix.x.abs() < 1e-9 && fix.y.abs() > 1e-6)
+        .unwrap();
+    let h = g.homography(Plane::Right).unwrap();
+    let start = b.center();
+    let from = h.apply(start).unwrap();
+    let to = h.apply(start + raw).unwrap();
+    s.execute("perspective.move", &json!({"ids": [id.0], "from": [from.x, from.y], "to": [to.x, to.y], "constrain": true})).unwrap();
+    let after = plane_pts(&s, id, Plane::Right, 0.0);
+    let delta = after[0] - before[0];
+    assert!((delta.x - delta.y).abs() < 1e-6, "{delta:?}");
+    let edge = [b.y0 + delta.y, b.y1 + delta.y];
+    assert!(edge.iter().any(|y| ((y / g.cell).round() * g.cell - y).abs() < 1e-6), "{edge:?}, correction {correction:?}");
+}
+
+#[test]
+fn constrained_move_uses_each_objects_plane() {
+    let (mut s, right) = persp_session();
+    let left_result = s.execute("shape.rectangle", &json!({"x": 240, "y": 380, "width": 60, "height": 60})).unwrap();
+    let left = NodeId(left_result["id"].as_u64().unwrap());
+    s.execute("perspective.attach", &json!({"ids": [left.0], "plane": "left"})).unwrap();
+    let right_before = plane_pts(&s, right, Plane::Right, 0.0);
+    let left_before = plane_pts(&s, left, Plane::Left, 0.0);
+    let from = grid(&s).homography(Plane::Right).unwrap().apply(bounds_of(&right_before).center()).unwrap();
+    let to = from + Vec2::new(70.0, 30.0);
+    let g = grid(&s);
+    for plane in [Plane::Right, Plane::Left] {
+        let raw = g.plane_delta(plane, 0.0, from, to).unwrap();
+        assert!(raw.x.abs() > 1e-3 && raw.y.abs() > 1e-3 && (raw.x.abs() - raw.y.abs()).abs() > 1e-3, "raw {plane:?}: {raw:?}");
+    }
+    s.execute("perspective.move", &json!({"ids": [right.0, left.0], "from": [from.x, from.y], "to": [to.x, to.y], "constrain": true, "snap": false}))
+        .unwrap();
+    for (id, plane, before) in [(right, Plane::Right, right_before), (left, Plane::Left, left_before)] {
+        let after = plane_pts(&s, id, plane, 0.0);
+        let delta = after[0] - before[0];
+        assert!(delta.x.abs() < 1e-6 || delta.y.abs() < 1e-6 || (delta.x.abs() - delta.y.abs()).abs() < 1e-6, "{plane:?}: {delta:?}");
+    }
+}
+
+#[test]
+fn constrained_move_rejects_non_boolean_switch() {
+    let (mut s, id) = near_gridline_session();
+    for direction in [json!([0.0, 0.0]), json!([1.0]), json!(1), json!("true")] {
+        let error = s.execute("perspective.move", &json!({"ids": [id.0], "from": [1.0, 1.0], "to": [2.0, 2.0], "constrain": direction})).unwrap_err();
+        assert!(error.to_string().contains("`constrain` must be true or false"), "{error}");
+    }
+}
+
+#[test]
+fn shift_drag_keeps_its_displacement_after_a_plane_key() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let start = bounds_of(&before).center();
+    let (from, to) = (h.apply(start).unwrap(), h.apply(start + Vec2::new(80.0, 20.0)).unwrap());
+    let shift = Mods { shift: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, from.x, from.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), v).unwrap();
+    s.tool_key(ToolKey::Digit(2), shift, v).unwrap();
+    assert_eq!(grid(&s).plane, Plane::Ground);
+    s.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y).with_mods(shift), v).unwrap();
+    for (a, b) in before.iter().zip(plane_pts(&s, id, Plane::Right, 0.0)) {
+        assert!((b - *a - Vec2::new(80.0, 0.0)).hypot() < 1e-6, "plane key: {a:?} → {b:?}");
+    }
+}
+
+#[test]
+fn loose_art_move_survives_clearing_the_active_plane() {
+    for (drag_after_key, switch_before_drag) in [(false, false), (true, false), (false, true)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 600, "created": null})).unwrap();
+        s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
+        s.execute("perspective.plane.set", &json!({"plane": "right"})).unwrap();
+        let result = s.execute("shape.rectangle", &json!({"x": 450, "y": 380, "width": 60, "height": 60})).unwrap();
+        let id = NodeId(result["id"].as_u64().unwrap());
+        assert_eq!(attached(&s, id), None);
+        let before = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        let (from, to) = (before.center(), before.center() + Vec2::new(30.0, 15.0));
+        let v = ViewInfo::default();
+        s.select_tool("perspectiveSelection", v).unwrap();
+        let undo_before = undo_len(&s);
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.x, from.y), v).unwrap();
+        if switch_before_drag {
+            s.tool_key(ToolKey::Digit(2), Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), v).unwrap();
+        s.tool_key(ToolKey::Digit(4), Mods::default(), v).unwrap();
+        assert_eq!(grid(&s).plane, Plane::None);
+        if drag_after_key {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, to.x + 10.0, to.y), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y), v).unwrap();
+        assert_eq!(attached(&s, id), Some((if switch_before_drag { Plane::Ground } else { Plane::Right }, 0.0)));
+        assert_ne!(s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap(), before);
+        assert_eq!(undo_len(&s), undo_before + 1);
+    }
+}
+
+#[test]
+fn cmd_alt_shift_drag_copies_on_a_plane_axis() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let count = s.doc().unwrap().doc.node_count();
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let start = bounds_of(&before).center();
+    let (from, to) = (h.apply(start).unwrap(), h.apply(start + Vec2::new(80.0, 20.0)).unwrap());
+    let n = undo_len(&s);
+    drag(&mut s, &[from, to, to], Mods { cmd: true, alt: true, shift: true, ..Default::default() });
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().doc.node_count(), count + 1);
+    let copy = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_ne!(copy, id);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![copy]);
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before);
+    assert_eq!(attached(&s, copy), Some((Plane::Right, 0.0)));
+    for (a, b) in before.iter().zip(plane_pts(&s, copy, Plane::Right, 0.0)) {
+        assert!((b - *a - Vec2::new(80.0, 0.0)).hypot() < 1e-6, "shift copy: {a:?} → {b:?}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node_count(), count);
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+}
+
+#[test]
+fn cmd_alt_drag_copies_on_the_perspective_plane() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let count = s.doc().unwrap().doc.node_count();
+    let c = bounds_of(&before).center();
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let (from, to) = (h.apply(c).unwrap(), h.apply(c + Vec2::new(80.0, 0.0)).unwrap());
+    let n = undo_len(&s);
+    drag(&mut s, &[from, to, to], Mods { cmd: true, alt: true, ..Default::default() });
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+    assert_eq!(s.doc().unwrap().doc.node_count(), count + 1, "one copy");
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+    let copy = s.doc().unwrap().selection.objects[0];
+    assert_ne!(copy, id, "the copy is selected");
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before, "the original stays");
+    assert_eq!(attached(&s, copy), Some((Plane::Right, 0.0)), "the copy is attached");
+    for (a, b) in before.iter().zip(plane_pts(&s, copy, Plane::Right, 0.0)) {
+        assert!((b - *a - Vec2::new(80.0, 0.0)).hypot() < 1e-6);
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node_count(), count);
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+}
+
+#[test]
+fn cmd_drag_still_lends_selection_from_perspective_selection() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let p = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().center();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, p.x, p.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, p.x, p.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "perspectiveSelection");
+    let cmd_alt = Mods { cmd: true, alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, p.x, p.y).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "perspectiveSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, p.x, p.y).with_mods(cmd_alt), v).unwrap();
+}
+
+#[test]
+fn cmd_alt_cursor_stays_with_perspective_selection() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let p = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().center();
+    let cmd_alt = Mods { cmd: true, alt: true, ..Default::default() };
+    assert_eq!(s.cursor(p, cmd_alt, v), Cursor::Arrow);
+    assert_eq!(s.tool_id(), "perspectiveSelection");
 }
 
 #[test]

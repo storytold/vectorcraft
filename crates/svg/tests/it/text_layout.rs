@@ -176,6 +176,23 @@ fn digits_are_written_as_drawn() {
     assert!(!text.contains("page 4") && !text.contains("page ٥"), "{svg}");
 }
 
+/// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is `font-size="20"`, after a 12 pt run measuring the em box,
+/// which takes the `<text>` element's 12.
+#[test]
+fn font_height_reference_writes_the_size_drawn() {
+    use vectorcraft_doc::FontHeightReference;
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let em_box = CharStyle { font_family: HEIGHT_FAMILY.into(), ..style(12.0) };
+    let cap = CharStyle { size: 14.0, font_height_reference: FontHeightReference::CapHeight, ..em_box.clone() };
+    let d = area_doc(vec![run("Hx ", em_box), run("Hx", cap)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains("font-size=\"12\" fill"), "{svg}");
+    let sizes: Vec<_> = tspans(&svg).iter().map(|t| attr(t, "font-size")).collect();
+    assert_eq!(sizes, [None, Some(20.0)], "{svg}");
+}
+
 #[test]
 fn fewer_tspans_writes_one_per_line() {
     let bold = CharStyle { font_style: "Bold".into(), ..style(12.0) };

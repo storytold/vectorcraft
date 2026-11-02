@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, CornerKind, Deserialize, PathData, Point, Rect, Serialize, cut_corners, shapes};
 
 /// Live shape parameters (Illustrator's "Live Shapes"). The node's path is regenerated from these
 /// while the shape stays live; editing anchors directly converts it to a plain path.

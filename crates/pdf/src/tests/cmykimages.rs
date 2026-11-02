@@ -439,6 +439,38 @@ fn a_cmyk_image_masked_by_a_grey_image_of_its_grid_writes_it_as_its_smask() {
     assert!(String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "a luminosity soft mask");
 }
 
+/// A pixelated CMYK image (an envelope's with Anti-Alias off) masked by a grey image of its grid
+/// is written without /Interpolate, as one without a mask is.
+#[test]
+fn a_pixelated_cmyk_image_with_its_grid_mask_asks_viewers_not_to_smooth_it() {
+    for pixelated in [false, true] {
+        let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
+        d.images.insert("img".into(), ImageBlob::cmyk_tiff(&Inks::new(2, 2, flat([0u8, 102, 255, 0], 4)).unwrap()).unwrap());
+        d.images.insert("alpha".into(), ImageBlob::new("image/png", png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap())));
+        let image = |key: &str| {
+            let im = ImageObject {
+                key: key.into(),
+                width: 2,
+                height: 2,
+                xf: Affine::scale(20.0),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            NodeKind::Image(Box::new(im))
+        };
+        let mask = vectorcraft_doc::OpacityMask::new(Node::new(d.alloc_id(), image("alpha")), true);
+        let mut n = Node::new(d.alloc_id(), image("img")).with_mask(Some(Box::new(mask)));
+        n.extras_mut().pixelated = pixelated;
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let out = export_with_report(&d, &PdfOptions { created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap().bytes;
+        let text = String::from_utf8_lossy(&out);
+        assert!(!text.contains("/S/Luminosity"), "the mask is the image's /SMask");
+        assert_eq!(text.contains("/Interpolate"), !pixelated, "pixelated: {pixelated}");
+    }
+}
+
 /// #2950: Press Quality converts to the document's profile with its numbers kept, so in a CMYK
 /// document an RGB image comes out CMYK, as the press needs; with no conversion (the default
 /// preset) it stays RGB, as before.

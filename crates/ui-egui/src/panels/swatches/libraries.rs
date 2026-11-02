@@ -1,7 +1,10 @@
 use super::actions::deletable;
 use super::dnd::selection;
 use super::tiles::{describe, global_mark, list_icons};
-use super::*;
+use super::{
+    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary, Ui, Value,
+    VectorcraftApp, json, library_panel, menu_item, swatch_tile, swatchlib,
+};
 
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
     libs.into_iter().map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
@@ -11,6 +14,24 @@ fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
 pub(crate) fn colour_libraries(app: &VectorcraftApp) -> Vec<LibraryRef> {
     let has_colours = |id: &str| swatchlib::library(&app.session, id).is_some_and(|(_, lib)| lib.iter().any(|w| w.paint.color().is_some()));
     library_refs(swatchlib::libraries(&app.session).into_iter().filter(|l| l.category != "gradients" && has_colours(&l.id)).collect())
+}
+
+/// The name of library choice `key` (the document's swatches or a swatch library, as Image
+/// Trace's Document Library and Find Nearest Swatch pick one); a library that is gone shows its key.
+pub(crate) fn library_label(app: &VectorcraftApp, key: &str) -> String {
+    match limit_name(app, key) {
+        Some(_) if key == swatchlib::DOCUMENT_SWATCHES => tl!(DOCUMENT_SWATCHES).to_string(),
+        Some(name) => library_panel::library_name(key, &name).to_string(),
+        None => key.to_string(),
+    }
+}
+
+/// The library choices: the document's swatches, then the colour libraries (`current` checked) →
+/// the key chosen.
+pub(crate) fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
+    let document = menu_item(ui, DOCUMENT_SWATCHES, true, current == swatchlib::DOCUMENT_SWATCHES).then(|| swatchlib::DOCUMENT_SWATCHES.to_string());
+    ui.separator();
+    library_panel::library_items(ui, &colour_libraries(app), &|id| id == current).or(document)
 }
 
 /// What Limit to Library menus call the document's own swatches ([`swatchlib::DOCUMENT_SWATCHES`]).
@@ -88,8 +109,12 @@ impl LibraryKind for SwatchLibraries {
     fn describe(w: &Swatch) -> String {
         describe(&w.paint, w.global, w.spot)
     }
-    /// Adds the swatch and applies it to the active proxy (Alt: the inactive one), as one step.
+    /// Adds the swatch and applies it to the active proxy (Alt: the inactive one), as one step. A
+    /// color swatch also becomes the Color Guide's base color.
     fn click(app: &mut VectorcraftApp, ui: &Ui, id: &str, name: &str) {
+        if let Some(c) = swatchlib::library(&app.session, id).and_then(|(_, lib)| lib.iter().find(|w| w.name == name).and_then(|w| w.paint.color())) {
+            crate::panels::color_guide::choose_base(app, c);
+        }
         let alt = crate::panels::alt_held(ui);
         let apply = if crate::panels::proxy_cmd(app, alt) == "paint.setFill" { "fill" } else { "stroke" };
         add_from_library(app, json!({"library": id, "names": [name], "apply": apply, "focus": !alt}));

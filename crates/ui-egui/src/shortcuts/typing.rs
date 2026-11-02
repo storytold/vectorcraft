@@ -1,4 +1,4 @@
-use super::*;
+use super::{EngineResult, Key, Mods, SurroundingUnit, ToolKey, UiRequest, VectorcraftApp, ViewInfo};
 
 /// Drop each key press made with Ctrl and Alt held that is followed by the text it typed. Firefox
 /// on Windows reports AltGr as Ctrl and Alt held, so AltGr+L on a Polish layout arrives as a

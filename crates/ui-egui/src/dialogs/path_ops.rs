@@ -1,4 +1,4 @@
-//! Path dialogs: Average, and Offset Path, Simplify and Split Into Grid with Preview.
+//! Path dialogs: Average, Average & Join, and Offset Path, Simplify and Split Into Grid with Preview.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, Unit};
@@ -23,6 +23,7 @@ const ORIGINAL_IDS: &str = "__ids";
 fn title(kind: &str) -> &'static str {
     match kind {
         "average" => tl!("Average"),
+        "averageJoin" => tl!("Average & Join"),
         "offsetPath" => tl!("Offset Path"),
         "simplify" => tl!("Simplify"),
         _ => tl!("Split Into Grid"),
@@ -33,6 +34,7 @@ fn title(kind: &str) -> &'static str {
 fn command(d: &Dialog) -> (&'static str, Value) {
     match d.kind.as_str() {
         "average" => ("path.average", json!({"axis": d.str("axis")})),
+        "averageJoin" => ("path.averageJoin", json!({"to": d.str("to")})),
         "offsetPath" => {
             ("object.path.offsetPath", json!({"offset": d.f64("offset", 10.0), "joins": d.str("joins"), "miterLimit": d.f64("miterLimit", 4.0)}))
         }
@@ -44,7 +46,7 @@ fn command(d: &Dialog) -> (&'static str, Value) {
     }
 }
 
-/// The undo label of the dialogs that preview on the canvas (all but Average).
+/// The undo label of the dialogs that preview on the canvas (all but Average and Average & Join).
 fn previewed(kind: &str) -> Option<&'static str> {
     match kind {
         "offsetPath" => Some("Offset Path"),
@@ -108,6 +110,20 @@ fn split_grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     form::check(ui, d, "addGuides", tl!("Add Guides"));
 }
 
+/// Average & Join's Points: Corner or Smooth, the joined anchor. "Points:" in the "anchor"
+/// context: the plain row is a star's number of points.
+fn join_points(ui: &mut egui::Ui, d: &mut Dialog) {
+    let to = d.str("to");
+    ui.horizontal(|ui| {
+        form::row_label(ui, crate::i18n::tr_ctx(crate::i18n::current(), "anchor", "Points:"));
+        for (value, label) in [("corner", "Corner"), ("smooth", "Smooth")] {
+            if crate::widgets::radio(ui, label, to == value, true) {
+                d.fields.insert("to".into(), json!(value));
+            }
+        }
+    });
+}
+
 /// The fields the Simplify dialog opens with at `tolerance` (points): the slider's tolerance when
 /// its More Options opens the dialog.
 pub(crate) fn simplify_dialog(tolerance: f64) -> Value {
@@ -160,6 +176,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         split_grid(ui, d, unit);
     } else if d.kind == "simplify" {
         simplify_fields(ui, d, unit);
+    } else if d.kind == "averageJoin" {
+        join_points(ui, d);
     } else {
         form::grid(ui, d, unit);
     }
@@ -189,7 +207,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (id, params) = command(d);
     if previewed(&d.kind).is_none() {
-        return run_and_close(app, id, params);
+        let r = run_and_close(app, id, params)?;
+        if d.kind == "averageJoin" {
+            app.ui.average_join = json!({"to": d.str("to")});
+        }
+        return Ok(r);
     }
     let r = form::commit_preview(app, id, params)?;
     // Simplify: with retain ticked, the menu item opens this dialog on these fields next time; with it

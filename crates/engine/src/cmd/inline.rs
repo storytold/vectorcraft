@@ -7,7 +7,7 @@ use vectorcraft_doc::{Document, InlineArt, NodeId, NodeKind, TextRun};
 use vectorcraft_text::edit;
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
