@@ -4319,6 +4319,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{w}` takes no operands	`{w}` はオペランドを取りません
 @msg	a wraparound group is inside a compound path	テキストの回り込みグループが複合パスの中にあります
 @msg	a path has too many points	ポイントが多すぎるパスがあります
+@msg	it ends inside a group or compound path	グループまたは複合パスの途中で終わっています
 @msg	it ends inside a layer	レイヤーの途中で終わっています
 @msg	it ends inside a multi-layer mask	複数レイヤーにまたがるマスクの途中で終わっています
 @msg	a multi-layer mask's operators are out of order	複数レイヤーにまたがるマスクの演算子の順序が正しくありません

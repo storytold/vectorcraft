@@ -4574,6 +4574,7 @@ axis	Both	Les deux
 @msg	`{w}` takes no operands	`{w}` n’accepte aucun opérande
 @msg	a wraparound group is inside a compound path	un groupe d’habillage de texte se trouve dans un tracé transparent
 @msg	a path has too many points	un tracé a trop de points
+@msg	it ends inside a group or compound path	elles se terminent à l’intérieur d’un groupe ou d’un tracé transparent
 @msg	it ends inside a layer	elles se terminent à l’intérieur d’un calque
 @msg	it ends inside a multi-layer mask	elles se terminent à l’intérieur d’un masque multicalque
 @msg	a multi-layer mask's operators are out of order	les opérateurs d’un masque multicalque sont dans le désordre

@@ -4483,6 +4483,7 @@ axis	Both	Båda
 @msg	`{w}` takes no operands	`{w}` tar inga operander
 @msg	a wraparound group is inside a compound path	en textombrytningsgrupp ligger inuti en sammansatt bana
 @msg	a path has too many points	en bana har för många punkter
+@msg	it ends inside a group or compound path	den slutar inuti en grupp eller en sammansatt bana
 @msg	it ends inside a layer	den slutar inuti ett lager
 @msg	it ends inside a multi-layer mask	den slutar inuti en flerlagersmask
 @msg	a multi-layer mask's operators are out of order	operatorerna för en flerlagersmask står i fel ordning

@@ -4321,6 +4321,7 @@ axis	Both	Her İkisi
 @msg	`{w}` takes no operands	`{w}` işlenen almaz
 @msg	a wraparound group is inside a compound path	bir metin kaydırma grubu bileşik bir yolun içinde
 @msg	a path has too many points	bir yolun çok fazla noktası var
+@msg	it ends inside a group or compound path	bir grubun veya bileşik yolun içinde bitiyor
 @msg	it ends inside a layer	bir katmanın içinde bitiyor
 @msg	it ends inside a multi-layer mask	çok katmanlı bir maskenin içinde bitiyor
 @msg	a multi-layer mask's operators are out of order	çok katmanlı bir maskenin işleçleri yanlış sırada

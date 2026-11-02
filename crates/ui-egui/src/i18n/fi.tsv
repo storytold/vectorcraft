@@ -4792,6 +4792,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`{w}` takes no operands	`{w}` ei ota operandeja
 @msg	a wraparound group is inside a compound path	tekstin rivitysryhmä on yhdistelmäpolun sisällä
 @msg	a path has too many points	polulla on liian monta pistettä
+@msg	it ends inside a group or compound path	se päättyy ryhmän tai yhdistelmäpolun sisään
 @msg	it ends inside a layer	se päättyy tason sisään
 @msg	it ends inside a multi-layer mask	se päättyy monitasoisen maskin sisään
 @msg	a multi-layer mask's operators are out of order	monitasoisen maskin operaattorit ovat väärässä järjestyksessä

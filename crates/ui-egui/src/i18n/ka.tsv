@@ -4323,6 +4323,7 @@ font-technology	Variable	ცვლადი
 @msg	`{w}` takes no operands	`{w}` ოპერანდებს არ იღებს
 @msg	a wraparound group is inside a compound path	ტექსტის გარსშემოვლების ჯგუფი შედგენილი ტრაექტორიის შიგნითაა
 @msg	a path has too many points	ტრაექტორიას ზედმეტად ბევრი წერტილი აქვს
+@msg	it ends inside a group or compound path	ის ჯგუფის ან შედგენილი ტრაექტორიის შიგნით მთავრდება
 @msg	it ends inside a layer	ის შრის შიგნით მთავრდება
 @msg	it ends inside a multi-layer mask	ის მრავალშრიანი ნიღბის შიგნით მთავრდება
 @msg	a multi-layer mask's operators are out of order	მრავალშრიანი ნიღბის ოპერატორები არასწორი თანმიმდევრობითაა

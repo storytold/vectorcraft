@@ -4499,6 +4499,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{w}` takes no operands	`{w}` nimmt keine Operanden
 @msg	a wraparound group is inside a compound path	eine Textumfluss-Gruppe liegt in einem zusammengesetzten Pfad
 @msg	a path has too many points	ein Pfad hat zu viele Punkte
+@msg	it ends inside a group or compound path	es endet innerhalb einer Gruppe oder eines zusammengesetzten Pfads
 @msg	it ends inside a layer	es endet innerhalb einer Ebene
 @msg	it ends inside a multi-layer mask	es endet innerhalb einer ebenenübergreifenden Maske
 @msg	a multi-layer mask's operators are out of order	die Operatoren einer ebenenübergreifenden Maske stehen in falscher Reihenfolge

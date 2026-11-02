@@ -4246,6 +4246,7 @@ theme	Appearance	외관
 @msg	`{w}` takes no operands	`{w}`은(는) 피연산자를 받지 않습니다
 @msg	a wraparound group is inside a compound path	문자 감싸기 그룹이 컴파운드 패스 안에 있습니다
 @msg	a path has too many points	패스의 점이 너무 많습니다
+@msg	it ends inside a group or compound path	그룹 또는 컴파운드 패스 안에서 끝납니다
 @msg	it ends inside a layer	레이어 안에서 끝납니다
 @msg	it ends inside a multi-layer mask	여러 레이어 마스크 안에서 끝납니다
 @msg	a multi-layer mask's operators are out of order	여러 레이어 마스크의 연산자 순서가 잘못되었습니다
