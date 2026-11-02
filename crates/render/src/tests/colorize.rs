@@ -1,5 +1,5 @@
 //! Grayscale and 1-bit images colorized by a fill color draw in that color, white pixels
-//! transparent.
+//! transparent; and how Separations Preview shows images.
 
 use crate::*;
 use vectorcraft_color::{Color, Paint};
@@ -153,14 +153,121 @@ fn separations_preview_shows_the_image_on_its_spot_plate() {
     let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     n.extras_mut().colorize = Some(Box::new(Paint::Solid { color: ink, swatch: Some("Ink".into()), tint: 1.0 }));
     d.insert(Some(d.layers[0].id), 0, n).unwrap();
-    let shown = |plates: &[&str]| {
-        let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };
-        let opts = RenderOptions { proof: Some(proof), overprint_preview: true, smooth_images: false, ..Default::default() };
-        Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &opts).pixel(10, 10)
-    };
+    let shown = |plates: &[&str]| Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(plates)).pixel(10, 10);
     let on = shown(&["Ink"]);
     // One plate shows as black ink.
     assert!(on[..3].iter().all(|v| *v < 128), "the Ink plate shows the image, got {on:?}");
     let off = shown(&["Cyan", "Magenta", "Yellow", "Black"]);
     assert!(off[..3].iter().all(|v| *v >= 250), "the process plates show paper, got {off:?}");
+}
+
+/// Separations Preview showing `plates`, as the canvas draws it.
+fn separations(plates: &[&str]) -> RenderOptions {
+    let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };
+    RenderOptions { proof: Some(proof), overprint_preview: true, smooth_images: false, ..Default::default() }
+}
+
+/// A 10 pt tall page of `mode`: the image of `blob` (`size` pixels, `scale` pt a pixel) at the
+/// origin, then from `x0` a 10 pt square of each of `fills`.
+fn image_and_fills(mode: vectorcraft_doc::ColorMode, blob: ImageBlob, (width, height): (u32, u32), scale: f64, x0: f64, fills: &[Color]) -> Document {
+    let mut d = Document::new_with_mode(x0 + 10.0 * fills.len() as f64, 10.0, mode);
+    let layer = Some(d.layers[0].id);
+    d.images.insert("pic".into(), blob);
+    let im = ImageObject { key: "pic".into(), width, height, xf: Affine::scale(scale), link: None, placement: Default::default(), pixels: None };
+    let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    d.insert(layer, 0, n).unwrap();
+    for (i, c) in fills.iter().enumerate() {
+        let x = x0 + 10.0 * i as f64;
+        let square =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::basic(Paint::solid(*c), Paint::None, 0.0));
+        d.insert(layer, i + 1, square).unwrap();
+    }
+    d
+}
+
+/// An RGB PNG of `width` × `height` `pixels`.
+fn rgb_png(width: u32, height: u32, pixels: &[[u8; 3]]) -> Vec<u8> {
+    let img = image::RgbImage::from_raw(width, height, pixels.concat()).unwrap();
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png
+}
+
+/// Whether `a` and `b` differ by at most `tolerance` in every channel.
+fn near(a: [u8; 4], b: [u8; 4], tolerance: u8) -> bool {
+    a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= tolerance)
+}
+
+/// Separations Preview shows an RGB image's pixels as the visible plates print them, as it shows
+/// fills of the same colors (#4153): with only Cyan visible a cyan pixel shows as dark ink and a
+/// red one as paper; with Cyan hidden, or only Magenta and Yellow, as the fills do. With the
+/// preview off the image keeps its own pixels.
+#[test]
+fn separations_preview_shows_an_rgb_images_process_inks() {
+    let (cyan, red) = (Color::rgb(0.0, 1.0, 1.0), Color::rgb(1.0, 0.0, 0.0));
+    let blob = ImageBlob::new("image/png", rgb_png(2, 1, &[[0, 255, 255], [255, 0, 0]]));
+    let d = image_and_fills(vectorcraft_doc::ColorMode::Rgb, blob, (2, 1), 10.0, 20.0, &[cyan, red]);
+    let render = |opts: &RenderOptions| Renderer::new().render(&d, 40, 10, Affine::IDENTITY, opts);
+    let off = render(&RenderOptions { smooth_images: false, ..Default::default() });
+    assert_eq!((off.pixel(5, 5), off.pixel(15, 5)), ([0, 255, 255, 255], [255, 0, 0, 255]), "the preview off: the image's own pixels");
+    for plates in [&["Cyan"][..], &["Magenta", "Yellow", "Black"], &["Magenta", "Yellow"], &["Cyan", "Magenta", "Yellow", "Black"]] {
+        let shown = render(&separations(plates));
+        for (image, fill) in [(5, 25), (15, 35)] {
+            let (a, b) = (shown.pixel(image, 5), shown.pixel(fill, 5));
+            assert!(near(a, b, 3), "{plates:?}: the image pixel at {image} shows as the fill does, {a:?} vs {b:?}");
+        }
+    }
+    let cyan_only = render(&separations(&["Cyan"]));
+    let (c, r) = (cyan_only.pixel(5, 5), cyan_only.pixel(15, 5));
+    assert!(c[0] < 128 && c[0] == c[1] && c[1] == c[2], "the cyan pixel shows its cyan ink as a grey, got {c:?}");
+    assert!(r[..3].iter().all(|v| *v >= 230), "red carries next to no cyan ink, got {r:?}");
+}
+
+/// A CMYK image shows its own inks on the plates, not inks separated again from its display
+/// colors: as a fill of the same inks does.
+#[test]
+fn separations_preview_shows_a_cmyk_images_own_inks() {
+    let ink = [0u8, 102, 255, 25];
+    let blob = ImageBlob::cmyk_tiff(&vectorcraft_doc::cmyk::Inks::new(2, 2, ink.repeat(4)).unwrap()).unwrap();
+    let fill = Color::cmyk(0.0, 0.4, 1.0, 25.0 / 255.0);
+    let d = image_and_fills(vectorcraft_doc::ColorMode::Cmyk, blob, (2, 2), 5.0, 10.0, &[fill]);
+    for (plates, grey) in [
+        (&["Cyan"][..], Some(255)),
+        (&["Magenta"], Some(153)),
+        (&["Black"], Some(230)),
+        (&["Magenta", "Yellow"], None),
+        (&["Cyan", "Yellow", "Black"], None),
+    ] {
+        let shown = Renderer::new().render(&d, 20, 10, Affine::IDENTITY, &separations(plates));
+        let (a, b) = (shown.pixel(5, 5), shown.pixel(15, 5));
+        assert!(near(a, b, 3), "{plates:?}: the image shows as the fill does, {a:?} vs {b:?}");
+        if let Some(v) = grey {
+            assert!(near(a, [v, v, v, 255], 2), "{plates:?}: the plate's own ink as a grey, got {a:?}");
+        }
+    }
+}
+
+/// Showing other plates draws the image again through them, its shrunk copies too, and the image
+/// drawn without the preview keeps its own pixels: each plate set's pixels are kept apart.
+#[test]
+fn separations_preview_keeps_an_images_pixels_per_plate_set() {
+    let cyan = Color::rgb(0.0, 1.0, 1.0);
+    let blob = ImageBlob::new("image/png", rgb_png(40, 40, &[[0, 255, 255]; 1600]));
+    let d = image_and_fills(vectorcraft_doc::ColorMode::Rgb, blob, (40, 40), 0.25, 10.0, &[cyan]);
+    let mips = |o: RenderOptions| RenderOptions { image_mips: true, ..o };
+    let off = mips(RenderOptions { smooth_images: false, ..Default::default() });
+    let mut r = Renderer::new();
+    let mut seen = vec![];
+    for _ in 0..2 {
+        for opts in [off.clone(), mips(separations(&["Cyan"])), mips(separations(&["Magenta", "Yellow", "Black"])), off.clone()] {
+            let shown = r.render(&d, 20, 10, Affine::IDENTITY, &opts);
+            let (a, b) = (shown.pixel(5, 5), shown.pixel(15, 5));
+            assert!(near(a, b, 3), "{:?}: the shrunk image shows as the fill does, {a:?} vs {b:?}", opts.proof.map(|p| p.separations));
+            seen.push(a);
+        }
+    }
+    assert_eq!(seen[0], [0, 255, 255, 255], "the preview off: the image's own pixels");
+    assert_eq!(seen[3], seen[0], "and again after the preview");
+    assert_ne!(seen[1], seen[2], "each plate set filters the image anew");
+    assert_eq!(seen[..4], seen[4..], "frames drawn from kept copies draw the same");
 }

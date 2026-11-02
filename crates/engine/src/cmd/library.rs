@@ -248,22 +248,24 @@ impl Libraries {
         })
     }
 
-    /// Change library `id` with `f` and save it; on a failed save the change is undone.
+    /// Change library `id` with `f` and save it; when `f` fails, or the save does, the change is
+    /// undone.
     fn change<T>(&mut self, id: &str, f: impl FnOnce(&mut Library) -> Result<T>) -> Result<T> {
         let i = self.libs.iter().position(|(i, _)| i == id).ok_or_else(|| EngineError::Other(format!("no library `{id}`")))?;
         let before = self.libs.get(i).map(|(_, l)| l.clone()).unwrap_or_default();
         let r = match self.libs.get_mut(i) {
-            Some((_, lib)) => f(lib)?,
+            Some((_, lib)) => f(lib),
             None => return Err(EngineError::Other(format!("no library `{id}`"))),
         };
-        if let Err(e) = self.save(id) {
+        let r = r.and_then(|r| self.save(id).map(|()| r));
+        if let Err(e) = r {
             if let Some((_, lib)) = self.libs.get_mut(i) {
                 *lib = before;
             }
             return Err(e);
         }
         self.sort();
-        Ok(r)
+        r
     }
 
     fn delete(&mut self, id: &str) -> Result<()> {
@@ -339,6 +341,23 @@ impl Library {
             ItemKind::Graphic => shift(&mut self.graphics, |g| g.id.as_str(), from, to_key, after),
             ItemKind::Unknown => {}
         }
+    }
+
+    /// Put item `r` in group `at` (an index; None: in none), out of the one it was in, and with
+    /// `next_to` just before or after that item of its kind in its kind's list: in the group too,
+    /// next to that item when it is there, else last. → the group's name.
+    fn put(&mut self, r: ItemRef, at: Option<usize>, next_to: Option<&(ItemRef, bool)>) -> Option<String> {
+        if let Some((other, after)) = next_to
+            && *other != r
+        {
+            self.place_next_to(&r, other, *after);
+        }
+        self.ungroup(&r);
+        at.and_then(|i| self.groups.get_mut(i)).map(|g| {
+            let near = next_to.and_then(|(other, after)| g.items.iter().position(|x| x == other).map(|j| j + usize::from(*after)));
+            g.items.insert(near.unwrap_or(g.items.len()).min(g.items.len()), r);
+            g.name.clone()
+        })
     }
 
     /// Make a library read from a file (hand-edited, imported) safe and consistent: at most
@@ -617,7 +636,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Library",
             [],
             None,
-            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). An item the library already has (same kind and contents) isn't added again → {library, kind, name, id?: graphic id, existing: bool}",
+            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint), group?: name, before?: item | after?: item (an item of the same kind)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). A new item goes into `group` (default: none) and, with `before` or `after`, just before or after that item in the order its kind is shown in, as dropping it among the Libraries panel's items does; an item the library already has (same kind and contents) isn't added again, nor moved → {library, kind, name, id?: graphic id, existing: bool, group?: name or null (a new item's)}",
             has_doc,
             add
         ),
@@ -789,14 +808,6 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// The library `p` names, else the current one, else a new "My Library".
-fn target_library(s: &mut Session, p: &Value, cmd: &str) -> Result<String> {
-    if p.get("library").is_some_and(|v| !v.is_null()) || s.libraries.current().is_some() {
-        return library_id(s, p, cmd);
-    }
-    s.libraries.create("My Library")
-}
-
 /// `base`, or `base 2`, `base 3`… the first that `taken` doesn't hold.
 fn unique(base: &str, taken: impl Fn(&str) -> bool) -> String {
     std::iter::once(base.to_string()).chain((2..).map(|n| format!("{base} {n}"))).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
@@ -818,9 +829,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             Item::Style(para, attrs)
         }
     };
-    let id = target_library(s, p, C)?;
+    let place = Placement::of(p, C)?;
     let kind_name = str_param(p, "kind").unwrap_or_default().to_string();
-    let r = s.libraries.change(&id, |lib| {
+    let item_kind = kind.item_kind();
+    let put = |lib: &mut Library| {
         let full = |n: usize| if n >= MAX_ITEMS { Err(bad(C, format!("the library holds {MAX_ITEMS} items of this kind already"))) } else { Ok(()) };
         Ok(match item {
             Item::Graphic(mut g) => {
@@ -833,8 +845,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 // Ids are `graphic`, `graphic-2`…: taken ones are looked for as they are kept.
                 g.id = unique("graphic", |n| lib.graphics.iter().any(|o| o.id == n.replace(' ', "-"))).replace(' ', "-");
                 let v = json!({ "name": g.name, "id": g.id, "existing": false });
+                let key = g.id.clone();
                 lib.graphics.push(g);
-                v
+                placed(lib, &place, ItemRef { kind: item_kind, item: key }, v)?
             }
             Item::Color((name, color)) => {
                 full(lib.colors.len())?;
@@ -843,7 +856,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 let name = unique(&given.clone().unwrap_or(name), |n| lib.colors.iter().any(|o| o.name == n));
                 lib.colors.push(LibraryColor { name: name.clone(), color });
-                json!({ "name": name, "existing": false })
+                placed(lib, &place, ItemRef { kind: item_kind, item: name.clone() }, json!({ "name": name, "existing": false }))?
             }
             Item::Gradient(mut g) => {
                 full(lib.gradients.len())?;
@@ -852,8 +865,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 g.name = unique(&given.clone().unwrap_or(g.name), |n| lib.gradients.iter().any(|o| o.name == n));
                 let v = json!({ "name": g.name, "existing": false });
+                let key = g.name.clone();
                 lib.gradients.push(g);
-                v
+                placed(lib, &place, ItemRef { kind: item_kind, item: key }, v)?
             }
             Item::Pattern(mut pat) => {
                 full(lib.patterns.len())?;
@@ -862,8 +876,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 pat.name = unique(&given.clone().unwrap_or(pat.name), |n| lib.patterns.iter().any(|o| o.name == n));
                 let v = json!({ "name": pat.name, "existing": false });
+                let key = pat.name.clone();
                 lib.patterns.push(pat);
-                v
+                placed(lib, &place, ItemRef { kind: item_kind, item: key }, v)?
             }
             Item::Style(para, attrs) => {
                 let list = if para { &mut lib.para_styles } else { &mut lib.char_styles };
@@ -874,14 +889,31 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 let base = given.clone().unwrap_or_else(|| style_name(&attrs, para));
                 let name = unique(&base, |n| list.iter().any(|o| o.name == n));
                 list.push(TextStyleDef { name: name.clone(), attrs });
-                json!({ "name": name, "existing": false })
+                placed(lib, &place, ItemRef { kind: item_kind, item: name.clone() }, json!({ "name": name, "existing": false }))?
             }
         })
-    })?;
-    let mut r = r;
+    };
+    // Into the library `p` names, else the current one, else a new "My Library", which is kept
+    // only once the item is in it (a `group` or item to place it by that it lacks makes none).
+    let (id, mut r) = if p.get("library").is_some_and(|v| !v.is_null()) || s.libraries.current().is_some() {
+        let id = library_id(s, p, C)?;
+        let r = s.libraries.change(&id, put)?;
+        (id, r)
+    } else {
+        let mut lib = Library { name: "My Library".to_string(), ..Default::default() };
+        let r = put(&mut lib)?;
+        (s.libraries.insert(lib)?, r)
+    };
     r["library"] = json!(id);
     r["kind"] = json!(kind_name);
     Ok(r)
+}
+
+/// New item `r` of `lib` put where `place` says, its group added to `v` (what `library.add`
+/// reports).
+fn placed(lib: &mut Library, place: &Placement, r: ItemRef, mut v: Value) -> Result<Value> {
+    v["group"] = json!(place.apply(lib, r, "library.add")?);
+    Ok(v)
 }
 
 enum Item {
@@ -1320,36 +1352,45 @@ fn delete_group(s: &mut Session, p: &Value) -> Result<Value> {
 fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.moveItem";
     let (id, kind, item) = item_param(s, p, C)?;
-    let group = str_param(p, "group");
-    let next_to = match (str_param(p, "before"), str_param(p, "after")) {
-        (Some(_), Some(_)) => return Err(bad(C, "give `before` or `after`, not both")),
-        (Some(b), None) => Some((b, false)),
-        (None, Some(a)) => Some((a, true)),
-        (None, None) => None,
-    };
+    let place = Placement::of(p, C)?;
     let (key, to) = s.libraries.change(&id, |lib| {
-        let missing = |item: &str| bad(C, format!("the library has no item `{item}`"));
-        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| missing(item))?;
-        let at = group.map(|g| group_at(lib, g, C)).transpose()?;
-        let next_to = next_to
-            .map(|(other, after)| Ok::<_, EngineError>((lib.item_ref(kind.item_kind(), other).ok_or_else(|| missing(other))?, after)))
-            .transpose()?;
-        if let Some((other, after)) = &next_to
-            && *other != r
-        {
-            lib.place_next_to(&r, other, *after);
-        }
-        lib.ungroup(&r);
+        let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
         let key = r.item.clone();
-        let to = at.and_then(|i| lib.groups.get_mut(i)).map(|g| {
-            // Next to the other item when that is in the group too, else last.
-            let near = next_to.as_ref().and_then(|(other, after)| g.items.iter().position(|x| x == other).map(|j| j + usize::from(*after)));
-            g.items.insert(near.unwrap_or(g.items.len()).min(g.items.len()), r);
-            g.name.clone()
-        });
+        let to = place.apply(lib, r, C)?;
         Ok((key, to))
     })?;
     Ok(json!({ "library": id, "kind": str_param(p, "kind"), "item": key, "group": to }))
+}
+
+/// Where `library.add` and `library.moveItem` put an item: its `group` (none: out of any), and
+/// the item of its kind it goes `before` or `after`.
+struct Placement<'a> {
+    group: Option<&'a str>,
+    next_to: Option<(&'a str, bool)>,
+}
+
+impl<'a> Placement<'a> {
+    fn of(p: &'a Value, cmd: &str) -> Result<Self> {
+        let next_to = match (str_param(p, "before"), str_param(p, "after")) {
+            (Some(_), Some(_)) => return Err(bad(cmd, "give `before` or `after`, not both")),
+            (Some(b), None) => Some((b, false)),
+            (None, Some(a)) => Some((a, true)),
+            (None, None) => None,
+        };
+        Ok(Self { group: str_param(p, "group"), next_to })
+    }
+
+    /// Put item `r` of `lib` where this says ([`Library::put`]) → its group's name.
+    fn apply(&self, lib: &mut Library, r: ItemRef, cmd: &str) -> Result<Option<String>> {
+        let at = self.group.map(|g| group_at(lib, g, cmd)).transpose()?;
+        let next_to = self
+            .next_to
+            .map(|(other, after)| {
+                lib.item_ref(r.kind, other).map(|o| (o, after)).ok_or_else(|| bad(cmd, format!("the library has no item `{other}`")))
+            })
+            .transpose()?;
+        Ok(lib.put(r, at, next_to.as_ref()))
+    }
 }
 
 fn move_group(s: &mut Session, p: &Value) -> Result<Value> {

@@ -656,8 +656,10 @@ pub(crate) fn normalize_bez(bp: &BezPath, rule: FillRule) -> Result<Contours, Pa
     if !crate::budget::sweep_fits([&bp]) {
         return Err(PathOpsError::TooComplex);
     }
-    let top = Topology::<i32>::from_path(&bp, eps).map_err(|_| PathOpsError::OpenPath)?;
-    Ok(top.contours(|w| inside(rule, *w)))
+    // As in `Sweep::new`, a panic in the sweep on near-degenerate input becomes an error.
+    let swept =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Topology::<i32>::from_path(&bp, eps).map(|top| top.contours(|w| inside(rule, *w)))));
+    swept.map_err(|_| PathOpsError::Degenerate)?.map_err(|_| PathOpsError::OpenPath)
 }
 
 /// Boolean operation between two filled paths. Returns an empty path on invalid (non-finite) input.

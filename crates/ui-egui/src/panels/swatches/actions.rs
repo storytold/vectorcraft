@@ -42,7 +42,7 @@ pub(super) fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
     }
     let message = match names.as_slice() {
         [n] => crate::i18n::fmt(tl!("Delete “{name}”?"), &[("name", n)]),
-        _ => crate::i18n::fmt(tl!("Delete these {count} swatches and groups?"), &[("count", &names.len().to_string())]),
+        _ => crate::i18n::tn(names.len() as u64, "Delete this {n} swatch or group?", "Delete these {n} swatches and groups?"),
     };
     crate::dialogs::confirm::ask(app, &message, tl!("Art using a deleted global swatch keeps its colour."), "swatch.delete", params);
 }

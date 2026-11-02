@@ -23,6 +23,9 @@
 //!   message itself stays English (the control channel, MCP and tests read it); `@msg` catalog
 //!   rows hold whole messages or templates such as `Couldn't open {name}: {e}`, and the values in
 //!   the placeholders are translated in turn (the reason after `: {e}` is often a message too).
+//!   A `@msgplural` row is a template with a count: its source holds the English `one|other`
+//!   forms, its translation the language's plural forms, and the `{n}` value picks the form;
+//!   [`msg_n`] writes such a message in English.
 
 mod catalog;
 
@@ -68,8 +71,8 @@ fn plural_french(n: u64) -> usize {
     usize::from(n > 1)
 }
 
-/// Russian and Ukrainian integer counts: 1 (but not 11) is `one`, 2–4 (but not 12–14)
-/// `few`, everything else `many`.
+/// Russian, Ukrainian and Bosnian integer counts: 1 (but not 11) is `one`, 2–4 (but not 12–14)
+/// `few`, everything else `many` (Bosnian `other`).
 fn plural_east_slavic(n: u64) -> usize {
     match n % 100 {
         11..=14 => 2,
@@ -94,7 +97,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 26] = [
+pub static LANGUAGES: [LangInfo; 27] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
@@ -134,6 +137,16 @@ pub static LANGUAGES: [LangInfo; 26] = [
         name: "Čeština",
         source: include_str!("i18n/cs.tsv"),
         plural: plural_czech,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    // Bosnian (Latin script, Ijekavian): the whole interface and the status and error messages, with
+    // one/few/other plurals (the Russian rule for whole counts); every `bs-*` locale resolves here.
+    LangInfo {
+        code: "bs",
+        name: "Bosanski",
+        source: include_str!("i18n/bs.tsv"),
+        plural: plural_east_slavic,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
@@ -641,11 +654,38 @@ pub fn message(lang: Lang, s: &str) -> String {
 }
 
 fn message_at(lang: Lang, s: &str, depth: usize) -> String {
-    let Some((template, caps)) = lang.catalog().message(s) else { return s.to_string() };
+    let Some((forms, caps)) = lang.catalog().message_forms(s) else { return s.to_string() };
+    let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
+    let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
+    let Some(template) = forms.get(form) else { return s.to_string() };
     let values: Vec<(&str, String)> =
         caps.into_iter().map(|(k, v)| (k, if depth > 1 { message_at(lang, v, depth - 1) } else { v.to_string() })).collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    fmt(template, &args)
+    fill_once(template, &args)
+}
+
+/// Fill `{name}` placeholders in one pass: a value that holds `{name}` text stays as it is.
+/// Unknown placeholders are left as written.
+fn fill_once(template: &str, args: &[(&str, &str)]) -> String {
+    let mut rest = template;
+    let mut out = String::with_capacity(rest.len());
+    while let Some(open) = rest.find('{') {
+        out.push_str(&rest[..open]);
+        let after = &rest[open + 1..];
+        let filled = after.find('}').and_then(|close| args.iter().find(|(k, _)| *k == &after[..close]).map(|(_, v)| (*v, close)));
+        match filled {
+            Some((value, close)) => {
+                out.push_str(value);
+                rest = &after[close + 1..];
+            }
+            None => {
+                out.push('{');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// [`message`] in the current language, remembering the last answer: the status bar asks for the
@@ -668,6 +708,16 @@ pub fn msg(s: &str) -> String {
 /// [`trn`] in the current language.
 pub fn tn(n: u64, one: &str, other: &str) -> String {
     trn(current(), n, one, other)
+}
+
+/// A status or error message with a count, in English: `one` for a count of 1, else `other`, with
+/// `{n}` and the `args` placeholders filled in one pass, so a value that holds `{name}` text stays
+/// as it is. Unknown placeholders are left as written. The message stays English, and [`msg`]
+/// shows it in the interface language through the catalogs' `@msgplural` rows.
+pub fn msg_n(n: u64, one: &str, other: &str, args: &[(&str, &str)]) -> String {
+    let count = n.to_string();
+    let all: Vec<(&str, &str)> = std::iter::once(("n", count.as_str())).chain(args.iter().copied()).collect();
+    fill_once(if n == 1 { one } else { other }, &all)
 }
 
 #[cfg(test)]

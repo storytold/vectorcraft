@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
             has_selection,
             |s, p| recolor(s, p, "Invert Colors", &invert)
         ),
@@ -178,10 +178,10 @@ impl Scope {
 
 /// One recolouring pass, the colour visitor Edit Colors and Recolor Artwork share: `f` maps the
 /// solid colours and gradient stops of fills, strokes and text runs, gradient-mesh points, the
-/// pixels of embedded images and the art of patterns used as fills or strokes. A recoloured image
-/// becomes a new image and a recoloured pattern a new pattern swatch ("Dots 2"); the originals stay
-/// as they are for other objects. Colours that change lose their swatch link. Only nodes that
-/// change are kept as copies.
+/// pixels of embedded images without a colorize paint and the art of patterns used as fills or
+/// strokes. A recoloured image becomes a new image and a recoloured pattern a new pattern swatch
+/// ("Dots 2"); the originals stay as they are for other objects. Colours that change lose their
+/// swatch link. Only nodes that change are kept as copies.
 pub(crate) struct Recolor<'a> {
     f: &'a dyn Fn(Color) -> Color,
     /// Maps solid colours and gradient stops with their link and tint in place of `f`.
@@ -400,6 +400,12 @@ pub(crate) fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color)
     run_pass(s, p, label, Recolor::new(Scope::of(p), f))
 }
 
+/// [`recolor`] with solid colours and gradient stops mapped through `links`, with their swatch
+/// link and tint.
+pub(crate) fn recolor_links(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color, links: &LinkMap) -> Result<Value> {
+    run_pass(s, p, label, Recolor::with_links(Scope::of(p), f, links))
+}
+
 /// Run `pass` on the `ids` param's objects (default: the selection) as one undo step. The reply's
 /// `notChanged` counts the locked and hidden objects the selection left out ([`left_out`]) that
 /// the pass would have changed.
@@ -413,9 +419,12 @@ fn run_pass(s: &mut Session, p: &Value, label: &str, pass: Recolor) -> Result<Va
             (roots, left)
         }
     };
+    let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let (n, not_changed) = s.edit(label, |d, _| {
         let not_changed = NotChanged::of(pass.again().would_change(d, &left).into_iter().map(|(_, hidden)| hidden));
-        Ok((pass.run(d, &ids), not_changed))
+        let n = pass.run(d, &ids);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
+        Ok((n, not_changed))
     })?;
     let mut out = json!({ "changed": n });
     not_changed.report(&mut out);
@@ -607,6 +616,7 @@ fn filled_leaves(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 fn fill_color(n: &Node) -> Option<Color> {
     match &n.kind {
         NodeKind::Text(t) => t.first_style().fill.color(),
+        NodeKind::Image(_) => n.extras().colorize.as_deref().and_then(Paint::color).or_else(|| n.appearance.fill_paint().color()),
         NodeKind::Mesh(m) => {
             let k = m.points.len() as f32;
             let sum = m.points.iter().map(|p| p.color.to_rgb()).reduce(|a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]])?;
@@ -643,6 +653,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         BlendOrder::Vertical => "Blend Vertically",
     };
     let fills = Scope { fill: true, stroke: false, images: false, patterns: false };
+    let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let changed = s.edit(label, |d, _| {
         let mut changed = 0;
         for (i, id) in ids.iter().enumerate().take(n - 1).skip(1) {
@@ -660,6 +671,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
             };
             changed += Recolor::new(fills, &*f).run(d, &[*id]);
         }
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
         Ok(changed)
     })?;
     Ok(json!({ "changed": changed }))

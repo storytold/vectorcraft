@@ -4,7 +4,9 @@ use super::{Ui, VectorcraftApp, Xf, json, widgets};
 /// Right-click: the object under the pointer is selected first unless it already is, then the
 /// context menu lists what applies to the selection ([`crate::menus::context_items`]). The locked
 /// objects under the pointer ([`vectorcraft_doc::hit::locked_objects_at`]) are kept in
-/// `ui.context_locked` while the menu is open, for its Unlock submenu.
+/// `ui.context_locked` while the menu is open, for its Unlock submenu. With the Intertwine tool, a
+/// right-click where three or more objects of the group overlap keeps the selection and puts what
+/// it arranges in `ui.context_intertwine` ([`vectorcraft_tools::intertwine::menu_target`]).
 pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
@@ -12,7 +14,13 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
         let p = xf.to_doc(p);
         let locked = hit_with(app, p, xf.zoom, |doc, p, opt| Some(vectorcraft_doc::hit::locked_objects_at(doc, p, opt)));
         app.ui.context_locked = app.session.active().map(|st| st.uid).zip(locked);
-        if let Some(st) = app.session.active()
+        app.ui.context_intertwine = app
+            .session
+            .active()
+            .filter(|_| app.session.tool_id() == "intertwine")
+            .and_then(|st| vectorcraft_tools::intertwine::menu_target(&st.doc, &st.selection.objects, p).map(|(g, m)| (st.uid, g, p, m)));
+        if app.ui.context_intertwine.is_none()
+            && let Some(st) = app.session.active()
             && let Some(top) = selection_hit_at(app, p, xf.zoom).map(|h| h.top_object(st.isolation))
             && !st.selection.contains(top)
         {
@@ -23,6 +31,7 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
     let mut clicked = None;
     if resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked)).is_none() {
         app.ui.context_locked = None;
+        app.ui.context_intertwine = None;
     }
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);

@@ -186,14 +186,19 @@ impl Builder {
                     return Some(Arc::new(g));
                 };
                 self.outline_text(&n.effects, &mut text);
-                let mut node = self.base(n, NodeKind::Text(Box::new(text)));
-                node.opacity *= alpha;
-                if !children.is_empty() {
-                    let mut kids = vec![Arc::new(node)];
+                if children.is_empty() {
+                    let mut node = self.base(n, NodeKind::Text(Box::new(text)));
+                    node.opacity *= alpha;
+                    node
+                } else {
+                    // Text clips its children as a shape does: the type is the clipping path, its
+                    // characters' fill behind the clipped art and their stroke over it.
+                    let mut clip = Node::new(self.doc.alloc_id(), NodeKind::Text(Box::new(text)));
+                    clip.opacity = alpha;
+                    let mut kids = vec![Arc::new(clip)];
                     kids.extend(children);
-                    node = Node::group(self.doc.alloc_id(), kids);
+                    self.base(n, NodeKind::Group { children: kids, clip: true })
                 }
-                node
             }
             Kind::Table(t) => {
                 let mut kids = self.table(t, to_doc);

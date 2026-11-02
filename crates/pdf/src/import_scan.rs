@@ -1,17 +1,15 @@
 //! What the interpreter doesn't tell the import, read from the file itself: the optional content
 //! groups (layers) with their states and nesting, which group each marked-content sequence belongs
-//! to, the isolate and knockout flags of transparency groups, the overprint parameters each path
-//! and each stretch of text is painted with, the Separation and DeviceN inks they are painted in
-//! (by their colorant names, which the interpreter drops), and the names of the fonts.
+//! to, the overprint parameters each path and each stretch of text is painted with, the Separation
+//! and DeviceN inks they are painted in (by their colorant names, which the interpreter drops), and
+//! the names of the fonts.
 //!
-//! hayro-interpret reports a marked-content sequence by its tag alone and a transparency group
-//! without its flags, and skips the content of groups that are off. So each page's content is
-//! walked here in the interpreter's order (page content, then form XObjects as they are drawn,
-//! skipping what it skips): the k-th `BDC`/`BMC` it reports is the k-th one found here (its tag
-//! checks that), the k-th form transparency group is the k-th group found here, and the k-th
-//! path it fills or strokes is the k-th one painted here (the page's count checks that). To import
-//! content that is off as hidden layers, [`all_on`] gives the file an update that turns every
-//! group on.
+//! hayro-interpret reports a marked-content sequence by its tag alone and skips the content of
+//! groups that are off. So each page's content is walked here in the interpreter's order (page
+//! content, then form XObjects as they are drawn, skipping what it skips): the k-th `BDC`/`BMC` it
+//! reports is the k-th one found here (its tag checks that), and the k-th path it fills or strokes
+//! is the k-th one painted here (the page's count checks that). To import content that is off as
+//! hidden layers, [`all_on`] gives the file an update that turns every group on.
 
 use std::collections::{HashMap, HashSet};
 
@@ -258,8 +256,6 @@ pub(crate) struct Scan {
     /// Each marked-content sequence: its tag ([`tag_key`]) and the group (index into
     /// [`Ocgs::list`]) it marks.
     pub tags: Vec<(u64, Option<usize>)>,
-    /// Each form transparency group: isolated, knockout.
-    pub groups: Vec<(bool, bool)>,
     /// Content was incomplete or a scan limit was reached. No document may be returned from
     /// this scan, since its routing no longer describes every object the interpreter draws.
     pub cut: bool,
@@ -638,11 +634,11 @@ impl Walker<'_, '_> {
     fn note_fonts(&mut self, res: &Resources<'_>) {
         for key in res.fonts.keys() {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
-                && let Some(name) = f.get::<Name<'_>>(b"BaseFont")
+                && let Some(name) = font_name(&f)
             {
                 self.fonts.entry(f.cache_key()).or_insert_with(|| {
                     let embedded = embeds_glyphs(&f);
-                    FontNote { name: String::from_utf8_lossy(name.as_ref()).into_owned(), embedded, vertical: vertical_metrics(&f, embedded) }
+                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded) }
                 });
             }
         }
@@ -846,13 +842,6 @@ impl Walker<'_, '_> {
                         self.hidden_form |= !self.is_visible();
                     }
                     if self.is_visible() {
-                        if let Some(g) = d.get::<Dict<'_>>(b"Group") {
-                            if self.out.groups.len() >= MAX_GROUPS {
-                                self.out.cut = true;
-                                return;
-                            }
-                            self.out.groups.push((g.get::<bool>(b"I").unwrap_or(false), g.get::<bool>(b"K").unwrap_or(false)));
-                        }
                         // (Its own resources, or without any those of what draws it: as the interpreter reads them.)
                         let inner = Resources::from_scope(d.get::<Dict<'_>>(b"Resources"), res.clone());
                         self.save();
@@ -1018,6 +1007,24 @@ fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
             return;
         }
     }
+}
+
+/// The PostScript name of font `f`: its `BaseFont`. A composite (Type 0) font's `BaseFont` is its
+/// CIDFont's name, a hyphen and its CMap's (`Name-Identity-H`, ISO 32000-1 §9.7.6.1), so its
+/// descendant CIDFont's `BaseFont` is taken, the font program's own name (§9.7.4.1); without one,
+/// the `BaseFont` without the CMap's name on its end.
+fn font_name(f: &Dict<'_>) -> Option<String> {
+    let base = String::from_utf8_lossy(f.get::<Name<'_>>(b"BaseFont")?.as_ref()).into_owned();
+    if f.get::<Name<'_>>(b"Subtype").is_none_or(|s| s.as_ref() != b"Type0") {
+        return Some(base);
+    }
+    let descendant = f.get::<Array<'_>>(b"DescendantFonts").and_then(|a| a.iter::<Dict<'_>>().next());
+    if let Some(name) = descendant.and_then(|d| d.get::<Name<'_>>(b"BaseFont")).filter(|n| !n.as_ref().is_empty()) {
+        return Some(String::from_utf8_lossy(name.as_ref()).into_owned());
+    }
+    let cmap = f.get::<Name<'_>>(b"Encoding").map(|n| String::from_utf8_lossy(n.as_ref()).into_owned());
+    let stripped = cmap.and_then(|c| base.strip_suffix(c.as_str())?.strip_suffix('-').filter(|b| !b.is_empty()).map(str::to_string));
+    Some(stripped.unwrap_or(base))
 }
 
 /// Whether font `f` carries its own glyphs: a font program in its descriptor (a composite font's in

@@ -145,7 +145,7 @@ impl Tool for TypeTool {
             return false;
         }
         let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        !(self.preedit.is_none() && !normalized.is_empty() && normalized == clip && !cx.paste_plain_text)
+        self.preedit.is_some() || normalized.is_empty() || normalized != clip || cx.paste_plain_text
     }
     /// Whether the typing session still describes the edited document; a session ended by an outside
     /// command reports false until a replacement commit starts a new one.
@@ -175,7 +175,7 @@ impl Tool for TypeTool {
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
-        if let Some(out) = self.step_attribute(key, mods, a, b) {
+        if let Some(out) = self.step_attribute(key, mods, a, b, t.vertical) {
             return out;
         }
         let word = mods.cmd || mods.alt;
@@ -636,9 +636,15 @@ impl Tool for TypeTool {
             (Some(_), Some(held)) => held,
             _ => self.acting(m),
         };
-        if mode != Mode::Type && Self::path_at(cx, p, mode == Mode::Area).is_some() {
-            return Cursor::Crosshair;
+        // While type is being edited a click on a path only ends the editing.
+        let in_path = if self.editing.is_some() { None } else { Self::in_path(cx, p, mode) };
+        match (in_path, vertical) {
+            (Some((_, false)), false) => Cursor::TypeArea,
+            (Some((_, false)), true) => Cursor::TypeAreaVertical,
+            (Some((_, true)), false) => Cursor::TypeOnPath,
+            (Some((_, true)), true) => Cursor::TypeOnPathVertical,
+            (None, false) => Cursor::Text,
+            (None, true) => Cursor::TypeVertical,
         }
-        if vertical { Cursor::TypeVertical } else { Cursor::Text }
     }
 }

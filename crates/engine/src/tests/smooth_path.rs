@@ -161,3 +161,56 @@ fn bad_params_are_refused_and_change_nothing() {
     // Levels past the ends count as the ends.
     assert_eq!(s.execute("object.path.smooth", &json!({"level": 250})).unwrap()["level"], json!(100.0));
 }
+
+/// A wave 360 pt long with an anchor every 9 pt pushed up to 6 pt off it, as a shaky hand draws.
+fn shaky_wave(s: &mut Session) -> NodeId {
+    let pts: Vec<(f64, f64)> =
+        (0..=40u32).map(|i| (20.0 + f64::from(i) * 9.0, 150.0 + 60.0 * (f64::from(i) / 6.0).sin() + f64::from((i * 37) % 13) - 6.0)).collect();
+    polyline(s, &pts, false)
+}
+
+/// The largest turn (degrees) at any anchor between two segments of `path`: a kink when large.
+fn sharpest_turn(path: &PathData) -> f64 {
+    path.subpaths
+        .iter()
+        .flat_map(|sp| (1..sp.segment_count()).map(move |i| (sp.segment(i - 1), sp.segment(i))))
+        .map(|(a, b)| {
+            let (out, inn) = ((a.p3 - a.p2).normalize(), (b.p1 - b.p0).normalize());
+            out.dot(inn).clamp(-1.0, 1.0).acos().to_degrees()
+        })
+        .fold(0.0, f64::max)
+}
+
+/// Auto-Smooth takes a shaky line to one smooth curve: no kinks left at its anchors, far fewer of
+/// them, and the wave still where it was.
+#[test]
+fn auto_smooth_leaves_no_jags_in_a_shaky_line() {
+    let mut s = session();
+    let id = shaky_wave(&mut s);
+    let before = path_of(&s, id);
+    s.execute("object.path.smooth", &json!({"auto": true})).unwrap();
+    let after = path_of(&s, id);
+    assert!(sharpest_turn(&after) < 12.0, "a kink of {}°", sharpest_turn(&after));
+    assert!(after.anchor_count() <= before.anchor_count() / 3, "{} anchors", after.anchor_count());
+    assert!(farthest(&after, &before) < 8.0, "{}", farthest(&after, &before));
+}
+
+/// With anchor points of a path direct-selected, Smooth changes only the section between them: the
+/// anchors outside it stay exactly where they were, and the section is smoothed and stays selected.
+#[test]
+fn direct_selected_anchors_smooth_only_their_section() {
+    let mut s = session();
+    let id = shaky_wave(&mut s);
+    let before = path_of(&s, id);
+    let anchors: Vec<Value> = (10..=30).map(|i| json!([0, i])).collect();
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": anchors})).unwrap();
+    s.execute("object.path.smooth", &json!({"level": 100})).unwrap();
+    let after = path_of(&s, id);
+    let (a, b) = (&before.subpaths[0].anchors, &after.subpaths[0].anchors);
+    assert!(b.len() < a.len(), "{} → {}", a.len(), b.len());
+    // Anchors 0..=10 and 30..=40 are untouched, the section between them refitted.
+    assert_eq!(a[..=10].iter().map(|x| x.p).collect::<Vec<_>>(), b[..=10].iter().map(|x| x.p).collect::<Vec<_>>());
+    assert_eq!(a[30..].iter().map(|x| x.p).collect::<Vec<_>>(), b[b.len() - 11..].iter().map(|x| x.p).collect::<Vec<_>>());
+    let sel = &s.doc().unwrap().selection;
+    assert!(sel.anchors.get(&id).is_some_and(|set| !set.is_empty()), "the section stays direct-selected");
+}

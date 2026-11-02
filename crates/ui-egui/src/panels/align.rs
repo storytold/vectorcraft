@@ -192,6 +192,16 @@ pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     }
 }
 
+/// The six Distribute Objects buttons of the Control bar, `size` points square. They distribute
+/// what the Align panel's buttons do, to what its Align To says.
+pub(crate) fn distribute_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
+    for (icon, tip, axis, v) in DISTRIBUTE {
+        if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
+            run_button(app, Button::Distribute(axis, v)).ok();
+        }
+    }
+}
+
 /// Whether the selection has a key object or a key guide.
 fn has_key(app: &VectorcraftApp) -> bool {
     app.session.active().is_some_and(|st| st.selection.has_key())

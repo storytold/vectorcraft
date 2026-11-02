@@ -194,10 +194,11 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         "existing": existing.iter().map(|g| &g.name).collect::<Vec<_>>(),
     });
     let first = picked.first().map(|g| doc_name(&g.name));
-    let targets = p.get("ids").is_some() || !super::appearance::appearance_targets(s, &json!({}))?.is_empty();
+    let ids = p.get("ids").filter(|v| !v.is_null());
+    let targets = ids.is_some() || !super::appearance::appearance_targets(s, &json!({}))?.is_empty();
     if let Some(name) = first.filter(|_| apply && targets) {
         let mut params = json!({"name": name, "add": add});
-        if let Some(ids) = p.get("ids") {
+        if let Some(ids) = ids {
             params["ids"] = ids.clone();
         }
         s.execute("graphicStyle.apply", &params)?;

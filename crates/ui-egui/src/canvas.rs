@@ -7,7 +7,7 @@ use serde_json::json;
 use vectorcraft_doc::text::TextKind;
 use vectorcraft_doc::{Node, NodeKind, SymbolBoxes, Unit};
 use vectorcraft_geom::{Affine, BezPath, PathEl, Point, Rect};
-use vectorcraft_tools::{Cursor, Mods, Overlay, PointerEvent, PointerKind};
+use vectorcraft_tools::{Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind};
 
 use crate::opening;
 use crate::state::View;
@@ -25,6 +25,7 @@ mod home;
 mod input;
 mod outline;
 mod overlays;
+mod panes;
 mod raster;
 mod task_bar;
 mod tool_overlays;
@@ -38,7 +39,7 @@ pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
 pub use drag::{apply_requests, dispatch, mods};
-pub(crate) use drag::{end_document_drag, release_art_in_window, release_over_panel};
+pub(crate) use drag::{end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
 #[cfg(test)]
 use drag::{frame_moves, tool_drag_doc_id, tool_drag_moved, tool_frame_moves, tool_press_doc_id};
 pub use fill::Fill;
@@ -58,9 +59,11 @@ use outline::KEY_OUTLINE;
 use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
-use overlays::{HandleLook, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
-pub(crate) use raster::color_image;
+use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
+pub use panes::Panes;
+pub(crate) use panes::{consolidate, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
+pub(crate) use raster::{color_image, color_image_owned};
 use task_bar::task_bar;
 pub(crate) use task_bar::{has_colors, task_bar_rect};
 pub use tool_overlays::HiddenChars;
@@ -164,6 +167,22 @@ enum Drag {
     Present,
 }
 
+/// Whether the canvas is holding a pointer drag across frames.
+pub(crate) fn dragging(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
+}
+
+/// The part of `outer` inside the scroll bars, and the part of that inside the rulers, which shows
+/// the document. Normal Screen Mode and Full Screen Mode with Menu Bar keep the scroll bars along
+/// the right and bottom edges; Full Screen and Presentation Mode have none.
+fn view_rects(app: &VectorcraftApp, outer: egui::Rect, ppp: f32) -> (egui::Rect, egui::Rect) {
+    let full = if app.ui.screen_mode < 2 { egui::Rect::from_min_max(outer.min, outer.max - vec2(SCROLL_BAR, SCROLL_BAR)) } else { outer };
+    let rect = if app.ui.view.rulers && app.ui.screen_mode < 3 { egui::Rect::from_min_max(full.min + vec2(RULER, RULER), full.max) } else { full };
+    // Dock layout can differ by fractions of a device pixel between fresh windows.
+    // Use one pixel-aligned rectangle for drawing, inspection and pointer transforms.
+    (full, rect.round_to_pixels(ppp))
+}
+
 /// Paint the document canvas, complete or cached artwork, navigation and tool overlays.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -196,20 +215,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.painter().rect_filled(full, 0.0, t.panel_darker);
         return;
     }
-    // Normal Screen Mode and Full Screen Mode with Menu Bar keep the scroll bars along the right
-    // and bottom edges; Full Screen and Presentation Mode have none.
     let outer = full;
     let bars = app.ui.screen_mode < 2;
-    let full = if bars { egui::Rect::from_min_max(full.min, full.max - vec2(SCROLL_BAR, SCROLL_BAR)) } else { full };
-    let rect = if app.ui.view.rulers && app.ui.screen_mode < 3 { egui::Rect::from_min_max(full.min + vec2(RULER, RULER), full.max) } else { full };
-    // Dock layout can differ by fractions of a device pixel between fresh windows.
-    // Use one pixel-aligned rectangle for drawing, inspection and pointer transforms.
-    let rect = rect.round_to_pixels(ui.ctx().pixels_per_point());
+    let (full, rect) = view_rects(app, outer, ui.ctx().pixels_per_point());
     app.canvas_rect = Some(rect);
     let fitted = app.view().is_some_and(|v| v.fitted);
-    if !fitted {
+    // Presentation Mode shows the active artboard on the whole screen and nothing but the art:
+    // no selection, guides, grids or artboard edges (#4365).
+    let presenting = app.ui.screen_mode == 3;
+    if !fitted || (presenting && app.canvas.presented != Some(rect)) {
         fit(app, "view.fitArtboard");
     }
+    app.canvas.presented = presenting.then_some(rect);
     // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
     if bars {
         scroll_bars(app, ui, rect, outer, &t);
@@ -236,9 +253,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let doc = st.doc.clone();
     let mask_view = st.shown_mask();
 
-    paint_paper(app, ui, &painter, &xf, rect, &t);
+    paint_paper(app, st, ui, &painter, &xf, rect, &t);
     // The grid behind the art (Guides & Grid › Grids In Back), else over it below.
-    let grid_look = app.ui.view.grid.then(|| LineLook::grid(&app.session.prefs));
+    let grid_look = (app.ui.view.grid && !presenting).then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
@@ -284,7 +301,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // decode, once per image in the process.
     let undecoded = vectorcraft_render::newly_undecodable(doc.images.values());
     if undecoded > 0 {
-        app.status(format!("{undecoded} image(s) couldn't be decoded and show as crossed boxes"));
+        app.status(crate::i18n::msg_n(
+            undecoded as u64,
+            "{n} image couldn't be decoded and shows as a crossed box",
+            "{n} images couldn't be decoded and show as crossed boxes",
+            &[],
+        ));
     }
     fill_uncovered(app, ui.ctx(), &painter, &key, &doc, rect, &xf);
     reproject_frame(app, &painter, &xf, rect, (key.doc, v.rotation));
@@ -293,28 +315,30 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The pixel grid (Guides & Grid › Show Pixel Grid (Above 600% Zoom)): in Pixel Preview from
     // 600% zoom, a line at every document pixel over the art, so the pixels it rasterizes to show.
-    if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
-        grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
-    }
-    artboard_outlines(app, ui, &painter, &xf, &t);
-    if app.ui.view.guides {
-        guide_lines(app, &painter, &xf, rect, &t);
-    }
-
-    if !app.session.slices_hidden() {
-        slice_overlay(app, &painter, &xf);
-    }
-    if app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling" {
-        print_tiling_overlay(app, &painter, &xf);
-    }
-    original_path_overlay(app, &painter, &xf);
-
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
     let view_info = app.view_info();
-    let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, hover_still), revolve_edit, view_info);
-    draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
-    if !revolve_edit {
-        shaper_widget_overlay(app, &painter, &xf);
+    if !presenting {
+        if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
+            grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
+        }
+        artboard_outlines(app, ui, &painter, &xf, &t);
+        if app.ui.view.guides {
+            guide_lines(app, &painter, &xf, rect, &t);
+        }
+
+        if !app.session.slices_hidden() {
+            slice_overlay(app, &painter, &xf);
+        }
+        if app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling" {
+            print_tiling_overlay(app, &painter, &xf);
+        }
+        original_path_overlay(app, &painter, &xf);
+
+        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, hover_still), revolve_edit, view_info);
+        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
+        if !revolve_edit {
+            shaper_widget_overlay(app, &painter, &xf);
+        }
     }
     ime_geometry(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
@@ -329,7 +353,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The task bar is not drawn while the Simplify or Smooth slider shows.
     let strip = crate::dialogs::simplify_slider::showing(app) || crate::dialogs::smooth_slider::showing(app);
-    if app.ui.task_bar && !revolve_edit && !app.session.tool_busy() && app.ui.screen_mode < 3 && !strip {
+    // It gives way to a drag, not to a click: hidden for the length of every press, it flashed as
+    // each click picked another object (#4681).
+    let dragging = app.session.tool_busy() && ui.input(|i| i.pointer.is_decidedly_dragging());
+    if app.ui.task_bar && !revolve_edit && !dragging && app.ui.screen_mode < 3 && !strip {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
@@ -473,7 +500,7 @@ fn cache_key(
         cy: v.center.y,
         w,
         h,
-        outline: app.ui.view.outline,
+        outline: app.outline_view(),
         trim: app.ui.view.trim_view,
         templates: app.ui.view.templates,
         guides: app.ui.view.guides,
@@ -505,17 +532,22 @@ fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
             app.canvas.fill_worker = crate::render_worker::Worker::spawn(ui.ctx().clone());
         }
     }
-    // Upload finished background renders.
+    // Upload finished background renders whenever they are not older than what is currently
+    // displayed on screen. This prevents canvas freezes during continuous edits (drags, arrow
+    // nudges, MCP command bursts) while ensuring obsolete out-of-order frames are dropped.
     if let Some(done) = app.canvas.worker.as_mut().and_then(|w| w.poll())
         && done.key.doc == key_doc
     {
-        upload(app, ui.ctx(), &done.img, done.key.pixel.is_some());
-        app.canvas.key = Some(done.key);
-        app.canvas.shown = Some((done.doc, done.opts));
-        app.perf.render_ms = done.ms;
-        app.canvas.last_ms = done.ms;
-        app.canvas.moved = done.moved > 0;
-        app.canvas.from_worker = true;
+        let not_older = app.canvas.key.as_ref().filter(|k| k.doc == done.key.doc).is_none_or(|k| done.key.revision >= k.revision);
+        if not_older {
+            upload(app, ui.ctx(), done.img, done.key.pixel.is_some());
+            app.canvas.key = Some(done.key);
+            app.canvas.shown = Some((done.doc, done.opts));
+            app.perf.render_ms = done.ms;
+            app.canvas.last_ms = done.ms;
+            app.canvas.moved = done.moved > 0;
+            app.canvas.from_worker = true;
+        }
     }
 }
 
@@ -541,7 +573,7 @@ fn frame_options(
     mask_view: Option<vectorcraft_doc::NodeId>,
     smooth_images: bool,
 ) -> vectorcraft_render::RenderOptions {
-    let opts = vectorcraft_render::RenderOptions { outline: app.ui.view.outline, background: None, artboards: false, ..Default::default() };
+    let opts = vectorcraft_render::RenderOptions { outline: app.outline_view(), background: None, artboards: false, ..Default::default() };
     vectorcraft_render::RenderOptions {
         proof: vectorcraft_render::proof::active_proof(),
         overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
@@ -625,7 +657,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);
-            upload(app, ui.ctx(), &img, pixel.is_some());
+            upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;
@@ -636,9 +668,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     }
 }
 
-/// The pasteboard, the artboards' shadows and paper, and the outline mode's white artboards.
-fn paint_paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, rect: egui::Rect, t: &Tokens) {
-    let Some(st) = app.session.active() else { return };
+/// The pasteboard, the artboards' shadows and paper, and the outline mode's white artboards, of
+/// document `st`.
+fn paint_paper(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, ui: &Ui, painter: &egui::Painter, xf: &Xf, rect: egui::Rect, t: &Tokens) {
     let doc = &st.doc;
     // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
     // simulated paper colour; a white Background Contents hides the grid).
@@ -646,7 +678,11 @@ fn paint_paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, 
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
     painter.rect_filled(rect, 0.0, t.pasteboard);
-    if app.ui.view.artboards && !app.ui.view.outline {
+    if !shows_artboards(app) {
+        // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
+        let setup = &doc.setup;
+        painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
+    } else if !app.outline_view() {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
@@ -664,7 +700,7 @@ fn paint_paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, 
                 }
             }
         }
-    } else if app.ui.view.outline {
+    } else if app.outline_view() {
         for ab in &doc.artboards {
             painter.add(Shape::convex_polygon(xf.quad(ab.rect), Color32::WHITE, Stroke::NONE));
         }
@@ -709,16 +745,38 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect:
     }
 }
 
+/// Do the artboards show? View › Hide Artboards hides them, except for the Artboard tool, which
+/// edits them.
+fn shows_artboards(app: &VectorcraftApp) -> bool {
+    app.ui.view.artboards || app.session.tool_id() == "artboard"
+}
+
 /// The artboards' edges, bleeds, marks and names.
 fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, t: &Tokens) {
+    if !shows_artboards(app) {
+        return;
+    }
     let Some(st) = app.session.active() else { return };
     let doc = &st.doc;
     // Artboard edges and names. The Artboard tool labels its selected artboards itself (following
     // a move or resize): those aren't named twice.
     let active_ab = crate::panels::artboards::selected(app, doc.artboards.len());
-    let artboard_tool = app.session.tool_id() == "artboard";
     let tool_selected = artboards::tool_labelled(app);
     let editing_name = ui.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).map(|e| e.index));
+    let unlabelled = |i: usize| editing_name == Some(i) || u64::try_from(i).ok().is_some_and(|idx| tool_selected.contains(&idx));
+    artboard_edges(app, doc, (painter, xf, t), active_ab, unlabelled);
+}
+
+/// The edges, bleeds, marks and names of `doc`'s artboards, `active_ab` the active one; the
+/// artboards `unlabelled` gives are not named.
+fn artboard_edges(
+    app: &VectorcraftApp,
+    doc: &vectorcraft_doc::Document,
+    (painter, xf, t): (&egui::Painter, &Xf, &Tokens),
+    active_ab: usize,
+    unlabelled: impl Fn(usize) -> bool,
+) {
+    let artboard_tool = app.session.tool_id() == "artboard";
     for (i, ab) in doc.artboards.iter().enumerate() {
         let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
         painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
@@ -729,8 +787,7 @@ fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf:
         // Show Center Mark, Show Cross Hairs and Show Video Safe Areas (Artboard Options). Only the
         // canvas draws them, as it does the edges: exports and print leave them out.
         artboard_marks(painter, xf, ab, t.artboard_mark);
-        let labelled_by_tool = u64::try_from(i).ok().is_some_and(|idx| tool_selected.contains(&idx));
-        if editing_name != Some(i) && (artboard_tool || doc.artboards.len() > 1) && !labelled_by_tool {
+        if (artboard_tool || doc.artboards.len() > 1) && !unlabelled(i) {
             // At the artboard's own top-left corner, which a rotated view turns away from its
             // bounding box's (#1095).
             let corner = xf.to_screen(Point::new(ab.rect.x0, ab.rect.y0));
@@ -741,13 +798,18 @@ fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf:
 
 /// The ruler guides.
 fn guide_lines(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect: egui::Rect, t: &Tokens) {
-    let Some(st) = app.session.active() else { return };
+    if let Some(st) = app.session.active() {
+        guides_of(app, st, (painter, xf, t), rect);
+    }
+}
+
+/// The ruler guides of document `st`, its selected guides in the selection colour.
+fn guides_of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, (painter, xf, t): (&egui::Painter, &Xf, &Tokens), rect: egui::Rect) {
     let doc = &st.doc;
     let look = LineLook::guides(&app.session.prefs, t);
-    // Selected guides in the selection colour.
     let picked = LineLook { color: t.selection, ..look };
-    let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
-    let key = app.session.active().and_then(|st| st.selection.key_guide);
+    let selected: &[usize] = &st.selection.guides;
+    let key = st.selection.key_guide;
     let view = view_bounds(xf);
     // Guides on a hidden layer hide with it.
     for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
@@ -792,6 +854,7 @@ fn selection_visuals(
             hover_highlight(app, painter, xf);
         }
         selection_overlay(app, painter, xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
+        draw_inside_overlay(app, painter, xf);
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
         if app.ui.view.text_threads {

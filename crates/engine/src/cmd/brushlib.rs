@@ -335,7 +335,7 @@ fn scatter_shapes() -> BrushLibrary {
         a.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(gold))));
         a
     });
-    doc.symbols.push(Symbol { name: "Sparkle".into(), art: Arc::new(sparkle) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Sparkle".into(), art: Arc::new(sparkle) });
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Sparkle".into(), xf: Affine::scale(0.3) });
     let random = |a: f64, b: f64| (a, b);
     let base = Scatter { colorization: Colorization::Tints, ..Default::default() };

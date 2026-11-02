@@ -34,6 +34,8 @@ pub struct DocState {
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
     /// ([`cmd::globaledit`]). Editing state: not saved, not undoable.
     pub global_edit: Option<cmd::globaledit::GlobalEdit>,
+    /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
+    pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
@@ -246,6 +248,7 @@ impl DocState {
             variables_highlight: None,
             isolation: None,
             global_edit: None,
+            symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
             last_transform: None,
@@ -347,6 +350,14 @@ impl DocState {
             self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
             self.revision += 1;
+        }
+    }
+    /// Clear the Variables panel highlight when the document defines no variable of that name
+    /// (deleted, or taken out by Undo or Redo), so a variable defined later under that name is
+    /// not highlighted without a click.
+    pub(crate) fn drop_stale_variables_highlight(&mut self) {
+        if self.variables_highlight.as_ref().is_some_and(|h| self.doc.variables.variable(h).is_none()) {
+            self.variables_highlight = None;
         }
     }
     /// Count the document as modified, as if never saved (a document restored by Data Recovery).

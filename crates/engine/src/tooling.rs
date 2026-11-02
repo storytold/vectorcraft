@@ -147,6 +147,7 @@ impl Session {
     /// Direct Selection to the tools that edit anchors (the Pen) and Selection to the others.
     /// Cmd+Alt lends Group Selection while Direct Selection is active. Cmd still lends the last
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
+    /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
     /// None for the other selection tools and the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
         use vectorcraft_tools::catalog::{edits_anchors, is_selection_tool};
@@ -155,6 +156,9 @@ impl Session {
         }
         if id == "directSelection" && mods.cmd && mods.alt {
             return Some("groupSelection");
+        }
+        if id == "perspectiveSelection" && mods.cmd && mods.alt {
+            return None;
         }
         if is_selection_tool(id) {
             return None;
@@ -216,6 +220,12 @@ impl Session {
                 }
             }
         }
+        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
+        if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
+            && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
+        {
+            t.set_option("smoothFidelity", v);
+        }
     }
 
     /// Store the persistent options of `t` in `prefs` (so they are saved with them too).
@@ -271,6 +281,7 @@ impl Session {
             snap_tangent: self.prefs.snap_tangent,
             snap_perpendicular: self.prefs.snap_perpendicular,
             snap_to_glyph: view.snap_to_glyph && view.smart_guides && !view.snap_to_grid,
+            glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
@@ -316,6 +327,7 @@ impl Session {
             },
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
+            precise_cursors: self.precise_cursors(),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -446,6 +458,11 @@ impl Session {
         // 1–4 pick the active perspective plane while the grid is shown.
         if let Some(plane) = self.plane_key(key) {
             self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
+            if self.tool_id() == "perspectiveSelection" {
+                let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
+                self.take_tool_panic()?;
+                return self.apply_actions(acts);
+            }
             return Ok(vec![]);
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
@@ -555,6 +572,24 @@ impl Session {
         self.tool.transforming()
     }
 
+    /// With Real-time Drawing off, how far a Selection-tool move drag has carried the selection
+    /// so far: the document moves on release, and the bounding box shows at this offset meanwhile.
+    pub fn deferred_move(&self) -> Option<vectorcraft_geom::Vec2> {
+        if self.tool.id() != "selection" || !self.tool.transforming() {
+            return None;
+        }
+        let it = self.active()?.interaction.as_ref()?;
+        if !matches!(it.label.as_str(), "Move" | "Copy") {
+            return None;
+        }
+        let (cmd, p) = self.unapplied_interaction_preview()?;
+        if cmd != "object.transform" || p.get("objects").and_then(Value::as_bool) == Some(false) {
+            return None;
+        }
+        let [a, b, c, d, e, f] = crate::cmd::matrix_param(&p, "matrix")?.as_coeffs();
+        (a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0).then(|| vectorcraft_geom::Vec2::new(e, f))
+    }
+
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
@@ -588,8 +623,8 @@ impl Session {
         v
     }
 
-    /// The pointer the active tool shows at `p` (General › Use Precise Cursors makes the drawing
-    /// tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
+    /// The pointer the active tool shows at `p` (General › Use Precise Cursors, or Caps Lock while
+    /// it is on, makes the drawing tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
         let lent = if mods.cmd && self.lender.is_none() { self.lent_tool(self.tool.id(), &mods) } else { None };
@@ -603,7 +638,12 @@ impl Session {
             }
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
         };
-        if self.prefs.use_precise_cursors { c.precise() } else { c }
+        if self.precise_cursors() { c.precise() } else { c }
+    }
+
+    /// General › Use Precise Cursors is on, or Caps Lock is.
+    fn precise_cursors(&self) -> bool {
+        self.prefs.use_precise_cursors || self.caps_lock
     }
 
     pub fn tool_options(&self) -> Value {
@@ -622,7 +662,8 @@ impl Session {
 
     /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
     /// stored for when it is chosen, and the active tool takes those it shares with it (the
-    /// Liquify tools' Global Brush Dimensions). Returns the tool's options.
+    /// Liquify tools' Global Brush Dimensions, the Smooth tool's Fidelity for Pencil, Paintbrush
+    /// and Blob Brush Alt smoothing). Returns the tool's options.
     pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
         let active = id.is_none_or(|id| id == self.tool.id());
         self.tool_set_since_reset |= active;
@@ -742,8 +783,9 @@ impl Session {
                 Action::Begin(label) => self.begin_interaction(&label)?,
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
-                    // params and apply them once on Commit instead of every move.
-                    if !self.prefs.real_time_drawing {
+                    // params and apply them once on Commit instead of every move. A ruler guide
+                    // being dragged still shows: the guide is all there is to see (#4646).
+                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") {
                         self.clear_deferred_overlay_cache();
                         let st = self.doc_mut()?;
                         if let Some(it) = &mut st.interaction {
@@ -845,13 +887,28 @@ impl Session {
     }
 }
 
+/// The most points the outlines of [`outlines_for_selection`] are drawn for, the same number as the
+/// canvas's limit on the anchor points it outlines (`OVERLAY_MAX_ANCHORS` in
+/// `crates/ui-egui/src/canvas/outline.rs`). Past it the selection's bounds are drawn instead.
+const FEEDBACK_MAX_POINTS: usize = 100_000;
+
+/// The outline of every selected object, or the selection's bounds when the outlines have more than
+/// [`FEEDBACK_MAX_POINTS`] points.
 fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    selection
-        .objects
-        .iter()
-        .filter_map(|&id| {
-            let n = doc.node(id)?;
-            vectorcraft_render::drawn_outline(doc, n).map(|(path, _)| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false })
-        })
-        .collect()
+    let mut left = FEEDBACK_MAX_POINTS;
+    let mut outlines = vec![];
+    for &id in &selection.objects {
+        let Some((path, _)) = doc.node(id).and_then(|n| vectorcraft_render::drawn_outline(doc, n)) else { continue };
+        let points = path.elements().iter().filter(|el| !matches!(el, kurbo::PathEl::ClosePath)).count();
+        let Some(l) = left.checked_sub(points) else {
+            return doc
+                .bounds_of(&selection.objects, true)
+                .map(|b| Overlay::Path { path: vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color: FEEDBACK, width: 1.0, dashed: false })
+                .into_iter()
+                .collect();
+        };
+        left = l;
+        outlines.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false });
+    }
+    outlines
 }

@@ -149,11 +149,20 @@ impl IccProfile {
 
     /// Device values (RGB / CMYK / Gray, 0..1) → sRGB.
     pub fn to_srgb(&self, v: &[f32], intent: Intent) -> Option<[f32; 3]> {
+        let mut src = [0.0f32; 4];
+        let channels = self.channels();
+        src.get_mut(..channels)?.iter_mut().zip(v.iter()).for_each(|(dst, value)| *dst = *value);
+        self.to_srgb_into(src.get(..channels)?, intent)
+    }
+
+    /// Convert an exact-width device pixel using the cached transform and stack storage.
+    pub fn to_srgb_into(&self, v: &[f32], intent: Intent) -> Option<[f32; 3]> {
+        if v.len() != self.channels() {
+            return None;
+        }
         let xf = self.to_xf(intent)?;
-        let mut src = v.to_vec();
-        src.resize(self.channels(), 0.0);
         let mut dst = [0.0f32; 3];
-        xf.transform(&src, &mut dst).ok()?;
+        xf.transform(v, &mut dst).ok()?;
         Some(dst.map(|x| x.clamp(0.0, 1.0)))
     }
 

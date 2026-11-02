@@ -1,4 +1,4 @@
-use super::{Arc, Deserialize, Node, NodeId, Point, Serialize};
+use super::{Affine, Arc, Deserialize, Node, NodeId, Point, Serialize};
 
 /// New art on a locked artboard ([`Document::new_art`]). Setting it changes the document in
 /// place, so a selection change that sets it doesn't replace the document.
@@ -42,6 +42,29 @@ impl std::fmt::Debug for NewArtIds {
 pub struct MaskEdit {
     pub object: NodeId,
     pub layer: NodeId,
+}
+
+/// Symbol editing mode: the art of symbol `symbol` lives on the temporary `layer` while editing,
+/// placed by `xf` (from the symbol's coordinates to the document's), and goes back into the symbol
+/// after each edit, so every instance follows it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SymbolEdit {
+    pub symbol: String,
+    pub layer: NodeId,
+    /// The instance editing was entered from (a double-click on it), selected again on leaving after an edit;
+    /// `None` when it was entered from the Symbols panel.
+    pub instance: Option<NodeId>,
+    pub xf: Affine,
+    /// The symbol's art is a group whose members are on the layer: the group takes them back.
+    pub group: bool,
+    /// An edit changed the art since editing was entered.
+    pub changed: bool,
+    /// The isolated object from before editing was entered, isolated again on leaving.
+    #[serde(default)]
+    pub back_isolation: Option<NodeId>,
+    /// The current layer from before editing was entered, current again on leaving.
+    #[serde(default)]
+    pub back_layer: Option<NodeId>,
 }
 
 /// A saved view (View → New View…): zoom, centre and rotation, listed at the bottom of the View menu.
@@ -108,6 +131,10 @@ impl SavedSelection {
 pub struct Symbol {
     pub name: String,
     pub art: Arc<Node>,
+    /// Symbol Options › Symbol Type › Dynamic Symbol: each instance may change the appearance of
+    /// objects in the art and stay linked (see [`crate::symbol_overrides`]). Static by default.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub dynamic: bool,
 }
 
 /// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects.

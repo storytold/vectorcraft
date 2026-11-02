@@ -89,7 +89,7 @@ pub(crate) struct PixelEntry {
     pub(super) anchor: vectorcraft_geom::Point,
     pub(super) rel: (f64, f64),
     pub(super) k: f64,
-    pub(super) image: std::sync::Arc<vello_cpu::Pixmap>,
+    pub(crate) image: std::sync::Arc<vello_cpu::Pixmap>,
     /// For a raster of the content's whole reach at full size, `None`: it draws after a pan too.
     /// For one cropped to the view, or made at a lower resolution, the view and the rect it was
     /// made for: it draws only there, so dragging other art over the object keeps it (a wide blur,
@@ -107,6 +107,9 @@ pub(crate) struct PixelEntry {
     /// ([`crate::paint::decode_failures`]): each frame that draws the raster counts them
     /// again ([`crate::paint::add_decode_failures`]).
     pub(super) failed: u64,
+    /// Whether an image in the content failed to draw while the raster was made: each frame that
+    /// draws the raster inside opacity-mask art notes it again.
+    pub(crate) image_left_out: bool,
     pub(crate) stamp: u64,
 }
 

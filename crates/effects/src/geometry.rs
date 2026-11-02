@@ -265,6 +265,7 @@ fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomCont
         "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" => stylize::convert_to_shape(id, b, p),
         "stylize.roundCorners" => stylize::round_corners(path, num(p, "radius", 10.0)),
         "stylize.scribble" => stylize::scribble(path, b, p),
+        _ if id.starts_with(crate::addons::path::PREFIX) => crate::addons::path::apply(id, p, path, max),
         _ => match id.strip_prefix("warp.").and_then(WarpStyle::from_id) {
             Some(style) => warp::warp(path, b, style, p, max),
             None => path.clone(),

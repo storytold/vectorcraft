@@ -362,14 +362,15 @@ fn art_brushes(n: &Node, out: &mut Vec<String>) {
 }
 
 /// The brushes no stroke paints with. Strokes in the art (opacity masks included), symbols, graph
-/// designs, pattern tiles and graphic styles count, and so do the strokes in the art of every brush
-/// that a counted stroke paints with.
+/// designs, pattern tiles and the tiles that pattern editing's Cancel puts back, and graphic styles
+/// count, and so do the strokes in the art of every brush that a counted stroke paints with.
 pub(super) fn brush_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let lib = brush::library(d);
     let mut todo = vec![];
     let trees = d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.graph_designs.iter().map(|g| &g.art));
-    trees.chain(d.patterns.iter().flat_map(|p| &p.art)).for_each(|n| art_brushes(n, &mut todo));
+    let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
+    trees.chain(patterns.flat_map(|p| &p.art)).for_each(|n| art_brushes(n, &mut todo));
     d.graphic_styles.iter().for_each(|g| stroke_brushes(&g.appearance.items, &mut todo));
     let mut used = BTreeSet::new();
     while let Some(name) = todo.pop() {
@@ -389,7 +390,77 @@ pub(super) fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
     let i = lib.iter().position(|b| b.name == name).ok_or_else(|| bad(C, format!("no brush named `{name}`")))?;
     let mut v = serde_json::to_value(&lib[i]).unwrap_or_default();
     if let Some(params) = p.get("params") {
+        let original = v.clone();
         merge(&mut v, params);
+        if lib[i].kind.type_id() == "pattern" {
+            let tiles = [
+                ("side_tile", "side"),
+                ("outer_corner_tile", "outer_corner"),
+                ("inner_corner_tile", "inner_corner"),
+                ("start_tile", "start"),
+                ("end_tile", "end"),
+            ];
+            // Resolve all Original choices against the brush before any tile can clear the art
+            // another corner borrows. Keep the matching frame with each copied tile.
+            let originals: Vec<_> = tiles
+                .iter()
+                .map(|(_, art)| {
+                    let from = if art.ends_with("corner")
+                        && original.get(art).is_none_or(Value::is_null)
+                        && original.get(if *art == "outer_corner" { "outer_source" } else { "inner_source" }).is_none_or(Value::is_null)
+                    {
+                        if *art == "outer_corner" { "inner_corner" } else { "outer_corner" }
+                    } else {
+                        *art
+                    };
+                    (original.get(from).cloned().unwrap_or(Value::Null), original.get(format!("{from}_frame")).cloned().unwrap_or(Value::Null))
+                })
+                .collect();
+            for ((tile, art), (original_art, original_frame)) in tiles.into_iter().zip(originals) {
+                let frame = format!("{art}_frame");
+                let swatch = format!("{art}_swatch");
+                let Some(choice) = params.get(tile) else {
+                    if params.get(art).is_some() {
+                        if params.get(frame.as_str()).is_none() {
+                            v[frame.as_str()] = Value::Null;
+                        }
+                        if params.get(swatch.as_str()).is_none() {
+                            v[swatch.as_str()] = Value::Null;
+                        }
+                    }
+                    continue;
+                };
+                let (choice, swatch_only) = if let Some(name) = choice.as_object() {
+                    (name.get("pattern").and_then(Value::as_str).ok_or_else(|| bad(C, "invalid pattern tile choice"))?, true)
+                } else {
+                    (choice.as_str().ok_or_else(|| bad(C, "invalid pattern tile choice"))?, false)
+                };
+                if art == "side" && choice == "none" && !swatch_only {
+                    return Err(bad(C, "You must choose a side pattern."));
+                }
+                if choice == "original" && !swatch_only {
+                    v[art] = original_art;
+                    v[frame.as_str()] = original_frame;
+                    v[swatch.as_str()] = Value::Null;
+                } else if !swatch_only && (choice == "none" || (art.ends_with("corner") && brush::CornerSource::parse(choice).is_some())) {
+                    v[art] = Value::Null;
+                    v[frame.as_str()] = Value::Null;
+                    v[swatch.as_str()] = Value::Null;
+                    if art.ends_with("corner") {
+                        v[if art == "outer_corner" { "outer_source" } else { "inner_source" }] = json!(choice);
+                    }
+                } else {
+                    let pattern = s.doc()?.doc.pattern(choice).ok_or_else(|| bad(C, format!("no pattern named `{choice}`")))?;
+                    let copy = Node::new(NodeId(0), NodeKind::Group { children: pattern.art.clone(), clip: false });
+                    v[art] = serde_json::to_value(copy).unwrap_or_default();
+                    v[frame.as_str()] = serde_json::to_value(pattern.tile).unwrap_or_default();
+                    v[swatch.as_str()] = json!(choice);
+                    if art.ends_with("corner") {
+                        v[if art == "outer_corner" { "outer_source" } else { "inner_source" }] = Value::Null;
+                    }
+                }
+            }
+        }
     }
     let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
     if let Some(nn) = &new_name {

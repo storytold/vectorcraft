@@ -14,10 +14,12 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         rows: a.rows,
         columns: a.columns,
         gutter: a.gutter,
+        row_gutter: a.row_gutter,
         inset: a.inset,
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
         vertical_align: a.vertical_align,
+        flow: a.flow,
         fit: a.fit,
         ..LayoutOptions::default()
     };
@@ -26,22 +28,30 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
 
 /// Area type in a frame too short for its first line draws nothing (type that doesn't fit its frame
 /// isn't drawn). For importers whose source shows that line: the frame is made taller, from its
-/// top, by what the first line needs. Whether it was.
+/// top, by what the first line needs (vertical type's frame wider, from its right edge, where its
+/// first column is). Whether it was.
 pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
     let TextKind::Area { frame } = &t.kind else { return false };
-    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6) else { return false };
+    let across = |b: &Rect| if t.vertical { b.width() } else { b.height() };
+    let Some(b) = frame.bounds().filter(|b| across(b) > 1e-6) else { return false };
     if !layout(db, t).lines.is_empty() {
         return false;
     }
-    // The height of its first line: the line's as point type.
+    // The height of its first line (a column's width): the line's as point type, its baseline at
+    // least Area Type Options › First Baseline's Min from the frame's top.
     let point = TextObject { kind: TextKind::Point, ..t.clone() };
-    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent + l.descent) else { return false };
+    let min = if t.area.first_baseline_min.is_finite() { t.area.first_baseline_min.max(0.0) } else { 0.0 };
+    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent.max(min) + l.descent) else { return false };
     // (A little more than it, for the rounding of the layout.)
-    let by = (need + 0.05) / b.height();
+    let by = (need + 0.05) / across(&b);
     if !(by.is_finite() && by > 1.0) {
         return false;
     }
-    let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
+    let taller = if t.vertical {
+        frame.transformed(Affine::translate((b.x1, 0.0)) * Affine::scale_non_uniform(by, 1.0) * Affine::translate((-b.x1, 0.0)))
+    } else {
+        frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)))
+    };
     let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
     // Something else keeps the line out (a frame narrower than a letter): as the source has it.
     if layout(db, t).lines.is_empty() {
@@ -105,8 +115,11 @@ pub fn decorations(layout: &TextLayout, db: &FontDb, t: &TextObject) -> Vec<(usi
 const SHRINK_PASSES: usize = 11;
 
 /// Lay out a text object with explicit options (area type rows/columns, inset, first baseline,
-/// fit, composer, OpenType features).
+/// fit, composer, OpenType features). Each run is set at the em size its font height reference
+/// gives it ([`FontDb::font_heights_resolved`]).
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    let resolved = db.font_heights_resolved(t);
+    let t = &*resolved;
     let first = layout_once(db, t, opts);
     match (opts.fit.min_scale(), &t.kind) {
         (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, opts, min).unwrap_or(first),
@@ -169,7 +182,7 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
     Some(best.unwrap_or_else(|| at(lo)))
 }
 
-/// `t` with every run's size, explicit leading and baseline shift scaled by `f`, inline art's own
+/// `t` with every run's size, explicit leading, baseline shift and tate-chu-yoko offsets scaled by `f`, inline art's own
 /// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
 /// Shrink Text to Fit lays `t` out as `scaled(t, f)`, where `f` is the layout's
 /// [`TextLayout::fit_scale`], so the result holds the styles the text is drawn in.
@@ -179,6 +192,8 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         r.style.size *= f;
         r.style.leading = r.style.leading.map(|l| l * f);
         r.style.baseline_shift *= f;
+        r.style.tcy_up_down *= f;
+        r.style.tcy_left_right *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }
@@ -227,6 +242,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         vertical,
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
+        upright_cluster: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next

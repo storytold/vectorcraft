@@ -333,6 +333,12 @@ impl<'a> Interp<'a> {
         self.spend(1)
     }
 
+    /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
+    /// charges per 64 bytes, so a loop of big copies runs out of the budget.
+    fn spend_bytes(&mut self, n: usize) -> Res {
+        self.spend((n / 256) as u64)
+    }
+
     /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
     /// far more than one operation (laying out type) does in a loop has to end too.
     pub fn spend(&mut self, ops: u64) -> Res {
@@ -661,6 +667,7 @@ impl<'a> Interp<'a> {
                 let n = self.pop_count()?;
                 let at = self.stack.len().checked_sub(n).ok_or(PsError::Ps("rangecheck", String::new()))?;
                 if n > 0 {
+                    self.spend_bytes(n)?;
                     let k = j.rem_euclid(n as i64) as usize;
                     if let Some(s) = self.stack.get_mut(at..) {
                         s.rotate_right(k);
@@ -687,6 +694,7 @@ impl<'a> Interp<'a> {
                 self.pop_to_mark()?;
             }
             CountToMark => {
+                self.spend_bytes(self.stack.len())?;
                 let n = self.stack.iter().rev().position(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
                 self.push(Obj::Int(n as i64))?;
             }
@@ -860,6 +868,7 @@ impl<'a> Interp<'a> {
             }
             Cvn => {
                 let s = self.pop_str()?;
+                self.spend_bytes(s.len())?;
                 // The name is a copy of the string (a bigger one when bytes are replaced).
                 self.alloc(s.len().saturating_mul(3))?;
                 let n: Rc<str> = Rc::from(String::from_utf8_lossy(&s.borrow()).as_ref());
@@ -966,8 +975,14 @@ impl<'a> Interp<'a> {
                 let src = self.pop()?;
                 let at = self.pop_count()?;
                 let written = match (self.pop()?, src) {
-                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => items.write(at, &from.to_vec()),
-                    (Obj::Str(s), Obj::Str(from)) => s.write(at, &from.to_vec()),
+                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => {
+                        self.spend_bytes(from.len())?;
+                        items.write(at, &from.to_vec())
+                    }
+                    (Obj::Str(s), Obj::Str(from)) => {
+                        self.spend_bytes(from.len())?;
+                        s.write(at, &from.to_vec())
+                    }
                     _ => return ps_err("typecheck", ""),
                 };
                 if !written {
@@ -1171,6 +1186,7 @@ impl<'a> Interp<'a> {
 
     /// The objects above the topmost mark, which is removed.
     fn pop_to_mark(&mut self) -> Res<Vec<Obj>> {
+        self.spend_bytes(self.stack.len())?;
         let at = self.stack.iter().rposition(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
         let items = self.stack.split_off(at + 1);
         self.stack.pop();
@@ -1202,6 +1218,7 @@ impl<'a> Interp<'a> {
             }
             Obj::Str(s) => {
                 let from = self.pop_str()?.to_vec();
+                self.spend_bytes(from.len())?;
                 if !s.write(0, &from) {
                     return ps_err("rangecheck", "copy");
                 }

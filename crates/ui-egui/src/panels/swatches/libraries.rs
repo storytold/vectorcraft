@@ -1,9 +1,9 @@
 use super::actions::deletable;
 use super::dnd::selection;
-use super::tiles::{describe, global_mark, list_icons};
+use super::tiles::{describe, global_mark, list_icons, pattern_thumb_in};
 use super::{
-    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary, Ui, Value,
-    VectorcraftApp, json, library_panel, menu_item, swatch_tile, swatchlib,
+    Arc, BuiltinLibrary, GRADIENT_LIBRARIES, Item, LibraryKind, LibraryRef, PATTERN_LIBRARIES, Rect, Row, SWATCH_LIBRARIES, Swatch, SwatchLibrary,
+    Ui, Value, VectorcraftApp, json, library_panel, menu_item, patternlib, swatch_tile, swatchlib,
 };
 
 fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
@@ -14,6 +14,24 @@ fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
 pub(crate) fn colour_libraries(app: &VectorcraftApp) -> Vec<LibraryRef> {
     let has_colours = |id: &str| swatchlib::library(&app.session, id).is_some_and(|(_, lib)| lib.iter().any(|w| w.paint.color().is_some()));
     library_refs(swatchlib::libraries(&app.session).into_iter().filter(|l| l.category != "gradients" && has_colours(&l.id)).collect())
+}
+
+/// The name of library choice `key` (the document's swatches or a swatch library, as Image
+/// Trace's Document Library and Find Nearest Swatch pick one); a library that is gone shows its key.
+pub(crate) fn library_label(app: &VectorcraftApp, key: &str) -> String {
+    match limit_name(app, key) {
+        Some(_) if key == swatchlib::DOCUMENT_SWATCHES => tl!(DOCUMENT_SWATCHES).to_string(),
+        Some(name) => library_panel::library_name(key, &name).to_string(),
+        None => key.to_string(),
+    }
+}
+
+/// The library choices: the document's swatches, then the colour libraries (`current` checked) →
+/// the key chosen.
+pub(crate) fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
+    let document = menu_item(ui, DOCUMENT_SWATCHES, true, current == swatchlib::DOCUMENT_SWATCHES).then(|| swatchlib::DOCUMENT_SWATCHES.to_string());
+    ui.separator();
+    library_panel::library_items(ui, &colour_libraries(app), &|id| id == current).or(document)
 }
 
 /// What Limit to Library menus call the document's own swatches ([`swatchlib::DOCUMENT_SWATCHES`]).
@@ -81,6 +99,10 @@ impl LibraryKind for SwatchLibraries {
     }
     fn draw(_: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
         swatch_tile(ui, r, &w.paint, selected, hovered);
+        // A built-in pattern library's pattern, drawn from the library.
+        if let Some(src) = patternlib::swatch_source(w) {
+            pattern_thumb_in(&src, ui, r.shrink(1.0), &w.paint);
+        }
         if w.global {
             global_mark(ui, r, w.spot);
         }
@@ -176,10 +198,12 @@ pub(crate) fn window_menu() -> Vec<Item> {
         "window.userSwatchLibrary10",
     ];
     let open = |b: &'static BuiltinLibrary| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }));
+    let patterns = PATTERN_LIBRARIES.iter().map(|b| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }))).collect();
     let mut items = vec![Item::Cmd("Default Swatches", "swatch.resetDefaults", Value::Null), Item::Sep];
     items.extend(SWATCH_LIBRARIES.iter().map(open));
     items.extend([
         Item::Sub("Gradients", GRADIENT_LIBRARIES.iter().map(open).collect()),
+        Item::Sub("Patterns", patterns),
         Item::Sep,
         Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
         Item::Sep,

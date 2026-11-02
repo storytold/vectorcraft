@@ -351,7 +351,9 @@ fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
     whole.appearance.effects.remove(at);
     (whole.opacity, whole.blend) = (1.0, Default::default());
     whole.extras_mut().mask = None;
-    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize").ok()?;
+    // shortcut: expanded Rasterize effects stay RGB, as the object keeps its own opacity mask and the
+    // image's transparency would need one too; upgrade when CMYK images carry alpha.
+    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize", false).ok()?;
     Some(image.into_node(d))
 }
 

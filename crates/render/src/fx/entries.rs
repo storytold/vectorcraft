@@ -43,11 +43,12 @@ pub(super) enum KeptImage {
     /// The image on its own grid, as [`Renderer::rasterize_image`] makes it, and how many images
     /// in the content failed to decode while it was made ([`crate::paint::decode_failures`]):
     /// each draw of the image from here counts them again ([`crate::paint::add_decode_failures`]).
-    Grid(std::rc::Rc<(Vec<u8>, usize, usize)>, u64),
+    /// The last value records whether an image was left out while making the grid.
+    Grid(std::rc::Rc<(Vec<u8>, usize, usize)>, u64, bool),
     /// An image over [`Renderer::rasterize_image`]'s limits: the content's raster with the
     /// Rasterize applied, as the first draw made it, and the transform from its pixels to
-    /// document space.
-    Raster(Arc<vello_cpu::Pixmap>, Affine),
+    /// document space. The remaining values record decode failures and whether an image was left out.
+    Raster(Arc<vello_cpu::Pixmap>, Affine, u64, bool),
 }
 
 /// A cached shadow / glow raster: premultiplied, already tinted and faded, positioned relative to
@@ -71,6 +72,12 @@ pub(crate) struct ShadowEntry {
     /// Made for the object before it moved ([`Renderer::move_shadow`]), or made over rasters
     /// made before their objects moved: only a frame rendered while interacting draws it.
     pub(super) moved: bool,
+    /// How many images in the silhouette failed to decode while the raster was made, as
+    /// [`PixelEntry::failed`].
+    pub(super) failed: u64,
+    /// Whether an image in the silhouette failed to draw while the raster was made, as
+    /// [`PixelEntry::image_left_out`].
+    pub(super) image_left_out: bool,
     pub(crate) stamp: u64,
 }
 

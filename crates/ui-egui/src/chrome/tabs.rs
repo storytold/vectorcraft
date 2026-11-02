@@ -12,6 +12,13 @@ pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bo
     format!("{}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom, display_print_size).replace('%', " %"))
 }
 
+/// The title of open document `i`'s tab, with its own view's zoom and Outline or Preview.
+pub(super) fn doc_tab_title(app: &VectorcraftApp, i: usize, d: &vectorcraft_engine::DocState) -> String {
+    let view = app.views.get(i);
+    let zoom = view.map_or(1.0, |v| v.zoom);
+    tab_title(d, zoom, view.is_some_and(|v| v.outline), app.session.prefs.display_print_size)
+}
+
 /// Whether a document tab's × comes before its title (macOS) rather than after it (Windows,
 /// Linux and the web).
 pub(super) const CLOSE_BEFORE_TITLE: bool = cfg!(target_os = "macos");
@@ -46,8 +53,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         .iter()
         .enumerate()
         .map(|(i, d)| {
-            let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
-            let title = tab_title(d, zoom, app.ui.view.outline, app.session.prefs.display_print_size);
+            let title = doc_tab_title(app, i, d);
             let color = if Some(i) == active { t.text_strong } else { t.text_dim };
             (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })
@@ -120,7 +126,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Makes document `i` the current one, as a click on its tab does: the Home screen closes, and
 /// with the Artboard tool the artboard the document shows becomes the tool's target.
-fn show_document(app: &mut VectorcraftApp, i: usize) {
+pub(crate) fn show_document(app: &mut VectorcraftApp, i: usize) {
     app.ui.home = None;
     let changed = app.session.active_index() != Some(i);
     if app.session.set_active(i)
@@ -178,7 +184,8 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
             crumbs.push(Crumb { id: None, is_layer: false, name: pn.clone() });
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
-        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::click_and_drag());
+        // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
+        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());

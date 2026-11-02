@@ -345,23 +345,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && !matches!(**live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
-        match &**live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => {
-                widgets::subheader(ui, tl!("Rectangle Properties:"));
-                corner_radius_row(app, ui, &n, "xfp-radius");
-            }
-            vectorcraft_doc::LiveShape::Polygon { .. } => {
-                widgets::subheader(ui, tl!("Polygon Properties:"));
-                polygon_rows(app, ui, &n, live, "xfp-polygon");
-            }
-            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
-                widgets::subheader(ui, tl!("Ellipse Properties:"));
-                pie_rows(app, ui, *pie, "xfp-pie");
-            }
-            _ => {
-                widgets::subheader(ui, tl!("Shape Properties:"));
-                widgets::dim_label(ui, tl!(n.kind_label()));
-            }
+        if !live_shape_rows(app, ui, &n, live, "xfp", true) {
+            widgets::subheader(ui, tl!("Shape Properties:"));
+            widgets::dim_label(ui, tl!(n.kind_label()));
         }
     }
     if pstate::<bool>(ui.ctx(), "xf-hide-options") {
@@ -375,6 +361,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+}
+
+/// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
+/// Contextual Task Bar), their widget ids under `id`. `headed` adds the Rectangle and Polygon
+/// Properties headings; an ellipse's heading always shows. Returns false, drawing nothing, for
+/// other live shapes.
+pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
+    match live {
+        LiveShape::Rectangle { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Rectangle Properties:"));
+            }
+            corner_radius_row(app, ui, n, &format!("{id}-radius"));
+        }
+        LiveShape::Polygon { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Polygon Properties:"));
+            }
+            polygon_rows(app, ui, n, live, &format!("{id}-polygon"));
+        }
+        LiveShape::Ellipse { pie, .. } => {
+            widgets::subheader(ui, tl!("Ellipse Properties:"));
+            pie_rows(app, ui, *pie, &format!("{id}-pie"));
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the

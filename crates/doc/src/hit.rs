@@ -1,7 +1,9 @@
 //! Hit testing over the document tree.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::OnceLock;
+use std::rc::Rc;
+use std::sync::{Arc, OnceLock};
 
 use vectorcraft_geom::hit::{fill_contains, stroke_contains};
 use vectorcraft_geom::{BezPath, FillRule, Point, Rect};
@@ -99,6 +101,128 @@ pub(crate) fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> 
     IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(n))
 }
 
+/// One level of evaluation of a live object in a document, as the canvas draws it: type in an
+/// envelope as its distorted glyph outlines, symbol instances as their art. Effects are evaluated
+/// above this crate, so the engine registers one with [`set_live_art`]. It reads the object, the
+/// document's symbols and patterns, and what [`LiveInputs`] stands for, and nothing else.
+pub type LiveArt = fn(Option<&Document>, &Node) -> Vec<Node>;
+
+/// A number that changes whenever something outside the document that [`LiveArt`] reads changes,
+/// such as the installed fonts or the plug-ins.
+pub type LiveInputs = fn() -> u64;
+
+static LIVE_ART: OnceLock<(LiveArt, LiveInputs)> = OnceLock::new();
+
+/// Register how a live object's art is evaluated for clicks, and the number that changes with what
+/// else it reads (the first registration stays).
+pub fn set_live_art(f: LiveArt, inputs: LiveInputs) {
+    // Already set: the same engine, registered by another session.
+    let _ = LIVE_ART.set((f, inputs));
+}
+
+/// The registered [`LiveInputs`] now, 0 while nothing is registered.
+fn live_inputs() -> u64 {
+    LIVE_ART.get().map_or(0, |(_, inputs)| inputs())
+}
+
+/// A live object evaluated by [`live_art`] on this thread: the object, its document's symbols (by
+/// name and art) and patterns and the [`LiveInputs`] as they were, the art and its [`art_size`].
+struct EvaluatedLive {
+    node: Node,
+    symbols: Vec<(String, Arc<Node>)>,
+    patterns: Vec<crate::PatternDef>,
+    inputs: u64,
+    art: Rc<Vec<Node>>,
+    size: usize,
+}
+
+impl EvaluatedLive {
+    /// Is this the evaluation of `n` in `doc`, with inputs `inputs`, as they are now?
+    fn is_of(&self, doc: &Document, n: &Node, inputs: u64) -> bool {
+        self.inputs == inputs
+            && self.symbols.len() == doc.symbols.len()
+            && self.symbols.iter().zip(&doc.symbols).all(|((name, art), s)| *name == s.name && Arc::ptr_eq(art, &s.art))
+            && self.node == *n
+            && self.patterns == doc.patterns
+    }
+}
+
+/// How many evaluations [`live_art`] keeps on each thread: the pointer moving in a blend's or an
+/// envelope's stroke band hits it again and again, and an envelope can hold a blend.
+const LIVE_KEPT: usize = 4;
+
+/// Most [`art_size`] the evaluations [`live_art`] keeps on one thread add up to. Art larger than
+/// this is not kept.
+const LIVE_KEPT_SIZE: usize = 250_000;
+
+/// The size of `art` for [`LIVE_KEPT_SIZE`]: its objects and the anchors of their paths.
+fn art_size(art: &[Node]) -> usize {
+    let mut size = 0usize;
+    for n in art {
+        n.walk(&mut |c| size = size.saturating_add(1 + c.path_data().map_or(0, |p| p.anchor_count())));
+    }
+    size
+}
+
+/// Does `n`, or the art of a symbol or a pattern of `doc`, hold a placed document? Its art changes
+/// when the file is read, so [`live_art`] does not keep an evaluation of `n`.
+fn holds_placed(doc: &Document, n: &Node) -> bool {
+    let mut placed = false;
+    let mut find = |c: &Node| placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
+    n.walk(&mut find);
+    doc.symbols.iter().for_each(|s| s.art.walk(&mut find));
+    doc.patterns.iter().flat_map(|p| &p.art).for_each(|a| a.walk(&mut find));
+    placed
+}
+
+thread_local! {
+    /// The evaluations [`live_art`] keeps, the latest first.
+    static EVALUATED: RefCell<Vec<EvaluatedLive>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The art live object `n` of `doc` draws ([`set_live_art`]); [`crate::live::expand_live`] while
+/// nothing is registered. The art is evaluated again when `n`, a symbol of `doc`, a pattern of
+/// `doc` or the [`LiveInputs`] have changed since, and on every click while it or the document's
+/// symbols or patterns hold a placed document ([`holds_placed`]).
+fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
+    let inputs = live_inputs();
+    let kept = EVALUATED.with_borrow_mut(|kept| {
+        let i = kept.iter().position(|e| e.is_of(doc, n, inputs))?;
+        let e = kept.remove(i);
+        let art = e.art.clone();
+        kept.insert(0, e);
+        Some(art)
+    });
+    if let Some(art) = kept {
+        return art;
+    }
+    #[cfg(test)]
+    LIVE_EVALUATED.with(|c| c.set(c.get() + 1));
+    let art = Rc::new(LIVE_ART.get().map_or_else(|| crate::live::expand_live(n), |(f, _)| f(Some(doc), n)));
+    let size = art_size(&art);
+    if size > LIVE_KEPT_SIZE || holds_placed(doc, n) {
+        return art;
+    }
+    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
+    let e = EvaluatedLive { node: n.clone(), symbols, patterns: doc.patterns.clone(), inputs, art: art.clone(), size };
+    EVALUATED.with_borrow_mut(|kept| {
+        kept.insert(0, e);
+        kept.truncate(LIVE_KEPT);
+        let mut total = 0usize;
+        kept.retain(|e| {
+            total = total.saturating_add(e.size);
+            total <= LIVE_KEPT_SIZE
+        });
+    });
+    art
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many live objects [`live_art`] evaluated on this thread.
+    static LIVE_EVALUATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Topmost editable object under `p`.
 pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
     hit_test_skipping(doc, p, opt, &|_| false, true)
@@ -108,6 +232,12 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
 /// including art outside the editing scope. This never changes their editability.
 pub fn hit_test_visible(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
     hit_test_skipping(doc, p, opt, &|_| false, false)
+}
+
+/// [`hit_test_visible`] passing over the nodes `skip` names (and their contents): what lies below
+/// them at `p`. A skipped clipping path still clips.
+pub fn hit_test_visible_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool) -> Option<Hit> {
+    hit_test_skipping(doc, p, opt, skip, false)
 }
 
 /// The object of `selected` (topmost first) whose own art lies under `p` where a clipping mask
@@ -538,20 +668,15 @@ fn hit_children(
 }
 
 /// The order a click at `p` tries the children of `parent` in, front first: their stacking order
-/// from the top, except that in an Intertwine group the members drawn over the others at `p`
-/// come first (from the top among them too).
+/// from the top, except that in an Intertwine group the members are tried in the order they are
+/// drawn at `p`, from the top ([`crate::intertwine::tier_at`]).
 fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
-    let over: Vec<usize> = if matches!(parent.kind, NodeKind::Intertwine { .. }) {
-        let contains = |a: &vectorcraft_geom::PathData| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p);
-        (0..children.len()).rev().filter(|i| children.get(*i).and_then(|c| crate::intertwine::over_area(c)).is_some_and(contains)).collect()
-    } else {
-        vec![]
-    };
-    let rest = (0..children.len()).rev().filter({
-        let over = over.clone();
-        move |i| !over.contains(i)
-    });
-    over.into_iter().chain(rest)
+    let mut order: Vec<usize> = (0..children.len()).rev().collect();
+    if matches!(parent.kind, NodeKind::Intertwine { .. }) {
+        let tier = |i: usize| children.get(i).map_or(0, |c| crate::intertwine::tier_at(c, p));
+        order.sort_by_cached_key(|i| std::cmp::Reverse((tier(*i), *i)));
+    }
+    order.into_iter()
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke
@@ -564,7 +689,15 @@ fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::
     stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many objects [`hit_leaf`] tested on this thread.
+    static LEAVES_TESTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    #[cfg(test)]
+    LEAVES_TESTED.with(|c| c.set(c.get() + 1));
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
             let bp = path.to_bezpath();
@@ -611,8 +744,17 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
                 AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
             })
         }
-        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
+        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } => {
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
+        }
+        // A blend or an envelope is hit within its bounds, and outside them where its evaluated
+        // art paints: a blend's keys and steps on a spine can reach past the keys and the spine,
+        // and the strokes of an envelope's distorted contents past its bounds.
+        NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
+            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+                return Some(HitKind::Bounds);
+            }
+            live_art(symbols.document(), n).iter().find_map(|g| hit_any(g, p, opt, symbols))
         }
         NodeKind::Repeat(r) => r.expand(Some(symbols.document())).iter().find_map(|g| hit_any(g, p, opt, symbols)),
         NodeKind::Mesh(m) => {
@@ -650,8 +792,25 @@ fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
 
 /// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]).
 fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    // Hidden art does not hit.
+    if !n.visible {
+        return None;
+    }
+    // Nor art whose reach does not hold `p`, as in [`may_hit`]: a blend's steps far from `p` are
+    // passed by without being measured.
+    if !edits_contents(n) && n.extras().shaper.is_none() && n.reach_bounds_with(symbols).is_some_and(|b| !b.inflate(opt.tol, opt.tol).contains(p)) {
+        return None;
+    }
     match &n.kind {
-        NodeKind::Group { children, .. } => children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols)),
+        // A clip group only hits inside its clipping path.
+        NodeKind::Group { children, clip } => {
+            if *clip && children.first().is_some_and(|c| !clip_contains(c, p)) {
+                return None;
+            }
+            children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols))
+        }
+        // An intertwine group hits by its members, as on the canvas.
+        NodeKind::Intertwine { children } => children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols)),
         _ => hit_leaf(n, p, opt, symbols),
     }
 }

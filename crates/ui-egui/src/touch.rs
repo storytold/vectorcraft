@@ -63,7 +63,8 @@ const TAP_SLOP: f32 = 16.0;
 /// What a touch event made of the gesture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Touch {
-    /// A second finger landed: the gesture isn't the first finger's press.
+    /// A finger landed while another is down: the gesture isn't the first finger's press, nor a
+    /// lifted finger's press as it lands again.
     Fingers,
     /// All fingers lifted from a tap of this many fingers (two or more).
     Tap(usize),
@@ -93,9 +94,8 @@ impl Taps {
                 if !self.down.iter().any(|(d, _)| *d == id) {
                     self.down.push((id, pos));
                 }
-                let before = self.most;
                 self.most = self.most.max(self.down.len());
-                (before < 2 && self.most >= 2).then_some(Touch::Fingers)
+                (self.down.len() >= 2).then_some(Touch::Fingers)
             }
             TouchPhase::Move => {
                 if self.down.iter().any(|(d, at)| *d == id && at.distance(pos) > TAP_SLOP) {

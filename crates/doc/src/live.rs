@@ -63,7 +63,7 @@ pub use expand::{
 };
 #[cfg(test)]
 use mesh::grid_eval;
-pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
+pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
 pub use warp::{WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, warp_point};
 
 #[cfg(test)]
@@ -181,6 +181,44 @@ mod tests {
         assert!((p.x - 37.0).abs() < 1e-6 && (p.y - 81.0).abs() < 1e-6, "{p:?}");
     }
 
+    /// #3592: a mesh read from a file can have any number of patches, and the view any zoom, so the
+    /// quads one tessellation makes are budgeted: the subdivision per patch gives way before memory
+    /// does, and each patch stays at least one quad.
+    #[test]
+    fn a_large_mesh_tessellates_within_the_quad_budget() {
+        let mesh = |n: u32| GradientMesh::from_surface(n, n, &|u, v| Point::new(u * 300.0, v * 300.0), &|u, v| Color::rgb(u as f32, v as f32, 0.5));
+        // 3,600 patches at 32 x 32 would be 3.7 million quads.
+        let m = mesh(60);
+        let quads = m.quads(32);
+        assert!(quads.len() <= GradientMesh::MAX_QUADS, "{} quads", quads.len());
+        assert!(quads.len() >= 3600 * 4, "still finer than a quad per patch: {}", quads.len());
+        // A small mesh keeps the subdivision asked for.
+        assert_eq!(mesh(3).quads(8).len(), 9 * 64);
+        // The finest the view asks for, on a mesh of 22,500 patches, is a few quads per patch.
+        let big = mesh(150).quads(64);
+        assert!(big.len() <= GradientMesh::MAX_QUADS && big.len() >= 22_500, "{} quads", big.len());
+        // More patches than the budget has quads is malformed, as a point count that doesn't fit is.
+        let point = MeshPoint { p: Point::ZERO, color: Color::rgb(0.0, 0.0, 0.0), opacity: 1.0, handles: [Vec2::ZERO; 4] };
+        let huge = GradientMesh { rows: 2000, cols: 2000, points: vec![point; 2001 * 2001] };
+        assert!(!huge.is_valid());
+        assert!(huge.quads(1).is_empty());
+    }
+
+    /// Flat pieces of a mesh over the quad budget follow the coarser subdivision [`GradientMesh::quads`]
+    /// gives way to: each patch's pieces are its own quads', so together they cover the mesh once.
+    #[test]
+    fn a_large_meshs_pieces_follow_the_quad_budget() {
+        let m = GradientMesh::from_surface(60, 60, &|u, v| Point::new(u * 300.0, v * 300.0), &|u, v| Color::rgb(u as f32, v as f32, 0.5));
+        let area = |pts: &[Point]| {
+            let n = pts.len();
+            (0..n).map(|i| pts[i].x * pts[(i + 1) % n].y - pts[(i + 1) % n].x * pts[i].y).sum::<f64>().abs() / 2.0
+        };
+        let pieces = m.pieces(32);
+        assert!(pieces.len() >= 3600, "{} pieces", pieces.len());
+        let total: f64 = pieces.iter().map(|p| area(&p.pts)).sum();
+        assert!((total - 90_000.0).abs() < 90.0, "covered {total}");
+    }
+
     /// A file's rows and columns can be anything: a point count too large to compute is no match
     /// for the points (u32::MAX × u32::MAX wrapped to 0 and passed for a grid without points).
     #[test]
@@ -195,15 +233,84 @@ mod tests {
         assert_eq!(envelope_mapper(&kind, Rect::new(0.0, 0.0, 100.0, 100.0))(p), p);
     }
 
+    /// How far the border of `m` strays from the ellipse in `r`, in points (measured across the
+    /// ellipse's short radius), checked at 20 places along every border edge.
+    fn mesh_border_off_ellipse(m: &GradientMesh, r: Rect) -> f64 {
+        let (rows, cols) = (m.rows as usize, m.cols as usize);
+        let edges = (0..cols).flat_map(|c| [m.edge_u(0, c), m.edge_u(rows, c)]).chain((0..rows).flat_map(|k| [m.edge_v(k, 0), m.edge_v(k, cols)]));
+        let (c, a, b) = (r.center(), r.width() / 2.0, r.height() / 2.0);
+        edges
+            .flat_map(|e| (0..=20).map(move |i| e.eval(f64::from(i) / 20.0)))
+            .map(|p| ((p.x - c.x) / a).hypot((p.y - c.y) / b) - 1.0)
+            .fold(0.0f64, |w, d| w.max(d.abs() * a.min(b)))
+    }
+
+    /// #3187: a gradient mesh made from an ellipse keeps the ellipse's shape: a Mesh tool click
+    /// (a 1×1 mesh with lines through the point) and Create Gradient Mesh's 4×4 grid both lay
+    /// their border on the outline, within about twice the 0.35 pt the outline is flattened to.
+    /// The 1×1 mesh was up to 7 pt off this 400 × 300 pt ellipse.
+    #[test]
+    fn a_mesh_from_an_ellipse_keeps_its_outline() {
+        const OFF: f64 = 0.75;
+        let r = Rect::new(100.0, 100.0, 500.0, 400.0);
+        let e = shapes::ellipse(r);
+        for (rows, cols) in [(1, 1), (4, 4), (2, 5)] {
+            let m = GradientMesh::for_path(&e, rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+            let off = mesh_border_off_ellipse(&m, r);
+            assert!(off < OFF, "{rows}×{cols} mesh: border {off} pt off the ellipse");
+        }
+        let made = GradientMesh::for_path(&e, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let mut m = made.clone();
+        // Off centre, so each line splits its edges unevenly.
+        let i = m.add_lines_at(Point::new(200.0, 330.0), 0.0).unwrap();
+        let off = mesh_border_off_ellipse(&m, r);
+        assert!(off < OFF, "after a Mesh tool click: {off} pt");
+        // Deleting the lines again (Alt-click) gives the border back as it was.
+        assert!(m.remove_point_lines(i));
+        assert_eq!((m.rows, m.cols), (1, 1));
+        for (k, (now, was)) in m.points.iter().zip(&made.points).enumerate() {
+            let moved = now.handles.iter().zip(&was.handles).map(|(a, b)| (*a - *b).hypot()).fold(0.0, f64::max);
+            assert!(now.p.distance(was.p) < 1e-6 && moved < 1e-3, "point {k}: {now:?}, made as {was:?}");
+        }
+        // With a handle at the new border point shortened since, the two edges no longer make one
+        // curve: the merged edge is straight rather than grown past its ends.
+        let mut m = made.clone();
+        let i = m.add_lines_at(Point::new(200.0, 330.0), 0.0).unwrap();
+        let top = m.idx(0, 1);
+        m.points[top].handles[H_LEFT] *= 1e-4;
+        assert!(m.remove_point_lines(i));
+        let (a, b) = (m.points[0].p, m.points[1].p);
+        assert!((m.points[0].handles[H_RIGHT] - (b - a) / 3.0).hypot() < 1e-9, "{:?}", m.points[0].handles);
+        // A rectangle's mesh keeps straight edges with handles a third of the way along.
+        let m = GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 90.0, 60.0)), 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let e = m.edge_u(0, 0);
+        assert!(e.p1.distance(Point::new(30.0, 0.0)) < 1e-6 && e.p2.distance(Point::new(60.0, 0.0)) < 1e-6, "{e:?}");
+    }
+
     #[test]
     fn mesh_insert_and_remove_lines() {
         let mut m =
             GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
-        let i = m.add_lines_at(Point::new(30.0, 60.0)).unwrap();
+        let i = m.add_lines_at(Point::new(30.0, 60.0), 0.0).unwrap();
         assert_eq!((m.rows, m.cols), (2, 2));
         assert!(m.points[i].p.distance(Point::new(30.0, 60.0)) < 0.5, "{:?}", m.points[i].p);
         assert!(m.remove_point_lines(i));
         assert_eq!((m.rows, m.cols), (1, 1));
+    }
+
+    /// A point outside the mesh within the tolerance locates the nearest point of its edge.
+    #[test]
+    fn mesh_locate_within_reaches_the_edge() {
+        let m = GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), 2, 2, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let p = Point::new(102.0, 30.0);
+        assert_eq!(m.locate(p), None);
+        assert_eq!(m.locate_within(p, 1.0), None);
+        let (r, c, u, v) = m.locate_within(p, 3.0).unwrap();
+        assert_eq!((r, c), (0, 1));
+        assert_eq!(u, 1.0, "on the right edge");
+        let q = m.eval(r, c, u, v);
+        assert!(q.distance(Point::new(100.0, 30.0)) < 1e-6, "{q:?}");
+        assert_eq!(m.locate_within(Point::new(30.0, 60.0), 3.0), m.locate(Point::new(30.0, 60.0)));
     }
 
     /// Corners all in CMYK mix in CMYK (the inks halfway), not in RGB.

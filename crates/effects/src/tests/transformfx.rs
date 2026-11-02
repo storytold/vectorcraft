@@ -3,11 +3,11 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Dash, Effect, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, Effect, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use crate::distort::{TransformOptions, transform_map, transform_move};
-use crate::{has_transform_art, has_transform_options, reshape};
+use crate::{bake_document, expand_outlined, has_transform_art, has_transform_options, reshape};
 
 fn transform(params: Value) -> Effect {
     Effect { id: "distort.transform".into(), params, visible: true }
@@ -156,4 +156,231 @@ fn stroke_scaling_across_copies_stays_finite() {
             assert!(w.is_finite() && w <= 1.0e6, "{w}");
         }
     }
+}
+
+/// A 100 pt square at the origin with a solid gray fill and a 2 pt black stroke (dashed 4/2) that
+/// carries the Transform effect `params` itself.
+fn stroke_with_effect(params: Value) -> Node {
+    let gray = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    let mut n =
+        Node::path(NodeId(10), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gray, Paint::solid(Color::BLACK), 2.0));
+    if let Some(s) = n.appearance.stroke_mut() {
+        s.dash = Some(Dash { pattern: vec![4.0, 2.0], offset: 0.0, align_corners: false });
+        s.effects.push(transform(params));
+    }
+    n
+}
+
+/// A 100 pt square at the origin filled with pattern "p" placed at the identity, the fill carrying
+/// the Transform effect `params` itself.
+fn fill_with_effect(params: Value) -> Node {
+    let mut n = patterned(json!({}));
+    n.appearance.effects.clear();
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.effects.push(transform(params));
+    }
+    n
+}
+
+/// The paths under `n` that a stroke paints.
+fn stroked_leaves(n: &Node) -> Vec<&Node> {
+    leaves(n).into_iter().filter(|p| p.appearance.stroke().is_some()).collect()
+}
+
+/// The paths under `n` that a pattern fills.
+fn pattern_leaves(n: &Node) -> Vec<&Node> {
+    leaves(n).into_iter().filter(|p| matches!(p.appearance.fill_paint(), Paint::Pattern { .. })).collect()
+}
+
+#[test]
+fn a_strokes_own_transform_scales_its_weight_and_dashes_with_scale_strokes_and_effects() {
+    let n = stroke_with_effect(json!({"scaleH": 200, "scaleV": 200, "strokes": true}));
+    assert!(has_transform_options(&n));
+    let art = reshape(None, &n, None).unwrap();
+    let paths = stroked_leaves(&art);
+    assert_eq!(paths.len(), 1);
+    let (w, dash) = stroke_of(paths[0]);
+    assert!(close(w, 4.0), "{w}");
+    assert_eq!(dash, vec![8.0, 4.0]);
+    assert!(close(paths[0].geometric_bounds().unwrap().width(), 200.0));
+    // The fill stays on the path as it was, below the stroke.
+    let all = leaves(&art);
+    assert_eq!(all.len(), 2);
+    assert!(all[0].appearance.stroke().is_none());
+    assert_eq!(all[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
+    // Off, the stroke keeps its weight and dashes: the effect stays geometry alone.
+    let plain = stroke_with_effect(json!({"scaleH": 200, "scaleV": 200, "strokes": false}));
+    assert!(!has_transform_art(&plain));
+}
+
+#[test]
+fn each_copy_of_a_strokes_own_transform_scales_its_weight_once_more() {
+    let n = stroke_with_effect(json!({"scaleH": 200, "scaleV": 200, "copies": 2, "strokes": true}));
+    let art = reshape(None, &n, None).unwrap();
+    let widths: Vec<f64> = stroked_leaves(&art).iter().map(|p| stroke_of(p).0).collect();
+    assert_eq!(widths, vec![2.0, 4.0, 8.0]);
+}
+
+#[test]
+fn a_fills_own_transform_with_scale_strokes_and_effects_scales_its_later_effects() {
+    let mut n = stroke_with_effect(json!({}));
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.effects.push(transform(json!({"scaleH": 300, "scaleV": 300, "strokes": true})));
+        f.effects.push(Effect { id: "path.offsetPath".into(), params: json!({"offset": 5.0}), visible: true });
+    }
+    let art = reshape(None, &n, None).unwrap();
+    let fill = leaves(&art).into_iter().find(|p| p.appearance.stroke().is_none()).unwrap();
+    let AppearanceItem::Fill(f) = &fill.appearance.items[0] else { panic!("not a fill") };
+    // The Offset Path, scaled from 5 to 15, applies to the transformed fill's path.
+    assert!(f.effects.is_empty(), "{:?}", f.effects);
+    let w = fill.geometric_bounds().unwrap().width();
+    assert!(close(w, 330.0), "{w}");
+}
+
+#[test]
+fn a_later_transform_on_a_stroke_turns_its_copies_about_their_combined_center() {
+    for later in [json!({"rotate": 90}), json!({"rotate": 90, "strokes": true})] {
+        let mut n = stroke_with_effect(json!({"moveH": 200, "copies": 1, "strokes": true}));
+        if let Some(s) = n.appearance.stroke_mut() {
+            s.effects.push(transform(later.clone()));
+        }
+        let art = reshape(None, &n, None).unwrap();
+        let paths = stroked_leaves(&art);
+        assert_eq!(paths.len(), 2, "{later}");
+        // The copies span 0 to 300 by 0 to 100 before the turn; about the center (150, 50) both
+        // go to x 100 to 200, one above the other.
+        let boxes: Vec<Rect> = paths.iter().map(|p| p.geometric_bounds().unwrap()).collect();
+        for b in &boxes {
+            assert!(close(b.x0, 100.0) && close(b.x1, 200.0), "{later}: {boxes:?}");
+        }
+        let top = boxes.iter().map(|b| b.y0).fold(f64::INFINITY, f64::min);
+        let bottom = boxes.iter().map(|b| b.y1).fold(f64::NEG_INFINITY, f64::max);
+        assert!(close(top, -100.0) && close(bottom, 200.0), "{later}: {boxes:?}");
+        for p in &paths {
+            assert!(p.appearance.stroke().unwrap().effects.is_empty(), "{later}");
+        }
+    }
+}
+
+#[test]
+fn a_fills_own_transform_moves_each_copys_pattern_with_transform_patterns() {
+    let n = fill_with_effect(json!({"moveH": 30, "copies": 2, "patterns": true}));
+    assert!(has_transform_options(&n));
+    let art = reshape(None, &n, None).unwrap();
+    let xs: Vec<f64> = pattern_leaves(&art).iter().map(|p| pattern_xf(p).as_coeffs()[4]).collect();
+    assert_eq!(xs, vec![0.0, 30.0, 60.0]);
+    // Off, the pattern stays put.
+    assert!(!has_transform_art(&fill_with_effect(json!({"moveH": 30, "copies": 2}))));
+}
+
+#[test]
+fn a_strokes_own_transform_with_transform_objects_off_keeps_its_geometry() {
+    let n = stroke_with_effect(json!({"scaleH": 50, "scaleV": 50, "moveH": 40, "copies": 3, "objects": false, "strokes": true}));
+    let art = reshape(None, &n, None).unwrap();
+    let paths = stroked_leaves(&art);
+    assert_eq!(paths.len(), 1, "no copies");
+    assert_eq!(paths[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
+    assert!(close(stroke_of(paths[0]).0, 1.0));
+    let n = fill_with_effect(json!({"rotate": 45, "objects": false, "patterns": true}));
+    let art = reshape(None, &n, None).unwrap();
+    let paths = pattern_leaves(&art);
+    assert_eq!(paths.len(), 1);
+    assert_eq!(paths[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
+    assert_ne!(pattern_xf(paths[0]), Affine::IDENTITY);
+}
+
+#[test]
+fn a_strokes_own_transform_draws_bakes_expands_and_measures_alike() {
+    let n = stroke_with_effect(json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
+    let drawn = reshape(None, &n, None).unwrap();
+    let widths = |art: &Node| stroked_leaves(art).iter().map(|p| stroke_of(p).0).collect::<Vec<f64>>();
+    assert_eq!(widths(&drawn), vec![2.0, 4.0]);
+    // Expand Appearance.
+    assert_eq!(widths(&expand_outlined(None, &n, None).unwrap()), widths(&drawn));
+    // Export.
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n.clone()).unwrap();
+    let baked = bake_document(&d).unwrap();
+    assert_eq!(widths(baked.node(NodeId(10)).unwrap()), widths(&drawn));
+    // Use Preview Bounds: the copy's 4 pt stroke (on -50..150) reaches 2 pt past it.
+    let symbols = d.symbol_boxes();
+    let b = crate::preview::visual_bounds(&symbols, &n).unwrap();
+    assert!(close(b.width(), 204.0), "{b:?}");
+    assert_eq!(Some(b), drawn.visual_bounds_with(&symbols));
+}
+
+/// Three strokes, each with three max-detail Roughens (#3578: nearly one effect budget on their
+/// own) before its own Transform effect: their paths keep to one effect budget together, not one
+/// each.
+#[test]
+fn strokes_with_their_own_transform_keep_to_one_effect_budget() {
+    use crate::geometry::Budget;
+    let rough = Effect { id: "distort.roughen".into(), params: json!({"size": 10000, "relative": false, "detail": 100}), visible: true };
+    let mut n = Node::path(
+        NodeId(11),
+        shapes::rectangle(Rect::new(0.0, 0.0, 1000.0, 1000.0)),
+        Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0),
+    );
+    let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).cloned() else {
+        panic!("no stroke")
+    };
+    n.appearance.items.retain(|i| !matches!(i, AppearanceItem::Stroke(_)));
+    for _ in 0..3 {
+        let mut s = s.clone();
+        s.effects = vec![rough.clone(); 3];
+        s.effects.push(transform(json!({"scaleH": 50, "scaleV": 50, "strokes": true})));
+        n.appearance.items.push(AppearanceItem::Stroke(s));
+    }
+    let art = reshape(None, &n, None).unwrap();
+    let paths = stroked_leaves(&art);
+    assert_eq!(paths.len(), 3);
+    let cost =
+        paths.iter().filter_map(|p| crate::reshape::leaf_geometry(p)).fold(Budget { anchors: 0, lines: 0 }, |c, (g, _)| c.plus(Budget::of(&g)));
+    assert!(Budget::EFFECTS.fits(cost) && cost.lines > crate::MAX_EFFECT_LINES / 2, "{cost:?}");
+}
+
+/// A path of 600,000 anchors with a fill below a stroke whose own Transform effect makes five
+/// copies: the fill's path counts toward the effect budget, so the stroke's copies stop where the
+/// whole art would pass it.
+#[test]
+fn a_fill_below_a_strokes_own_transform_counts_toward_the_effect_budget() {
+    use crate::geometry::Budget;
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let points: Vec<Point> = (0..600_000).map(|i| Point::new(f64::from(i) * 1.0e-4, f64::from(i % 2))).collect();
+    let gray = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    let mut n = Node::path(NodeId(12), PathData::single(SubPath::polyline(&points, false)), Appearance::basic(gray, Paint::solid(Color::BLACK), 1.0));
+    if let Some(s) = n.appearance.stroke_mut() {
+        s.effects.push(transform(json!({"moveH": 100, "copies": 5, "strokes": true})));
+    }
+    let art = reshape(None, &n, None).unwrap();
+    let cost = leaves(&art)
+        .iter()
+        .filter_map(|p| crate::reshape::leaf_geometry(p))
+        .fold(Budget { anchors: 0, lines: 0 }, |c, (g, _)| c.plus(Budget::of(&g)));
+    assert_eq!(stroked_leaves(&art).len(), 2, "{cost:?}");
+    assert!(Budget::EFFECTS.fits(cost), "{cost:?}");
+}
+
+/// A path of 600,000 anchors with a stroke whose own Transform effect makes two copies, below a
+/// fill: the stroke's copies leave room for the fill painted after them.
+#[test]
+fn a_strokes_own_transform_leaves_room_for_a_fill_above_it() {
+    use crate::geometry::Budget;
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let points: Vec<Point> = (0..600_000).map(|i| Point::new(f64::from(i) * 1.0e-4, f64::from(i % 2))).collect();
+    let gray = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    let mut n = Node::path(NodeId(13), PathData::single(SubPath::polyline(&points, false)), Appearance::basic(gray, Paint::solid(Color::BLACK), 1.0));
+    if let Some(s) = n.appearance.stroke_mut() {
+        s.effects.push(transform(json!({"moveH": 100, "copies": 2, "strokes": true})));
+    }
+    n.appearance.items.reverse();
+    assert!(matches!(n.appearance.items.first(), Some(AppearanceItem::Stroke(_))));
+    let art = reshape(None, &n, None).unwrap();
+    let cost = leaves(&art)
+        .iter()
+        .filter_map(|p| crate::reshape::leaf_geometry(p))
+        .fold(Budget { anchors: 0, lines: 0 }, |c, (g, _)| c.plus(Budget::of(&g)));
+    assert_eq!(stroked_leaves(&art).len(), 2, "{cost:?}");
+    assert!(Budget::EFFECTS.fits(cost), "{cost:?}");
 }

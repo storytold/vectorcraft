@@ -234,10 +234,20 @@ pub fn polyline(pts: &[Point]) -> BezPath {
 /// whose long axis runs at `angle` degrees counter-clockwise on the page (y-down document space)
 /// and whose short axis is `roundness` percent of the long one (kept within 1–100).
 pub fn eraser_tip(angle: f64, roundness: f64) -> Affine {
+    ellipse_tip(angle, roundness.clamp(1.0, 100.0))
+}
+
+/// Map a round brush tip to a page-oriented ellipse. 0 percent Roundness is drawn as
+/// 0.1 percent so its inverse is defined.
+pub fn blob_tip(angle: f64, roundness: f64) -> Affine {
+    ellipse_tip(angle, roundness.clamp(0.1, 100.0))
+}
+
+fn ellipse_tip(angle: f64, roundness: f64) -> Affine {
     let t = angle.to_radians();
     let u = Vec2::new(t.cos(), -t.sin());
     let v = Vec2::new(-u.y, u.x);
-    let r = roundness.clamp(1.0, 100.0) / 100.0;
+    let r = roundness / 100.0;
     let (xx, xy, yy) = (u.x * u.x + r * v.x * v.x, u.x * u.y + r * v.x * v.y, u.y * u.y + r * v.y * v.y);
     Affine::new([xx, xy, xy, yy, 0.0, 0.0])
 }
@@ -246,7 +256,15 @@ pub fn eraser_tip(angle: f64, roundness: f64) -> Affine {
 /// `roundness`) covers along `pts`: a round stroke along the points squashed by the tip's map,
 /// stretched back.
 pub fn eraser_area(pts: &[Point], size: f64, angle: f64, roundness: f64) -> PathData {
-    let stretch = eraser_tip(angle, roundness);
+    swept_tip_area(pts, size, eraser_tip(angle, roundness))
+}
+
+/// The filled area covered by a Blob Brush's page-oriented elliptical tip.
+pub fn blob_area(pts: &[Point], size: f64, angle: f64, roundness: f64) -> PathData {
+    swept_tip_area(pts, size, blob_tip(angle, roundness))
+}
+
+fn swept_tip_area(pts: &[Point], size: f64, stretch: Affine) -> PathData {
     let squash = stretch.inverse();
     let mut round: Vec<Point> = pts.iter().map(|p| squash * *p).collect();
     if let [p] = round[..] {

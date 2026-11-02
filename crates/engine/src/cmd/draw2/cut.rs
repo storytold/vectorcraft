@@ -272,7 +272,7 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     let angle = number_or(p, "angle", 0.0, C)?;
     let roundness = number_or(p, "roundness", 100.0, C)?;
     let pressure = size_pressure(p, &samples, C)?;
-    let pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
+    let pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
     let r = size / 2.0;
     // The tip's short axis (its narrowest with Pressure): an open path is sampled at least every half of it.
     let narrowest = pressure.as_ref().map_or(size, |(_, v)| vectorcraft_tools::draw2::pressure_size(size, *v, 0.0));

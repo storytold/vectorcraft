@@ -203,7 +203,8 @@ fn shift_clicking_a_chip_opens_the_mixer_on_that_row() {
     // The chip sits 52 pt right of the label's start (label at EYE_W + 24, chip at EYE_W + 76).
     let label = text_rect(&texts, "Fill:");
     click_with(&ctx, &mut app, egui::pos2(label.left() + 52.0 + 9.0, label.center().y), egui::Modifiers::SHIFT);
-    assert_eq!(app.ui.open_panel.as_deref(), Some("color"));
+    // The Color panel opens as the row's popup.
+    assert_eq!(app.ui.transient_panel.as_deref(), Some("color"));
     assert_eq!(app.session.appearance_item(), Some(0));
 }
 

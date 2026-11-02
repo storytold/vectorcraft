@@ -462,9 +462,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
     let paint = if span { placed_across(&s.doc()?.doc, &ids, paint, p, fill) } else { paint };
-    // The gradient mesh point last clicked with the Mesh tool or Direct Selection: a solid fill
-    // recolours just that point of its mesh.
-    let mesh_point = if fill && matches!(paint, Paint::Solid { .. }) { focused_mesh_point(s) } else { None };
+    // The gradient mesh points picked with the Mesh tool or Direct Selection: a solid fill
+    // recolours just those points of their meshes.
+    let mesh_points = if fill && matches!(paint, Paint::Solid { .. }) { picked_mesh_points(s, &ids) } else { vec![] };
     // Without `item`, unless the Appearance panel's active fill item takes the paint.
     let colorized = if fill && p.get("item").is_none() && item == ItemTarget::Top {
         colorized_images(&s.doc()?.doc, &ids, &paint).map_err(|e| bad(cmd, e))?
@@ -486,11 +486,14 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
             }
             if index.is_none()
                 && let Paint::Solid { color, .. } = &paint
-                && let Some((_, i)) = mesh_point.filter(|(id, _)| *id == n.id)
+                && let Some((_, points)) = mesh_points.iter().find(|(id, _)| *id == n.id)
                 && let NodeKind::Mesh(m) = &mut n.kind
-                && let Some(q) = m.points.get_mut(i)
             {
-                q.color = *color;
+                for i in points {
+                    if let Some(q) = m.points.get_mut(*i) {
+                        q.color = *color;
+                    }
+                }
                 return Ok(());
             }
             if index.is_none()
@@ -678,6 +681,11 @@ pub(super) fn check_colorized_kept(was_ok: bool, d: &Document) -> std::result::R
     if was_ok { check_colorized(d) } else { Ok(()) }
 }
 
+/// Is `e` the refusal of [`check_colorized`]?
+pub(super) fn is_colorize_refusal(e: &EngineError) -> bool {
+    e.to_string().contains(PROCESS_ON_TRANSPARENCY)
+}
+
 /// Is `c` black or white (white, or black alone at 100%)?
 fn black_or_white(c: &Color) -> bool {
     let (none, full) = (|v: f32| v <= 0.0, |v: f32| v >= 1.0);
@@ -689,20 +697,31 @@ fn black_or_white(c: &Color) -> bool {
     }
 }
 
-/// The mesh point the active tool has focused (its `meshPoint` option: the Mesh tool's or Direct
-/// Selection's point last clicked).
-fn focused_mesh_point(s: &Session) -> Option<(NodeId, usize)> {
+/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's or Direct
+/// Selection's) on the gradient meshes among `ids`, in range, each mesh with its points.
+fn picked_mesh_points(s: &Session, ids: &[NodeId]) -> Vec<(NodeId, Vec<usize>)> {
     let o = s.tool_options();
-    let pt = o.get("meshPoint")?;
-    Some((NodeId(pt.get("id")?.as_u64()?), usize::try_from(pt.get("index")?.as_u64()?).ok()?))
+    let (Some(picked), Ok(st)) = (o.get("meshPoints").and_then(Value::as_array), s.doc()) else { return vec![] };
+    let mut out: Vec<(NodeId, Vec<usize>)> = vec![];
+    for pt in picked {
+        let (Some(id), Some(index)) = (pt.get("id").and_then(Value::as_u64).map(NodeId), pt.get("index").and_then(Value::as_u64)) else { continue };
+        let Ok(index) = usize::try_from(index) else { continue };
+        if !ids.contains(&id) || !matches!(st.doc.node(id).map(|n| &n.kind), Some(NodeKind::Mesh(m)) if index < m.points.len()) {
+            continue;
+        }
+        match out.iter_mut().find(|(m, _)| *m == id) {
+            Some((_, v)) => v.push(index),
+            None => out.push((id, vec![index])),
+        }
+    }
+    out
 }
 
-/// The focused mesh point (see [`focused_mesh_point`]) with its opacity, when `ids` is just the
-/// gradient mesh it belongs to.
-pub(crate) fn focused_mesh_point_of(s: &Session, ids: &[NodeId]) -> Option<(NodeId, usize, f32)> {
-    let (id, index) = focused_mesh_point(s).filter(|(id, _)| ids == [*id])?;
-    let NodeKind::Mesh(m) = &s.doc().ok()?.doc.node(id)?.kind else { return None };
-    Some((id, index, m.points.get(index)?.opacity))
+/// The picked gradient mesh points (see [`picked_mesh_points`]) when each of `ids` is a gradient
+/// mesh with points picked: the Transparency panel's opacity is theirs then.
+pub(crate) fn picked_mesh_points_of(s: &Session, ids: &[NodeId]) -> Option<Vec<(NodeId, Vec<usize>)>> {
+    let v = picked_mesh_points(s, ids);
+    (!ids.is_empty() && ids.iter().all(|id| v.iter().any(|(m, _)| m == id))).then_some(v)
 }
 
 /// A type run's stroke; a painted stroke on a run without one gets 1 pt.
@@ -821,7 +840,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             })?;
             (json!({ "changed": changed }), Some(index))
         }
-        // The proxy's colours only: images and pattern tiles stay as they are.
+        // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
             (super::colorcmds::recolor(s, &q, label, f)?, None)
@@ -848,15 +867,16 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     q.remove("item");
     q.remove("id");
     q.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
-    // The gradient mesh point last clicked with the Mesh tool or Direct Selection takes the
-    // opacity itself, so only the mesh around it fades (#4206).
+    // The gradient mesh points picked with the Mesh tool or Direct Selection take the opacity
+    // themselves, so only the mesh around them fades (#4206, #4170, #4208).
     if matches!(item, ItemTarget::Top)
         && let Some(o) = q.get("opacity").and_then(Value::as_f64)
-        && let Some((id, index, _)) = focused_mesh_point_of(s, &ids)
+        && let Some(points) = picked_mesh_points_of(s, &ids)
     {
         q.remove("opacity");
         let opacity = f64::from(super::opacitymask::percent(o));
-        s.execute("object.mesh.setPointColor", &json!({"id": id.0, "index": index, "opacity": opacity}))?;
+        let items: Vec<Value> = points.iter().map(|(id, v)| json!({"id": id.0, "points": v})).collect();
+        s.execute("object.mesh.setPointColor", &json!({"items": items, "opacity": opacity}))?;
         if q.keys().all(|k| k == "ids") {
             return ok();
         }

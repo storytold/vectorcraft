@@ -18,6 +18,325 @@ fn run(text: &str, size: f64) -> TextRun {
     TextRun { text: text.into(), style: style(size), inline: None }
 }
 
+#[test]
+fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let mut t = TextObject::point(Point::ZERO, "III", st);
+    let advance = |t: &TextObject| layout(db(), t).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let optical = advance(&t);
+    let mut plain = t.clone();
+    plain.runs[0].style.kerning = Some(0.0);
+    let unkerned = advance(&plain);
+    assert!((optical[0] - unkerned[0]).abs() > 0.1, "Optical changes the monospaced pair");
+    edit::style_range(&mut t.runs, 1, 2, |s| s.fill = vectorcraft_doc::color::Paint::solid(vectorcraft_doc::color::Color::rgb(1.0, 0.0, 0.0)));
+    let painted = advance(&t);
+    assert!((painted[0] - optical[0]).abs() < 0.01, "paint does not interrupt Optical");
+    edit::style_range(&mut t.runs, 0, 1, |s| s.kerning = Some(0.0));
+    let manual = advance(&t);
+    assert!((manual[0] - unkerned[0]).abs() < 0.01);
+    assert!((manual[1] - optical[1]).abs() < 0.01, "the next pair remains Optical");
+    edit::style_range(&mut t.runs, 0, 3, |s| s.tracking = 100.0);
+    let tracked = advance(&t);
+    assert!((tracked[0] - manual[0] - 10.0).abs() < 0.01);
+    assert!((tracked[1] - manual[1] - 10.0).abs() < 0.01);
+
+    for text in ["I I", "I\u{301}"] {
+        let sample = TextObject::point(Point::ZERO, text, CharStyle { kerning: None, ..t.runs[0].style.clone() });
+        let mut zero = sample.clone();
+        zero.runs[0].style.kerning = Some(0.0);
+        assert_eq!(advance(&sample), advance(&zero), "spaces and marks inside a cluster have no Optical correction");
+    }
+    let mut vertical = TextObject::point(Point::ZERO, "II", CharStyle { kerning: None, ..t.runs[0].style.clone() });
+    vertical.vertical = true;
+    let mut vertical_zero = vertical.clone();
+    vertical_zero.runs[0].style.kerning = Some(0.0);
+    assert_eq!(advance(&vertical), advance(&vertical_zero), "vertical type keeps a neutral correction");
+    let rtl = TextObject::point(Point::ZERO, "אב", CharStyle { kerning: None, ..t.runs[0].style.clone() });
+    let rtl_advances = advance(&rtl);
+    assert!(rtl_advances.len() >= 2 && rtl_advances.iter().all(|v| v.is_finite()));
+    let mut rtl_zero = rtl.clone();
+    rtl_zero.runs[0].style.kerning = Some(0.0);
+    assert!((rtl_advances[1] - advance(&rtl_zero)[1]).abs() <= 25.0, "right-to-left Optical corrections remain bounded");
+    let mut rtl_manual = rtl.clone();
+    edit::style_range(&mut rtl_manual.runs, 0, 2, |s| s.kerning = Some(200.0));
+    let mut rtl_pair_zero = rtl.clone();
+    edit::style_range(&mut rtl_pair_zero.runs, 0, 2, |s| s.kerning = Some(0.0));
+    let pair_advance = |t: &TextObject| layout(db(), t).glyphs.iter().find(|g| g.byte == 0).map(|g| g.advance).unwrap();
+    assert!((pair_advance(&rtl_pair_zero) - pair_advance(&rtl_zero)).abs() < 0.01, "manual zero replaces the right-to-left Optical correction");
+    assert!((pair_advance(&rtl_manual) - pair_advance(&rtl_pair_zero) - 20.0).abs() < 0.01, "manual spacing changes the adjacent right-to-left pair");
+}
+
+#[test]
+fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
+    for optical_kerning in [false, true] {
+        // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet carries the kerning.
+        let base = CharStyle { size: 100.0, optical_kerning, ..CharStyle::default() };
+        let kerned = |value: f64| {
+            let mut t = TextObject::point(Point::ZERO, "אבג", base.clone());
+            edit::style_range(&mut t.runs, 2, 4, |s| s.kerning = Some(value));
+            layout(db(), &t)
+        };
+        let ink = |lay: &TextLayout, byte: usize| {
+            let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+            assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+            (g.xf * Point::ZERO).x
+        };
+        let (plain, spaced) = (kerned(0.0), kerned(200.0));
+        let gap = |lay: &TextLayout, right: usize, left: usize| ink(lay, right) - ink(lay, left);
+        assert!(
+            (gap(&spaced, 2, 4) - gap(&plain, 2, 4) - 20.0).abs() < 0.01,
+            "kerning on bet spaces it from gimel, after it in reading order (Optical: {optical_kerning})"
+        );
+        assert!(
+            (gap(&spaced, 0, 2) - gap(&plain, 0, 2)).abs() < 0.01,
+            "alef, before bet in reading order, keeps its place (Optical: {optical_kerning})"
+        );
+        // The caret between bet and gimel stays at gimel: the new space is on bet's side of it.
+        let caret = |lay: &TextLayout| caret_position(lay, 4).0.x;
+        assert!((caret(&spaced) - ink(&spaced, 4) - (caret(&plain) - ink(&plain, 4))).abs() < 0.01);
+        assert!((ink(&spaced, 2) - caret(&spaced) - (ink(&plain, 2) - caret(&plain)) - 20.0).abs() < 0.01);
+    }
+}
+
+#[test]
+fn rtl_manual_kerning_on_a_rotated_character_moves_it_along_the_baseline() {
+    // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet is turned 90 degrees and
+    // carries the kerning.
+    let kerned = |value: f64| {
+        let mut t = TextObject::point(Point::ZERO, "אבג", CharStyle { size: 100.0, ..CharStyle::default() });
+        edit::style_range(&mut t.runs, 2, 4, |s| {
+            s.kerning = Some(value);
+            s.rotation = 90.0;
+        });
+        layout(db(), &t)
+    };
+    let origin = |lay: &TextLayout, byte: usize| {
+        let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+        assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+        g.xf * Point::ZERO
+    };
+    let (plain, spaced) = (kerned(0.0), kerned(200.0));
+    let moved = origin(&spaced, 2) - origin(&plain, 2);
+    let gimel = origin(&spaced, 4) - origin(&plain, 4);
+    assert!((moved.x - gimel.x - 20.0).abs() < 0.01, "kerning on the turned bet spaces it from gimel along the line: {moved:?}, {gimel:?}");
+    assert!(moved.y.abs() < 0.01, "the turned bet stays on its baseline: {moved:?}");
+    let alef = origin(&spaced, 0) - origin(&plain, 0);
+    assert!((alef.x - moved.x).abs() < 0.01 && alef.y.abs() < 0.01, "alef keeps its place next to bet: {alef:?}");
+}
+
+#[test]
+fn optical_pair_skips_an_invisible_soft_hyphen_with_an_outline() {
+    use crate::test_fonts::{SOFT_HYPHEN_OUTLINE_FAMILY, soft_hyphen_outline_font};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(soft_hyphen_outline_font().unwrap()), 1);
+    let style = CharStyle { font_family: SOFT_HYPHEN_OUTLINE_FAMILY.into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let face = db.style_face(&style).unwrap();
+    assert_ne!(face.glyph_for('\u{00AD}'), 0);
+    assert_eq!(face.glyph_for('\u{00AD}'), face.glyph_for('-'));
+    let paired = layout(&db, &TextObject::point(Point::ZERO, "AV", style.clone()));
+    let separated = layout(&db, &TextObject::point(Point::ZERO, "A\u{00AD}V", style.clone()));
+    let mut manual = style;
+    manual.kerning = Some(0.0);
+    let plain = layout(&db, &TextObject::point(Point::ZERO, "A\u{00AD}V", manual));
+
+    assert!((paired.glyphs[0].advance - plain.glyphs[0].advance).abs() > 0.1, "A-V has an Optical correction");
+    // A keeps its uncorrected advance because neither pair across the invisible glyph is measured.
+    assert!((separated.glyphs[0].advance - plain.glyphs[0].advance).abs() < 0.01);
+    assert!(separated.glyphs.iter().filter(|g| g.byte == 1).all(|g| g.advance == 0.0), "the soft hyphen remains zero width if emitted");
+    let v = |lay: &TextLayout| lay.glyphs.iter().find(|g| g.byte == 3).unwrap().origin.x;
+    assert!((v(&separated) - v(&plain)).abs() < 0.01, "the soft hyphen adds no spacing");
+}
+
+#[test]
+fn optical_pair_after_separate_combining_mark_uses_base_outline() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |text: &str, manual: bool| {
+        let mut style = st.clone();
+        if manual {
+            style.kerning = Some(0.0);
+        }
+        layout(db(), &TextObject::point(Point::ZERO, text, style)).glyphs.iter().map(|g| (g.byte, g.advance)).collect::<Vec<_>>()
+    };
+    let plain = advances("II", false);
+    let plain_zero = advances("II", true);
+    let accented = advances("I\u{30d}I", false);
+    let accented_zero = advances("I\u{30d}I", true);
+    assert_eq!(accented.len(), 3, "the accent has its own glyph");
+    assert_eq!(accented[0].0, accented[1].0, "the base and mark share a cluster");
+    assert!((accented[0].1 - accented_zero[0].1).abs() < 0.01, "the base keeps its advance");
+    let correction = accented[1].1 - accented_zero[1].1;
+    assert!((correction - (plain[0].1 - plain_zero[0].1)).abs() < 0.01, "the marked cluster uses the base outline");
+    assert!(correction.abs() > 0.1, "Optical adjusts the pair after the accent");
+}
+
+#[test]
+fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
+    let st = CharStyle { font_family: "Noto Sans Arabic".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let shaped = |text: &str, manual: bool| {
+        let mut style = st.clone();
+        if manual {
+            style.kerning = Some(0.0);
+        }
+        layout(db(), &TextObject::point(Point::ZERO, text, style)).glyphs.iter().map(|g| (g.byte, g.advance)).collect::<Vec<_>>()
+    };
+    let plain = shaped("بب", false);
+    let plain_zero = shaped("بب", true);
+    let marked = shaped("بَب", false);
+    let marked_zero = shaped("بَب", true);
+    let marked_cluster = marked.iter().filter(|g| g.0 == 0).collect::<Vec<_>>();
+    assert_eq!(marked_cluster.len(), plain.iter().filter(|g| g.0 == 0).count() + 1, "the mark has its own glyph in the base cluster");
+    assert_eq!(marked_cluster.first().unwrap().1, 0.0, "the cluster starts with a nonspacing glyph");
+    assert!(marked_cluster.last().unwrap().1 > 0.0, "the base follows the mark");
+    let correction = marked.iter().filter(|g| g.0 == 4).map(|g| g.1).sum::<f64>() - marked_zero.iter().filter(|g| g.0 == 4).map(|g| g.1).sum::<f64>();
+    let plain_correction =
+        plain.iter().filter(|g| g.0 == 2).map(|g| g.1).sum::<f64>() - plain_zero.iter().filter(|g| g.0 == 2).map(|g| g.1).sum::<f64>();
+    assert!(plain_correction.abs() > 0.1, "Optical adjusts the unmarked pair");
+    assert!((correction - plain_correction).abs() < 0.01, "the marked cluster uses the base outline");
+}
+
+#[test]
+fn recurring_optical_pairs_have_equal_corrections() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let text = "II".repeat(50);
+    let optical = layout(db(), &TextObject::point(Point::ZERO, &text, st.clone())).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let zero = layout(db(), &TextObject::point(Point::ZERO, &text, CharStyle { kerning: Some(0.0), ..st }))
+        .glyphs
+        .iter()
+        .map(|g| g.advance)
+        .collect::<Vec<_>>();
+    assert_eq!(optical.len(), zero.len());
+    let correction = optical[0] - zero[0];
+    assert!(correction.abs() > 0.1);
+    for i in 1..optical.len() - 1 {
+        assert_eq!(optical[i] - zero[i], correction, "pair {i} has the same correction");
+    }
+}
+
+#[test]
+fn metrics_pair_survives_transition_to_optical() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "AVV", st);
+    let advances = |text: &TextObject| layout(db(), text).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let metrics = advances(&text);
+    let mut unkerned = text.clone();
+    unkerned.runs[0].style.kerning = Some(0.0);
+    assert!((metrics[0] - advances(&unkerned)[0]).abs() > 0.1, "the font supplies an AV pair");
+    edit::style_range(&mut text.runs, 1, 3, |s| s.optical_kerning = true);
+    let mixed = advances(&text);
+    assert!((mixed[0] - metrics[0]).abs() < 0.01, "the metrics AV pair crosses the mode change");
+    let mut optical = TextObject::point(Point::ZERO, "VV", text.runs[1].style.clone());
+    let optical_pair = advances(&optical)[0];
+    optical.runs[0].style.kerning = Some(0.0);
+    assert!((mixed[1] - optical_pair).abs() < 0.01, "the first Optical V keeps its next pair");
+    assert!((mixed[1] - advances(&optical)[0]).abs() > 0.1, "Optical corrects the next pair");
+}
+
+#[test]
+fn manual_pair_before_optical_does_not_gain_font_kerning() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "AVA", st);
+    edit::style_range(&mut text.runs, 1, 2, |s| s.kerning = Some(0.0));
+    edit::style_range(&mut text.runs, 2, 3, |s| s.optical_kerning = true);
+    let mixed = layout(db(), &text).glyphs[1].advance;
+    let mut unkerned = TextObject::point(Point::ZERO, "VA", text.runs[1].style.clone());
+    unkerned.runs[0].style.kerning = Some(0.0);
+    let manual = layout(db(), &unkerned).glyphs[0].advance;
+    assert!((mixed - manual).abs() < 0.01, "manual V keeps its unkerned pair with Optical A");
+}
+
+#[test]
+fn optical_pair_uses_drawn_baseline() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "II", st);
+    let first = |text: &TextObject| layout(db(), text).glyphs[0].advance;
+    let normal = first(&text);
+    edit::style_range(&mut text.runs, 1, 2, |s| s.baseline_shift = 80.0);
+    let shifted = first(&text);
+    assert!((shifted - normal).abs() > 0.1, "a displaced outline changes the Optical correction");
+}
+
+#[test]
+fn optical_pair_skips_rotated_glyphs() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "II", st);
+    let first = |text: &TextObject| layout(db(), text).glyphs[0].advance;
+    let unrotated = first(&text);
+    let mut plain = text.clone();
+    plain.runs[0].style.kerning = Some(0.0);
+    assert!((unrotated - first(&plain)).abs() > 0.1, "the unrotated pair has an Optical correction");
+    edit::style_range(&mut text.runs, 1, 2, |s| s.rotation = 20.0);
+    let rotated = first(&text);
+    let mut manual_zero = text.clone();
+    edit::style_range(&mut manual_zero.runs, 0, 1, |s| s.kerning = Some(0.0));
+    assert!((rotated - first(&manual_zero)).abs() < 0.01, "rotated pairs keep their uncorrected advance");
+}
+
+#[test]
+fn optical_shaping_keeps_manual_value_on_first_run() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, optical_kerning: true, kerning: Some(0.0), ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "AVA", st);
+    let zero = layout(db(), &text).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    edit::style_range(&mut text.runs, 0, 1, |s| s.kerning = Some(120.0));
+    let manual = layout(db(), &text).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    assert!((manual[0] - zero[0] - 12.0).abs() < 0.01, "the first run adds its manual value");
+    assert!((manual[1] - zero[1]).abs() < 0.01, "the following run keeps its advance");
+}
+
+#[test]
+fn ordinary_and_vertical_segments_keep_their_spacing() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, kerning: Some(100.0), ..CharStyle::default() };
+    let plain = TextObject::point(Point::ZERO, "AVA", st);
+    let advances = |text: &TextObject| layout(db(), text).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let expected = advances(&plain);
+    let mut split = plain.clone();
+    edit::style_range(&mut split.runs, 1, 2, |s| s.fill = vectorcraft_doc::color::Paint::solid(vectorcraft_doc::color::Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(advances(&split), expected, "a non-Optical segment keeps the same spacing across runs");
+
+    let mut vertical = plain;
+    vertical.vertical = true;
+    let expected = advances(&vertical);
+    edit::style_range(&mut vertical.runs, 0, 1, |s| s.kerning = Some(120.0));
+    let manual = advances(&vertical);
+    assert!((manual[0] - expected[0] - 2.0).abs() < 0.01, "vertical manual spacing changes only its own advance");
+    edit::style_range(&mut vertical.runs, 0, 3, |s| s.optical_kerning = true);
+    assert_eq!(advances(&vertical), manual, "vertical type keeps its spacing with Optical selected");
+}
+
+#[test]
+fn optical_spacing_works_without_font_pair_tables() {
+    use crate::test_fonts::{NO_PAIR_KERNING_FAMILY, no_pair_kerning_font};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(no_pair_kerning_font().unwrap()), 1);
+    let st = CharStyle { font_family: NO_PAIR_KERNING_FAMILY.into(), size: 100.0, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "AV", st);
+    let metrics = layout(&db, &text).glyphs[0].advance;
+    text.runs[0].style.kerning = Some(0.0);
+    let manual_zero = layout(&db, &text).glyphs[0].advance;
+    assert!((metrics - manual_zero).abs() < 0.01, "the font has no automatic pair correction");
+    text.runs[0].style.kerning = None;
+    text.runs[0].style.optical_kerning = true;
+    let optical = layout(&db, &text).glyphs[0].advance;
+    assert!((optical - manual_zero).abs() > 0.1, "Optical uses outlines without a pair table");
+}
+
+#[test]
+fn manual_pair_positions_match_under_auto_and_optical_in_both_directions() {
+    use crate::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(right_to_left_optical_font().unwrap()), 1);
+    for (letters, family) in [("AV", "Source Sans 3"), ("אב", RIGHT_TO_LEFT_OPTICAL_FAMILY)] {
+        let mut text = TextObject::point(Point::ZERO, letters, CharStyle { font_family: family.into(), size: 100.0, ..CharStyle::default() });
+        edit::style_range(&mut text.runs, 0, letters.chars().next().unwrap().len_utf8(), |s| s.kerning = Some(200.0));
+        let positions = |text: &TextObject| layout(&db, text).glyphs.iter().map(|g| (g.byte, g.origin, g.advance)).collect::<Vec<_>>();
+        let auto = positions(&text);
+        edit::style_range(&mut text.runs, 0, letters.len(), |s| s.optical_kerning = true);
+        assert_eq!(positions(&text), auto, "{letters}: manual pair has the same positions in both modes");
+    }
+}
+
 fn area_path(text: &str, st: CharStyle, frame: &BezPath, justify: Justify) -> TextObject {
     let mut t = TextObject::point(Point::ZERO, text, st);
     t.kind = TextKind::Area { frame: PathData::from_bezpath(frame) };
@@ -196,6 +515,39 @@ fn hit_testing_picks_the_right_column() {
     }
 }
 
+/// Area Type Options › Text Flow (#4978): by columns (the default) the second cell is the one
+/// below the first; by rows it is the one beside it.
+#[test]
+fn text_flow_fills_the_cells_by_columns_or_by_rows() {
+    let t = area(&COPY.repeat(8), style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    let grid = LayoutOptions { rows: 2, columns: 2, gutter: 20.0, ..Default::default() };
+    for (flow, second) in [(TextFlow::Columns, (0.0, 160.0)), (TextFlow::Rows, (220.0, 0.0))] {
+        let l = layout_with(db(), &t, &LayoutOptions { flow, ..grid.clone() });
+        let frame = l.frames.get(1).copied().unwrap();
+        assert_eq!((frame.x0, frame.y0), second, "{flow:?}");
+        let line = l.lines.iter().find(|li| li.region == 1).expect("text reaches the second cell");
+        assert!(line.x0 >= second.0 - 1e-6 && line.baseline >= second.1, "{flow:?}: {line:?}");
+        assert!(l.lines.iter().all(|li| l.lines.iter().all(|m| m.region >= li.region || m.start <= li.start)), "{flow:?}: text runs in cell order");
+    }
+    // The object's own option lays out the same way.
+    let mut by_rows = t.clone();
+    (by_rows.area.rows, by_rows.area.columns, by_rows.area.gutter, by_rows.area.flow) = (2, 2, 20.0, TextFlow::Rows);
+    assert_eq!(layout(db(), &by_rows).frames.get(1).map(|f| (f.x0, f.y0)), Some((220.0, 0.0)));
+}
+
+/// A gutter between rows of its own: the rows are that far apart, and the columns keep the gutter.
+#[test]
+fn rows_can_have_a_gutter_of_their_own() {
+    let mut t = area(&COPY.repeat(8), style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (2, 2, 20.0, Some(40.0));
+    let cells: Vec<(f64, f64, f64, f64)> = layout(db(), &t).frames.iter().map(|f| (f.x0, f.y0, f.x1, f.y1)).collect();
+    // By columns: down the first column, then the second; (300 − 40) / 2 tall, (420 − 20) / 2 wide.
+    assert_eq!(cells, [(0.0, 0.0, 200.0, 130.0), (0.0, 170.0, 200.0, 300.0), (220.0, 0.0, 420.0, 130.0), (220.0, 170.0, 420.0, 300.0)]);
+    // Without one, the rows take the gutter too.
+    t.area.row_gutter = None;
+    assert_eq!(layout(db(), &t).frames.get(1).map(|f| f.y0), Some(160.0));
+}
+
 // ---------- area flow ----------
 
 #[test]
@@ -308,6 +660,31 @@ fn frames_and_wrap_shapes_beyond_a_billion_points_are_left_out() {
         assert_eq!(line_places(&wrapped(boxed(150.0, 300.0, 200.0, far))), line_places(&unwrapped), "{far}");
     }
     assert_eq!(line_places(&wrapped(Rect::new(150.0, 0.0, 300.0, f64::NAN).to_path(0.1))), line_places(&unwrapped));
+}
+
+/// Area type whose frame a wrap object covers sets no line and overflows. Area type wrapped around
+/// a shape of 10,000 anchors sets its lines beside the shape.
+#[test]
+fn a_frame_a_wrap_object_covers_overflows_and_a_complex_wrap_shape_is_laid_out() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    let mut wrapped = |path: BezPath| {
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&path), wrap: Default::default() }];
+        layout_soon(&t)
+    };
+    let covered = wrapped(Rect::new(-10.0, -10.0, 310.0, 210.0).to_path(0.1));
+    assert!(covered.lines.is_empty() && covered.overflow, "{:?}", line_places(&covered));
+    // A zigzag between x = 150 and 160 down the frame, closed along its right half.
+    let mut zigzag = BezPath::new();
+    zigzag.move_to((150.0, 0.0));
+    for i in 1..10_000 {
+        zigzag.line_to((if i % 2 == 0 { 150.0 } else { 160.0 }, 200.0 * i as f64 / 10_000.0));
+    }
+    zigzag.line_to((300.0, 200.0));
+    zigzag.line_to((300.0, 0.0));
+    zigzag.close_path();
+    let beside = wrapped(zigzag);
+    assert!(!beside.lines.is_empty(), "no line was set");
+    assert!(beside.lines.iter().all(|li| li.x1 <= 160.0), "{:?}", line_places(&beside));
 }
 
 /// Layout steps a line down a frame (or a row or column of one) at most 100,000 times to find room
@@ -1147,6 +1524,51 @@ fn restyling_one_character_keeps_its_kerning_with_its_neighbors() {
     edit::style_range(&mut t.runs, 6, 7, |s| s.leading = Some(60.0));
     let l = layout(db(), &t);
     assert!((l.lines[1].baseline - l.lines[0].baseline - 60.0).abs() < 1e-9, "{:?}", l.lines);
+}
+
+/// Baseline shift moves a rotated character up from its line by the shift, at any rotation, in
+/// point type and on a slanted path, and leaves its neighbors where they are. It turns about its
+/// pen position moved by the shift (`xf * pivot`), and `xf * unturned` still places the shifted
+/// glyph without its rotation.
+#[test]
+fn baseline_shift_moves_a_rotated_character_across_its_line() {
+    let slanted = vectorcraft_geom::PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (300.0, -300.0)).to_path(1e-3));
+    for on_path in [false, true] {
+        for rotation in [0.0, 45.0, 85.0, 90.0, 95.0, -90.0] {
+            let at = |shift: f64| {
+                let mut t = avav(1, |s| {
+                    s.rotation = rotation;
+                    s.baseline_shift = shift;
+                });
+                if on_path {
+                    t.kind = TextKind::OnPath { path: slanted.clone(), start: 0.0, end: None };
+                }
+                layout(db(), &t)
+            };
+            let (plain, shifted) = (at(0.0), at(10.0));
+            let pen = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.xf * Point::ZERO).unwrap();
+            let v = plain.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let up = kurbo::Vec2::new(v.angle.sin(), -v.angle.cos());
+            let moved = pen(&shifted, 1) - pen(&plain, 1);
+            assert!((moved - up * 10.0).hypot() < 1e-6, "on a path {on_path}, {rotation}°: {moved:?}, up {up:?}");
+            for byte in [0, 2, 3] {
+                assert!((pen(&shifted, byte) - pen(&plain, byte)).hypot() < 1e-6, "on a path {on_path}, {rotation}°: byte {byte} moved");
+            }
+            let g = shifted.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let turn_at = g.xf * g.pivot;
+            assert!((turn_at - (v.origin + up * 10.0)).hypot() < 1e-6, "on a path {on_path}, {rotation}°: turns about {turn_at:?}");
+            let unrotated = layout(db(), &{
+                let mut t = avav(1, |s| s.baseline_shift = 10.0);
+                if on_path {
+                    t.kind = TextKind::OnPath { path: slanted.clone(), start: 0.0, end: None };
+                }
+                t
+            });
+            let u = unrotated.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let (a, b) = ((g.xf * g.unturned).as_coeffs(), u.xf.as_coeffs());
+            assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "on a path {on_path}, {rotation}°: {a:?} vs {b:?}");
+        }
+    }
 }
 
 #[test]

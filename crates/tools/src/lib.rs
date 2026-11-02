@@ -7,6 +7,7 @@
 //! by the control channel and MCP, and keeps tools testable without a UI.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 pub mod bbox;
 pub mod builder;
 pub mod catalog;
@@ -55,9 +56,9 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
-pub use input::{Action, Mods, PointerEvent, PointerKind, ToolKey};
+pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]
@@ -291,6 +292,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| intertwine::create(other))
             .or_else(|| objects_on_path::create(other))
             .or_else(|| touchtype::create(other))
+            .or_else(|| addons::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }
@@ -463,6 +465,7 @@ pub(crate) mod testutil {
             snap_tangent: true,
             snap_perpendicular: true,
             snap_to_glyph: false,
+            glyph_snap: GlyphSnap::default(),
             corner_widgets: true,
             fill_active: true,
             gradient_stop: None,
@@ -504,6 +507,7 @@ pub(crate) mod testutil {
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            precise_cursors: false,
         }
     }
 }
@@ -550,7 +554,13 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            assert_eq!(c.stand_in(), Some(if id == "mesh" { Cursor::PenAdd } else { Cursor::Crosshair }), "{id}");
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            let stand_in = match id {
+                "mesh" => Some(Cursor::PenAdd),
+                "blobBrush" | "eraser" => None,
+                _ => Some(Cursor::Crosshair),
+            };
+            assert_eq!(c.stand_in(), stand_in, "{id}");
         }
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
