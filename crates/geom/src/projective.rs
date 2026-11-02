@@ -90,13 +90,7 @@ impl Homography {
         if !self.is_finite() {
             return false;
         }
-        let f = self.0.map(|row| row.map(frexp));
-        // The columns each of the six products takes from rows 0, 1 and 2, and its sign.
-        let cols = [(0, 1, 2, 1.0), (0, 2, 1, -1.0), (1, 0, 2, -1.0), (1, 2, 0, 1.0), (2, 0, 1, 1.0), (2, 1, 0, -1.0)];
-        let terms = cols.map(|(a, b, c, sign)| {
-            let (a, b, c) = (f[0][a], f[1][b], f[2][c]);
-            (sign * a.0 * b.0 * c.0, a.1 + b.1 + c.1)
-        });
+        let terms = self.det_terms();
         let Some(e) = terms.iter().filter(|(m, _)| *m != 0.0).map(|(_, e)| *e).max() else {
             return false;
         };
@@ -104,6 +98,18 @@ impl Homography {
         let largest = terms.iter().fold(0.0_f64, |k, v| k.max(v.abs()));
         let d: f64 = terms.iter().sum();
         d.abs() > 1e-15 * largest
+    }
+
+    /// The six signed products the determinant sums, each as a mantissa product and an exponent
+    /// sum.
+    fn det_terms(&self) -> [(f64, i32); 6] {
+        let f = self.0.map(|row| row.map(frexp));
+        // The columns each of the six products takes from rows 0, 1 and 2, and its sign.
+        let cols = [(0, 1, 2, 1.0), (0, 2, 1, -1.0), (1, 0, 2, -1.0), (1, 2, 0, 1.0), (2, 0, 1, 1.0), (2, 1, 0, -1.0)];
+        cols.map(|(a, b, c, sign)| {
+            let (a, b, c) = (f[0][a], f[1][b], f[2][c]);
+            (sign * a.0 * b.0 * c.0, a.1 + b.1 + c.1)
+        })
     }
 
     /// The same map with every entry divided by one power of two, chosen so that the largest of the
@@ -128,7 +134,7 @@ impl Homography {
 
     /// Inverse; `None` when [`Self::has_significant_det`] counts the map as not invertible. The
     /// inverse is formed from the map itself when its determinant is finite, and is kept when every
-    /// entry is finite and it passes [`Self::has_significant_det`]. Otherwise it is the inverse of
+    /// entry is finite and its own determinant is not 0. Otherwise it is the inverse of
     /// [`Self::scaled`] (the exact inverse multiplied by one power of two, which is the same map),
     /// and `None` when that one fails the same checks.
     pub fn inverse(&self) -> Option<Self> {
@@ -144,9 +150,10 @@ impl Homography {
     }
 
     /// The adjugate divided by the determinant; `None` when an entry is not finite, the
-    /// determinant is 0, or the result fails [`Self::has_significant_det`]. Every cofactor and the
-    /// determinant are held as a mantissa and a power of two, so an entry of the result is lost
-    /// only when that entry itself is beyond the range of `f64`.
+    /// determinant is 0, or the result has an entry that is not finite or a determinant of 0 (its
+    /// six products, each held as a mantissa and a power of two, sum to 0, as when a row underflows
+    /// to 0). Every cofactor and the determinant are held as a mantissa and a power of two, so an
+    /// entry of the result is lost only when that entry itself is beyond the range of `f64`.
     fn adjugate_inverse(&self) -> Option<Self> {
         if !self.is_finite() {
             return None;
@@ -176,7 +183,7 @@ impl Homography {
         }
         let out = Self(out);
         // H⁻¹·(x, y, 1) = (u, v, 1)/w_H, so points in front of the camera keep w > 0.
-        out.has_significant_det().then_some(out)
+        (out.is_finite() && split_sum(&out.det_terms()).0 != 0.0).then_some(out)
     }
 
     /// `self ∘ other`: `other` first.
@@ -516,6 +523,34 @@ mod tests {
         let want = [1e300, 0.0, 0.0, 0.0, 1e-300, 0.0, 0.0, 0.0, 1e300];
         for (v, w) in inv.to_array().iter().zip(want) {
             assert!((v - w).abs() <= 1e-12 * w.abs(), "{inv:?}");
+        }
+    }
+
+    #[test]
+    fn an_invertible_map_has_an_inverse_at_any_scale() {
+        let times = |h: Homography, f: f64| Homography(h.0.map(|row| row.map(|v| v * f)));
+        // Determinant 1e-17 against a largest product of 1e-9 (and 1e-8 at 1e3 times the map): its
+        // inverse is finite, though that inverse's own determinant is near 1e-16 of its largest
+        // product.
+        let skew = Homography([[-1000.0, -1e-8, -1e-5], [0.0, 1e-4, -1e7], [1e-8, 0.0, 1e-8]]);
+        let exact = [1e5, 10.0, 1e16 + 1e8, -1e16, -1e12 + 1e4, -1e27, -1e5, -10.0, -1e16];
+        for f in [1.0, 1e3] {
+            let s = times(skew, f);
+            assert_eq!(Homography::from_array(s.to_array()), Some(s), "{f}");
+            let inv = s.inverse().unwrap_or_else(|| panic!("{f}"));
+            for (v, w) in inv.to_array().iter().zip(exact) {
+                assert!((v * f - w).abs() <= 1e-9 * w.abs(), "{f}: {inv:?}");
+            }
+            // The map times its inverse is the identity, to within the rounding of the products
+            // each entry sums (they cancel by up to 1e23 in the second row).
+            let id = s.then_after(&inv);
+            for (r, row) in id.0.iter().enumerate() {
+                for (k, v) in row.iter().enumerate() {
+                    let size: f64 = (0..3).map(|i| (s.0[r][i] * inv.0[i][k]).abs()).sum();
+                    let want = if r == k { 1.0 } else { 0.0 };
+                    assert!((v - want).abs() <= 1e-12 * size, "{f}: {id:?}");
+                }
+            }
         }
     }
 
