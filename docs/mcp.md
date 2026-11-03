@@ -1757,9 +1757,32 @@ already walks Image Trace. Short agent entry points:
   refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
   disabled where there is no open dialog (the web).
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
-  the top set) to `name` with spaces trimmed from both ends, keeps its steps, and returns `{name}`. An index past the
-  last set or action, or an empty name, is an error, and then nothing is renamed. The panel menu's Action Options…
-  runs this for the selected action.
+  the top set) to `name` with spaces trimmed from both ends, keeps its steps, function key and color, and returns
+  `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed.
+- Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?}` adds an action named `name` (spaces
+  trimmed) after the last action of set `set` (0 is the top set), starts recording into it and returns
+  `{set, action}`; Stop Playing/Recording (`ui.action.stop`) ends the recording. `key` 1 to 15 is the function key F1 to F15 that plays the
+  action (0 or null for none), with `cmd` (Ctrl, Command on macOS) and `shift`. `color` is its Button Mode color
+  (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), which the panel does not show. Action function
+  keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6
+  cannot be used. While an action is recording, and for an index past the last set,
+  an empty name, or a key or color that is not one of these, it is an error and nothing is added. The panel's Create
+  New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
+- Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at
+  `action` in set `set` and keeps its steps: `name` renames it, `key` with `cmd` and `shift` sets its function key,
+  and `color` its Button Mode color, as `ui.action.new` takes them; a param left out keeps what the action has, and
+  `cmd` or `shift` alone changes that modifier of its key. It
+  returns `{name, key, color}`. The panel menu's Action Options… runs this for the selected action. A function key
+  plays its action from the keyboard; like command shortcuts, it does nothing while a dialog, the command palette or
+  a text field has the keyboard, or while a tool is busy. Editing command shortcuts (`shortcuts.set`, Keyboard Shortcuts), loading preferences and
+  `ui.actionSet.load` preserve action function keys. When several actions have the same key, the first in panel order
+  plays. A stored key reserved on the current platform does not play an action.
+- Actions: `ui.action.play {action, set?}` plays the action named `action` as one undoable batch; `set` names the set
+  to look in (default: every set), and a `set` that is not a string is an error. A name that no action has, or that
+  more than one action in the sets looked in has, is an error, and then nothing plays.
+- Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
+  for it, else in a new action after the last action of its set, and returns `{stopped}`. With nothing recording it
+  changes nothing. The panel's Stop Playing/Recording button runs this.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the

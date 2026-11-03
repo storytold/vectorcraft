@@ -3774,6 +3774,13 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Rename Action	Canvia el nom de l’acció
+	New Action…	Acció nova…
+	New Action	Acció nova
+	Create New Action	Crea una acció nova
+	Play Action	Reprodueix l’acció
+	Action Set:	Conjunt d’accions:
+	Function Key:	Tecla de funció:
+	Record	Enregistra
 	Set Options…	Defineix les opcions…
 	Set Preference	Defineix la preferència
 	Set Slice Rectangle	Defineix el rectangle del tall
@@ -5160,6 +5167,11 @@ digits	Malayalam	Malaiàlam
 @msg	move requires an existing destination panel	per moure cal un panell de destinació existent
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Els fitxers PSD multicanal no es poden llegir: deseu-los en mode RGB, CMYK o escala de grisos
 @msg	name is empty	el nom és buit
+@msg	an action is already recording	ja s’està enregistrant una acció
+@msg	no such function key	no existeix aquesta tecla de funció
+@msg	no such color	no existeix aquest color
+@msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows
+@msg	more than one action is named “{_1}”	més d’una acció es diu “{_1}”
 @msg	name the file	poseu un nom al fitxer
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu

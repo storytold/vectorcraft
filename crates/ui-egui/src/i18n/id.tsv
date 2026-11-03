@@ -5360,6 +5360,11 @@ swatch	Bright Violet	Violet cerah
 	Export Type:	Jenis ekspor:
 	Movie Clip	Klip film
 @msg	name is empty	nama kosong
+@msg	an action is already recording	sebuah tindakan sedang direkam
+@msg	no such function key	tidak ada tombol fungsi seperti itu
+@msg	no such color	tidak ada warna seperti itu
+@msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
+@msg	more than one action is named “{_1}”	lebih dari satu tindakan bernama “{_1}”
 @msg	no symbol named `{n}`	tidak ada simbol bernama `{n}`
 	Remove Color Profile…	Hapus profil warna…
 	Color wheel	Roda warna
@@ -5639,6 +5644,13 @@ axis	Y Axis	Sumbu Y
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
 	Rename Action	Ganti nama tindakan
+	New Action…	Tindakan baru…
+	New Action	Tindakan baru
+	Create New Action	Buat tindakan baru
+	Play Action	Putar tindakan
+	Action Set:	Set tindakan:
+	Function Key:	Tombol fungsi:
+	Record	Rekam
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global

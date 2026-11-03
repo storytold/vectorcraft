@@ -8,6 +8,7 @@
 
 mod about;
 pub mod action_batch;
+pub mod action_new;
 pub mod action_set_options;
 pub mod artboard_options;
 pub mod blend_options;
@@ -361,6 +362,7 @@ registry! {
     Package: [package::KIND] => package::SPEC,
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
+    ActionNew: [action_new::KIND] => action_new::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,

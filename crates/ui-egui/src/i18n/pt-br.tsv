@@ -5482,6 +5482,11 @@ mark-style	Japanese	Japonesas
 
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
+@msg	an action is already recording	uma ação já está sendo gravada
+@msg	no such function key	tecla de função inexistente
+@msg	no such color	cor inexistente
+@msg	{_1} cannot be used on Windows	{_1} não pode ser usado no Windows
+@msg	more than one action is named “{_1}”	mais de uma ação se chama “{_1}”
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
 	Smudge Stick…	Esfuminho…
 	Smudge Stick	Esfuminho
@@ -5652,6 +5657,13 @@ axis	Y Axis	Eixo Y
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
 	Rename Action	Renomear Ação
+	New Action…	Nova Ação…
+	New Action	Nova Ação
+	Create New Action	Criar Nova Ação
+	Play Action	Reproduzir Ação
+	Action Set:	Conjunto de Ações:
+	Function Key:	Tecla de Função:
+	Record	Gravar
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global

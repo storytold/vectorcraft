@@ -5141,6 +5141,11 @@ lighting	Light	광원
 	Export Type:	내보내기 유형:
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
+@msg	an action is already recording	이미 액션을 기록하고 있습니다
+@msg	no such function key	해당 기능 키가 없습니다
+@msg	no such color	해당 색상이 없습니다
+@msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
+@msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대
@@ -5314,6 +5319,13 @@ axis	Y Axis	Y축
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
 	Rename Action	액션 이름 바꾸기
+	New Action…	새 액션…
+	New Action	새 액션
+	Create New Action	새 액션 만들기
+	Play Action	액션 재생
+	Action Set:	액션 세트:
+	Function Key:	기능 키:
+	Record	기록
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션

@@ -5476,6 +5476,11 @@ theme	Appearance	Външен вид
 	Export Type:	Тип на експортиране:
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
+@msg	an action is already recording	вече се записва действие
+@msg	no such function key	няма такъв функционален клавиш
+@msg	no such color	няма такъв цвят
+@msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
+@msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -5622,6 +5627,13 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Rename Action	Преименуване на действие
+	New Action…	Ново действие…
+	New Action	Ново действие
+	Create New Action	Създаване на ново действие
+	Play Action	Изпълнение на действие
+	Action Set:	Набор от действия:
+	Function Key:	Функционален клавиш:
+	Record	Запис
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране

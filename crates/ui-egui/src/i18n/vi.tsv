@@ -5161,6 +5161,11 @@ theme	Appearance	Giao diện
 	Export Type:	Kiểu xuất:
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
+@msg	an action is already recording	đang ghi một hành động
+@msg	no such function key	không có phím chức năng như vậy
+@msg	no such color	không có màu như vậy
+@msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
+@msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ
@@ -5334,6 +5339,13 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Rename Action	Đổi tên hành động
+	New Action…	Hành động mới…
+	New Action	Hành động mới
+	Create New Action	Tạo hành động mới
+	Play Action	Phát hành động
+	Action Set:	Bộ hành động:
+	Function Key:	Phím chức năng:
+	Record	Ghi
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục

@@ -5508,6 +5508,11 @@ mark-style	Japanese	Japonesas
 	Export Type:	Tipo de exportación:
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
+@msg	an action is already recording	ya se está grabando una acción
+@msg	no such function key	no existe esa tecla de función
+@msg	no such color	no existe ese color
+@msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
+@msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -5678,6 +5683,13 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Rename Action	Cambiar nombre de acción
+	New Action…	Nueva acción…
+	New Action	Nueva acción
+	Create New Action	Crear nueva acción
+	Play Action	Reproducir acción
+	Action Set:	Conjunto de acciones:
+	Function Key:	Tecla de función:
+	Record	Grabar
 	Create New Set	Crear nuevo conjunto
 	Stop Global Edit	Detener edición global
 	Global Edit Options	Opciones de edición global
