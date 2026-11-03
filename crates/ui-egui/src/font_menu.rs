@@ -249,6 +249,7 @@ struct MenuState {
     /// kept while the pointer stays on it: each step makes its family a recent one, which would
     /// otherwise move it in the order.
     wheel_order: Option<Arc<[String]>>,
+    wheel_target: Option<crate::state::InputGeneration>,
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -263,6 +264,12 @@ pub fn font_menu(
 ) -> Option<FontPick> {
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
+    let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
+    let target_changed = st.wheel_target != target;
+    if target_changed {
+        st.wheel_order = None;
+        st.wheel_target = target;
+    }
     let height = st.header + LIST_HEIGHT;
     let state = &mut st;
     // The search field and filters stay in place over the rows, which scroll. The rows are all
@@ -277,34 +284,52 @@ pub fn font_menu(
         )
     });
     let drawn = shown.is_some();
+    if target_changed {
+        ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+    }
     let mut out = shown.flatten();
     if !drawn && out.is_none() && st.previewed.take().is_some() {
         // Closed (Escape, a click outside) with a preview showing.
         out = Some(FontPick::EndPreview);
     }
-    if !look.wheel || drawn || !field.contains_pointer() {
+    let turns = remember_wheel_field(ui, &field, look.wheel && !drawn && field.enabled());
+    if !look.wheel || !field.enabled() {
         st.wheel_order = None;
         ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
-    } else if out.is_none() {
-        let notches = wheel_notches(ui, &field);
-        if !notches.is_empty() {
+    } else if out.is_none() || drawn {
+        if !turns.is_empty() {
             let mut own = vectorcraft_text::FontDb::global().canonical(current, "").0;
-            if st.wheel_order.is_none() {
-                st.wheel_order = Some(wheel_order(&st, look).into());
-            }
             let mut steps = Vec::new();
-            if let Some(order) = st.wheel_order.as_deref() {
-                for notch in notches {
-                    let next = wheel_steps(order, &own, notch);
-                    if let Some(last) = next.last() {
-                        own.clone_from(last);
+            for turn in turns {
+                match turn {
+                    WheelInput::Leave => st.wheel_order = None,
+                    WheelInput::Notches(notches) => {
+                        if st.wheel_order.is_none() {
+                            st.wheel_order = Some(wheel_order(&st, look).into());
+                        }
+                        if let Some(order) = st.wheel_order.as_deref() {
+                            let next = wheel_steps(order, &own, notches);
+                            if let Some(last) = next.last() {
+                                own.clone_from(last);
+                            }
+                            steps.extend(next);
+                        }
                     }
-                    steps.extend(next);
                 }
             }
             if !steps.is_empty() {
+                if drawn {
+                    // These turns preceded the opener. The popup cancels back to the newly
+                    // applied family, and any preview drawn this pass has not been applied.
+                    st.current.clone_from(&own);
+                    st.previewed = None;
+                }
                 out = Some(FontPick::Wheel(steps));
             }
+        }
+        if drawn || !field.contains_pointer() {
+            st.wheel_order = None;
+            ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
         }
     }
     if matches!(out, Some(FontPick::Chosen(..))) {
@@ -355,40 +380,158 @@ fn wheel_steps(order: &[String], current: &str, notches: i32) -> Vec<String> {
     if to >= at { order.iter().skip(at + 1).take(to - at).cloned().collect() } else { order.iter().take(at).skip(to).rev().cloned().collect() }
 }
 
-/// Whole notches of the mouse wheel turned over closed field `resp` this frame, positive when it
-/// turns down (towards the user). A wheel notch is a line, or `line_scroll_speed` points of a
-/// trackpad or fine wheel; what is left of a notch carries over to the next turn. The wheel over
-/// the field is the field's: the panel under it does not scroll. A turn with a modifier key is
-/// left to the panel and the canvas.
-fn wheel_notches(ui: &Ui, resp: &egui::Response) -> Vec<i32> {
-    let (line, id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
-    let mut notches: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(0.0);
-    let mut completed = Vec::new();
-    let mut turned = false;
-    ui.input_mut(|i| {
-        i.events.retain(|e| match e {
-            egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() => {
-                notches -= match unit {
-                    egui::MouseWheelUnit::Point => delta.y / line.max(1.0),
-                    egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
-                };
-                let whole = notches.trunc();
-                if whole != 0.0 {
-                    completed.push(whole as i32);
-                    notches -= whole;
-                }
-                turned = true;
-                false
-            }
-            _ => true,
-        });
-        if turned || i.modifiers.is_none() {
-            // The rest of a turn egui spreads over the next frames scrolls nothing either.
-            i.smooth_scroll_delta = egui::Vec2::ZERO;
+#[derive(Clone)]
+enum WheelInput {
+    Leave,
+    Notches(i32),
+}
+
+#[derive(Clone, Copy)]
+struct WheelField {
+    id: egui::Id,
+    rect: egui::Rect,
+    layer: egui::LayerId,
+}
+
+#[derive(Clone, Default)]
+struct WheelFields {
+    pass: u64,
+    pending_frame: u64,
+    activation_pass: u64,
+    activating: Vec<egui::Id>,
+    pointer: Option<egui::Pos2>,
+    fields: Vec<WheelField>,
+    pending: HashMap<egui::Id, Vec<WheelInput>>,
+}
+
+fn wheel_fields_id(viewport: egui::ViewportId) -> egui::Id {
+    egui::Id::unique("font-wheel-fields").with(viewport)
+}
+
+/// Pending turns belong to the document, dialog and focus that received their input batch.
+pub(crate) fn sync_wheel_target(app: &VectorcraftApp, ctx: &egui::Context, viewport: egui::ViewportId) {
+    let target = app.input_generation();
+    let key = wheel_fields_id(viewport);
+    ctx.data_mut(|d| {
+        if d.get_temp::<crate::state::InputGeneration>(key.with("target")).is_some_and(|old| old != target) {
+            d.remove::<WheelFields>(key);
         }
+        d.insert_temp(key.with("target"), target);
     });
-    ui.data_mut(|d| d.insert_temp(id, notches));
-    completed
+}
+
+/// Remember the visible closed fields for the next input batch and take this field's turns.
+fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<WheelInput> {
+    let key = wheel_fields_id(ui.ctx().viewport_id());
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.data_mut(|d| {
+        let mut fields: WheelFields = d.get_temp(key).unwrap_or_default();
+        if fields.pass != pass {
+            fields.pass = pass;
+            fields.fields.clear();
+        }
+        fields.fields.retain(|f| f.id != resp.id);
+        if enabled {
+            fields.fields.push(WheelField { id: resp.id, rect: resp.interact_rect, layer: resp.layer_id });
+        }
+        let turns = fields.pending.remove(&resp.id).unwrap_or_default();
+        d.insert_temp(key, fields);
+        turns
+    })
+}
+
+/// Take the closed font fields' wheel events before egui smooths and combines them. Other
+/// events stay in the input, so scrolling elsewhere keeps its own delta and event order.
+pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
+    let key = wheel_fields_id(raw.viewport_id);
+    let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };
+    if !ctx.input(|i| i.raw.viewports.contains_key(&raw.viewport_id)) {
+        ctx.data_mut(|d| d.remove::<WheelFields>(key));
+        return;
+    }
+    let frame = ctx.cumulative_frame_nr_for(raw.viewport_id);
+    let pass = ctx.cumulative_pass_nr_for(raw.viewport_id);
+    if pass < fields.pass || pass.saturating_sub(fields.pass) > 1 {
+        fields.fields.clear();
+        fields.pointer = None;
+    }
+    if fields.pending_frame != frame {
+        fields.pending_frame = frame;
+        fields.pending.clear();
+    }
+    let line = ctx.options(|o| o.input_options.line_scroll_speed).max(1.0);
+    let mut pointer = fields.pointer.or_else(|| ctx.input(|i| i.pointer.latest_pos()));
+    let over =
+        |field: &WheelField, point: Option<egui::Pos2>| point.is_some_and(|p| field.rect.contains(p) && ctx.layer_id_at(p) == Some(field.layer));
+    // An activation batch belongs to the popup, including a release after a prior press.
+    if fields.activation_pass != pass {
+        fields.activation_pass = pass;
+        fields.activating.clear();
+        let pressed = ctx.input(|i| if i.pointer.button_down(egui::PointerButton::Primary) { i.pointer.press_origin() } else { None });
+        if let Some(field) = fields.fields.iter().find(|f| over(f, pressed)) {
+            fields.activating.push(field.id);
+        }
+    }
+    let focused = ctx.memory(|m| m.focused());
+    let mut captured = false;
+    raw.events.retain(|event| {
+        let opening = match event {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => {
+                fields.fields.iter().rev().find(|f| over(f, Some(*pos))).map(|f| f.id)
+            }
+            egui::Event::Key { key: egui::Key::Enter | egui::Key::Space, pressed: true, .. } if raw.focused => {
+                focused.filter(|id| fields.fields.iter().any(|f| f.id == *id))
+            }
+            _ => None,
+        };
+        if let Some(id) = opening
+            && !fields.activating.contains(&id)
+        {
+            fields.activating.push(id);
+        }
+        match event {
+            egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                for field in &fields.fields {
+                    if over(field, pointer) && !over(field, Some(*p)) {
+                        ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+                        fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
+                    }
+                }
+                pointer = Some(*p);
+            }
+            egui::Event::PointerGone => {
+                pointer = None;
+                for field in &fields.fields {
+                    ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+                    fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
+                }
+            }
+            egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() && delta.y != 0.0 => {
+                if let Some(field) = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied() {
+                    let id = field.id.with("wheel");
+                    let mut notches: f32 = ctx.data(|d| d.get_temp(id)).unwrap_or(0.0);
+                    notches -= match unit {
+                        egui::MouseWheelUnit::Point => delta.y / line,
+                        egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
+                    };
+                    let whole = notches.trunc();
+                    ctx.data_mut(|d| d.insert_temp(id, notches - whole));
+                    if whole != 0.0 {
+                        fields.pending.entry(field.id).or_default().push(WheelInput::Notches(whole as i32));
+                    }
+                    captured = true;
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        true
+    });
+    fields.pointer = pointer;
+    ctx.data_mut(|d| d.insert_temp(key, fields));
+    if captured {
+        ctx.request_repaint();
+    }
 }
 
 /// What the menu's header hands its rows.

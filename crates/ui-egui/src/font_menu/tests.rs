@@ -262,6 +262,99 @@ fn the_wheel_follows_the_menus_order_and_filters() {
     assert_eq!(order, favorites, "the favourites filter");
 }
 
+/// A field removed by a later layout pass must not intercept the next wheel event.
+#[test]
+fn a_family_field_omitted_from_the_last_pass_leaves_the_wheel_to_its_owner() {
+    let ctx = egui::Context::default();
+    let mut point = egui::Pos2::ZERO;
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let resp = ui.button("Family");
+            point = resp.rect.center();
+            super::remember_wheel_field(ui, &resp, true);
+        });
+        out.textures_delta.clear();
+    }
+    let mut pass = 0;
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        if pass == 0 {
+            let resp = ui.button("Family");
+            point = resp.rect.center();
+            super::remember_wheel_field(ui, &resp, true);
+            ui.ctx().request_discard("the next pass removes the field");
+        }
+        pass += 1;
+    });
+    out.textures_delta.clear();
+    assert!(pass > 1);
+    let mut raw = egui::RawInput {
+        events: vec![
+            egui::Event::PointerMoved(point),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: egui::vec2(0.0, -1.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: Default::default(),
+                source: egui::MouseWheelSource::Unknown,
+            },
+        ],
+        ..Default::default()
+    };
+    super::take_raw_wheel(&ctx, &mut raw);
+    assert!(raw.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
+}
+
+/// Activation leaves later wheel input to the popup; an earlier turn still belongs to the field.
+#[test]
+fn activating_the_family_popup_leaves_its_wheel_input_available() {
+    let activations = [None, Some((egui::Key::Enter, egui::Modifiers::NONE)), Some((egui::Key::Space, egui::Modifiers::SHIFT))];
+    for activation in activations {
+        let ctx = egui::Context::default();
+        let frame = |events| {
+            let mut raw = egui::RawInput { events, ..Default::default() };
+            super::take_raw_wheel(&ctx, &mut raw);
+            let mut point = egui::Pos2::ZERO;
+            let mut out = ctx.run_ui(raw, |ui| {
+                let resp = ui.button("Family");
+                point = resp.rect.center();
+                if activation.is_some() {
+                    resp.request_focus();
+                }
+                super::remember_wheel_field(ui, &resp, true);
+            });
+            out.textures_delta.clear();
+            point
+        };
+        let mut point = egui::Pos2::ZERO;
+        for _ in 0..3 {
+            point = frame(vec![]);
+        }
+        let button =
+            |pressed| egui::Event::PointerButton { pos: point, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let opener = if let Some((key, modifiers)) = activation {
+            egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+        } else {
+            frame(vec![egui::Event::PointerMoved(point), button(true)]);
+            button(false)
+        };
+        let turn = || egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        let mut events = vec![egui::Event::PointerMoved(point)];
+        if activation.is_some() {
+            events.push(turn());
+        }
+        events.extend([opener, turn()]);
+        let mut raw = egui::RawInput { events, ..Default::default() };
+        super::take_raw_wheel(&ctx, &mut raw);
+        assert_eq!(raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count(), 1);
+    }
+}
+
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
 #[test]
 fn the_variable_filter_is_named_as_fonts_are() {

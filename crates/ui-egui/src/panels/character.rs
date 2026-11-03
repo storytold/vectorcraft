@@ -804,6 +804,7 @@ fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
 /// Control bar), with their `ids` and `widths`. The mouse wheel over the closed family field steps
 /// the text through the families.
 pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle, ids: (&str, &str), widths: (f32, f32)) {
+    crate::font_menu::sync_wheel_target(app, ui.ctx(), ui.ctx().viewport_id());
     let sample = crate::font_menu::sample_text(app);
     let look = crate::font_menu::MenuLook { wheel: true, ..crate::font_menu::MenuLook::of(app) };
     if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look) {

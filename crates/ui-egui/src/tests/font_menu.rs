@@ -232,8 +232,9 @@ fn panel_frame(
     family: &str,
     draw: &dyn Fn(&mut VectorcraftApp, &mut egui::Ui),
 ) -> (Option<egui::Pos2>, bool) {
-    let input =
+    let mut input =
         egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+    app.raw_input_hook(ctx, &mut input);
     let mut out = ctx.run_ui(input, |ui| {
         crate::font_menu::end_stale_preview(app, ui.ctx());
         draw(app, ui);
@@ -334,6 +335,119 @@ fn opposite_wheel_notches_in_one_frame_keep_their_undo_steps() {
     assert_ne!(first_style(&app, id).font_family, "Inter");
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(first_style(&app, id).font_family, "Inter");
+}
+
+/// A turn before opening applies once; the popup keeps the later wheel and cancels to that font.
+#[test]
+fn a_wheel_before_opening_the_family_popup_keeps_its_committed_change() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let id = selected_inter(&mut app);
+    let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::panels::character::show(app, ui);
+    let mut field = None;
+    for _ in 0..3 {
+        field = panel_frame(&ctx, &mut app, vec![], "Inter", &draw).0;
+    }
+    let field = field.unwrap();
+    let before = app.session.active().unwrap().history.undo.len();
+    let button = |pressed| egui::Event::PointerButton { pos: field, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let turn = || wheel(egui::MouseWheelUnit::Line, -1.0, Default::default());
+    panel_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(field), turn(), button(true), button(false), turn()], "Inter", &draw);
+    let applied = first_style(&app, id).font_family;
+    assert_ne!(applied, "Inter");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    for _ in 0..3 {
+        panel_frame(&ctx, &mut app, vec![], &applied, &draw);
+    }
+    panel_frame(&ctx, &mut app, key(egui::Key::Escape), &applied, &draw);
+    assert_eq!(first_style(&app, id).font_family, applied);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(first_style(&app, id).font_family, "Inter");
+}
+
+/// A later pointer move must not change which field owns an earlier wheel event.
+#[test]
+fn wheel_events_use_the_pointer_position_when_they_occurred() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let id = selected_inter(&mut app);
+    let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::panels::character::show(app, ui);
+    let mut field = None;
+    for _ in 0..3 {
+        field = panel_frame(&ctx, &mut app, vec![], "Inter", &draw).0;
+    }
+    let field = field.expect("the Character panel shows the family field");
+    let outside = egui::pos2(580.0, 780.0);
+    panel_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(outside)], "Inter", &draw);
+    let before = app.session.active().unwrap().history.undo.len();
+    let line = egui::MouseWheelUnit::Line;
+    panel_frame(&ctx, &mut app, vec![wheel(line, -1.0, Default::default()), egui::Event::PointerMoved(field)], "Inter", &draw);
+    assert_eq!(first_style(&app, id).font_family, "Inter", "the wheel was outside the field");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before);
+    assert!(ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. }))), "outside wheel input is left for its owner");
+    panel_frame(&ctx, &mut app, vec![wheel(line, -1.0, Default::default()), egui::Event::PointerMoved(outside)], "Inter", &draw);
+    assert_ne!(first_style(&app, id).font_family, "Inter", "the wheel was over the field before the pointer left");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(first_style(&app, id).font_family, "Inter");
+    let button = |pos| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    panel_frame(&ctx, &mut app, vec![button(field), wheel(line, -1.0, Default::default()), button(outside)], "Inter", &draw);
+    assert_ne!(first_style(&app, id).font_family, "Inter", "button events also carry the pointer's position");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    let end = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::Vec2::ZERO,
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::End,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    panel_frame(&ctx, &mut app, vec![end], "Inter", &draw);
+    panel_frame(
+        &ctx,
+        &mut app,
+        vec![
+            wheel(egui::MouseWheelUnit::Point, -2.0, Default::default()),
+            egui::Event::PointerMoved(field),
+            wheel(line, -1.0, Default::default()),
+            egui::Event::PointerMoved(outside),
+        ],
+        "Inter",
+        &draw,
+    );
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    assert_eq!(ctx.input(|i| i.smooth_scroll_delta.y), -2.0, "only the outside wheel contributes to panel scrolling");
+}
+
+/// A turn queued for one document cannot restyle another document opened before its UI pass.
+#[test]
+fn a_wheel_queued_for_another_document_is_discarded() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    selected_inter(&mut app);
+    let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::panels::character::show(app, ui);
+    let mut field = None;
+    for _ in 0..3 {
+        field = panel_frame(&ctx, &mut app, vec![], "Inter", &draw).0;
+    }
+    let field = field.expect("the Character panel shows the family field");
+    let mut raw = egui::RawInput {
+        events: vec![egui::Event::PointerMoved(field), wheel(egui::MouseWheelUnit::Line, -1.0, Default::default())],
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))),
+        ..Default::default()
+    };
+    app.raw_input_hook(&ctx, &mut raw);
+    assert!(!raw.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
+    let id = selected_inter(&mut app);
+    let before = app.session.active().unwrap().history.undo.len();
+    let mut out = ctx.run_ui(raw, |ui| draw(&mut app, ui));
+    out.textures_delta.clear();
+    assert_eq!(first_style(&app, id).font_family, "Inter");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before);
 }
 
 /// #5253: the Properties panel and the Control bar have the same family field, and the wheel steps
