@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes and strokes with no width left out, with the patterns they use; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes and strokes with no width left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -254,14 +254,6 @@ pub fn report(s: &mut Session, selection_only: bool) -> Result<String> {
     Ok(v["text"].as_str().unwrap_or_default().to_string())
 }
 
-fn paint_kind(p: &Paint) -> Option<&'static str> {
-    match p {
-        Paint::Gradient(_) => Some("gradients"),
-        Paint::Pattern { .. } => Some("patterns"),
-        _ => None,
-    }
-}
-
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -357,8 +349,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     vectorcraft_doc::AppearanceItem::Fill(f) => &f.paint,
                     vectorcraft_doc::AppearanceItem::Stroke(s) => &s.paint,
                 };
-                if let Some(k) = paint_kind(paint) {
-                    kinds.insert(k);
+                // Objects counts an object with a pattern when Pattern Objects lists it, below.
+                if let Paint::Gradient(_) = paint {
+                    kinds.insert("gradients");
                 }
                 // A hidden fill or stroke, or a stroke with no width, paints nothing.
                 let paints = item.visible() && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0);
@@ -396,6 +389,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 let name = n.display_name();
                 pattern_objects.push(json!({ "id": n.id.0, "name": name, "patterns": used_patterns }));
                 pattern_rows.push((name, used_patterns.join(", ")));
+                kinds.insert("patterns");
             }
             for k in kinds {
                 *counts.entry(k).or_default() += 1;
@@ -672,7 +666,7 @@ mod tests {
 
     /// Document Info › Pattern Objects lists each object filled or stroked with a pattern once,
     /// with the patterns it uses, one in a group and a type object whose characters use a pattern
-    /// included; a pattern no art uses adds no row. With
+    /// included; a pattern no art uses adds no row, and Objects counts the listed objects. With
     /// Selection Only it lists the patterned objects in the selection, and the report writes the
     /// same rows.
     #[test]
@@ -717,6 +711,11 @@ mod tests {
             ])
         );
         assert_eq!(i["patternNames"], json!(["Dots"]));
+        // Objects counts the objects that Pattern Objects lists.
+        assert_eq!(i["objects"]["patterns"].as_u64(), Some(3), "{}", i["objects"]);
+        s.execute("select.set", &json!({"ids": [d, e]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+        assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
         assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("patterns"), Some("Pattern Objects")));
         assert_eq!(i["sections"][0]["rows"], json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"]]));
