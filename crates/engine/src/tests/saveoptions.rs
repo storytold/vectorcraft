@@ -180,9 +180,13 @@ fn native_saves_carry_all_artboards_as_pdf_by_default() {
     s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": false})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 60, "y": 10, "width": 10, "height": 10})).unwrap();
     s.execute("document.save", &json!({})).unwrap();
-    assert!(vectorcraft_format::pdf_content(&std::fs::read(path).unwrap()).is_none());
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none());
     let options = s.execute("file.formatOptions", &json!({"format":"vectorcraft"})).unwrap();
     assert_eq!(options["options"]["pdfCompatible"]["value"], false);
+    s.execute("document.save", &json!({"compress": true})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none());
+    s.execute("document.save", &json!({"pdfCompatible": true})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some());
 }
 
 #[test]

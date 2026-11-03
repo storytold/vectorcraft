@@ -273,7 +273,15 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         }
     }
     // None given: the ones the document was last saved with in this format.
-    let options = if given.is_empty() && format.id == st.format { remembered_save_options(st) } else { given };
+    let mut options = if given.is_empty() && format.id == st.format { remembered_save_options(st) } else { given };
+    // Native PDF compatibility stays as last saved unless this save gives it explicitly.
+    if matches!(format.id, "vectorcraft" | "template")
+        && format.id == st.format
+        && !options.contains_key("pdfCompatible")
+        && let Some(pdf @ Value::Bool(_)) = st.save_options.get("pdfCompatible")
+    {
+        options.insert("pdfCompatible".into(), pdf.clone());
+    }
     // Save writes the document's own file; the other modes only where they are told to.
     let path =
         path.or_else(|| (mode == SaveMode::Save && !st.converted && !st.recovered && format.id == st.format).then(|| st.path.clone()).flatten());
