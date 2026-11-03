@@ -15,7 +15,8 @@ pub(crate) fn denoise_keeping(labels: &mut [u16], w: usize, h: usize, min_area: 
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
 
-    // Every index below is a `u32`: 4 bytes per pixel and per region instead of a `Vec<usize>` of pixels per region.
+    // Every index below is a `u32`, so a pixel costs 8 bytes and a region 18 instead of a `Vec<usize>` per region. An image
+    // of `u32::MAX` pixels or more (far above the decoder's cap) is left as it is.
     const NONE: u32 = u32::MAX;
     if min_area <= 1 || w == 0 || h == 0 || w.checked_mul(h) != Some(labels.len()) || labels.len() >= NONE as usize {
         return;
@@ -262,12 +263,7 @@ mod tests {
             state ^= state << 17;
             state
         };
-        (0..w * h)
-            .map(|_| {
-                // Runs of equal labels as well as single pixels, so regions of every size touch.
-                if transparent_one_in > 0 && next() % transparent_one_in == 0 { TRANSPARENT } else { (next() % colours) as u16 }
-            })
-            .collect()
+        (0..w * h).map(|_| if transparent_one_in > 0 && next() % transparent_one_in == 0 { TRANSPARENT } else { (next() % colours) as u16 }).collect()
     }
 
     #[test]
