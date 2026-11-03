@@ -1219,7 +1219,8 @@ fn text_copied_into_array_cells_stops_at_the_text_budget() {
     // 1,000 characters of text in an anonymous block placed 10 × 10: 100 KB of copies, past the
     // 64 KB tests import with.
     let long = "x".repeat(1000);
-    let blocks = [(0, "BLOCK"), (2, "*U1"), (70, "1"), (10, "0"), (20, "0"), (0, "TEXT"), (10, "0"), (20, "0"), (40, "1"), (1, long.as_str()), (0, "ENDBLK")];
+    let blocks =
+        [(0, "BLOCK"), (2, "*U1"), (70, "1"), (10, "0"), (20, "0"), (0, "TEXT"), (10, "0"), (20, "0"), (40, "1"), (1, long.as_str()), (0, "ENDBLK")];
     let insert = [(0, "INSERT"), (2, "*U1"), (10, "0"), (20, "0"), (70, "10"), (71, "10"), (44, "1"), (45, "1")];
     let r = open(&drawing(&[], &[], &blocks, &insert), &points());
     let bytes = text_bytes(&r.document);
