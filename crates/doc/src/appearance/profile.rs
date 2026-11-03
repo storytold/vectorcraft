@@ -34,11 +34,11 @@ impl WidthProfile {
         if t <= p[0].0 {
             return (p[0].1, p[0].2);
         }
-        for w in p.windows(2) {
-            if t <= w[1].0 {
-                let u = (t - w[0].0) / (w[1].0 - w[0].0).max(1e-9);
-                return (w[0].1 + (w[1].1 - w[0].1) * u, w[0].2 + (w[1].2 - w[0].2) * u);
-            }
+        // (Positions go forward; found in log time, so a long profile read from a file is cheap to ask.)
+        let i = p.partition_point(|q| q.0 < t);
+        if let (Some(a), Some(b)) = (i.checked_sub(1).and_then(|j| p.get(j)), p.get(i)) {
+            let u = (t - a.0) / (b.0 - a.0).max(1e-9);
+            return (a.1 + (b.1 - a.1) * u, a.2 + (b.2 - a.2) * u);
         }
         p.last().map_or((1.0, 1.0), |l| (l.1, l.2))
     }
@@ -90,10 +90,11 @@ impl WidthProfile {
     /// discontinuous point (two points at `t`, within `1e-7`).
     pub fn around(&self, t: f64) -> ((f64, f64), (f64, f64)) {
         let p = &self.points;
-        if let Some(i) = p.iter().position(|q| (q.0 - t).abs() <= 1e-7) {
-            let j = i + p[i..].iter().take_while(|q| (q.0 - p[i].0).abs() <= 1e-9).count() - 1;
+        let i = p.partition_point(|q| q.0 < t - 1e-7);
+        if let Some(first) = p.get(i).filter(|q| (q.0 - t).abs() <= 1e-7) {
+            let j = i + p[i..].partition_point(|q| q.0 - first.0 <= 1e-9) - 1;
             if j > i {
-                return ((p[i].1, p[i].2), (p[j].1, p[j].2));
+                return ((first.1, first.2), (p[j].1, p[j].2));
             }
         }
         let v = self.at(t);
@@ -333,4 +334,24 @@ fn simplify_1d(pts: &[(f64, f64)], tol: f64) -> Vec<bool> {
 pub struct SavedProfile {
     pub name: String,
     pub profile: WidthProfile,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn width_profile_lookups_by_search() {
+        let p = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (0.5, 0.5, 0.25), (1.0, 0.0, 0.0)] };
+        assert_eq!(p.at(-1.0), (0.0, 0.0));
+        assert_eq!(p.at(0.25), (0.5, 0.5));
+        assert_eq!(p.at(0.75), (0.25, 0.125));
+        assert_eq!(p.at(2.0), (0.0, 0.0));
+        // A step: the widths just before and just after it.
+        assert_eq!(p.around(0.5), ((1.0, 1.0), (0.5, 0.25)));
+        assert_eq!(p.around(0.25), ((0.5, 0.5), (0.5, 0.5)));
+        // Many points at one position are one step, found without a pass over them all.
+        let many = WidthProfile { points: (0..1000).map(|i| (0.5, i as f64, i as f64)).collect() };
+        assert_eq!(many.around(0.5), ((0.0, 0.0), (999.0, 999.0)));
+    }
 }
