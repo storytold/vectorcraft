@@ -232,6 +232,25 @@ fn native_template_saves_keep_the_document_pdf_preference() {
 }
 
 #[test]
+fn a_default_native_save_keeps_its_pdf_after_another_document_opts_out() {
+    let dir = Folder::new("default-native-pdf-choice");
+    for (index, options) in [json!({}), json!({"options":{"pdfCompatible":null}})].into_iter().enumerate() {
+        let mut s = three_boards();
+        let path = dir.file(&format!("first-{index}.vectorcraft"));
+        let mut params = options.as_object().unwrap().clone();
+        params.insert("path".into(), json!(path));
+        s.execute("file.saveAs", &Value::Object(params)).unwrap();
+        assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some());
+        s.execute("file.new", &json!({"width": 10, "height": 10})).unwrap();
+        s.execute("file.saveAs", &json!({"path":dir.file(&format!("other-{index}.vectorcraft")),"pdfCompatible":false})).unwrap();
+        s.execute("document.activate", &json!({"index":0})).unwrap();
+        s.execute("document.save", &json!({})).unwrap();
+        assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some(), "the first document keeps the PDF it was saved with");
+        assert_eq!(s.doc().unwrap().save_options.get("pdfCompatible"), Some(&json!(true)));
+    }
+}
+
+#[test]
 fn reopening_native_files_keeps_each_files_pdf_compatibility() {
     let dir = Folder::new("pdf-reopened-options");
     let mut s = three_boards();

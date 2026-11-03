@@ -557,8 +557,8 @@ struct Meta {
     path: Option<String>,
     /// The format Save writes for it ([`SAVE_FORMATS`]).
     format: String,
-    /// The native PDF preference before the recovery copy deliberately omits its PDF.
-    /// Older copies did not record this preference.
+    /// A document's own native PDF choice before the recovery copy omits its PDF. None keeps
+    /// inheritance from the current application preference. Older copies did not record a choice.
     #[serde(skip_serializing_if = "Option::is_none")]
     native_pdf_compatible: Option<bool>,
     /// When the copy was written (Unix seconds; none without a clock).
@@ -827,13 +827,11 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             title: title.clone(),
             path: st.path.clone(),
             format: st.format.to_string(),
-            native_pdf_compatible: matches!(st.format, "vectorcraft" | "template").then(|| {
-                st.save_options
-                    .get("pdfCompatible")
-                    .and_then(Value::as_bool)
-                    .or_else(|| s.prefs.native_save_options.get("pdfCompatible").and_then(Value::as_bool))
-                    .unwrap_or(true)
-            }),
+            native_pdf_compatible: if matches!(st.format, "vectorcraft" | "template") {
+                st.save_options.get("pdfCompatible").and_then(Value::as_bool)
+            } else {
+                None
+            },
             saved,
             imported_from: st.imported_from.clone(),
             import_losses: st.import_losses.clone(),

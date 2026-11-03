@@ -274,12 +274,17 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     }
     // None given: the ones the document was last saved with in this format.
     let mut options = if given.is_empty() && format.id == st.format { remembered_save_options(st) } else { given };
-    // Native PDF compatibility stays as last saved unless this save gives it explicitly.
-    if matches!(format.id, "vectorcraft" | "template")
-        && !options.contains_key("pdfCompatible")
-        && let Some(pdf) = native_pdf_preference(s, Some(st))
-    {
-        options.insert("pdfCompatible".into(), json!(pdf));
+    // Remember the effective choice, including the encoder's default, so another document's
+    // later save cannot change what this one writes. Invalid non-null values still reach validation.
+    if matches!(format.id, "vectorcraft" | "template") {
+        let pdf = match options.get("pdfCompatible") {
+            None => Some(native_pdf_preference(s, Some(st)).unwrap_or(true)),
+            Some(Value::Null) => Some(true),
+            _ => None,
+        };
+        if let Some(pdf) = pdf {
+            options.insert("pdfCompatible".into(), json!(pdf));
+        }
     }
     // Save writes the document's own file; the other modes only where they are told to.
     let path =

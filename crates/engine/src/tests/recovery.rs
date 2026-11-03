@@ -90,6 +90,27 @@ fn restored_recovery_copies_keep_the_original_pdf_preference() {
 }
 
 #[test]
+fn recovered_unsaved_documents_keep_inheriting_the_current_pdf_preference() {
+    let dir = crate::tests_links::Folder::new("recovered-inherited-pdf-choice");
+    let (mut s, store) = session();
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    assert!(s.doc().unwrap().save_options.get("pdfCompatible").is_none());
+    s.execute("file.new", &json!({"width": 10, "height": 10})).unwrap();
+    s.execute("file.saveAs", &json!({"path":dir.file("other.vectorcraft"),"pdfCompatible":false})).unwrap();
+    assert!(s.execute("file.recovery.save", &json!({})).unwrap()["saved"].as_array().unwrap().is_empty());
+    let latest_preferences = s.prefs.clone();
+    drop(s);
+    let mut s = relaunch(&store);
+    // The host loads its latest preferences before offering recovery.
+    s.prefs = latest_preferences;
+    assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    assert!(s.doc().unwrap().save_options.get("pdfCompatible").is_none());
+    let saved = s.execute("document.save", &json!({})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    assert!(vectorcraft_format::pdf_content(&bytes).is_none());
+}
+
+#[test]
 fn recovery_save_writes_modified_documents_once() {
     let (mut s, store) = session();
     // A clean second document gets no copy.
