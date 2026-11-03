@@ -35,11 +35,17 @@ fn append(out: &mut String, declaration: &simplecss::Declaration<'_>, remaining:
     Ok(())
 }
 
-pub(super) fn preserve_matches(svg: &str, xml: &roxmltree::Document, edits: &mut Edits) -> Result<(), SvgError> {
-    preserve_with_limit(svg, xml, edits, usize::try_from(crate::MAX_SVGZ).unwrap_or(usize::MAX))
+pub(super) fn preserve_matches(svg: &str, xml: &roxmltree::Document, edits: &mut Edits, warnings: &mut Vec<String>) -> Result<(), SvgError> {
+    preserve_with_limit(svg, xml, edits, warnings, usize::try_from(crate::MAX_SVGZ).unwrap_or(usize::MAX))
 }
 
-fn preserve_with_limit(svg: &str, xml: &roxmltree::Document, edits: &mut Edits, mut remaining: usize) -> Result<(), SvgError> {
+fn preserve_with_limit(
+    svg: &str,
+    xml: &roxmltree::Document,
+    edits: &mut Edits,
+    warnings: &mut Vec<String>,
+    mut remaining: usize,
+) -> Result<(), SvgError> {
     let styles: Vec<_> = xml.descendants().filter(|n| n.has_tag_name("style") && n.attribute("type").is_none_or(|t| t == "text/css")).collect();
     let texts: Vec<String> = styles.iter().map(|n| n.children().filter(XNode::is_text).filter_map(|n| n.text()).collect()).collect();
     let mut sheet = simplecss::StyleSheet::new();
@@ -47,8 +53,10 @@ fn preserve_with_limit(svg: &str, xml: &roxmltree::Document, edits: &mut Edits, 
         sheet.parse_more(text);
     }
     let element_count = xml.descendants().filter(XNode::is_element).count();
+    // Too much matching: the file opens without this pass (nothing is edited yet), as it did before it.
     if element_count.checked_mul(sheet.rules.len()).is_none_or(|work| work > 1_000_000) {
-        return Err(SvgError::TooBig("SVG stylesheet matching exceeds the import work limit".into()));
+        warnings.push("the style sheet is too large to match against every element: attribute selectors may not apply to linked objects".into());
+        return Ok(());
     }
     for node in xml.descendants().filter(XNode::is_element) {
         let mut declarations = String::new();
@@ -86,8 +94,8 @@ mod tests {
     fn expanded_styles_are_bounded() {
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><style>circle {fill:red}</style><circle/><circle/></svg>"#;
         let xml = roxmltree::Document::parse(svg).unwrap();
-        assert!(matches!(preserve_with_limit(svg, &xml, &mut Edits::default(), 1), Err(SvgError::TooBig(_))));
-        assert!(preserve_with_limit(svg, &xml, &mut Edits::default(), 64).is_ok());
+        assert!(matches!(preserve_with_limit(svg, &xml, &mut Edits::default(), &mut vec![], 1), Err(SvgError::TooBig(_))));
+        assert!(preserve_with_limit(svg, &xml, &mut Edits::default(), &mut vec![], 64).is_ok());
     }
 
     #[test]
@@ -96,7 +104,10 @@ mod tests {
         let elements = "<circle/>".repeat(1000);
         let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{rules}</style>{elements}</svg>"#);
         let xml = roxmltree::Document::parse(&svg).unwrap();
-        assert!(matches!(preserve_matches(&svg, &xml, &mut Edits::default()), Err(SvgError::TooBig(_))));
+        let (mut edits, mut warnings) = (Edits::default(), vec![]);
+        assert!(preserve_matches(&svg, &xml, &mut edits, &mut warnings).is_ok(), "the file still opens");
+        assert!(edits.list.is_empty() && edits.styles.is_empty(), "nothing is edited");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
     }
 
     #[test]
@@ -104,7 +115,7 @@ mod tests {
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><style>circle[id]{fill:red}<!-- -->text{font-size:30px}</style><text>x</text></svg>"#;
         let xml = roxmltree::Document::parse(svg).unwrap();
         let mut edits = Edits::default();
-        preserve_matches(svg, &xml, &mut edits).unwrap();
+        preserve_matches(svg, &xml, &mut edits, &mut vec![]).unwrap();
         let output = edits.apply(svg);
         let xml = roxmltree::Document::parse(&output).unwrap();
         let text = xml.descendants().find(|n| n.has_tag_name("text")).unwrap();

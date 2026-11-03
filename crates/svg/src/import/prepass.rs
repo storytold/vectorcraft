@@ -268,7 +268,7 @@ pub(super) fn prepass<'s>(
             let text_edits = Edits { list: edits.list.clone(), styles: edits.styles.clone(), ..Default::default() };
             found.text_source = Some(text_edits.apply(svg).into_owned());
         }
-        id_styles::preserve_matches(svg, xml, &mut edits)?;
+        id_styles::preserve_matches(svg, xml, &mut edits, &mut found.warnings)?;
     }
     Ok((edits.apply(svg), found))
 }
