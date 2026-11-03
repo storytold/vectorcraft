@@ -278,6 +278,9 @@
 	As Multiple Assets	Sebagai beberapa aset
 	Plug-ins	Plug-in
 	No filter plug-ins installed	Tidak ada plug-in filter yang terinstal
+	No panel plug-ins installed	Tidak ada plug-in panel yang terinstal
+	This plug-in is no longer installed.	Plug-in ini tidak lagi terinstal.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	File lebih besar dari 4 MiB, batas terbesar yang diterima panel plug-in.
 	Install Plug-in…	Instal plug-in…
 	Open this setting's help page	Buka halaman bantuan pengaturan ini
 	Reload Plug-ins	Muat ulang plug-in
@@ -3235,6 +3238,8 @@ theme	Appearance	Tampilan
 	Install Plug-in	Pasang plug-in
 	List Plug-ins	Daftarkan plug-in
 	Plug-in Info	Info plug-in
+	Plug-in Panel	Panel plug-in
+	Plug-in Panel Event	Peristiwa panel plug-in
 	Remove Plug-in	Hapus plug-in
 	Run Plug-in	Jalankan plug-in
 	Smooth	Haluskan

@@ -319,6 +319,9 @@
 	As Multiple Assets	Jako více prvků
 	Plug-ins	Zásuvné moduly
 	No filter plug-ins installed	Nejsou nainstalovány žádné filtry
+	No panel plug-ins installed	Nejsou nainstalovány žádné panelové zásuvné moduly
+	This plug-in is no longer installed.	Tento zásuvný modul již není nainstalován.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Soubor je větší než 4 MiB, což je nejvíc, co panel zásuvného modulu může dostat.
 	Install Plug-in…	Nainstalovat zásuvný modul…
 	Open this setting's help page	Otevřít stránku nápovědy k tomuto nastavení
 	Reload Plug-ins	Znovu načíst zásuvné moduly
@@ -3494,6 +3497,8 @@ theme	Appearance	Motiv
 	Install Plug-in	Nainstalovat zásuvný modul
 	List Plug-ins	Vypsat zásuvné moduly
 	Plug-in Info	Informace o zásuvném modulu
+	Plug-in Panel	Panel zásuvného modulu
+	Plug-in Panel Event	Událost panelu zásuvného modulu
 	Remove Plug-in	Odebrat zásuvný modul
 	Run Plug-in	Spustit zásuvný modul
 	Smooth	Hladký

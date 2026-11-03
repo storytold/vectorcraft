@@ -2139,6 +2139,9 @@ file-filter	Templates	Шаблони
 	No document open	Немає відкритого документа
 	No document open.	Документ не відкрито.
 	No filter plug-ins installed	Модулі фільтрів не встановлено
+	No panel plug-ins installed	Модулі панелей не встановлено
+	This plug-in is no longer installed.	Цей модуль більше не встановлено.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Файл більший за 4 MiB — це найбільше, що отримує панель модуля.
 	No fonts are available.	Шрифти недоступні.
 	No gradient swatches	Немає градієнтних зразків
 	No graphic styles	Немає графічних стилів
@@ -2421,6 +2424,8 @@ diagnostics	ui	інтерфейс
 	Save Actions…	Зберегти дії…
 	Load Actions…	Завантажити дії…
 	Plug-in Info	Відомості про модуль
+	Plug-in Panel	Панель модуля
+	Plug-in Panel Event	Подія панелі модуля
 	Plug-ins	Модулі
 	Plug-in…	Модуль…
 	Point Sample	Точковий зразок

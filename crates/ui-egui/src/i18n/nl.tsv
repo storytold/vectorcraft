@@ -292,6 +292,9 @@
 	As Multiple Assets	Als meerdere assets
 	Plug-ins	Plug-ins
 	No filter plug-ins installed	Geen filterplug-ins geïnstalleerd
+	No panel plug-ins installed	Geen paneelplug-ins geïnstalleerd
+	This plug-in is no longer installed.	Deze plug-in is niet meer geïnstalleerd.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Het bestand is groter dan 4 MiB, het maximum dat een plug-inpaneel krijgt.
 	Install Plug-in…	Plug-in installeren…
 	Open this setting's help page	Helppagina van deze instelling openen
 	Reload Plug-ins	Plug-ins opnieuw laden
@@ -3249,6 +3252,8 @@ theme	Appearance	Vormgeving
 	Install Plug-in	Plug-in installeren
 	List Plug-ins	Plug-ins weergeven
 	Plug-in Info	Plug-in-info
+	Plug-in Panel	Plug-inpaneel
+	Plug-in Panel Event	Gebeurtenis van plug-inpaneel
 	Remove Plug-in	Plug-in verwijderen
 	Run Plug-in	Plug-in uitvoeren
 	Smooth	Gladmaken

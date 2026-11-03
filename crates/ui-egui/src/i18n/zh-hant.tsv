@@ -2994,6 +2994,9 @@ file-filter	Templates	範本
 	No document open	沒有開啟的文件
 	No document open.	沒有開啟的文件。
 	No filter plug-ins installed	未安裝濾鏡增效模組
+	No panel plug-ins installed	未安裝面板增效模組
+	This plug-in is no longer installed.	此增效模組已不再安裝。
+	The file is larger than 4 MiB, the most a plug-in panel is given.	檔案大於 4 MiB，這是增效模組面板可接收的上限。
 	No fonts are available.	沒有可用的字體。
 	No gradient swatches	沒有漸層色票
 	No graphic styles	沒有繪圖樣式
@@ -3278,6 +3281,8 @@ diagnostics	ui	介面
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
 	Plug-in Info	增效模組資訊
+	Plug-in Panel	增效模組面板
+	Plug-in Panel Event	增效模組面板事件
 	Plug-ins	增效模組
 	Plug-in…	增效模組…
 	Point Sample	單點取樣

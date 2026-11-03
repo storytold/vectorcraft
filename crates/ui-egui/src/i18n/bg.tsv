@@ -2051,6 +2051,9 @@ font-technology	Variable	Променливи
 	No document open	Няма отворен документ
 	No document open.	Няма отворен документ.
 	No filter plug-ins installed	Няма инсталирани плъгини за филтри
+	No panel plug-ins installed	Няма инсталирани плъгини за панели
+	This plug-in is no longer installed.	Този плъгин вече не е инсталиран.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Файлът е по-голям от 4 MiB – най-много, което може да получи панел на плъгин.
 	No fonts are available.	Няма налични шрифтове.
 	No gradient swatches	Няма образци на разградки
 	No graphic styles	Няма графични стилове
@@ -2329,6 +2332,8 @@ font-technology	Variable	Променливи
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
 	Plug-in Info	Информация за приставката
+	Plug-in Panel	Панел на плъгин
+	Plug-in Panel Event	Събитие в панел на плъгин
 	Plug-ins	Приставки
 	Plug-in…	Приставка…
 	Point Sample	Точкова проба

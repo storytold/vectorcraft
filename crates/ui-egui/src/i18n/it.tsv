@@ -2147,6 +2147,9 @@ file-filter	Templates	Modelli
 	No document open	Nessun documento aperto
 	No document open.	Nessun documento aperto.
 	No filter plug-ins installed	Nessun plug-in filtro installato
+	No panel plug-ins installed	Nessun plug-in pannello installato
+	This plug-in is no longer installed.	Questo plug-in non è più installato.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Il file supera 4 MiB, il massimo che un pannello plug-in riceve.
 	No fonts are available.	Nessun font disponibile.
 	No gradient swatches	Nessun campione sfumatura
 	No graphic styles	Nessuno stile grafico
@@ -2429,6 +2432,8 @@ diagnostics	ui	interfaccia
 	Save Actions…	Salva azioni…
 	Load Actions…	Carica azioni…
 	Plug-in Info	Informazioni plug-in
+	Plug-in Panel	Pannello plug-in
+	Plug-in Panel Event	Evento del pannello plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Plug-in…
 	Point Sample	Campionamento puntuale

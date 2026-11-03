@@ -5518,8 +5518,12 @@ undo step; it may change, delete or add objects, and the result is selected). A 
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
-that no built-in format has. A failing plug-in returns an error and leaves the document as it was (an export writes
-no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
+that no built-in format has. A panel plug-in has a panel in the desktop app (Window › Plug-ins);
+`plugin.panel.event {id, event, values?}` hands it an event as its panel does (`{type: "open"}`, `{type: "click",
+target}`, `{type: "change", target, value}`, `{type: "file", target, name, dataBase64}`, or `{type: "selection"}` to
+one that asks for it) and runs the commands it answers with as one undo step with no file access, returning `{plugin,
+panel, results}`: what its panel shows now and the commands' results. A failing plug-in returns an error and leaves
+the document as it was (an export writes no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
 
@@ -5527,6 +5531,7 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+{"name":"run_command","arguments":{"command":"plugin.panel.event","params":{"id":"org.example.shapes","event":{"type":"click","target":"add"},"values":{"width":40}}}}
 ```
 
 ## Colour adjustments

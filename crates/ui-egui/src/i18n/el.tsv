@@ -2837,6 +2837,9 @@ theme	Appearance	Εμφάνιση
 	No CSS	Δεν υπάρχει CSS
 	No document open.	Δεν υπάρχει ανοιχτό έγγραφο.
 	No filter plug-ins installed	Δεν έχουν εγκατασταθεί πρόσθετα φίλτρων
+	No panel plug-ins installed	Δεν έχουν εγκατασταθεί πρόσθετα πινάκων
+	This plug-in is no longer installed.	Αυτό το πρόσθετο δεν είναι πλέον εγκατεστημένο.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Το αρχείο είναι μεγαλύτερο από 4 MiB, το μέγιστο που δέχεται ένας πίνακας προσθέτου.
 	No fonts are available.	Δεν υπάρχουν διαθέσιμες γραμματοσειρές.
 	No gradient swatches	Δεν υπάρχουν δείγματα ντεγκραντέ
 	No graphic styles	Δεν υπάρχουν στυλ γραφικών
@@ -3023,6 +3026,8 @@ theme	Appearance	Εμφάνιση
 	Save Actions…	Αποθήκευση ενεργειών…
 	Load Actions…	Φόρτωση ενεργειών…
 	Plug-in Info	Πληροφορίες προσθέτου
+	Plug-in Panel	Πίνακας προσθέτου
+	Plug-in Panel Event	Συμβάν πίνακα προσθέτου
 	Plug-in…	Πρόσθετο…
 	Point Text Objects	Αντικείμενα κειμένου σημείου
 	Points: clicks add free points	Σημεία: τα κλικ προσθέτουν ελεύθερα σημεία

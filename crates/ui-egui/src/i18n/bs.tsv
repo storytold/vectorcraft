@@ -311,6 +311,9 @@
 	As Multiple Assets	Kao više resursa
 	Plug-ins	Dodaci
 	No filter plug-ins installed	Nisu instalirani dodaci filtera
+	No panel plug-ins installed	Nisu instalirani dodaci panela
+	This plug-in is no longer installed.	Ovaj dodatak više nije instaliran.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Datoteka je veća od 4 MiB, što je najviše što panel dodatka može primiti.
 	Install Plug-in…	Instaliraj dodatak…
 	Open this setting's help page	Otvori stranicu pomoći za ovu postavku
 	Reload Plug-ins	Ponovo učitaj dodatke
@@ -3454,6 +3457,8 @@ theme	Appearance	Izgled
 	Install Plug-in	Instaliraj dodatak
 	List Plug-ins	Izlistaj dodatke
 	Plug-in Info	Informacije o dodatku
+	Plug-in Panel	Panel dodatka
+	Plug-in Panel Event	Događaj panela dodatka
 	Remove Plug-in	Ukloni dodatak
 	Run Plug-in	Pokreni dodatak
 	Smooth	Glatko

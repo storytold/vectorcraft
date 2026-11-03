@@ -522,6 +522,10 @@ pub struct UiState {
     /// ([`crate::panels::library_panel`], `ui.libraryPanel`).
     #[serde(default)]
     pub library_panels: Vec<crate::panels::library_panel::LibraryPanel>,
+    /// What each open plug-in panel shows, by plug-in id: its plug-in's last answer and its fields'
+    /// values ([`crate::panels::plugin_panel`]). Not saved: a panel asks its plug-in again.
+    #[serde(skip)]
+    pub plugin_panels: std::collections::BTreeMap<String, crate::panels::plugin_panel::PluginPanel>,
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
@@ -962,6 +966,7 @@ impl Default for UiState {
             engine_prefs: Value::Null,
             color_guide: Default::default(),
             library_panels: vec![],
+            plugin_panels: Default::default(),
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,

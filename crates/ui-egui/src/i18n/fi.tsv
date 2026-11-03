@@ -316,6 +316,9 @@
 	As Multiple Assets	Useina resursseina
 	Plug-ins	Laajennukset
 	No filter plug-ins installed	Suodinlaajennuksia ei ole asennettu
+	No panel plug-ins installed	Paneelilaajennuksia ei ole asennettu
+	This plug-in is no longer installed.	Tätä laajennusta ei ole enää asennettu.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Tiedosto on suurempi kuin 4 MiB, eikä laajennuksen paneeli saa enempää.
 	Install Plug-in…	Asenna laajennus…
 	Open this setting's help page	Avaa tämän asetuksen ohjesivu
 	Reload Plug-ins	Lataa laajennukset uudelleen
@@ -3432,6 +3435,8 @@ theme	Appearance	Ulkoasu
 	Install Plug-in	Asenna laajennus
 	List Plug-ins	Luettele laajennukset
 	Plug-in Info	Laajennuksen tiedot
+	Plug-in Panel	Laajennuksen paneeli
+	Plug-in Panel Event	Laajennuksen paneelin tapahtuma
 	Remove Plug-in	Poista laajennus
 	Run Plug-in	Suorita laajennus
 	Smooth	Tasainen

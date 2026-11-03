@@ -2388,6 +2388,9 @@ digits	Hindi	Hindi
 	No document open	Không có tài liệu nào đang mở
 	No document open.	Không có tài liệu nào đang mở.
 	No filter plug-ins installed	Không có plug-in lọc được cài đặt
+	No panel plug-ins installed	Không có plug-in bảng được cài đặt
+	This plug-in is no longer installed.	Plug-in này không còn được cài đặt.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Tệp lớn hơn 4 MiB, mức tối đa mà một bảng plug-in nhận được.
 	No fonts are available.	Không có phông chữ nào.
 	No gradient swatches	Không có mẫu chuyển sắc
 	No graphic styles	Không có kiểu đồ họa
@@ -2715,6 +2718,8 @@ diagnostics	ui	giao diện
 	Save Actions…	Lưu hành động…
 	Load Actions…	Tải hành động…
 	Plug-in Info	Thông tin plug-in
+	Plug-in Panel	Bảng plug-in
+	Plug-in Panel Event	Sự kiện bảng plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Phần bổ trợ…
 	Point Sample	Mẫu điểm

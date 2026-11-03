@@ -129,6 +129,9 @@ pub struct Session {
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
+    /// What each panel plug-in keeps between its events, by plug-in id (`plugin.panel.event`): the
+    /// `state` it last returned, handed back with its next event. Not saved.
+    panel_states: std::collections::BTreeMap<String, serde_json::Value>,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).

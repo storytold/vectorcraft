@@ -333,6 +333,9 @@ digits	Malayalam	マラヤーラム数字
 	As Multiple Assets	複数アセットとして
 	Plug-ins	プラグイン
 	No filter plug-ins installed	フィルタープラグインはインストールされていません
+	No panel plug-ins installed	パネルプラグインはインストールされていません
+	This plug-in is no longer installed.	このプラグインはもうインストールされていません。
+	The file is larger than 4 MiB, the most a plug-in panel is given.	ファイルが 4 MiB を超えています。プラグインパネルに渡せるのは 4 MiB までです。
 	Install Plug-in…	プラグインをインストール…
 	Open this setting's help page	この設定のヘルプページを開く
 	Reload Plug-ins	プラグインを再読み込み
@@ -2502,6 +2505,8 @@ diagnostics	ui	UI
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
 	Plug-in Info	プラグイン情報
+	Plug-in Panel	プラグインパネル
+	Plug-in Panel Event	プラグインパネルのイベント
 	Plug-in…	プラグイン…
 	Points	ポイント
 	Points: clicks add free points	ポイント: クリックで自由なポイントを追加

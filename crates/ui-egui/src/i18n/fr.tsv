@@ -2110,6 +2110,9 @@ font-technology	Variable	Variables
 	No document open	Aucun document ouvert
 	No document open.	Aucun document ouvert.
 	No filter plug-ins installed	Aucun module externe de filtre installé
+	No panel plug-ins installed	Aucun module externe de panneau installé
+	This plug-in is no longer installed.	Ce module externe n’est plus installé.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	Le fichier dépasse 4 Mio, le maximum transmis à un panneau de module externe.
 	No fonts are available.	Aucune police disponible.
 	No gradient swatches	Aucune nuance de dégradé
 	No graphic styles	Aucun style graphique
@@ -2390,6 +2393,8 @@ font-technology	Variable	Variables
 	Save Actions…	Enregistrer les scripts…
 	Load Actions…	Charger des scripts…
 	Plug-in Info	Informations sur le module externe
+	Plug-in Panel	Panneau de module externe
+	Plug-in Panel Event	Événement de panneau de module externe
 	Plug-ins	Modules externes
 	Plug-in…	Module externe…
 	Point Sample	Échantillon ponctuel

@@ -112,6 +112,11 @@ pub fn manifest(id: &str, kind: &str, params: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"{kind}","params":{params}}}"#)
 }
 
+/// The manifest of a test panel `id` asking for `events` (a JSON list).
+pub fn panel_asking(id: &str, events: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"panel","events":{events},"params":{{}}}}"#)
+}
+
 /// The manifest of a test exporter `id` writing `extensions` (a JSON list) with `params`.
 pub fn exporter(id: &str, extensions: &str, params: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"exporter","extensions":{extensions},"params":{params}}}"#)

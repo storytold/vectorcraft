@@ -237,6 +237,9 @@
 	As Multiple Assets	როგორც რამდენიმე რესურსი
 	Plug-ins	პლაგინები
 	No filter plug-ins installed	ფილტრის პლაგინები არ არის დაყენებული
+	No panel plug-ins installed	პანელის პლაგინები არ არის დაყენებული
+	This plug-in is no longer installed.	ეს პლაგინი აღარ არის დაყენებული.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	ფაილი 4 MiB-ზე დიდია — ეს არის მაქსიმუმი, რასაც პლაგინის პანელი იღებს.
 	Install Plug-in…	პლაგინის დაყენება…
 	Open this setting's help page	ამ პარამეტრის დახმარების გვერდის გახსნა
 	Reload Plug-ins	პლაგინების ხელახლა ჩატვირთვა
@@ -3045,6 +3048,8 @@ theme	Appearance	იერსახე
 	Install Plug-in	პლაგინის დაყენება
 	List Plug-ins	პლაგინების სია
 	Plug-in Info	პლაგინის ინფორმაცია
+	Plug-in Panel	პლაგინის პანელი
+	Plug-in Panel Event	პლაგინის პანელის მოვლენა
 	Remove Plug-in	პლაგინის წაშლა
 	Run Plug-in	პლაგინის გაშვება
 	Smooth	გლუვი

@@ -326,6 +326,9 @@ digits	Malayalam	말라얄람어
 	As Multiple Assets	여러 에셋으로
 	Plug-ins	플러그인
 	No filter plug-ins installed	설치된 필터 플러그인 없음
+	No panel plug-ins installed	설치된 패널 플러그인 없음
+	This plug-in is no longer installed.	이 플러그인은 더 이상 설치되어 있지 않습니다.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	파일이 4 MiB보다 큽니다. 플러그인 패널에는 최대 4 MiB까지 전달됩니다.
 	Install Plug-in…	플러그인 설치…
 	Open this setting's help page	이 설정의 도움말 페이지 열기
 	Reload Plug-ins	플러그인 다시 불러오기
@@ -2492,6 +2495,8 @@ diagnostics	ui	UI
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
 	Plug-in Info	플러그인 정보
+	Plug-in Panel	플러그인 패널
+	Plug-in Panel Event	플러그인 패널 이벤트
 	Plug-in…	플러그인…
 	Points	포인트
 	Points: clicks add free points	포인트: 클릭하면 자유 포인트 추가

@@ -1,6 +1,6 @@
 use super::context::context_items;
 use super::invoke::click_target;
-use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, unlock_item_label};
+use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, lists_plugin, unlock_item_label};
 use super::state::{shortcut_of, shown_state};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Serialize, Value, VectorcraftApp};
@@ -47,8 +47,10 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
             Entry::Item(Row {
                 command: Some((id, p)),
                 source: label,
+                // An installed plug-in listed by its own name keeps it, whatever it says.
                 label: effect_item_label(id, p)
                     .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
+                    .or_else(|| lists_plugin(id, p).then(|| label.to_string()))
                     .unwrap_or_else(|| display_label(app, id, label))
                     .into(),
                 shortcut: item_shortcut(id, p),

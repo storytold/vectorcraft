@@ -2581,6 +2581,9 @@ file-filter	Templates	Sablonok
 	No document open.	Nincs megnyitott dokumentum.
 	No downsampling	Nincs alulmintavételezés
 	No filter plug-ins installed	Nincs telepített szűrőbővítmény
+	No panel plug-ins installed	Nincs telepített panelbővítmény
+	This plug-in is no longer installed.	Ez a bővítmény már nincs telepítve.
+	The file is larger than 4 MiB, the most a plug-in panel is given.	A fájl nagyobb 4 MiB-nál, ennél többet egy bővítménypanel nem kaphat.
 	No fonts are available.	Nincs elérhető betűtípus.
 	No gradient swatches	Nincs színátmenet-színminta
 	No graphic styles	Nincs grafikai stílus
@@ -2921,6 +2924,8 @@ diagnostics	ui	felület
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
 	Plug-in Info	Bővítmény adatai
+	Plug-in Panel	Bővítménypanel
+	Plug-in Panel Event	Bővítménypanel-esemény
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…
 	Plus	Plusz

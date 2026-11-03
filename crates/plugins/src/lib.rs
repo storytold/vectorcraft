@@ -19,7 +19,9 @@
 //! the objects to keep, change or add, applied to the document as one edit
 //! ([`objects::apply_output`]); a **live effect** ([`effect`]) rewrites one object's geometry each
 //! time it is drawn, from an appearance stack; an **exporter** ([`export`]) writes the whole
-//! document in a file format of its own. The process-wide [`registry`] holds the installed
+//! document in a file format of its own; a **panel** ([`panel`]) has a panel of its own, whose
+//! events it answers with new contents and host commands to run. The process-wide [`registry`]
+//! holds the installed
 //! plug-ins. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]).
 #![forbid(unsafe_code)]
@@ -29,12 +31,13 @@ pub mod effect;
 pub mod export;
 pub mod manifest;
 pub mod objects;
+pub mod panel;
 pub mod registry;
 mod runtime;
 pub mod wat;
 
 pub use dialog::ParamUi;
-pub use manifest::{Budget, Kind, Manifest, Param, ParamSpec};
+pub use manifest::{Budget, Kind, Manifest, PanelEvent, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect
