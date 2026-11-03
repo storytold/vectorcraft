@@ -208,6 +208,9 @@ fn selected_inter(app: &mut VectorcraftApp) -> u64 {
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    if !crate::panel_docking::showing(&app.ui, "character") {
+        app.run("window.panel", json!({"panel": "character"})).unwrap();
+    }
     id
 }
 
@@ -450,6 +453,34 @@ fn a_wheel_queued_for_another_document_is_discarded() {
     assert_eq!(app.session.active().unwrap().history.undo.len(), before);
 }
 
+/// Presentation mode hides an Appearance row's Character popup even if its state is still open.
+#[test]
+fn presentation_mode_leaves_a_transient_font_fields_wheel_available() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    selected_inter(&mut app);
+    app.run("window.panel.close", json!({"panel": "character"})).unwrap();
+    app.run("window.panel.close", json!({"panel": "properties"})).unwrap();
+    app.run("window.panel", json!({"panel": "appearance"})).unwrap();
+    assert!(!crate::panel_docking::showing(&app.ui, "character"));
+    assert!(!crate::panel_docking::showing(&app.ui, "properties"));
+    assert!(crate::panel_docking::showing(&app.ui, "appearance"));
+    app.ui.transient_panel = Some("character".into());
+    let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::panels::character::show(app, ui);
+    let mut field = None;
+    for _ in 0..3 {
+        field = panel_frame(&ctx, &mut app, vec![], "Inter", &draw).0;
+    }
+    app.ui.screen_mode = 3;
+    let mut raw = egui::RawInput {
+        events: vec![egui::Event::PointerMoved(field.unwrap()), wheel(egui::MouseWheelUnit::Line, -1.0, Default::default())],
+        ..Default::default()
+    };
+    app.raw_input_hook(&ctx, &mut raw);
+    assert!(raw.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
+}
+
 /// #5253: the Properties panel and the Control bar have the same family field, and the wheel steps
 /// the families over it too.
 #[test]
@@ -465,6 +496,7 @@ fn the_wheel_steps_the_families_in_properties_and_the_control_bar() {
         crate::theme::install_fonts(&ctx);
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         let id = selected_inter(&mut app);
+        app.ui.control_bar = true;
         let mut field = None;
         for _ in 0..3 {
             field = panel_frame(&ctx, &mut app, vec![], "Inter", &draw).0;

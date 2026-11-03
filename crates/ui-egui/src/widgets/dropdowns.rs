@@ -217,7 +217,7 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
     let ctx = &resp.ctx;
     let id = resp.id.with("popover");
     let frame = ctx.cumulative_frame_nr();
-    let was_open = ctx.data(|d| d.get_temp::<u64>(id)).is_some_and(|f| f + 1 >= frame);
+    let was_open = popover_is_open(ctx, resp.id);
     let mut open = if toggle {
         !was_open
     } else {
@@ -244,6 +244,12 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
         }
     });
     inner
+}
+
+/// Whether the popover for this anchor was open in the latest completed frame.
+pub(crate) fn popover_is_open(ctx: &egui::Context, anchor: egui::Id) -> bool {
+    let frame = ctx.cumulative_frame_nr();
+    ctx.data(|d| d.get_temp::<u64>(anchor.with("popover"))).is_some_and(|f| f + 1 >= frame)
 }
 
 /// Records where the bottom bars (status and hint bars) start this frame, so menus can stop above

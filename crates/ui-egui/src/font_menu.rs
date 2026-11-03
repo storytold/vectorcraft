@@ -41,6 +41,42 @@ pub enum FontPick {
     Wheel(Vec<String>),
 }
 
+/// The UI that contains a font family field.
+#[derive(Clone, Copy, Debug)]
+pub enum WheelOwner {
+    Character,
+    Properties,
+    Control,
+    /// The Character popover attached to this Control bar link.
+    ControlPopover(egui::Id),
+}
+
+impl WheelOwner {
+    fn visible(self, app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+        if crate::panels::character::text_style(app).is_none() {
+            return false;
+        }
+        let panel = match self {
+            Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
+            Self::ControlPopover(anchor) => {
+                return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
+            }
+            Self::Character => "character",
+            Self::Properties => {
+                let selected = app.session.active().and_then(|document| document.selection.objects.first().and_then(|id| document.doc.node(*id)));
+                if !selected.is_some_and(|n| matches!(&n.kind, vectorcraft_doc::NodeKind::Text(_))) {
+                    return false;
+                }
+                "properties"
+            }
+        };
+        app.ui.dock
+            && app.ui.screen_mode < 3
+            && (crate::panel_docking::showing(&app.ui, panel)
+                || (app.ui.transient_panel.as_deref() == Some(panel) && crate::panel_docking::showing(&app.ui, "appearance")))
+    }
+}
+
 /// How the menu looks (from the preferences and the favourites) and whether its closed field
 /// takes the mouse wheel.
 #[derive(Clone, Copy, Debug)]
@@ -58,12 +94,14 @@ pub struct MenuLook<'a> {
     /// The mouse wheel turned over the closed field steps through the families in the menu's
     /// order ([`FontPick::Wheel`]): the Character and Properties panels and the Control bar.
     pub wheel: bool,
+    /// Its owner, so a field hidden before the next layout cannot capture wheel input.
+    pub wheel_owner: Option<WheelOwner>,
 }
 
 impl Default for MenuLook<'static> {
     /// Samples on, English names, medium rows, no favourites, no wheel.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false }
+        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
     }
 }
 
@@ -81,6 +119,7 @@ impl<'a> MenuLook<'a> {
             favorites: &app.ui.favorite_fonts,
             recent: app.recent_fonts(),
             wheel: false,
+            wheel_owner: None,
         }
     }
 }
@@ -250,7 +289,7 @@ struct MenuState {
     /// kept while the pointer stays on it: each step makes its family a recent one, which would
     /// otherwise move it in the order.
     wheel_order: Option<Arc<[String]>>,
-    wheel_target: Option<crate::state::InputGeneration>,
+    wheel_target: Option<WheelTarget>,
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -293,7 +332,7 @@ pub fn font_menu(
         // Closed (Escape, a click outside) with a preview showing.
         out = Some(FontPick::EndPreview);
     }
-    let turns = remember_wheel_field(ui, &field, look.wheel && !drawn && field.enabled());
+    let turns = remember_owned_wheel_field(ui, &field, look.wheel && !drawn && field.enabled(), state_id, look.wheel_owner);
     if !look.wheel || !field.enabled() {
         st.wheel_order = None;
         ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
@@ -390,6 +429,8 @@ enum WheelInput {
 #[derive(Clone, Copy)]
 struct WheelField {
     id: egui::Id,
+    menu: egui::Id,
+    owner: Option<WheelOwner>,
     rect: egui::Rect,
     layer: egui::LayerId,
 }
@@ -409,20 +450,58 @@ fn wheel_fields_id(viewport: egui::ViewportId) -> egui::Id {
     egui::Id::unique("font-wheel-fields").with(viewport)
 }
 
-/// Pending turns belong to the document, dialog and focus that received their input batch.
+#[derive(Clone, Copy, PartialEq)]
+struct WheelTarget {
+    input: crate::state::InputGeneration,
+    workspace: u64,
+}
+
+/// Pending turns and field rectangles belong to their input target and visible workspace.
 pub(crate) fn sync_wheel_target(app: &VectorcraftApp, ctx: &egui::Context, viewport: egui::ViewportId) {
-    let target = app.input_generation();
+    let target = WheelTarget { input: app.input_generation(), workspace: app.ui.docking_generation };
     let key = wheel_fields_id(viewport);
+    let (previous, mut fields) = ctx.data(|d| (d.get_temp::<WheelTarget>(key.with("target")), d.get_temp::<WheelFields>(key)));
+    if previous.is_some_and(|old| old != target) {
+        fields = None;
+    }
+    let mut hidden = Vec::new();
+    if let Some(fields) = &mut fields {
+        fields.fields.retain(|field| {
+            if field.owner.is_none_or(|owner| owner.visible(app, ctx)) {
+                true
+            } else {
+                hidden.push(*field);
+                false
+            }
+        });
+        for field in &hidden {
+            fields.pending.remove(&field.id);
+        }
+    }
     ctx.data_mut(|d| {
-        if d.get_temp::<crate::state::InputGeneration>(key.with("target")).is_some_and(|old| old != target) {
+        if let Some(fields) = fields {
+            d.insert_temp(key, fields);
+        } else {
             d.remove::<WheelFields>(key);
+        }
+        for field in hidden {
+            d.remove::<f32>(field.id.with("wheel"));
+            if let Some(mut state) = d.get_temp::<MenuState>(field.menu) {
+                state.wheel_order = None;
+                d.insert_temp(field.menu, state);
+            }
         }
         d.insert_temp(key.with("target"), target);
     });
 }
 
 /// Remember the visible closed fields for the next input batch and take this field's turns.
+#[cfg(test)]
 fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<WheelInput> {
+    remember_owned_wheel_field(ui, resp, enabled, resp.id, None)
+}
+
+fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, menu: egui::Id, owner: Option<WheelOwner>) -> Vec<WheelInput> {
     let key = wheel_fields_id(ui.ctx().viewport_id());
     let pass = ui.ctx().cumulative_pass_nr();
     ui.data_mut(|d| {
@@ -433,7 +512,7 @@ fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<Wh
         }
         fields.fields.retain(|f| f.id != resp.id);
         if enabled {
-            fields.fields.push(WheelField { id: resp.id, rect: resp.interact_rect, layer: resp.layer_id });
+            fields.fields.push(WheelField { id: resp.id, menu, owner, rect: resp.interact_rect, layer: resp.layer_id });
         }
         let turns = fields.pending.remove(&resp.id).unwrap_or_default();
         d.insert_temp(key, fields);
