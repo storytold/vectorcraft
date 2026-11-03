@@ -821,6 +821,18 @@ fn imported_libraries_are_made_consistent() {
     );
 }
 
+/// A library of one name repeated as often as it may hold numbers the copies in one pass.
+#[test]
+fn a_library_of_one_repeated_name_imports_numbered() {
+    let mut s = session();
+    let red = json!({"name": "Red", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}});
+    let lib = json!({"name": "Many", "colors": vec![red; 10_000]});
+    run(&mut s, "library.import", json!({"data": lib.to_string()}));
+    let got = run(&mut s, "library.get", json!({}));
+    let colors = got["colors"].as_array().unwrap();
+    assert_eq!((colors.len(), colors[1]["name"].as_str(), colors[9_999]["name"].as_str()), (10_000, Some("Red 2"), Some("Red 10000")));
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_library_is_exported_to_a_file_and_imported_from_it() {

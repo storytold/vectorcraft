@@ -781,10 +781,9 @@ pub fn unique_name(lib: &[Brush], base: &str) -> String {
         return base.to_string();
     }
     // At most `lib.len()` names are taken, so one of the first `lib.len() + 1` candidates is free.
-    (2..=lib.len() + 2)
-        .map(|i| format!("{base} {i}"))
-        .find(|n| !lib.iter().any(|b| &b.name == n))
-        .unwrap_or_else(|| format!("{base} {}", lib.len() + 2))
+    // Each is looked up in a set: scanning the library per candidate is quadratic in its size.
+    let taken: std::collections::HashSet<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    (2..=lib.len() + 2).map(|i| format!("{base} {i}")).find(|n| !taken.contains(n.as_str())).unwrap_or_else(|| format!("{base} {}", lib.len() + 2))
 }
 
 // ---------- geometry ----------

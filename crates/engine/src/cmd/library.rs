@@ -448,6 +448,8 @@ fn clip(name: &mut String) {
 fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep: &str, fold: bool) {
     let key = |n: &str| if fold { n.to_lowercase() } else { n.to_string() };
     let mut seen = HashSet::new();
+    // Per repeated name, the number to try next: a run of one name counts on instead of from 2.
+    let mut next: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for name in names {
         clip(name);
         if name.trim().is_empty() {
@@ -455,7 +457,12 @@ fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep
         }
         if seen.contains(&key(name)) {
             let base = name.clone();
-            *name = (2..).map(|n| format!("{base}{sep}{n}")).find(|n| !seen.contains(&key(n))).unwrap_or_default();
+            let n = next.entry(key(&base)).or_insert(2);
+            while seen.contains(&key(&format!("{base}{sep}{n}"))) {
+                *n += 1;
+            }
+            *name = format!("{base}{sep}{n}");
+            *n += 1;
         }
         seen.insert(key(name));
     }
