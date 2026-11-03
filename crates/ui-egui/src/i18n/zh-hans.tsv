@@ -1176,6 +1176,7 @@ file-filter	Templates	模板
 	Flip Row Order	反转行顺序
 	Flip Vertical	垂直翻转
 	Float in Window	在窗口中浮动
+	Float All in Windows	全部在窗口中浮动
 	Focal Fill	焦点填色
 	Focal Stroke	焦点描边
 	Folder	文件夹

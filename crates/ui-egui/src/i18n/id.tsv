@@ -586,6 +586,7 @@
 	Cascade	Bertingkat
 	Tile	Ubin
 	Float in Window	Mengambang di jendela
+	Float All in Windows	Mengambangkan semua di jendela
 	Consolidate All Windows	Konsolidasikan semua jendela
 	Workspace	Ruang kerja
 	Reset Essentials	Atur ulang Essentials

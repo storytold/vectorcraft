@@ -1,0 +1,459 @@
+use egui::{Pos2, Shape, pos2, vec2};
+use vectorcraft_engine::Session;
+
+use super::*;
+use crate::menus::enabled;
+
+/// An app with `n` new 400 × 300 pt documents, the last one current.
+fn app_with(n: usize) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for _ in 0..n {
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    }
+    app
+}
+
+/// One headless frame of the canvas panel's body (the tabs and the canvas or panes) on a
+/// 1200 × 800 window, then the floating document windows, which egui draws inside the window →
+/// the shapes it drew, `Shape::Vec`s flattened.
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<Shape> {
+    fn flat(s: Shape, out: &mut Vec<Shape>) {
+        match s {
+            Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
+            s => out.push(s),
+        }
+    }
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+        max_texture_side: Some(8192),
+        events,
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(raw, |ui| {
+        app.canvas_area(ui);
+        show(app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    let mut shapes = vec![];
+    out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
+    shapes
+}
+
+fn button(pos: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+/// A press and release at `pos`, then a frame to settle.
+fn click(app: &mut VectorcraftApp, ctx: &egui::Context, pos: Pos2) {
+    frame(app, ctx, vec![egui::Event::PointerMoved(pos), button(pos, true)]);
+    frame(app, ctx, vec![button(pos, false)]);
+    frame(app, ctx, vec![]);
+}
+
+/// Where the last frame drew document `i`'s window body.
+fn body_of(app: &VectorcraftApp, i: usize) -> egui::Rect {
+    let uid = app.session.documents()[i].uid;
+    app.ui.floating.iter().find(|w| w.uid == uid).and_then(|w| w.body).unwrap()
+}
+
+/// The whole of document `i`'s window inside the main window, title bar included.
+fn window_of(app: &VectorcraftApp, ctx: &egui::Context, i: usize) -> egui::Rect {
+    let uid = app.session.documents()[i].uid;
+    let w = app.ui.floating.iter().find(|w| w.uid == uid).unwrap();
+    ctx.memory(|m| m.area_rect(egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation)))).unwrap()
+}
+
+/// A drag with the primary button from `from` to `to`, then a frame to settle.
+fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2) {
+    frame(app, ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(app, ctx, vec![button(from, true)]);
+    for k in 1..=4 {
+        frame(app, ctx, vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / 4.0))]);
+    }
+    frame(app, ctx, vec![button(to, false)]);
+    frame(app, ctx, vec![]);
+}
+
+/// Whether the last frame drew text holding `title` in the tab strip (the top 35 points).
+fn tab_drawn(shapes: &[Shape], title: &str) -> bool {
+    shapes.iter().any(|s| matches!(s, Shape::Text(t) if t.pos.y < 35.0 && t.galley.text().contains(title)))
+}
+
+#[test]
+fn cascade_places_step_down_and_right_inside_the_area() {
+    let area = egui::Rect::from_min_size(pos2(10.0, 35.0), vec2(1190.0, 765.0));
+    let places = cascade_places(area, 5);
+    assert_eq!(places.len(), 5);
+    for (k, p) in places.iter().enumerate() {
+        assert!(area.contains_rect(*p), "place {k} is inside the area: {p:?}");
+        assert_eq!(p.size(), places[0].size(), "every window is the same size");
+        let offset = CASCADE_MARGIN + k as f32 * CASCADE_STEP;
+        assert_eq!(p.min, area.min + vec2(offset, offset), "place {k} is {offset} pt down and right");
+    }
+    // A small area holds fewer steps: the stack starts again at the corner and stays inside.
+    let small = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 400.0));
+    let places = cascade_places(small, 12);
+    assert!(places.iter().all(|p| small.contains_rect(*p)), "{places:?}");
+    assert!(places.iter().skip(1).any(|p| p.min == places[0].min), "the stack starts again: {places:?}");
+    // An area smaller than a window: the window fills it.
+    let tiny = egui::Rect::from_min_size(pos2(5.0, 5.0), vec2(100.0, 80.0));
+    assert_eq!(cascade_places(tiny, 2), [tiny, tiny]);
+}
+
+#[test]
+fn a_control_channel_keeps_the_windows_inside_the_main_window() {
+    let ctx = egui::Context::default();
+    ctx.set_embed_viewports(false);
+    let plain = app_with(0);
+    let wayland = ["WAYLAND_DISPLAY", "WAYLAND_SOCKET"].iter().any(|n| std::env::var_os(n).is_some_and(|v| !v.is_empty()));
+    if !wayland {
+        assert!(native(&plain, &ctx), "without a control channel the windows are OS windows");
+    }
+    let (_tx, rx) = std::sync::mpsc::channel();
+    let controlled = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    assert!(!native(&controlled, &ctx), "with a control channel the windows stay inside the main window");
+    ctx.set_embed_viewports(true);
+    assert!(!native(&plain, &ctx), "where egui draws every viewport inside the main window");
+}
+
+#[test]
+fn float_in_window_moves_the_current_document_out_of_the_tabs() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    let shapes = frame(&mut app, &ctx, vec![]);
+    let title = app.session.documents()[2].title();
+    assert!(tab_drawn(&shapes, &title), "the current document has a tab");
+    let tabbed = app.canvas_rect.unwrap();
+    assert_eq!(app.run("window.arrange.floatInWindow", json!({})).unwrap(), json!({"floating": [2]}));
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    assert!(!tab_drawn(&shapes, &title), "a floating document has no tab");
+    assert!(tab_drawn(&shapes, &app.session.documents()[0].title()));
+    assert_eq!(docked(&app), [0, 1]);
+    assert_eq!(app.session.active_index(), Some(2), "the floating document stays the current one");
+    // Its window holds the canvas, fitted to the window; the main window shows a tabbed document.
+    let body = body_of(&app, 2);
+    let canvas = app.canvas_rect.unwrap();
+    assert!(body.contains_rect(canvas) && canvas.width() < tabbed.width(), "the canvas is in the window: {canvas:?} in {body:?}");
+    assert!(app.views[2].fitted);
+    assert_eq!(tab_document(&app), Some(0));
+    assert_eq!(crate::control::inspect(&app, &ctx)["floating"], json!([2]));
+    // Floating it again leaves it where it is.
+    assert_eq!(app.run("window.arrange.floatInWindow", json!({})).unwrap(), json!({"floating": [2]}));
+    assert_eq!(app.ui.floating.len(), 1);
+}
+
+#[test]
+fn a_press_in_another_documents_window_or_the_main_window_makes_its_document_current() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    // The lower left of document 0's window, clear of document 1's window, which cascades below
+    // and to the right of it, and of the window's resize edges.
+    let body = body_of(&app, 0);
+    click(&mut app, &ctx, pos2(body.left() + 12.0, body.bottom() - 12.0));
+    assert_eq!(app.session.active_index(), Some(0), "a press in its window makes document 0 current");
+    assert!(body_of(&app, 0).contains_rect(app.canvas_rect.unwrap()), "its window holds the canvas now");
+    // The main window shows the only tabbed document as a pane: a press there makes it current.
+    assert_eq!(tab_document(&app), Some(2));
+    click(&mut app, &ctx, pos2(1100.0, 700.0));
+    assert_eq!(app.session.active_index(), Some(2));
+    // A press on the title bar of document 0's window, in front, makes document 0 current again.
+    let (window, body) = (window_of(&app, &ctx, 0), body_of(&app, 0));
+    click(&mut app, &ctx, pos2(window.left() + 60.0, (window.top() + body.top()) / 2.0));
+    assert_eq!(app.session.active_index(), Some(0), "a press on its title bar makes document 0 current");
+}
+
+#[test]
+fn a_resized_window_fits_its_document_again_unless_it_was_zoomed() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let (before, other) = (app.views[1].zoom, app.views[0].zoom);
+    // Document 1's window, in front and holding the canvas, grows from its lower-right corner.
+    let window = window_of(&app, &ctx, 1);
+    drag(&mut app, &ctx, window.right_bottom() - vec2(2.0, 2.0), window.right_bottom() + vec2(150.0, 100.0));
+    assert!(window_of(&app, &ctx, 1).width() > window.width() + 100.0, "the window grew");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    assert!(app.views[1].zoom > before, "the document fits its larger window: {before} → {}", app.views[1].zoom);
+    assert_eq!(app.views[0].zoom, other, "the other window keeps its size and its document's zoom");
+    // A zoomed view keeps its zoom when its window changes size again.
+    app.run("view.zoomIn", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let zoomed = app.views[1].zoom;
+    let window = window_of(&app, &ctx, 1);
+    drag(&mut app, &ctx, window.right_bottom() - vec2(2.0, 2.0), window.right_bottom() - vec2(100.0, 60.0));
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.views[1].zoom, zoomed, "a zoomed document keeps its zoom");
+}
+
+#[test]
+fn cascade_floats_every_document_and_stacks_the_windows() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    assert_eq!(app.run("window.arrange.cascade", json!({})).unwrap(), json!({"floating": [0, 1, 2]}));
+    assert!(!app.ui.tiled, "Cascade ends Tile");
+    assert!(docked(&app).is_empty());
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let area = app.canvas.windows.area.unwrap();
+    let places: Vec<egui::Rect> = app.ui.floating.iter().map(|w| w.place).collect();
+    assert_eq!(places, cascade_places(area, 3), "the windows stack in tab order, document 1's moved from where it floated");
+    for (i, place) in places.iter().copied().enumerate() {
+        let body = body_of(&app, i);
+        assert!((body.left() - place.left()).abs() < 4.0 && body.top() > place.top(), "document {i}'s window is at its place: {body:?} {place:?}");
+        assert!(app.views[i].fitted, "document {i} fits its window");
+    }
+    assert!(body_of(&app, 1).contains_rect(app.canvas_rect.unwrap()), "the current document's window holds the canvas");
+}
+
+#[test]
+fn float_all_in_windows_floats_the_tabbed_documents_and_consolidate_brings_them_back() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let tabbed = app.canvas_rect.unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let first = app.ui.floating[0].place;
+    assert_eq!(app.run("window.arrange.floatAllInWindows", json!({})).unwrap(), json!({"floating": [2, 0, 1]}));
+    assert_eq!(app.ui.floating[0].place, first, "a window already floating stays where it is");
+    assert!(docked(&app).is_empty());
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false, "floating": []}));
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    assert_eq!(docked(&app), [0, 1, 2]);
+    for d in app.session.documents() {
+        assert!(tab_drawn(&shapes, &d.title()), "{} has its tab again", d.title());
+    }
+    assert_eq!(app.canvas_rect, Some(tabbed), "the canvas is under the tabs again");
+    assert!(app.views[2].fitted);
+}
+
+#[test]
+fn tile_brings_floating_documents_back_into_the_grid() {
+    let mut app = app_with(3);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(i, _)| *i).collect();
+    assert_eq!(docs, [0, 1], "a floating document leaves the grid; the tabbed ones share it");
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3}));
+    frame(&mut app, &ctx, vec![]);
+    let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(i, _)| *i).collect();
+    assert_eq!(docs, [0, 1, 2]);
+    assert!(app.ui.floating.is_empty());
+}
+
+#[test]
+fn closing_a_floating_window_closes_its_document_and_asks_to_save_an_unsaved_one() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    // Document 0's window is behind document 1's: its close button is at the top right of its
+    // title bar, clear of document 1's window to the right and below.
+    let close_button = |app: &VectorcraftApp, i: usize| {
+        let uid = app.session.documents()[i].uid;
+        let w = app.ui.floating.iter().find(|w| w.uid == uid).unwrap();
+        let area = ctx.memory(|m| m.area_rect(egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation)))).unwrap();
+        let body = w.body.unwrap();
+        (area, body)
+    };
+    let (area0, body0) = close_button(&app, 0);
+    assert!(body0.top() > area0.top(), "the window has a title bar");
+    // Close document 1 (in front): it is unsaved after an edit, so the app asks first.
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    assert!(app.session.documents()[1].is_dirty());
+    frame(&mut app, &ctx, vec![]);
+    // The close button sits near the right end of the title bar.
+    let press_close = |app: &mut VectorcraftApp, i: usize| {
+        let (area, body) = close_button(app, i);
+        let bar = (area.top() + body.top()) / 2.0;
+        let n = app.session.documents().len();
+        for dx in (4..40).step_by(3) {
+            click(app, &ctx, pos2(area.right() - dx as f32, bar));
+            if app.ui.dialog.is_some() || app.session.documents().len() < n {
+                return true;
+            }
+        }
+        false
+    };
+    assert!(press_close(&mut app, 1), "the close button of document 1's window acts");
+    assert!(app.ui.dialog.is_some(), "an unsaved document asks to be saved");
+    assert_eq!(app.session.documents().len(), 2);
+    // While the prompt is open the windows take no press.
+    let body = body_of(&app, 0);
+    click(&mut app, &ctx, pos2(body.left() + 12.0, body.bottom() - 12.0));
+    assert_eq!(app.session.active_index(), Some(1), "a press in another window waits for the prompt");
+    app.ui.dialog = None;
+    // Document 0 has no changes: its window closes with it.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(press_close(&mut app, 0), "the close button of document 0's window acts");
+    assert_eq!(app.session.documents().len(), 1);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.ui.floating.len(), 1, "its window has gone");
+}
+
+#[test]
+fn presentation_mode_shows_the_floating_current_document_in_the_main_window() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let body = body_of(&app, 1);
+    assert!(body.contains_rect(app.canvas_rect.unwrap()), "the current document's window holds the canvas");
+    let windowed = (app.views[0].zoom, app.views[1].zoom);
+    app.run("view.presentation", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let shown = app.canvas_rect.unwrap();
+    assert!(shown.width() > body.width() + 100.0, "the main window shows the current document: {shown:?}, its window was {body:?}");
+    // The presentation goes on to the other floating document, fitted to the main window, then
+    // ends on the first one.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.views[0].zoom > windowed.0, "the presentation fitted document 0 to the main window");
+    app.run("view.presentation", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    assert!(body_of(&app, 1).contains_rect(app.canvas_rect.unwrap()), "the window holds the canvas again");
+    assert_eq!(app.ui.floating.len(), 2, "the windows come back");
+    for (i, before) in [windowed.0, windowed.1].into_iter().enumerate() {
+        assert!((app.views[i].zoom - before).abs() < 1e-6, "document {i} fits its window again: {before} → {}", app.views[i].zoom);
+    }
+}
+
+#[test]
+fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let layer = |app: &VectorcraftApp, i: usize| {
+        let uid = app.session.documents()[i].uid;
+        let w = app.ui.floating.iter().find(|w| w.uid == uid).unwrap();
+        egui::LayerId::new(egui::Order::Middle, egui::Id::unique(("vectorcraft-document-window", w.uid, w.generation)))
+    };
+    let top = |ctx: &egui::Context| ctx.memory(|m| m.areas().top_layer_id(egui::Order::Middle));
+    assert_eq!(top(&ctx), Some(layer(&app, 1)), "the current document's window is in front");
+    app.run("view.presentation", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.run("view.presentation", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(top(&ctx), Some(layer(&app, 0)), "document 0's window comes to the front");
+}
+
+/// A stand-in for the window system of the documents' OS windows: it runs each one's frame, asks
+/// each to close while `close` is set, and records the commands the windows were sent.
+#[derive(Default)]
+struct Host {
+    close: bool,
+    commands: Vec<(egui::ViewportId, egui::ViewportCommand)>,
+}
+
+fn native_host() -> std::rc::Rc<std::cell::RefCell<Host>> {
+    let host = std::rc::Rc::new(std::cell::RefCell::new(Host::default()));
+    let shared = host.clone();
+    egui::Context::set_immediate_viewport_renderer(move |ctx, mut viewport| {
+        let id = viewport.ids.this;
+        let events = if shared.borrow().close { vec![egui::ViewportEvent::Close] } else { vec![] };
+        let rect = egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0));
+        let info = egui::ViewportInfo { events, inner_rect: Some(rect), outer_rect: Some(rect), focused: Some(false), ..Default::default() };
+        let input =
+            egui::RawInput { viewport_id: id, viewports: std::iter::once((id, info)).collect(), screen_rect: Some(rect), ..Default::default() };
+        let mut full = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+        full.textures_delta.clear();
+        let mut host = shared.borrow_mut();
+        for (vid, output) in full.viewport_output {
+            host.commands.extend(output.commands.into_iter().map(|c| (vid, c)));
+        }
+    });
+    host
+}
+
+#[test]
+fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
+    let host = native_host();
+    let ctx = egui::Context::default();
+    ctx.set_embed_viewports(false);
+    let mut app = app_with(2);
+    if !native(&app, &ctx) {
+        // Wayland: the windows are inside the main window.
+        return;
+    }
+    frame(&mut app, &ctx, vec![]);
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let vid = viewport_id(app.session.documents()[1].uid);
+    host.borrow_mut().close = true;
+    frame(&mut app, &ctx, vec![]);
+    host.borrow_mut().close = false;
+    assert!(app.ui.dialog.is_some(), "the unsaved document asks to be saved");
+    assert_eq!(app.session.documents().len(), 2);
+    assert!(is_floating(&app, 1), "the document still floats");
+    assert!(
+        host.borrow().commands.iter().any(|(id, c)| *id == vid && *c == egui::ViewportCommand::CancelClose),
+        "its OS window is kept open: {:?}",
+        host.borrow().commands
+    );
+}
+
+#[test]
+fn the_arrange_items_are_enabled_as_the_documents_allow() {
+    let ids = [
+        "window.arrange.cascade",
+        "window.arrange.tile",
+        "window.arrange.floatInWindow",
+        "window.arrange.floatAllInWindows",
+        "window.arrange.consolidateAllWindows",
+    ];
+    let states = |app: &VectorcraftApp| ids.map(|id| enabled(app, id));
+    let mut app = app_with(0);
+    assert_eq!(states(&app), [false; 5], "no document");
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    assert_eq!(states(&app), [false, false, true, true, false], "one tabbed document");
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    assert_eq!(states(&app), [true, true, true, true, false], "two tabbed documents");
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    assert_eq!(states(&app), [true, true, false, true, true], "the current document floats, one is tabbed");
+    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+    assert_eq!(states(&app), [true, true, false, false, true], "every document floats");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    assert_eq!(states(&app), [true, true, true, true, false], "consolidated");
+}
