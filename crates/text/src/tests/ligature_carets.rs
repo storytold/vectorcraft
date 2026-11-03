@@ -62,6 +62,79 @@ fn a_contour_point_caret_uses_its_unhinted_x_and_y() {
     assert_eq!(bad.face(LIGATURE_CARET_FAMILY, "Regular").unwrap().ligature_carets(gid, 1), None);
 }
 
+/// [`contour_caret_font`] with its `glyf` and `loca` replaced: the ligature is a composite of
+/// eight copies of a glyph that is itself eight copies of the next, 15 levels down to a glyph with
+/// no contours. Every other glyph is empty.
+fn composite_fan_caret_font() -> Vec<u8> {
+    use skrifa::raw::TableProvider;
+    use write_fonts::FontBuilder;
+    use write_fonts::types::Tag;
+
+    const FAN: usize = 8;
+    const LEVELS: usize = 15;
+    let base = contour_caret_font(0);
+    let font = skrifa::FontRef::new(&base).expect("test font parses");
+    let ligature = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let num_glyphs = font.maxp().expect("maxp reads").num_glyphs();
+    let short_loca = font.head().expect("head reads").index_to_loc_format() == 0;
+    let levels: Vec<u16> = (1..num_glyphs).filter(|g| *g != ligature).take(LEVELS).collect();
+    let composite = |child: u16| {
+        let mut data = vec![0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+        for i in 0..FAN {
+            // ARGS_ARE_XY_VALUES, plus MORE_COMPONENTS on all but the last; byte offsets of 0.
+            let flags: u16 = if i + 1 < FAN { 0x0022 } else { 0x0002 };
+            data.extend(flags.to_be_bytes());
+            data.extend(child.to_be_bytes());
+            data.extend([0, 0]);
+        }
+        data
+    };
+    let mut glyf = Vec::new();
+    let mut offsets = vec![0usize];
+    for gid in 0..num_glyphs {
+        if gid == ligature {
+            glyf.extend(composite(levels[0]));
+        } else if let Some(level) = levels.iter().position(|g| *g == gid) {
+            match levels.get(level + 1) {
+                Some(child) => glyf.extend(composite(*child)),
+                // No contours, a zero bounding box and no instructions.
+                None => glyf.extend([0u8; 12]),
+            }
+        }
+        offsets.push(glyf.len());
+    }
+    let loca: Vec<u8> = if short_loca {
+        offsets.iter().flat_map(|o| u16::try_from(o / 2).expect("short offset").to_be_bytes()).collect()
+    } else {
+        offsets.iter().flat_map(|o| u32::try_from(*o).expect("long offset").to_be_bytes()).collect()
+    };
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"glyf"), glyf);
+    builder.add_raw(Tag::new(b"loca"), loca);
+    for record in font.table_directory.table_records() {
+        let tag = Tag::new(&record.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(record.tag()).expect("base table reads").as_bytes());
+        }
+    }
+    builder.build()
+}
+
+/// A contour-point caret on a composite that expands to billions of glyphs with no points gives
+/// no caret, and quickly, rather than reading every one of them.
+#[test]
+fn a_contour_point_caret_on_a_huge_empty_composite_gives_up() {
+    let gid = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph"));
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let db = db_with(Some(composite_fan_caret_font()));
+        let carets = db.face(LIGATURE_CARET_FAMILY, "Regular").map(|face| face.ligature_carets(gid, 1));
+        let _ = send.send(carets);
+    });
+    let carets = receive.recv_timeout(std::time::Duration::from_secs(30)).expect("the caret lookup finishes");
+    assert_eq!(carets, Some(None));
+}
+
 fn point(text: &str, family: &str) -> TextObject {
     TextObject::point(Point::ZERO, text, CharStyle { font_family: family.into(), size: 100.0, ..CharStyle::default() })
 }

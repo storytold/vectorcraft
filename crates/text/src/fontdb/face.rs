@@ -3,9 +3,14 @@ use super::names::{localized, name};
 use super::traits::{FaceKeys, FontTraits};
 use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
+/// The most glyphs one [`outline_points`] lookup reads, composite components included.
+const MAX_OUTLINE_VISITS: usize = 65_536;
+
 /// Unhinted TrueType contour points in glyph order, including transformed composite components.
-/// A cap and depth bound keep damaged fonts from making caret lookup unbounded.
-fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize) -> Option<Vec<(f64, f64)>> {
+/// A point cap, a depth bound and `visits`, the number of glyphs the whole lookup may still read,
+/// keep damaged fonts from making caret lookup unbounded. Callers start `visits` at
+/// [`MAX_OUTLINE_VISITS`].
+fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize, visits: &mut usize) -> Option<Vec<(f64, f64)>> {
     use skrifa::raw::TableProvider;
     use skrifa::raw::tables::glyf::{Anchor, CompositeGlyphFlags, Glyph};
 
@@ -14,6 +19,7 @@ fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize) -> Opt
     if depth >= MAX_DEPTH {
         return None;
     }
+    *visits = visits.checked_sub(1)?;
     let glyph = font.loca(None).ok()?.get(gid, &font.glyf().ok()?)?.into_glyph()?;
     match glyph {
         Glyph::Simple(simple) => {
@@ -26,7 +32,7 @@ fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize) -> Opt
         Glyph::Composite(composite) => {
             let mut points = Vec::new();
             for component in composite.components() {
-                let child = outline_points(font, GlyphId::new(component.glyph.to_u32()), depth + 1)?;
+                let child = outline_points(font, GlyphId::new(component.glyph.to_u32()), depth + 1, visits)?;
                 let t = component.transform;
                 let xx = f64::from(t.xx.to_f32());
                 let xy = f64::from(t.xy.to_f32());
@@ -341,7 +347,8 @@ impl FontFace {
                     if self.location.coords().iter().any(|c| c.to_f32() != 0.0) {
                         return None;
                     }
-                    let point = outline_points(&font, GlyphId::new(gid), 0)?.get(usize::from(v.caret_value_point_index())).copied()?;
+                    let mut visits = MAX_OUTLINE_VISITS;
+                    let point = outline_points(&font, GlyphId::new(gid), 0, &mut visits)?.get(usize::from(v.caret_value_point_index())).copied()?;
                     Some(if vertical { point.1 } else { point.0 })
                 }
             })
