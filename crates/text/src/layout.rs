@@ -140,7 +140,9 @@ impl Ctx<'_> {
     /// stretch.
     fn char_directions(&self, r: &Range<usize>) -> Vec<(Range<usize>, ParaDirection)> {
         let mut out: Vec<(Range<usize>, ParaDirection)> = Vec::new();
-        for (rr, st) in &self.runs {
+        // Only the paragraph's own runs (they are in order), not every run of the text.
+        let first = self.runs.partition_point(|(rr, _)| rr.end <= r.start);
+        for (rr, st) in self.runs.iter().skip(first).take_while(|(rr, _)| rr.start < r.end) {
             let (a, b) = (rr.start.max(r.start), rr.end.min(r.end));
             let Some(d) = st.char_direction.filter(|_| a < b) else { continue };
             let (a, b) = (a - r.start, b - r.start);
@@ -212,7 +214,10 @@ impl Ctx<'_> {
     fn prepend_marker(&self, pr: &Range<usize>, para: &ParaStyle, text: Option<&str>, rtl: bool, sg: &mut Vec<SGlyph>) -> usize {
         let Some(text) = text.filter(|_| para.list.is_some() && !pr.is_empty()) else { return 0 };
         let st = vectorcraft_doc::text::ParaList::marker_style(self.style_at(pr.start));
-        let Some(run) = self.runs.iter().position(|(r, _)| r.start <= pr.start && pr.start < r.end) else { return 0 };
+        let run = self.runs.partition_point(|(r, _)| r.end <= pr.start);
+        if !self.runs.get(run).is_some_and(|(r, _)| r.start <= pr.start && pr.start < r.end) {
+            return 0;
+        }
         // The paragraph's direction: the marker starts a right-to-left paragraph at its right.
         let level = if rtl { Level::rtl() } else { Level::ltr() };
         let mut marker = Vec::with_capacity(text.len() + 1);

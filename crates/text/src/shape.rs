@@ -375,7 +375,13 @@ pub(crate) fn shape_range(
         art: Option<&'a InlineArt>,
     }
     let mut spans: Vec<ShapeSpan<'_>> = Vec::new();
-    for (ri, (rr, st)) in runs.iter().enumerate() {
+    // The runs are in order: start at the first that ends inside the range and stop past it, so
+    // that each paragraph looks only at its own runs.
+    let first = runs.partition_point(|(rr, _)| rr.end <= range.start);
+    for (ri, (rr, st)) in runs.iter().enumerate().skip(first) {
+        if rr.start >= range.end {
+            break;
+        }
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
         if a >= b || text.get(a..b).is_none() {
