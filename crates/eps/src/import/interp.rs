@@ -1135,9 +1135,12 @@ impl<'a> Interp<'a> {
             PdfMark => {
                 self.pop_to_mark()?;
             }
+            // True for a simple object, and for a composite one in global VM (PLRM 3rd ed., `gcheck`);
+            // every composite here is in local VM. Procsets that copy values into global VM leave
+            // alone those whose `gcheck` is true, such as a halftone's numbers.
             Gcheck | Scheck => {
-                self.pop()?;
-                self.push(Obj::Bool(false))?;
+                let simple = !self.pop()?.is_composite();
+                self.push(Obj::Bool(simple))?;
             }
             CurrentShared => self.push(Obj::Bool(false))?,
             SetShared | SetVmThreshold | VmReclaim | Echo => {
