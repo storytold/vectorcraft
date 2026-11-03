@@ -207,10 +207,21 @@ impl SizeUnit {
         }
     }
 
-    /// `points` as a length in this unit, rounded to `decimals` places, e.g. `70.556mm`.
+    /// `points` as a length in this unit, rounded to `decimals` places, e.g. `70.556mm`. A
+    /// positive size never rounds to zero (a zero `width` disables rendering): in a unit with a
+    /// suffix it gets more places, up to 12, until a digit survives. `px` stays as [`fmt_num`]
+    /// writes it.
     pub fn length(self, points: f64, decimals: u8) -> String {
+        const MAX_PLACES: u8 = 12;
         let (scale, suffix) = self.per_point();
-        format!("{}{suffix}", fmt_num(points * scale, decimals))
+        let v = points * scale;
+        let mut places = decimals;
+        if !suffix.is_empty() && v.is_finite() && v > 0.0 {
+            while places < MAX_PLACES && fmt_num(v, places) == "0" {
+                places += 1;
+            }
+        }
+        format!("{}{suffix}", fmt_num(v, places))
     }
 }
 
@@ -709,6 +720,19 @@ mod tests {
         assert_eq!(fmt_num(-0.0001, 3), "0");
         assert_eq!(fmt_num(10.5, 1), "10.5");
         assert_eq!(fmt_num(100.0, 0), "100");
+    }
+
+    #[test]
+    fn tiny_physical_sizes_never_format_as_zero() {
+        // 3 pt is 0.0417 in: one place would write `0in`, and a zero width disables rendering.
+        assert_eq!(SizeUnit::In.length(3.0, 1), "0.04in");
+        assert_eq!(SizeUnit::Mm.length(0.001, 1), "0.0004mm");
+        // Nothing to widen when a digit survives, or when the size really is zero.
+        assert_eq!(SizeUnit::In.length(72.0, 1), "1in");
+        assert_eq!(SizeUnit::In.length(0.0, 1), "0in");
+        // `px` is written exactly as `fmt_num` does.
+        assert_eq!(SizeUnit::Px.length(3.0, 1), "3");
+        assert_eq!(SizeUnit::Px.length(0.01, 1), "0");
     }
 
     #[test]

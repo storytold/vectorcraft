@@ -217,7 +217,9 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
         }
         ui.end_row();
         choice(ui, d, "encoding", tl!("Encoding:"), &ENCODINGS, None);
-        choice(ui, d, "units", tl!("Units:"), &UNITS, None);
+        // Responsive omits width and height, so the unit has nothing to act on: show it dimmed.
+        let (units, responsive) = (d.str("units"), d.bool("responsive"));
+        choice(ui, d, "units", tl!("Units:"), &UNITS, responsive.then_some(units.as_str()));
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
