@@ -1263,6 +1263,10 @@ pub(crate) fn type_ranges(
 ) -> Result<Vec<(NodeId, usize, usize, bool)>> {
     // (text, its range; None: all of it).
     let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
+        // An object that isn't type is refused as `ids` of it is.
+        Some(id) if s.doc()?.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Text(_))) => {
+            return Err(bad(c, "no text objects selected"));
+        }
         Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs), c)?))],
         None => {
             let editing = editing_range(s)?.filter(|_| p.get("ids").filter(|v| !v.is_null()).is_none());
