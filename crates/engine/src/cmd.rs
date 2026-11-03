@@ -611,6 +611,26 @@ pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
     (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
 }
 
+/// [`unique_name`] for names given one after another (an import): `next` keeps, per base (in
+/// any case), the number after the last one tried, so a run of one name doesn't count up from 2
+/// again for each copy. Names only become taken meanwhile, so the result is the same.
+pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<String, usize>, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let i = next.entry(base.to_lowercase()).or_insert(2);
+    loop {
+        let n = format!("{base} {i}");
+        *i += 1;
+        if !taken(&n) {
+            return n;
+        }
+    }
+}
+
+/// The most presets one presets file imports: each is looked up among the saved ones.
+pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
+
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use vectorcraft_doc::range::parse_range;
