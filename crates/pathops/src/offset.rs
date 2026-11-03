@@ -119,10 +119,10 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
     // true offset is bounded by arrangement edges, so a contour is spurious iff a point deep inside
     // it lies closer than `d`: holes when growing, islands when insetting.
-    let src = path.to_bezpath();
+    let src = std::cell::LazyCell::new(|| boxed_segments(&path.to_bezpath()));
     let drop_outer = delta < 0.0;
     let spurious: Vec<bool> =
-        c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| dist_to(&src, p) < d * (1.0 - 1e-4) - 1e-6)).collect();
+        c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| any_within(&src, p, d * (1.0 - 1e-4) - 1e-6))).collect();
     if !spurious.contains(&true) {
         return all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION));
     }
@@ -208,9 +208,22 @@ fn deep_point(bp: &BezPath) -> Option<kurbo::Point> {
     best.map(|(_, p)| p)
 }
 
-fn dist_to(bp: &BezPath, p: kurbo::Point) -> f64 {
+/// Each segment of `bp` with its bounding box.
+fn boxed_segments(bp: &BezPath) -> Vec<(kurbo::Rect, kurbo::PathSeg)> {
+    use kurbo::ParamCurveExtrema;
+    bp.segments().map(|s| (s.bounding_box(), s)).collect()
+}
+
+/// Whether some segment lies closer than `r` to `p`. A segment whose box is more than `r` away
+/// (with a little slack for rounding) can't, so it is skipped without the costly nearest-point
+/// search, and the search stops at the first segment that does.
+fn any_within(segs: &[(kurbo::Rect, kurbo::PathSeg)], p: kurbo::Point, r: f64) -> bool {
     use kurbo::ParamCurveNearest;
-    bp.segments().map(|s| s.nearest(p, 1e-6).distance_sq).fold(f64::INFINITY, f64::min).sqrt()
+    let reach = r + 1e-6;
+    r > 0.0
+        && segs.iter().any(|(b, s)| {
+            p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach && s.nearest(p, 1e-6).distance_sq.sqrt() < r
+        })
 }
 
 #[cfg(test)]
@@ -218,6 +231,87 @@ mod tests {
     use kurbo::Shape;
 
     use super::*;
+
+    /// The check as it was: the nearest distance over every segment, then compared.
+    fn dist_to(bp: &BezPath, p: kurbo::Point) -> f64 {
+        use kurbo::ParamCurveNearest;
+        bp.segments().map(|s| s.nearest(p, 1e-6).distance_sq).fold(f64::INFINITY, f64::min).sqrt()
+    }
+
+    struct Lcg(u64);
+    impl Lcg {
+        fn next(&mut self) -> f64 {
+            self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (self.0 >> 11) as f64 / (1u64 << 53) as f64
+        }
+        /// A coordinate on a coarse grid, so segments touch, coincide and nest often.
+        fn grid(&mut self, n: f64) -> f64 {
+            (self.next() * n).floor()
+        }
+    }
+
+    #[test]
+    fn nearby_segment_check_agrees_with_the_full_scan() {
+        let mut rng = Lcg(7);
+        let mut hits = 0;
+        for case in 0..400 {
+            let n = [3.0, 6.0, 20.0][case % 3];
+            let mut bp = BezPath::new();
+            for _ in 0..1 + (rng.next() * 12.0) as usize {
+                let pt = |rng: &mut Lcg| kurbo::Point::new(rng.grid(n), rng.grid(n));
+                let a = pt(&mut rng);
+                bp.move_to(a);
+                match (rng.next() * 5.0) as u32 {
+                    0 => bp.line_to(a), // zero length
+                    1 => bp.line_to(pt(&mut rng)),
+                    2 => bp.quad_to(pt(&mut rng), pt(&mut rng)),
+                    3 => bp.curve_to(pt(&mut rng), pt(&mut rng), pt(&mut rng)),
+                    _ => {
+                        // A circle, touching or nested in others.
+                        let r = 1.0 + rng.grid(n / 2.0);
+                        bp.extend(kurbo::Circle::new(a, r).to_path(0.01));
+                    }
+                }
+                if rng.next() < 0.3 {
+                    bp.close_path();
+                }
+            }
+            let segs = boxed_segments(&bp);
+            for _ in 0..40 {
+                // On the grid (on segments and their ends) and off it.
+                let p = if rng.next() < 0.5 {
+                    kurbo::Point::new(rng.grid(n), rng.grid(n))
+                } else {
+                    kurbo::Point::new(rng.next() * (n + 2.0) - 1.0, rng.next() * (n + 2.0) - 1.0)
+                };
+                let nearest = dist_to(&bp, p);
+                // Radii around the true distance (where a wrong skip would show), and the usual kind.
+                for r in [nearest, nearest * (1.0 - 1e-9), nearest * (1.0 + 1e-9), nearest + 1e-6, 0.0, -1.0, 1e-7, rng.next() * 3.0, 1e6] {
+                    assert_eq!(any_within(&segs, p, r), nearest < r, "case {case} p {p:?} r {r} nearest {nearest}");
+                    hits += usize::from(nearest < r);
+                }
+            }
+        }
+        assert!(hits > 1000, "{hits}");
+        assert!(!any_within(&[], kurbo::Point::ZERO, 1.0));
+    }
+
+    #[test]
+    fn growing_a_plate_with_many_holes_keeps_the_holes_that_stay() {
+        // A plate with a grid of round holes: growing by 1 closes the narrow ones (radius <= 1)
+        // and keeps the wide ones.
+        let mut plate = BezPath::new();
+        plate.extend(kurbo::Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1));
+        for i in 0..10 {
+            for j in 0..10 {
+                let r = if (i + j) % 2 == 0 { 0.8 } else { 4.0 };
+                plate.extend(kurbo::Circle::new((10.0 + 20.0 * f64::from(i), 10.0 + 20.0 * f64::from(j)), r).to_path(0.01).reverse_subpaths());
+            }
+        }
+        let out = offset_path(&PathData::from_bezpath(&plate), 1.0, Join::Round, 4.0);
+        // The outer contour and the 50 wide holes; the 50 narrow ones are gone.
+        assert_eq!(out.subpaths.len(), 1 + 50);
+    }
 
     #[test]
     fn stroke_region_unites_outlines_whatever_their_winding() {
