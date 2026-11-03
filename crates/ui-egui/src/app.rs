@@ -511,8 +511,11 @@ impl VectorcraftApp {
         }
         if self.ui.status_bar && self.ui.screen_mode < 3 {
             chrome::status_bar(self, ui);
+        }
+        if self.ui.help_bar && self.ui.screen_mode < 3 {
             chrome::hint_bar(self, ui);
-        } else {
+        }
+        if self.ui.screen_mode >= 3 || (!self.ui.status_bar && !self.ui.help_bar) {
             // Keeps the previous frame's value valid for menus drawn above, before the bars.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }

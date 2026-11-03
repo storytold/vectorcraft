@@ -1,8 +1,10 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (independent Help Bar visibility; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
+
+Window → Help Bar toggles the bottom tool-help strip independently of the status bar. Its visibility is saved with workspaces and UI preferences; Presentation Mode hides both bars. Scores and estimates are unchanged.
 
 **Feature evidence last updated:** 2026-11-03.
 
@@ -19,6 +21,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Help Bar has its own Window menu toggle and workspace visibility setting. Scores and estimates unchanged. |
 | 2026-10-26 | minor | Pencil Fidelity goes down to 0.01 pt (dialog, tool and engine; Smooth keeps 0.05) on a logarithmic slider across the Tool Options row, with hundredths in the field and key steps that fit the range (#3328); scores and estimates unchanged (estimated) |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |

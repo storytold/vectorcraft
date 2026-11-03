@@ -433,6 +433,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.control" => flag(&mut app.ui.control_bar),
+        "window.helpBar" => flag(&mut app.ui.help_bar),
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {

@@ -441,6 +441,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    ("window.helpBar", "Help Bar", "", "{} toggle the tool-help strip independently of the status bar; returns the new visibility"),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",

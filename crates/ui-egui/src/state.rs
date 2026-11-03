@@ -432,6 +432,7 @@ pub struct UiState {
     #[serde(default)]
     pub toolbar_pos: Option<[f32; 2]>,
     pub status_bar: bool,
+    pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
     /// hidden them since it last showed them, or a workspace was applied since.
@@ -940,6 +941,7 @@ impl Default for UiState {
             dock_width: None,
             toolbar_pos: None,
             status_bar: true,
+            help_bar: true,
             dock: true,
             tab_hid: None,
             view: ViewFlags::default(),

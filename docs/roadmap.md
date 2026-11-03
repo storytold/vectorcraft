@@ -1,8 +1,10 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (independent Help Bar visibility; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
+
+Window → Help Bar toggles the bottom tool-help strip independently of the status bar. Its visibility is saved with workspaces and UI preferences; Presentation Mode hides both bars. Scores and estimates are unchanged.
 
 **Feature evidence last updated:** 2026-11-03.
 
@@ -19,6 +21,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Help Bar has its own Window menu toggle and workspace visibility setting. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; scores and estimates unchanged. |
 | 2026-10-30 | minor | Raster effects: bounded length fields in effect dialogs clamp on commit and reject invalid inputs visibly (#4638); estimates unchanged. |
