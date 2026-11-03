@@ -12,6 +12,8 @@ use crate::*;
 /// The example Desaturate plug-in (built from `crates/plugins/example`).
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
 const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
+const TANGENT_CIRCLE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/tangent_circle.wasm");
+const TANGENT_CIRCLE_ID: &str = "org.vectorcraft.tangent-circle";
 
 fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd}: {e}"))
@@ -446,6 +448,46 @@ fn removing_an_active_tool_plugin_selects_the_selection_tool() {
     assert_eq!(s.tool_id(), format!("plugin.{id}"));
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert_eq!(s.tool_id(), "selection");
+}
+
+#[test]
+fn tangent_circle_plugin_keeps_an_exact_external_tangency_through_undo_redo() {
+    let mut s = session();
+    install(&mut s, TANGENT_CIRCLE);
+    let moved = run(&mut s, "shape.ellipse", json!({"x": 90, "y": 90, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    let a = run(&mut s, "shape.ellipse", json!({"x": 60, "y": 60, "width": 40, "height": 40}))["id"].as_u64().unwrap();
+    let b = run(&mut s, "shape.ellipse", json!({"x": 100, "y": 100, "width": 40, "height": 40}))["id"].as_u64().unwrap();
+    let listed = vectorcraft_plugins::tool::circles(&s.doc().unwrap().doc, 20);
+    assert!(
+        listed.iter().any(|c| c["id"] == moved && c["center"] == json!([100.0, 100.0]) && c["radius"] == json!(10.0)),
+        "{listed:?}"
+    );
+    assert!(listed.iter().any(|c| c["id"] == b && c["center"] == json!([120.0, 120.0]) && c["radius"] == json!(20.0)), "{listed:?}");
+    s.select_tool(&format!("plugin.{TANGENT_CIRCLE_ID}"), ViewInfo::default()).unwrap();
+    let down = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, 100.0, 100.0);
+    s.pointer(&down, ViewInfo::default()).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![NodeId(moved)]);
+    s.pointer(&vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Drag, 93.0, 108.0), ViewInfo::default()).unwrap();
+    s.pointer(&vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Up, 93.0, 108.0), ViewInfo::default()).unwrap();
+    let center = |s: &Session, id: u64| {
+        let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+        let vectorcraft_doc::LiveShape::Ellipse { w, h, xf, .. } = n.live_shape().unwrap() else { panic!("a live ellipse") };
+        assert_eq!(w, h);
+        (*xf * Point::new(w / 2.0, h / 2.0), w / 2.0)
+    };
+    let (m, radius) = center(&s, moved);
+    let (ca, _) = center(&s, a);
+    let (cb, _) = center(&s, b);
+    assert!((m.distance(ca) - (radius + 20.0)).abs() < 1e-9, "{m:?} to {ca:?}");
+    assert!((m.distance(cb) - (radius + 20.0)).abs() < 1e-9, "{m:?} to {cb:?}");
+    assert_eq!(radius, 10.0, "the plug-in never resizes the moved circle");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(center(&s, moved).0, Point::new(100.0, 100.0));
+    run(&mut s, "edit.redo", json!({}));
+    let (again, again_radius) = center(&s, moved);
+    assert_eq!(again_radius, radius);
+    assert!((again.distance(ca) - (again_radius + 20.0)).abs() < 1e-9);
+    assert!((again.distance(cb) - (again_radius + 20.0)).abs() < 1e-9);
 }
 
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
