@@ -83,6 +83,8 @@ fn junk_options_are_rejected() {
         json!({"svg": "css"}),
         json!({"images": "inline"}),
         json!({"useArtboards": "yes"}),
+        json!({"units": "furlong"}),
+        json!({"units": 7}),
     ] {
         let mut q = p.clone();
         q["format"] = json!("svg");
@@ -90,6 +92,30 @@ fn junk_options_are_rejected() {
     }
     // Other formats ignore the SVG options.
     assert!(s.execute("document.export", &json!({"format": "png", "styling": "fancy"})).is_ok());
+}
+
+/// #4462: width and height carry the chosen unit (the document is 200 × 100 pt, the viewBox stays
+/// in points), px is today's bare numbers, and Responsive leaves the size out whatever the unit.
+#[test]
+fn svg_export_writes_width_height_with_the_requested_unit() {
+    let mut s = session(1);
+    let plain = svg(&mut s, json!({}));
+    assert!(plain.contains(" width=\"200\" height=\"100\" viewBox=\"0 0 200 100\""), "{plain}");
+    assert_eq!(svg(&mut s, json!({"units": "px"})), plain, "px is the default, byte for byte");
+    for (unit, size) in [
+        ("mm", "width=\"70.556mm\" height=\"35.278mm\""),
+        ("cm", "width=\"7.056cm\" height=\"3.528cm\""),
+        ("in", "width=\"2.778in\" height=\"1.389in\""),
+        ("pt", "width=\"200pt\" height=\"100pt\""),
+    ] {
+        for p in [json!({"units": unit}), json!({"svg": {"units": unit}})] {
+            let out = svg(&mut s, p);
+            assert!(out.contains(&format!(" {size} viewBox=\"0 0 200 100\"")), "{unit}:\n{out}");
+        }
+    }
+    let out = svg(&mut s, json!({"units": "mm", "responsive": true}));
+    assert!(!out.contains("mm\"") && !out.contains("height=\"100\" viewBox") && out.contains("viewBox=\"0 0 200 100\""), "{out}");
+    assert!(svg(&mut s, json!({"units": "mm", "decimals": 1})).contains("width=\"70.6mm\" height=\"35.3mm\""));
 }
 
 #[test]

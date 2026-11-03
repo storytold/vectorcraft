@@ -6,7 +6,7 @@ use vectorcraft_doc::{
     StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
-use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import, import_with_report};
+use vectorcraft_svg::{ExportOptions, ObjectIds, SizeUnit, Styling, export, import, import_with_report};
 
 fn doc_with(nodes: Vec<Node>) -> Document {
     let mut d = Document::new(200.0, 200.0);
@@ -545,6 +545,21 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
     let s = export(&d, &ExportOptions { object_ids: ObjectIds::Minimal, ..Default::default() });
     assert!(!s.contains("id=\"Layer_1\""));
+}
+
+/// An SVG written with a physical width and height (#4462) reopens at the artboard it was written from.
+#[test]
+fn svg_in_physical_units_reopens_at_the_same_size() {
+    let mut d = Document::new(200.0, 100.0);
+    let n = rect_node(&mut d, Rect::new(10.0, 10.0, 60.0, 50.0), Appearance::default_art());
+    let l = d.layers[0].id;
+    d.insert(Some(l), usize::MAX, n).unwrap();
+    for units in [SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In, SizeUnit::Pt] {
+        let s = export(&d, &ExportOptions { units, ..Default::default() });
+        let back = import(&s).unwrap_or_else(|e| panic!("{units:?}: {e}\n{s}"));
+        let r = back.artboards[0].rect;
+        assert!((r.width() - 200.0).abs() < 0.1 && (r.height() - 100.0).abs() < 0.1, "{units:?}: {r:?}\n{s}");
+    }
 }
 
 #[test]

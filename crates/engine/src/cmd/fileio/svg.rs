@@ -49,6 +49,12 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption { name: "minify", ty: "boolean", default: "false", description: "no XML declaration, indentation or line breaks" },
     FormatOption { name: "responsive", ty: "boolean", default: "false", description: "no width/height: the SVG scales to its container" },
     FormatOption {
+        name: "units",
+        ty: "string",
+        default: "\"px\"",
+        description: "the unit of width and height: px (bare numbers, one per point) | pt | mm | cm | in (the viewBox stays in points; not with responsive)",
+    },
+    FormatOption {
         name: "preserveEditing",
         ty: "boolean",
         default: "false",
