@@ -206,6 +206,20 @@ pub(super) fn upright_cell(g: &SGlyph) -> f64 {
     }
 }
 
+/// An upright glyph's cell in font units, as [`upright_cell`] and [`upright_centre`] place it before
+/// its size: (its length down the column, the height of its top above the baseline). From the
+/// font's vertical metrics, else at least one em long, centred on the ideographic em box.
+pub(super) fn upright_extent(g: &SGlyph) -> (f64, f64) {
+    match g.face.vertical_glyph(g.gid) {
+        Some((advance, origin)) => (advance, origin),
+        None => {
+            let em = g.face.units_per_em();
+            let cell = g.face.advance(g.gid).max(em);
+            (cell, EM_CENTER * em + cell * 0.5)
+        }
+    }
+}
+
 /// Height above the baseline (line space) of the centre of an upright glyph's `cell`, the point it
 /// turns about: from the font's vertical metrics, the cell hanging from the glyph's vertical origin;
 /// else the centre of the ideographic em box ([`EM_CENTER`] of the size `em`).
