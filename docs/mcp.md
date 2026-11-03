@@ -1939,6 +1939,10 @@ act on several fills/strokes at once, and `appearance.showAllHidden` makes every
 visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
 (`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.
 
+Effect dialogs use the targeted object, group, or layer shown in Appearance. The Transform dialog previews valid
+numbers as they are typed, including Copies, distances with units, and rotation. With Preview off, changes apply
+on OK. Cancel restores the original artwork.
+
 ## Overprint
 
 Each fill and stroke (and each character's fill and stroke) can overprint: its inks print over the inks below instead
