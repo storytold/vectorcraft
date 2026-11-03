@@ -149,7 +149,7 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// * so do objects with attributes in other applications' namespaces ([`foreign`]);
 /// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
 ///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
-///   style sheet has an `[id` selector);
+///   style sheet has an attribute selector);
 /// * linked files are read ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
@@ -164,8 +164,9 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
     let not = markers.contains(":not(");
     let events = SVG_EVENTS.iter().any(|e| markers.contains(e));
     let foreign_attrs = markers.contains("xmlns:") && has_foreign_attributes(xml);
-    // An id would change what a style sheet's `[id]` selector matches: such files keep usvg's curves.
-    let ellipses = !markers.contains("[id") && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
+    let attribute_selectors =
+        xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "style").filter_map(|n| n.text()).any(|text| text.contains('['));
+    let ellipses = !attribute_selectors && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
     if !css_transform
         && !not
         && !events
