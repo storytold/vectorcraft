@@ -1,10 +1,10 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Symbol editing shows draggable 9-slice guides; G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-22.
+**Feature evidence last updated:** 2026-11-03.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -709,6 +709,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |
 | 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
 | 2026-11-01 | minor | G5: dynamic symbols (#4938): Symbol Options › Symbol Type, per-instance fill, stroke, opacity and blend for objects of a dynamic symbol's art that stay linked (redefining keeps them, Break Link bakes them, Reset and Static drop them; `symbol.instance.setAppearance`, `symbol.instance.reset`; `crates/engine/src/tests/dynamic_symbols.rs`); on-canvas Direct Selection of the parts and `.ai` round trip remain. Estimate 15–26 → 14–24 h. |
 | 2026-11-01 | minor | G13: Artboard background colors in output (#4937): raster exports (a transparent background too), PDF, SVG and EPS pages, `.ai` files' PDF pages, Export for Screens and print (and its preview) draw each artboard's color behind its art, inside the artboard and in the color's own model; Export for Screens has Include Artboard Fill beside Include Bleed (on by default, remembered; `includeArtboardFill`, also on `document.export` and `file.print`); editing data keeps the color as the artboard's, and Export for Screens' document rows keep it too; estimate unchanged. |
