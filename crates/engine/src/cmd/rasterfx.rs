@@ -636,6 +636,19 @@ pub fn export_pdf_with_report(
     doc: &Document,
     opts: &vectorcraft_pdf::PdfOptions,
 ) -> std::result::Result<vectorcraft_pdf::ExportReport, vectorcraft_pdf::PdfError> {
+    // A PDF is zoomed and printed: request at least `vectorcraft_pdf::MIN_RASTER_PPI`, even when
+    // the document's raster effects resolution is the 72 ppi screen default (soft edges look
+    // blurry when zoomed). The 64 Mpx cap per image still holds.
+    let raised;
+    let doc = if vectorcraft_pdf::pdf_raster_ppi(doc.raster_effects_ppi) == doc.raster_effects_ppi {
+        doc
+    } else {
+        // Nodes and encoded image/proxy bytes are Arc-backed, so this shares their payloads.
+        let mut d = doc.clone();
+        d.raster_effects_ppi = vectorcraft_pdf::pdf_raster_ppi(doc.raster_effects_ppi);
+        raised = d;
+        &raised
+    };
     let mut report = FlattenReport::new(Which::All, doc);
     let flat = flatten(doc, &mut report);
     // Flattening stops early when cancelled, leaving a half-flattened copy that must not be written.
