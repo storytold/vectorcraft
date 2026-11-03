@@ -153,7 +153,10 @@ fn document_paragraphs(doc: &Document) -> Vec<Para> {
     for piece in pieces(doc, true) {
         match piece {
             Piece::Story(id, s) => slots.push(Ok((id, s))),
-            Piece::Line(l) => {
+            Piece::Line(mut l) => {
+                // Lines on different artboards (a PDF's pages) never make one paragraph.
+                let at = vectorcraft_geom::Point::new(l.left, l.baseline);
+                l.board = doc.artboards.iter().position(|a| a.rect.contains(at));
                 slots.push(Err(lines.len()));
                 lines.push(l);
             }

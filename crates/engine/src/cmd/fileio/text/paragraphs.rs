@@ -1,10 +1,13 @@
 //! Paragraphs for Export As Text (`paragraphs: true`). A PDF, and the files other programs write
 //! from one, often holds a line of point type per line that was set, so its paragraphs come as
-//! loose lines. Lines that belong together share a font family and size, a left edge and evenly
-//! spaced baselines: they make a block. A block whose first baseline lines up with another's to
-//! its right continues there (columns, read left to right). Inside that run of lines a paragraph
+//! loose lines. Lines that belong together share an artboard (a PDF's page), a font family and
+//! size, boldness (a heading is a block of its own), a left edge and evenly spaced baselines:
+//! they make a block. A block whose first baseline
+//! lines up with another's just to its right continues there (columns, read left to right; the
+//! gutter at most as wide as the block). Inside that run of lines a paragraph
 //! ends:
-//! - in justified lines (most lines as long as the longest), after a line clearly shorter;
+//! - in justified lines (most lines as long as the longest, and each of the others ending a
+//!   sentence or a lead-in), after a line clearly shorter;
 //! - in ragged lines, after a shorter line that ends a sentence;
 //! - before a line that starts bold among lines that don't, and between a line mostly bold (a
 //!   heading) and one that isn't;
@@ -30,6 +33,8 @@ pub(super) struct Line {
     strong: bool,
     /// Most of it is bold (or heavier): a heading, as against a paragraph's lead-in.
     bold: bool,
+    /// The artboard its start is on (`None`: on none).
+    pub board: Option<usize>,
 }
 
 /// Whether `style` is bold or heavier.
@@ -68,12 +73,15 @@ impl Line {
             runs.map(|r| r.text.chars().filter(|c| c.is_alphanumeric()).count()).sum()
         };
         let bold = letters(true) * 2 > letters(false);
-        Some(Line { id, text, left, baseline, size, family: run.style.font_family.clone(), width: width.max(0.0), strong, bold })
+        Some(Line { id, text, left, baseline, size, family: run.style.font_family.clone(), width: width.max(0.0), strong, bold, board: None })
     }
 
-    /// Lines of one block share this: the family and the size (to a hundredth of a point).
-    fn key(&self) -> (&str, i64) {
-        (self.family.as_str(), (self.size * 100.0).round() as i64)
+    /// Lines of one block share this: the artboard, the family, the size (to a hundredth of a
+    /// point) and whether they are mostly bold. A heading set in the body's family and size is a
+    /// block of its own, so the larger space below it doesn't become the body's leading and cut
+    /// the body's first line off from the rest.
+    fn key(&self) -> (Option<usize>, &str, i64, bool) {
+        (self.board, self.family.as_str(), (self.size * 100.0).round() as i64, self.bold)
     }
 }
 
@@ -198,8 +206,9 @@ fn longest(lines: &[Line], ids: &[usize]) -> f64 {
     ids.iter().filter_map(|&i| lines.get(i)).map(|l| l.width).fold(0.0, f64::max)
 }
 
-/// `blocks` (of one family and size) as chains of columns: each block followed by the block whose
-/// first baseline lines up with its own, nearest to its right and spaced alike.
+/// `blocks` (of one artboard, family and size) as chains of columns: each block followed by the
+/// block whose first baseline lines up with its own, nearest to its right, spaced alike, and
+/// separated from it by a gutter no wider than it (a table's column further off isn't its next).
 fn columns(lines: &[Line], blocks: &[Block]) -> Vec<Vec<usize>> {
     let mut next: Vec<Option<usize>> = vec![None; blocks.len()];
     let mut follows = vec![false; blocks.len()];
@@ -220,6 +229,7 @@ fn columns(lines: &[Line], blocks: &[Block]) -> Vec<Vec<usize>> {
             .filter(|(_, bb)| {
                 (bb.top - ba.top).abs() <= 0.5 * size
                     && bb.left > ba.left + 0.5 * width
+                    && bb.left <= ba.left + 2.0 * width
                     && bb.leading.is_some_and(|ld| (ld - lead).abs() <= EVEN * lead)
             })
             .min_by(|(_, x), (_, y)| x.left.total_cmp(&y.left));
@@ -265,8 +275,11 @@ fn split(lines: &[Line], seq: &[usize], indented: &[bool]) -> (Vec<Vec<usize>>, 
     let longest = longest(lines, seq);
     let inner = all.len().saturating_sub(1);
     let full = all.iter().take(inner).filter(|l| l.width >= FULL * longest).count();
-    // Fewer lines can't tell justified type from ragged.
-    let justified = all.len() >= 4 && full * 2 >= inner;
+    // Fewer lines can't tell justified type from ragged. In justified type a line that isn't full
+    // ends its paragraph, so it ends a sentence or a lead-in (a colon): ragged lines that mostly
+    // run nearly as long as the longest have one that doesn't.
+    let ends_para = |l: &&Line| ends_sentence(&l.text) || l.text.trim_end().ends_with(':');
+    let justified = all.len() >= 4 && full * 2 >= inner && all.iter().take(inner).all(|l| l.width >= FULL * longest || ends_para(l));
     let all_strong = all.iter().all(|l| l.strong);
     let mut out = vec![];
     let mut para = vec![];

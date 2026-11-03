@@ -100,6 +100,55 @@ fn text_export_joins_lines_of_point_type_into_paragraphs() {
     assert_eq!(String::from_utf8(b64(&s.execute("document.export", &json!({"format": "txt"})).unwrap())).unwrap().matches('\n').count(), 15);
 }
 
+/// A paragraph's lines don't run on into lines on another artboard (a PDF's next pages), nor into
+/// a table's column far to its right, though their baselines line up and are spaced alike; and a
+/// bold heading in the body's font and size, a little further up and to the left, doesn't cut the
+/// first line off from the rest.
+#[test]
+fn paragraphs_stay_on_their_artboard_and_next_to_their_column() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 500})).unwrap();
+    s.execute("artboard.new", &json!({"x": 650, "y": 0, "width": 600, "height": 500})).unwrap();
+    let line =
+        |s: &mut Session, x: f64, y: f64, t: &str| s.execute("text.create", &json!({"x": x, "y": y, "size": 8, "text": t})).unwrap()["id"].clone();
+    let heading = line(&mut s, 302.0, 88.8, "Verkaufs- und Lieferbedingungen");
+    s.execute("text.setRangeStyle", &json!({"id": heading, "start": 0, "end": 31, "style": "Bold"})).unwrap();
+    line(&mut s, 300.0, 100.0, "Es gelten unsere Allgemeinen Verkaufs- und Lieferbedingungen, die zum");
+    line(&mut s, 300.0, 108.5, "Zeitpunkt der Bestellung Gültigkeit haben.");
+    // A table's column on the next artboard, and one far to the right on this one.
+    for x in [700.0, 30.0] {
+        line(&mut s, x, 100.0, "Stück");
+        line(&mut s, x, 108.5, "Stück");
+    }
+    let got =
+        String::from_utf8(b64(&s.execute("document.export", &json!({"format": "txt", "paragraphs": true, "lineBreaks": "space"})).unwrap())).unwrap();
+    assert!(
+        got.contains(
+            "Verkaufs- und Lieferbedingungen\nEs gelten unsere Allgemeinen Verkaufs- und Lieferbedingungen, die zum Zeitpunkt der Bestellung Gültigkeit haben.\n"
+        ),
+        "{got}"
+    );
+    assert_eq!(got.matches("Stück Stück\n").count(), 2, "{got}");
+
+    // Ragged lines that mostly run nearly as long as the longest aren't justified: a shorter line
+    // that ends no sentence goes on.
+    let ragged = [
+        "Verpackung und Bearbeitung 15,- € netto. Bestellungen von Lagerartikeln,",
+        "die an einem Arbeitstag bis 14.00 Uhr eingehen, werden im Laufe des",
+        "nächsten Arbeitstages ausgeliefert. Ist eine Belieferung bis 09.00 Uhr am",
+        "Folgetag gewünscht, ist diese als „Express-Lieferung“ (max. 30 kg) gegen",
+        "eine Kostenpauschale in Höhe 40,- € netto möglich. Bei schwereren Teilen",
+        "werden die tatsächlich anfallenden Porto- und Verpackungskosten",
+        "berechnet.",
+    ];
+    for (k, t) in ragged.iter().enumerate() {
+        line(&mut s, 30.0, 300.0 + 8.5 * k as f64, t);
+    }
+    let got =
+        String::from_utf8(b64(&s.execute("document.export", &json!({"format": "txt", "paragraphs": true, "lineBreaks": "space"})).unwrap())).unwrap();
+    assert!(got.contains(&format!("{}\n", ragged.join(" "))), "{got}");
+}
+
 #[test]
 fn paragraphs_with_ids_come_back_edited() {
     let mut s = Session::new();
