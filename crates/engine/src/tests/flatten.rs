@@ -381,6 +381,33 @@ fn outlined_type_keeps_its_underline() {
     assert!(b.y1 > 151.0, "{b:?}");
 }
 
+/// Flattening transparent type that runs over several lines gives a group per line, each holding
+/// that line's regions (#5252).
+#[test]
+fn flattening_multiline_transparent_text_gives_one_group_per_line() {
+    let _settings = settings_lock();
+    let mut s = session();
+    let text =
+        run(&mut s, "text.create", json!({"x": 10, "y": 40, "text": "First line\nSecond line\nThird line", "size": 24}))["id"].as_u64().unwrap();
+    run(&mut s, "transparency.set", json!({"ids": [text], "opacity": 50}));
+    let NodeKind::Text(t) = &node(&s, text).kind else { panic!("type") };
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let baselines: Vec<f64> = layout.baselines().iter().map(|(a, _)| (t.xf * *a).y).collect();
+    assert_eq!(baselines.len(), 3, "{baselines:?}");
+    let before = picture(&s);
+    let (ids, vector, _) = flatten(&mut s, json!({"ids": [text]}));
+    assert_eq!(ids.len(), 1);
+    assert!(vector > 0);
+    let g = node(&s, ids[0]);
+    let lines: Vec<&std::sync::Arc<Node>> = g.children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Group { .. })).collect();
+    assert_eq!(lines.len(), 3, "expected one group per line, got {} children", g.children().unwrap().len());
+    for (line, y) in lines.iter().zip(&baselines) {
+        let b = line.geometric_bounds().unwrap();
+        assert!(b.y0 > y - 24.0 && b.y1 < y + 10.0, "line at baseline {y} has bounds {b:?}");
+        assert_regions_match(&s, &before, line.id.0, 2, "line");
+    }
+}
+
 #[test]
 fn outlined_type_keeps_its_gradient_on_the_outlines_its_transform_effect_moves() {
     let _settings = settings_lock();
