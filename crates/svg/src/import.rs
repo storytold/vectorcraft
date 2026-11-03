@@ -154,6 +154,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         hidden: found.hidden,
         uses: found.uses,
         symbols: HashMap::new(),
+        symbol_names: HashSet::new(),
+        symbol_suffixes: HashMap::new(),
+        pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
         files,
         non_scaling: found.non_scaling,
@@ -304,6 +307,11 @@ struct Importer {
     uses: HashMap<String, String>,
     /// The symbols made so far, by `<symbol>` id.
     symbols: HashMap<String, SymbolMade>,
+    /// The names of the symbols made so far.
+    symbol_names: HashSet<String>,
+    /// Where the suffixes of each symbol and pattern name base go on from (`unique_name`).
+    symbol_suffixes: HashMap<String, usize>,
+    pattern_suffixes: HashMap<String, usize>,
     /// Blend modes of the shadows and glows our export wrote, by filter id ([`fx::blends`]).
     blends: HashMap<String, String>,
     /// The files `<image>` elements link to.
