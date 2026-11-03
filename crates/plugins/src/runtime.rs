@@ -280,6 +280,12 @@ impl Plugin {
         self.run_limited(input, params, &self.limits)
     }
 
+    /// Runs a tool plug-in's `vc_run` once with one event document. Tool calls get no separate
+    /// parameters: their state and context travel in the event JSON.
+    pub fn run_tool(&self, input: &[u8]) -> Result<Vec<u8>> {
+        self.run(input, b"{}")
+    }
+
     /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one).
     pub fn run_limited(&self, input: &[u8], params: &[u8], limits: &Limits) -> Result<Vec<u8>> {
         // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must

@@ -85,6 +85,15 @@ fn input_and_params_reach_the_plugin_and_output_comes_back() {
 }
 
 #[test]
+fn a_tool_plugin_reads_and_writes_tool_events() {
+    let manifest = r#"{"id":"test.tangent","name":"Tangent","kind":"tool","toolGroup":"ellipse"}"#;
+    let p = Plugin::load(&build(&tpl::module(manifest, tpl::ECHO, "", 1)), Limits::default()).unwrap();
+    assert_eq!(p.manifest().kind, Kind::Tool);
+    let event = br#"{"event":{"kind":"down","pos":[10,20]},"state":null,"selection":[],"circles":[]}"#;
+    assert_eq!(p.run_tool(event).unwrap(), event);
+}
+
+#[test]
 fn hostile_modules_fail_quickly() {
     let quick = Duration::from_secs(5);
     let cases: Vec<(&str, Vec<u8>)> = vec![
