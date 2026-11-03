@@ -184,7 +184,7 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
         up: unit(linear(m * g.unturned, Vec2::new(0.0, -1.0))),
         ex,
         ey,
-        kerned: lay.glyphs.iter().any(|h| h.line == g.line && h.len > 0 && h.byte + h.len == g.byte),
+        kerned: lay.glyphs.iter().any(|h| h.line == g.line && h.len > 0 && h.byte + h.len == g.byte && h.rtl == g.rtl),
         style: t.effective_char_style(&style)?,
     })
 }

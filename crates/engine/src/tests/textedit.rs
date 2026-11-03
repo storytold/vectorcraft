@@ -627,6 +627,33 @@ fn touch_type_moves_one_character_in_centered_and_right_aligned_lines() {
     }
 }
 
+#[test]
+fn touch_type_centered_ltr_scale_keeps_the_expected_width_change() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 200, "y": 100, "text": "Type", "size": 40, "justify": "center"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "hScale": 150})).unwrap();
+    let after = glyph_pens(&s, id);
+    let previous = moved_by(&before, &after, 0).0;
+    let following = moved_by(&before, &after, 2).0;
+    assert!(previous < -1.0, "centered line shifts left: {previous}");
+    assert!(following > 1.0, "the wider character shifts following text right: {following}");
+    assert!((following + previous).abs() < 0.1, "width growth is shared around the center: {previous}, {following}");
+}
+
+#[test]
+fn touch_type_refuses_horizontal_move_across_a_direction_boundary() {
+    let mut s = session();
+    let id = text(&mut s, "abc אבג");
+    let before = obj(&s, id);
+    let result = s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dx": 5}));
+    assert!(result.is_err(), "a mixed-direction boundary has no safe preceding glyph for kerning");
+    assert_eq!(obj(&s, id), before, "a refused move leaves the text unchanged");
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dy": 3})).unwrap();
+}
+
 /// `dy` moves a rotated character that many document points up from its line, also in type
 /// scaled unevenly.
 #[test]

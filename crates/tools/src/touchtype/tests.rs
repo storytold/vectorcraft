@@ -417,3 +417,15 @@ fn touch_type_rtl_middle_character_can_drag_and_nudge_along_its_line() {
     tool.target = Some((id, 0));
     assert!(tool.key(&cx, ToolKey::Left, Mods::default()).is_empty(), "the first logical character has no preceding character to kern");
 }
+
+#[test]
+fn touch_type_direction_boundary_offers_only_vertical_movement() {
+    let text = TextObject::point(Point::new(100.0, 200.0), "abc אבג", CharStyle { size: 40.0, ..Default::default() });
+    let lay = vectorcraft_text::layout(FontDb::global(), &text);
+    let at = lay.glyphs.iter().position(|g| g.byte == 4).unwrap();
+    let b = char_box(&text, &lay, at).unwrap();
+    assert!(!b.kerned, "the previous logical character has a different reading direction");
+    let params = TouchTypeTool::nudge_params(NodeId(1), &text, &b, -5.0, -3.0);
+    assert!(params.get("dx").is_none(), "{params}");
+    assert!(params.get("dy").is_some(), "{params}");
+}
