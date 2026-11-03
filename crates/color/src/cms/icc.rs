@@ -107,7 +107,10 @@ impl IccProfile {
             return Err(CmsError::BadProfile(format!("its localized names take more than {} KB", MAX_LOCALIZED_TEXT >> 10)));
         }
         if let Some(tag) = repeated_tag(bytes) {
-            return Err(CmsError::BadProfile(format!("its tag table lists the `{}` tag more than once", String::from_utf8_lossy(&tag.to_be_bytes()))));
+            return Err(CmsError::BadProfile(format!(
+                "its tag table lists the `{}` tag more than once",
+                String::from_utf8_lossy(&tag.to_be_bytes())
+            )));
         }
         let p = ColorProfile::new_from_slice(bytes).map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
         Ok(Self { source: bytes.to_vec(), ..Self::from_profile(name, p)? })
