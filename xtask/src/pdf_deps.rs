@@ -5,12 +5,10 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const REV: &str = "92d392cff132eaf53e13afff77f38b5c11b73aa0";
-/// The writer's revision: craft-libs#417, CMYK, gray and spot colors with their exact inks.
-const KRILLA_REV: &str = "fb08be5fa19eee8d37e624397fcdc96df6035e92";
+const REV: &str = "f8f8829cc7be65d466d687dae381d1ca60e31242";
 const PACKAGES: &[(&str, &str, &str)] = &[
     ("craft-pdf", "0.1.0", REV),
-    ("krilla", "0.8.2", KRILLA_REV),
+    ("krilla", "0.8.2", REV),
     ("hayro-syntax", "0.7.2", REV),
     ("hayro-interpret", "0.7.0", REV),
     ("hayro-jbig2", "0.3.0", REV),
@@ -34,7 +32,7 @@ pub fn run(root: &Path) -> Result<(), String> {
     }
     let metadata: Value = serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata: {e}"))?;
     validate(&metadata)?;
-    println!("PDF: shared crate and patched backends resolve once to {REV} (krilla to {KRILLA_REV})");
+    println!("PDF: shared crate and patched backends resolve once to {REV}");
     Ok(())
 }
 
@@ -94,7 +92,7 @@ mod tests {
                 ("source", Value::Null),
                 ("source", json!("registry+https://github.com/rust-lang/crates.io-index")),
                 ("source", json!("git+https://github.com/storytold/craft-libs?branch=main#other")),
-                ("source", json!(source(if PACKAGES[index].2 == REV { KRILLA_REV } else { REV }))),
+                ("source", json!(source("92d392cff132eaf53e13afff77f38b5c11b73aa0"))),
                 ("version", json!("0.99.0")),
             ] {
                 let mut m = metadata();

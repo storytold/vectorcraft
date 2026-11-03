@@ -52,6 +52,46 @@ fn close(a: f64, b: f64, tol: f64) -> bool {
 }
 
 #[test]
+fn metadata_ids_preserve_the_original_text_cascade() {
+    for (rules, text, color) in [
+        ("text:not(.x){fill:red!important} text{fill:blue!important}", r#"<text y="20">Hi</text>"#, (255, 0, 0)),
+        ("#t{fill:blue} [id]{fill:red}", r#"<text id="t" y="20">Hi</text>"#, (0, 0, 255)),
+        ("#holder{fill:blue} g[id]{fill:red}", r#"<g id="holder"><text y="20"><tspan>Hi</tspan></text></g>"#, (0, 0, 255)),
+    ] {
+        for metadata in [false, true] {
+            let attribute = if metadata { r#" data-note="kept""# } else { "" };
+            let doc = open(&format!(r#"<style>{rules} rect[id]{{fill:black}}</style>{text}<rect width="5" height="5"{attribute}/>"#));
+            let expected = Paint::solid(vectorcraft_color::Color::rgb8(color.0, color.1, color.2));
+            assert_eq!(only_text(&doc).runs[0].style.fill, expected, "{rules}, metadata {metadata}");
+        }
+    }
+}
+
+#[test]
+fn metadata_ids_preserve_text_preprocessing_and_relative_styles() {
+    for body in [
+        r#"<style>g{font-size:10px} text{font-size:2em} tspan{font-size:1.5em}</style><g transform="translate(4 5)"><text y="20">A<tspan>B</tspan></text></g>"#,
+        r#"<style>text{display:none;fill:red}</style><text y="20">Hidden</text>"#,
+        r#"<style>text{transform:translate(10px,20px)}</style><text y="20">Moved</text>"#,
+        r##"<defs><path id="p" d="M0 20L150 20"/></defs><text font-size="12"><textPath href="#p">Path</textPath></text>"##,
+    ] {
+        let load = |attribute: &str| {
+            let doc = open(&format!(r#"<style>rect[id]{{fill:black}}</style>{body}<rect width="5" height="5"{attribute}/>"#));
+            art(&doc)
+                .into_iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Text(t) => Some((n.visible, serde_json::to_value(t).unwrap())),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let expected = load("");
+        assert!(!expected.is_empty(), "{body}");
+        assert_eq!(load(r#" data-note="kept""#), expected, "{body}");
+    }
+}
+
+#[test]
 fn text_keeps_its_z_order_between_shapes() {
     let d = open(r#"<rect width="10" height="10"/><text x="5" y="20">Hi</text><rect y="30" width="10" height="10"/>"#);
     let kinds: Vec<&str> = art(&d)

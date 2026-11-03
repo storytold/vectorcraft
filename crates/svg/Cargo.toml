@@ -28,6 +28,7 @@ flate2 = { workspace = true }
 image = { workspace = true }
 # Colour / transform / length parsing for the <text> fallback (MIT OR Apache-2.0; already used by usvg).
 svgtypes = "0.16"
+simplecss = "0.2.2"
 
 [dev-dependencies]
 # Reading embedded font subsets back.

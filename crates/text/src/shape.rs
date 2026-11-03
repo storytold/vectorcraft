@@ -401,7 +401,7 @@ pub(crate) fn shape_range(
         let b = bytes.end;
         if let Some(art) = art {
             if let Some(face) = db.style_face(st).or_else(|| db.face_covering('a')) {
-                out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a)));
+                out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a), feats.vertical));
             }
             continue;
         }
@@ -795,10 +795,21 @@ fn shaping_script(c: char) -> Script {
 ///
 /// The art is scaled uniformly to `scale` x the font size tall, its left edge on the pen and its
 /// vertical centre on the middle of the cap height raised by the inline's shift (see
-/// [`InlineArt`]). Its advance is the scaled art width plus tracking; the glyph's ascent and
-/// descent grow to the art's extent so a tall graphic opens up its line. A missing symbol takes a
-/// square of the same height and draws nothing.
-fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usize, range: Range<usize>, text: &str, level: Level) -> SGlyph {
+/// [`InlineArt`]). Its advance is the scaled art width plus tracking and its character's manual
+/// kerning, which right to left in horizontal type also moves the art right by the value, as it
+/// moves a letter's glyph. The glyph's ascent and descent grow to the art's extent so a tall
+/// graphic opens up its line. A missing symbol takes a square of the same height and draws nothing.
+#[allow(clippy::too_many_arguments)]
+fn inline_glyph(
+    face: &Arc<FontFace>,
+    st: &CharStyle,
+    art: &InlineArt,
+    run: usize,
+    range: Range<usize>,
+    text: &str,
+    level: Level,
+    vertical: bool,
+) -> SGlyph {
     let size = if st.size.is_finite() { st.size.max(0.0) } else { 0.0 };
     let vs = if st.v_scale.is_finite() { st.v_scale / 100.0 } else { 1.0 };
     let km = size / face.upem;
@@ -815,7 +826,8 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         _ => (kurbo::Affine::IDENTITY, h, None),
     };
     let tracking = st.tracking / 1000.0 * size;
-    let adv = width + if tracking.is_finite() { tracking } else { 0.0 };
+    let manual_kern = st.kerning.map(|v| v / 1000.0 * size).filter(|k| k.is_finite()).unwrap_or(0.0);
+    let adv = width + if tracking.is_finite() { tracking } else { 0.0 } + manual_kern;
     SGlyph {
         face: face.clone(),
         gid: 0,
@@ -825,7 +837,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         adv: if adv.is_finite() { adv } else { 0.0 },
         dx: 0.0,
         dy: 0.0,
-        kern_shift: 0.0,
+        kern_shift: if level.is_rtl() && !vertical { manual_kern } else { 0.0 },
         // Not used to draw (the art has its own transform), but they make the glyph's em box
         // its run's em: Character Alignment and Top-to-Top leading treat an inline graphic as a
         // character of its run's size, whatever its scale (see `layout::glyph_em`).

@@ -241,6 +241,34 @@ fn uneven_scales_keep_live_corners_circular() {
     assert_round_corners(&n, Affine::IDENTITY, 40.0);
 }
 
+/// Objects attached to a rounded rectangle that keeps its corners when scaled stay where the scale
+/// takes them on the regenerated path, which is not twice as long when twice the size.
+#[test]
+fn objects_on_a_live_rectangle_follow_its_regenerated_path() {
+    use crate::objects_on_path::{CENTER, ObjectsOnPath, stops};
+    let path = live_rect(100.0, 100.0, 20.0, Affine::IDENTITY);
+    let objects: Vec<Node> =
+        (2..5).map(|i| Node::path(NodeId(i), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default())).collect();
+    let members: Vec<&Node> = objects.iter().collect();
+    let rec = ObjectsOnPath { spacing: Some(20.0), start: 10.0, ..ObjectsOnPath::new(NodeId(1), &members, CENTER, 0.0) };
+    let mut children = vec![Arc::new(path)];
+    children.extend(objects.iter().cloned().map(Arc::new));
+    let mut g = Node::new(NodeId(9), NodeKind::Group { children, clip: false });
+    g.extras_mut().objects_on_path = Some(Box::new(rec));
+    let path_of = |g: &Node| g.children().and_then(|c| c.first()).and_then(|p| p.path_data().cloned()).unwrap();
+    let rec_of = |g: &Node| g.extras().objects_on_path.as_deref().cloned().unwrap();
+    let r = rec_of(&g);
+    let before = stops(&path_of(&g), 3, r.spacing, r.start).unwrap();
+    let a = Affine::scale(2.0);
+    g.transform(a, KEEP_CORNERS);
+    assert_round_corners(&g.children().unwrap()[0], Affine::IDENTITY, 20.0);
+    let r = rec_of(&g);
+    let after = stops(&path_of(&g), 3, r.spacing, r.start).unwrap();
+    for ((p, _), (q, _)) in before.iter().zip(&after) {
+        assert!((a * *p).distance(*q) < 1e-6, "{p:?} went to {q:?}: {r:?}");
+    }
+}
+
 #[test]
 fn rotated_and_reflected_live_rectangles_scale_along_their_own_sides() {
     let place = Affine::translate((200.0, 100.0)) * Affine::rotate(30f64.to_radians());
@@ -517,4 +545,24 @@ fn fields_before_the_type_are_buffered_within_the_value_budget() {
     let written = serde_json::to_string(&Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![]))])).unwrap();
     assert!(with_buffered_value_budget(0, || read(&written)).is_ok(), "a saved object buffers nothing: {written}");
     assert!(read(reordered).is_ok(), "no budget outside a read");
+}
+
+/// A compound path's path is its members' paths one after another, open and closed, empty
+/// members and single anchors included.
+#[test]
+fn compound_stroke_path_is_its_members_in_order() {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let open = PathData::single(SubPath::new([(0.0, 0.0), (5.0, 1.0), (9.0, 7.0)].map(|(x, y)| Anchor::corner(Point::new(x, y))).to_vec(), false));
+    let lone = PathData::single(SubPath::new(vec![Anchor::corner(Point::new(3.0, 3.0))], false));
+    let members =
+        [shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), open, PathData::default(), lone, shapes::ellipse(Rect::new(10.0, 10.0, 20.0, 16.0))];
+    let mut expected = vectorcraft_geom::BezPath::new();
+    for pd in &members {
+        expected.extend(pd.to_bezpath());
+    }
+    let children = members.iter().enumerate().map(|(i, pd)| Arc::new(Node::path(NodeId(i as u64 + 1), pd.clone(), Appearance::default()))).collect();
+    let n = Node::new(NodeId(99), NodeKind::Compound { children, rule: vectorcraft_geom::FillRule::EvenOdd });
+    let bp = n.stroke_path().unwrap();
+    assert_eq!(bp.elements(), expected.elements());
+    assert!(!bp.elements().is_empty());
 }

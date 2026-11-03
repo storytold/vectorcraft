@@ -113,7 +113,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
-    let (svg, found) = prepass(svg, &scan.markers, &xml, opts);
+    let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
@@ -126,7 +126,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let units = RootUnits::of(xml.root_element());
     let root_name = root_layer_name(xml.root_element());
     let mut warnings = found.warnings;
-    let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
+    let text_xml = found.text_source.as_deref().map(parse).transpose()?;
+    let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     let files = found.files;
     let tree = {
         let opt = usvg::Options {
@@ -161,6 +162,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         foreign: found.foreign,
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
+        ellipses: found.ellipses,
         screen: k,
         converted_nodes: 1,
         max_nodes,
@@ -318,6 +320,8 @@ struct Importer {
     sublayers: HashSet<String>,
     /// The groups made of them, made sublayers where they sit in a layer ([`promote_sublayers`]).
     sublayer_groups: HashSet<NodeId>,
+    /// Ids of the `<circle>` and `<ellipse>` elements ([`prepass`]).
+    ellipses: HashSet<String>,
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,

@@ -110,8 +110,9 @@ impl Document {
 
     /// Visit every color that can link to a swatch (solid paints and gradient stops of fills,
     /// strokes and text runs) in the art (opacity masks included), symbol definitions, graph
-    /// designs, pattern tiles and the tile that pattern editing's Cancel puts back, graphic styles
-    /// and the swatches themselves (tint swatches, gradient swatches' stops).
+    /// designs, pattern tiles and the tile that pattern editing's Cancel puts back, graphic styles,
+    /// character styles' fill and stroke and the swatches themselves (tint swatches, gradient
+    /// swatches' stops).
     /// `f(colour, link, tint)` may change them and returns true when it did
     /// ([`Paint::map_links`]). Only nodes holding a changed paint (and the paths to them) are
     /// copied. Returns the number of changed paints.
@@ -133,6 +134,11 @@ impl Document {
         }
         for w in self.swatches_iter_mut() {
             n += usize::from(w.paint.map_links(f));
+        }
+        for def in &mut self.char_styles {
+            for key in ["fill", "stroke"] {
+                n += usize::from(map_style_paint(&mut def.attrs, key, f));
+            }
         }
         n
     }
@@ -197,6 +203,23 @@ pub fn color_name(c: Color) -> String {
 /// What [`Document::map_solid_paints`] applies to each linkable colour: `(colour, link, tint)`,
 /// true when it changed them.
 pub type LinkFn<'a> = dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
+
+/// Apply `f` to the paint a character style's attribute `key` holds, as [`Paint::map_links`]
+/// does, and store the result in the attribute. True when it changed.
+fn map_style_paint(attrs: &mut serde_json::Map<String, serde_json::Value>, key: &str, f: &mut LinkFn) -> bool {
+    let Some(value) = attrs.get_mut(key) else { return false };
+    let Ok(mut paint) = serde_json::from_value::<Paint>(value.clone()) else { return false };
+    if !paint.map_links(f) {
+        return false;
+    }
+    match serde_json::to_value(&paint) {
+        Ok(changed) => {
+            *value = changed;
+            true
+        }
+        Err(_) => false,
+    }
+}
 
 /// Every colour in the subtree of `n` with the swatch it links to: solid fills, strokes, text runs
 /// and gradient stops (with their link), then mesh points (unlinked), in paint order.

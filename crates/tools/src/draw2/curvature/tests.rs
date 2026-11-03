@@ -370,6 +370,34 @@ fn a_press_on_a_point_selects_it_and_a_drag_moves_it() {
     assert_eq!(press(&mut t, &cx, 100.0, 0.0, false).len(), 1);
 }
 
+/// A dropped drag of a point of the path being drawn puts the point back where it was at the
+/// press, and the path goes on: the next click adds a point to it.
+#[test]
+fn a_dropped_drag_puts_the_point_back_and_keeps_drawing() {
+    let (d, id) = doc_with(SubPath::polyline(&[pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)], false));
+    let (s, p) = (selected(id, None), paint());
+    let cx = quiet(&d, &s, &p);
+    let mut t = CurvatureTool {
+        pts: vec![(pt(100.0, 100.0), false), (pt(200.0, 100.0), false), (pt(300.0, 100.0), false)],
+        id: Some(id),
+        current: Some(2),
+        ..Default::default()
+    };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 100.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 220.0, 160.0));
+    assert_eq!(a[0], Action::Begin("Curvature".into()));
+    assert_eq!(t.pts[1].0, pt(220.0, 160.0));
+    assert!(t.drop_press(&cx).is_empty(), "the engine has undone the preview");
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 0.0, 0.0)), vec![]);
+    assert_eq!(t.pts[1].0, pt(200.0, 100.0), "the point is back");
+    assert_eq!(t.current, Some(2), "the current point is the one before the press");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 200.0));
+    assert!(
+        matches!(&a[0], Action::Exec(_, v) if v["id"] == id.0 && v["points"][1]["y"] == 100.0 && v["points"].as_array().unwrap().len() == 4),
+        "{a:?}"
+    );
+}
+
 /// #2120: the dragged end of a slanted straight path keeps to its extension (Smart Guides).
 #[test]
 fn a_dragged_end_of_a_straight_path_keeps_to_its_extension() {

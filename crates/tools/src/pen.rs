@@ -445,6 +445,15 @@ impl Tool for PenTool {
             _ => vec![],
         }
     }
+    /// A dropped press drops only the anchor it was placing, a handle it was dragging or the
+    /// close it was making: the path being drawn goes on with the next click.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drag = None;
+        self.handle = None;
+        self.convert = None;
+        self.snap.clear();
+        vec![]
+    }
     /// Deactivate the pen tool, committing in-flight operations and restoring compound path selection.
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let path = self.path;
