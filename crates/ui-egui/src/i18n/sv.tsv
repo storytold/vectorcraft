@@ -153,7 +153,6 @@
 	All Artwork Above	All grafik ovanför
 	All Caps	Versaler
 	All Categories	Alla kategorier
-	All colours are within the CMYK gamut	Alla färger ligger inom CMYK-färgomfånget
 	All on Active Artboard	Alla på aktiv rityta
 	All on Same Layers	Alla på samma lager
 	All printer's marks	Alla tryckmärken
@@ -596,7 +595,6 @@ font-technology	Variable	Variabla
 	Convert to sRGB	Konvertera till sRGB
 	Convert to Straight Lines	Konvertera till raka linjer
 	Convert:	Konvertera:
-	Copied the CSS of {rules} object(s)	Kopierade CSS för {rules} objekt
 	Copies:	Kopior:
 	Copy	Kopiera
 	Copy (make a transformed copy)	Kopiera (gör en transformerad kopia)
@@ -749,6 +747,7 @@ font-technology	Variable	Variabla
 	Delete Tab	Radera tabb
 	Delete the graphic style “{name}”?	Radera grafikstilen ”{name}”?
 	Delete Action Sets	Radera åtgärdsuppsättningar
+	Duplicate Action or Action Set	Duplicera åtgärd eller åtgärdsuppsättning
 	Delete the action set “{name}” and its actions?	Radera åtgärdsuppsättningen ”{name}” och dess åtgärder?
 	Delete the selected action sets and their actions?	Radera de markerade åtgärdsuppsättningarna och deras åtgärder?
 	Delete Theme	Radera tema
@@ -784,7 +783,6 @@ font-technology	Variable	Variabla
 	Discard Empty Type	Släng tom text
 	Discard Recovered Documents	Släng återställda dokument
 	Discard White Overprint in Output	Släng vit övertryckning i utdata
-	Discarded {} recovered document(s)	Slängde {} återställda dokument
 	Discord	Discord
 	Discretionary Hyphen	Mjukt bindestreck
 	Discretionary Ligatures	Valfria ligaturer
@@ -840,13 +838,14 @@ font-technology	Variable	Variabla
 	Double Right Quotation Marks	Dubbla högercitattecken
 	Double-click	Dubbelklick
 	Double-click to edit the characters' paint	Dubbelklicka för att redigera tecknens färg
+	Click to edit	Klicka för att redigera
+	Double-click to edit	Dubbelklicka för att redigera
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål
 	Download	Hämta
 	Download:	Hämta:
 	Downloaded {what}	Hämtade {what}
-	Downloaded {} file(s)	Hämtade {} fil(er)
 	Drag	Dra
 	Drag a handle	Dra i ett handtag
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Dra hit grafik, eller markera den och klicka på +. Håll ned Alt för att skapa en resurs av flera objekt.
@@ -947,8 +946,6 @@ font-technology	Variable	Variabla
 	Embed page thumbnails	Bädda in sidminiatyrer
 	Embedded	Inbäddad
 	Embedded Image	Inbäddad bild
-	Embedded {n} image(s)	Bäddade in {n} bild(er)
-	Embedded {n} image(s); {missing} missing: relink them first	Bäddade in {n} bild(er); {missing} saknas: länka om dem först
 	Emulsion:	Emulsion:
 	En Dash	Tankstreck
 	En Space	Halvfyrkant
@@ -1023,6 +1020,16 @@ font-technology	Variable	Variabla
 	Delete Export Preset	Ta bort exportförinställning
 	Export Presets	Exportförinställningar
 	Save Export Preset	Spara exportförinställning
+	Export Export Presets	Exportera exportförinställningar
+	Export Preset…	Exportera förinställning…
+	Import Export Presets	Importera exportförinställningar
+	Import Preset…	Importera förinställning…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` är namnet på en förinställning i document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	ingen exportförinställning `{n}` (se document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	inga sparade exportförinställningar att exportera (ange inbyggda i `names`)
+@msg	not an export presets file (format `{_1}`)	inte en fil med exportförinställningar (format `{_1}`)
+@msg	not an export presets file: {e}	inte en fil med exportförinställningar: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportera lager
 	Export Selection	Exportera markering
 	All in One Folder	Allt i en mapp
@@ -1066,10 +1073,8 @@ font-technology	Variable	Variabla
 	Export Transparency Flattener Presets	Exportera förinställningar för transparensförenkling
 	Export {count} Selected	Exportera {count} markerade
 	Export:	Exportera:
-	Exported {count} file(s) to {folder}	Exporterade {count} fil(er) till {folder}
 	Exported {path}	Exporterade {path}
 	Exported {what}	Exporterade {what}
-	Exported {what} with {} note(s): {first}	Exporterade {what} med {} anmärkning(ar): {first}
 	Exporting {}	Exporterar {}
 	Export…	Exportera…
 	Extrude & Bevel…	Extrudera och fasa…
@@ -1180,6 +1185,7 @@ font-technology	Variable	Variabla
 	Flip Row Order	Vänd radordning
 	Flip Vertical	Vänd lodrätt
 	Float in Window	Gör flytande i fönster
+	Float All in Windows	Gör alla flytande i fönster
 	Focal Fill	Fokal fyllning
 	Focal Stroke	Fokal kontur
 	Folder	Mapp
@@ -1246,6 +1252,7 @@ font-technology	Variable	Variabla
 	Get Preferences	Hämta inställningar
 	Get Text Range	Hämta textintervall
 	Global	Global
+	Global Adjust	Global justering
 	Global Brush Dimensions	Globala penseldimensioner
 	Global Process Color	Global processfärg
 	Global Process Color, CMYK	Global processfärg, CMYK
@@ -1342,6 +1349,10 @@ font-technology	Variable	Variabla
 	Hard Light	Hårt ljus
 	Hard Mix	Hård blandning
 	Harmony Rules:	Harmoniregler:
+	Segmented color wheel	Segmenterat färghjul
+	Show smooth color wheel	Visa steglöst färghjul
+	Show segmented color wheel	Visa segmenterat färghjul
+	Show color bars	Visa färgstaplar
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
 	Height:	Höjd:
@@ -1657,6 +1668,8 @@ font-technology	Variable	Variabla
 	Large Thumbnail View	Stor miniatyrvy
 	Large Thumbnails	Stora miniatyrer
 	Lasso Tool	Lassoverktyg
+	Enclosing Lasso Tool	Omslutande lassoverktyg
+	Enclosing Lasso	Omslutande lasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
@@ -1794,6 +1807,7 @@ font-technology	Variable	Variabla
 	Manually	Manuellt
 	Mark as trapped	Märk som överfyllt
 	Mark Older Files as [Converted] When Opened	Märk äldre filer som [Konverterad] när de öppnas
+	Use System Defaults for Edit Original	Använd systemets standardinställningar för Redigera original
 	Marker…	Markör…
 	Marks	Märken
 	Marks and Bleed	Märken och utfall
@@ -1856,6 +1870,7 @@ font-technology	Variable	Variabla
 	Modify	Ändra
 	Mojikumi	Mojikumi
 	Insert Kashidas	Infoga kashidor
+	Kashidas	Kashidor
 	Long	Lång
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
@@ -1963,6 +1978,8 @@ font-technology	Variable	Variabla
 	Roundness:	Rundhet:
 	Fixed	Fast
 	Pressure	Tryck
+	Tilt	Lutning
+	Bearing	Riktning
 	Shape:	Form:
 	Bristle Length:	Borstlängd:
 	Bristle Density:	Borsttäthet:
@@ -2025,6 +2042,10 @@ font-technology	Variable	Variabla
 	New Without Dialog	Ny utan dialogruta
 	New Workspace	Ny arbetslayout
 	New Workspace…	Ny arbetslayout…
+	New Toolbar…	Nytt verktygsfält…
+	New Toolbar	Nytt verktygsfält
+	Show Toolbar	Visa verktygsfält
+	List Toolbars	Lista verktygsfält
 	New {kind} Style…	Ny {kind}stil…
 	New…	Ny…
 	Next	Nästa
@@ -2170,7 +2191,6 @@ font-technology	Variable	Variabla
 	Open Recent Files	Öppna senaste filer
 	Open Swatch Library	Öppna färgrutebibliotek
 	Open the URL in the web browser	Öppna URL:en i webbläsaren
-	Opened with {} note(s): {}	Öppnad med {} anteckning(ar): {}
 	Open…	Öppna…
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
@@ -2231,7 +2251,6 @@ font-technology	Variable	Variabla
 	Package collects a saved document with its linked files and fonts.	Paketera samlar ett sparat dokument med dess länkade filer och typsnitt.
 	Package created	Paketet har skapats
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Paketerade {n} fil i {folder} {note}|Paketerade {n} filer i {folder} {note}
-	Packaged {n} file(s){note}	Paketerade {n} fil(er){note}
 	Package…	Paketera…
 	Page	Sida
 	Page information	Sidinformation
@@ -2322,6 +2341,8 @@ font-technology	Variable	Variabla
 	Plates	Plåtar
 	Platform:	Plattform:
 	Play Current Selection	Spela upp aktuell markering
+	Save Actions…	Spara åtgärder…
+	Load Actions…	Läs in åtgärder…
 	Plug-in Info	Information om plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -2424,6 +2445,10 @@ digits	Telugu	Telugu
 digits	Kannada	Kannada
 digits	Malayalam	Malayalam
 	Proportional Lining	Proportionella versalsiffror
+	Position:	Position:
+	Default Position	Standardposition
+	Numerator	Täljare
+	Denominator	Nämnare
 	Proportional Oldstyle	Proportionella medievalsiffror
 	Pucker & Bloat…	Dra ihop och svullna…
 	Pucker Tool	Verktyget Dra ihop
@@ -2580,9 +2605,6 @@ digits	Malayalam	Malayalam
 	Relink	Länka om
 	Relink Linked Files to the Document	Länka om länkade filer till dokumentet
 	Relink to Folder…	Länka om till mapp…
-	Relinked {n} image(s)	{n} bild(er) har länkats om
-	Relinked {n} image(s); not in that folder: {}	{n} bild(er) har länkats om; finns inte i mappen: {}
-	Relinked {} image(s)	{} bild(er) har länkats om
 	Relink…	Länka om…
 	Find Linked Files	Sök länkade filer
 	Find Linked Files in Folder…	Sök länkade filer i mapp…
@@ -2628,6 +2650,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Ersätt ryggrad
 	Replace Symbol	Ersätt symbol
 	Replace With Font	Ersätt med typsnitt
+	Replace With Font From	Ersätt med typsnitt från
+	System	System
 	Replaces the saved preset of that name.	Ersätter den sparade förinställningen med samma namn.
 	Replace…	Ersätt…
 	Require a password to open the document	Kräv lösenord för att öppna dokumentet
@@ -2663,7 +2687,6 @@ digits	Malayalam	Malayalam
 	Restore every preference to its default (applied on OK)	Återställ alla inställningar till standard (verkställs vid OK)
 	Restore Recovered Documents	Återställ återskapade dokument
 	Restored documents open unsaved: save them to keep them.	Återställda dokument öppnas osparade: spara dem för att behålla dem.
-	Restored {} recovered document(s): save them to keep them	Återställde {} återskapade dokument: spara dem för att behålla dem
 	Restrict printing, editing and other tasks	Begränsa utskrift, redigering och andra åtgärder
 	Reverse Front to Back	Vänd ordningen fram och bak
 	Reverse Gradient	Vänd gradient
@@ -2723,11 +2746,13 @@ digits	Malayalam	Malayalam
 	Save a Copy	Spara en kopia
 	Save a Copy…	Spara en kopia…
 	Save As	Spara som
+	Save As Preset…	Spara som förinställning…
 	Save as PDF…	Spara som PDF…
 	Save as preset:	Spara som förinställning:
 	Save as Template	Spara som mall
 	Save as Template…	Spara som mall…
 	Save As…	Spara som…
+	Save Changes	Spara ändringar
 	Save changes to {name}	Spara ändringar i {name}
 	Save color group to Swatch panel	Spara färggruppen i panelen Färgrutor
 	Save Colors as Swatches	Spara färger som färgrutor
@@ -2829,7 +2854,6 @@ digits	Malayalam	Malayalam
 	Saved Views	Sparade vyer
 	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
 	Saved {path}	Sparade {path}
-	Saved {path} with {} note(s): {first}	Sparade {path} med {} anteckning(ar): {first}
 	Saves the current bars, toolbar and panel layout.	Sparar aktuella fält, verktygsfält och panellayout.
 	Save…	Spara…
 	Saving	Sparar
@@ -3263,6 +3287,7 @@ digits	Malayalam	Malayalam
 	Graphic	Grafik
 	Show all open documents	Visa alla öppna dokument
 	Symbol Instance	Symbolinstans
+	Link Block Series	Serie av länkade block
 	Symbol Libraries	Symbolbibliotek
 	Symbol Screener Tool	Verktyg för symbolopacitet
 	Symbol Scruncher Tool	Verktyg för att dra ihop symboler
@@ -3286,6 +3311,10 @@ digits	Malayalam	Malayalam
 	Target Contents	Målets innehåll
 	Target:	Mål:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
+	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Up/Down:	Upp/ned:
+	Left/Right:	Vänster/höger:
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/färgton…
 	Template	Mall
@@ -3294,6 +3323,7 @@ digits	Malayalam	Malayalam
 	Templates…	Mallar…
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ för textexport
+	Text Fill & Stroke Color	Textens fyllnads- och konturfärg
 	Text Fill Color	Textens fyllnadsfärg
 	Text Import Options	Alternativ för textimport
 	Text Stroke Color	Textens konturfärg
@@ -3466,7 +3496,6 @@ digits	Malayalam	Malayalam
 	Update Links	Uppdatera länkar
 	Update Changed Links	Uppdatera ändrade länkar
 	Update Modified Links	Uppdatera ändrade länkar
-	Updated {} image(s)	Uppdaterade {} bild(er)
 	UPPERCASE	VERSALER
 	URL:	URL:
 	Use 	Använd 
@@ -3862,14 +3891,12 @@ axis	Both	Båda
 @msg	No saved views (View → New View…)	Inga sparade vyer (Visa → Ny vy…)
 @msg	Offset Path: select paths	Förskjut bana: markera banor
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Förskjut bana: förskjutningen lämnar inget kvar av de markerade banorna (en infällning större än formerna)
-@msg	Opened with {_1} note(s): {_2}	Öppnad med {_1} anteckning(ar): {_2}
 @msg	Opened {url}	Öppnade {url}
 @msg	Outline Stroke: no stroked paths selected	Kontur till bana: inga banor med kontur markerade
 @msg	PDF settings are not an object	PDF-inställningarna är inte ett objekt
 @msg	PDF security settings are not an object	PDF-säkerhetsinställningarna är inte ett objekt
 @msg	PDF writer error: {0}	fel i PDF-skrivaren: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketerade {n} fil i {folder} ({note})|Paketerade {n} filer i {folder} ({note})
-@msg	Packaged {n} file(s){note}	Paketerade {n} fil(er){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filer i stället)
 @msg	Release Guides: no guides	Släpp stödlinjer: inga stödlinjer
 @msg	Release: no layer to put the rectangle in	Släpp: inget lager att placera rektangeln i
@@ -3903,6 +3930,7 @@ axis	Both	Båda
 @msg	`library` is a library id or name (see {list})	`library` är ett biblioteks-id eller biblioteksnamn (se {list})
 @msg	`mode` applies to freeform gradients	`mode` gäller för fria gradienter
 @msg	`preserve` must be an object	`preserve` måste vara ett objekt
+@msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
@@ -4070,6 +4098,8 @@ axis	Both	Båda
 @msg	join needs open paths	foga samman kräver öppna banor
 @msg	lang must be one of {_1}	lang måste vara något av {_1}
 @msg	layers can't be wrap objects	lager kan inte vara radbrytningsobjekt
+@msg	line {line}: value for `{var}` must be true or false	rad {line}: värdet för `{var}` måste vara true eller false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	rad {line}: värdet för `{var}` är längre än {MAX_GRAPH_CSV} byte
 @msg	missing `folder`	`folder` saknas
 @msg	missing `id` (see plugin.list)	`id` saknas (se plugin.list)
 @msg	missing `name`	`name` saknas
@@ -4155,6 +4185,14 @@ axis	Both	Båda
 @msg	no selection bounds	inga markeringsgränser
 @msg	no slice selected	ingen skiva är markerad
 @msg	no such action	åtgärden finns inte
+@msg	no such action set	åtgärdsuppsättningen finns inte
+@msg	the action sets changed; nothing was deleted	åtgärdsuppsättningarna har ändrats; inget raderades
+@msg	no action set to save	ingen åtgärdsuppsättning att spara
+@msg	not an action set file	inte en fil med åtgärdsuppsättning
+@msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
+@msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder
+@msg	the action set file needs a later version of VectorCraft	filen med åtgärdsuppsättningen kräver en nyare version av VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	en åtgärd i filen med åtgärdsuppsättningen har fler än 10 000 steg
 @msg	no such anchor	ankaret finns inte
 @msg	no such artboard	ritytan finns inte
 @msg	the artboard is locked	ritytan är låst
@@ -4181,6 +4219,7 @@ axis	Both	Båda
 @msg	no user library folder here	ingen mapp för användarbibliotek här
 @msg	no user workspace `{from}`	ingen användararbetslayout `{from}`
 @msg	node {_1} is not text	nod {_1} är inte text
+@msg	node {_1} is on a locked artboard	nod {_1} ligger på en låst rityta
 @msg	not a DXF drawing	inte en DXF-ritning
 @msg	not a VectorCraft file: {0}	inte en VectorCraft-fil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	inte en kortkommandouppsättning för VectorCraft (`overrides` saknas)
@@ -4379,7 +4418,12 @@ axis	Both	Båda
 @msg	unknown workspace (one of {_1})	okänd arbetslayout (en av {_1})
 @msg	unsupported: {0}	stöds inte: {0}
 @msg	variables are locked	variablerna är låsta
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	fler än {MAX_CSV_ROWS} datauppsättningar: Importera datauppsättningar läser högst {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	fler än {MAX_CSV_COLS} variabler: Importera datauppsättningar läser högst {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	variabler som inte är text utelämnades: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	ett nytt dokument läser inte tillbaka dessa variabler med deras typ: {names}
+@msg	a new document refuses this file because of these variables: {names}	ett nytt dokument avvisar den här filen på grund av dessa variabler: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	rubriken `{header}` för `{name}` skulle läsas som variabeln `{other}`: byt namn på en av dem
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` och `options.{key}: {inner}` stämmer inte överens: ange alternativet bara en gång
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	filer i version {0} kan inte komprimeras: endast version {COMPRESSED_SINCE} och senare kan öppna komprimerade filer
 @msg	width and height are at least 1 pixel	bredd och höjd är minst 1 pixel
@@ -4413,7 +4457,9 @@ axis	Both	Båda
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kunde inte placera {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kunde inte klistra in från urklippet: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Kunde inte klistra in: dokumentet det klistrades in i har stängts
 @msg	Saved {path} with {_1} note(s): {first}	Sparade {path} med {_1} anteckning(ar): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Exporterade {what} med {_1} anteckning(ar): {first}
 @msg	Exported {what}	Exporterade {what}
 @msg	Saved {n} files beside {path}	Sparade {n} filer bredvid {path}
 @msg	Saving	Sparar
@@ -4421,9 +4467,12 @@ axis	Both	Båda
 @msg	Exporting {_1}	Exporterar {_1}
 @msg	Packaging {_1}	Paketerar {_1}
 @msg	Placing {_1}	Placerar {_1}
+@msg	Pasting	Klistrar in
 @msg	Saving recovery data for {_1}	Sparar återställningsdata för {_1}
-@msg	Discarded {_1} recovered document(s)	Kastade {_1} återställda dokument
-@msg	Restored {_1} recovered document(s): save them to keep them	Återställde {_1} återskapade dokument: spara dem för att behålla dem
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kastade {n} återställt dokument|Kastade {n} återställda dokument
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Återställde {n} återskapat dokument: spara det för att behålla det|Återställde {n} återskapade dokument: spara dem för att behålla dem
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Öppnad med {n} anteckning: {first}|Öppnad med {n} anteckningar: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sparade {path} med {n} anteckning: {first}|Sparade {path} med {n} anteckningar: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Bäddade in {n} bild; {missing} saknas: länka om dem först|Bäddade in {n} bilder; {missing} saknas: länka om dem först
 @msgplural	Embedded {n} image|Embedded {n} images	Bäddade in {n} bild|Bäddade in {n} bilder
 @msgplural	Relinked {n} image|Relinked {n} images	Omlänkade {n} bild|Omlänkade {n} bilder
@@ -4444,6 +4493,8 @@ axis	Both	Båda
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopierade CSS för {n} objekt|Kopierade CSS för {n} objekt
 @msgplural	Downloaded {n} file|Downloaded {n} files	Hämtade {n} fil|Hämtade {n} filer
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exporterade {n} fil till {folder}|Exporterade {n} filer till {folder}
+@msg	All colors are within the CMYK gamut	Alla färger ligger inom CMYK-färgomfånget
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} färg ligger utanför CMYK-färgomfånget|{n} färger ligger utanför CMYK-färgomfånget
 @msg	Unembedded to {_1}	Extraherad till {_1}
 @msg	Reset {_1}	Återställ {_1}
 @msg	Sent to {_1}	Skickat till {_1}
@@ -4469,8 +4520,17 @@ axis	Both	Båda
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	det här är ingen logotyp i platta färger ({_1} % av dess enfärgade ytor matchar några få platta färger), så läget Platt logotyp skulle göra om dess gradienter till fläckar: använd läget Färg i stället
 @msg	`{what}` closes nothing	`{what}` stänger ingenting
 @msg	`{what}` closes something it didn't open	`{what}` stänger något som den inte öppnade
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	en mask som täcker flera lager kommer in som en urklippsgrupp i varje lager den täcker
+@msg	a graph's records don't end where they should: its art was read as it is	ett diagrams poster slutar inte där de ska: dess grafik lästes som den är
+@msg	`{w}` takes no operands	`{w}` tar inga operander
+@msg	a wraparound group is inside a compound path	en textombrytningsgrupp ligger inuti en sammansatt bana
 @msg	a path has too many points	en bana har för många punkter
+@msg	it ends inside a group or compound path	den slutar inuti en grupp eller en sammansatt bana
 @msg	it ends inside a layer	den slutar inuti ett lager
+@msg	it ends inside a multi-layer mask	den slutar inuti en flerlagersmask
+@msg	a multi-layer mask's operators are out of order	operatorerna för en flerlagersmask står i fel ordning
+@msg	a multi-layer mask needs one clipping path	en flerlagersmask behöver en klippbana
+@msg	a group crosses a multi-layer mask	en grupp korsar en flerlagersmask
 @msg	it has art outside its layers	den har grafik utanför sina lager
 @msg	it has more than {MAX_NODES} objects	den har fler än {MAX_NODES} objekt
 @msg	it has no layers	den har inga lager
@@ -4481,11 +4541,13 @@ axis	Both	Båda
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten ”{name}” är inte definierad i filen: en enfärgad fyllning används i stället
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
+@msg	graphs come in as plain art, without their data or settings	diagram läses in som vanlig grafik, utan sina data och inställningar
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	länkade bilder visar förhandsgranskningen med låg upplösning som sparats i filen tills deras filer hittas: länka om dem i panelen Länkar
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	områdestext i ramar som var för låga för en rad i det typsnitt den visas med fick högre ramar ({_1}): annars skulle texten inte synas
 @msg	its editing data doesn't say where its art is	dess redigeringsdata anger inte var dess grafik finns
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	den här filen sparades utan PDF-kompatibilitet och dess redigeringsdata kan inte läsas ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF-delen kunde inte läsas ({_1}): filen öppnades från dess redigeringsdata
 @msg	No fonts are missing in this document	Inga typsnitt saknas i det här dokumentet
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft söker inte i andra appars eller systemets mappar: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft söker inte i mappen Shared eller Public under Users: {path}
@@ -4576,6 +4638,9 @@ axis	Both	Båda
 @msg	the PCX file is cut short	PCX-filen är avkortad
 @msg	the PCX file's header is damaged	PCX-filens huvud är skadat
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bitars pixlar i {planes} plan kan inte läsas
+@msg	the Pixar file is cut short	Pixar-filen är avkortad
+@msg	the Pixar file's header is damaged	Pixar-filens huvud är skadat
+@msg	the Pixar file's image data is damaged	Pixar-filens bilddata är skadade
 @msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan inte läsas
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har en färgrymd eller ett JPX-innehåll som inte stöds
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
@@ -5261,6 +5326,7 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
 file-filter	Swatch libraries	Färgrutebibliotek
 file-filter	Templates	Mallar
@@ -5321,6 +5387,11 @@ theme	Appearance	Utseende
 	Editable	Redigerbar
 	Export Data Sets…	Exportera datauppsättningar…
 	Load Variable Library…	Läs in variabelbibliotek…
+	Save Variable Library…	Spara variabelbibliotek…
+@msg	a variable library holds text variables, and the document has none	ett variabelbibliotek innehåller textvariabler, och dokumentet har inga
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabeln `{name}` kan inte sparas i ett variabelbibliotek: byt namn på den så att den börjar med en bokstav eller `_`, utan mellanslag eller andra symboler än `-`, `_` och `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	datauppsättningen `{name}` innehåller ett kontrolltecken, som ett variabelbibliotek inte kan innehålla
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	datauppsättningen `{name}` börjar eller slutar med blanksteg, som ett variabelbibliotek inte kan innehålla
 	Filter	Filter
 	Filter Layers Panel Rows	Filtrera rader i panelen Lager
 	Flatten	Platta till
@@ -5404,8 +5475,10 @@ theme	Appearance	Utseende
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp
+@msg	columns {first} and {column} both name the variable `{name}`	kolumnerna {first} och {column} anger båda variabeln `{name}`
 @msg	open a document with data sets	öppna ett dokument med datauppsättningar
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	inget i datauppsättningen {name} användes: inget objekt är bundet till en variabel som den har ett värde för
+@msg	no bound object reports a value (locked objects and embedded images report none)	inget bundet objekt rapporterar ett värde (låsta objekt och inbäddade bilder rapporterar inget)
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
 @msg	select an Objects on Path group	markera en grupp med objekt på bana
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en bana inuti en sammansatt bana, en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte ta emot objekt
@@ -5452,6 +5525,11 @@ theme	Appearance	Utseende
 	Export Type:	Exporttyp:
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
+@msg	an action is already recording	en åtgärd spelas redan in
+@msg	no such function key	funktionstangenten finns inte
+@msg	no such color	färgen finns inte
+@msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
+@msg	more than one action is named “{_1}”	fler än en åtgärd heter ”{_1}”
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
 	Angular	Vinkelmått
 	Away from the Line	Bort från linjen
@@ -5600,7 +5678,9 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
+@msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
 	Move Anchor Point	Flytta ankarpunkt
@@ -5627,6 +5707,7 @@ font-script	Japanese	Japanska
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriska stödlinjer
+	Geometric Patterns	Geometriska mönster
 	Ease In	Långsam start
 	Ease Out	Långsamt slut
 	Ease In Out	Långsam start och slut
@@ -5684,17 +5765,30 @@ axis	Y Axis	Y-axel
 	New Set	Ny uppsättning
 	Set Options…	Alternativ för uppsättning…
 	Set Options	Alternativ för uppsättning
+	Action Options…	Alternativ för åtgärd…
+	Action Options	Alternativ för åtgärd
+	Rename Action	Byt namn på åtgärd
+	New Action…	Ny åtgärd…
+	New Action	Ny åtgärd
+	Create New Action	Skapa ny åtgärd
+	Play Action	Spela upp åtgärd
+	Action Set:	Åtgärdsuppsättning:
+	Function Key:	Funktionstangent:
+	Record	Spela in
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
+	Leave Out of Global Edit	Uteslut från global redigering
 	Match	Matcha
 	On Artboards	På ritytor
 	All Artboards	Alla ritytor
 	Include Objects On Canvas	Ta med objekt på arbetsytan
-	Result(s): {count}	Resultat: {count}
+@plural	Result: {n}|Results: {n}	Resultat: {n}|Resultat: {n}
 @msg	select one object	markera ett objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
+@msg	Global Edit is off	Global redigering är inte aktiv
+@msg	only an object of the Global Edit other than the one it started from can be left out	bara ett annat objekt än det som den globala redigeringen började med kan uteslutas
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
 	Add to Symbols	Lägg till i symboler
 	Basic Shapes	Grundformer
@@ -5975,6 +6069,16 @@ shape	Open	Öppen
 	Case	Skiftläge
 @msg	{label} must be a number	{label} måste vara ett tal
 @msg	{label} must be a number of at least 0.1	{label} måste vara ett tal på minst 0,1
+	Advanced Character Formats	Avancerade teckenformat
+	Horizontal Scale	Horisontell skala
+	Vertical Scale	Vertikal skala
+@msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+	Character Color	Teckenfärg
+	OpenType Features	OpenType-funktioner
+	Stylistic Sets	Stilistiska uppsättningar
+@msg	features lists at most {max} tags	features får innehålla högst {max} taggar
+@msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6217,3 +6321,24 @@ breakText	Glyphs	Glyfer
 	Small to Large	Från liten till stor
 	Large to Small	Från stor till liten
 	Distribute Evenly	Fördela jämnt
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Skapa färgrutelegend
+	Create Swatch Legend…	Skapa färgrutelegend…
+	HEX	HEX
+
+# The strings the report listed as missing for sv.
+	Font Size:	Teckenstorlek:
+digits	Hindi	Hindi
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textverktyg
+	Text Tweaker…	Textjustering…
+	Text Tweaker	Textjustering
+	Attribute:	Attribut:
+	From:	Från:
+	To:	Till:
+	Bow	Båge
+	Spike	Spets
+	Skip Spaces	Hoppa över mellanslag
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den

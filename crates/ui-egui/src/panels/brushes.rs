@@ -13,7 +13,7 @@ use std::sync::Arc;
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_brush::Brush;
-use vectorcraft_doc::{Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
+use vectorcraft_doc::{AngleProfile, Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
 use vectorcraft_engine::DocState;
 use vectorcraft_engine::cmd::brushlib::{self, BrushLibrary};
 use vectorcraft_engine::cmd::clipboard::{ArtResources, art_resources};
@@ -96,7 +96,8 @@ fn preview(ui: &Ui, doc: &Document, def: &Value, key: u64, size: egui::Vec2) -> 
 /// What a stroke preview of brush definition `def`, `w` × `h` pt, renders: a copy of `resources`
 /// (a document whose patterns, symbols, swatches and images the brush art may use) without its art,
 /// and a stroke painted with the brush across it. The stroke goes from light to heavy pen pressure
-/// and back, so pressure-sensitive brushes show how they vary.
+/// and back, from an upright pen to one lying flat and back, and once round every bearing and barrel
+/// rotation, so brushes that vary with the pen show how they vary.
 fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Document> {
     let mut doc = resources.clone();
     let layer = doc.alloc_id();
@@ -107,6 +108,9 @@ fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Docu
     let st = ap.stroke_mut()?;
     st.brush = Some(name);
     st.pressure = Some(PressureProfile::sample());
+    st.tilt = Some(PressureProfile::sample());
+    st.bearing = Some(AngleProfile::sample());
+    st.rotation = Some(AngleProfile::sample());
     // A gentle S-curve across the swatch (square tiles keep a quarter of it either side).
     let mut bp = vectorcraft_geom::BezPath::new();
     let margin = (h * 0.5).min(w * 0.25);

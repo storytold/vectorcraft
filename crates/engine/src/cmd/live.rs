@@ -21,7 +21,7 @@ use super::expand::gradient_sampler;
 use super::pathops::Beside;
 use super::{
     CommandSpec, EngineError, Result, Session, always, bad, check_numbers, check_switches, cmd, color_value, f64_or, f64_req, finite_numbers,
-    has_doc, has_multi, has_selection, id_param, ids_param, number_or, ok, str_param, switch_or,
+    has_doc, has_multi, has_selection, id_param, named_ids, number_or, ok, str_param, switch_or,
 };
 
 mod blend;

@@ -66,6 +66,17 @@ fn a_spot_color_writes_the_image_in_its_ink() {
 }
 
 #[test]
+fn a_spot_colorized_image_keeps_the_ink_values_of_its_swatch() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 0.75, 0.75, 0.1), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let Some(ink) = d.swatches.iter_mut().find(|s| s.name == "Ink") else { panic!("the Ink swatch") };
+    ink.paint = Paint::solid(Color::cmyk(0.0, 0.75, 0.75, 0.1));
+    let text = String::from_utf8_lossy(&pdf(&d)).into_owned();
+    assert!(text.contains("/Separation/Ink/DeviceCMYK"), "{text}");
+    assert!(text.contains("/C1[0 0.75 0.75 0.1]"), "M75 Y75 K10, not 191/255 and 26/255: {text}");
+}
+
+#[test]
 fn a_process_color_writes_the_image_in_that_color_with_a_soft_mask() {
     let out = pdf(&doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)))));
     // The image and its soft mask, a gray image.
@@ -167,4 +178,16 @@ fn a_pixelated_colorized_image_asks_viewers_not_to_smooth_it() {
         assert_eq!(images(&out), [("DeviceGray".into(), vec![], false), ("DeviceCMYK".into(), vec![], true)], "pixelated: {pixelated}");
         assert_eq!(String::from_utf8_lossy(&out).contains("/Interpolate"), !pixelated, "pixelated: {pixelated}");
     }
+}
+
+/// Ink options naming no ink give one warning, its lists cut short, however many there are.
+#[test]
+fn ink_options_naming_no_ink_give_one_short_warning() {
+    let d = doc(ColorMode::Cmyk, None);
+    let inks: Vec<serde_json::Value> = (0..10_000).map(|i| serde_json::json!({"name": format!("Missing {i}")})).collect();
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations", "inks": inks}})).unwrap();
+    let (list, warnings) = print_inks(&d, &settings);
+    assert!(list.iter().any(|i| i.name == "Cyan"));
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].contains("`Missing 0`") && warnings[0].contains("and 9990 more") && warnings[0].len() < 500, "{}", warnings[0]);
 }

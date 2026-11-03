@@ -312,10 +312,31 @@ pub(crate) fn apply_gradient_edit_in(
     bounds: Option<Rect>,
     inside: &dyn Fn(Point) -> bool,
 ) -> std::result::Result<Paint, String> {
-    let mut gp = match paint {
+    apply_gradient_edit_in_model(paint, p, bounds, inside, None)
+}
+
+/// New implicit stops use the document's model; existing gradients retain their own colors.
+fn gradient_for_edit(paint: &Paint, model: Option<vectorcraft_color::cms::Model>) -> GradientPaint {
+    match paint {
         Paint::Gradient(g) => (**g).clone(),
-        _ => GradientPaint::new(Gradient::default()),
-    };
+        _ => {
+            let mut gradient = Gradient::default();
+            for stop in &mut gradient.stops {
+                stop.color = super::paint::stored_color(model, stop.color);
+            }
+            GradientPaint::new(gradient)
+        }
+    }
+}
+
+fn apply_gradient_edit_in_model(
+    paint: &Paint,
+    p: &Value,
+    bounds: Option<Rect>,
+    inside: &dyn Fn(Point) -> bool,
+    model: Option<vectorcraft_color::cms::Model>,
+) -> std::result::Result<Paint, String> {
+    let mut gp = gradient_for_edit(paint, model);
     let mut switched = false;
     if let Some(k) = str_param(p, "kind") {
         let kind = parse_kind(k)?;
@@ -414,13 +435,15 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`dither` applies to gradient fills (stroke: false)"));
     }
     super::paint::check_keep_model(p, C)?;
+    let model = super::paint::new_color_model(s, p);
     // New RGB stop colors take the document's model; those of the swatches the stops name don't.
     let stored = stop_colors(s, p, p);
     // Stops naming swatches take their colours from them.
     let p = &link_stops(&s.doc()?.doc, p).map_err(|e| bad(C, e))?;
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
-    let new_default = apply_gradient_edit(&default_paint, &with_stored_stops(p, &default_paint, &stored), None).map_err(|e| bad(C, e))?;
+    let new_default = apply_gradient_edit_in_model(&default_paint, &with_stored_stops(p, &default_paint, &stored), None, &|_| true, model)
+        .map_err(|e| bad(C, e))?;
     let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
     edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
@@ -429,7 +452,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
             let lb = t.local_bounds();
             for r in &mut t.runs {
                 let (cur, b) = run_paint_mut(r, stroke, lb);
-                *cur = apply_gradient_edit(cur, &with_stored_stops(p, cur, &stored), Some(b)).map_err(|e| bad(C, e))?;
+                *cur = apply_gradient_edit_in_model(cur, &with_stored_stops(p, cur, &stored), Some(b), &|_| true, model).map_err(|e| bad(C, e))?;
             }
             return Ok(());
         }
@@ -441,7 +464,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
             None => &|_| true,
         };
         let old = n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None);
-        let np = apply_gradient_edit_in(old, &with_stored_stops(p, old, &stored), b, inside).map_err(|e| bad(C, e))?;
+        let np = apply_gradient_edit_in_model(old, &with_stored_stops(p, old, &stored), b, inside, model).map_err(|e| bad(C, e))?;
         n.appearance.set_paint_at(index, !stroke, np);
         if let Some(m) = mode
             && let Some(st) = n.appearance.stroke_at_mut(index)
@@ -547,12 +570,9 @@ impl GeomEdit {
 /// `cur` with the vector, aspect and focal point of `e` (given in the document). `to_doc` maps
 /// the paint's space (text space for type runs) to the document and `bounds` (in that space) fits
 /// an unplaced gradient, so what the document shows carries over where `e` keeps it.
-fn vector_paint(cur: &Paint, e: &GeomEdit, to_doc: Affine, bounds: Option<Rect>) -> Option<Paint> {
+fn vector_paint(cur: &Paint, e: &GeomEdit, to_doc: Affine, bounds: Option<Rect>, model: Option<vectorcraft_color::cms::Model>) -> Option<Paint> {
     let from_doc = invert(to_doc)?;
-    let mut gp = match cur {
-        Paint::Gradient(g) => (**g).clone(),
-        _ => GradientPaint::new(Gradient::default()),
-    };
+    let mut gp = gradient_for_edit(cur, model);
     let kind = gp.gradient.kind;
     let map = |mut g: GradientGeom, a: Affine| {
         if a != Affine::IDENTITY {
@@ -597,6 +617,7 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
+    let model = super::paint::new_color_model(s, &Value::Null);
     edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
@@ -607,14 +628,14 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
                     run_stroke_weight(&mut r.style);
                 }
                 let (paint, b) = run_paint_mut(r, stroke, lb);
-                if let Some(np) = vector_paint(paint, &edit, xf, Some(b)) {
+                if let Some(np) = vector_paint(paint, &edit, xf, Some(b), model) {
                     *paint = np;
                 }
             }
             return Ok(());
         }
         let b = item_paint_bounds(n, index, !stroke);
-        if let Some(np) = vector_paint(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), &edit, Affine::IDENTITY, b) {
+        if let Some(np) = vector_paint(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), &edit, Affine::IDENTITY, b, model) {
             n.appearance.set_paint_at(index, !stroke, np);
         }
         Ok(())

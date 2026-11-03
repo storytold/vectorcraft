@@ -426,6 +426,7 @@
 	Stroke Weight	Tloušťka tahu
 	Graphic Style	Grafický styl
 	Symbol Instance	Instance symbolu
+	Link Block Series	Řada propojených bloků
 	Font Family	Rodina písma
 	Font Family & Style	Rodina a řez písma
 	Font Family, Style & Size	Rodina, řez a velikost písma
@@ -433,6 +434,7 @@
 	Variable Font	Variabilní písmo
 	Text Fill Color	Barva výplně textu
 	Text Stroke Color	Barva tahu textu
+	Text Fill & Stroke Color	Barva výplně a tahu textu
 	All on Same Layers	Vše ve stejných vrstvách
 	Direction Handles	Směrové úchyty
 	Brush Strokes	Tahy štětcem
@@ -634,6 +636,7 @@
 	Cascade	Do kaskády
 	Tile	Vedle sebe
 	Float in Window	Uvolnit do samostatného okna
+	Float All in Windows	Uvolnit vše do samostatných oken
 	Consolidate All Windows	Sloučit všechna okna
 	Workspace	Pracovní prostor
 	Reset Essentials	Obnovit Essentials
@@ -646,6 +649,10 @@
 	Reset Typography	Obnovit Typography
 	Reset Web	Obnovit Web
 	New Workspace…	Nový pracovní prostor…
+	New Toolbar…	Nový panel nástrojů…
+	New Toolbar	Nový panel nástrojů
+	Show Toolbar	Zobrazit panel nástrojů
+	List Toolbars	Seznam panelů nástrojů
 	Manage Workspaces…	Spravovat pracovní prostory…
 	Control	Ovládací panel
 	Contextual Task Bar	Kontextový panel úloh
@@ -1259,6 +1266,8 @@ lighting	Light	Světlo
 	Hand	Ručička
 	Join Tool	Nástroj Spojení
 	Lasso Tool	Nástroj Laso
+	Enclosing Lasso Tool	Nástroj obklopující laso
+	Enclosing Lasso	Obklopující laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf
@@ -1341,6 +1350,8 @@ lighting	Light	Světlo
 	No actions. Press ● to record.	Žádné akce. Stisknutím ● spustíte záznam.
 	Outline Text	Text převedený na křivky
 	Play Current Selection	Přehrát aktuální výběr
+	Save Actions…	Uložit akce…
+	Load Actions…	Načíst akce…
 	Reflect Horizontal	Zrcadlit vodorovně
 	Rotate 90° CW	Otočit o 90° po směru hodin
 	Set 1	Sada 1
@@ -1369,6 +1380,8 @@ lighting	Light	Světlo
 	Dashed	Čárkovaný
 	Delete Selected Item	Odstranit vybranou položku
 	Double-click to edit the characters' paint	Dvojklikem upravíte barvu znaků
+	Click to edit	Kliknutím upravíte
+	Double-click to edit	Dvojklikem upravíte
 	Double-click to target the contents	Dvojklikem zacílíte obsah
 	Drag onto art to apply this appearance	Přetažením na kresbu použijete tento vzhled
 	Duplicate Selected Item	Duplikovat vybranou položku
@@ -1473,6 +1486,10 @@ digits	Malayalam	Malajálamské
 	Superscript (on the roadmap)	Horní index (v plánu)
 	System Layout	Systémové rozvržení
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Nastavení Tate-chu-yoko…
+	Tate-chu-yoko Settings	Nastavení Tate-chu-yoko
+	Up/Down:	Nahoru/dolů:
+	Left/Right:	Vlevo/vpravo:
 	Underline	Podtržení
 	Vertical Scale %	Svislá změna velikosti %
 	Axis	Osa
@@ -1515,7 +1532,6 @@ digits	Malayalam	Malajálamské
 	Save changes to {name}	Uložit změny do {name}
 	Save theme to My Themes	Uložit motiv do Mých motivů
 	Set the selected color to the current color	Nastavit vybranou barvu jako aktuální barvu
-	Copied the CSS of {rules} object(s)	Zkopírováno CSS objektů: {rules}
 	Copy All Styles	Kopírovat všechny styly
 	Exported {path}	Exportováno: {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Generovat CSS: CSS celého dokumentu, když není nic vybráno
@@ -1577,6 +1593,7 @@ digits	Malayalam	Malajálamské
 	Delete Graphic Style (Alt-click: without asking)	Odstranit grafický styl (Alt+kliknutí: bez dotazu)
 	Delete the graphic style “{name}”?	Odstranit grafický styl „{name}“?
 	Delete Action Sets	Odstranit sady akcí
+	Duplicate Action or Action Set	Duplikovat akci nebo sadu akcí
 	Delete the action set “{name}” and its actions?	Odstranit sadu akcí „{name}“ a její akce?
 	Delete the selected action sets and their actions?	Odstranit vybrané sady akcí a jejich akce?
 	Delete these {n} graphic styles?	Odstranit tyto grafické styly ({n})?
@@ -1761,8 +1778,6 @@ digits	Malayalam	Malajálamské
 	Color Space	Barevný prostor
 	Created	Vytvořeno
 	Dimensions	Rozměry
-	Embedded {n} image(s)	Vloženo obrázků: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Vloženo obrázků: {n}; chybí {missing}: nejprve je znovu propojte
 	File › Place… brings in an image, linked or embedded.	Soubor › Umístit… přidá obrázek, propojený nebo vložený.
 	Format	Formát
 	Medium Thumbnails	Střední miniatury
@@ -1772,9 +1787,6 @@ digits	Malayalam	Malajálamské
 	No Thumbnails	Bez miniatur
 	Nothing matches the Show filter.	Filtru Zobrazit nic neodpovídá.
 	PPI	PPI
-	Relinked {n} image(s)	Znovu propojeno obrázků: {n}
-	Relinked {n} image(s); not in that folder: {}	Znovu propojeno obrázků: {n}; nejsou v dané složce: {}
-	Relinked {} image(s)	Znovu propojeno obrázků: {}
 	Relink…	Znovu propojit…
 	Find Linked Files	Najít propojené soubory
 	Find Linked Files in Folder…	Najít propojené soubory ve složce…
@@ -1791,7 +1803,6 @@ digits	Malayalam	Malajálamské
 	Status	Stav
 	Unembedded to {}	Vložení zrušeno, uloženo do: {}
 	Update Link	Aktualizovat propojení
-	Updated {} image(s)	Aktualizováno obrázků: {}
 	Break Link	Zrušit propojení
 	Tolerance:	Tolerance:
 	Corner Point Angle Threshold:	Prahový úhel rohových bodů:
@@ -1815,6 +1826,10 @@ digits	Malayalam	Malajálamské
 	Ligatures are off while the text is tracked.	Ligatury jsou vypnuté, když má text prostrkání.
 	Ordinals	Řadové číslovky
 	Proportional Lining	Proporcionální verzálkové
+	Position:	Poloha:
+	Default Position	Výchozí poloha
+	Numerator	Čitatel
+	Denominator	Jmenovatel
 	Proportional Oldstyle	Proporcionální minuskové
 	Reset OpenType Features	Obnovit funkce OpenType
 	Select text to set its OpenType features.	Vyberte text, abyste mohli nastavit jeho funkce OpenType.
@@ -1842,6 +1857,7 @@ digits	Malayalam	Malajálamské
 	Left-to-Right Paragraph Direction	Směr odstavce zleva doprava
 	Line-end Punctuation Half Width	Interpunkce na konci řádku poloviční šířky
 	Insert Kashidas	Vložit kašídy
+	Kashidas	Kašídy
 	Long	Dlouhý
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
@@ -1921,7 +1937,6 @@ digits	Malayalam	Malajálamské
 	Smart Guides (⌘U)	Chytrá vodítka (⌘U)
 	Snap Options	Možnosti přichytávání
 	Type:	Typ:
-	All colours are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
 	Assign:	Přiřadit:
 	Color Settings	Nastavení barev
 	Gamut Check	Kontrola gamutu
@@ -2166,6 +2181,7 @@ digits	Malayalam	Malajálamské
 	Color Mode:	Barevný režim:
 	Convert	Převést
 	Global	Globální
+	Global Adjust	Globální úprava
 	Green	Zelená
 	Shifts the tints of global and spot colors; other colors stay.	Posune tóny globálních a přímých barev; ostatní barvy zůstanou.
 	Tint	Tón
@@ -2349,6 +2365,8 @@ digits	Malayalam	Malajálamské
 	Preserve Overprints and Spot Colors	Zachovat přetisky a přímé barvy
 	Rasters	Rastry
 	Replaces the saved preset of that name.	Nahradí uložené přednastavení se stejným názvem.
+	Save As Preset…	Uložit jako předvolbu…
+	Save Changes	Uložit změny
 	Save Preset…	Uložit přednastavení…
 	Vectors	Vektory
 	A saved copy of the selected preset	Uložená kopie vybraného přednastavení
@@ -2484,7 +2502,6 @@ digits	Malayalam	Malajálamské
 	Package collects a saved document with its linked files and fonts.	Sbalení shromáždí uložený dokument s jeho propojenými soubory a písmy.
 	Package created	Balíček vytvořen
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Zabalen {n} soubor do {folder} {note}|Zabaleny {n} soubory do {folder} {note}|Zabaleno {n} souborů do {folder} {note}
-	Packaged {n} file(s){note}	Zabaleno souborů: {n}{note}
 	Relink Linked Files to the Document	Znovu propojit propojené soubory s dokumentem
 	Save the document first?	Nejprve uložit dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} soubor v {folder} {note}. Zobrazit složku balíčku?|{n} soubory v {folder} {note}. Zobrazit složku balíčku?|{n} souborů v {folder} {note}. Zobrazit složku balíčku?
@@ -2644,6 +2661,10 @@ digits	Malayalam	Malajálamské
 	Current Colors	Aktuální barvy
 	Current Colors (0)	Aktuální barvy (0)
 	Harmony Rules:	Pravidla harmonie:
+	Segmented color wheel	Segmentované barevné kolo
+	Show smooth color wheel	Zobrazit plynulé barevné kolo
+	Show segmented color wheel	Zobrazit segmentované barevné kolo
+	Show color bars	Zobrazit barevné pruhy
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
 	Limit to Library:	Omezit na knihovnu:
@@ -2678,7 +2699,6 @@ digits	Malayalam	Malajálamské
 	Convert to sRGB	Převést na sRGB
 	Delete this saved preset	Odstranit toto uložené přednastavení
 	Dither:	Rozptýlení:
-	Downloaded {} file(s)	Staženo souborů: {}
 	Fit in View	Přizpůsobit zobrazení
 	Format:	Formát:
 	WebP	WebP
@@ -2951,6 +2971,16 @@ digits	Malayalam	Malajálamské
 	Delete Export Preset	Odstranit přednastavení exportu
 	Export Presets	Přednastavení exportu
 	Save Export Preset	Uložit přednastavení exportu
+	Export Export Presets	Exportovat přednastavení exportu
+	Export Preset…	Exportovat přednastavení…
+	Import Export Presets	Importovat přednastavení exportu
+	Import Preset…	Importovat přednastavení…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` je název přednastavení z document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	přednastavení exportu `{n}` neexistuje (viz document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	žádná uložená přednastavení exportu k exportu (vestavěná uveďte v `names`)
+@msg	not an export presets file (format `{_1}`)	nejde o soubor přednastavení exportu (formát `{_1}`)
+@msg	not an export presets file: {e}	nejde o soubor přednastavení exportu: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportovat vrstvu
 	Export Selection	Exportovat výběr
 	All in One Folder	Vše v jedné složce
@@ -3008,6 +3038,7 @@ digits	Malayalam	Malajálamské
 
 # Command labels and other interface strings
 	Art	Obrazový
+	Bearing	Azimut
 	Bristle	Štětinový
 	Calligraphic	Kaligrafický
 	Dots	Body
@@ -3015,6 +3046,7 @@ digits	Malayalam	Malajálamské
 	Pressure	Tlak
 	Random	Náhodný
 	Scatter	Rozptylový
+	Tilt	Náklon
 	Color Burn	Ztmavit barvy
 	Color Dodge	Zesvětlit barvy
 	Darken	Ztmavit
@@ -3572,6 +3604,7 @@ theme	Appearance	Motiv
 	List Preferences	Vypsat předvolby
 	Manually	Ručně
 	Mark Older Files as [Converted] When Opened	Při otevření označit starší soubory jako [Converted]
+	Use System Defaults for Edit Original	Pro Upravit originál použít výchozí aplikace systému
 	Match User Interface Brightness	Odpovídat jasu uživatelského rozhraní
 	Light Gray	Světle šedá
 	Medium Gray	Středně šedá
@@ -3931,6 +3964,8 @@ effect	Regular	Pravidelný
 	In the selected objects	Ve vybraných objektech
 	Find in Folder…	Najít ve složce…
 	Replace With Font	Nahradit písmem
+	Replace With Font From	Nahradit písmem z
+	System	Systém
 	  — substituted by {style}	  — nahrazeno řezem {style}
 	  — {n} characters from another font	  — znaky z jiného písma: {n}
 	All Scripts	Všechny systémy písma
@@ -3952,20 +3987,16 @@ font-technology	Variable	Variabilní
 	Can't save “{name}”.	„{name}“ nelze uložit.
 	Can't export “{name}”.	„{name}“ nelze exportovat.
 	Downloaded {what}	Staženo: {what}
-	Exported {count} file(s) to {folder}	Exportováno souborů: {count} do {folder}
 	Exported {what}	Exportováno: {what}
-	Exported {what} with {} note(s): {first}	Exportováno: {what}, poznámky ({}): {first}
 	Exporting {}	Exportování {}
 	Imported {what}: {}	Importováno {what}: {}
 	Installed plug-in {}	Nainstalován zásuvný modul {}
-	Opened with {} note(s): {}	Otevřeno, poznámky ({}): {}
 	Revert to the saved version of “{name}”?	Vrátit se k uložené verzi dokumentu „{name}“?
 	Replace “{name}”, the file this document was opened from?	Nahradit „{name}“, soubor, ze kterého byl tento dokument otevřen?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Při otevírání bylo vynecháno, co VectorCraft zatím neumí přečíst ({what}), takže nahrazením se to nenávratně ztratí. Chcete-li to zachovat, uložte dokument pod jiným názvem.
 	“{name}” already exists. Replace it?	„{name}“ již existuje. Nahradit?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Název v panelu ukládání byl „{typed}“ a VectorCraft přidal příponu typu souboru. Nahrazením souboru se přepíše jeho obsah.
 	Saved {path}	Uloženo: {path}
-	Saved {path} with {} note(s): {first}	Uloženo: {path}, poznámky ({}): {first}
 	Saving	Ukládání
 	Saving {}	Ukládání {}
 	Search commands and tools…	Hledat příkazy a nástroje…
@@ -3982,8 +4013,6 @@ font-technology	Variable	Variabilní
 	Smaller ↔ Larger	Menší ↔ Větší
 	Smart Guides (View → Smart Guides)	Chytrá vodítka (Zobrazení → Chytrá vodítka)
 	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
-	Discarded {} recovered document(s)	Zahozeno obnovených dokumentů: {}
-	Restored {} recovered document(s): save them to keep them	Obnoveno dokumentů: {}; pokud je chcete zachovat, uložte je
 	Saved recovery data for {title}	Data pro obnovení uložena pro {title}
 	Saving recovery data for {}	Ukládání dat pro obnovení pro {}
 	Alt	Alt
@@ -4259,14 +4288,12 @@ imageTrace	Outline	Obrys
 @msg	No saved views (View → New View…)	Žádná uložená zobrazení (Zobrazení → Nové zobrazení…)
 @msg	Offset Path: select paths	Odsadit cestu: vyberte cesty
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Odsadit cestu: po odsazení z vybraných cest nic nezbude (odsazení dovnitř větší než tvary)
-@msg	Opened with {_1} note(s): {_2}	Otevřeno, poznámky ({_1}): {_2}
 @msg	Opened {url}	Otevřeno {url}
 @msg	Outline Stroke: no stroked paths selected	Převést tah na obrys: nejsou vybrány žádné cesty s tahem
 @msg	PDF settings are not an object	nastavení PDF nejsou objekt
 @msg	PDF security settings are not an object	nastavení zabezpečení PDF nejsou objekt
 @msg	PDF writer error: {0}	chyba zápisu PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Zabalen {n} soubor do {folder} ({note})|Zabaleny {n} soubory do {folder} ({note})|Zabaleno {n} souborů do {folder} ({note})
-@msg	Packaged {n} file(s){note}	Zabaleno souborů: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Náhled v prohlížeči vyžaduje desktopovou aplikaci (webová verze místo toho stahuje soubory)
 @msg	Release Guides: no guides	Uvolnit vodítka: žádná vodítka
 @msg	Release: no layer to put the rectangle in	Uvolnit: chybí vrstva, do které by šel obdélník umístit
@@ -4299,6 +4326,7 @@ imageTrace	Outline	Obrys
 @msg	`library` is a library id or name (see {list})	`library` je ID nebo název knihovny (viz {list})
 @msg	`mode` applies to freeform gradients	`mode` platí pro volné přechody
 @msg	`preserve` must be an object	`preserve` musí být objekt
+@msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)
@@ -4472,6 +4500,8 @@ imageTrace	Outline	Obrys
 @msg	join needs open paths	spojení vyžaduje otevřené cesty
 @msg	lang must be one of {_1}	lang musí být jedno z {_1}
 @msg	layers can't be wrap objects	vrstvy nemohou být objekty obtékání
+@msg	line {line}: value for `{var}` must be true or false	řádek {line}: hodnota pro `{var}` musí být true nebo false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	řádek {line}: hodnota pro `{var}` je delší než {MAX_GRAPH_CSV} bajtů
 @msg	missing `folder`	chybí `folder`
 @msg	missing `id` (see plugin.list)	chybí `id` (viz plugin.list)
 @msg	missing `name`	chybí `name`
@@ -4557,6 +4587,14 @@ imageTrace	Outline	Obrys
 @msg	no selection bounds	výběr nemá hranice
 @msg	no slice selected	není vybrán žádný řez
 @msg	no such action	taková akce neexistuje
+@msg	no such action set	taková sada akcí neexistuje
+@msg	the action sets changed; nothing was deleted	sady akcí se změnily; nic nebylo odstraněno
+@msg	no action set to save	žádná sada akcí k uložení
+@msg	not an action set file	není to soubor sady akcí
+@msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
+@msg	the action set file holds more than 1,000 actions	soubor sady akcí obsahuje více než 1 000 akcí
+@msg	the action set file needs a later version of VectorCraft	soubor sady akcí vyžaduje novější verzi aplikace VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	akce v souboru sady akcí má více než 10 000 kroků
 @msg	no such anchor	takový kotevní bod neexistuje
 @msg	no such artboard	taková pracovní plocha neexistuje
 @msg	the artboard is locked	pracovní plocha je zamčená
@@ -4583,6 +4621,7 @@ imageTrace	Outline	Obrys
 @msg	no user library folder here	zde není složka uživatelských knihoven
 @msg	no user workspace `{from}`	uživatelský pracovní prostor `{from}` neexistuje
 @msg	node {_1} is not text	uzel {_1} není text
+@msg	node {_1} is on a locked artboard	uzel {_1} je na zamčené pracovní ploše
 @msg	not a DXF drawing	nejde o výkres DXF
 @msg	not a VectorCraft file: {0}	nejde o soubor VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	nejde o sadu klávesových zkratek VectorCraft (chybí `overrides`)
@@ -4786,7 +4825,12 @@ imageTrace	Outline	Obrys
 @msg	unknown workspace (one of {_1})	neznámý pracovní prostor (jeden z {_1})
 @msg	unsupported: {0}	nepodporováno: {0}
 @msg	variables are locked	proměnné jsou zamčené
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	více než {MAX_CSV_ROWS} sad dat: Importovat sady dat načte nejvýše {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	více než {MAX_CSV_COLS} proměnných: Importovat sady dat načte nejvýše {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	proměnné, které nejsou textové, byly vynechány: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	nový dokument tyto proměnné nenačte zpět s jejich druhem: {names}
+@msg	a new document refuses this file because of these variables: {names}	nový dokument tento soubor kvůli těmto proměnným odmítne: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	záhlaví `{header}` pro `{name}` by se načetlo jako proměnná `{other}`: jednu z nich přejmenujte
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` a `options.{key}: {inner}` si odporují: zadejte volbu jen jednou
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	soubory verze {0} nelze komprimovat: komprimované soubory otevírá až verze {COMPRESSED_SINCE} a novější
 @msg	width and height are at least 1 pixel	šířka i výška jsou alespoň 1 obrazový bod
@@ -4820,7 +4864,9 @@ imageTrace	Outline	Obrys
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} nelze umístit: {e}
 @msg	Couldn't paste from the clipboard: {e}	Nelze vložit ze schránky: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Nelze vložit: dokument, do kterého se vkládalo, byl zavřen
 @msg	Saved {path} with {_1} note(s): {first}	Uloženo: {path}, poznámky ({_1}): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Exportováno: {what}, poznámky ({_1}): {first}
 @msg	Exported {what}	Exportováno: {what}
 @msg	Saved {n} files beside {path}	Uloženo souborů: {n} vedle {path}
 @msg	Saving	Ukládání
@@ -4828,9 +4874,12 @@ imageTrace	Outline	Obrys
 @msg	Exporting {_1}	Exportování {_1}
 @msg	Packaging {_1}	Balení {_1}
 @msg	Placing {_1}	Umísťování {_1}
+@msg	Pasting	Vkládání
 @msg	Saving recovery data for {_1}	Ukládání dat pro obnovení pro {_1}
-@msg	Discarded {_1} recovered document(s)	Zahozeno obnovených dokumentů: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Obnoveno dokumentů: {_1}; pokud je chcete zachovat, uložte je
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Zahozen {n} obnovený dokument|Zahozeny {n} obnovené dokumenty|Zahozeno {n} obnovených dokumentů
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Obnoven {n} dokument; pokud ho chcete zachovat, uložte ho|Obnoveny {n} dokumenty; pokud je chcete zachovat, uložte je|Obnoveno {n} dokumentů; pokud je chcete zachovat, uložte je
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otevřeno, {n} poznámka: {first}|Otevřeno, {n} poznámky: {first}|Otevřeno, {n} poznámek: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Uloženo: {path}, {n} poznámka: {first}|Uloženo: {path}, {n} poznámky: {first}|Uloženo: {path}, {n} poznámek: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Vložen {n} obrázek; chybí {missing}: nejprve je znovu propojte|Vloženy {n} obrázky; chybí {missing}: nejprve je znovu propojte|Vloženo {n} obrázků; chybí {missing}: nejprve je znovu propojte
 @msgplural	Embedded {n} image|Embedded {n} images	Vložen {n} obrázek|Vloženy {n} obrázky|Vloženo {n} obrázků
 @msgplural	Relinked {n} image|Relinked {n} images	Znovu propojen {n} obrázek|Znovu propojeny {n} obrázky|Znovu propojeno {n} obrázků
@@ -4851,6 +4900,8 @@ imageTrace	Outline	Obrys
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Zkopírováno CSS {n} objektu|Zkopírováno CSS {n} objektů|Zkopírováno CSS {n} objektů
 @msgplural	Downloaded {n} file|Downloaded {n} files	Stažen {n} soubor|Staženy {n} soubory|Staženo {n} souborů
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportován {n} soubor do {folder}|Exportovány {n} soubory do {folder}|Exportováno {n} souborů do {folder}
+@msg	All colors are within the CMYK gamut	Všechny barvy jsou v gamutu CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} barva je mimo gamut CMYK|{n} barvy jsou mimo gamut CMYK|{n} barev je mimo gamut CMYK
 @msg	Unembedded to {_1}	Vložení zrušeno, uloženo do: {_1}
 @msg	Reset {_1}	Obnoveno: {_1}
 @msg	Sent to {_1}	Odesláno do {_1}
@@ -4876,8 +4927,17 @@ imageTrace	Outline	Obrys
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	nejde o logo s plnými barvami ({_1} % jeho plných ploch odpovídá několika plným barvám), takže režim Ploché logo by z jeho přechodů udělal skvrny: použijte místo toho režim Barva
 @msg	`{what}` closes nothing	`{what}` nic neuzavírá
 @msg	`{what}` closes something it didn't open	`{what}` uzavírá něco, co neotevřel
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	maska, která pokrývá několik vrstev, se načte jako ořezová skupina v každé vrstvě, kterou pokrývá
+@msg	a graph's records don't end where they should: its art was read as it is	záznamy grafu nekončí tam, kde mají: jeho kresba byla načtena tak, jak je
+@msg	`{w}` takes no operands	`{w}` nepřijímá žádné operandy
+@msg	a wraparound group is inside a compound path	skupina obtékání textu je uvnitř složené cesty
 @msg	a path has too many points	cesta má příliš mnoho bodů
+@msg	it ends inside a group or compound path	končí uvnitř skupiny nebo složené cesty
 @msg	it ends inside a layer	končí uvnitř vrstvy
+@msg	it ends inside a multi-layer mask	končí uvnitř masky přes více vrstev
+@msg	a multi-layer mask's operators are out of order	operátory masky přes více vrstev jsou ve špatném pořadí
+@msg	a multi-layer mask needs one clipping path	maska přes více vrstev potřebuje jednu ořezovou cestu
+@msg	a group crosses a multi-layer mask	skupina přesahuje masku přes více vrstev
 @msg	it has art outside its layers	má kresbu mimo své vrstvy
 @msg	it has more than {MAX_NODES} objects	má více než {MAX_NODES} objektů
 @msg	it has no layers	nemá žádné vrstvy
@@ -4888,11 +4948,13 @@ imageTrace	Outline	Obrys
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekty s více výplněmi nebo tahy, efekty či štětci byly načteny jako vykreslený vzhled ({_1}): jejich vzhled zatím nelze upravovat
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	přechod „{name}“ není v souboru definován: zastupuje ho plná barva
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
+@msg	graphs come in as plain art, without their data or settings	grafy se načtou jako obyčejná grafika, bez svých dat a nastavení
 @msg	an image whose data is cut short was left out	obrázek s useknutými daty byl vynechán
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	text v oblasti v rámcích příliš nízkých pro řádek písma, ve kterém se zde zobrazuje, dostal vyšší rámce ({_1}): jinak by nebyl vidět
 @msg	its editing data doesn't say where its art is	z jeho dat pro úpravy není zřejmé, kde je kresba
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tento soubor byl uložen bez kompatibility s PDF a jeho data pro úpravy nelze přečíst ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	část PDF nelze přečíst ({_1}): soubor byl otevřen z jeho dat pro úpravy
 @msg	No fonts are missing in this document	V tomto dokumentu nechybí žádná písma
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft neprohledává složky jiných aplikací ani systému: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft neprohledává složku Shared ani Public ve složce Users: {path}
@@ -4939,6 +5001,9 @@ imageTrace	Outline	Obrys
 @msg	the PCX file is cut short	soubor PCX je useknutý
 @msg	the PCX file's header is damaged	hlavička souboru PCX je poškozená
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	soubory PCX s {bits}bitovými obrazovými body v {planes} rovinách nelze přečíst
+@msg	the Pixar file is cut short	soubor Pixar je useknutý
+@msg	the Pixar file's header is damaged	hlavička souboru Pixar je poškozená
+@msg	the Pixar file's image data is damaged	obrazová data souboru Pixar jsou poškozená
 @msg	the JPEG 2000 file can't be read	soubor JPEG 2000 nelze přečíst
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	soubor JPEG 2000 obsahuje nepodporovaný barevný prostor nebo obsah JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
@@ -5300,6 +5365,7 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG
 file-filter	PDF-compatible .ai	.ai kompatibilní s PDF
 file-filter	VectorCraft Template	Šablona VectorCraft
@@ -5459,6 +5525,11 @@ mark-style	Japanese	Japonské
 	Import Data Sets…	Importovat sady dat…
 	Export Data Sets…	Exportovat sady dat…
 	Load Variable Library…	Načíst knihovnu proměnných…
+	Save Variable Library…	Uložit knihovnu proměnných…
+@msg	a variable library holds text variables, and the document has none	knihovna proměnných obsahuje textové proměnné a dokument žádné nemá
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	proměnnou `{name}` nelze uložit do knihovny proměnných: přejmenujte ji tak, aby začínala písmenem nebo `_` a neobsahovala mezery ani jiné symboly než `-`, `_` a `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	sada dat `{name}` obsahuje řídicí znak, který knihovna proměnných nemůže obsahovat
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	sada dat `{name}` začíná nebo končí prázdným znakem, který knihovna proměnných nemůže obsahovat
 	Make Graph Dynamic	Nastavit graf jako dynamický
 	Batch…	Dávka…
 	Source Folder:	Zdrojová složka:
@@ -5469,8 +5540,10 @@ mark-style	Japanese	Japonské
 @msg	Batch: {count} processed, {failed} failed	Dávka: zpracováno {count}, selhalo {failed}
 @msg	choose a destination folder	vyberte cílovou složku
 @msg	choose a source folder	vyberte zdrojovou složku
+@msg	columns {first} and {column} both name the variable `{name}`	sloupce {first} a {column} uvádějí stejnou proměnnou `{name}`
 @msg	open a document with data sets	otevřete dokument se sadami dat
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
+@msg	no bound object reports a value (locked objects and embedded images report none)	žádný svázaný objekt nevrací hodnotu (zamčené objekty a vložené obrazy žádnou nevracejí)
 @msg	the action has no steps	akce nemá žádné kroky
 
 # User Interface › Accent Color
@@ -5497,6 +5570,11 @@ mark-style	Japanese	Japonské
 	Export Type:	Typ exportu:
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
+@msg	an action is already recording	akce se už zaznamenává
+@msg	no such function key	taková funkční klávesa neexistuje
+@msg	no such color	taková barva neexistuje
+@msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
+@msg	more than one action is named “{_1}”	název „{_1}“ má více než jedna akce
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
 	Smudge Stick…	Rozmazávací tyčinka…
 	Smudge Stick	Rozmazávací tyčinka
@@ -5578,7 +5656,9 @@ mark-style	Japanese	Japonské
 	Effect Gallery	Galerie efektů
 	Filters	Filtry
 	Select artwork to apply effects	Vyberte grafiku, na kterou chcete použít efekty
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	proměnné a sady dat souboru nebyly načteny (proměnné: {variables}, sady dat: {data_sets}): panel Proměnné je nezobrazuje
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	knihovna proměnných souboru byla načtena jen částečně (vynechané položky: {_1}): panel Proměnné zobrazuje zbytek
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	knihovnu proměnných souboru nebylo možné načíst: panel Proměnné ji nezobrazuje
+@msg	a variable of unknown kind can't be bound to objects	proměnnou neznámého druhu nelze svázat s objekty
 # Select by Color (select.color)
 	Select by Color	Vybrat podle barvy
 	Move Anchor Point	Přesunout kotevní bod
@@ -5604,6 +5684,7 @@ mark-style	Japanese	Japonské
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
+	Geometric Patterns	Geometrické vzorky
 	Ease In	Pozvolný začátek
 	Ease Out	Pozvolný konec
 	Ease In Out	Pozvolný začátek a konec
@@ -5661,17 +5742,30 @@ axis	Y Axis	osa Y
 	New Set	Nová sada
 	Set Options…	Možnosti sady…
 	Set Options	Možnosti sady
+	Action Options…	Možnosti akce…
+	Action Options	Možnosti akce
+	Rename Action	Přejmenovat akci
+	New Action…	Nová akce…
+	New Action	Nová akce
+	Create New Action	Vytvořit novou akci
+	Play Action	Přehrát akci
+	Action Set:	Sada akcí:
+	Function Key:	Funkční klávesa:
+	Record	Zaznamenat
 	Create New Set	Vytvořit novou sadu
 	Stop Global Edit	Ukončit globální úpravy
 	Global Edit Options	Možnosti globálních úprav
+	Leave Out of Global Edit	Vyřadit z globálních úprav
 	Match	Shoda
 	On Artboards	Na pracovních plochách
 	All Artboards	Všechny pracovní plochy
 	Include Objects On Canvas	Zahrnout objekty na plátně
-	Result(s): {count}	Výsledky: {count}
+@plural	Result: {n}|Results: {n}	Výsledek: {n}|Výsledky: {n}|Výsledky: {n}
 @msg	select one object	vyberte jeden objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
+@msg	Global Edit is off	Globální úpravy nejsou zapnuté
+@msg	only an object of the Global Edit other than the one it started from can be left out	z globálních úprav lze vyřadit jen jiný objekt než ten, od kterého začaly
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all nebo rozsah, například 1, 3-5, ne {v}
 	Add to Symbols	Přidat do symbolů
 	Basic Shapes	Základní tvary
@@ -5923,6 +6017,16 @@ anchor	Points:	Body:
 	Case	Velikost písmen
 @msg	{label} must be a number	{label} musí být číslo
 @msg	{label} must be a number of at least 0.1	{label} musí být číslo alespoň 0,1
+	Advanced Character Formats	Rozšířené formáty znaků
+	Horizontal Scale	Vodorovná změna velikosti
+	Vertical Scale	Svislá změna velikosti
+@msg	{label} must be a number from {min} to {max}	{label} musí být číslo od {min} do {max}
+	Character Color	Barva znaků
+	OpenType Features	Funkce OpenType
+	Stylistic Sets	Stylistické sady
+@msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
+@msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6165,3 +6269,20 @@ breakText	Glyphs	Glyfy
 	Small to Large	Od nejmenšího po největší
 	Large to Small	Od největšího po nejmenší
 	Distribute Evenly	Rozmístit rovnoměrně
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Vytvořit legendu vzorníku
+	Create Swatch Legend…	Vytvořit legendu vzorníku…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Nástroje textu
+	Text Tweaker…	Ladění textu…
+	Text Tweaker	Ladění textu
+	Attribute:	Atribut:
+	From:	Od:
+	To:	Do:
+	Bow	Oblouk
+	Spike	Špička
+	Skip Spaces	Přeskočit mezery
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG

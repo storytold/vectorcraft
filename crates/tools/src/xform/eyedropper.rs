@@ -225,7 +225,8 @@ fn node_color_at(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, on_
 }
 
 /// The color the art of symbol `name` shows at `p` as instance `inst` draws it: stained by the
-/// instance's fill and placed in the document by `xf`, its strokes and patterns unscaled.
+/// instance's fill and placed in the document by `xf` (through the symbol's 9-slice guides when it
+/// has them), its strokes and patterns unscaled. The objects the guides add count as work too.
 fn symbol_color_at(s: &mut Sampler, levels: &mut [Option<Document>], inst: &Node, name: &str, xf: Affine, p: Point) -> Option<Color> {
     if xf.determinant().abs() < 1e-12 {
         return None;
@@ -233,8 +234,24 @@ fn symbol_color_at(s: &mut Sampler, levels: &mut [Option<Document>], inst: &Node
     let doc = s.doc;
     let sym = doc.symbols.iter().find(|s| s.name == name)?;
     s.spend(sym.art.count())?;
-    let mut art = vectorcraft_brush::instance_art(&sym.art, inst);
-    art.transform(xf, false);
+    let art = vectorcraft_brush::instance_art(&sym.art, inst);
+    let art = match doc.symbol_slice_map(name, xf) {
+        Some(m) => {
+            let most = usize::try_from(m.most_placed(&art, doc)).unwrap_or(usize::MAX).saturating_sub(sym.art.count());
+            if s.work < most {
+                // Too little work is left for the most objects the guides can make.
+                s.spend(most)?;
+            }
+            let placed = m.place(&art, doc);
+            s.spend(placed.count().saturating_sub(sym.art.count()))?;
+            placed
+        }
+        None => {
+            let mut art = art;
+            art.transform(xf, false);
+            art
+        }
+    };
     art_color_at(s, levels, [art], p)
 }
 
@@ -867,6 +884,52 @@ mod tests {
         d.patterns.push(bars);
         d.node_mut(id).unwrap().appearance.set_fill(vectorcraft_doc::pattern::pattern_paint("Bars"));
         assert_eq!(at(&d, 150.0, 155.0), "#00ff00");
+    }
+
+    /// An instance of a symbol with 9-slice guides is sampled as it is drawn: scaled twice, its
+    /// 10 pt red corner square stays 10 pt, so 15 pt in from the corner shows the green art behind it.
+    #[test]
+    fn a_scaled_nine_slice_instance_is_sampled_as_it_is_drawn() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{NodeId, SymbolNineSlice};
+        use vectorcraft_geom::{Affine, Rect};
+        let (mut d, _) = doc_with_rect();
+        let green = filled_rect(Rect::new(0.0, 0.0, 100.0, 100.0), Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+        let red = filled_rect(Rect::new(0.0, 0.0, 10.0, 10.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(Node::group(NodeId(0), vec![green, red])) });
+        let (l, inst) = (d.layers[0].id, d.alloc_id());
+        let xf = Affine::translate((250.0, 250.0)) * Affine::scale(2.0);
+        d.insert(Some(l), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let shift = Mods { shift: true, ..Default::default() };
+        let at = |d: &vectorcraft_doc::Document, x: f64, y: f64| {
+            sampled_hex(&EyedropperTool::default().pointer(&cx(d, &s, &p), &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift)))
+        };
+        assert_eq!(at(&d, 265.0, 265.0), "#ff0000", "without guides the corner scales");
+        d.set_symbol_nine_slice("Panel", Some(SymbolNineSlice::default()));
+        assert_eq!((at(&d, 255.0, 255.0), at(&d, 265.0, 265.0)), ("#ff0000".to_string(), "#00ff00".to_string()));
+    }
+
+    /// A scaled 9-slice instance of a symbol with 40,000 objects in its corner is sampled within
+    /// the work limit, as it is without guides: objects that stay in one cell are not reserved for
+    /// as if each were drawn in nine.
+    #[test]
+    fn a_large_nine_slice_instance_with_its_art_in_one_cell_is_sampled() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{NodeId, SymbolNineSlice};
+        use vectorcraft_geom::{Affine, Rect};
+        let (mut d, _) = doc_with_rect();
+        let mut art = vec![filled_rect(Rect::new(0.0, 0.0, 100.0, 100.0), Paint::solid(Color::rgb(0.0, 1.0, 0.0)))];
+        art.extend((0..40_000).map(|_| filled_rect(Rect::new(0.0, 0.0, 10.0, 10.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)))));
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(Node::group(NodeId(0), art)) });
+        d.set_symbol_nine_slice("Panel", Some(SymbolNineSlice::default()));
+        let (l, inst) = (d.layers[0].id, d.alloc_id());
+        let xf = Affine::translate((250.0, 250.0)) * Affine::scale(2.0);
+        d.insert(Some(l), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let shift = Mods { shift: true, ..Default::default() };
+        let ev = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 255.0, 255.0).with_mods(shift));
+        assert_eq!(sampled_hex(&ev), "#ff0000");
     }
 
     /// A pattern nested more than three patterns deep, and a pattern the document lacks, sample as

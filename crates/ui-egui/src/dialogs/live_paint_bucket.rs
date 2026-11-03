@@ -5,8 +5,8 @@
 //!
 //! Fields: `paintFills` and `paintStrokes` (the faces and the edges of Live Paint groups),
 //! `highlight` (whether the face or edge under the pointer is outlined), `color` (the highlight
-//! color: `#rrggbb`, or a layer color's name such as "Red") and `width` (the highlight's width in
-//! screen pixels).
+//! color: `#rrggbb`, or a layer color's name such as "Red") and `width` (the width of a face's
+//! highlight in screen pixels; an edge's highlight is half as wide).
 
 use serde_json::{Map, Value, json};
 use vectorcraft_color::Color;
@@ -132,9 +132,9 @@ mod tests {
         d.fields.insert("width".into(), json!(8));
         super::super::confirm(&mut app).unwrap();
         assert!(app.ui.dialog.is_none());
-        // The tool takes them: by the edge, the edge highlights in the new color and width.
+        // The tool takes them: by the edge, the edge highlights in the new color at half the new width.
         let ov = hover(&mut app, 151.0);
-        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { color: [0x4f, 0xff, 0x4f], width: 8.0, .. })), "{ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { color: [0x4f, 0xff, 0x4f], width: 4.0, .. })), "{ov:?}");
         // They last while another tool is chosen, and the dialog opens on them again.
         app.select_tool("selection");
         let o = app.session.tool_options_of(TOOL);

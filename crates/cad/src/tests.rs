@@ -1007,3 +1007,22 @@ fn crop_keeps_an_instance_whose_art_reaches_the_region() {
     let o = DxfOptions { crop: true, ..opts(&d) };
     assert!(!kinds(&export(&d, &o).unwrap()).is_empty());
 }
+
+#[test]
+fn symbols_fanning_out_into_empty_symbols_stop_at_the_symbol_budget() {
+    // Five levels of 100 instances of the level below, ending in an empty symbol: 10^10 empty
+    // instances, which write no entities, past the million objects tests export with.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "L5".into(), xf: Affine::IDENTITY })]);
+    let empty = Node::group(d.alloc_id(), vec![]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "L0".into(), art: Arc::new(empty) });
+    for level in 1..=5 {
+        let below = format!("L{}", level - 1);
+        let children =
+            (0..100).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: below.clone(), xf: Affine::IDENTITY }))).collect();
+        let art = Node::group(d.alloc_id(), children);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("L{level}"), art: Arc::new(art) });
+    }
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(entities(&out).is_empty());
+    assert!(out.warnings.iter().any(|w| w.contains("symbols placed inside symbols")), "{:?}", out.warnings);
+}

@@ -1,5 +1,8 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{
+    FLIP, GState, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED,
+    VERSIONED_UNENDED,
+};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -49,11 +52,45 @@ impl<'a> Reader<'a> {
             }
             return Ok(());
         }
+        // The header's comments (AI7 specification §2.1.1; DSC 3.0).
+        let more = self.custom_more.take();
+        if !self.header_done && self.frames.is_empty() {
+            let bytes = c.trim_ascii_end();
+            if let (Some(cmyk), Some(v)) = (more, bytes.strip_prefix(b"%+")) {
+                self.custom_color(v, cmyk);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%CMYKCustomColor:") {
+                self.custom_color(v, true);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%RGBCustomColor:") {
+                self.custom_color(v, false);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%For:") {
+                // `(username) (organization)`: the user who created the file.
+                if self.author.is_none() {
+                    self.author = ps_string(v).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+                }
+                return Ok(());
+            }
+            if bytes == b"%EndComments" {
+                self.header_done = true;
+            }
+        }
+        if self.note_comment(c) {
+            return Ok(());
+        }
         let m = marker(line);
-        // A pattern's definition (one inside another's isn't read).
-        if m == "BeginPattern" && self.pattern.is_none() {
+        // A pattern's definition. One inside another's isn't read, and the outer tile is then incomplete.
+        if m == "BeginPattern" {
             let section = self.section("EndPattern")?;
-            self.define_pattern(section);
+            if self.pattern.is_some() {
+                self.unsupported.insert("patterns inside patterns".into());
+            } else {
+                self.define_pattern(section);
+            }
             return Ok(());
         }
         if m == "BeginSymbol" {
@@ -64,6 +101,11 @@ impl<'a> Reader<'a> {
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
             self.styles = crate::import::ai::style::art_styles(section);
+            return Ok(());
+        }
+        if m == "BeginArtStyleList" {
+            let section = self.section("EndArtStyleList")?;
+            self.style_list = crate::import::ai::style::art_style_list(section);
             return Ok(());
         }
         if m == "BeginPalette" {
@@ -100,7 +142,10 @@ impl<'a> Reader<'a> {
             _ => {}
         }
         if line.starts_with("AI5_BeginLayer") {
-            return self.open(Kind::Layer(Box::default()), false);
+            self.multi_mask_layer_starts()?;
+            self.open(Kind::Layer(Box::default()), false)?;
+            self.multi_mask_go_on();
+            return Ok(());
         }
         if line.starts_with("AI5_BeginRaster") {
             self.raster = Some(Raster::default());
@@ -109,11 +154,32 @@ impl<'a> Reader<'a> {
                 return self.image_from(vals, &hex);
             }
         } else if line.starts_with("AI5_BeginPlace") {
-            self.place = Some(Place::default());
+            // One that is still open (no `~` ended it) isn't read.
+            let unseen = hidden || self.gs.hidden || !self.shown();
+            if let Some(open) = self.place.replace(Place { hidden: unseen, ..Place::default() }) {
+                self.unreadable("placed files", open.hidden);
+            }
         } else if line.starts_with("AI5_EndPlace") {
             // One that `~` didn't end isn't read.
             if self.place.is_some() {
                 self.end_place(hidden)?;
+            }
+        } else if m == "BeginPlacedRelativePath" {
+            let at = self.stack.len();
+            if let Some(p) = self.place.as_mut() {
+                p.folder_at = Some(at);
+            }
+        } else if m == "EndPlacedRelativePath" {
+            // The folder is the string between the markers, taken off the stack.
+            let base = self.frames.last().map_or(0, |f| f.base);
+            if let Some(at) = self.place.as_mut().and_then(|p| p.folder_at.take()).filter(|at| (base..=self.stack.len()).contains(at)) {
+                let vals = self.stack.split_off(at);
+                if let Some(p) = self.place.as_mut() {
+                    p.folder = vals
+                        .iter()
+                        .find_map(|v| if let V::Str(s) = v { Some(super::obj::text(s)) } else { None })
+                        .filter(|f| f.len() <= MAX_PLACED_FOLDER);
+                }
             }
         } else if self.frames.is_empty()
             && let Some(v) = line.strip_prefix("%HiResBoundingBox:")
@@ -138,7 +204,7 @@ impl<'a> Reader<'a> {
             self.ruler_units = Some(n);
         } else if let Some(v) = line.strip_prefix("AI5_ArtSize:") {
             self.art_size = two(v);
-        } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:") {
+        } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:").or_else(|| line.strip_prefix("%TemplateBox:")) {
             self.template_center = two(v);
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
@@ -155,6 +221,70 @@ impl<'a> Reader<'a> {
             self.color_model = Some(v.trim() == "2");
         }
         Ok(())
+    }
+
+    /// `%AI3_Note:` (or `%%Note:`) sets the note of the paths that follow, an empty one clearing it,
+    /// and `%AI5_NoteMore:` adds a line to it. The text is kept as written, up to [`MAX_NOTE`]
+    /// characters.
+    fn note_comment(&mut self, c: &[u8]) -> bool {
+        let (text, more) = if let Some(t) = c.strip_prefix(b"AI3_Note:").or_else(|| c.strip_prefix(b"%Note:")) {
+            (t, false)
+        } else if let Some(t) = c.strip_prefix(b"AI5_NoteMore:") {
+            (t, true)
+        } else {
+            return false;
+        };
+        // Only as much of the line as the note can keep is decoded; a UTF-8 character the cut
+        // splits is left out.
+        let mut head = text.get(..text.len().min(4 * MAX_NOTE)).unwrap_or(text);
+        if head.len() < text.len()
+            && let Err(e) = std::str::from_utf8(head)
+            && e.error_len().is_none()
+        {
+            head = head.get(..e.valid_up_to()).unwrap_or(head);
+        }
+        let text = super::obj::text(head);
+        match (&mut self.gs.note, more) {
+            (Some(note), true) => {
+                note.push('\n');
+                note.push_str(&text);
+            }
+            // A continuation with no note to continue.
+            (None, true) => return true,
+            (note, false) => *note = Some(text),
+        }
+        if let Some(note) = self.gs.note.as_mut()
+            && let Some((at, _)) = note.char_indices().nth(MAX_NOTE)
+        {
+            note.truncate(at);
+        }
+        true
+    }
+
+    /// A custom color of the header, `cyan magenta yellow black (name)` (`cmyk`) or
+    /// `red green blue (name)`, each component from 0 to 1. One written otherwise isn't kept.
+    fn custom_color(&mut self, v: &[u8], cmyk: bool) {
+        self.custom_more = Some(cmyk);
+        if self.custom_colors.len() >= MAX_CUSTOM_COLORS {
+            return;
+        }
+        let Some(open) = v.iter().position(|&b| b == b'(') else { return };
+        let (Some(head), Some(name)) = (v.get(..open), v.get(open..).and_then(ps_string)) else { return };
+        // One more than a color has, so that too many are seen.
+        let parts: Vec<Option<f32>> = head
+            .split(u8::is_ascii_whitespace)
+            .filter(|w| !w.is_empty())
+            .take(5)
+            .map(|w| std::str::from_utf8(w).ok()?.parse::<f32>().ok().filter(|n| (0.0..=1.0).contains(n)))
+            .collect();
+        let color = match parts.as_slice() {
+            [Some(c), Some(m), Some(y), Some(k)] if cmyk => vectorcraft_color::Color::cmyk(*c, *m, *y, *k),
+            [Some(r), Some(g), Some(b)] if !cmyk => vectorcraft_color::Color::rgb(*r, *g, *b),
+            _ => return,
+        };
+        if !name.trim().is_empty() && !self.custom_colors.iter().any(|n| n.name == name) {
+            self.custom_colors.push(super::Named { name, color, tint: 1.0, spot: true });
+        }
     }
 
     /// Skip to the comment with marker `end` (sections of the same kind nested in it count, and
@@ -197,6 +327,11 @@ impl<'a> Reader<'a> {
         if self.pattern_tiles.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
             return;
         }
+        match legacy_pattern(section) {
+            Legacy::No => {}
+            Legacy::Malformed => return,
+            Legacy::Yes(def) => return self.define_legacy_pattern(&def),
+        }
         let mut sub = Reader::new(section);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
@@ -214,6 +349,98 @@ impl<'a> Reader<'a> {
             && sub.unread.is_empty()
             && sub.hidden_unread.is_empty()
             && sub.frames.len() == 1;
+        self.keep_pattern(sub, whole, false);
+    }
+
+    /// A definition in the version 7 form ([`legacy_pattern`]), read layer by layer into one group:
+    /// each layer's colors (`@`) set the state its tile string (`&`) is read with, or the fill of the
+    /// tile's box (`_ &`). Each layer starts from the state the definition starts with.
+    fn define_legacy_pattern(&mut self, def: &LegacyPattern) {
+        let mut sub = Reader::new(b"");
+        sub.subreader_depth = self.subreader_depth + 1;
+        sub.pattern = Some(PatternHead { taken: true, name: def.name.clone(), tile: Some(def.tile) });
+        sub.gradients = std::mem::take(&mut self.gradients);
+        sub.nodes = self.nodes;
+        sub.template = self.template;
+        let mut read = sub.open(Kind::Group, false);
+        for layer in &def.layers {
+            if read.is_err() {
+                break;
+            }
+            read = sub.pattern_layer(layer, def.tile);
+        }
+        self.nodes = sub.nodes;
+        self.gradients = std::mem::take(&mut sub.gradients);
+        let whole = read.is_ok()
+            && sub.unsupported.is_empty()
+            && sub.unknown.is_empty()
+            && sub.unread.is_empty()
+            && sub.hidden_unread.is_empty()
+            && sub.frames.len() == 1;
+        self.keep_pattern(sub, whole, true);
+    }
+
+    /// One layer of a definition in the version 7 form, read into the definition's group.
+    fn pattern_layer(&mut self, layer: &'a LegacyLayer, tile: Rect) -> Result<(), String> {
+        self.gs = GState::default();
+        self.pending_fill = None;
+        self.pending_stroke = None;
+        self.pending_unread_fill = false;
+        self.pending_unread_stroke = false;
+        self.instance = None;
+        self.end_path_quietly();
+        // The color part has the overprint and the colors only.
+        let mut lex = super::Lexer::new(&layer.color);
+        while let Some(t) = lex.next_token() {
+            match t.tok {
+                Tok::Num(_) | Tok::Str(_) | Tok::Hex(_) => {}
+                Tok::Word(w) if LAYER_COLOR_OPS.contains(&w) => {}
+                _ => return Err("a pattern layer's colors hold something else".into()),
+            }
+        }
+        self.run_string(&layer.color)?;
+        match &layer.tile {
+            Some(art) => self.run_string(art)?,
+            None => {
+                let corner = |x: f64, y: f64| [V::Num(x), V::Num(y)];
+                self.path_op("m", &corner(tile.x0, tile.y0))?;
+                for (x, y) in [(tile.x0, tile.y1), (tile.x1, tile.y1), (tile.x1, tile.y0)] {
+                    self.path_op("L", &corner(x, y))?;
+                }
+                self.paint("f", false, false)?;
+            }
+        }
+        // A path the layer leaves unpainted paints nothing.
+        self.end_path_quietly();
+        Ok(())
+    }
+
+    /// Run this reader on one of a pattern layer's strings, which must end everything it starts.
+    fn run_string(&mut self, bytes: &'a [u8]) -> Result<(), String> {
+        let depth = self.frames.len();
+        self.lex = super::Lexer::new(bytes);
+        let read = self.run();
+        let open = self.done
+            || self.frames.len() != depth
+            || self.stack.iter().any(|v| matches!(v, V::Mark))
+            || !self.marks.is_empty()
+            || self.text.is_some()
+            || self.raster.is_some()
+            || self.place.is_some()
+            || self.mesh.is_some()
+            || self.gradient_def.is_some();
+        self.stack.clear();
+        self.marks.clear();
+        read?;
+        if open {
+            return Err("a pattern layer doesn't end what it starts".into());
+        }
+        Ok(())
+    }
+
+    /// Keep the pattern `sub` read, when it read it `whole`, as a pattern swatch; `v7` when it was
+    /// defined in the version 7 form.
+    fn keep_pattern(&mut self, mut sub: Reader<'_>, whole: bool, v7: bool) {
         let (Some(head), Some(frame)) = (sub.pattern.take(), sub.frames.pop()) else { return };
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
@@ -223,6 +450,11 @@ impl<'a> Reader<'a> {
         def.tile = FLIP.transform_rect_bbox(tile);
         if self.pattern_tiles.insert(def.name.clone(), def.tile).is_some() {
             self.doc.patterns.retain(|p| p.name != def.name);
+        }
+        if v7 {
+            self.v7_patterns.insert(def.name.clone());
+        } else {
+            self.v7_patterns.remove(&def.name);
         }
         self.doc.patterns.push(def);
         for (key, blob) in sub.doc.images {
@@ -279,9 +511,188 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// The operators a pattern layer's colors (`@`) may hold: overprint, gray, process and custom colors.
+const LAYER_COLOR_OPS: &[&[u8]] = &[b"O", b"R", b"g", b"G", b"k", b"K", b"x", b"X"];
+
+/// The longest string a pattern layer may have (the format's limit, 64K bytes).
+const MAX_LAYER_STRING: usize = 65_535;
+
+/// Most layers in one pattern's definition.
+const MAX_LAYERS: usize = 65_536;
+
+/// A pattern's definition in the version 7 form: its head, then a list of layers painted in order,
+/// the first the lowest.
+struct LegacyPattern {
+    name: String,
+    /// The tile in the pattern's space (y up).
+    tile: Rect,
+    layers: Vec<LegacyLayer>,
+}
+
+/// `(colors) @ (tile) &`, or `(colors) @ _ &` (no tile: the tile's box is filled with the colors' fill).
+struct LegacyLayer {
+    color: Vec<u8>,
+    tile: Option<Vec<u8>>,
+}
+
+enum Legacy {
+    /// Another form: the definition's art follows its head as operators.
+    No,
+    /// The version 7 form, which can't be read.
+    Malformed,
+    Yes(LegacyPattern),
+}
+
+/// The next token that isn't a comment; `Err` at a pattern's definition inside this one.
+fn next_operand<'s>(lex: &mut super::Lexer<'s>) -> Result<Option<super::super::lex::Token<'s>>, ()> {
+    while let Some(t) = lex.next_token() {
+        match t.tok {
+            Tok::Comment(c) if marker(&String::from_utf8_lossy(c)) == "BeginPattern" => return Err(()),
+            Tok::Comment(_) => {}
+            _ => return Ok(Some(t)),
+        }
+    }
+    Ok(None)
+}
+
+/// A pattern's definition in the version 7 form: `(name) llx lly urx ury [`, then for each layer
+/// `(colors) @` and `(tile) &` or `_ &`, then `] E` (version 7 specification §3.4). It is that form
+/// when a `[` that isn't on a `%_` line follows the head.
+fn legacy_pattern(section: &[u8]) -> Legacy {
+    let mut lex = super::Lexer::new(section);
+    let mut next = || next_operand(&mut lex).ok().flatten().map(|t| (t.tok, t.hidden));
+    let name = match next() {
+        Some((Tok::Str(s), _)) => super::obj::text(&s),
+        _ => return Legacy::No,
+    };
+    let mut tile = [0.0; 4];
+    for v in &mut tile {
+        match next() {
+            Some((Tok::Num(n), _)) => *v = n,
+            _ => return Legacy::No,
+        }
+    }
+    if !matches!(next(), Some((Tok::Word(b"["), false))) {
+        return Legacy::No;
+    }
+    let [x0, y0, x1, y1] = tile;
+    let mut layers = vec![];
+    let string = |t: Option<(Tok, bool)>| match t {
+        Some((Tok::Str(s) | Tok::Hex(s), _)) if s.len() <= MAX_LAYER_STRING => Some(s),
+        _ => None,
+    };
+    let word = |t: Option<(Tok, bool)>, w: &[u8]| matches!(t, Some((Tok::Word(x), _)) if x == w);
+    loop {
+        // Before the first layer, anything but a string or `] E` is the newer form's art (`[]0 d`).
+        let first = layers.is_empty();
+        let color = match next() {
+            Some((Tok::Word(b"]"), _)) if !first => break,
+            Some((Tok::Word(b"]"), _)) => {
+                return match next() {
+                    Some((Tok::Word(b"E"), _)) => Legacy::Yes(LegacyPattern { name, tile: Rect::new(x0, y0, x1, y1), layers }),
+                    _ => Legacy::No,
+                };
+            }
+            t @ Some((Tok::Str(_) | Tok::Hex(_), _)) => match string(t) {
+                Some(s) => s,
+                None => return Legacy::Malformed,
+            },
+            _ if first => return Legacy::No,
+            _ => return Legacy::Malformed,
+        };
+        if !word(next(), b"@") {
+            return Legacy::Malformed;
+        }
+        let tile = match next() {
+            Some((Tok::Word(b"_"), _)) => None,
+            t => match string(t) {
+                Some(s) => Some(s),
+                None => return Legacy::Malformed,
+            },
+        };
+        if !word(next(), b"&") || layers.len() >= MAX_LAYERS {
+            return Legacy::Malformed;
+        }
+        layers.push(LegacyLayer { color, tile });
+    }
+    // `] E` ends the definition: nothing but comments may follow it.
+    if !word(next(), b"E") || !matches!(next_operand(&mut lex), Ok(None)) {
+        return Legacy::Malformed;
+    }
+    Legacy::Yes(LegacyPattern { name, tile: Rect::new(x0, y0, x1, y1), layers })
+}
+
+/// How many custom colors the header may define.
+pub(super) const MAX_CUSTOM_COLORS: usize = 1000;
+
+/// The longest string the header's comments may give, in bytes.
+const MAX_STRING: usize = 4096;
+
+/// The PostScript string `v` starts with (after spaces), its escapes read, when it ends on the line
+/// and holds at most [`MAX_STRING`] bytes.
+fn ps_string(v: &[u8]) -> Option<String> {
+    let mut bytes = v.trim_ascii_start().iter().copied().peekable();
+    if bytes.next()? != b'(' {
+        return None;
+    }
+    let (mut out, mut depth) = (Vec::new(), 0usize);
+    while let Some(b) = bytes.next() {
+        if out.len() > MAX_STRING {
+            return None;
+        }
+        match b {
+            b'\\' => match bytes.next()? {
+                b'n' => out.push(b'\n'),
+                b'r' => out.push(b'\r'),
+                b't' => out.push(b'\t'),
+                b'b' => out.push(8),
+                b'f' => out.push(12),
+                d @ b'0'..=b'7' => {
+                    let mut n = u32::from(d - b'0');
+                    for _ in 0..2 {
+                        match bytes.peek() {
+                            Some(&o @ b'0'..=b'7') => {
+                                n = n * 8 + u32::from(o - b'0');
+                                bytes.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    out.push((n & 0xff) as u8);
+                }
+                other => out.push(other),
+            },
+            b'(' => {
+                depth += 1;
+                out.push(b);
+            }
+            b')' => {
+                let Some(d) = depth.checked_sub(1) else { return Some(super::obj::text(&out)) };
+                depth = d;
+                out.push(b);
+            }
+            _ => out.push(b),
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn postscript_strings_read_their_escapes_and_end_on_the_line() {
+        assert_eq!(ps_string(b" (Ann \\(R\\) (x) \\101\\0618) (Org)").as_deref(), Some("Ann (R) (x) A18"));
+        assert_eq!(ps_string(b"(a\\nb\\\\)").as_deref(), Some("a\nb\\"));
+        assert_eq!(ps_string(b"(never ends \\)"), None);
+        assert_eq!(ps_string(b"(ends in a backslash\\"), None);
+        assert_eq!(ps_string(b"no string"), None);
+        let long = format!("({})", "x".repeat(MAX_STRING + 1));
+        assert_eq!(ps_string(long.as_bytes()), None);
+        let longest = format!("({})", "x".repeat(MAX_STRING));
+        assert_eq!(ps_string(longest.as_bytes()).map(|s| s.len()), Some(MAX_STRING));
+    }
 
     #[test]
     fn deeply_nested_symbol_definitions_stop_at_subreader_limit() {

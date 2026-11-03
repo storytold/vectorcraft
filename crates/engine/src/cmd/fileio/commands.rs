@@ -86,6 +86,24 @@ pub fn specs() -> Vec<CommandSpec> {
             screens::presets_delete
         ),
         cmd!(
+            query "document.exportPresets.import",
+            "Import Export Presets",
+            [],
+            None,
+            "{path? | data?: file text | dataBase64?, replace?: false (replace saved presets of the same names; else the imported ones get a number)} add the presets of a .vcexportpresets file (as document.exportPresets.export writes) to the saved ones; a built-in name gets a number; a taken name that ends in a number gets the next free one (Web 2 comes in as Web 3); settings that document.exportPresets.save refuses, more than 1000 presets, or a file larger than 4194304 bytes fail the whole file → {imported: [names]}",
+            always,
+            screens::presets_import
+        ),
+        cmd!(
+            query "document.exportPresets.export",
+            "Export Export Presets",
+            [],
+            None,
+            "{names?: [preset names, built-in ones too] (default: every saved preset), path?} write the presets as a .vcexportpresets file (JSON); more than 1000 presets or a file larger than 4194304 bytes is an error → {path, count}; without path → {data: the file's text, count}",
+            always,
+            screens::presets_export
+        ),
+        cmd!(
             query "command.batch",
             "Batch",
             [],

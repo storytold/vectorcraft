@@ -38,10 +38,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
     };
     Some(match id {
         "type.orientation.vertical" | "type.orientation.horizontal" => {
-            selected_text(false).is_some_and(|t| t.vertical == (id == "type.orientation.vertical"))
+            crate::panels::character::shared_text_flag(app, |t| t.vertical) == Some(id == "type.orientation.vertical")
         }
         "type.opticalMarginAlignment" => crate::panels::character::shared_text_flag(app, |t| t.optical_margin) == Some(true),
-        "view.outline" => v.outline,
+        "view.outline" => app.outline_view(),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
         "view.snapToPixel" => v.snap_to_pixel,
@@ -61,11 +61,22 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
-        "window.toolbarColumns" => app.ui.toolbar_double,
-        "window.editToolbar" => app.ui.tools_drawer,
+        "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
+            None => app.ui.toolbar_double,
+            Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
+        },
+        "window.editToolbar" => {
+            app.ui.tools_drawer
+                && crate::custom_toolbars::drawer_target(&app.ui).map(crate::custom_toolbars::key)
+                    == p.get("toolbar").and_then(Value::as_str).map(crate::custom_toolbars::key)
+        }
+        "window.toolbar.custom" => {
+            p.get("name").and_then(Value::as_str).and_then(|name| crate::custom_toolbars::find(&app.ui, name)).is_some_and(|b| b.shown)
+        }
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
-            app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
+            let toolbar = p.get("toolbar").and_then(Value::as_str);
+            crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
@@ -205,6 +216,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitArtboard"
         | "view.fitAll"
         | "view.actualSize"
+        | "view.outline"
         | "view.rotate" => app.session.active().is_some(),
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
@@ -228,13 +240,13 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
         "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
-                && d.str("section") == "basic"
+                && crate::dialogs::char_style_options::can_reset(d)
         }),
         "ui.newArtboard" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
-        "ui.hyphenation" | "ui.justification" => crate::panels::character::text_style(app).is_some(),
+        "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" => crate::panels::character::text_style(app).is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
@@ -271,8 +283,18 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
         "ui.perspectivePlane" => app.session.active().is_some(),
-        // Only one window per document so far: greyed out, as Window › Arrange's items are (#3724).
+        // Only one window per document so far: grayed out (#3724).
         "window.newWindow" => false,
+        // Tile and Cascade with two documents or more; Float in Window for a current document under
+        // the tabs; Float All in Windows while a document is under the tabs; Consolidate All
+        // Windows while documents are tiled or floating.
+        "window.arrange.tile" | "window.arrange.cascade" => app.session.documents().len() > 1,
+        "window.arrange.floatInWindow" => app.session.active_index().is_some_and(|i| !crate::doc_windows::is_floating(app, i)),
+        "window.arrange.floatAllInWindows" => !crate::doc_windows::docked(app).is_empty(),
+        "window.arrange.consolidateAllWindows" => {
+            let n = app.session.documents().len();
+            n > 0 && (app.ui.tiled || crate::doc_windows::docked(app).len() < n)
+        }
         "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }

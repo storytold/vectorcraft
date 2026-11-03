@@ -3,7 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kurbo::{CubicBez, ParamCurveArclen, Point, Rect, Vec2};
+use kurbo::{CubicBez, PathSeg, Point, Rect, Vec2};
+use vectorcraft_geom::path::measured_arclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 use crate::boolean::{Seg, segs_to_subpath};
@@ -115,7 +116,8 @@ fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
         }
         let mut pts = Vec::new();
         for (k, s) in piece.iter().enumerate() {
-            let len = s.c.arclen(1e-6);
+            // Guarded: kurbo subdivides without end on huge finite coordinates.
+            let len = measured_arclen(&PathSeg::Cubic(s.c), 1e-6);
             let m = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
             sample(&s.c, m, &mut pts, k == 0);
         }
@@ -454,7 +456,7 @@ fn seam_error(original: &SubPath, before: &SubPath, fit: &SubPath, tol: f64) -> 
         let mut pts = Vec::new();
         for j in (0..sp.segment_count()).filter(|&j| !seam_only || is_seam(j)) {
             let c = sp.segment(j);
-            let m = ((c.arclen(1e-6) / (tol.max(1e-6) * 0.5)).ceil() as usize).clamp(4, 256);
+            let m = ((measured_arclen(&PathSeg::Cubic(c), 1e-6) / (tol.max(1e-6) * 0.5)).ceil() as usize).clamp(4, 256);
             sample(&c, m, &mut pts, true);
         }
         pts

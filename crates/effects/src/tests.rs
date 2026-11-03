@@ -133,6 +133,15 @@ fn geometry_effects_are_deterministic() {
     }
 }
 
+/// The effects that symbol art across 9-slice guides draws once around all its cells are raster
+/// effects that do not reshape it.
+#[test]
+fn nine_slice_painted_effects_are_raster_effects() {
+    for id in vectorcraft_doc::PAINTED_EFFECTS {
+        assert!(is_raster(id) && !is_geometry(id), "{id}");
+    }
+}
+
 #[test]
 fn open_paths_stay_open() {
     let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 20.0), Point::new(100.0, 0.0)], false));
@@ -931,6 +940,18 @@ fn round_corners_keeps_where_a_closed_path_starts() {
     assert!(start.distance(Point::new(42.0, 0.0)) < 1e-9, "{start:?}");
     // An infinite radius rounds as much as fits, curve-line corners too.
     assert_eq!(stylize::round_corners(&d, f64::INFINITY), stylize::round_corners(&d, 1e9));
+}
+
+#[test]
+fn twist_turns_clockwise_for_positive_angles() {
+    // A positive angle turns clockwise, a negative one counterclockwise
+    // (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+    // The document's y runs down, so clockwise on the page takes a point right of the center down.
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
+    assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
+    assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
 }
 
 #[test]

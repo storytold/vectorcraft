@@ -70,6 +70,8 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
+        crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
+        crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })
@@ -164,7 +166,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
-    if let Err(e) = app.run(id, p) {
+    // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
+    app.placing.for_user = id.starts_with("edit.paste");
+    let r = app.run(id, p);
+    app.placing.for_user = false;
+    if let Err(e) = r {
         app.status(e);
     } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
         app.ui.open_panel = Some("patternOptions".into());
@@ -208,6 +214,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
             Ok(mut fields) => {
                 if let Some(o) = fields.as_object_mut() {
                     o.retain(|k, _| !hidden.contains(&k.as_str()));
+                    // Area type whose rows have no gutter of their own: its Row Gutter follows the
+                    // Gutter unless it is changed (see `dialogs::command`).
+                    if id == "text.areaOptions"
+                        && let Some(g) = o.get("rowGutter").filter(|g| Some(*g) == o.get("gutter")).cloned()
+                    {
+                        o.insert("__rowGutterLinked".into(), g);
+                    }
                 }
                 let _ = app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields}));
             }

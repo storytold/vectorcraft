@@ -423,6 +423,7 @@
 	Stroke Weight	Viivan paksuus
 	Graphic Style	Grafiikkatyyli
 	Symbol Instance	Symbolin ilmentymä
+	Link Block Series	Linkitettyjen lohkojen sarja
 	Font Family	Fonttiperhe
 	Font Family & Style	Fonttiperhe ja tyyli
 	Font Family, Style & Size	Fonttiperhe, tyyli ja koko
@@ -430,6 +431,7 @@
 	Variable Font	Muuttuva fontti
 	Text Fill Color	Tekstin täyttöväri
 	Text Stroke Color	Tekstin viivan väri
+	Text Fill & Stroke Color	Tekstin täytön ja viivan väri
 	All on Same Layers	Kaikki samoilla tasoilla
 	Direction Handles	Suuntakahvat
 	Brush Strokes	Sivellinviivat
@@ -625,6 +627,7 @@
 	Cascade	Porrasta
 	Tile	Vierekkäin
 	Float in Window	Kelluta ikkunassa
+	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
 	Workspace	Työtila
 	Reset Essentials	Palauta Essentials
@@ -637,6 +640,10 @@
 	Reset Typography	Palauta Typography
 	Reset Web	Palauta Web
 	New Workspace…	Uusi työtila…
+	New Toolbar…	Uusi työkalurivi…
+	New Toolbar	Uusi työkalurivi
+	Show Toolbar	Näytä työkalurivi
+	List Toolbars	Luettele työkalurivit
 	Manage Workspaces…	Hallitse työtiloja…
 	Control	Ohjaus
 	Contextual Task Bar	Kontekstuaalinen tehtäväpalkki
@@ -1235,6 +1242,8 @@ lighting	Light	Valo
 	Hand	Käsi
 	Join Tool	Liitostyökalu
 	Lasso Tool	Lassotyökalu
+	Enclosing Lasso Tool	Sulkeva lassotyökalu
+	Enclosing Lasso	Sulkeva lasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -1315,6 +1324,8 @@ lighting	Light	Valo
 	No actions. Press ● to record.	Ei toimintoja. Aloita tallennus painamalla ●.
 	Outline Text	Muunna teksti ääriviivoiksi
 	Play Current Selection	Toista nykyinen valinta
+	Save Actions…	Tallenna toiminnot…
+	Load Actions…	Lataa toiminnot…
 	Reflect Horizontal	Peilaa vaakasuunnassa
 	Rotate 90° CW	Kierrä 90° myötäpäivään
 	Set 1	Sarja 1
@@ -1343,6 +1354,8 @@ lighting	Light	Valo
 	Dashed	Katkoviiva
 	Delete Selected Item	Poista valittu kohde
 	Double-click to edit the characters' paint	Muokkaa merkkien väritystä kaksoisnapsauttamalla
+	Click to edit	Muokkaa napsauttamalla
+	Double-click to edit	Muokkaa kaksoisnapsauttamalla
 	Double-click to target the contents	Kohdista sisältöön kaksoisnapsauttamalla
 	Drag onto art to apply this appearance	Käytä tätä ulkoasua vetämällä se kuvituksen päälle
 	Duplicate Selected Item	Monista valittu kohde
@@ -1446,6 +1459,10 @@ digits	Malayalam	Malajalam
 	Superscript (on the roadmap)	Yläindeksi (suunnitteilla)
 	System Layout	Järjestelmän asettelu
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Tate-chu-yoko-asetukset…
+	Tate-chu-yoko Settings	Tate-chu-yoko-asetukset
+	Up/Down:	Ylös/alas:
+	Left/Right:	Vasen/oikea:
 	Underline	Alleviivaus
 	Vertical Scale %	Pystyskaalaus %
 	Axis	Akseli
@@ -1488,7 +1505,6 @@ digits	Malayalam	Malajalam
 	Save changes to {name}	Tallenna muutokset kohteeseen {name}
 	Save theme to My Themes	Tallenna teema Omiin teemoihin
 	Set the selected color to the current color	Aseta valituksi väriksi nykyinen väri
-	Copied the CSS of {rules} object(s)	CSS kopioitu, objekteja: {rules}
 	Copy All Styles	Kopioi kaikki tyylit
 	Exported {path}	Viety: {path}
 	Generate CSS: the whole document's CSS while nothing is selected	Luo CSS: koko asiakirjan CSS, kun mitään ei ole valittu
@@ -1550,6 +1566,7 @@ digits	Malayalam	Malajalam
 	Delete Graphic Style (Alt-click: without asking)	Poista grafiikkatyyli (Alt-napsautus: kysymättä)
 	Delete the graphic style “{name}”?	Poistetaanko grafiikkatyyli ”{name}”?
 	Delete Action Sets	Poista toimintosarjat
+	Duplicate Action or Action Set	Monista toiminto tai toimintosarja
 	Delete the action set “{name}” and its actions?	Poistetaanko toimintosarja ”{name}” ja sen toiminnot?
 	Delete the selected action sets and their actions?	Poistetaanko valitut toimintosarjat ja niiden toiminnot?
 	Delete these {n} graphic styles?	Poistetaanko nämä {n} grafiikkatyyliä?
@@ -1722,8 +1739,6 @@ digits	Malayalam	Malajalam
 	Color Space	Väriavaruus
 	Created	Luotu
 	Dimensions	Mitat
-	Embedded {n} image(s)	Upotettu {n} kuva(a)
-	Embedded {n} image(s); {missing} missing: relink them first	Upotettu {n} kuva(a); {missing} puuttuu: linkitä ne ensin uudelleen
 	File › Place… brings in an image, linked or embedded.	Tiedosto › Sijoita… tuo kuvan linkitettynä tai upotettuna.
 	Format	Muoto
 	Medium Thumbnails	Keskikokoiset pikkukuvat
@@ -1733,9 +1748,6 @@ digits	Malayalam	Malajalam
 	No Thumbnails	Ei pikkukuvia
 	Nothing matches the Show filter.	Mikään ei vastaa Näytä-suodinta.
 	PPI	PPI
-	Relinked {n} image(s)	Linkitetty uudelleen {n} kuva(a)
-	Relinked {n} image(s); not in that folder: {}	Linkitetty uudelleen {n} kuva(a); ei kyseisessä kansiossa: {}
-	Relinked {} image(s)	Linkitetty uudelleen {} kuva(a)
 	Relink…	Linkitä uudelleen…
 	Find Linked Files	Etsi linkitetyt tiedostot
 	Find Linked Files in Folder…	Etsi linkitetyt tiedostot kansiosta…
@@ -1752,7 +1764,6 @@ digits	Malayalam	Malajalam
 	Status	Tila
 	Unembedded to {}	Upotus purettu: {}
 	Update Link	Päivitä linkki
-	Updated {} image(s)	Päivitetty {} kuva(a)
 	Break Link	Katkaise linkki
 	Tolerance:	Toleranssi:
 	Corner Point Angle Threshold:	Kulmapisteiden kulmakynnys:
@@ -1776,6 +1787,10 @@ digits	Malayalam	Malajalam
 	Ligatures are off while the text is tracked.	Ligatuurit eivät ole käytössä, kun tekstin merkkiväliä on muutettu.
 	Ordinals	Järjestysluvut
 	Proportional Lining	Suhteelliset numerot
+	Position:	Sijainti:
+	Default Position	Oletussijainti
+	Numerator	Osoittaja
+	Denominator	Nimittäjä
 	Proportional Oldstyle	Suhteelliset vanhanaikaiset numerot
 	Reset OpenType Features	Palauta OpenType-ominaisuudet
 	Select text to set its OpenType features.	Valitse teksti, jonka OpenType-ominaisuudet haluat asettaa.
@@ -1803,6 +1818,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kappaleen suunta vasemmalta oikealle
 	Line-end Punctuation Half Width	Rivinlopun välimerkit puolileveinä
 	Insert Kashidas	Lisää kashidat
+	Kashidas	Kashidat
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
@@ -1882,7 +1898,6 @@ digits	Malayalam	Malajalam
 	Smart Guides (⌘U)	Älykkäät apuviivat (⌘U)
 	Snap Options	Tartunta-asetukset
 	Type:	Tyyppi:
-	All colours are within the CMYK gamut	Kaikki värit ovat CMYK-väriavaruuden sisällä
 	Assign:	Määritä:
 	Color Settings	Väriasetukset
 	Gamut Check	Väriavaruuden tarkistus
@@ -2125,6 +2140,7 @@ digits	Malayalam	Malajalam
 	Color Mode:	Väritila:
 	Convert	Muunna
 	Global	Globaali
+	Global Adjust	Yleissäätö
 	Green	Vihreä
 	Shifts the tints of global and spot colors; other colors stay.	Siirtää globaalien värien ja spottivärien sävyjä; muut värit säilyvät.
 	Tint	Sävy
@@ -2304,6 +2320,8 @@ digits	Malayalam	Malajalam
 	Preserve Overprints and Spot Colors	Säilytä päällepainatukset ja spottivärit
 	Rasters	Rasterit
 	Replaces the saved preset of that name.	Korvaa samannimisen tallennetun esiasetuksen.
+	Save As Preset…	Tallenna esiasetuksena…
+	Save Changes	Tallenna muutokset
 	Save Preset…	Tallenna esiasetus…
 	Vectors	Vektorit
 	A saved copy of the selected preset	Tallennettu kopio valitusta esiasetuksesta
@@ -2428,7 +2446,6 @@ digits	Malayalam	Malajalam
 	Package collects a saved document with its linked files and fonts.	Paketointi kokoaa tallennetun asiakirjan sekä sen linkitetyt tiedostot ja fontit.
 	Package created	Paketti luotu
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Paketoitiin {n} tiedosto kansioon {folder} {note}|Paketoitiin {n} tiedostoa kansioon {folder} {note}
-	Packaged {n} file(s){note}	Paketoitu {n} tiedosto(a){note}
 	Relink Linked Files to the Document	Linkitä linkitetyt tiedostot uudelleen asiakirjaan
 	Save the document first?	Tallennetaanko asiakirja ensin?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tiedosto kansiossa {folder} {note}. Näytetäänkö pakettikansio?|{n} tiedostoa kansiossa {folder} {note}. Näytetäänkö pakettikansio?
@@ -2588,6 +2605,10 @@ digits	Malayalam	Malajalam
 	Current Colors	Nykyiset värit
 	Current Colors (0)	Nykyiset värit (0)
 	Harmony Rules:	Harmoniasäännöt:
+	Segmented color wheel	Segmentoitu väriympyrä
+	Show smooth color wheel	Näytä liukuva väriympyrä
+	Show segmented color wheel	Näytä segmentoitu väriympyrä
+	Show color bars	Näytä väripalkit
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
 	Limit to Library:	Rajoita kirjastoon:
@@ -2622,7 +2643,6 @@ digits	Malayalam	Malajalam
 	Convert to sRGB	Muunna sRGB:ksi
 	Delete this saved preset	Poista tämä tallennettu esiasetus
 	Dither:	Rasterointi:
-	Downloaded {} file(s)	Ladattu {} tiedosto(a)
 	Fit in View	Sovita näkymään
 	Format:	Muoto:
 	WebP	WebP
@@ -2895,6 +2915,16 @@ digits	Malayalam	Malajalam
 	Delete Export Preset	Poista vientiesiasetus
 	Export Presets	Vientiesiasetukset
 	Save Export Preset	Tallenna vientiesiasetus
+	Export Export Presets	Vie vientiesiasetukset
+	Export Preset…	Vie esiasetus…
+	Import Export Presets	Tuo vientiesiasetukset
+	Import Preset…	Tuo esiasetus…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` on luettelon document.exportPresets.list esiasetuksen nimi
+@msg	no export preset `{n}` (see document.exportPresets.list)	ei vientiesiasetusta `{n}` (katso document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	ei tallennettuja vientiesiasetuksia vietäväksi (anna sisäänrakennetut parametrissa `names`)
+@msg	not an export presets file (format `{_1}`)	ei vientiesiasetustiedosto (muoto `{_1}`)
+@msg	not an export presets file: {e}	ei vientiesiasetustiedosto: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Vie taso
 	Export Selection	Vie valinta
 	All in One Folder	Kaikki yhteen kansioon
@@ -2950,6 +2980,7 @@ digits	Malayalam	Malajalam
 	Total Width:	Kokonaisleveys:
 	Width Point Edit	Leveyspisteen muokkaus
 	Art	Kuvitus
+	Bearing	Suunta
 	Bristle	Harjas
 	Calligraphic	Kalligrafinen
 	Dots	Pisteet
@@ -2957,6 +2988,7 @@ digits	Malayalam	Malajalam
 	Pressure	Paine
 	Random	Satunnainen
 	Scatter	Sironta
+	Tilt	Kallistus
 	Color Burn	Värisävyn tummennus
 	Color Dodge	Värisävyn vaalennus
 	Darken	Tummenna
@@ -3496,6 +3528,7 @@ theme	Appearance	Ulkoasu
 	List Preferences	Luettele asetukset
 	Manually	Manuaalisesti
 	Mark Older Files as [Converted] When Opened	Merkitse vanhemmat tiedostot [Muunnettu] avattaessa
+	Use System Defaults for Edit Original	Käytä järjestelmän oletuksia toiminnossa Muokkaa alkuperäistä
 	Match User Interface Brightness	Sovita käyttöliittymän kirkkauteen
 	Light Gray	Vaaleanharmaa
 	Medium Gray	Keskiharmaa
@@ -3850,6 +3883,8 @@ effect	Regular	Normaali
 	In the selected objects	Valituissa objekteissa
 	Find in Folder…	Etsi kansiosta…
 	Replace With Font	Korvaa fontilla
+	Replace With Font From	Korvaavan fontin lähde
+	System	Järjestelmä
 	  — substituted by {style}	  — korvattu tyylillä {style}
 	  — {n} characters from another font	  — {n} merkkiä toisesta fontista
 	All Scripts	Kaikki kirjoitusjärjestelmät
@@ -3871,20 +3906,16 @@ font-technology	Variable	Muuttuvat
 	Can't save “{name}”.	Kohdetta ”{name}” ei voi tallentaa.
 	Can't export “{name}”.	Kohdetta ”{name}” ei voi viedä.
 	Downloaded {what}	Ladattu {what}
-	Exported {count} file(s) to {folder}	Viety {count} tiedosto(a) kansioon {folder}
 	Exported {what}	Viety {what}
-	Exported {what} with {} note(s): {first}	Viety {what}, huomautuksia {}: {first}
 	Exporting {}	Viedään {}
 	Imported {what}: {}	Tuotu {what}: {}
 	Installed plug-in {}	Asennettu laajennus {}
-	Opened with {} note(s): {}	Avattu, huomautuksia {}: {}
 	Revert to the saved version of “{name}”?	Palautetaanko tiedoston ”{name}” tallennettu versio?
 	Replace “{name}”, the file this document was opened from?	Korvataanko ”{name}”, tiedosto, josta tämä asiakirja avattiin?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Avattaessa jätettiin pois se, mitä VectorCraft ei vielä osaa lukea ({what}), joten korvaaminen hävittää sen pysyvästi. Säilytä se tallentamalla toisella nimellä.
 	“{name}” already exists. Replace it?	”{name}” on jo olemassa. Korvataanko se?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Tallennusikkunan nimi oli ”{typed}”, ja VectorCraft lisäsi tiedostotyypin tunnisteen. Tiedoston korvaaminen kirjoittaa sen sisällön yli.
 	Saved {path}	Tallennettu {path}
-	Saved {path} with {} note(s): {first}	Tallennettu {path}, huomautuksia {}: {first}
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
 	Search commands and tools…	Hae komentoja ja työkaluja…
@@ -3901,8 +3932,6 @@ font-technology	Variable	Muuttuvat
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
 	Smart Guides (View → Smart Guides)	Älykkäät apuviivat (Näytä → Älykkäät apuviivat)
 	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
-	Discarded {} recovered document(s)	Hylätty {} palautettua asiakirjaa
-	Restored {} recovered document(s): save them to keep them	Palautettu {} asiakirjaa: tallenna ne säilyttääksesi ne
 	Saved recovery data for {title}	Tallennettu palautustiedot: {title}
 	Saving recovery data for {}	Tallennetaan palautustietoja: {}
 	Alt	Alt
@@ -4173,14 +4202,12 @@ imageTrace	Outline	Ääriviiva
 @msg	No saved views (View → New View…)	Ei tallennettuja näkymiä (Näytä → Uusi näkymä…)
 @msg	Offset Path: select paths	Siirrä polkua: valitse polkuja
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Siirrä polkua: siirtymän jälkeen valituista poluista ei jää mitään (sisennys on muotoja suurempi)
-@msg	Opened with {_1} note(s): {_2}	Avattiin, {_1} huomautus(ta): {_2}
 @msg	Opened {url}	Avattiin {url}
 @msg	Outline Stroke: no stroked paths selected	Muunna viiva ääriviivaksi: viivallisia polkuja ei ole valittu
 @msg	PDF settings are not an object	PDF-asetukset eivät ole objekti
 @msg	PDF security settings are not an object	PDF-suojausasetukset eivät ole objekti
 @msg	PDF writer error: {0}	PDF-kirjoittimen virhe: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketoitiin {n} tiedosto kansioon {folder} ({note})|Paketoitiin {n} tiedostoa kansioon {folder} ({note})
-@msg	Packaged {n} file(s){note}	Paketoitiin {n} tiedosto(a){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Esikatselu selaimessa vaatii työpöytäsovelluksen (verkkoversio lataa tiedostot sen sijaan)
 @msg	Release Guides: no guides	Vapauta apuviivat: ei apuviivoja
 @msg	Release: no layer to put the rectangle in	Vapauta: ei tasoa, johon suorakulmion voisi sijoittaa
@@ -4213,6 +4240,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`library` is a library id or name (see {list})	`library` on kirjaston tunnus tai nimi (ks. {list})
 @msg	`mode` applies to freeform gradients	`mode` koskee vapaamuotoisia liukuvärejä
 @msg	`preserve` must be an object	`preserve` on oltava objekti
+@msg	`globalAdjust` must be an object	`globalAdjust` on oltava objekti
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` on oltava 1, 3 tai 5
 @msg	`stops` must be an array	`stops` on oltava taulukko
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` on oltava SVG-asetusten objekti (ks. document.formats)
@@ -4380,6 +4408,8 @@ imageTrace	Outline	Ääriviiva
 @msg	join needs open paths	liittäminen vaatii avoimia polkuja
 @msg	lang must be one of {_1}	lang-arvon on oltava jokin seuraavista: {_1}
 @msg	layers can't be wrap objects	tasot eivät voi olla rivitysobjekteja
+@msg	line {line}: value for `{var}` must be true or false	rivi {line}: muuttujan `{var}` arvon on oltava true tai false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	rivi {line}: muuttujan `{var}` arvo on pidempi kuin {MAX_GRAPH_CSV} tavua
 @msg	missing `folder`	`folder` puuttuu
 @msg	missing `id` (see plugin.list)	`id` puuttuu (ks. plugin.list)
 @msg	missing `name`	`name` puuttuu
@@ -4465,6 +4495,14 @@ imageTrace	Outline	Ääriviiva
 @msg	no selection bounds	ei valinnan rajoja
 @msg	no slice selected	viipaletta ei ole valittu
 @msg	no such action	toimintoa ei ole
+@msg	no such action set	toimintosarjaa ei ole
+@msg	the action sets changed; nothing was deleted	toimintosarjat muuttuivat; mitään ei poistettu
+@msg	no action set to save	ei tallennettavaa toimintosarjaa
+@msg	not an action set file	ei ole toimintosarjatiedosto
+@msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
+@msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa
+@msg	the action set file needs a later version of VectorCraft	toimintosarjatiedosto vaatii uudemman VectorCraft-version
+@msg	an action in the action set file has more than 10,000 steps	toimintosarjatiedoston toiminnossa on yli 10 000 vaihetta
 @msg	no such anchor	ankkuria ei ole
 @msg	no such artboard	piirtoalustaa ei ole
 @msg	the artboard is locked	piirtoalusta on lukittu
@@ -4491,6 +4529,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no user library folder here	täällä ei ole käyttäjäkirjastokansiota
 @msg	no user workspace `{from}`	ei käyttäjän työtilaa `{from}`
 @msg	node {_1} is not text	solmu {_1} ei ole tekstiä
+@msg	node {_1} is on a locked artboard	solmu {_1} on lukitulla piirtoalustalla
 @msg	not a DXF drawing	ei DXF-piirustus
 @msg	not a VectorCraft file: {0}	ei VectorCraft-tiedosto: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	ei VectorCraftin pikanäppäinjoukko (`overrides` puuttuu)
@@ -4688,7 +4727,12 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown workspace (one of {_1})	tuntematon työtila (jokin seuraavista: {_1})
 @msg	unsupported: {0}	ei tuettu: {0}
 @msg	variables are locked	muuttujat on lukittu
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	yli {MAX_CSV_ROWS} tietojoukkoa: Tuo tietojoukot lukee enintään {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	yli {MAX_CSV_COLS} muuttujaa: Tuo tietojoukot lukee enintään {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	muut kuin tekstimuuttujat jätettiin pois: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	uusi asiakirja ei lue näitä muuttujia takaisin niiden lajin mukaisina: {names}
+@msg	a new document refuses this file because of these variables: {names}	uusi asiakirja hylkää tämän tiedoston näiden muuttujien vuoksi: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	muuttujan `{name}` otsikko `{header}` luettaisiin muuttujaksi `{other}`: nimeä toinen niistä uudelleen
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` ja `options.{key}: {inner}` ovat ristiriidassa: anna asetus vain kerran
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	version {0} tiedostoja ei voi pakata: pakattuja tiedostoja voi avata vain versiosta {COMPRESSED_SINCE} alkaen
 @msg	width and height are at least 1 pixel	leveys ja korkeus ovat vähintään 1 pikseli
@@ -4722,7 +4766,9 @@ imageTrace	Outline	Ääriviiva
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Kohdetta {name} ei voitu sijoittaa: {e}
 @msg	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on suljettu
 @msg	Saved {path} with {_1} note(s): {first}	Tallennettiin {path}, {_1} huomautus(ta): {first}
+@msg	Exported {what} with {_1} note(s): {first}	Vietiin {what}, {_1} huomautus(ta): {first}
 @msg	Exported {what}	Vietiin {what}
 @msg	Saved {n} files beside {path}	Tallennettiin {n} tiedostoa kohteen {path} viereen
 @msg	Saving	Tallennetaan
@@ -4730,9 +4776,12 @@ imageTrace	Outline	Ääriviiva
 @msg	Exporting {_1}	Viedään {_1}
 @msg	Packaging {_1}	Paketoidaan {_1}
 @msg	Placing {_1}	Sijoitetaan {_1}
+@msg	Pasting	Liitetään
 @msg	Saving recovery data for {_1}	Tallennetaan palautustietoja: {_1}
-@msg	Discarded {_1} recovered document(s)	Hylättiin {_1} palautettu(a) asiakirja(a)
-@msg	Restored {_1} recovered document(s): save them to keep them	Palautettiin {_1} asiakirja(a): tallenna ne säilyttääksesi ne
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Hylättiin {n} palautettu asiakirja|Hylättiin {n} palautettua asiakirjaa
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Palautettiin {n} asiakirja: tallenna se säilyttääksesi sen|Palautettiin {n} asiakirjaa: tallenna ne säilyttääksesi ne
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Avattiin, {n} huomautus: {first}|Avattiin, {n} huomautusta: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Tallennettiin {path}, {n} huomautus: {first}|Tallennettiin {path}, {n} huomautusta: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Upotettiin {n} kuva; {missing} puuttuu: linkitä ne ensin uudelleen|Upotettiin {n} kuvaa; {missing} puuttuu: linkitä ne ensin uudelleen
 @msgplural	Embedded {n} image|Embedded {n} images	Upotettiin {n} kuva|Upotettiin {n} kuvaa
 @msgplural	Relinked {n} image|Relinked {n} images	Linkitettiin uudelleen {n} kuva|Linkitettiin uudelleen {n} kuvaa
@@ -4753,6 +4802,8 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Kopioitiin {n} objektin CSS|Kopioitiin {n} objektin CSS
 @msgplural	Downloaded {n} file|Downloaded {n} files	Ladattiin {n} tiedosto|Ladattiin {n} tiedostoa
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Vietiin {n} tiedosto kansioon {folder}|Vietiin {n} tiedostoa kansioon {folder}
+@msg	All colors are within the CMYK gamut	Kaikki värit ovat CMYK-väriavaruuden sisällä
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} väri on CMYK-väriavaruuden ulkopuolella|{n} väriä on CMYK-väriavaruuden ulkopuolella
 @msg	Unembedded to {_1}	Upotus purettiin kohteeseen {_1}
 @msg	Reset {_1}	Palautettiin oletukseksi {_1}
 @msg	Sent to {_1}	Lähetettiin kohteeseen {_1}
@@ -4778,8 +4829,17 @@ imageTrace	Outline	Ääriviiva
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	tämä ei ole tasavärinen logo ({_1} % sen yhtenäisistä alueista vastaa muutamaa tasaväriä), joten Tasavärilogo-tila muuttaisi sen liukuvärit laikuiksi: käytä sen sijaan Väri-tilaa
 @msg	`{what}` closes nothing	`{what}` ei sulje mitään
 @msg	`{what}` closes something it didn't open	`{what}` sulkee jotain, mitä se ei avannut
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	useita tasoja peittävä maski tuodaan leikkausryhmänä jokaiseen tasoon, jonka se peittää
+@msg	a graph's records don't end where they should: its art was read as it is	kaavion tietueet eivät pääty siihen, mihin niiden pitäisi: sen piirros luettiin sellaisenaan
+@msg	`{w}` takes no operands	`{w}` ei ota operandeja
+@msg	a wraparound group is inside a compound path	tekstin rivitysryhmä on yhdistelmäpolun sisällä
 @msg	a path has too many points	polulla on liian monta pistettä
+@msg	it ends inside a group or compound path	se päättyy ryhmän tai yhdistelmäpolun sisään
 @msg	it ends inside a layer	se päättyy tason sisään
+@msg	it ends inside a multi-layer mask	se päättyy monitasoisen maskin sisään
+@msg	a multi-layer mask's operators are out of order	monitasoisen maskin operaattorit ovat väärässä järjestyksessä
+@msg	a multi-layer mask needs one clipping path	monitasoinen maski tarvitsee yhden leikkauspolun
+@msg	a group crosses a multi-layer mask	ryhmä ylittää monitasoisen maskin rajan
 @msg	it has art outside its layers	siinä on kuvitusta tasojensa ulkopuolella
 @msg	it has more than {MAX_NODES} objects	siinä on yli {MAX_NODES} objektia
 @msg	it has no layers	siinä ei ole tasoja
@@ -4790,11 +4850,13 @@ imageTrace	Outline	Ääriviiva
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
 @msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
+@msg	graphs come in as plain art, without their data or settings	kaaviot tuodaan tavallisena grafiikkana ilman niiden tietoja ja asetuksia
 @msg	an image whose data is cut short was left out	kuva, jonka data on katkennut, jätettiin pois
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkitetyt kuvat näyttävät tiedostoon tallennetun matalan tarkkuuden esikatselun, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	aluetekstin kehykset, jotka olivat liian matalia yhdelle riville niiden fontilla, korotettiin ({_1}): muuten niiden teksti ei näkyisi
 @msg	its editing data doesn't say where its art is	sen muokkaustiedoista ei selviä kuvituksen sijainti
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tämä tiedosto tallennettiin ilman PDF-yhteensopivuutta, eikä sen muokkaustietoja voi lukea ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF-osaa ei voitu lukea ({_1}): tiedosto avattiin sen muokkaustiedoista
 @msg	No fonts are missing in this document	Tästä asiakirjasta ei puutu fontteja
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft ei hae muiden sovellusten tai järjestelmän kansioista: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft ei hae Users-kansion Shared- tai Public-kansiosta: {path}
@@ -4841,6 +4903,9 @@ imageTrace	Outline	Ääriviiva
 @msg	the PCX file is cut short	tämä PCX-tiedosto on katkennut
 @msg	the PCX file's header is damaged	PCX-tiedoston otsake on vahingoittunut
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-tiedostoja, joissa on {bits}-bittisiä pikseleitä {planes} tasossa, ei voi lukea
+@msg	the Pixar file is cut short	tämä Pixar-tiedosto on katkennut
+@msg	the Pixar file's header is damaged	Pixar-tiedoston otsake on vahingoittunut
+@msg	the Pixar file's image data is damaged	Pixar-tiedoston kuvadata on vahingoittunut
 @msg	the JPEG 2000 file can't be read	tätä JPEG 2000 -tiedostoa ei voi lukea
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tässä JPEG 2000 -tiedostossa on tukematon väriavaruus tai JPX-sisältö
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	tämä PSD-kuva on liian suuri luettavaksi ({_1} × {_2} pikseliä)
@@ -5186,6 +5251,7 @@ file-filter	Swatch libraries	Värimallikirjastot
 file-filter	Flattener presets	Litistyksen esiasetukset
 file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
+file-filter	Export presets	Vientiesiasetukset
 file-filter	SVG Compressed	Pakattu SVG
 file-filter	PDF-compatible .ai	PDF-yhteensopiva .ai
 file-filter	VectorCraft Template	VectorCraft-malli
@@ -5329,6 +5395,11 @@ mark-style	Japanese	Japanilainen
 	Editable	Muokattava
 	Export Data Sets…	Vie tietojoukot…
 	Load Variable Library…	Lataa muuttujakirjasto…
+	Save Variable Library…	Tallenna muuttujakirjasto…
+@msg	a variable library holds text variables, and the document has none	muuttujakirjasto sisältää tekstimuuttujia, eikä asiakirjassa ole yhtään
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	muuttujaa `{name}` ei voi tallentaa muuttujakirjastoon: nimeä se uudelleen niin, että se alkaa kirjaimella tai merkillä `_` eikä sisällä välilyöntejä tai muita symboleja kuin `-`, `_` ja `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	tietojoukko `{name}` sisältää ohjausmerkin, jota muuttujakirjasto ei voi sisältää
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	tietojoukko `{name}` alkaa tai päättyy tyhjeeseen, jota muuttujakirjasto ei voi sisältää
 	Filter	Suodata
 	Filter Layers Panel Rows	Suodata Tasot-paneelin rivit
 	Flatten	Litistä
@@ -5412,8 +5483,10 @@ mark-style	Japanese	Japanilainen
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
+@msg	columns {first} and {column} both name the variable `{name}`	sarakkeet {first} ja {column} nimeävät molemmat muuttujan `{name}`
 @msg	open a document with data sets	avaa asiakirja, jossa on tietojoukkoja
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	tietojoukosta {name} ei käytetty mitään: mitään objektia ei ole sidottu muuttujaan, jolle siinä on arvo
+@msg	no bound object reports a value (locked objects and embedded images report none)	mikään sidottu objekti ei ilmoita arvoa (lukitut objektit ja upotetut kuvat eivät ilmoita arvoa)
 @msg	select an Intertwine group	valitse lomitusryhmä
 @msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	yhdistelmäpolun, sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevaan polkuun ei voi kiinnittää objekteja
@@ -5460,6 +5533,11 @@ mark-style	Japanese	Japanilainen
 	Export Type:	Vientityyppi:
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
+@msg	an action is already recording	toimintoa nauhoitetaan jo
+@msg	no such function key	toimintonäppäintä ei ole
+@msg	no such color	väriä ei ole
+@msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
+@msg	more than one action is named “{_1}”	useamman kuin yhden toiminnon nimi on ”{_1}”
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
 	Smudge Stick…	Sumennuskynä…
 	Smudge Stick	Sumennuskynä
@@ -5541,7 +5619,9 @@ mark-style	Japanese	Japanilainen
 	Effect Gallery	Tehostegalleria
 	Filters	Suodattimet
 	Select artwork to apply effects	Valitse kuvitus, johon tehosteet lisätään
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	tiedoston muuttujia ja tietojoukkoja ei luettu (muuttujia: {variables}, tietojoukkoja: {data_sets}): Muuttujat-paneeli ei näytä niitä
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	tiedoston muuttujakirjasto luettiin vain osittain (ohitettuja kohtia: {_1}): Muuttujat-paneeli näyttää loput
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	tiedoston muuttujakirjastoa ei voitu lukea: Muuttujat-paneeli ei näytä sitä
+@msg	a variable of unknown kind can't be bound to objects	tuntemattoman tyyppistä muuttujaa ei voi sitoa objekteihin
 # Select by Color (select.color)
 	Select by Color	Valitse värin mukaan
 	Angular	Kulma
@@ -5634,6 +5714,7 @@ swatch	Bright Violet	Kirkas violetti
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriset apuviivat
+	Geometric Patterns	Geometriset kuviot
 	Ease In	Hidas alku
 	Ease Out	Hidas loppu
 	Ease In Out	Hidas alku ja loppu
@@ -5691,17 +5772,30 @@ axis	Y Axis	Y-akseli
 	New Set	Uusi sarja
 	Set Options…	Sarjan asetukset…
 	Set Options	Sarjan asetukset
+	Action Options…	Toiminnon asetukset…
+	Action Options	Toiminnon asetukset
+	Rename Action	Nimeä toiminto uudelleen
+	New Action…	Uusi toiminto…
+	New Action	Uusi toiminto
+	Create New Action	Luo uusi toiminto
+	Play Action	Toista toiminto
+	Action Set:	Toimintosarja:
+	Function Key:	Toimintonäppäin:
+	Record	Nauhoita
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
+	Leave Out of Global Edit	Jätä pois yleismuokkauksesta
 	Match	Vastaavuus
 	On Artboards	Piirtoalustoilla
 	All Artboards	Kaikki piirtoalustat
 	Include Objects On Canvas	Sisällytä kankaalla olevat objektit
-	Result(s): {count}	Tulokset: {count}
+@plural	Result: {n}|Results: {n}	Tulos: {n}|Tulokset: {n}
 @msg	select one object	valitse yksi objekti
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Yleismuokkaus toimii poluille, yhdistelmäpoluille, symbolien esiintymille ja niiden ryhmille
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (kierrettyjä tai peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen
+@msg	Global Edit is off	Yleismuokkaus ei ole käynnissä
+@msg	only an object of the Global Edit other than the one it started from can be left out	yleismuokkauksesta voi jättää pois vain muun objektin kuin sen, josta se alkoi
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin
 	Basic Shapes	Perusmuodot
@@ -5953,6 +6047,16 @@ anchor	Points:	Pisteet:
 	Case	Kirjainkoko
 @msg	{label} must be a number	{label} on oltava luku
 @msg	{label} must be a number of at least 0.1	{label} on oltava vähintään 0,1
+	Advanced Character Formats	Merkkien lisämuotoilut
+	Horizontal Scale	Vaakaskaalaus
+	Vertical Scale	Pystyskaalaus
+@msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+	Character Color	Merkin väri
+	OpenType Features	OpenType-ominaisuudet
+	Stylistic Sets	Tyylisarjat
+@msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
+@msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6195,3 +6299,20 @@ breakText	Glyphs	Merkit
 	Small to Large	Pienestä suureen
 	Large to Small	Suuresta pieneen
 	Distribute Evenly	Jaa tasaisesti
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Luo värimallien selite
+	Create Swatch Legend…	Luo värimallien selite…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstityökalut
+	Text Tweaker…	Tekstin säätö…
+	Text Tweaker	Tekstin säätö
+	Attribute:	Määrite:
+	From:	Alku:
+	To:	Loppu:
+	Bow	Kaari
+	Spike	Piikki
+	Skip Spaces	Ohita välilyönnit
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa

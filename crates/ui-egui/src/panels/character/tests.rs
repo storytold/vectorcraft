@@ -673,6 +673,23 @@ fn tate_chu_yoko_menu_item_shows_with_east_asian_options_and_toggles() {
     assert!(!on(&app));
 }
 
+/// Tate-chu-yoko Settings… is in the panel menu with the East Asian options, and choosing it opens
+/// the dialog on the selected characters.
+#[test]
+fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "2026"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains("Tate-chu-yoko Settings…"));
+    app.session.prefs.show_east_asian_options = true;
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim() == "Tate-chu-yoko Settings…").unwrap_or_else(|| panic!("{texts:?}")).1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
+}
+
 /// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
 /// marks the selected characters, one undo step each way; its check shows only while every
 /// selected character has it, and a mixed selection turns it on.
@@ -788,6 +805,24 @@ fn shared_text_flag_optical_margin_three_object_selections() {
     app.run("type.opticalMarginAlignment", json!({"on": true, "id": c})).unwrap();
     app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
     assert_eq!(shared_text_flag(&app, |t| t.optical_margin), Some(true));
+}
+
+#[test]
+fn shared_text_flag_vertical_three_object_selections() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let v0 = app.run("text.create", json!({"x": 10, "y": 40, "text": "v0", "vertical": true})).unwrap()["id"].clone();
+    let h1 = app.run("text.create", json!({"x": 10, "y": 80, "text": "h1"})).unwrap()["id"].clone();
+    let h2 = app.run("text.create", json!({"x": 10, "y": 120, "text": "h2"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [v0.clone(), h1.clone(), h2.clone()]})).unwrap();
+    assert_eq!(shared_text_flag(&app, |t| t.vertical), None);
+    let h0 = app.run("text.create", json!({"x": 10, "y": 160, "text": "h0"})).unwrap()["id"].clone();
+    let v1 = app.run("text.create", json!({"x": 10, "y": 200, "text": "v1", "vertical": true})).unwrap()["id"].clone();
+    let v2 = app.run("text.create", json!({"x": 10, "y": 240, "text": "v2", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(shared_text_flag(&app, |t| t.vertical), None);
+    app.run("select.set", json!({"ids": [v0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(shared_text_flag(&app, |t| t.vertical), Some(true));
 }
 
 /// Small Caps, Superscript and Subscript buttons and menu items stay off when the selection mixes them.
@@ -993,9 +1028,48 @@ fn no_break_menu_item_toggles_the_selected_characters() {
     assert!(!on(&app));
 }
 
+/// Kashidas appears with Middle Eastern options, starts checked, and a mixed selection is
+/// unchecked until the user enables all of its characters.
+#[test]
+fn kashidas_menu_item_handles_default_and_mixed_ranges() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.show_indic_options = true;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let row = |app: &mut VectorcraftApp| {
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], menu)
+            .into_iter()
+            .find(|(text, _)| text.trim_start_matches(['✓', ' ']) == "Kashidas")
+            .expect("Kashidas menu item")
+    };
+    assert!(row(&mut app).0.starts_with('✓'));
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "kashidas": false})).unwrap();
+    assert!(!row(&mut app).0.starts_with('✓'));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    assert!(row(&mut app).0.starts_with('✓'));
+    let states = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(states.iter().all(|v| *v));
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    let after = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(after.iter().all(|v| *v), "an empty caret leaves all characters unchanged");
+}
+
 /// Reset Panel sets every character attribute the panel shows, except the font family, style
 /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
-/// Metrics, Tate-chu-yoko, No Break, Character Direction, Digits and the font height reference
+/// Metrics, Tate-chu-yoko and its settings, No Break, Character Direction, Digits and the font height reference
 /// included), in the selected type and in the text the Type tool has selected while it edits.
 #[test]
 fn reset_panel_resets_every_attribute_but_the_font() {
@@ -1023,6 +1097,8 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.char_align != d.char_align,
             s.proportional_metrics != d.proportional_metrics,
             s.tate_chu_yoko != d.tate_chu_yoko,
+            s.tcy_up_down != d.tcy_up_down,
+            s.tcy_left_right != d.tcy_left_right,
             s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
@@ -1036,17 +1112,17 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             json!({
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
-                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "standardVerticalRoman": true,
-                "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
+                "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 20]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 22]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 20]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 22]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);

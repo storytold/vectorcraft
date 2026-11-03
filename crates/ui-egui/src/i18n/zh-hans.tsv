@@ -115,7 +115,6 @@
 	All Artwork Above	上方所有图稿
 	All Caps	全部大写
 	All Categories	所有类别
-	All colours are within the CMYK gamut	所有颜色皆在 CMYK 色域内
 	All on Active Artboard	当前画板上的所有对象
 	All on Same Layers	同层上的所有对象
 	All printer's marks	所有打印机标记
@@ -555,7 +554,6 @@
 	Convert to sRGB	转换为 sRGB
 	Convert to Straight Lines	转换为直线
 	Convert:	转换：
-	Copied the CSS of {rules} object(s)	已复制 {rules} 个对象的 CSS
 	Copies:	份数：
 	Copy	复制
 	Copy (make a transformed copy)	复制 (制作变换后的副本)
@@ -705,6 +703,7 @@
 	Delete Tab	删除制表位
 	Delete the graphic style “{name}”?	要删除图形样式“{name}”吗？
 	Delete Action Sets	删除动作组
+	Duplicate Action or Action Set	复制动作或动作组
 	Delete the action set “{name}” and its actions?	要删除动作组“{name}”及其中的动作吗？
 	Delete the selected action sets and their actions?	要删除所选动作组及其中的动作吗？
 	Delete Theme	删除主题
@@ -739,7 +738,6 @@
 	Discard Empty Type	丢弃空文字
 	Discard Recovered Documents	丢弃已恢复的文档
 	Discard White Overprint in Output	输出时放弃白色叠印
-	Discarded {} recovered document(s)	已放弃 {} 份恢复的文档
 	Discord	Discord
 	Discretionary Hyphen	选择性连字号
 	Discretionary Ligatures	任意连字
@@ -795,13 +793,14 @@
 	Double Right Quotation Marks	右双引号
 	Double-click	双击
 	Double-click to edit the characters' paint	双击以编辑字符的上色
+	Click to edit	单击以编辑
+	Double-click to edit	双击以编辑
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
 	Download	下载
 	Download:	下载：
 	Downloaded {what}	已下载 {what}
-	Downloaded {} file(s)	已下载 {} 个文件
 	Drag	拖动
 	Drag a handle	拖动控制手柄
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	将图稿拖到此处，或选择图稿后单击 +。按住 Alt 可将多个对象合并为一个资源。
@@ -909,8 +908,6 @@
 	Embed page thumbnails	嵌入页面缩略图
 	Embedded	嵌入
 	Embedded Image	嵌入的图像
-	Embedded {n} image(s)	已嵌入 {n} 张图像
-	Embedded {n} image(s); {missing} missing: relink them first	已嵌入 {n} 张图像；{missing} 张缺失：请先重新链接
 	Emulsion:	药膜：
 	En Dash	短破折号
 	En Space	半角空格
@@ -985,6 +982,16 @@
 	Delete Export Preset	删除导出预设
 	Export Presets	导出预设
 	Save Export Preset	存储导出预设
+	Export Export Presets	导出导出预设
+	Export Preset…	导出预设…
+	Import Export Presets	导入导出预设
+	Import Preset…	导入预设…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` 是 document.exportPresets.list 中某个预设的名称
+@msg	no export preset `{n}` (see document.exportPresets.list)	没有导出预设 `{n}` (参见 document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	没有可导出的已保存导出预设 (内置预设请在 `names` 中指定)
+@msg	not an export presets file (format `{_1}`)	不是导出预设文件 (格式为 `{_1}`)
+@msg	not an export presets file: {e}	不是导出预设文件：{e}
+@msg	`{_1}`: {msg}	`{_1}`：{msg}
 	Export Layer	导出图层
 	Export Selection	导出选区
 	All in One Folder	全部放在一个文件夹
@@ -1028,10 +1035,8 @@
 	Export Transparency Flattener Presets	导出透明度拼合器预设
 	Export {count} Selected	导出 {count} 个选择项目
 	Export:	导出：
-	Exported {count} file(s) to {folder}	已导出 {count} 个文件至 {folder}
 	Exported {path}	已导出 {path}
 	Exported {what}	已导出 {what}
-	Exported {what} with {} note(s): {first}	已导出 {what}，附 {} 条附注：{first}
 	Exporting {}	正在导出 {}
 	Export…	导出…
 	Extrude & Bevel…	突出与斜角…
@@ -1157,6 +1162,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
 file-filter	VectorCraft Template	VectorCraft 模板
@@ -1170,6 +1176,7 @@ file-filter	Templates	模板
 	Flip Row Order	反转行顺序
 	Flip Vertical	垂直翻转
 	Float in Window	在窗口中浮动
+	Float All in Windows	全部在窗口中浮动
 	Focal Fill	焦点填色
 	Focal Stroke	焦点描边
 	Folder	文件夹
@@ -1236,6 +1243,7 @@ file-filter	Templates	模板
 	Get Preferences	获取首选项
 	Get Text Range	获取文本范围
 	Global	全局
+	Global Adjust	全局调整
 	Global Brush Dimensions	全局画笔尺寸
 	Global Process Color	全局印刷色
 	Global Process Color, CMYK	全局印刷色，CMYK
@@ -1331,6 +1339,10 @@ file-filter	Templates	模板
 	Hard Light	强光
 	Hard Mix	实色混合
 	Harmony Rules:	协调规则：
+	Segmented color wheel	分段色轮
+	Show smooth color wheel	显示平滑色轮
+	Show segmented color wheel	显示分段色轮
+	Show color bars	显示颜色条
 	Harmony Sets	色彩调和组
 	Height	高度
 	Height:	高度：
@@ -1617,6 +1629,8 @@ file-filter	Templates	模板
 	Large Thumbnail View	大缩略图视图
 	Large Thumbnails	大缩略图
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包围套索工具
+	Enclosing Lasso	包围套索
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…
@@ -1732,7 +1746,7 @@ file-filter	Templates	模板
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
-	Luminosity	亮度
+	Luminosity	明度
 	LZW Compression	LZW 压缩
 	Mac	Mac
 	Magenta	洋红
@@ -1762,6 +1776,7 @@ file-filter	Templates	模板
 	Manually	手动
 	Mark as trapped	标示为已陷印
 	Mark Older Files as [Converted] When Opened	打开旧文件时标记为 [已转换]
+	Use System Defaults for Edit Original	“编辑原稿”使用系统默认设置
 	Marker…	标记…
 	Marks	标记
 	Marks and Bleed	标记和出血
@@ -1925,6 +1940,8 @@ file-filter	Templates	模板
 	Roundness:	圆度：
 	Fixed	固定
 	Pressure	压力
+	Tilt	倾斜
+	Bearing	方位
 	Shape:	形状：
 	Bristle Length:	鬃毛长度：
 	Bristle Density:	鬃毛密度：
@@ -1985,6 +2002,10 @@ file-filter	Templates	模板
 	New Without Dialog	无对话框新建
 	New Workspace	新建工作区
 	New Workspace…	新建工作区…
+	New Toolbar…	新建工具栏…
+	New Toolbar	新建工具栏
+	Show Toolbar	显示工具栏
+	List Toolbars	列出工具栏
 	New {kind} Style…	新建{kind}样式…
 	New…	新建…
 	Next	下一个
@@ -2130,7 +2151,6 @@ file-filter	Templates	模板
 	Open Recent Files	打开最近文件
 	Open Swatch Library	打开色板库
 	Open the URL in the web browser	在 Web 浏览器中打开 URL
-	Opened with {} note(s): {}	已打开，附 {} 条附注：{}
 	OpenType	OpenType
 	Open…	打开…
 	Optical	视觉
@@ -2190,7 +2210,6 @@ file-filter	Templates	模板
 	Package collects a saved document with its linked files and fonts.	打包会将已存储的文件连同其链接文件与字体一并收集。
 	Package created	已创建打包
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	已将 {n} 个文件打包于 {folder}{note}
-	Packaged {n} file(s){note}	已打包 {n} 个文件{note}
 	Package…	打包…
 	Page	页面
 	Page information	页面信息
@@ -2286,6 +2305,8 @@ diagnostics	ui	界面
 	Plates	印版
 	Platform:	平台：
 	Play Current Selection	播放当前选择项目
+	Save Actions…	存储动作…
+	Load Actions…	载入动作…
 	Plug-in Info	插件信息
 	Plug-ins	增效工具
 	Plug-in…	增效工具…
@@ -2391,6 +2412,10 @@ digits	Telugu	泰卢固数字
 digits	Kannada	卡纳达数字
 digits	Malayalam	马拉雅拉姆数字
 	Proportional Lining	比例齐线数字
+	Position:	位置：
+	Default Position	默认位置
+	Numerator	分子
+	Denominator	分母
 	Proportional Oldstyle	比例旧式数字
 	Pucker & Bloat…	缩拢与膨胀…
 	Pucker Tool	收缩工具
@@ -2546,9 +2571,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Relink	重新链接
 	Relink Linked Files to the Document	将链接文件重新链接到文档
 	Relink to Folder…	重新链接到文件夹…
-	Relinked {n} image(s)	已重新链接 {n} 张图像
-	Relinked {n} image(s); not in that folder: {}	已重新链接 {n} 张图像；不在该文件夹中：{}
-	Relinked {} image(s)	已重新链接 {} 张图像
 	Relink…	重新链接…
 	Find Linked Files	查找链接文件
 	Find Linked Files in Folder…	在文件夹中查找链接文件…
@@ -2594,6 +2616,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace Spine	替换脊线
 	Replace Symbol	替换符号
 	Replace With Font	替换为字体
+	Replace With Font From	替换字体来源
+	System	系统
 	Replaces the saved preset of that name.	替换同名已存预设。
 	Replace…	替换…
 	Require a password to open the document	打开文档时需要密码
@@ -2629,7 +2653,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
 	Restore Recovered Documents	恢复已恢复的文档
 	Restored documents open unsaved: save them to keep them.	恢复的文档处于未存储状态：请存储以保留。
-	Restored {} recovered document(s): save them to keep them	已还原 {} 份恢复的文档：请存储以保留
 	Restrict printing, editing and other tasks	限制打印、编辑及其他操作
 	Reverse Front to Back	从前向后反转
 	Reverse Gradient	反转渐变
@@ -2685,11 +2708,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Save a Copy	存储副本
 	Save a Copy…	保存副本…
 	Save As	存储为
+	Save As Preset…	另存为预设…
 	Save as PDF…	存为 PDF…
 	Save as preset:	存储为预设：
 	Save as Template	另存模板
 	Save as Template…	存为模板…
 	Save As…	另存为…
+	Save Changes	保存更改
 	Save changes to {name}	存储对 {name} 的更改
 	Save color group to Swatch panel	将颜色组存储至色板面板
 	Save Colors as Swatches	将颜色存储为色板
@@ -2768,7 +2793,6 @@ digits	Malayalam	马拉雅拉姆数字
 	Saved Views	已存视图
 	Saved {n} files beside {path}	已将 {n} 个文件存储于 {path} 旁
 	Saved {path}	已存储 {path}
-	Saved {path} with {} note(s): {first}	已存储 {path}，附 {} 条附注：{first}
 	Saves the current bars, toolbar and panel layout.	保存当前的栏、工具栏和面板布局。
 	Save…	存储…
 	Saving	正在存储
@@ -3208,6 +3232,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Graphic	图形
 	Show all open documents	显示所有打开的文档
 	Symbol Instance	符号实例
+	Link Block Series	链接块系列
 	Symbol Libraries	符号库
 	Symbol Screener Tool	符号透明度工具
 	Symbol Scruncher Tool	符号紧缩工具
@@ -3231,6 +3256,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Target Contents	目标内容
 	Target:	目标：
 	Tate-chu-yoko	纵中横
+	Tate-chu-yoko Settings…	纵中横设置…
+	Tate-chu-yoko Settings	纵中横设置
+	Up/Down:	上/下：
+	Left/Right:	左/右：
 	Temperature	色温
 	Temperature/Tint…	色温/色调…
 	Template	模板
@@ -3239,6 +3268,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Templates…	模板…
 	Text Displayed in Cell:	单元格中显示的文字：
 	Text Export Options	文本导出选项
+	Text Fill & Stroke Color	文字填色和描边颜色
 	Text Fill Color	文字填色
 	Text Import Options	文本导入选项
 	Text Stroke Color	文字描边颜色
@@ -3416,7 +3446,6 @@ digits	Malayalam	马拉雅拉姆数字
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示
 	Update Modified Links	更新已修改的链接
-	Updated {} image(s)	已更新 {} 张图像
 	UPPERCASE	大写
 	URL:	URL：
 	Use 	使用 
@@ -3471,7 +3500,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Lock Variables	锁定变量
 	Unlock Variables	解锁变量
 @msg	variables are locked	变量已锁定
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	数据集超过 {MAX_CSV_ROWS} 个：“导入数据集”最多读取 {MAX_CSV_ROWS} 个
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	变量超过 {MAX_CSV_COLS} 个：“导入数据集”最多读取 {MAX_CSV_COLS} 个
 @msg	variables that aren't text were left out: {kinds}	已省略非文本变量：{kinds}
+@msg	a new document won't read these variables back with their kind: {names}	新文档不会按原类型读回这些变量：{names}
+@msg	a new document refuses this file because of these variables: {names}	新文档会因这些变量而拒绝此文件：{names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` 的标题 `{header}` 会被读作变量 `{other}`：请重命名其中一个
 	List Variables	列出变量
 	Bind Variable	绑定变量
 	Unbind Variable	解除变量绑定
@@ -3842,6 +3876,7 @@ imageTrace	Outline	轮廓
 @msg	the document has no artboard	文档没有画板
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	此格式只能包含一个画板：要导出多个画板，请导出为 PDF 或使用 document.exportForScreens
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	此文件保存时未启用 PDF 兼容性，且无法读取其编辑数据 ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	无法读取 PDF 部分 ({_1})：已从其编辑数据打开文件
 @msg	the export wrote no file	导出未写入任何文件
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} 文件可以打开，但不能写入 (请参阅 document.formats)
 @msg	{_1} files are written by file.saveAsTemplate	{_1} 文件由 file.saveAsTemplate 写入
@@ -3878,6 +3913,7 @@ imageTrace	Outline	轮廓
 @msg	`groupColors` must be an array	`groupColors` 必须是数组
 @msg	`mode` applies to freeform gradients	`mode` 仅适用于任意形状渐变
 @msg	`preserve` must be an object	`preserve` 必须是对象
+@msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
@@ -4006,8 +4042,11 @@ imageTrace	Outline	轮廓
 @msg	a graphic style named `{to}` already exists	名为 `{to}` 的图形样式已存在
 @msg	no graphic style `{name}`	没有图形样式 `{name}`
 @msg	node {_1} is not text	节点 {_1} 不是文字
+@msg	node {_1} is on a locked artboard	节点 {_1} 位于已锁定的画板上
 @msg	Text Wrap: select a wrap object	文本绕排：请选择一个绕排对象
 @msg	layers can't be wrap objects	图层不能作为绕排对象
+@msg	line {line}: value for `{var}` must be true or false	第 {line} 行：`{var}` 的值必须是 true 或 false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	第 {line} 行：`{var}` 的值超过 {MAX_GRAPH_CSV} 字节
 @msg	no threaded text selected	未选择串接文本
 @msg	Create Outlines: select text objects	创建轮廓：请选择文本对象
 @msg	paste unavailable	无法粘贴
@@ -4038,8 +4077,17 @@ imageTrace	Outline	轮廓
 @msg	unknown command `{0}`; did you mean `{1}`?	未知命令 `{0}`；您是否想输入 `{1}`？
 @msg	`{what}` closes nothing	`{what}` 没有可结束的内容
 @msg	`{what}` closes something it didn't open	`{what}` 结束了并非由它开始的内容
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	覆盖多个图层的蒙版会在其覆盖的每个图层中作为剪切组导入
+@msg	a graph's records don't end where they should: its art was read as it is	图表的记录没有在应有的位置结束：其图稿按原样读取
+@msg	`{w}` takes no operands	`{w}` 不接受操作数
+@msg	a wraparound group is inside a compound path	文本绕排组位于复合路径内
 @msg	a path has too many points	某条路径的点过多
+@msg	it ends inside a group or compound path	它在编组或复合路径内部结束
 @msg	it ends inside a layer	它在图层内部结束
+@msg	it ends inside a multi-layer mask	它在跨图层蒙版内部结束
+@msg	a multi-layer mask's operators are out of order	跨图层蒙版的运算符顺序错误
+@msg	a multi-layer mask needs one clipping path	跨图层蒙版需要一条剪切路径
+@msg	a group crosses a multi-layer mask	编组跨越了跨图层蒙版
 @msg	it has art outside its layers	它有位于图层之外的图稿
 @msg	it has more than {MAX_NODES} objects	它包含超过 {MAX_NODES} 个对象
 @msg	it has no layers	它没有图层
@@ -4048,6 +4096,7 @@ imageTrace	Outline	轮廓
 @msg	its objects are nested too deeply	其对象嵌套过深
 @msg	its section ending with `%{end}` doesn't end	其以 `%{end}` 结束的部分没有结束
 @msg	an image VectorCraft can't read was left out	已略去 VectorCraft 无法读取的图像
+@msg	graphs come in as plain art, without their data or settings	图表作为普通图稿导入，不保留其数据和设置
 @msg	an image whose data is cut short was left out	已略去数据不完整的图像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
@@ -4167,6 +4216,7 @@ imageTrace	Outline	轮廓
 @msg	Exporting {_1}	正在导出 {_1}
 @msg	Packaging {_1}	正在打包 {_1}
 @msg	Placing {_1}	正在置入 {_1}
+@msg	Pasting	正在粘贴
 @msg	Exported {what}	已导出 {what}
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" 不是颜色：请写为 #rrggbb
 @msg	could not decode image: {0}	无法解码图像：{0}
@@ -4211,7 +4261,6 @@ imageTrace	Outline	轮廓
 @msg	`{tool}` isn't a Liquify tool	`{tool}` 不是液化工具
 @msg	pick a colour, gradient or pattern to save as a swatch	请选取要保存为色板的颜色、渐变或图案
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	已将 {n} 个文件打包到 {folder}({note})
-@msg	Packaged {n} file(s){note}	已打包 {n} 个文件{note}
 @msg	choose a location for the package	请为打包选择位置
 @msg	missing `folder`	缺少 `folder`
 @msg	the package came back damaged	返回的打包文件已损坏
@@ -4265,7 +4314,6 @@ imageTrace	Outline	轮廓
 @msg	Downloaded {what}	已下载 {what}
 @msg	Imported {what}: {_1}	已导入 {what}：{_1}
 @msg	Installed plug-in {_1}	已安装增效工具 {_1}
-@msg	Opened with {_1} note(s): {_2}	已打开，有 {_1} 条注释：{_2}
 @msg	Saved {path}	已保存 {path}
 @msg	no app to open files here	此处没有可打开文件的应用
 @msg	no data	没有数据
@@ -4276,7 +4324,6 @@ imageTrace	Outline	轮廓
 @msg	the document has never been saved	该文档从未保存过
 @msg	the export returned unreadable data	导出返回了无法读取的数据
 @msg	{status} ({e})	{status} ({e})
-@msg	Saved {path} with {_1} note(s): {first}	已保存 {path}，有 {_1} 条注释：{first}
 @msg	Couldn't open {name}: {e}	无法打开 {name}：{e}
 @msg	Couldn't read {name}: {e}	无法读取 {name}：{e}
 @msg	Internal error: {msg} (please report this bug)	内部错误：{msg} (请报告此错误)
@@ -4318,6 +4365,14 @@ imageTrace	Outline	轮廓
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
 @msg	no such action	没有此动作
+@msg	no such action set	没有此动作组
+@msg	the action sets changed; nothing was deleted	动作组已更改；未删除任何内容
+@msg	no action set to save	没有要存储的动作组
+@msg	not an action set file	不是动作组文件
+@msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
+@msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
+@msg	the action set file needs a later version of VectorCraft	动作组文件需要更高版本的 VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	动作组文件中有动作超过 10,000 个步骤
 @msg	choose a folder to export to	请选择要导出到的文件夹
 @msg	the selection has no URL (or they differ)	所选对象没有 URL (或其 URL 各不相同)
 @msg	select some type first	请先选择一些文字
@@ -4363,6 +4418,8 @@ imageTrace	Outline	轮廓
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	已复制 {n} 个对象的 CSS
 @msgplural	Downloaded {n} file|Downloaded {n} files	已下载 {n} 个文件
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	已将 {n} 个文件导出到 {folder}
+@msg	All colors are within the CMYK gamut	所有颜色皆在 CMYK 色域内
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 个颜色超出 CMYK 色域
 @msg	Unembedded to {_1}	已取消嵌入到 {_1}
 @msg	no swatch library `{l}` (see swatch.library.list)	没有色板库 `{l}` (请参阅 swatch.library.list)
 @msg	no user library folder here	此处没有用户库文件夹
@@ -4378,8 +4435,10 @@ imageTrace	Outline	轮廓
 @msg	there are no printer settings to open here	此处没有可打开的打印机设置
 @msg	Couldn't save recovery data: {e}	无法保存恢复数据：{e}
 @msg	Saved recovery data for {title}	已保存 {title} 的恢复数据
-@msg	Discarded {_1} recovered document(s)	已丢弃 {_1} 个恢复的文档
-@msg	Restored {_1} recovered document(s): save them to keep them	已还原 {_1} 个恢复的文档：请保存以保留它们
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已打开，有 {n} 条注释：{first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
 @msg	This shortcut file is in a form VectorCraft can't read.	此快捷键文件的格式 VectorCraft 无法读取。
 @msg	bad shortcut	快捷键无效
@@ -4399,6 +4458,7 @@ imageTrace	Outline	轮廓
 @msg	{_1} is reserved by the system	{_1} 已被系统保留
 @msg	Couldn't copy to the system clipboard: {e}	无法复制到系统剪贴板：{e}
 @msg	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
+@msg	Couldn't paste: the document it was pasted in was closed	无法粘贴：要粘贴到的文档已关闭
 @msg	nothing selected	未选择任何对象
 @msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项
@@ -4457,6 +4517,9 @@ imageTrace	Outline	轮廓
 @msg	the PCX file is cut short	PCX 文件不完整
 @msg	the PCX file's header is damaged	PCX 文件头已损坏
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	无法读取 {planes} 个平面中含 {bits} 位像素的 PCX 文件
+@msg	the Pixar file is cut short	Pixar 文件不完整
+@msg	the Pixar file's header is damaged	Pixar 文件头已损坏
+@msg	the Pixar file's image data is damaged	Pixar 文件的图像数据已损坏
 @msg	the JPEG 2000 file can't be read	无法读取 JPEG 2000 文件
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 文件包含不受支持的色彩空间或 JPX 内容
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
@@ -4528,8 +4591,10 @@ imageTrace	Outline	轮廓
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
 @msg	choose a destination folder	请选择目标文件夹
 @msg	choose a source folder	请选择源文件夹
+@msg	columns {first} and {column} both name the variable `{name}`	第 {first} 列和第 {column} 列都指定了变量 `{name}`
 @msg	open a document with data sets	请打开包含数据集的文档
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	数据集 {name} 未应用任何内容：没有对象绑定到该数据集中有值的变量
+@msg	no bound object reports a value (locked objects and embedded images report none)	没有绑定的对象报告值 (锁定的对象和嵌入的图像不报告值)
 @msg	the action has no steps	该动作没有步骤
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
 	Import Shortcut Set	导入快捷键组
@@ -4842,6 +4907,7 @@ font-technology	Variable	可变
 	Right-to-Left Paragraph Direction	从右到左段落方向
 	Line-end Punctuation Half Width	行尾标点半角
 	Insert Kashidas	插入卡希达
+	Kashidas	卡希达
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
@@ -5299,6 +5365,11 @@ lighting	Light	光源
 	Import Data Sets…	导入数据集…
 	Export Data Sets…	导出数据集…
 	Load Variable Library…	载入变量库…
+	Save Variable Library…	保存变量库…
+@msg	a variable library holds text variables, and the document has none	变量库包含文本变量，而文档中没有文本变量
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	无法将变量 `{name}` 保存到变量库中：请重命名，使其以字母或 `_` 开头，且不含空格或 `-`、`_`、`.` 以外的符号
+@msg	data set `{name}` holds a control character, which a variable library can't hold	数据集 `{name}` 包含变量库无法保存的控制字符
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	数据集 `{name}` 的开头或结尾有变量库无法保存的空白字符
 	Make Graph Dynamic	使图表动态化
 	Batch…	批处理…
 	Source Folder:	源文件夹：
@@ -5332,6 +5403,11 @@ lighting	Light	光源
 	Export Type:	导出类型:
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
+@msg	an action is already recording	已在记录动作
+@msg	no such function key	没有此功能键
+@msg	no such color	没有此颜色
+@msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
+@msg	more than one action is named “{_1}”	有多个动作名为“{_1}”
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
 	Smudge Stick…	涂抹棒…
 	Smudge Stick	涂抹棒
@@ -5417,7 +5493,9 @@ lighting	Light	光源
 	Effect Gallery	效果库
 	Filters	滤镜
 	Select artwork to apply effects	选择要应用效果的图稿
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	文件的变量和数据集未被读取（变量：{variables}，数据集：{data_sets}）：“变量”面板不会列出它们
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	文件的变量库只读取了一部分（跳过的条目：{_1}）：“变量”面板列出其余部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	无法读取文件的变量库：“变量”面板不会列出它
+@msg	a variable of unknown kind can't be bound to objects	类型未知的变量不能绑定到对象
 # Select by Color (select.color)
 	Select by Color	按颜色选择
 	Move Anchor Point	移动锚点
@@ -5443,6 +5521,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	几何参考线
+	Geometric Patterns	几何图案
 	Ease In	缓入
 	Ease Out	缓出
 	Ease In Out	缓入缓出
@@ -5501,17 +5580,30 @@ axis	Y Axis	Y 轴
 	New Set	新建组
 	Set Options…	组选项…
 	Set Options	组选项
+	Action Options…	动作选项…
+	Action Options	动作选项
+	Rename Action	重命名动作
+	New Action…	新建动作…
+	New Action	新建动作
+	Create New Action	创建新动作
+	Play Action	播放动作
+	Action Set:	动作组：
+	Function Key:	功能键：
+	Record	记录
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
+	Leave Out of Global Edit	从全局编辑中排除
 	Match	匹配
 	On Artboards	在画板上
 	All Artboards	所有画板
 	Include Objects On Canvas	包括画布上的对象
-	Result(s): {count}	结果：{count}
+@plural	Result: {n}|Results: {n}	结果：{n}
 @msg	select one object	请选择一个对象
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	全局编辑适用于路径、复合路径、符号实例及其编组
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（旋转或镜像的副本不会匹配）；请更改全局编辑选项后重试
+@msg	Global Edit is off	全局编辑未开启
+@msg	only an object of the Global Edit other than the one it started from can be left out	只能从全局编辑中排除起始对象以外的对象
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
 	Basic Shapes	基本形状
@@ -5766,6 +5858,16 @@ anchor	Points:	点：
 	Case	大小写
 @msg	{label} must be a number	{label} 必须是数字
 @msg	{label} must be a number of at least 0.1	{label} 必须是至少 0.1 的数字
+	Advanced Character Formats	高级字符格式
+	Horizontal Scale	水平缩放
+	Vertical Scale	垂直缩放
+@msg	{label} must be a number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的数字
+	Character Color	字符颜色
+	OpenType Features	OpenType 特性
+	Stylistic Sets	风格集
+@msg	features lists at most {max} tags	features 最多包含 {max} 个标签
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6008,3 +6110,20 @@ breakText	Glyphs	字形
 	Small to Large	从小到大
 	Large to Small	从大到小
 	Distribute Evenly	均匀分布
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	创建色板图例
+	Create Swatch Legend…	创建色板图例…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微调…
+	Text Tweaker	文字微调
+	Attribute:	属性：
+	From:	起始：
+	To:	结束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	跳过空格
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	图稿太大，无法作为图片复制：其他应用不会获得它的 PNG
