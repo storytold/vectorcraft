@@ -308,6 +308,14 @@ impl RecoveryStore for FolderStore {
     }
     fn read(&self, name: &str) -> std::result::Result<Vec<u8>, String> {
         let f = self.file(name)?;
+        // Entry names come from the copy's metadata: refuse a link (or a folder another account
+        // owns) that would read a file from outside the store.
+        if let Some(dir) = f.parent() {
+            Self::own_area(dir)?;
+        }
+        if !std::fs::symlink_metadata(&f).map_err(|e| format!("{}: {e}", f.display()))?.file_type().is_file() {
+            return Err(format!("{}: not a plain file", f.display()));
+        }
         std::fs::read(&f).map_err(|e| format!("{}: {e}", f.display()))
     }
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
