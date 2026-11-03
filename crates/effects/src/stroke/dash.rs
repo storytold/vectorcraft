@@ -57,6 +57,10 @@ pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
         pat.extend_from_within(..);
     }
     let period: f64 = pat.iter().sum();
+    // Finite entries can still sum to infinity, which would never leave the phase loop below.
+    if !period.is_finite() {
+        return None;
+    }
     let plans: Vec<Plan> = subpaths(bp)
         .into_iter()
         .map(|(r, closed)| {

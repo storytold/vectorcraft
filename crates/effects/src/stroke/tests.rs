@@ -21,6 +21,11 @@ fn stroke(width: f64, f: impl FnOnce(&mut StrokeLayer)) -> StrokeLayer {
     st
 }
 
+#[test]
+fn dash_period_overflowing_to_infinity_is_solid() {
+    assert!(dash(&line(0.0, 60.0), &dashed(&[f64::MAX, f64::MAX], -1.0)).is_none());
+}
+
 fn dashed(pattern: &[f64], offset: f64) -> Dash {
     Dash { pattern: pattern.to_vec(), offset, align_corners: false }
 }
