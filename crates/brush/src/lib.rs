@@ -848,9 +848,15 @@ fn draws_brushed(doc: &Document, def: Named<'_>, known: &mut Known) -> bool {
     };
     // Without recursion, each one looked at once: they may use one another without end.
     let (mut seen, mut stack) = (std::collections::HashSet::from([key.clone()]), art(def));
+    // A brush name the library lacks draws a plain stroke ([`node_pieces`]), which runs no brush.
+    let mut names: Option<std::collections::HashSet<String>> = None;
+    let mut resolves = |n: &Node| {
+        let names = names.get_or_insert_with(|| library(doc).into_iter().map(|b| b.name).collect());
+        n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && s.brush.as_ref().is_some_and(|b| names.contains(b))))
+    };
     let mut answer = false;
     while let Some(n) = stack.pop() {
-        if has_brush(n) {
+        if has_brush(n) && resolves(n) {
             answer = true;
             break;
         }
