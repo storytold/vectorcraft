@@ -5523,6 +5523,7 @@ theme	Appearance	Görünüm
 	Highlight:	Vurgu:
 	In Merge Mode, Clicking Stroke Splits the Path	Birleştirme modunda kontura tıklamak yolu böler
 	Insert Kashidas	Keşide Ekle
+	Kashidas	Keşide
 	Load Variable Library…	Değişken Kitaplığı Yükle…
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
