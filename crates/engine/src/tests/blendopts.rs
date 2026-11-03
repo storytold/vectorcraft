@@ -1,6 +1,6 @@
 //! Blend Options (defaults with nothing selected, `object.blend.info`) and the Blend tool:
 //! start points from clicked anchors, adding keys to a blend instead of nesting it (M8.18), and
-//! Escape dropping the first pick.
+//! Escape, or an edit made outside the tool, dropping the first pick.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
@@ -231,6 +231,102 @@ fn escape_drops_the_blend_tools_first_pick() {
     click(&mut s, 20.0, 20.0);
     assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
     assert_eq!(spec(&s, g).0, vec![b, c], "a was not added");
+}
+
+#[test]
+fn an_edit_undo_or_redo_made_outside_the_blend_tool_drops_its_first_pick() {
+    for case in ["edit", "undo", "redo", "group"] {
+        let undo = case == "undo";
+        let mut s = session();
+        let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
+        if case == "redo" {
+            s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        // In an open undo group, the edit after the pick is merged into the group's step.
+        if case == "group" {
+            s.begin_undo_group();
+            s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#00ff00"})).unwrap();
+        }
+        s.select_tool("blend", ViewInfo::default()).unwrap();
+        let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
+        // Undo takes away c, the object picked first; an edit or a redo recolors c, which is not picked.
+        click(&mut s, if undo { 420.0 } else { 20.0 }, 20.0);
+        assert!(!s.overlays(ViewInfo::default()).is_empty());
+        match case {
+            "undo" => s.execute("edit.undo", &json!({})).unwrap(),
+            "redo" => s.execute("edit.redo", &json!({})).unwrap(),
+            _ => s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap(),
+        };
+        assert!(s.overlays(ViewInfo::default()).is_empty(), "{case}: the pick is not marked");
+        let (layers, depth) = (s.doc().unwrap().doc.layers.clone(), s.doc().unwrap().history.undo.len());
+        click(&mut s, 220.0, 20.0);
+        assert_eq!(s.doc().unwrap().selection.objects, vec![b], "{case}: b is picked first");
+        assert_eq!((&s.doc().unwrap().doc.layers, s.doc().unwrap().history.undo.len()), (&layers, depth), "{case}: the click changes no art");
+        click(&mut s, if undo { 20.0 } else { 420.0 }, 20.0);
+        let g = s.doc().unwrap().selection.objects[0];
+        assert_eq!(spec(&s, g).0, if undo { vec![a, b] } else { vec![b, c] }, "{case}");
+    }
+}
+
+#[test]
+fn two_picks_with_no_edit_between_them_blend() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0));
+    s.select_tool("blend", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
+    click(&mut s, 20.0, 20.0);
+    // Drawing the overlays between the picks does not drop the first one.
+    assert!(!s.overlays(ViewInfo::default()).is_empty());
+    click(&mut s, 220.0, 20.0);
+    let g = s.doc().unwrap().selection.objects[0];
+    assert_eq!(spec(&s, g).0, vec![a, b]);
+}
+
+#[test]
+fn removing_the_blend_the_blend_tool_adds_to_ends_adding() {
+    let mut s = session();
+    let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
+    let (d, e) = (rect(&mut s, 0.0, 300.0, 40.0), rect(&mut s, 200.0, 300.0, 40.0));
+    let other = id_of(&s.execute("object.blend.make", &json!({"ids": [d.0, e.0]})).unwrap());
+    s.select_tool("blend", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();
+    click(&mut s, 20.0, 20.0);
+    click(&mut s, 220.0, 20.0);
+    let g = s.doc().unwrap().selection.objects[0];
+    s.execute("edit.clear", &json!({"ids": [g.0]})).unwrap();
+    sel(&mut s, &[other]);
+    click(&mut s, 420.0, 20.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![c], "c is picked first");
+    assert_eq!(spec(&s, other).0, vec![d, e], "c is not added to the selected blend");
+    assert!([a, b, g].iter().all(|id| s.doc().unwrap().doc.node(*id).is_none()), "the blend went with its keys");
+}
+
+#[test]
+fn a_selection_change_keeps_the_blend_tools_first_pick() {
+    for drag in [false, true] {
+        let mut s = session();
+        let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
+        let view = ViewInfo::default();
+        s.select_tool("blend", view).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 20.0, 20.0), view).unwrap();
+        sel(&mut s, &[c]);
+        // Cmd lends the selection tool: a click on c selects it, a drag moves it (an edit).
+        let cmd = Mods { cmd: true, ..Mods::default() };
+        let to = if drag { 440.0 } else { 420.0 };
+        s.pointer(&PointerEvent::new(PointerKind::Down, 420.0, 20.0).with_mods(cmd), view).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to, 20.0).with_mods(cmd), view).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to, 20.0).with_mods(cmd), view).unwrap();
+        assert_eq!(s.tool_id(), "blend");
+        assert_eq!(s.overlays(view).is_empty(), drag, "drag {drag}");
+        s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 20.0), view).unwrap();
+        if drag {
+            assert_eq!(s.doc().unwrap().selection.objects, vec![b], "the drag dropped the pick");
+        } else {
+            let g = s.doc().unwrap().selection.objects[0];
+            assert_eq!(spec(&s, g).0, vec![a, b]);
+        }
+    }
 }
 
 #[test]

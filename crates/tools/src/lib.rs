@@ -230,6 +230,10 @@ pub trait Tool: Send {
     fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// The undo history moved outside the tool (an edit, Undo or Redo the tool did not make), or
+    /// another document became active. The Blend tool drops its first pick and stops adding to the
+    /// blend it just made.
+    fn history_moved(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
     /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.
