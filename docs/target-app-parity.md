@@ -4,6 +4,7 @@
 
 ## Feature submission evidence
 
+**Feature evidence last updated:** 2026-11-02.
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 
 **PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
@@ -31,6 +32,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-07 | minor | The canvas keeps selection outlines, anchors and handles between frames, so an idle frame with a large selection redraws them as one mesh; scores and estimates unchanged |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
 | 2026-11-06 | minor | Stroke gradients: an arrowhead whose tip sits on the end of a long straight leg is painted by the gradient to the corners of its base. The slices that reach across a head now run to the end of its reach instead of narrowing towards the next corner (#5964). Test: `stroke::tests_gradient::slices_cover_an_arrowhead_on_a_long_straight_leg`. Scores and estimates unchanged. |
@@ -1798,6 +1800,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-06 | minor | Direct Selection: with Snap to Grid, a dragged straight segment lands its anchors on the grid (#3835); evidence added; scores unchanged. |
 | 2026-11-06 | minor | Snap to Glyph › Glyph Bounds: the corners of each glyph's box are points a drawn point lands on, also on a curved side (`B`), and the box turns with rotated type, its edges then Angular Guides (#5112; [Snap to Glyph options](https://helpx.adobe.com/illustrator/desktop/design-with-text/special-characters-glyphs/snap-to-glyph-options.html)); scores and estimates unchanged. |
 | 2026-11-06 | minor | Drop Shadow: a swatch beside Color opens the Color Picker over the dialog, as the other effect colour fields do (#5364); correction: the #5365 entry listed Drop Shadow, whose Color is drawn outside the shared grid and had no swatch; scores unchanged. |
