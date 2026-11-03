@@ -131,18 +131,25 @@ fn pdf_a_carries_no_editing_data() {
 
 /// A tiny PDF made of the given objects (numbered from 1), with the cross-reference table written.
 fn raw_pdf(objects: &[String]) -> Vec<u8> {
+    raw_pdf_bytes(objects.iter().map(|o| o.clone().into_bytes()))
+}
+
+/// [`raw_pdf`] of objects that may hold binary data.
+fn raw_pdf_bytes(objects: impl IntoIterator<Item = Vec<u8>>) -> Vec<u8> {
     let mut out = b"%PDF-1.7\n".to_vec();
     let mut offsets = Vec::new();
-    for (i, body) in objects.iter().enumerate() {
+    for (i, body) in objects.into_iter().enumerate() {
         offsets.push(out.len());
-        out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(&body);
+        out.extend_from_slice(b"\nendobj\n");
     }
     let xref = out.len();
-    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
     for at in offsets {
         out.extend_from_slice(format!("{at:010} 00000 n \n").as_bytes());
     }
-    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).as_bytes());
     out
 }
 
@@ -166,6 +173,36 @@ fn a_name_tree_node_shared_by_many_kids_is_searched_once() {
     objects.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string());
     let e = editing(&raw_pdf(&objects)).unwrap();
     assert_eq!((e.data.as_slice(), e.intact), (&b"hello"[..], true));
+}
+
+#[test]
+fn pages_sharing_a_large_content_stream_are_hashed_within_a_budget() {
+    use std::io::Write;
+    // 300 pages showing one stream of 1 MiB of spaces: 300 MiB decoded, past the 256 MiB hashed.
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    z.write_all(&vec![b' '; 1 << 20]).unwrap();
+    let packed = z.finish().unwrap();
+    let pages = 300;
+    let kids: String = (0..pages).map(|i| format!("{} 0 R ", 7 + i)).collect();
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+        format!("<< /Type /Pages /Kids [{kids}] /Count {pages} >>"),
+        "<< /Names [(a) 4 0 R] >>".to_string(),
+        format!("<< /Type /Filespec /UF ({EDITING_FILE}) /Desc (hash 0000000000000000) /EF << /F 5 0 R >> >>"),
+        "<< /Length 5 >>\nstream\nhello\nendstream".to_string(),
+        String::new(),
+    ];
+    for _ in 0..pages {
+        objects.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] /Contents 6 0 R >>".to_string());
+    }
+    let mut stream = format!("<< /Length {} /Filter /FlateDecode >>\nstream\n", packed.len()).into_bytes();
+    stream.extend_from_slice(&packed);
+    stream.extend_from_slice(b"\nendstream");
+    let bytes = raw_pdf_bytes(objects.into_iter().enumerate().map(|(i, o)| if i == 5 { stream.clone() } else { o.into_bytes() }));
+    let start = std::time::Instant::now();
+    let e = editing(&bytes).unwrap();
+    assert_eq!((e.data.as_slice(), e.intact), (&b"hello"[..], false));
+    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
 }
 
 #[test]

@@ -173,8 +173,8 @@ impl<'p> Builder<'p> {
     }
 
     /// The group art drawn now belongs to (the innermost marked as one).
-    fn current_group(&self) -> Option<usize> {
-        self.marked.iter().rev().find_map(|g| *g)
+    pub(super) fn current_group(&self) -> Option<usize> {
+        self.marked.last().and_then(|(_, current)| *current)
     }
 
     /// Add `n` to the open frame; `group`: the optional content group it was drawn in, if it
