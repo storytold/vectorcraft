@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (a double-click on a ruler adds a guide there, #5239; scores and estimates unchanged; previously: new gradients follow document color mode) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -28,6 +28,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields step selected text with the mouse wheel (#5253); no scored gap or estimate reassessed. |
 | 2026-10-24 | minor | G12: General › Corner Radius is the Rounded Rectangle tool's radius, a change while the tool is active reaches it, and the radius ↑/↓ set while drawing (or a Tool Options value) becomes the preference, within 0–1296 pt (#394, `crates/engine/src/tests/constrain_tools.rs`); no entry closed, estimate unchanged. |
@@ -597,6 +598,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** Selection artwork drag across visible document tabs (400 ms hover); lossless target copy, source/clipboard preservation and cancellation regressions. Cross-window dragging remains separate.
 
+- **Done (#5239):** a double-click on a ruler adds a guide at the pointer (vertical on the top ruler, horizontal on the left one) through `guide.add`, unsnapped and in one undo step; no scored gap or estimate reassessed.
 - **Done:** custom document ruler origin (#1212): corner drag with preview, double-click reset to the active artboard, relative X/Y inputs and native save/reopen.
 - **Done:** View › Rulers › Change to Global / Artboard Rulers (`view.globalRulers`, Cmd+Alt+R): artboard rulers, a new document's, count from the active artboard, each artboard with its own zero point; rulers, X/Y fields and guide readouts follow the mode, which is saved with the document. Estimate unchanged.
 - **Done (#2849):** View › Rulers › Show Video Rulers (`view.videoRulers`): the rulers show and count the active artboard in video pixels from its top-left corner, a pixel as many points wide as the artboard's Video Ruler Pixel Aspect Ratio and one point tall ([public source](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/set-video-display-options-for-artboards.html)); Hide Video Rulers returns them to the General unit and the ruler origin. Shift-snapping a new guide to ruler ticks still uses the General unit's ticks. Estimate unchanged.

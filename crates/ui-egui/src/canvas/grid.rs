@@ -178,7 +178,10 @@ pub(super) fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
 /// A drag from a ruler onto the canvas makes a guide where the button is released (the engine's
 /// `Session::ruler_guide`): a horizontal one from the top ruler, a vertical one from the left
 /// ruler, snapped as a moved guide is (with Shift to the ruler's ticks). Released anywhere else,
-/// it makes none. The corner drags the rulers' origin or resets it on a double-click.
+/// it makes none. A double-click on a ruler makes a guide at the pointer, across the ruler's
+/// axis (a vertical one on the top ruler, a horizontal one on the left), unsnapped, as one
+/// `guide.add` and so one undo step. The corner drags the rulers' origin or resets it on a
+/// double-click.
 pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf) -> Option<Point> {
     let [top, left, corner] = ruler_rects(full);
     // Right-click on a ruler or the origin box: the document units, to swap between them as
@@ -189,6 +192,22 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         // (right). Not focusable (`click_and_drag` is): no key acts on a ruler, so Tab skips it.
         let resp = ui.interact(r, egui::Id::unique(id), Sense::CLICK | Sense::DRAG);
         resp.context_menu(|ui| crate::menus::ruler_menu_body(app, ui, &mut unit_clicked));
+        if resp.double_clicked_by(egui::PointerButton::Primary)
+            && let Some(p) = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()))
+        {
+            // The same document point the drag path reads; the guide runs across the other axis
+            // than the ruler, so it takes the pointer's coordinate along the ruler.
+            let at = xf.to_doc(p);
+            let mut params = json!({"vertical": !vertical, "pos": if vertical { at.y } else { at.x }});
+            if let Some(ab) = app.session.ruler_guide_artboard() {
+                params["artboard"] = json!(ab);
+            }
+            // The new guide shows even if guides were hidden.
+            app.ui.view.guides = true;
+            if let Err(e) = app.run("guide.add", params) {
+                app.status(e.to_string());
+            }
+        }
         let kind = if resp.drag_stopped() {
             PointerKind::Up
         } else if resp.dragged() {

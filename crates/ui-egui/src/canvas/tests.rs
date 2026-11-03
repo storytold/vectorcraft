@@ -8859,3 +8859,54 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
     assert_eq!(set_count, 1, "settled frame 10 is uploaded to texture");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }
+
+/// #5239: a double-click on a ruler adds a guide at the pointer: a vertical one on the top ruler
+/// at its x, a horizontal one on the left ruler at its y, as one undo step, shown even when
+/// guides were hidden. The first click of the pair adds nothing.
+#[test]
+fn double_clicking_a_ruler_adds_a_guide_at_that_position() {
+    // The ruler to click, the guide's orientation and its position, the pointer at that position.
+    for (top, vertical, pos) in [(true, true, 120.0), (false, false, 80.0)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.rulers = true;
+        app.ui.view.guides = false;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let view = app.view_mut().unwrap();
+        view.zoom = 2.0;
+        view.rotation = 0.0;
+        view.center = Point::new(200.0, 150.0);
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let at = if top {
+            pos2(xf.to_screen(Point::new(pos, 0.0)).x, rect.top() - RULER / 2.0)
+        } else {
+            pos2(rect.left() - RULER / 2.0, xf.to_screen(Point::new(0.0, pos)).y)
+        };
+        let guides = |app: &mut VectorcraftApp| {
+            let list = app.session.execute("guide.list", &json!({})).unwrap();
+            list.as_array().unwrap().iter().map(|g| (g["vertical"].as_bool().unwrap(), g["pos"].as_f64().unwrap())).collect::<Vec<_>>()
+        };
+        let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let before = steps(&app);
+        let click = |app: &mut VectorcraftApp| {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        click(&mut app);
+        assert_eq!(guides(&mut app), vec![], "a single click adds none");
+        click(&mut app);
+        let got = guides(&mut app);
+        assert_eq!(got.len(), 1, "top ruler: {top}, {got:?}");
+        assert!(got[0].0 == vertical && (got[0].1 - pos).abs() < 0.01, "top ruler: {top}, want vertical {vertical} at {pos}: {got:?}");
+        assert!(app.ui.view.guides, "the new guide is shown");
+        assert_eq!(steps(&app), before + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(guides(&mut app), vec![]);
+    }
+}
