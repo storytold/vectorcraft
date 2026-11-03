@@ -6177,7 +6177,8 @@ Envelope Options.
 
 The Mesh tool and Direct Selection pick mesh points on gradient meshes and mesh envelopes. A click picks one point
 (its handles show); Shift-click adds a point or takes a picked one away. Direct Selection's marquee picks the points
-inside it (Shift toggles them) and selects their meshes; its click on a gradient mesh's line picks the line's two
+inside it (Shift toggles them) and selects their meshes, as does a Lasso loop round them (Shift adds, Alt takes
+away); its click on a gradient mesh's line picks the line's two
 ends, and a click inside a patch picks the four points around it. The picked points show filled. Dragging one of them
 moves them all as one undo step (`object.mesh.movePoints`), a click on one of several picked points picks it alone,
 and the arrow keys nudge them by the keyboard increment. The active tool lists them in its options
