@@ -1,7 +1,7 @@
 //! Document Info panel data, its categories and the text report (Document Info › Save…, File →
 //! Package), and Object → Make Pixel Perfect.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -294,10 +294,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut repeats: Vec<Value> = vec![];
     let mut repeat_rows: Vec<(String, String)> = vec![];
     // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
-    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
+    // The set holds each object's address, so two objects that share an id (as a damaged file can hold) count as two.
+    let mut seen: HashSet<*const Node> = HashSet::new();
     for r in roots {
         r.walk(&mut |n| {
-            if !seen.insert(n.id) {
+            if !seen.insert(std::ptr::from_ref(n)) {
                 return;
             }
             let k = match &n.kind {
@@ -665,6 +666,29 @@ mod tests {
                 "{ids}: {o}"
             );
             assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{ids}: {}", i["pathLength"]);
+        }
+    }
+
+    /// Document Info › Objects counts two objects that share an id (as a damaged file can hold) as
+    /// two, in the whole document and in a selected group that holds both.
+    #[test]
+    fn info_counts_objects_that_share_an_id() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square = |s: &mut Session, x: f64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
+        };
+        let (a, b) = (square(&mut s, 0.0), square(&mut s, 100.0));
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [group]})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.node_mut(NodeId(b)).unwrap().id = NodeId(a);
+        for p in [json!({}), json!({"selectionOnly": true})] {
+            let i = s.execute("document.info", &p).unwrap();
+            let o = &i["objects"];
+            assert_eq!((o["paths"].as_u64(), o["groups"].as_u64()), (Some(2), Some(1)), "{p}: {o}");
+            assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{p}: {}", i["pathLength"]);
         }
     }
 
