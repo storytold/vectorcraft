@@ -349,6 +349,28 @@ fn import_uses_the_files_own_title() {
 }
 
 #[test]
+fn compressed_svg_keeps_its_title() {
+    let svgz = |inner: &str| {
+        vectorcraft_svg::compress(&format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">{inner}<rect width=\"5\" height=\"5\"/></svg>"
+        ))
+    };
+    assert_eq!(opened_title("box.svgz", &svgz("<title>Access paths</title>")), "Access paths");
+    assert_eq!(opened_title("box.svgz", &svgz("")), "box");
+}
+
+#[test]
+fn file_name_title_is_cleaned_like_an_imported_one() {
+    let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\"><rect width=\"5\" height=\"5\"/></svg>";
+    // A name `file.info` would reject (white space only) or that keeps control characters.
+    assert_eq!(opened_title("  .svg", svg), "Untitled-1");
+    assert_eq!(opened_title("\u{1}\u{7f}.svg", svg), "Untitled-1");
+    assert_eq!(opened_title("bo\u{1}x  two\t.svg", svg), "box two");
+    // The Untitled-N name stays the stem.
+    assert_eq!(opened_title("Untitled-7.svg", svg), "Untitled-7");
+}
+
+#[test]
 fn png_exports_carry_text_chunks() {
     let mut s = session();
     s.execute("file.info", &info()).unwrap();

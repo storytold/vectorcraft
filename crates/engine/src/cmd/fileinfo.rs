@@ -146,11 +146,24 @@ fn text(k: &str, v: &Value, multiline: bool) -> Result<String> {
 /// are kept, as `file.info` takes a title. `None` when nothing is left, or when it is the
 /// Untitled-N name New gives (what a document that never had a title writes to its files).
 pub(crate) fn imported_title(raw: &str) -> Option<String> {
+    let title = cleaned_title(raw);
+    super::fileio::is_own_title(&title).then_some(title)
+}
+
+/// `raw` as `file.info` takes a title (see [`imported_title`]), empty when nothing is left. An
+/// Untitled-N name stays.
+fn cleaned_title(raw: &str) -> String {
     let words: Vec<String> =
         raw.split_whitespace().map(|w| w.chars().filter(|c| !c.is_control()).collect::<String>()).filter(|w| !w.is_empty()).collect();
     let title: String = words.join(" ").chars().take(MAX_TEXT).collect();
-    let title = title.trim_end();
-    super::fileio::is_own_title(title).then(|| title.to_string())
+    title.trim_end().to_string()
+}
+
+/// The title a document without one of its own takes from its file name's `stem`: cleaned as an
+/// imported title is, so `file.info` takes it, and the Untitled-1 name a new document starts
+/// with when nothing is left of it.
+pub(crate) fn stem_title(stem: &str) -> String {
+    Some(cleaned_title(stem)).filter(|t| !t.is_empty()).unwrap_or_else(|| "Untitled-1".to_string())
 }
 
 /// Keywords from a list or a comma- or semicolon-separated string: trimmed, each once (ignoring

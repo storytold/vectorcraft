@@ -7,7 +7,7 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::effects::pixel::LoadedTexture;
 
-use super::super::fileinfo::imported_title;
+use super::super::fileinfo::{imported_title, stem_title};
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
 use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, file_stem, format, psdread, read_file, readable_format_for_name};
@@ -422,11 +422,11 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // the file name once the document has a path.
     let own = match format.id {
         "vectorcraft" | "template" => Some(doc.title.clone()).filter(|t| !t.is_empty()),
-        _ if restored || format.id == "svg" => imported_title(&doc.title),
+        _ if restored || matches!(format.id, "svg" | "svgz") => imported_title(&doc.title),
         "pdf" | "ai" | "ait" => pdf_title.as_deref().and_then(imported_title),
         _ => None,
     };
-    doc.title = own.unwrap_or_else(|| file_stem(&title));
+    doc.title = own.unwrap_or_else(|| stem_title(&file_stem(&title)));
     warnings.extend(doc.images.values().filter_map(|b| size_note(&b.bytes)));
     Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data })
 }
