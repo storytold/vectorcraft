@@ -6297,25 +6297,5 @@ breakText	Glyphs	Glyfer
 	HEX	HEX
 
 # The strings the report listed as missing for sv.
-	Automation	Automation
-	Essentials	Grundläggande
-	Essentials Classic	Grundläggande (klassiska)
 	Font Size:	Teckenstorlek:
-	Layout	Layout
-	OpenType	OpenType
-	Painting	Målning
-	Printing and Proofing	Utskrift och korrektur
-	Touch	Pek
-	Tracing	Spårning
-	Typography	Typografi
-	VectorCraft	VectorCraft
-	Web	Webb
-	[1P-High View]	[1P — hög kvalitet]
-	[1P-Low View]	[1P — låg kvalitet]
-	[1P-Normal View]	[1P — normal kvalitet]
-	[2P-High View]	[2P — hög kvalitet]
-	[2P-Low View]	[2P — låg kvalitet]
-	[2P-Normal View]	[2P — normal kvalitet]
-	[3P-Low View]	[3P — låg kvalitet]
-	[3P-Normal View]	[3P — normal kvalitet]
 digits	Hindi	Hindi
