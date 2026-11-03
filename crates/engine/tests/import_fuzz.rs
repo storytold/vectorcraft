@@ -648,6 +648,8 @@ proptest! {
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
+    /// The linked `<rect>` gets an id from the importer, so attribute selectors in `sheet` reach the
+    /// pass that copies style sheet matches into the elements' styles.
     #[test]
     fn svg_hostile_css_never_panics(
         sheet in r#"[a-z#.>*\[\]=:;{}@ !"'/,-]{0,160}"#,
@@ -655,7 +657,7 @@ proptest! {
         body in prop::collection::vec(arb_svg_element(1), 0..3),
     ) {
         let svg = format!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>{sheet}</style><g class=\"a b\"><text id=\"t\" class=\"a\" x=\"1 2 3\" y=\"9\" rotate=\"5\" style=\"{decls}\">ab<tspan dy=\"3\">c</tspan></text></g>{}</svg>",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>{sheet}</style><g class=\"a b\"><text id=\"t\" class=\"a\" x=\"1 2 3\" y=\"9\" rotate=\"5\" style=\"{decls}\">ab<tspan dy=\"3\">c</tspan></text></g><a href=\"#t\"><rect width=\"5\" height=\"5\"/></a>{}</svg>",
             body.concat()
         );
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;

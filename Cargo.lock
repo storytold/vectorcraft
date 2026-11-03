@@ -6458,6 +6458,7 @@ dependencies = [
  "resvg",
  "serde",
  "serde_json",
+ "simplecss",
  "skrifa 0.47.0",
  "svgtypes 0.16.1",
  "thiserror 2.0.21",
