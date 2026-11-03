@@ -9,8 +9,9 @@
 //! in-menu font previews and Font Preview Size turn the samples off or size the rows. Recently
 //! used families appear first, in the order they were last applied, within the same search and
 //! filters as the remaining families. In the Character and Properties panels and the Control bar,
-//! the mouse wheel turned over the closed field applies the next family down the menu (or up it) to
-//! the selected text, one undo step per notch, stopping at the menu's first and last family.
+//! the mouse wheel turned over the closed field applies the next family (or previous one) to the
+//! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
+//! pointer leaves the field; steps stop at its first and last family.
 
 use std::collections::HashMap;
 use std::sync::Arc;
