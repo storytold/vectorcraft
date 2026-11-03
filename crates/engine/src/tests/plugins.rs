@@ -458,10 +458,7 @@ fn tangent_circle_plugin_keeps_an_exact_external_tangency_through_undo_redo() {
     let a = run(&mut s, "shape.ellipse", json!({"x": 60, "y": 60, "width": 40, "height": 40}))["id"].as_u64().unwrap();
     let b = run(&mut s, "shape.ellipse", json!({"x": 100, "y": 100, "width": 40, "height": 40}))["id"].as_u64().unwrap();
     let listed = vectorcraft_plugins::tool::circles(&s.doc().unwrap().doc, 20);
-    assert!(
-        listed.iter().any(|c| c["id"] == moved && c["center"] == json!([100.0, 100.0]) && c["radius"] == json!(10.0)),
-        "{listed:?}"
-    );
+    assert!(listed.iter().any(|c| c["id"] == moved && c["center"] == json!([100.0, 100.0]) && c["radius"] == json!(10.0)), "{listed:?}");
     assert!(listed.iter().any(|c| c["id"] == b && c["center"] == json!([120.0, 120.0]) && c["radius"] == json!(20.0)), "{listed:?}");
     s.select_tool(&format!("plugin.{TANGENT_CIRCLE_ID}"), ViewInfo::default()).unwrap();
     let down = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, 100.0, 100.0);

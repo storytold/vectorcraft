@@ -219,7 +219,10 @@ mod tests {
         let cx = cx(&d, &s, &p);
         let mut t = PluginTool::new(&id).unwrap();
         let got = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 30.0, 40.0));
-        assert!(matches!(&got[..], [Action::Begin(name), Action::Preview(cmd, v)] if name == "Move" && cmd == "object.transform" && v["matrix"] == serde_json::json!([1,0,0,1,12,8])), "{got:?}");
+        assert!(
+            matches!(&got[..], [Action::Begin(name), Action::Preview(cmd, v)] if name == "Move" && cmd == "object.transform" && v["matrix"] == serde_json::json!([1,0,0,1,12,8])),
+            "{got:?}"
+        );
         assert!(matches!(t.overlays(&cx).as_slice(), [Overlay::Line { .. }, Overlay::Label { text, .. }] if text == "tangent"));
         registry::remove("test.tool.preview");
     }

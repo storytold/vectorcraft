@@ -11,7 +11,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (installable tool plug-ins can add tools beside Ellipse; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -132,6 +132,11 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 ## Progress log
 
 - 2026-11-04: New Document: the units chosen in Preset Details now belong to the chosen document, as the pane's options are listed for the selected preset; the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units, so switching between inches and millimetres no longer restyles every recent template. Scores and estimates unchanged.
+- 2026-11-04: Tool plug-ins join the WebAssembly ABI. An installed tool validates a `toolGroup`
+  (Ellipse for ABI v1) and appears in the Ellipse toolbar flyout; removing it takes the tool away.
+  The Tangent Circle example receives editable circle context, snaps a dragged circle to exact
+  external tangency with two neighbors without resizing it, and draws the two constraints. The
+  feature is a VectorCraft addition: headline scores and estimates are unchanged.
 - 2026-11-02: Mouse wheel over a closed font-family field in Character, Properties or Control changes selected text through the family list using saved font filters (excluding search text), one undo step per notch, stopping at the ends (#5253). Scores and estimates unchanged.
 - 2026-10-31: Pattern libraries: Window › Swatch Libraries › Patterns and the Swatches panel's library menu open Geometric Patterns, a built-in library of eleven pattern swatches (dots, stripes, checks, a grid and shapes); clicking one adds its pattern and swatch to the document, once, and applies it to the active fill or stroke (`swatch.library.add`).
 - 2026-11-01: Find Nearest Swatch joins the Color Effects add-on (Object › Plug-ins › Color Effects): for each colour of the selection, the closest swatches of the document, a built-in library or a library or colour book the user loaded, with their CIEDE2000 difference; Apply gives each colour its nearest swatch as one undo step, linking global and spot swatches and adding a library's to the document first, so a process colour becomes the closest spot colour (`addon.color.nearestSwatch`, `addon.color.applyNearestSwatch`, #4923).

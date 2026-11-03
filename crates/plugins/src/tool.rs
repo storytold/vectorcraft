@@ -73,9 +73,7 @@ fn path_circle(path: &vectorcraft_geom::PathData) -> Option<Circle> {
     }
     let b = path.bounds()?;
     let radius = (b.width() + b.height()) / 4.0;
-    if !(b.width().is_finite() && b.height().is_finite() && radius > 1e-6)
-        || (b.width() - b.height()).abs() > 1e-9 * radius.max(1.0)
-    {
+    if !(b.width().is_finite() && b.height().is_finite() && radius > 1e-6) || (b.width() - b.height()).abs() > 1e-9 * radius.max(1.0) {
         return None;
     }
     let center = b.center();
@@ -107,12 +105,8 @@ mod tests {
 
     fn live_circle(d: &mut Document, center: Point, radius: f64) -> NodeId {
         let id = d.alloc_id();
-        let live = LiveShape::Ellipse {
-            w: radius * 2.0,
-            h: radius * 2.0,
-            pie: (0.0, 360.0),
-            xf: Affine::translate((center.x - radius, center.y - radius)),
-        };
+        let live =
+            LiveShape::Ellipse { w: radius * 2.0, h: radius * 2.0, pie: (0.0, 360.0), xf: Affine::translate((center.x - radius, center.y - radius)) };
         let mut n = Node::path(id, live.to_path(), Appearance::default_art());
         if let NodeKind::Path { live: slot, .. } = &mut n.kind {
             *slot = Some(Box::new(live));

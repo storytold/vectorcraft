@@ -308,9 +308,7 @@ impl Manifest {
         }
         match (self.kind, self.tool_group.as_deref(), self.icon.as_deref()) {
             (Kind::Tool, Some("ellipse"), Some(icon))
-                if !icon.is_empty()
-                    && icon.len() <= 64
-                    && icon.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') => {}
+                if !icon.is_empty() && icon.len() <= 64 && icon.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') => {}
             (Kind::Tool, Some(_), _) => return Err(Error::Manifest("unknown `toolGroup`: use `ellipse`".into())),
             (Kind::Tool, None, _) => return Err(Error::Manifest("a tool declares `toolGroup`".into())),
             (_, None, None) => {}

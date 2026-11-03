@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select by Artboards add-on selects by overlap, inside or outside several artboards; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select by Artboards add-on selects by overlap, inside or outside several artboards; WebAssembly tool plug-ins can register beside Ellipse; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -8,7 +8,7 @@ Ligature caret stops use a font's GDEF contour-point positions in horizontal and
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
-**Feature evidence last updated:** 2026-11-03.
+**Feature evidence last updated:** 2026-11-04.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -32,6 +32,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | 2026-11-03 | minor | Correct the Type core missing list and remove duplicate target and Type core entries: Hyphenation and Justification options are complete; the remaining Every-line Composer fidelity limits stay listed. Record the Kashidas paragraph lengths and per-character switch in the feature history (#5404). Scores and estimates unchanged. |
 | 2026-11-03 | minor | Correct the Type core missing list: Hyphenation and Justification options are complete; the remaining Every-line Composer fidelity limits stay listed. Record the Kashidas paragraph lengths and per-character switch in the feature history (#5404). Scores and estimates unchanged. |
 | 2026-11-03 | minor | Ligature caret stops use GDEF contour-point positions in horizontal and vertical type at the font's default variation location; invalid point indices keep the evenly divided fallback. Scores and estimates unchanged. |
+| 2026-11-04 | minor | Tool plug-ins: a sandboxed `.wasm` can register one tool in the Ellipse group and receive pointer events with circle context; Tangent Circle demonstrates exact two-neighbor external tangency without resizing. Scores and estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Type Tools add-on: Text Tweaker (a VectorCraft addition, #4924): evidence added; scores unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
@@ -1325,6 +1326,8 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
 - **Blend, mesh and envelope numbers given as text:** `object.blend.make` and `object.blend.options` (`steps`, `distance`, `value`), `object.envelope.makeWithWarp`, `resetWithWarp` and `options` (`bend`, `h`, `v`, `horizontalDistortion`, `verticalDistortion`), `object.envelope.makeWithMesh` and `resetWithMesh` (`rows`, `cols`, `columns`), `object.envelope.options` (`fidelity`), `object.mesh.create` (`rows`, `cols`, `columns`, `highlight`) and `object.mesh.setPointColor` (`opacity`) refuse a value other than a number or null, such as `"8"`, and change nothing. `object.mesh.create` refuses an `at` that is not `[x, y]`.
 
 - **Blend and envelope options given as text:** `object.blend.make` and `object.blend.options` (`smooth`), `object.blend.spine.moveAnchor` (`independent`) and `reshapeSegment` (`perpendicular`), `object.envelope.makeWithWarp`, `resetWithWarp` and `options` (`horizontal`), `object.envelope.resetWithMesh` (`maintainShape`), `object.envelope.options` (`antiAlias`, `distortAppearance`, `distortLinearGradients`, `distortPatternFills`) and `object.envelope.editContents` (`editing`) refuse a value other than true, false or null, such as `"false"`, and leave the document and its undo history as they were.
+
+- **Tool plug-ins (G17, VectorCraft addition):** a WebAssembly plug-in of kind `tool` registers a sandboxed pointer tool. ABI v1 accepts `toolGroup: "ellipse"`; installing adds the tool to the Ellipse toolbar flyout and All Tools, and removing it takes the tool away, returning to Selection if it was active. Pointer calls carry opaque tool state, selected ids and a bounded list of visible editable circle centers and radii; returned exec, begin, preview and commit actions still go through engine validation and undo. The Tangent Circle example selects the circle under the press, drags it without resizing, snaps its center to the exact intersection of the two external tangency constraints when within tolerance, and draws both center-to-contact guides. Regressions: `crates/plugins/tests/abi.rs`, `crates/plugins/src/tool.rs`, `crates/tools/src/plugin_tool.rs`, `crates/tools/src/catalog.rs`, `crates/ui-egui/src/toolbar/tests.rs`, `crates/engine/src/tests/plugins.rs`, and the standalone `plugins/tangent-circle` tests. Scores and hours unchanged.
 
 - **Exporter plug-ins (G17):** a WebAssembly plug-in of kind `exporter` adds a write-only file format. File › Export › Export As lists it after the built-in formats, with Use Artboards greyed out (the plug-in writes the whole document) and its parameters in a generated dialog once the file is picked; `document.export` writes it by its format id, `plugin.<id>`, or by one of its extensions, and built-in formats keep theirs. The plug-in is given the native file's JSON (large images without their data) and `_context` (`mode`, `extension`, `name`), with 10 G instructions plus 4,000 per byte of input and 300 s, and Background Export's Cancel stops it between two slices of that budget. A decline or invalid output writes nothing; its warnings come back with the export's. Regressions: `crates/engine/tests/plugin_export.rs`, `crates/plugins/tests/abi.rs`, `crates/ui-egui/src/dialogs/tests_plugin_export.rs`. Scores and hours unchanged.
 

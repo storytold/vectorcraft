@@ -56,11 +56,8 @@ fn tangent_centers(moved: Circle, a: Circle, b: Circle) -> Option<Vec<(f64, f64)
 
 fn number_pair(v: Option<&Value>) -> Option<(f64, f64)> {
     let v = v?;
-    let (x, y) = if let Some([x, y]) = v.as_array().map(Vec::as_slice) {
-        (x.as_f64()?, y.as_f64()?)
-    } else {
-        (v.get("x")?.as_f64()?, v.get("y")?.as_f64()?)
-    };
+    let (x, y) =
+        if let Some([x, y]) = v.as_array().map(Vec::as_slice) { (x.as_f64()?, y.as_f64()?) } else { (v.get("x")?.as_f64()?, v.get("y")?.as_f64()?) };
     (x.is_finite() && y.is_finite()).then_some((x, y))
 }
 
@@ -226,12 +223,8 @@ mod tests {
 
     #[test]
     fn pressing_a_circle_selects_it_and_remembers_the_grab() {
-        let out = run_value(&input(
-            event("down", 110.0, 100.0),
-            Value::Null,
-            vec![],
-            vec![circle(1, 100.0, 100.0, 10.0), circle(2, 200.0, 100.0, 20.0)],
-        ));
+        let out =
+            run_value(&input(event("down", 110.0, 100.0), Value::Null, vec![], vec![circle(1, 100.0, 100.0, 10.0), circle(2, 200.0, 100.0, 20.0)]));
         assert_eq!(out["state"]["selected"], 1);
         assert_eq!(out["state"]["grab"], json!([100.0, 100.0]));
         assert_eq!(out["actions"], json!([{"type":"exec","command":"select.set","params":{"ids":[1]}}]));
@@ -256,11 +249,12 @@ mod tests {
             vec![],
             vec![circle(1, 100.0, 100.0, 10.0), circle(2, 80.0, 100.0, 20.0), circle(3, 120.0, 100.0, 20.0)],
         ));
-        let out = run_value(&input(event("drag", 101.0, 134.0), down["state"].clone(), vec![1], vec![
-            circle(1, 100.0, 100.0, 10.0),
-            circle(2, 80.0, 100.0, 20.0),
-            circle(3, 120.0, 100.0, 20.0),
-        ]));
+        let out = run_value(&input(
+            event("drag", 101.0, 134.0),
+            down["state"].clone(),
+            vec![1],
+            vec![circle(1, 100.0, 100.0, 10.0), circle(2, 80.0, 100.0, 20.0), circle(3, 120.0, 100.0, 20.0)],
+        ));
         let all = vec![
             (1, Circle { x: 100.0, y: 100.0, radius: 10.0 }),
             (2, Circle { x: 80.0, y: 100.0, radius: 20.0 }),
@@ -283,11 +277,12 @@ mod tests {
             vec![],
             vec![circle(1, 0.0, 0.0, 10.0), circle(2, 500.0, 0.0, 20.0), circle(3, 1000.0, 0.0, 20.0)],
         ));
-        let out = run_value(&input(event("drag", 10.0, 20.0), down["state"].clone(), vec![1], vec![
-            circle(1, 0.0, 0.0, 10.0),
-            circle(2, 500.0, 0.0, 20.0),
-            circle(3, 1000.0, 0.0, 20.0),
-        ]));
+        let out = run_value(&input(
+            event("drag", 10.0, 20.0),
+            down["state"].clone(),
+            vec![1],
+            vec![circle(1, 0.0, 0.0, 10.0), circle(2, 500.0, 0.0, 20.0), circle(3, 1000.0, 0.0, 20.0)],
+        ));
         assert_eq!(out["actions"][1]["params"]["matrix"], json!([1.0, 0.0, 0.0, 1.0, 10.0, 20.0]));
         assert_eq!(out["guides"], json!([]));
     }
