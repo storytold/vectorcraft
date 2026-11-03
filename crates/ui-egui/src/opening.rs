@@ -20,6 +20,9 @@ pub struct Pending {
     /// What the status bar shows ("Opening Poster.vectorcraft").
     pub label: String,
     done: Receiver<Result<ReadFile, String>>,
+    /// The automation roots in force where the open started: the document is installed under
+    /// them too (its links are read as it opens).
+    scope: ScopeHandle,
 }
 
 /// The files being read.
@@ -57,6 +60,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
+    let opener = scope.clone();
     let spawned = std::thread::Builder::new().name("vectorcraft-open".into()).spawn(move || {
         let r = scope
             .run(|| {
@@ -74,7 +78,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
         return Err(Arc::try_unwrap(bytes).unwrap_or_else(|b| b.to_vec()));
     }
     let label = format!("Opening {}", fileio::file_name(path));
-    app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done });
+    app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done, scope: opener });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(json!({ "background": true, "status": status }))
@@ -109,7 +113,7 @@ pub fn poll(app: &mut VectorcraftApp) {
         if app.ui.status == format!("{}…", p.label) {
             app.ui.status.clear();
         }
-        finish(app, &p.path, r);
+        p.scope.run(|| finish(app, &p.path, r));
     }
 }
 
