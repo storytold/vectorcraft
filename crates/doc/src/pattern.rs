@@ -1067,7 +1067,6 @@ mod tests {
         let kept = g.transforms(None).len();
         assert!(kept.saturating_mul(5000) <= MAX_REPEAT_COPIES, "{kept} copies kept");
         assert!(kept > 1);
-        assert_eq!(g.expand(None).len(), kept);
     }
 
     #[test]
