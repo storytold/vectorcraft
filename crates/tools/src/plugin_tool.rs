@@ -17,6 +17,7 @@ pub struct PluginTool {
     id: &'static str,
     plugin: Arc<Plugin>,
     state: Value,
+    circles: Vec<Value>,
     guides: Vec<Overlay>,
     pressed: bool,
     last_error: Option<String>,
@@ -31,6 +32,7 @@ impl PluginTool {
             id: registry::intern(id),
             plugin,
             state: Value::Null,
+            circles: Vec::new(),
             guides: Vec::new(),
             pressed: false,
             last_error: None,
@@ -42,14 +44,17 @@ impl PluginTool {
         self.last_error.as_deref()
     }
 
-    fn input(&self, cx: &ToolContext, ev: &PointerEvent) -> Result<Vec<u8>, String> {
+    fn input(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Result<Vec<u8>, String> {
         let event = serde_json::to_value(ev).map_err(|e| e.to_string())?;
         let selected = Value::Array(cx.selection.objects.iter().map(|id| Value::from(id.0)).collect());
+        if ev.kind == PointerKind::Down || self.circles.is_empty() {
+            self.circles = tool::circles(cx.doc, 4096);
+        }
         serde_json::to_vec(&json!({
             "event": event,
             "state": self.state,
             "selection": selected,
-            "circles": tool::circles(cx.doc, 4096),
+            "circles": self.circles,
             "zoom": cx.zoom,
             "tolerance": cx.snap_tol(),
         }))
@@ -57,7 +62,8 @@ impl PluginTool {
     }
 
     fn run(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Result<Vec<Action>, String> {
-        let output = self.plugin.run_tool(&self.input(cx, ev)?).map_err(|e| e.to_string())?;
+        let input = self.input(cx, ev)?;
+        let output = self.plugin.run_tool(&input).map_err(|e| e.to_string())?;
         let value: Value = serde_json::from_slice(&output).map_err(|e| format!("plug-in output: {e}"))?;
         let obj = value.as_object().ok_or("plug-in tool output must be a JSON object")?;
         if let Some(error) = obj.get("error") {
@@ -89,6 +95,9 @@ impl PluginTool {
         self.state = state;
         self.guides = guides;
         self.last_error = None;
+        if ev.kind == PointerKind::Up {
+            self.circles.clear();
+        }
         Ok(out)
     }
 }
@@ -194,6 +203,41 @@ mod tests {
         let bytes = wat::parse_str(src).unwrap();
         registry::install(Plugin::load(&bytes, Limits::default()).unwrap());
         format!("plugin.{id}")
+    }
+
+    fn doc_with_circle(center: vectorcraft_geom::Point, radius: f64) -> (vectorcraft_doc::Document, vectorcraft_doc::NodeId) {
+        use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+        use vectorcraft_geom::{Affine, Rect, shapes};
+        let mut d = vectorcraft_doc::Document::new(400.0, 300.0);
+        let id = d.alloc_id();
+        let live =
+            LiveShape::Ellipse { w: radius * 2.0, h: radius * 2.0, pie: (0.0, 360.0), xf: Affine::translate((center.x - radius, center.y - radius)) };
+        let mut n = Node::path(id, shapes::ellipse(Rect::from_center_size(center, (radius * 2.0, radius * 2.0))), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(live));
+        }
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        (d, id)
+    }
+
+    #[test]
+    fn circle_context_is_gathered_once_per_gesture() {
+        let id = install("test.tool.cache", "{}");
+        let (mut d, circle) = doc_with_circle(vectorcraft_geom::Point::new(100.0, 80.0), 20.0);
+        let (s, p) = (Selection::default(), paint());
+        let mut t = PluginTool::new(&id).unwrap();
+        let first: serde_json::Value =
+            serde_json::from_slice(&t.input(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 80.0)).unwrap()).unwrap();
+        assert_eq!(first["circles"][0]["center"], serde_json::json!([100.0, 80.0]));
+        if let vectorcraft_doc::NodeKind::Path { live: Some(live), .. } = &mut d.node_mut(circle).unwrap().kind
+            && let vectorcraft_doc::LiveShape::Ellipse { xf, .. } = live.as_mut()
+        {
+            *xf = vectorcraft_geom::Affine::translate((100.0, 0.0)) * *xf;
+        }
+        let drag: serde_json::Value =
+            serde_json::from_slice(&t.input(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Drag, 110.0, 80.0)).unwrap()).unwrap();
+        assert_eq!(drag["circles"][0]["center"], serde_json::json!([100.0, 80.0]), "references stay gathered from the press");
+        registry::remove("test.tool.cache");
     }
 
     #[test]
