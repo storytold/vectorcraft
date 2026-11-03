@@ -88,7 +88,7 @@ impl<'a> Reader<'a> {
                 }
                 // Arrays nest as deep as their `[`s; dropping a deeper one would overflow the stack.
                 if self.marks.len() >= MAX_DEPTH {
-                    return Err("it has arrays nested too deeply".into());
+                    return Err("its objects are nested too deeply".into());
                 }
                 self.marks.push(self.stack.len());
                 return self.push(V::Mark);
