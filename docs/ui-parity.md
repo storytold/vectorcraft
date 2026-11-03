@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; Ctrl/Cmd+arrow fine nudge, #5258; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -210,7 +210,7 @@ tools, never checked side by side) isn't captured row by row.
 | Behaviour | Status | Notes |
 |---|---|---|
 | Wheel over a closed font-family field in Character, Properties or Control | done | #5253: applies the next or previous family to selected text, one undo step per notch; uses saved font filters, ignores search text and stops at the list's ends. Escape and pointer departure keep the change. Other font-picking menus and modifier-wheel input keep their existing behavior. |
-| Arrow keys nudge by Keyboard Increment (0.001–1296 pt); Shift ×10; Alt copies | done | |
+| Arrow keys nudge by Keyboard Increment (0.001–1296 pt); Shift ×10; Ctrl/Cmd ÷10 (Shift+Ctrl/Cmd: one increment), as the Transform panel fields step; Alt copies | done | Ctrl/Cmd ÷10 is VectorCraft's own addition (#5258) |
 | Fields commit what was typed on a click away or a move to another field, as Enter does; Escape discards it | done | #1787 |
 | Number fields: Up/Down step, Shift ×10, Cmd/Ctrl ÷10, wheel over a focused field; steps, the wheel and label scrubs stop at the field's bounds (a stroke weight at 0, a miter limit at 1) | done | Shift+arrow in the Stroke weight field doesn't step by 10 (#991); bounds #3370 |
 | Arithmetic in fields (`+ - * /`, and `%` of the value before it: `3cm*50%`, `50pt+25%`) and unit suffixes (`3 mm`, `1in`, `2p6`) | done | `Unit::parse`; mixed units in one expression not verified |
@@ -418,6 +418,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Arrow keys: Ctrl/Cmd+arrow nudges art, direct-selected anchors, ruler guides and a selection in perspective by a tenth of the Keyboard Increment, and Shift+Ctrl/Cmd+arrow by one increment; `object.nudge` and `perspective.nudge` take `fine`; Snap to Grid no longer pulls a nudge in perspective back onto the gridlines, which left grid-aligned art unmoved (#5258); scores and estimates unchanged |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |

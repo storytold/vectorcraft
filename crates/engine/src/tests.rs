@@ -1396,6 +1396,7 @@ fn a_boolean_given_as_text_for_a_transform_is_an_error() {
         ("object.move", json!({"dx": 5, "copy": "true"}), "copy"),
         ("object.move", json!({"dx": 5, "objects": 0}), "objects"),
         ("object.nudge", json!({"dx": 1, "big": "true"}), "big"),
+        ("object.nudge", json!({"dx": 1, "fine": "true"}), "fine"),
         ("object.rotate", json!({"angle": 45, "absolute": "true"}), "absolute"),
         ("object.scale", json!({"sx": 200, "strokes": "false"}), "strokes"),
         ("object.scale", json!({"sx": 200, "corners": [true]}), "corners"),

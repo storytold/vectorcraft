@@ -290,11 +290,26 @@ pub(crate) fn along_constrain_angle(dx: f64, dy: f64, deg: f64) -> (f64, f64) {
     (v.x, v.y)
 }
 
+/// The arrow keys' step: the keyboard increment, ×10 with Shift (`big`) and ÷10 with Ctrl/Cmd
+/// (`fine`), so Shift+Ctrl+arrow moves by one increment. Divided, not multiplied by 0.1, so a tenth
+/// of a 1 pt increment is the nearest `f64` to 0.1.
+pub(crate) fn nudge_step(increment: f64, big: bool, fine: bool) -> f64 {
+    match (big, fine) {
+        (true, true) => increment,
+        (true, false) => increment * 10.0,
+        (false, true) => increment / 10.0,
+        (false, false) => increment,
+    }
+}
+
+/// `object.nudge`, the arrow keys: the selected anchors, else the selected objects (and the guides
+/// that move with them), else the selected ruler guides move by [`nudge_step`] in the arrow's
+/// direction, in one undo step.
 pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.nudge")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.nudge")?;
-    check_switches(p, &["big"], "object.nudge")?;
-    let k = s.prefs.keyboard_increment * if bool_or(p, "big", false) { 10.0 } else { 1.0 };
+    check_switches(p, &["big", "fine"], "object.nudge")?;
+    let k = nudge_step(s.prefs.keyboard_increment, bool_or(p, "big", false), bool_or(p, "fine", false));
     let (dx, dy) = (f64_or(p, "dx", 0.0) * k, f64_or(p, "dy", 0.0) * k);
     // Guides keep to the page's axes; art and anchors move along the constrain angle's.
     let (gx, gy) = (dx, dy);

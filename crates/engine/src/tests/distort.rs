@@ -796,9 +796,10 @@ fn perspective_grid_commands_refuse_a_boolean_given_as_text() {
 
 /// For an object in perspective, Move in Perspective by 0 (along its plane or its normal),
 /// Transform in Perspective by the identity, Transform Again after each, and a Perspective Selection
-/// drag that ends where it started record no undo step. So do a Move by 0 and a 1 pt Nudge that
-/// Snap to Grid takes back to the gridlines the object's edges are on, and Transform Again after
-/// each. With Copy, the identity copies the object in one undo step.
+/// drag that ends where it started record no undo step. So do a Move by 0 of an object Snap to Grid
+/// keeps on the gridlines its edges are on, and Transform Again after it. With Copy, the identity
+/// copies the object in one undo step. (A Nudge in Perspective isn't snapped: it moves by its step,
+/// see `arrow_keys_nudge_in_perspective_by_the_step_with_snap_to_grid`.)
 #[test]
 fn perspective_moves_that_move_nothing_record_no_undo_step() {
     let mut s = session();
@@ -830,8 +831,8 @@ fn perspective_moves_that_move_nothing_record_no_undo_step() {
     assert_eq!(s.journal.last().unwrap().0, "perspective.move");
     let (undo, redo, _) = history(&s);
     assert_eq!(((undo, redo), path(&s, a)), ((before.0, before.1), shape.clone()), "a drag back to its start");
-    // Snap to Grid takes a move that ends 0.3 pt past a gridline crossing onto the crossing. Then it
-    // takes a move by 0 and a 1 pt nudge back there, and Transform Again after each moves nothing.
+    // Snap to Grid takes a move that ends 0.3 pt past a gridline crossing onto the crossing. Then a
+    // move by 0 there, and Transform Again after it, moves nothing.
     s.execute("perspective.grid.snap", &json!({"on": true})).unwrap();
     let g = grid(&s);
     let (_, _, b) = g.plane_bounds(&s.doc().unwrap().doc, &[a]).unwrap();
@@ -842,12 +843,7 @@ fn perspective_moves_that_move_nothing_record_no_undo_step() {
     with_a_step_to_redo(&mut s);
     let before = history(&s);
     let on_grid = path(&s, a);
-    let calls = [
-        ("perspective.move", json!({"from": [to.x, to.y], "to": [to.x, to.y]})),
-        ("object.transformAgain", json!({})),
-        ("perspective.nudge", json!({"dx": 1, "dy": 0})),
-        ("object.transformAgain", json!({})),
-    ];
+    let calls = [("perspective.move", json!({"from": [to.x, to.y], "to": [to.x, to.y]})), ("object.transformAgain", json!({}))];
     for (c, p) in calls {
         assert_eq!(s.execute(c, &p).unwrap(), json!({"ids": [a.0]}), "{c} {p}");
         assert_eq!((history(&s), path(&s, a)), (before, on_grid.clone()), "{c} {p}");
@@ -859,7 +855,7 @@ fn perspective_moves_that_move_nothing_record_no_undo_step() {
 }
 
 /// Move in Perspective refuses a `copy`, `perpendicular` or `snap`, Transform in Perspective a `copy`,
-/// and Nudge in Perspective a `big` or `copy`, given as text or as another value that is not true or
+/// and Nudge in Perspective a `big`, `fine` or `copy`, given as text or as another value that is not true or
 /// false: the object stays where it is, nothing is copied, and the undo history stays as it was. Null
 /// is read as the key left out.
 #[test]
@@ -877,7 +873,7 @@ fn perspective_moves_refuse_a_boolean_given_as_text() {
             refuses_non_boolean(&mut s, "perspective.move", &json!({"from": from, "to": to, key: v}), key);
         }
         refuses_non_boolean(&mut s, "perspective.transform", &json!({"matrix": [1.5, 0, 0, 1.5, 0, 0], "copy": v}), "copy");
-        for key in ["big", "copy"] {
+        for key in ["big", "fine", "copy"] {
             refuses_non_boolean(&mut s, "perspective.nudge", &json!({"dx": 1, "dy": 0, key: v}), key);
         }
         assert_eq!(state(&s), before, "{v}");
@@ -885,7 +881,7 @@ fn perspective_moves_refuse_a_boolean_given_as_text() {
     let calls = [
         ("perspective.move", json!({"from": from, "to": to, "copy": null, "perpendicular": null, "snap": null})),
         ("perspective.transform", json!({"matrix": [1.5, 0, 0, 1.5, 0, 0], "copy": null})),
-        ("perspective.nudge", json!({"dx": 1, "dy": 0, "big": null, "copy": null})),
+        ("perspective.nudge", json!({"dx": 1, "dy": 0, "big": null, "fine": null, "copy": null})),
     ];
     for (i, (c, p)) in calls.into_iter().enumerate() {
         assert_eq!(s.execute(c, &p).unwrap(), json!({"ids": [a.0]}), "{c} {p}");

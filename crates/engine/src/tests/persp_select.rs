@@ -488,6 +488,41 @@ fn transform_again_repeats_a_perspective_scale_and_copies() {
     assert!(s.execute("perspective.transform", &json!({"matrix": [1, 0, 0, 1, 0, 0], "depth": f64::MAX})).is_err());
 }
 
+/// Snap to Grid (on by default) leaves the arrow keys' step alone: art whose edges are on
+/// gridlines moves by the step (a tenth of it with Ctrl/Cmd) in one undo step each, instead of
+/// being pulled back onto the gridlines and not moving at all.
+#[test]
+fn arrow_keys_nudge_in_perspective_by_the_step_with_snap_to_grid() {
+    let (mut s, id) = persp_session();
+    s.execute("perspective.grid.snap", &json!({"on": true})).unwrap();
+    // A move that ends 0.3 pt past a gridline crossing snaps the corner onto it.
+    let g = grid(&s);
+    let b = bounds_of(&plane_pts(&s, id, Plane::Right, 0.0));
+    let past = |v: f64| (v / g.cell).ceil() * g.cell + 0.3 - v;
+    let (c, dv) = (b.center(), Vec2::new(past(b.x0), past(b.y0)));
+    let (from, to) = (g.to_page(Plane::Right, c).unwrap(), g.to_page(Plane::Right, c + dv).unwrap());
+    s.execute("perspective.move", &json!({"from": [from.x, from.y], "to": [to.x, to.y]})).unwrap();
+    let on_grid = bounds_of(&plane_pts(&s, id, Plane::Right, 0.0));
+    assert!((on_grid.x0 / g.cell - (on_grid.x0 / g.cell).round()).abs() < 1e-6, "{on_grid:?}");
+    // The page step measured at the centre of the selection, as `perspective.nudge` measures it.
+    let page_step = |s: &Session, before: &[Point]| {
+        let after = plane_pts(s, id, Plane::Right, 0.0);
+        let h = grid(s).homography(Plane::Right).unwrap();
+        let c = bounds_of(before).center();
+        h.apply(c + (after[0] - before[0])).unwrap() - h.apply(c).unwrap()
+    };
+    let v = ViewInfo::default();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let k = s.prefs.keyboard_increment;
+    for (mods, step) in [(Mods::default(), k), (Mods { cmd: true, ..Default::default() }, k / 10.0)] {
+        let (before, n) = (plane_pts(&s, id, Plane::Right, 0.0), undo_len(&s));
+        s.tool_key(ToolKey::Right, mods, v).unwrap();
+        assert_eq!(undo_len(&s), n + 1, "{mods:?}");
+        let d = page_step(&s, &before);
+        assert!((d - Vec2::new(step, 0.0)).hypot() < 1e-6, "{mods:?} {d:?}");
+    }
+}
+
 #[test]
 fn arrow_keys_nudge_in_perspective() {
     let (mut s, id) = persp_session();
@@ -508,6 +543,13 @@ fn arrow_keys_nudge_in_perspective() {
     let c = bounds_of(&before).center();
     let step = h.apply(c + d).unwrap() - h.apply(c).unwrap();
     assert!((step - Vec2::new(s.prefs.keyboard_increment, 0.0)).hypot() < 1e-6, "{step:?}");
+    // Ctrl/Cmd takes a tenth of a step.
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    s.tool_key(ToolKey::Right, Mods { cmd: true, ..Default::default() }, v).unwrap();
+    let after = plane_pts(&s, id, Plane::Right, 0.0);
+    let c = bounds_of(&before).center();
+    let step = h.apply(c + (after[0] - before[0])).unwrap() - h.apply(c).unwrap();
+    assert!((step - Vec2::new(s.prefs.keyboard_increment / 10.0, 0.0)).hypot() < 1e-6, "{step:?}");
     // Alt copies; Shift takes ten steps.
     s.tool_key(ToolKey::Left, Mods { alt: true, shift: true, ..Default::default() }, v).unwrap();
     let copy = *s.doc().unwrap().selection.objects.first().unwrap();
