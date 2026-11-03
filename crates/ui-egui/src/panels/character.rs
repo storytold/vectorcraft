@@ -218,8 +218,28 @@ impl<T: PartialEq> Shared<T> {
 fn style(app: &mut VectorcraftApp, p: Value) {
     char_cmd(app, "text.setStyle", p);
 }
-fn format(app: &mut VectorcraftApp, p: Value) {
+pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
     char_cmd(app, "text.setFormat", p);
+}
+
+/// [`format`] that returns the command's result: `text.setRangeStyle` on the range the Type tool
+/// has selected (the whole text when nothing is selected) while it edits text, else
+/// `text.setFormat` on the selected text objects.
+pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
+    let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    end_typing(app);
+    p["id"] = json!(id.0);
+    if b > a {
+        p["start"] = json!(a);
+        p["end"] = json!(b);
+    }
+    app.run("text.setRangeStyle", p)
+}
+
+/// The Tate-chu-yoko Settings Up/Down and Left/Right the characters the panels act on share, in
+/// document points; `None` where they differ, or with no type.
+pub(crate) fn shared_tcy_offsets(app: &VectorcraftApp) -> (Option<f64>, Option<f64>) {
+    (shared_effective(app, |s| s.tcy_up_down), shared_effective(app, |s| s.tcy_left_right))
 }
 
 /// Apply character attributes: to the selected range while the Type tool edits text (the whole
@@ -781,10 +801,30 @@ fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
 }
 
 /// The font family menu and the font style dropdown of style `s` (Character and Properties panels,
-/// Control bar), with their `ids` and `widths`.
+/// Control bar), with their `ids` and `widths`. The mouse wheel over the closed family field steps
+/// the text through the families.
 pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle, ids: (&str, &str), widths: (f32, f32)) {
+    let wheel_owner = match ids.0 {
+        "ch-font" => Some(crate::font_menu::WheelOwner::Character),
+        "font" => Some(crate::font_menu::WheelOwner::Properties),
+        "cb-font" => Some(crate::font_menu::WheelOwner::Control),
+        _ => None,
+    };
+    font_pickers_owned(app, ui, s, ids, widths, wheel_owner);
+}
+
+fn font_pickers_owned(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    s: &CharStyle,
+    ids: (&str, &str),
+    widths: (f32, f32),
+    wheel_owner: Option<crate::font_menu::WheelOwner>,
+) {
+    crate::font_menu::sync_wheel_target(app, ui.ctx(), ui.ctx().viewport_id());
     let sample = crate::font_menu::sample_text(app);
-    if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), crate::font_menu::MenuLook::of(app)) {
+    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, ..crate::font_menu::MenuLook::of(app) };
+    if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look) {
         crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
@@ -872,7 +912,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .on_hover_text(tl!("Character options"));
     widgets::popover(&link, link.clicked(), |ui| {
         ui.set_width(260.0);
-        show(app, ui);
+        show_owned(app, ui, crate::font_menu::WheelOwner::ControlPopover(link.id));
     });
     font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
     size_field(app, ui, "cb-font-size", 96.0);
@@ -884,7 +924,11 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    attributes(app, ui);
+    show_owned(app, ui, crate::font_menu::WheelOwner::Character);
+}
+
+fn show_owned(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::WheelOwner) {
+    attributes(app, ui, owner);
     // Drawing over type needs no type selected, so the options show without one too.
     if pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS) {
         snap_to_glyph_options(app, ui);
@@ -922,7 +966,7 @@ fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The character attributes of the type selected (an empty state without any).
-fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
+fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::WheelOwner) {
     let Some((s, _)) = text_style(app) else {
         app.character_focus = None;
         super::empty_state(ui, "type", tl!("No text selected"), tl!("Select a text object to edit its character attributes."));
@@ -934,7 +978,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(f) = app.character_focus {
         widgets::arm_field_focus(ui.ctx(), f.salt());
     }
-    font_pickers(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0));
+    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");
@@ -1168,6 +1212,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!("Tate-chu-yoko"), has, tcy) {
             format(app, json!({"tateChuYoko": !tcy}));
         }
+        // Tate-chu-yoko Settings…: the Up/Down and Left/Right that move a tate-chu-yoko block.
+        if menu_item(ui, tl!("Tate-chu-yoko Settings…"), has, false)
+            && let Err(e) = app.run("ui.tateChuYokoSettings", json!({}))
+        {
+            app.status(e);
+        }
         // Standard Vertical Roman Alignment: the selected half-width characters stand upright in
         // vertical type instead of being rotated. Checked when every selected character has it; a
         // mixed selection turns it on.
@@ -1187,6 +1237,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
         });
+        // A mixed selection is unchecked; choosing it enables kashidas for the whole range.
+        let kashidas = shared(app, |s| s.kashidas) == Some(true);
+        let selected_characters = text_editing(app).is_none_or(|(_, start, end)| end > start);
+        if menu_item(ui, tl!("Kashidas"), has && selected_characters, kashidas) {
+            format(app, json!({"kashidas": !kashidas}));
+        }
         ui.separator();
     }
     // No Break: the selected characters stay on one line.
@@ -1239,9 +1295,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
-/// No Break off, the Default character direction, the Default digits and the Em Box font height
-/// reference, whether or not Show East Asian Options, Show Indic Options and Show Font Height
-/// Options are on.
+/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
+/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// Options, Show Indic Options and Show Font Height Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -1251,7 +1307,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
-            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
+            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
+            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );

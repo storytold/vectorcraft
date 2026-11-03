@@ -12,6 +12,7 @@ use vectorcraft_doc::{CharStyle, Document, Justify, Node, NodeId, NodeKind, Para
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::{FontDb, FontMatch, TextLayout, edit};
 
+use crate::cmd::fonts::{edit_symbol_texts, symbol_texts};
 use crate::cmd::textedit::editing_range;
 use crate::cmd::typecmd::refresh_bounds;
 use crate::cmd::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, switch_or, text_param};
@@ -107,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Missing Fonts…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
+            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type (the type in the art of its symbols included) whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
             has_doc,
             replace_fonts
         ),
@@ -918,24 +919,25 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "the replacement font is not available")),
     };
     let missing = |st: &CharStyle| db.resolve(&st.font_family, &st.font_style).is_none_or(|(_, m)| m == FontMatch::Missing);
+    let lacks = |t: &TextObject| t.runs.iter().any(|r| missing(&r.style));
     let d = &s.doc()?.doc;
     let mut ids = vec![];
     for l in &d.layers {
         l.walk(&mut |n| {
             if let NodeKind::Text(t) = &n.kind
-                && t.runs.iter().any(|r| missing(&r.style))
+                && lacks(t)
             {
                 ids.push(n.id);
             }
         });
     }
-    if ids.is_empty() {
+    // The type in the symbols' art too, which exports name when its font is missing.
+    if ids.is_empty() && !symbol_texts(d, None).into_iter().any(|(t, _)| lacks(t)) {
         return Err(EngineError::Other("No fonts are missing".into()));
     }
     let runs = s.edit("Replace Missing Fonts", |d, _| {
         let mut runs = 0;
-        for id in &ids {
-            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+        let mut replace = |t: &mut TextObject| {
             for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
                 // The style the font has closest to the one the character had.
                 r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
@@ -946,7 +948,14 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
             }
             edit::normalize(&mut t.runs);
             refresh_bounds(t);
+        };
+        for id in &ids {
+            if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                replace(t);
+            }
         }
+        edit_symbol_texts(d, None, &|t, _| lacks(t), &mut replace);
+        drop(replace);
         Ok(runs)
     })?;
     Ok(json!({ "runs": runs, "font": family }))

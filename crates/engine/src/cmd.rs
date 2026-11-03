@@ -62,6 +62,7 @@ pub mod params;
 mod path;
 pub(crate) mod pathops;
 mod patterncmds;
+pub mod patternlib;
 pub mod pdfcmds;
 pub mod perspgrid;
 pub mod place;
@@ -511,11 +512,44 @@ pub fn color_value(v: &Value) -> Option<Color> {
     }
 }
 
+/// `v` as an object id: an error unless it is a non-negative integer.
+fn object_id(v: &Value) -> Result<NodeId> {
+    v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")))
+}
+
+/// The error for `id` given as step reference `r`, which only a batch resolves.
+fn unresolved_reference(r: &str) -> EngineError {
+    EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve"))
+}
+
+/// The objects `p` names for a command whose `id` can only be an object id: its `ids`, else its
+/// `id` as `ids` of one. A value that isn't an object id is an error, never the selection (#785).
+/// `None` when `p` gives neither (or gives them as `null`). The ids are not looked up in the
+/// document.
+pub(crate) fn named_ids(p: &Value) -> Result<Option<Vec<NodeId>>> {
+    match p.get("ids").filter(|v| !v.is_null()) {
+        Some(Value::Array(a)) => return a.iter().map(object_id).collect::<Result<Vec<_>>>().map(Some),
+        Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
+        None => {}
+    }
+    Ok(named_id(p)?.map(|id| vec![id]))
+}
+
+/// The object `p`'s `id` names, for a command whose `id` can only be an object id: a value that
+/// isn't an object id is an error, never the selection (#785). `None` when `p` leaves `id` out (or
+/// gives it as `null`). The id is not looked up in the document.
+pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
+    match p.get("id").filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
+        Some(v) => object_id(v).map(Some),
+    }
+}
+
 /// Objects a command targets: explicit `ids` param or the selection.
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     // Objects given are used as given: a value that isn't an object id fails rather than the
     // command acting on the selection instead (#785).
-    let object_id = |v: &Value| v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")));
     match p.get("ids").filter(|v| !v.is_null()) {
         Some(Value::Array(a)) => return a.iter().map(object_id).collect(),
         Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
@@ -525,9 +559,7 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         Some(v @ Value::Number(_)) => Ok(vec![object_id(v)?]),
         // A step reference a batch couldn't resolve (other strings are other ids, such as an
         // effect's).
-        Some(Value::String(r)) if r.starts_with('$') => {
-            Err(EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
-        }
+        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
         _ => Ok(s.doc()?.selection.objects.clone()),
     }
 }
@@ -578,6 +610,26 @@ pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
     }
     (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
 }
+
+/// [`unique_name`] for names given one after another (an import): `next` keeps, per base (in
+/// any case), the number after the last one tried, so a run of one name doesn't count up from 2
+/// again for each copy. Names only become taken meanwhile, so the result is the same.
+pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<String, usize>, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let i = next.entry(base.to_lowercase()).or_insert(2);
+    loop {
+        let n = format!("{base} {i}");
+        *i += 1;
+        if !taken(&n) {
+            return n;
+        }
+    }
+}
+
+/// The most presets one presets file imports: each is looked up among the saved ones.
+pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;

@@ -181,7 +181,6 @@
 	All Artwork Above	Tất cả tác phẩm phía trên
 	All Caps	Viết hoa toàn bộ
 	All Categories	Tất cả danh mục
-	All colours are within the CMYK gamut	Tất cả màu nằm trong gam CMYK
 	All on Active Artboard	Tất cả trên bảng vẽ hiện hoạt
 	All on Same Layers	Tất cả trên cùng lớp
 	All printer's marks	Tất cả dấu máy in
@@ -319,6 +318,7 @@ font-technology	Variable	Biến thiên
 	Baseline Shift	Dịch chuyển đường cơ sở
 	Basic Latin	Latin cơ bản
 	Batch	Hàng loạt
+	Bearing	Hướng
 	Begin Recording	Bắt đầu ghi
 	Begin Undo Group	Bắt đầu nhóm hoàn tác
 	Bend:	Uốn cong:
@@ -698,7 +698,6 @@ font-technology	Variable	Biến thiên
 	Convert to sRGB	Chuyển sang sRGB
 	Convert to Straight Lines	Chuyển thành đường thẳng
 	Convert:	Chuyển đổi:
-	Copied the CSS of {rules} object(s)	Đã sao chép CSS của {rules} đối tượng
 	Copies:	Bản sao:
 	Copy	Sao chép
 	Copy (make a transformed copy)	Sao chép (tạo bản sao đã biến đổi)
@@ -882,6 +881,7 @@ font-technology	Variable	Biến thiên
 	Delete Tab	Xóa tab
 	Delete the graphic style “{name}”?	Xóa kiểu đồ họa “{name}”?
 	Delete Action Sets	Xóa các bộ hành động
+	Duplicate Action or Action Set	Nhân bản hành động hoặc bộ hành động
 	Delete the action set “{name}” and its actions?	Xóa bộ hành động “{name}” và các hành động của nó?
 	Delete the selected action sets and their actions?	Xóa các bộ hành động đã chọn và các hành động của chúng?
 	Delete the library “{name}”?	Xóa thư viện “{name}”?
@@ -928,7 +928,6 @@ font-technology	Variable	Biến thiên
 	Discard Empty Type	Loại bỏ chữ trống
 	Discard Recovered Documents	Loại bỏ tài liệu đã phục hồi
 	Discard White Overprint in Output	Loại bỏ in chồng màu trắng khi xuất
-	Discarded {} recovered document(s)	Đã loại bỏ {} tài liệu đã phục hồi
 	Discord	Discord
 	Discretionary Hyphen	Gạch nối tùy chọn
 	Discretionary Ligatures	Chữ ghép tùy chọn
@@ -987,13 +986,14 @@ font-technology	Variable	Biến thiên
 	Double Right Quotation Marks	Dấu ngoặc kép phải đôi
 	Double-click	Bấm đúp
 	Double-click to edit the characters' paint	Bấm đúp để chỉnh sửa màu ký tự
+	Click to edit	Bấm để chỉnh sửa
+	Double-click to edit	Bấm đúp để chỉnh sửa
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung
 	Download	Tải xuống
 	Download:	Tải xuống:
 	Downloaded {what}	Đã tải xuống {what}
-	Downloaded {} file(s)	Đã tải xuống {} tệp
 	Draft	Nháp
 	Drag	Kéo
 	Drag a handle	Kéo một tay nắm
@@ -1112,8 +1112,6 @@ font-technology	Variable	Biến thiên
 	Embed page thumbnails	Nhúng hình thu nhỏ trang
 	Embedded	Đã nhúng
 	Embedded Image	Ảnh đã nhúng
-	Embedded {n} image(s)	Đã nhúng {n} ảnh
-	Embedded {n} image(s); {missing} missing: relink them first	Đã nhúng {n} ảnh; {missing} còn thiếu: hãy liên kết lại trước
 	Emulsion:	Nhũ tương:
 	En Dash	Gạch ngang ngắn
 	En Space	Khoảng trắng en
@@ -1196,6 +1194,16 @@ font-technology	Variable	Biến thiên
 	Delete Export Preset	Xóa cài đặt sẵn xuất
 	Export Presets	Cài đặt sẵn xuất
 	Save Export Preset	Lưu cài đặt sẵn xuất
+	Export Export Presets	Xuất cài đặt sẵn xuất
+	Export Preset…	Xuất cài đặt sẵn…
+	Import Export Presets	Nhập cài đặt sẵn xuất
+	Import Preset…	Nhập cài đặt sẵn…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` là tên của một cài đặt sẵn trong document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	không có cài đặt sẵn xuất `{n}` (xem document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	không có cài đặt sẵn xuất đã lưu nào để xuất (ghi các cài đặt tích hợp sẵn trong `names`)
+@msg	not an export presets file (format `{_1}`)	không phải tệp cài đặt sẵn xuất (định dạng `{_1}`)
+@msg	not an export presets file: {e}	không phải tệp cài đặt sẵn xuất: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Xuất lớp
 	Export Selection	Xuất vùng chọn
 	All in One Folder	Tất cả trong một thư mục
@@ -1241,10 +1249,8 @@ font-technology	Variable	Biến thiên
 	Export Transparency Flattener Presets	Xuất thiết lập sẵn làm phẳng độ trong suốt
 	Export {count} Selected	Xuất {count} đã chọn
 	Export:	Xuất:
-	Exported {count} file(s) to {folder}	Đã xuất {count} tệp đến {folder}
 	Exported {path}	Đã xuất {path}
 	Exported {what}	Đã xuất {what}
-	Exported {what} with {} note(s): {first}	Đã xuất {what} với {} ghi chú: {first}
 	Exporting {}	Đang xuất {}
 	Export…	Xuất…
 	Extrude & Bevel…	Kéo dài & vát…
@@ -1409,6 +1415,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
 file-filter	VectorCraft Template	Mẫu VectorCraft
@@ -1424,6 +1431,7 @@ file-filter	Templates	Mẫu
 	Flip Vertical	Lật dọc
 	Flip:	Lật:
 	Float in Window	Nổi trong cửa sổ
+	Float All in Windows	Nổi tất cả trong cửa sổ
 	Float Panel	Thả nổi bảng
 	Float Tool Group	Thả nổi nhóm công cụ
 	Focal Fill	Tô tiêu điểm
@@ -1503,6 +1511,7 @@ file-filter	Templates	Mẫu
 	Glass	Kính
 	Glass…	Kính…
 	Global	Toàn cục
+	Global Adjust	Điều chỉnh toàn cục
 	Global Brush Dimensions	Kích thước cọ toàn cục
 	Global Process Color	Màu xử lý toàn cục
 	Global Process Color, CMYK	Màu xử lý toàn cục, CMYK
@@ -1602,6 +1611,10 @@ file-filter	Templates	Mẫu
 	Hard Light	Ánh sáng mạnh
 	Hard Mix	Trộn cứng
 	Harmony Rules:	Quy tắc hài hòa màu:
+	Segmented color wheel	Bánh xe màu phân đoạn
+	Show smooth color wheel	Hiện bánh xe màu liền mạch
+	Show segmented color wheel	Hiện bánh xe màu phân đoạn
+	Show color bars	Hiện các thanh màu
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
 	Height:	Chiều cao:
@@ -1978,6 +1991,8 @@ digits	Hindi	Hindi
 	Large Thumbnails	Hình thu nhỏ lớn
 	Largest:	Lớn nhất:
 	Lasso Tool	Công cụ Lasso
+	Enclosing Lasso Tool	Công cụ Lasso bao quanh
+	Enclosing Lasso	Lasso bao quanh
 	Last	Cuối cùng
 	Last commit	Commit cuối cùng
 	Last Effect: {name}	Hiệu ứng vừa dùng: {name}
@@ -2160,6 +2175,7 @@ digits	Hindi	Hindi
 	Manually	Thủ công
 	Mark as trapped	Đánh dấu đã chồng màu
 	Mark Older Files as [Converted] When Opened	Đánh dấu tệp cũ là [Đã chuyển đổi] khi mở
+	Use System Defaults for Edit Original	Dùng mặc định hệ thống cho Chỉnh sửa bản gốc
 	Marker…	Ký hiệu đánh dấu…
 	Marks	Dấu in
 	Marks and Bleed	Dấu in và chảy tràn
@@ -2238,6 +2254,7 @@ digits	Hindi	Hindi
 	Modify	Sửa đổi
 	Mojikumi	Mojikumi
 	Insert Kashidas	Chèn kashida
+	Kashidas	Kashida
 	Long	Dài
 	Stylistic	Kiểu cách
 	Mojikumi Set	Bộ Mojikumi
@@ -2352,6 +2369,10 @@ digits	Hindi	Hindi
 	New Without Dialog	Mới không qua hộp thoại
 	New Workspace	Không gian làm việc mới
 	New Workspace…	Không gian làm việc mới…
+	New Toolbar…	Thanh công cụ mới…
+	New Toolbar	Thanh công cụ mới
+	Show Toolbar	Hiện thanh công cụ
+	List Toolbars	Danh sách thanh công cụ
 	New {kind} Style…	Kiểu {kind} mới…
 	New…	Mới…
 	Next	Tiếp theo
@@ -2525,7 +2546,6 @@ digits	Hindi	Hindi
 	Open Recent Files	Mở tệp gần đây
 	Open Swatch Library	Mở thư viện mẫu màu
 	Open the URL in the web browser	Mở URL trong trình duyệt web
-	Opened with {} note(s): {}	Mở với {} ghi chú: {}
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Khi mở, những phần VectorCraft chưa đọc được ({what}) đã bị bỏ qua, nên thay thế sẽ mất chúng vĩnh viễn. Hãy lưu với tên khác để giữ lại.
 	“{name}” already exists. Replace it?	“{name}” đã tồn tại. Thay thế tệp này?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Tên trong bảng lưu là “{typed}”, và VectorCraft đã thêm phần mở rộng của loại tệp. Thay thế tệp sẽ ghi đè nội dung của tệp.
@@ -2594,7 +2614,6 @@ digits	Hindi	Hindi
 	Package collects a saved document with its linked files and fonts.	Gói thu thập tài liệu đã lưu cùng tệp liên kết và phông chữ.
 	Package created	Đã tạo gói
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Đã đóng gói {n} tệp trong {folder} {note}
-	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 	Package…	Gói…
 	Page	Trang
 	Page information	Thông tin trang
@@ -2703,6 +2722,8 @@ diagnostics	ui	giao diện
 	Plates	Bản in
 	Platform:	Nền tảng:
 	Play Current Selection	Phát vùng chọn hiện tại
+	Save Actions…	Lưu hành động…
+	Load Actions…	Tải hành động…
 	Plug-in Info	Thông tin plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Phần bổ trợ…
@@ -2799,6 +2820,10 @@ mark-style	Japanese	Kiểu Nhật
 	Properties	Thuộc tính
 	Proportional Metrics	Số liệu theo tỷ lệ
 	Proportional Lining	Số tỷ lệ đứng
+	Position:	Vị trí:
+	Default Position	Vị trí mặc định
+	Numerator	Tử số
+	Denominator	Mẫu số
 	Proportional Oldstyle	Kiểu cũ theo tỷ lệ
 	Pucker & Bloat…	Nhíu & Phồng…
 	Pucker Tool	Công cụ Nhíu
@@ -2942,9 +2967,6 @@ mark-style	Japanese	Kiểu Nhật
 	Relink	Liên kết lại
 	Relink Linked Files to the Document	Liên kết lại các tệp liên kết với tài liệu
 	Relink to Folder…	Liên kết lại vào thư mục…
-	Relinked {n} image(s)	Đã liên kết lại {n} ảnh
-	Relinked {n} image(s); not in that folder: {}	Đã liên kết lại {n} ảnh; không có trong thư mục đó: {}
-	Relinked {} image(s)	Đã liên kết lại {} ảnh
 	Relink…	Liên kết lại…
 	Reload Plug-ins	Tải lại plug-in
 	Remove	Gỡ
@@ -2990,6 +3012,8 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
 	Replace With Font	Thay thế bằng phông chữ
+	Replace With Font From	Thay thế bằng phông chữ từ
+	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
 	Replace…	Thay thế…
@@ -3042,7 +3066,6 @@ mark-style	Japanese	Kiểu Nhật
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
 	Restored documents open unsaved: save them to keep them.	Tài liệu đã khôi phục mở ở trạng thái chưa lưu: hãy lưu để giữ lại.
-	Restored {} recovered document(s): save them to keep them	Đã khôi phục {} tài liệu: hãy lưu để giữ lại
 	Restrict printing, editing and other tasks	Hạn chế in, chỉnh sửa và các tác vụ khác
 	Reverse Front to Back	Đảo ngược từ trước ra sau
 	Reverse Gradient	Đảo ngược chuyển sắc
@@ -3124,11 +3147,13 @@ mark-style	Japanese	Kiểu Nhật
 	Save a Copy	Lưu bản sao
 	Save a Copy…	Lưu bản sao…
 	Save As	Lưu thành
+	Save As Preset…	Lưu dưới dạng cài đặt sẵn…
 	Save as PDF…	Lưu thành PDF…
 	Save as preset:	Lưu thành thiết lập sẵn:
 	Save as Template	Lưu thành mẫu
 	Save as Template…	Lưu thành mẫu…
 	Save As…	Lưu thành…
+	Save Changes	Lưu thay đổi
 	Save changes to {name}	Lưu thay đổi vào {name}
 	Save color group to Swatch panel	Lưu nhóm màu vào bảng mẫu màu
 	Save Colors as Swatches	Lưu màu thành mẫu màu
@@ -3232,7 +3257,6 @@ mark-style	Japanese	Kiểu Nhật
 	Saved Views	Chế độ xem đã lưu
 	Saved {n} files beside {path}	Đã lưu {n} tệp bên cạnh {path}
 	Saved {path}	Đã lưu {path}
-	Saved {path} with {} note(s): {first}	Đã lưu {path} với {} ghi chú: {first}
 	Saves the current bars, toolbar and panel layout.	Lưu bố cục thanh, thanh công cụ và bảng hiện tại.
 	Save…	Lưu…
 	Saving	Đang lưu
@@ -3697,6 +3721,7 @@ mark-style	Japanese	Kiểu Nhật
 	Switch workspace	Chuyển không gian làm việc
 	Switch x/y	Đổi x/y
 	Symbol Instance	Thực thể ký hiệu
+	Link Block Series	Chuỗi khối liên kết
 	Symbol Libraries	Thư viện ký hiệu
 	Symbol Screener Tool	Công cụ Lọc ký hiệu
 	Symbol Scruncher Tool	Công cụ Thu gọn ký hiệu
@@ -3725,6 +3750,10 @@ mark-style	Japanese	Kiểu Nhật
 	Target Contents	Nội dung mục tiêu
 	Target:	Mục tiêu:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
+	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Up/Down:	Lên/Xuống:
+	Left/Right:	Trái/Phải:
 	Temperature	Nhiệt độ màu
 	Temperature/Tint…	Nhiệt độ màu/Tông…
 	Template	Mẫu
@@ -3734,6 +3763,7 @@ mark-style	Japanese	Kiểu Nhật
 	Text	Văn bản
 	Text Displayed in Cell:	Văn bản hiển thị trong ô:
 	Text Export Options	Tùy chọn xuất văn bản
+	Text Fill & Stroke Color	Màu tô & nét văn bản
 	Text Fill Color	Màu tô văn bản
 	Text Import Options	Tùy chọn nhập văn bản
 	Text Stroke Color	Màu nét văn bản
@@ -3787,6 +3817,7 @@ mark-style	Japanese	Kiểu Nhật
 	Tile Type:	Loại ô:
 	tile {number}	ô {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Các ô được đánh số từ ngang sang dọc; để trống phạm vi để in tất cả ô.
+	Tilt	Độ nghiêng
 	Tint	Tông màu
 	Tints	Sắc pha
 	Tints and Shades	Sắc pha và bóng
@@ -3952,7 +3983,6 @@ mark-style	Japanese	Kiểu Nhật
 	Update Link	Cập nhật liên kết
 	Update Links	Cập nhật các liên kết
 	Update Modified Links	Cập nhật liên kết đã sửa đổi
-	Updated {} image(s)	Đã cập nhật {} ảnh
 	UPPERCASE	CHỮ HOA
 	URL:	URL:
 	Use 	Dùng 
@@ -4177,6 +4207,7 @@ theme	Appearance	Giao diện
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng
+@msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
 @msg	`stops` must be an array	`stops` phải là một mảng
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` phải là đối tượng tùy chọn SVG (xem document.formats)
@@ -4223,6 +4254,10 @@ theme	Appearance	Giao diện
 @msg	`{to}` is not an available name	`{to}` không phải là tên khả dụng
 @msg	`{what}` closes nothing	`{what}` không đóng gì
 @msg	`{what}` closes something it didn't open	`{what}` đóng thứ nó chưa mở
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	một mặt nạ phủ nhiều lớp được nhập thành một nhóm cắt xén trong mỗi lớp mà nó phủ
+@msg	a graph's records don't end where they should: its art was read as it is	các bản ghi của một biểu đồ không kết thúc đúng chỗ: hình vẽ của nó được đọc nguyên trạng
+@msg	`{w}` takes no operands	`{w}` không nhận toán hạng
+@msg	a wraparound group is inside a compound path	một nhóm bao văn bản nằm trong một đường dẫn phức
 @msg	a bitmap is empty	ảnh bitmap trống
 @msg	a bitmap is too large to read	ảnh bitmap quá lớn để đọc
 @msg	A browser with WebGPU or WebGL2 is required.	Cần trình duyệt hỗ trợ WebGPU hoặc WebGL2.
@@ -4280,6 +4315,7 @@ theme	Appearance	Giao diện
 @msg	add a format to export	thêm định dạng để xuất
 @msg	already editing a pattern	đang chỉnh sửa họa tiết
 @msg	an image VectorCraft can't read was left out	một ảnh VectorCraft không đọc được đã bị bỏ qua
+@msg	graphs come in as plain art, without their data or settings	biểu đồ được nhập dưới dạng hình vẽ thường, không kèm dữ liệu và thiết lập của chúng
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa
@@ -4355,6 +4391,7 @@ theme	Appearance	Giao diện
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
 @msg	Couldn't open {name}: {e}	Không thể mở {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Không thể dán từ khay nhớ tạm: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
@@ -4368,7 +4405,7 @@ theme	Appearance	Giao diện
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Phục hồi dữ liệu không có nơi lưu bản sao: đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	decimals must be {_1}–{_2} (got {_3})	số thập phân phải từ {_1}–{_2} (nhận được {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	chọn trực tiếp các điểm neo để cắt (không phải điểm cuối của đường dẫn mở)
-@msg	Discarded {_1} recovered document(s)	Đã loại bỏ {_1} tài liệu đã phục hồi
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
 @msg	Divide Objects Below: select a path	Chia đối tượng bên dưới: hãy chọn một đường dẫn
 @msg	Divide Objects Below: select exactly one path	Chia đối tượng bên dưới: chọn đúng một đường dẫn
@@ -4390,6 +4427,7 @@ theme	Appearance	Giao diện
 @msg	Exporting {_1}	Đang xuất {_1}
 @msg	Packaging {_1}	Đang đóng gói {_1}
 @msg	Placing {_1}	Đang đặt {_1}
+@msg	Pasting	Đang dán
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	phiên bản tệp {0} mới hơn VectorCraft hỗ trợ ({VERSION})
 @msg	Flatten Transparency: select objects to flatten	Dẹp phẳng độ trong suốt: hãy chọn đối tượng để dẹp phẳng
 @msg	Flatten Transparency: {e}	Dẹp phẳng độ trong suốt: {e}
@@ -4431,7 +4469,12 @@ theme	Appearance	Giao diện
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
 @msg	invalid restored panel group	nhóm bảng được phục hồi không hợp lệ
 @msg	is not an image VectorCraft reads	không phải ảnh mà VectorCraft đọc được
+@msg	it ends inside a group or compound path	nó kết thúc bên trong một nhóm hoặc đường dẫn phức
 @msg	it ends inside a layer	nó kết thúc bên trong một lớp
+@msg	it ends inside a multi-layer mask	nó kết thúc bên trong một mặt nạ nhiều lớp
+@msg	a multi-layer mask's operators are out of order	các toán tử của mặt nạ nhiều lớp không đúng thứ tự
+@msg	a multi-layer mask needs one clipping path	mặt nạ nhiều lớp cần một đường dẫn cắt
+@msg	a group crosses a multi-layer mask	một nhóm vắt ngang mặt nạ nhiều lớp
 @msg	it has art outside its layers	nó có tác phẩm ngoài các lớp
 @msg	it has more than one artboard	nó có nhiều hơn một bảng vẽ
 @msg	it has more than {MAX_NODES} objects	nó có hơn {MAX_NODES} đối tượng
@@ -4464,6 +4507,8 @@ theme	Appearance	Giao diện
 @msg	lang must be one of {_1}	lang phải là một trong {_1}
 @msg	larger than 256 MB	lớn hơn 256 MB
 @msg	layers can't be wrap objects	lớp không thể là đối tượng bọc
+@msg	line {line}: value for `{var}` must be true or false	dòng {line}: giá trị của `{var}` phải là true hoặc false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	dòng {line}: giá trị của `{var}` dài hơn {MAX_GRAPH_CSV} byte
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	ảnh liên kết hiển thị bản xem trước độ phân giải thấp đã lưu trong tệp cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Hợp nhất tô trực tiếp: chọn nhóm tô trực tiếp và các đường dẫn để thêm
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Tô trực tiếp nhận đường dẫn và đường dẫn phức: hãy chuyển văn bản, hình ảnh và các đối tượng khác thành đường dẫn trước
@@ -4565,6 +4610,14 @@ theme	Appearance	Giao diện
 @msg	no selection bounds	vùng chọn không có giới hạn
 @msg	no slice selected	chưa chọn lát cắt
 @msg	no such action	không có hành động như vậy
+@msg	no such action set	không có bộ hành động như vậy
+@msg	the action sets changed; nothing was deleted	các bộ hành động đã thay đổi; không có gì bị xóa
+@msg	no action set to save	không có bộ hành động nào để lưu
+@msg	not an action set file	không phải tệp bộ hành động
+@msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
+@msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
+@msg	the action set file needs a later version of VectorCraft	tệp bộ hành động cần phiên bản VectorCraft mới hơn
+@msg	an action in the action set file has more than 10,000 steps	một hành động trong tệp bộ hành động có hơn 10.000 bước
 @msg	no such anchor	không có điểm neo như vậy
 @msg	no such artboard	không có bảng vẽ như vậy
 @msg	the artboard is locked	bảng vẽ bị khóa
@@ -4591,6 +4644,7 @@ theme	Appearance	Giao diện
 @msg	no user library folder here	không có thư mục thư viện người dùng ở đây
 @msg	no user workspace `{from}`	không có không gian làm việc người dùng `{from}`
 @msg	node {_1} is not text	nút {_1} không phải là văn bản
+@msg	node {_1} is on a locked artboard	nút {_1} nằm trên bảng vẽ bị khóa
 @msg	not a blend	không phải đối tượng hòa trộn
 @msg	not a DXF drawing	không phải bản vẽ DXF
 @msg	not a file	không phải tệp
@@ -4635,11 +4689,10 @@ theme	Appearance	Giao diện
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Đường dẫn độ lệch: độ lệch không để lại gì từ các đường dẫn đã chọn (độ lệch vào trong lớn hơn hình)
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi
 @msg	onto must name a panel floating in another group	onto phải đặt tên bảng đang thả nổi trong nhóm khác
-@msg	Opened with {_1} note(s): {_2}	Đã mở với {_1} ghi chú: {_2}
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Đã mở với {n} ghi chú: {first}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})
-@msg	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 @msg	page size {w} × {h}	kích thước trang {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	trang {0} không tồn tại (PDF có {1} trang)
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: trang {n} không tồn tại (tệp có 1 trang)
@@ -4695,11 +4748,13 @@ theme	Appearance	Giao diện
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Đã sao chép CSS của {n} đối tượng
 @msgplural	Downloaded {n} file|Downloaded {n} files	Đã tải xuống {n} tệp
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Đã xuất {n} tệp vào {folder}
+@msg	All colors are within the CMYK gamut	Tất cả màu nằm trong gam CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} màu nằm ngoài gam CMYK
 @msg	Reload the page to go on (changes not saved yet may be lost).	Tải lại trang để tiếp tục (các thay đổi chưa lưu có thể bị mất).
 @msg	Replace Spine: select a blend and a path	Thay thế trục: chọn một đối tượng hòa trộn và một đường dẫn
 @msg	Reset {_1}	Đã đặt lại {_1}
 @msg	resolutions must be between 1 and 2400 ppi	độ phân giải phải nằm trong khoảng 1 đến 2400 ppi
-@msg	Restored {_1} recovered document(s): save them to keep them	Đã phục hồi {_1} tài liệu: hãy lưu để giữ lại
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Đã phục hồi {n} tài liệu: hãy lưu để giữ lại
 @msg	result would exceed the canvas (coordinates out of range)	kết quả sẽ vượt quá vùng vẽ (tọa độ ngoài phạm vi)
 @msg	objects can't be nested more than 32 deep	không thể lồng các đối tượng sâu quá 32 cấp
 @msg	the SVG's elements are nested more than {0} deep	các phần tử SVG lồng nhau sâu quá {0} cấp
@@ -4712,7 +4767,7 @@ theme	Appearance	Giao diện
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
 @msg	Saved {n} files beside {path}	Đã lưu {n} tệp bên cạnh {path}
 @msg	Saved {path}	Đã lưu {path}
-@msg	Saved {path} with {_1} note(s): {first}	Đã lưu {path} với {_1} ghi chú: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Đã lưu {path} với {n} ghi chú: {first}
 @msg	Saving	Đang lưu
 @msg	Saving recovery data for {_1}	Đang lưu dữ liệu phục hồi cho {_1}
 @msg	Saving {_1}	Đang lưu {_1}
@@ -4853,6 +4908,9 @@ theme	Appearance	Giao diện
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	tệp PCX có điểm ảnh {bits}-bit trong {planes} mặt phẳng không thể đọc được
+@msg	the Pixar file is cut short	tệp Pixar bị cắt ngắn
+@msg	the Pixar file's header is damaged	phần đầu của tệp Pixar bị hỏng
+@msg	the Pixar file's image data is damaged	dữ liệu ảnh của tệp Pixar bị hỏng
 @msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
@@ -4876,6 +4934,7 @@ theme	Appearance	Giao diện
 @msg	there are no objects to release	không có đối tượng nào để giải phóng
 @msg	there are no printer settings to open here	không có cài đặt máy in để mở ở đây
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tệp này được lưu không có tương thích PDF, và dữ liệu chỉnh sửa không thể đọc được ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	không đọc được phần PDF ({_1}): tệp được mở từ dữ liệu chỉnh sửa
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript của tệp này không thể đọc được ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	định dạng này chứa một bảng vẽ: xuất nhiều bảng vẽ dưới dạng PDF hoặc với document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	đây là bản vẽ DWG, không thể đọc: lưu từ ứng dụng CAD dưới dạng ASCII DXF và mở tệp đó
@@ -4916,7 +4975,12 @@ theme	Appearance	Giao diện
 @msg	unsupported native docking operation	thao tác neo gốc không được hỗ trợ
 @msg	unsupported: {0}	không được hỗ trợ: {0}
 @msg	variables are locked	biến số bị khóa
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	hơn {MAX_CSV_ROWS} tập dữ liệu: Nhập tập dữ liệu chỉ đọc tối đa {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	hơn {MAX_CSV_COLS} biến số: Nhập tập dữ liệu chỉ đọc tối đa {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	các biến số không phải văn bản đã bị bỏ qua: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	tài liệu mới sẽ không đọc lại các biến số này đúng loại: {names}
+@msg	a new document refuses this file because of these variables: {names}	tài liệu mới sẽ từ chối tệp này vì các biến số sau: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	tiêu đề `{header}` của `{name}` sẽ được đọc thành biến số `{other}`: hãy đổi tên một trong hai
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft không tìm kiếm trong thư mục của ứng dụng khác hoặc hệ thống: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft không tìm kiếm thư mục Shared hoặc Public trong Users: {path}
 @msg	VectorCraft failed to start: {e}	VectorCraft khởi động thất bại: {e}
@@ -5058,6 +5122,11 @@ theme	Appearance	Giao diện
 	Import Data Sets…	Nhập tập dữ liệu…
 	Export Data Sets…	Xuất tập dữ liệu…
 	Load Variable Library…	Tải thư viện biến số…
+	Save Variable Library…	Lưu thư viện biến số…
+@msg	a variable library holds text variables, and the document has none	thư viện biến số chứa các biến số văn bản, và tài liệu không có biến số văn bản nào
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	không thể lưu biến số `{name}` vào thư viện biến số: hãy đổi tên để bắt đầu bằng một chữ cái hoặc `_`, không có khoảng trắng hay ký hiệu nào ngoài `-`, `_` và `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	tập dữ liệu `{name}` chứa ký tự điều khiển mà thư viện biến số không thể chứa
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	tập dữ liệu `{name}` bắt đầu hoặc kết thúc bằng khoảng trắng mà thư viện biến số không thể chứa
 	Make Graph Dynamic	Tạo biểu đồ động
 	Batch…	Hàng loạt…
 	Source Folder:	Thư mục nguồn:
@@ -5068,8 +5137,10 @@ theme	Appearance	Giao diện
 @msg	Batch: {count} processed, {failed} failed	Hàng loạt: đã xử lý {count}, lỗi {failed}
 @msg	choose a destination folder	hãy chọn thư mục đích
 @msg	choose a source folder	hãy chọn thư mục nguồn
+@msg	columns {first} and {column} both name the variable `{name}`	cột {first} và cột {column} cùng chỉ định biến số `{name}`
 @msg	open a document with data sets	hãy mở một tài liệu có tập dữ liệu
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	không có gì trong tập dữ liệu {name} được áp dụng: không có đối tượng nào được gắn với biến số mà tập dữ liệu có giá trị
+@msg	no bound object reports a value (locked objects and embedded images report none)	không có đối tượng được gắn nào báo cáo giá trị (đối tượng bị khóa và hình ảnh nhúng không báo cáo giá trị nào)
 @msg	the action has no steps	hành động không có bước nào
 
 # User Interface › Accent Color
@@ -5097,6 +5168,11 @@ theme	Appearance	Giao diện
 	Export Type:	Kiểu xuất:
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
+@msg	an action is already recording	đang ghi một hành động
+@msg	no such function key	không có phím chức năng như vậy
+@msg	no such color	không có màu như vậy
+@msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
+@msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ
@@ -5179,7 +5255,9 @@ theme	Appearance	Giao diện
 	Effect Gallery	Thư viện hiệu ứng
 	Filters	Bộ lọc
 	Select artwork to apply effects	Chọn đồ họa để áp dụng hiệu ứng
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	các biến và tập dữ liệu của tệp chưa được đọc (biến: {variables}, tập dữ liệu: {data_sets}): bảng Biến không liệt kê chúng
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	thư viện biến số của tệp chỉ được đọc một phần (mục đã bỏ qua: {_1}): bảng Biến liệt kê phần còn lại
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	không thể đọc thư viện biến số của tệp: bảng Biến không liệt kê nó
+@msg	a variable of unknown kind can't be bound to objects	không thể liên kết biến thuộc loại không xác định với đối tượng
 # Select by Color (select.color)
 	Select by Color	Chọn theo màu
 	Move Anchor Point	Di chuyển điểm neo
@@ -5205,6 +5283,7 @@ theme	Appearance	Giao diện
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Đường dẫn hình học
+	Geometric Patterns	Họa tiết hình học
 	Ease In	Chậm lúc đầu
 	Ease Out	Chậm lúc cuối
 	Ease In Out	Chậm lúc đầu và cuối
@@ -5264,17 +5343,30 @@ axis	Y Axis	Trục Y
 	New Set	Bộ mới
 	Set Options…	Tùy chọn bộ…
 	Set Options	Tùy chọn bộ
+	Action Options…	Tùy chọn hành động…
+	Action Options	Tùy chọn hành động
+	Rename Action	Đổi tên hành động
+	New Action…	Hành động mới…
+	New Action	Hành động mới
+	Create New Action	Tạo hành động mới
+	Play Action	Phát hành động
+	Action Set:	Bộ hành động:
+	Function Key:	Phím chức năng:
+	Record	Ghi
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
+	Leave Out of Global Edit	Loại khỏi chỉnh sửa toàn cục
 	Match	Khớp
 	On Artboards	Trên các bảng vẽ
 	All Artboards	Tất cả bảng vẽ
 	Include Objects On Canvas	Bao gồm đối tượng trên vùng vẽ
-	Result(s): {count}	Kết quả: {count}
+@plural	Result: {n}|Results: {n}	Kết quả: {n}
 @msg	select one object	hãy chọn một đối tượng
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp, phiên bản biểu tượng và nhóm của chúng
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	không tìm thấy đối tượng tương tự (các bản sao đã xoay hoặc lật không được tính); hãy thay đổi tùy chọn chỉnh sửa toàn cục rồi thử lại
+@msg	Global Edit is off	Chỉnh sửa toàn cục đang tắt
+@msg	only an object of the Global Edit other than the one it started from can be left out	chỉ có thể loại khỏi chỉnh sửa toàn cục một đối tượng khác với đối tượng mà nó bắt đầu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all hoặc một phạm vi như 1, 3-5, không phải {v}
 	Add to Symbols	Thêm vào ký hiệu
 	Basic Shapes	Hình cơ bản
@@ -5529,6 +5621,16 @@ anchor	Points:	Điểm:
 	Case	Chữ hoa và chữ thường
 @msg	{label} must be a number	{label} phải là một số
 @msg	{label} must be a number of at least 0.1	{label} phải là một số ít nhất bằng 0,1
+	Advanced Character Formats	Định dạng ký tự nâng cao
+	Horizontal Scale	Tỷ lệ ngang
+	Vertical Scale	Tỷ lệ dọc
+@msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+	Character Color	Màu ký tự
+	OpenType Features	Tính năng OpenType
+	Stylistic Sets	Bộ phong cách
+@msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
+@msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -5772,3 +5874,20 @@ breakText	Glyphs	Glyph
 	Small to Large	Từ nhỏ đến lớn
 	Large to Small	Từ lớn đến nhỏ
 	Distribute Evenly	Phân bố đều
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Tạo chú giải mẫu màu
+	Create Swatch Legend…	Tạo chú giải mẫu màu…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Công cụ văn bản
+	Text Tweaker…	Tinh chỉnh văn bản…
+	Text Tweaker	Tinh chỉnh văn bản
+	Attribute:	Thuộc tính:
+	From:	Từ:
+	To:	Đến:
+	Bow	Cung
+	Spike	Đỉnh nhọn
+	Skip Spaces	Bỏ qua khoảng trắng
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Hình vẽ quá lớn để sao chép dưới dạng ảnh: các ứng dụng khác không nhận được PNG của nó

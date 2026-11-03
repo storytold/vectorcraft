@@ -298,7 +298,8 @@ pub fn tweak(path: &PathData, b: Rect, p: &Value) -> PathData {
 }
 
 /// Twist: rotation that is strongest at the centre and fades to zero at the bounding circle,
-/// making at most `max` anchors ([`map_nonlinear_within`]).
+/// clockwise on the page for a positive `angle`, making at most `max` anchors
+/// ([`map_nonlinear_within`]).
 pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     let ang = angle.clamp(-3600.0, 3600.0).to_radians();
     if ang == 0.0 {
@@ -309,7 +310,8 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     let f = move |q: Point| {
         let d = q - c;
         let t = (1.0 - d.hypot() / r).max(0.0);
-        let a = -ang * t;
+        // y runs down, so a positive turn is clockwise on the page.
+        let a = ang * t;
         let (s, co) = a.sin_cos();
         c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
     };

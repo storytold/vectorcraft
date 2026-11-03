@@ -534,6 +534,43 @@ fn apply_reports_the_index_in_the_object_whose_row_it_names() {
     assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(1)), "a's row 0 holds two effects");
 }
 
+/// `effect.move`'s reply names where the effect landed in the object whose row the active item is
+/// (the first selected object), also when that object paints above the others.
+#[test]
+fn move_reports_the_index_in_the_object_whose_row_it_names() {
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    // Row 0's first effect goes to the end of the row: index 1 in b, 0 in a, which paints first.
+    let r = run(&mut s, "effect.move", json!({"from": 0, "to": 9}));
+    assert_eq!((node(&s, a).appearance.items[0].effects().len(), node(&s, b).appearance.items[0].effects().len()), (1, 2));
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(1)), "b's row 0 holds two effects");
+    // An explicit item is a row of the first target, a.
+    let r = run(&mut s, "effect.move", json!({"from": 0, "to": 9, "fromItem": 0}));
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "a's row 0 holds one effect");
+    // When the first selected object has no effect to move, the reply names the first object that moved.
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.move", json!({"from": 1, "to": 0}));
+    assert_eq!(r["ids"], json!([b.0]), "only b has a second effect in row 0");
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "b's effect moved to the start of its row 0");
+    // From the active row to an explicit destination (here the object's effects, where b already
+    // has one), the reply names the first target, a.
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": null}));
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.move", json!({"from": 0, "to": 9, "toItem": null}));
+    assert_eq!((node(&s, a).appearance.effects.len(), node(&s, b).appearance.effects.len()), (1, 2));
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(null), json!(0)), "a's effects hold one effect");
+}
+
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
 fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();

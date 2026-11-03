@@ -785,6 +785,51 @@ fn shape_builder_merge_across_a_line_removes_the_piece_between() {
     assert_eq!(layer_children(&s), 2);
 }
 
+/// A line from (100, 200) to (300, 200) and one from (200, 100) to (200, 300), with an unfilled
+/// square from (100, 100) to (300, 300) in front of them, selected; the top row merged, which puts
+/// the merged shape in front of the lines with its bottom edge along the first line. Returns the
+/// first line and the merged shape.
+fn lines_under_a_merged_row(s: &mut Session) -> (NodeId, NodeId) {
+    let h = line(s, (100.0, 200.0), (300.0, 200.0));
+    let v = line(s, (200.0, 100.0), (200.0, 300.0));
+    let sq = rect(s, 100.0, 100.0, 200.0, 200.0);
+    s.edit("t", |d, _| {
+        for id in [h, v, sq] {
+            d.node_mut(id).unwrap().appearance.set_fill(Paint::None);
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [h.0, v.0, sq.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[150, 150], [250, 150]]})).unwrap();
+    (h, NodeId(r["merged"].as_u64().unwrap()))
+}
+
+/// The left half of `h` (from x = 100 to 200) is gone.
+fn left_half_gone(s: &Session, h: NodeId) -> bool {
+    s.doc().unwrap().doc.node(h).is_none_or(|n| outline(n).0.bounds().is_none_or(|b| b.x0 > 199.0))
+}
+
+#[test]
+fn shape_builder_drag_from_a_merged_shape_over_a_line_under_its_edge_makes_one_region() {
+    let mut s = session();
+    let (h, m1) = lines_under_a_merged_row(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[250, 150], [150, 250]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!(s.doc().unwrap().doc.node(m1).is_none(), "the merged row is part of the new shape");
+    assert!((area(&s, merged) - 30000.0).abs() < 1.0);
+    assert!(left_half_gone(&s, h), "the line's stretch between the merged regions is removed");
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let ours = r["regions"].as_array().unwrap().iter().filter(|x| x["sources"] == json!([merged.0])).count();
+    assert_eq!(ours, 1, "{r}");
+
+    // Erasing from the merged row into the cell below takes the line's stretch between them too.
+    let mut s = session();
+    let (h, _) = lines_under_a_merged_row(&mut s);
+    s.execute("shapeBuilder.merge", &json!({"points": [[250, 150], [150, 250]], "erase": true})).unwrap();
+    assert!(left_half_gone(&s, h));
+}
+
 #[test]
 fn shape_builder_alt_deletes_a_region_or_a_line_piece() {
     let mut s = session();

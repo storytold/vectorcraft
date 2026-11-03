@@ -1304,6 +1304,10 @@ fn graph_designs_are_saved_pasted_and_deleted() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(series_parts(&s, id, 0).iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })));
     assert!(s.execute("graph.design", &json!({"delete": "Nope"})).is_err());
+    // A name listed many times deletes once (its graphs regenerate once).
+    s.execute("graph.design", &json!({"delete": vec!["Pill"; 1000]})).unwrap();
+    assert!(s.doc().unwrap().doc.graph_designs.is_empty());
+    assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
 }
 
 #[test]
@@ -2586,6 +2590,18 @@ fn formatting_the_whole_graphs_text_survives_it_being_drawn_again() {
     assert!(spec(&s, id).label_styles.values.is_some());
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(spec(&s, id).label_styles, vectorcraft_doc::LabelStyles::default());
+}
+
+/// A stroke given to all of a graph's text without a weight is kept at 1 pt, as `paint.setStroke` keeps it.
+#[test]
+fn a_stroke_given_to_the_whole_graphs_text_is_kept_at_1_pt() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"stroke": "#ff0000"})).unwrap();
+    let legend = spec(&s, id).label_styles.legend.unwrap();
+    assert_eq!((legend.stroke.color().map(|c| c.to_hex()), legend.stroke_width), (Some("#ff0000".into()), 1.0));
 }
 
 #[test]

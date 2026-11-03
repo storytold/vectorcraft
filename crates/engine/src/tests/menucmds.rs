@@ -1948,6 +1948,125 @@ fn select_same_font_size_and_fill() {
     assert!(s.execute("select.same.fontSize", &json!({})).is_err());
 }
 
+/// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
+/// both match the first character of the selected type: the same fill with another stroke, or the
+/// same stroke with another fill, is left out, and in type with several runs one run has to match
+/// both.
+#[test]
+fn select_same_text_fill_and_stroke_color_needs_both_to_match() {
+    let mut s = session();
+    let typed = |s: &mut Session, y: f64, fill: &str, stroke: &str| {
+        let id = id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type"})).unwrap());
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let (red, blue, green) = ("#ff0000", "#0000ff", "#00ff00");
+    let a = typed(&mut s, 20.0, red, blue);
+    let both = typed(&mut s, 60.0, red, blue);
+    let same_fill = typed(&mut s, 100.0, red, green);
+    let same_stroke = typed(&mut s, 140.0, green, blue);
+    // Mixed runs: "ty" matches both; the other runs do not.
+    let mixed = typed(&mut s, 180.0, green, green);
+    s.execute("text.setRangeStyle", &json!({"id": mixed.0, "start": 0, "end": 2, "fill": red, "stroke": blue})).unwrap();
+    // Mixed runs where one run has the fill and another the stroke: no run matches both.
+    let split = typed(&mut s, 220.0, green, green);
+    s.execute("text.setRangeStyle", &json!({"id": split.0, "start": 0, "end": 2, "fill": red})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": split.0, "start": 2, "end": 4, "stroke": blue})).unwrap();
+    let r = rect(&mut s, 300.0, 0.0, 5.0, 5.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "color": red})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("select.same.textFillAndStrokeColor", &json!({})).unwrap()["count"], 3);
+    assert_eq!(selected(&s), vec![a, both, mixed]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "selecting adds no undo step");
+    // The single-attribute commands take the type that matches one of the two.
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("select.same.textFillColor", &json!({})).unwrap()["count"], 5);
+    assert_eq!(selected(&s), vec![a, both, same_fill, mixed, split]);
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("select.same.textStrokeColor", &json!({})).unwrap()["count"], 5);
+    assert_eq!(selected(&s), vec![a, both, same_stroke, mixed, split]);
+    // With no type selected the command reports it.
+    sel(&mut s, &[r]);
+    assert!(s.execute("select.same.textFillAndStrokeColor", &json!({})).is_err());
+}
+
+#[test]
+fn select_same_character_colors_ignore_empty_text() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 20, "text": "a"})).unwrap());
+    let b = id_of(&s.execute("text.create", &json!({"x": 0, "y": 40, "text": "b"})).unwrap());
+    let empty = id_of(&s.execute("text.create", &json!({"x": 0, "y": 60, "text": ""})).unwrap());
+    for cmd in ["select.same.textFillColor", "select.same.textStrokeColor", "select.same.textFillAndStrokeColor"] {
+        sel(&mut s, &[a]);
+        s.execute(cmd, &json!({})).unwrap();
+        assert_eq!(selected(&s), vec![a, b], "{cmd}: empty object {empty:?}");
+    }
+}
+
+#[test]
+fn select_same_link_block_series_selects_the_frames_of_a_thread() {
+    let mut s = session();
+    let frame = |s: &mut Session, x: f64, y: f64| {
+        id_of(&s.execute("text.create", &json!({"x": x, "y": y, "text": "words ".repeat(40), "area": {"width": 80, "height": 30}})).unwrap())
+    };
+    let (a, b, c) = (frame(&mut s, 10.0, 10.0), frame(&mut s, 110.0, 10.0), frame(&mut s, 210.0, 10.0));
+    sel(&mut s, &[a, b, c]);
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (d, e) = (frame(&mut s, 10.0, 200.0), frame(&mut s, 110.0, 200.0));
+    sel(&mut s, &[d, e]);
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let lone = text(&mut s, "alone");
+    let r = rect(&mut s, 300.0, 300.0, 10.0, 10.0);
+    let undo = s.doc().unwrap().history.undo.len();
+    // The middle frame of the first thread selects that thread's three frames, in thread order.
+    sel(&mut s, &[b]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 3);
+    assert_eq!(selected(&s), vec![a, b, c]);
+    // Frames of two threads select both threads.
+    sel(&mut s, &[c, e]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 5);
+    // Type in no thread selects itself; a path beside it is left out.
+    sel(&mut s, &[lone, r]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![lone]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "selecting adds no undo step");
+    // With no type selected the command is not available.
+    sel(&mut s, &[r]);
+    assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
+    // A selected group counts the type inside it, but not hidden or locked type.
+    let box_ = rect(&mut s, 400.0, 400.0, 10.0, 10.0);
+    sel(&mut s, &[d, box_]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[g]);
+    assert!(find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 2);
+    assert_eq!(selected(&s), vec![d, e]);
+    for props in [json!({"id": d.0, "visible": false}), json!({"id": d.0, "visible": true, "locked": true})] {
+        s.execute("layer.setProps", &props).unwrap();
+        sel(&mut s, &[g]);
+        assert!(!find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled, "{props}");
+        assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err(), "{props}");
+        assert_eq!(selected(&s), vec![g], "{props}");
+    }
+    s.execute("layer.setProps", &json!({"id": d.0, "locked": false})).unwrap();
+    // A frame on a hidden layer, selected by id, is not type to start from.
+    let l1 = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.setProps", &json!({"id": l1.0, "visible": false})).unwrap();
+    sel(&mut s, &[a]);
+    assert!(!find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled);
+    assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
+    s.execute("layer.setProps", &json!({"id": l1.0, "visible": true})).unwrap();
+    // In an isolated group, only the frames inside it count and are selected.
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[d]);
+    assert_eq!(s.execute("select.same.linkBlockSeries", &json!({})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![d]);
+    sel(&mut s, &[a]);
+    assert!(!find_command("select.same.linkBlockSeries").unwrap().info(&s).enabled);
+    assert!(s.execute("select.same.linkBlockSeries", &json!({})).is_err());
+}
+
 /// #1737: Select > Same reads type's fill and stroke from its characters (the first run), so type
 /// matches type and paths both ways.
 #[test]

@@ -151,7 +151,6 @@
 	All Artwork Above	Всички графични елементи отгоре
 	All Caps	Всички главни букви
 	All Categories	Всички категории
-	All colours are within the CMYK gamut	Всички цветове са в CMYK цветовата гама
 	All on Active Artboard	Всички на активната работна област
 	All on Same Layers	Всички на същите слоеве
 	All printer's marks	Всички печатарски марки
@@ -594,7 +593,6 @@ font-technology	Variable	Променливи
 	Convert to sRGB	Конвертиране в sRGB
 	Convert to Straight Lines	Преобразуване в прави линии
 	Convert:	Конвертиране:
-	Copied the CSS of {rules} object(s)	Копиран е CSS кодът на {rules} обект(а)
 	Copies:	Копия:
 	Copy	Копиране
 	Copy (make a transformed copy)	Копиране (създаване на трансформирано копие)
@@ -747,6 +745,7 @@ font-technology	Variable	Променливи
 	Delete Tab	Изтриване на табулация
 	Delete the graphic style “{name}”?	Изтриване на графичния стил „{name}“?
 	Delete Action Sets	Изтриване на набори от действия
+	Duplicate Action or Action Set	Дублиране на действие или набор от действия
 	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
 	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
 	Delete Theme	Изтриване на тема
@@ -782,7 +781,6 @@ font-technology	Variable	Променливи
 	Discard Empty Type	Отхвърляне на празен текст
 	Discard Recovered Documents	Отхвърляне на възстановени документи
 	Discard White Overprint in Output	Премахване на бял надпечат при изход
-	Discarded {} recovered document(s)	Отхвърлени възстановени документи: {}
 	Discord	Discord
 	Discretionary Hyphen	Избираемо сричкопренасяне
 	Discretionary Ligatures	Избираеми лигатури
@@ -838,13 +836,14 @@ font-technology	Variable	Променливи
 	Double Right Quotation Marks	Двойни дясна кавичка
 	Double-click	Двойно щракване
 	Double-click to edit the characters' paint	Двойно щракване за редактиране на оцветяването на знаците
+	Click to edit	Щракнете за редактиране
+	Double-click to edit	Двойно щракване за редактиране
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието
 	Download	Изтегляне
 	Download:	Изтегляне:
 	Downloaded {what}	Изтеглено: {what}
-	Downloaded {} file(s)	Изтеглени файлове: {}
 	Drag	Провлачване
 	Drag a handle	Провлачване на дръжка
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Провлачете графичен елемент тук или го изберете и щракнете върху +. Задръжте Alt за един актив от няколко обекта.
@@ -945,8 +944,6 @@ font-technology	Variable	Променливи
 	Embed page thumbnails	Вграждане на миниатюри на страници
 	Embedded	Вградено
 	Embedded Image	Вградено изображение
-	Embedded {n} image(s)	Вградени са {n} изображения
-	Embedded {n} image(s); {missing} missing: relink them first	Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 	Emulsion:	Емулсия:
 	En Dash	Средно тире
 	En Space	Интервал „ен“
@@ -1021,6 +1018,10 @@ font-technology	Variable	Променливи
 	Delete Export Preset	Изтриване на набор за експортиране
 	Export Presets	Набори за експортиране
 	Save Export Preset	Запазване на набор за експортиране
+	Export Export Presets	Експортиране на набори за експортиране
+	Export Preset…	Експортиране на набор…
+	Import Export Presets	Импортиране на набори за експортиране
+	Import Preset…	Импортиране на набор…
 	Export Layer	Експортиране на слой
 	Export Selection	Експортиране на избраното
 	All in One Folder	Всичко в една папка
@@ -1064,10 +1065,8 @@ font-technology	Variable	Променливи
 	Export Transparency Flattener Presets	Експортиране на предварителни настройки за сплескване на прозрачност
 	Export {count} Selected	Експортиране на {count} избрани
 	Export:	Експортиране:
-	Exported {count} file(s) to {folder}	Експортирани са {count} файла в {folder}
 	Exported {path}	Експортирано: {path}
 	Exported {what}	Експортирано: {what}
-	Exported {what} with {} note(s): {first}	Експортирани са {what} с {} бележка/бележки: {first}
 	Exporting {}	Експортиране на {}
 	Export…	Експортиране…
 	Extrude & Bevel…	Избутване и фасетка…
@@ -1178,6 +1177,7 @@ font-technology	Variable	Променливи
 	Flip Row Order	Обръщане реда на редовете
 	Flip Vertical	Вертикално обръщане
 	Float in Window	Плаващ прозорец
+	Float All in Windows	Всички в плаващи прозорци
 	Focal Fill	Фокусно запълване
 	Focal Stroke	Фокусен щрих
 	Folder	Папка
@@ -1244,6 +1244,7 @@ font-technology	Variable	Променливи
 	Get Preferences	Извличане на предпочитания
 	Get Text Range	Вземане на текстов диапазон
 	Global	Глобален
+	Global Adjust	Глобална корекция
 	Global Brush Dimensions	Глобални размери на четката
 	Global Process Color	Глобален процесен цвят
 	Global Process Color, CMYK	Глобален процесен цвят, CMYK
@@ -1340,6 +1341,10 @@ font-technology	Variable	Променливи
 	Hard Light	Твърда светлина
 	Hard Mix	Твърдо смесване
 	Harmony Rules:	Правила за хармония:
+	Segmented color wheel	Сегментирано цветово колело
+	Show smooth color wheel	Показване на плавно цветово колело
+	Show segmented color wheel	Показване на сегментирано цветово колело
+	Show color bars	Показване на цветни ленти
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -1657,6 +1662,8 @@ font-technology	Variable	Променливи
 	Large Thumbnail View	Изглед с големи миниатюри
 	Large Thumbnails	Големи миниатюри
 	Lasso Tool	Инструмент „Ласо“
+	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
+	Enclosing Lasso	Обхващащо ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -1794,6 +1801,7 @@ font-technology	Variable	Променливи
 	Manually	Ръчно
 	Mark as trapped	Маркиране като прехванато
 	Mark Older Files as [Converted] When Opened	Маркиране на по-стари файлове като [Конвертирани] при отваряне
+	Use System Defaults for Edit Original	Системни настройки по подразбиране за „Редактиране на оригинал“
 	Marker…	Маркер…
 	Marks	Маркери
 	Marks and Bleed	Маркери и изтичане
@@ -1856,6 +1864,7 @@ font-technology	Variable	Променливи
 	Modify	Модифициране
 	Mojikumi	Моджикуми
 	Insert Kashidas	Вмъкване на кашиди
+	Kashidas	Кашиди
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
@@ -1967,6 +1976,8 @@ font-technology	Variable	Променливи
 	Roundness:	Закръгленост:
 	Fixed	Фиксирано
 	Pressure	Натиск
+	Tilt	Наклон
+	Bearing	Азимут
 	Shape:	Форма:
 	Bristle Length:	Дължина на косъма:
 	Bristle Density:	Плътност на косъмчетата:
@@ -2029,6 +2040,10 @@ font-technology	Variable	Променливи
 	New Without Dialog	Нов без диалогов прозорец
 	New Workspace	Ново работно пространство
 	New Workspace…	Ново работно пространство…
+	New Toolbar…	Нова лента с инструменти…
+	New Toolbar	Нова лента с инструменти
+	Show Toolbar	Показване на лента с инструменти
+	List Toolbars	Списък на лентите с инструменти
 	New {kind} Style…	Нов стил ({kind})…
 	New…	Нов…
 	Next	Следващ
@@ -2174,7 +2189,6 @@ font-technology	Variable	Променливи
 	Open Recent Files	Скорошни файлове
 	Open Swatch Library	Отваряне на библиотека с образци
 	Open the URL in the web browser	Отваряне на URL адреса в уеб браузъра
-	Opened with {} note(s): {}	Отворено с {} бележка(и): {}
 	Open…	Отваряне…
 	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
@@ -2235,7 +2249,6 @@ font-technology	Variable	Променливи
 	Package collects a saved document with its linked files and fonts.	Пакетът събира запазен документ заедно с неговите свързани файлове и шрифтове.
 	Package created	Пакетът е създаден
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Пакетиран е {n} файл в {folder} {note}|Пакетирани са {n} файла в {folder} {note}
-	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
 	Package…	Пакет…
 	Page	Страница
 	Page information	Информация за страница
@@ -2326,6 +2339,8 @@ font-technology	Variable	Променливи
 	Plates	Пластини
 	Platform:	Платформа:
 	Play Current Selection	Изпълнение на текущия избор
+	Save Actions…	Запазване на действия…
+	Load Actions…	Зареждане на действия…
 	Plug-in Info	Информация за приставката
 	Plug-ins	Приставки
 	Plug-in…	Приставка…
@@ -2428,6 +2443,10 @@ digits	Telugu	Телугу
 digits	Kannada	Каннада
 digits	Malayalam	Малаялам
 	Proportional Lining	Пропорционални подравнени цифри
+	Position:	Позиция:
+	Default Position	Стандартна позиция
+	Numerator	Числител
+	Denominator	Знаменател
 	Proportional Oldstyle	Пропорционални стари цифри
 	Pucker & Bloat…	Свиване и раздуване…
 	Pucker Tool	Инструмент „Свиване“
@@ -2584,9 +2603,6 @@ digits	Malayalam	Малаялам
 	Relink	Свързване наново
 	Relink Linked Files to the Document	Свързване наново на свързаните файлове към документа
 	Relink to Folder…	Свързване наново към папка…
-	Relinked {n} image(s)	Свързани наново {n} изображения
-	Relinked {n} image(s); not in that folder: {}	Свързани наново {n} изображения; липсващи в тази папка: {}
-	Relinked {} image(s)	Свързани наново {} изображения
 	Relink…	Свързване наново…
 	Find Linked Files	Търсене на свързани файлове
 	Find Linked Files in Folder…	Търсене на свързани файлове в папка…
@@ -2632,6 +2648,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
 	Replace With Font	Замяна с шрифт
+	Replace With Font From	Замяна с шрифт от
+	System	Система
 	Replaces the saved preset of that name.	Заменя записаната предварителна настройка с това име.
 	Replace…	Замяна…
 	Require a password to open the document	Изискване на парола за отваряне на документа
@@ -2667,7 +2685,6 @@ digits	Malayalam	Малаялам
 	Restore every preference to its default (applied on OK)	Възстановяване на всички настройки по подразбиране (прилага се при ОПК)
 	Restore Recovered Documents	Възстановяване на възстановените документи
 	Restored documents open unsaved: save them to keep them.	Възстановените документи се отварят незаписани: запазете ги, за да ги съхраните.
-	Restored {} recovered document(s): save them to keep them	Възстановени са {} възстановени документ(и): запазете ги, за да ги съхраните
 	Restrict printing, editing and other tasks	Ограничаване на печата, редактирането и други задачи
 	Reverse Front to Back	Обръщане от преден към заден
 	Reverse Gradient	Обръщане на градиент
@@ -2727,11 +2744,13 @@ digits	Malayalam	Малаялам
 	Save a Copy	Запазване на копие
 	Save a Copy…	Запазване на копие…
 	Save As	Запазване като
+	Save As Preset…	Запази като предварителна настройка…
 	Save as PDF…	Запазване като PDF…
 	Save as preset:	Запази като предварителна настройка:
 	Save as Template	Запази като шаблон
 	Save as Template…	Запази като шаблон…
 	Save As…	Запази като…
+	Save Changes	Запази промените
 	Save changes to {name}	Запазване на промените в {name}
 	Save color group to Swatch panel	Запазване на цветовата група в панела „Образци“
 	Save Colors as Swatches	Запази цветовете като образци
@@ -2833,7 +2852,6 @@ digits	Malayalam	Малаялам
 	Saved Views	Запазени изгледи
 	Saved {n} files beside {path}	Записани са {n} файла до {path}
 	Saved {path}	Записано: {path}
-	Saved {path} with {} note(s): {first}	Запазено {path} с {} бележка(и): {first}
 	Saves the current bars, toolbar and panel layout.	Запазва текущите ленти, лентата с инструменти и подредбата на панелите.
 	Save…	Запази…
 	Saving	Запазване
@@ -3267,6 +3285,7 @@ digits	Malayalam	Малаялам
 	Graphic	Графика
 	Show all open documents	Показване на всички отворени документи
 	Symbol Instance	Екземпляр на символ
+	Link Block Series	Серия свързани блокове
 	Symbol Libraries	Библиотеки със символи
 	Symbol Screener Tool	Инструмент „Филтър на символи“
 	Symbol Scruncher Tool	Инструмент „Свиване на символи“
@@ -3290,6 +3309,10 @@ digits	Malayalam	Малаялам
 	Target Contents	Целево съдържание
 	Target:	Цел:
 	Tate-chu-yoko	Тате-чу-йоко
+	Tate-chu-yoko Settings…	Настройки на Тате-чу-йоко…
+	Tate-chu-yoko Settings	Настройки на Тате-чу-йоко
+	Up/Down:	Нагоре/надолу:
+	Left/Right:	Наляво/надясно:
 	Temperature	Температура
 	Temperature/Tint…	Температура/Нюанс…
 	Template	Шаблон
@@ -3298,6 +3321,7 @@ digits	Malayalam	Малаялам
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
+	Text Fill & Stroke Color	Цвят на запълване и щрих на текста
 	Text Fill Color	Цвят на запълване на текста
 	Text Import Options	Опции за импортиране на текст
 	Text Stroke Color	Цвят на щриха на текста
@@ -3470,7 +3494,6 @@ digits	Malayalam	Малаялам
 	Update Links	Актуализиране на връзките
 	Update Changed Links	Актуализиране на променените връзки
 	Update Modified Links	Актуализиране на модифицираните връзки
-	Updated {} image(s)	Актуализирани са {} изображения
 	UPPERCASE	Главни букви
 	URL:	URL адрес:
 	Use 	Използване 
@@ -3853,14 +3876,12 @@ axis	Both	И двете
 @msg	No saved views (View → New View…)	Няма запазени изгледи (Изглед → Нов изглед…)
 @msg	Offset Path: select paths	Отместване на път: изберете пътища
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Отместване на път: отместването не оставя нищо от избраните пътища (вътрешно отместване, по-голямо от фигурите)
-@msg	Opened with {_1} note(s): {_2}	Отворено с {_1} бележка(и): {_2}
 @msg	Opened {url}	Отворено: {url}
 @msg	Outline Stroke: no stroked paths selected	Преобразуване на щрих в контур: няма избрани пътища с щрих
 @msg	PDF settings are not an object	Настройките за PDF не са обект
 @msg	PDF security settings are not an object	Настройките за сигурност на PDF не са обект
 @msg	PDF writer error: {0}	Грешка на PDF записа: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Пакетиран е {n} файл в {folder} ({note})|Пакетирани са {n} файла в {folder} ({note})
-@msg	Packaged {n} file(s){note}	Пакетирани са {n} файла{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
 @msg	Release Guides: no guides	Освобождаване на водачи: няма водачи
 @msg	Release: no layer to put the rectangle in	Освобождаване: няма слой, в който да се постави правоъгълникът
@@ -4128,6 +4149,14 @@ axis	Both	И двете
 @msg	no selection bounds	няма граници на селекцията
 @msg	no slice selected	няма избран срез
 @msg	no such action	няма такова действие
+@msg	no such action set	няма такъв набор от действия
+@msg	the action sets changed; nothing was deleted	наборите от действия се промениха; нищо не беше изтрито
+@msg	no action set to save	няма набор от действия за запазване
+@msg	not an action set file	не е файл с набор от действия
+@msg	the action set file is larger than 8 MiB	файлът с набор от действия е по-голям от 8 MiB
+@msg	the action set file holds more than 1,000 actions	файлът с набор от действия съдържа повече от 1000 действия
+@msg	the action set file needs a later version of VectorCraft	файлът с набор от действия изисква по-нова версия на VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	действие във файла с набор от действия има повече от 10 000 стъпки
 @msg	no such anchor	няма такава опорна точка
 @msg	no such artboard	няма такава работна област
 @msg	the artboard is locked	работната област е заключена
@@ -4352,6 +4381,9 @@ axis	Both	И двете
 @msg	unsupported: {0}	не се поддържа: {0}
 @msg	variables are locked	променливите са заключени
 @msg	variables that aren't text were left out: {kinds}	променливите, които не са текстови, бяха пропуснати: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	нов документ няма да прочете тези променливи обратно с техния вид: {names}
+@msg	a new document refuses this file because of these variables: {names}	нов документ отказва този файл заради тези променливи: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заглавието `{header}` за `{name}` ще бъде прочетено като променливата `{other}`: преименувайте едната от тях
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файловете от версия {0} не могат да бъдат компресирани: само версия {COMPRESSED_SINCE} и по-нови отварят компресирани файлове
 @msg	width and height are at least 1 pixel	ширината и височината са най-малко 1 пиксел
 @msg	workspace name can't be empty	името на работното пространство не може да бъде празно
@@ -4382,7 +4414,9 @@ axis	Both	И двете
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Неуспешно поставяне на {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Неуспешно поставяне от клипборда: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Неуспешно поставяне: документът, в който се поставяше, е затворен
 @msg	Saved {path} with {_1} note(s): {first}	{path} е запазен с {_1} бележка/и: {first}
+@msg	Exported {what} with {_1} note(s): {first}	{what} е експортиран с {_1} бележка/и: {first}
 @msg	Exported {what}	Експортирано: {what}
 @msg	Saved {n} files beside {path}	Записани са {n} файла до {path}
 @msg	Saving	Запазване
@@ -4390,9 +4424,12 @@ axis	Both	И двете
 @msg	Exporting {_1}	Експортиране на {_1}
 @msg	Packaging {_1}	Пакетиране на {_1}
 @msg	Placing {_1}	Вмъкване на {_1}
+@msg	Pasting	Поставяне
 @msg	Saving recovery data for {_1}	Записване на данни за възстановяване на {_1}
-@msg	Discarded {_1} recovered document(s)	Изхвърлени са {_1} възстановени документ(и)
-@msg	Restored {_1} recovered document(s): save them to keep them	Възстановени са {_1} документ(и): запазете ги, за да ги съхраните
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 @msgplural	Embedded {n} image|Embedded {n} images	Вградено е {n} изображение|Вградени са {n} изображения
 @msgplural	Relinked {n} image|Relinked {n} images	Свързано наново е {n} изображение|Свързани наново са {n} изображения
@@ -4413,6 +4450,8 @@ axis	Both	И двете
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Копиран е CSS кодът на {n} обект|Копиран е CSS кодът на {n} обекта
 @msgplural	Downloaded {n} file|Downloaded {n} files	Изтеглен е {n} файл|Изтеглени са {n} файла
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортиран е {n} файл в {folder}|Експортирани са {n} файла в {folder}
+@msg	All colors are within the CMYK gamut	Всички цветове са в CMYK цветовата гама
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} цвят е извън CMYK цветовата гама|{n} цвята са извън CMYK цветовата гама
 @msg	Unembedded to {_1}	Извадено от вграждане в {_1}
 @msg	Reset {_1}	Нулирано: {_1}
 @msg	Sent to {_1}	Изпратено към {_1}
@@ -4438,7 +4477,15 @@ axis	Both	И двете
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	това не е лого с плътни цветове ({_1}% от плътните му зони съвпадат с малко на брой плътни цветове), затова режимът „Плоско лого“ ще превърне градиентите му в петна: използвайте режима „Цвят“
 @msg	`{what}` closes nothing	`{what}` не затваря нищо
 @msg	`{what}` closes something it didn't open	`{what}` затваря нещо, което не е отворило
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` е името на настройка от document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	няма настройка за експортиране `{n}` (вижте document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	няма запазени настройки за експортиране (посочете вградените в `names`)
+@msg	not an export presets file (format `{_1}`)	не е файл с настройки за експортиране (формат `{_1}`)
+@msg	not an export presets file: {e}	не е файл с настройки за експортиране: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	`globalAdjust` must be an object	`globalAdjust` трябва да е обект
 @msg	a path has too many points	пътят има твърде много точки
+@msg	it ends inside a group or compound path	той завършва вътре в група или съставен път
 @msg	it ends inside a layer	той завършва вътре в слой
 @msg	it has art outside its layers	той има обекти извън своите слоеве
 @msg	it has more than {MAX_NODES} objects	той има повече от {MAX_NODES} обекта
@@ -4455,6 +4502,7 @@ axis	Both	И двете
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF частта не можа да бъде прочетена ({_1}): файлът беше отворен от данните си за редактиране
 @msg	No fonts are missing in this document	В този документ няма липсващи шрифтове
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не търси в папките на други приложения или на системата: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не търси в папките Shared или Public в Users: {path}
@@ -5220,6 +5268,7 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци
 file-filter	Templates	Шаблони
@@ -5376,6 +5425,11 @@ theme	Appearance	Външен вид
 	Import Data Sets…	Импортиране на набори от данни…
 	Export Data Sets…	Експортиране на набори от данни…
 	Load Variable Library…	Зареждане на библиотека с променливи…
+	Save Variable Library…	Запазване на библиотека с променливи…
+@msg	a variable library holds text variables, and the document has none	библиотеката с променливи съдържа текстови променливи, а документът няма такива
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	променливата `{name}` не може да бъде запазена в библиотека с променливи: преименувайте я така, че да започва с буква или `_`, без интервали и символи, различни от `-`, `_` и `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	наборът от данни `{name}` съдържа управляващ знак, който библиотеката с променливи не може да съдържа
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	наборът от данни `{name}` започва или завършва с интервал, който библиотеката с променливи не може да съдържа
 	Make Graph Dynamic	Динамична диаграма
 	Batch…	Пакет…
 	Source Folder:	Изходна папка:
@@ -5429,6 +5483,11 @@ theme	Appearance	Външен вид
 	Export Type:	Тип на експортиране:
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
+@msg	an action is already recording	вече се записва действие
+@msg	no such function key	няма такъв функционален клавиш
+@msg	no such color	няма такъв цвят
+@msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
+@msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -5491,7 +5550,9 @@ theme	Appearance	Външен вид
 	Effect Gallery	Галерия с ефекти
 	Filters	Филтри
 	Select artwork to apply effects	Изберете графика, за да приложите ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
+@msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
 	Move Anchor Point	Преместване на опорна точка
@@ -5517,6 +5578,7 @@ theme	Appearance	Външен вид
 	Ruby…	Руби…
 	Ruby	Руби
 	Geometric Guides	Геометрични водачи
+	Geometric Patterns	Геометрични мостри
 	Ease In	Плавно начало
 	Ease Out	Плавен край
 	Ease In Out	Плавно начало и край
@@ -5569,15 +5631,26 @@ axis	Y Axis	Y ос
 	New Set	Нов набор
 	Set Options…	Опции на набора…
 	Set Options	Опции на набора
+	Action Options…	Опции на действието…
+	Action Options	Опции на действието
+	Rename Action	Преименуване на действие
+	New Action…	Ново действие…
+	New Action	Ново действие
+	Create New Action	Създаване на ново действие
+	Play Action	Изпълнение на действие
+	Action Set:	Набор от действия:
+	Function Key:	Функционален клавиш:
+	Record	Запис
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+	Leave Out of Global Edit	Изключване от глобалното редактиране
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
 	On Artboards	В работните области
 	All Artboards	Всички работни области
 	Include Objects On Canvas	Включване на обекти от платното
-	Result(s): {count}	Резултат(и): {count}
+@plural	Result: {n}|Results: {n}	Резултат: {n}|Резултати: {n}
 	Add to Symbols	Добавяне към символи
 	Basic Shapes	Основни фигури
 	Open Symbol Library	Отваряне на библиотека със символи
@@ -6052,3 +6125,20 @@ breakText	Glyphs	Глифи
 	Small to Large	От малко към голямо
 	Large to Small	От голямо към малко
 	Distribute Evenly	Равномерно разпределение
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Създаване на легенда на образците
+	Create Swatch Legend…	Създаване на легенда на образците…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Инструменти за текст
+	Text Tweaker…	Настройка на текста…
+	Text Tweaker	Настройка на текста
+	Attribute:	Атрибут:
+	From:	От:
+	To:	До:
+	Bow	Дъга
+	Spike	Връх
+	Skip Spaces	Пропускане на интервалите
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея

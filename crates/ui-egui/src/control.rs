@@ -191,6 +191,18 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
+        // each one's document index and rect. Canvas coordinates map to the current document's
+        // pane, inside its rulers and scroll bars (`canvasRect`).
+        "tiled": app.ui.tiled,
+        "panes": app.canvas.panes.last.iter().map(|(i, c)| json!({
+            "document": i,
+            "rect": [c.left(), c.top(), c.width(), c.height()],
+            "active": app.session.active_index() == Some(*i),
+        })).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the documents in floating windows, by index. While
+        // the current one floats, `canvasRect` is in its window's coordinates.
+        "floating": (0..app.session.documents().len()).filter(|i| crate::doc_windows::is_floating(app, *i)).collect::<Vec<_>>(),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
@@ -258,7 +270,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
-        "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
+        "ui.tool.list" => {
+            let groups: Vec<_> = vectorcraft_tools::TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
+            ok(serde_json::to_value(groups).unwrap_or_default())
+        }
         "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
@@ -326,10 +341,20 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
+                // In order: a field that sets others (an export preset) goes before the fields after it.
+                // A field that fails leaves the dialog as it was before the request.
+                let before = app.ui.dialog.clone();
                 for (f, value) in fields {
-                    crate::dialogs::set_field(d, f, value);
+                    let old = app.ui.dialog.as_ref().and_then(|d| d.fields.get(&f).cloned());
+                    if let Some(d) = app.ui.dialog.as_mut() {
+                        crate::dialogs::set_field(d, f.clone(), value);
+                    }
+                    if let Err(e) = crate::dialogs::field_set(app, &f, old.as_ref()) {
+                        app.ui.dialog = before;
+                        return err(e);
+                    }
                 }
-                ok(serde_json::to_value(&*d).unwrap_or_default())
+                ok(app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default())
             }
             None => err("no dialog open"),
         },
@@ -519,7 +544,8 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
         };
         let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
         let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-        let pos = if e.get("space").and_then(Value::as_str) == Some("screen") {
+        let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+        let pos = if screen {
             match xf {
                 Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
                 None => return err("no canvas yet"),
@@ -528,8 +554,13 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
             vectorcraft_geom::Point::new(x, y)
         };
         let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        // A tilt given in screen axes leans the same way on the page as on the screen.
+        let pen = PointerEvent::json_pen(e).map(|q| match xf {
+            Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
+            _ => q,
+        });
         let backquote = e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
-        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e) }, view);
+        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);
         let hold = PointerEvent::json_hold(e);
         if hold > 0.0 {
             let r = app.session.tool_tick(hold, view);
@@ -593,6 +624,10 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
 fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // Outline is a setting of the active document's view: without one, nothing is set.
+    if p.get("outline").is_some_and(Value::is_boolean) && app.session.active().is_none() {
+        return err("no document");
+    }
     let mut r = Ok(Value::Null);
     if let Some(b) = s("brightness") {
         r = app.run("window.brightness", json!({"brightness": b}));
@@ -613,7 +648,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
         if let Some(want) = p.get(k).and_then(Value::as_bool) {
             let cur = match k {
                 "rulers" => app.ui.view.rulers,
-                "outline" => app.ui.view.outline,
+                "outline" => app.outline_view(),
                 "grid" => app.ui.view.grid,
                 "smartGuides" => app.ui.view.smart_guides,
                 _ => app.ui.view.bounding_box,

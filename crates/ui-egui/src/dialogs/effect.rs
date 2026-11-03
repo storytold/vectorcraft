@@ -106,10 +106,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The effects of the first selected object that `item` (an index or null) addresses.
+/// The function reads effects at `item` (an index or null) from the targeted node or first selected object.
 fn target_effects(app: &VectorcraftApp, item: &Value) -> Vec<vectorcraft_doc::Effect> {
     let Some(st) = app.session.active() else { return vec![] };
-    let node = st.selection.objects.first().and_then(|id| st.doc.node(*id));
+    let node = st.selection.subjects().first().and_then(|id| st.doc.node(*id));
     node.and_then(|n| n.appearance.effects_at(item.as_u64().map(|i| i as usize))).cloned().unwrap_or_default()
 }
 
@@ -294,7 +294,7 @@ fn texturizer_textures(loaded: bool) -> form::Choices {
 /// it and picked in the Texture menu.
 fn load_texture(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     use vectorcraft_engine::cmd::fileio;
-    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, f.extensions)));
+    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, fileio::read_extensions(f))));
     let path = crate::picks::open(app, &crate::FilePick { filters, ..Default::default() }).ok_or("cancelled")?;
     // The button is off where files can't be read.
     let Some(read) = app.services.read.as_ref() else { return Ok(()) };
@@ -550,7 +550,7 @@ fn scribble_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Uni
 /// last previewed.
 fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
     ui.horizontal_top(|ui| {
-        ui.vertical(|ui| transform_each::sections(ui, d, unit));
+        ui.vertical(|ui| transform_each::sections(ui, d, unit, true));
         ui.add_space(16.0);
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Options"));
@@ -560,7 +560,7 @@ fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
             form::check(ui, d, "strokes", tl!("Scale Strokes & Effects"));
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, tl!("Copies:"));
-                if let Some(n) = widgets::range_field(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
+                if let Some(n) = widgets::range_field_live(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
                     d.fields.insert("copies".into(), json!(n));
                 }
             });

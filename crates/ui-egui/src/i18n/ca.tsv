@@ -249,7 +249,6 @@
 	All Artwork Above	Tot l’art superior
 	All Caps	Totes majúscules
 	All Categories	Totes les categories
-	All colours are within the CMYK gamut	Tots els colors són dins de la gamma CMYK
 	All in One Folder	Tot en una carpeta
 	All Layers	Totes les capes
 	All on Active Artboard	Tot al tauler actiu
@@ -435,6 +434,7 @@
 	Basic Shapes	Formes bàsiques
 	Batch	Lot
 	Batch…	Lot…
+	Bearing	Orientació
 	Before Last:	Abans de l’últim:
 	Begin Recording	Comença a enregistrar
 	Begin Undo Group	Inicia el grup de desfets
@@ -845,7 +845,6 @@
 	Convert:	Converteix:
 	Convex	Convex
 	Cool	Fred
-	Copied the CSS of {rules} object(s)	S’ha copiat el CSS de {rules} objecte(s)
 	Copies:	Còpies:
 	Copy	Copia
 	Copy (make a transformed copy)	Copia (fes una còpia transformada)
@@ -1064,6 +1063,7 @@
 	Delete Tab	Suprimeix la tabulació
 	Delete the graphic style “{name}”?	Voleu suprimir l’estil gràfic “{name}”?
 	Delete Action Sets	Suprimeix els conjunts d’accions
+	Duplicate Action or Action Set	Duplica l’acció o el conjunt d’accions
 	Delete the action set “{name}” and its actions?	Voleu suprimir el conjunt d’accions “{name}” i les seves accions?
 	Delete the selected action sets and their actions?	Voleu suprimir els conjunts d’accions seleccionats i les seves accions?
 	Delete the library “{name}”?	Voleu suprimir la biblioteca “{name}”?
@@ -1124,7 +1124,6 @@
 	Discard Empty Type	Descarta el text buit
 	Discard Recovered Documents	Descarta els documents recuperats
 	Discard White Overprint in Output	Descarta la sobrempressió del blanc a la sortida
-	Discarded {} recovered document(s)	S’han descartat {} documents recuperats
 	Discord	Discord
 	Discretionary Hyphen	Guionet discrecional
 	Discretionary Ligatures	Lligadures discrecionals
@@ -1205,7 +1204,6 @@
 	Download	Baixa
 	Download:	Baixa:
 	Downloaded {what}	S’ha baixat {what}
-	Downloaded {} file(s)	S’han baixat {} fitxers
 	Draft	Esbós
 	Drag	Arrossega
 	Drag a handle	Arrossega una maneta
@@ -1354,8 +1352,6 @@
 	Embed page thumbnails	Incrusta les miniatures de pàgina
 	Embedded	Incrustat
 	Embedded Image	Imatge incrustada
-	Embedded {n} image(s)	{n} imatge/imatges incrustades
-	Embedded {n} image(s); {missing} missing: relink them first	{n} imatge/imatges incrustades; en falten {missing}: torna a enllaçar-les primer
 	Emulsion:	Emulsió:
 	En Dash	Ratlla en
 	En Space	Espai en
@@ -1480,10 +1476,8 @@
 	Export Type:	Tipus d’exportació:
 	Export {count} Selected	Exporta {count} elements seleccionats
 	Export:	Exporta:
-	Exported {count} file(s) to {folder}	S’han exportat {count} fitxers a {folder}
 	Exported {path}	S’ha exportat {path}
 	Exported {what}	S’ha exportat {what}
-	Exported {what} with {} note(s): {first}	S’ha exportat {what} amb {} notes: {first}
 	Exporting {}	S’està exportant {}
 	Export…	Exporta…
 	Extrude & Bevel…	Extrudeix i bisella…
@@ -1616,6 +1610,7 @@ digits	Malayalam	Malaiàlam
 	Flip Vertical	Inverteix verticalment
 	Flip:	Inverteix:
 	Float in Window	Flota a la finestra
+	Float All in Windows	Flota-ho tot en finestres
 	Float Panel	Flota el panell
 	Float Tool Group	Flota el grup d’eines
 	Focal Fill	Farciment focal
@@ -1692,6 +1687,7 @@ digits	Malayalam	Malaiàlam
 	Generate CSS	Genera CSS
 	Generate CSS: the whole document's CSS while nothing is selected	Genera CSS: el CSS de tot el document quan no hi ha res seleccionat
 	Geometric Guides	Guies geomètriques
+	Geometric Patterns	Motius geomètrics
 	German	Alemany
 	Get Preferences	Obtén les preferències
 	Get Text Range	Obtén l’interval de text
@@ -1699,8 +1695,10 @@ digits	Malayalam	Malaiàlam
 	Glass	Vidre
 	Glass…	Vidre…
 	Global	Global
+	Global Adjust	Ajust global
 	Global Brush Dimensions	Dimensions globals del pinzell
 	Global Edit Options	Opcions globals d’edició
+	Leave Out of Global Edit	Exclou de l’edició global
 	Global Process Color	Color de procés global
 	Global Process Color, CMYK	Color de procés global, CMYK
 	Glow Amount	Quantitat de resplendor
@@ -1808,6 +1806,10 @@ digits	Malayalam	Malaiàlam
 	Hard Mix	Mescla dura
 	Harmony Rules	Regles d’harmonia
 	Harmony Rules:	Regles d’harmonia:
+	Segmented color wheel	Roda de color segmentada
+	Show smooth color wheel	Mostra la roda de color contínua
+	Show segmented color wheel	Mostra la roda de color segmentada
+	Show color bars	Mostra les barres de color
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -1987,6 +1989,7 @@ digits	Malayalam	Malaiàlam
 	Insert Character	Insereix caràcter
 	Insert Inline Symbol	Insereix símbol en línia
 	Insert Kashidas	Insereix kashides
+	Kashidas	Kashides
 	Insert Special Character	Insereix caràcter especial
 	Insert Whitespace Character	Insereix caràcter d’espai
 	Inserting, deleting and rotating pages	Inserir, suprimir i girar pàgines
@@ -2099,6 +2102,8 @@ digits	Malayalam	Malaiàlam
 	Largest:	El més gran:
 	Lasso	Llaç
 	Lasso Tool	Eina de llaç
+	Enclosing Lasso Tool	Eina de llaç envoltant
+	Enclosing Lasso	Llaç envoltant
 	Last	Últim
 	Last Artboard	Últim tauler
 	Last commit	Últim commit
@@ -2246,6 +2251,11 @@ digits	Malayalam	Malaiàlam
 	Load Texture…	Carrega una textura…
 	Load Variable Library	Carrega la biblioteca de variables
 	Load Variable Library…	Carrega la biblioteca de variables…
+	Save Variable Library…	Desa la biblioteca de variables…
+@msg	a variable library holds text variables, and the document has none	una biblioteca de variables conté variables de text, i el document no en té cap
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no es pot desar en una biblioteca de variables: canvieu-li el nom perquè comenci amb una lletra o `_`, sense espais ni símbols que no siguin `-`, `_` i `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	el conjunt de dades `{name}` conté un caràcter de control, que una biblioteca de variables no pot contenir
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	el conjunt de dades `{name}` comença o acaba amb un espai en blanc, que una biblioteca de variables no pot contenir
 	Loaded Texture	Textura carregada
 	Loads native code	Carrega codi natiu
 	Local Libraries	Biblioteques locals
@@ -2324,6 +2334,7 @@ digits	Malayalam	Malaiàlam
 	Manually	Manualment
 	Mark as trapped	Marca com a reventat
 	Mark Older Files as [Converted] When Opened	Marca els fitxers antics com a [Convertit] en obrir-los
+	Use System Defaults for Edit Original	Utilitza els valors per defecte del sistema per a Edita l’original
 	Marker…	Marcador…
 	Marks	Marques
 	Marks and Bleed	Marques i sangrat
@@ -2551,6 +2562,10 @@ digits	Malayalam	Malaiàlam
 	New Without Dialog	Nou sense diàleg
 	New Workspace	Espai de treball nou
 	New Workspace…	Espai de treball nou…
+	New Toolbar…	Barra d’eines nova…
+	New Toolbar	Barra d’eines nova
+	Show Toolbar	Mostra la barra d’eines
+	List Toolbars	Llista les barres d’eines
 	New {kind} Style…	Nou estil de {kind}…
 	New…	Nou…
 	Next	Següent
@@ -2756,7 +2771,6 @@ digits	Malayalam	Malaiàlam
 	Open the URL in the web browser	Obre l’URL al navegador web
 	Open this dialog with these settings next time	Obre aquest quadre de diàleg amb aquesta configuració la propera vegada
 	Open this setting's help page	Obre la pàgina d’ajuda d’aquest paràmetre
-	Opened with {} note(s): {}	S’ha obert amb {} nota(es): {}
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	En obrir-lo s’ha omès el que VectorCraft encara no pot llegir ({what}), de manera que substituir-lo ho perd per sempre. Desa’l amb un altre nom per conservar-ho.
 	Opens files in other apps	Obre fitxers en altres aplicacions
 	Opens network connections	Obre connexions de xarxa
@@ -2837,7 +2851,6 @@ digits	Malayalam	Malaiàlam
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	S’ha empaquetat {n} fitxer a {folder}|S’han empaquetat {n} fitxers a {folder}
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	S’ha empaquetat {n} fitxer a {folder} {note}|S’han empaquetat {n} fitxers a {folder} {note}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	S’ha empaquetat {n} fitxer {note}|S’han empaquetat {n} fitxers {note}
-	Packaged {n} file(s){note}	S’han empaquetat {n} fitxers{note}
 	Package…	Empaqueta…
 	Page	Pàgina
 	Page Cover 1640×624	Coberta de pàgina 1640×624
@@ -2984,6 +2997,8 @@ digits	Malayalam	Malaiàlam
 	Plates	Planxes
 	Platform:	Plataforma:
 	Play Current Selection	Reprodueix la selecció actual
+	Save Actions…	Desa les accions…
+	Load Actions…	Carrega accions…
 	Play:	Reprodueix:
 	Plug-in Info	Informació del complement
 	Plug-ins	Complements
@@ -3107,6 +3122,10 @@ digits	Malayalam	Malaiàlam
 	Properties	Propietats
 	Proportional Metrics	Mètriques proporcionals
 	Proportional Lining	Xifres proporcionals alineades
+	Position:	Posició:
+	Default Position	Posició predeterminada
+	Numerator	Numerador
+	Denominator	Denominador
 	Proportional Oldstyle	Oldstyle proporcional
 	PRs	PRs
 	Public Domain	Domini públic
@@ -3270,9 +3289,6 @@ digits	Malayalam	Malaiàlam
 	Relink	Torna a enllaçar
 	Relink Linked Files to the Document	Torna a enllaçar els fitxers enllaçats al document
 	Relink to Folder…	Torna a enllaçar a una carpeta…
-	Relinked {n} image(s)	S’han tornat a enllaçar {n} imatge/imatges
-	Relinked {n} image(s); not in that folder: {}	S’han tornat a enllaçar {n} imatge/imatges; no es troben en aquesta carpeta: {}
-	Relinked {} image(s)	S’han tornat a enllaçar {} imatge/imatges
 	Relink…	Torna a enllaçar…
 	Reload Plug-ins	Recarrega els complements
 	Remember Import Matches	Recorda les coincidències d’importació
@@ -3332,6 +3348,8 @@ digits	Malayalam	Malaiàlam
 	Replace Spine	Reemplaça l’espina
 	Replace Symbol	Reemplaça el símbol
 	Replace With Font	Reemplaça per un tipus de lletra
+	Replace With Font From	Reemplaça per un tipus de lletra de
+	System	Sistema
 	Replace “{name}”, the file this document was opened from?	Voleu reemplaçar “{name}”, el fitxer amb què es va obrir aquest document?
 	Replaces the saved preset of that name.	Reemplaça el preajust desat amb aquest nom.
 	Replace…	Reemplaça…
@@ -3393,10 +3411,9 @@ digits	Malayalam	Malaiàlam
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
 	Restore Recovered Documents	Restaura els documents recuperats
 	Restored documents open unsaved: save them to keep them.	Els documents restaurats s’obren sense desar: desa’ls per conservar-los.
-	Restored {} recovered document(s): save them to keep them	S’han restaurat {} document(s) recuperat(s): desa’ls per conservar-los
 	Restrict printing, editing and other tasks	Restringeix la impressió, l’edició i altres tasques
 	Restricted Colors	Colors restringits
-	Result(s): {count}	Resultat(s): {count}
+@plural	Result: {n}|Results: {n}	Resultat: {n}|Resultats: {n}
 	Reticulation	Retículació
 	Reticulation…	Retículació…
 	Reverse Front to Back	Inverteix de davant a darrere
@@ -3494,6 +3511,7 @@ digits	Malayalam	Malaiàlam
 	Save a Copy…	Desa una còpia…
 	Save and Close	Desa i tanca
 	Save As	Desa com a
+	Save As Preset…	Desa com a preajust…
 	Save as New Preset…	Desa com a preajust nou…
 	Save as PDF…	Desa com a PDF…
 	Save as preset:	Desa com a preajust:
@@ -3503,6 +3521,7 @@ digits	Malayalam	Malaiàlam
 	Save Brush Library	Desa la biblioteca de pinzells
 	Save Brush Library…	Desa la biblioteca de pinzells…
 	Save Brushes…	Desa els pinzells…
+	Save Changes	Desa els canvis
 	Save changes to {name}	Desa els canvis a {name}
 	Save color group to Swatch panel	Desa el grup de colors al panell de mostres
 	Save Colors as Swatches	Desa els colors com a mostres
@@ -3510,6 +3529,10 @@ digits	Malayalam	Malaiàlam
 	Save Document Info…	Desa la informació del document…
 	Save each artboard to a separate file	Desa cada tauler en un fitxer separat
 	Save Export Preset	Desa el preajust d’exportació
+	Export Export Presets	Exporta els preajustos d’exportació
+	Export Preset…	Exporta el preajust…
+	Import Export Presets	Importa preajustos d’exportació
+	Import Preset…	Importa un preajust…
 	Save for Office Documents	Desa per a documents d’Office
 	Save for Office Documents…	Desa per a documents d’Office…
 	Save for Web	Desa per a web
@@ -3609,7 +3632,6 @@ digits	Malayalam	Malaiàlam
 	Saved Views	Vistes desades
 	Saved {n} files beside {path}	S’han desat {n} fitxers al costat de {path}
 	Saved {path}	S’ha desat {path}
-	Saved {path} with {} note(s): {first}	S’ha desat {path} amb {} nota(es): {first}
 	Saves the current bars, toolbar and panel layout.	Desa la disposició actual de barres, barra d’eines i panells.
 	Save…	Desa…
 	Saving	Desant
@@ -3756,6 +3778,16 @@ digits	Malayalam	Malaiàlam
 	Set Keyboard Shortcut	Defineix la drecera de teclat
 	Set Mesh Point Color	Defineix el color del punt de malla
 	Set Options	Defineix les opcions
+	Action Options…	Opcions de l’acció…
+	Action Options	Opcions de l’acció
+	Rename Action	Canvia el nom de l’acció
+	New Action…	Acció nova…
+	New Action	Acció nova
+	Create New Action	Crea una acció nova
+	Play Action	Reprodueix l’acció
+	Action Set:	Conjunt d’accions:
+	Function Key:	Tecla de funció:
+	Record	Enregistra
 	Set Options…	Defineix les opcions…
 	Set Preference	Defineix la preferència
 	Set Slice Rectangle	Defineix el rectangle del tall
@@ -4147,6 +4179,7 @@ digits	Malayalam	Malaiàlam
 	Switch x/y	Intercanvia x/y
 	Symbol	Símbol
 	Symbol Instance	Instància de símbol
+	Link Block Series	Sèrie de blocs enllaçats
 	Symbol Libraries	Biblioteques de símbols
 	Symbol Libraries Menu	Menú de biblioteques de símbols
 	Symbol Library	Biblioteca de símbols
@@ -4196,6 +4229,10 @@ digits	Malayalam	Malaiàlam
 	Target Contents	Contingut del destí
 	Target:	Destí:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Configuració de Tate-chu-yoko…
+	Tate-chu-yoko Settings	Configuració de Tate-chu-yoko
+	Up/Down:	Amunt/avall:
+	Left/Right:	Esquerra/dreta:
 	Technical Drawing	Dibuix tècnic
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/To…
@@ -4211,6 +4248,7 @@ digits	Malayalam	Malaiàlam
 	Text Displayed in Cell	Text mostrat a la cel·la
 	Text Displayed in Cell:	Text mostrat a la cel·la:
 	Text Export Options	Opcions d’exportació de text
+	Text Fill & Stroke Color	Color de farciment i traç del text
 	Text Fill Color	Color de farciment del text
 	Text Import Options	Opcions d’importació de text
 	Text Orientation	Orientació del text
@@ -4281,6 +4319,7 @@ digits	Malayalam	Malaiàlam
 	Tile Type:	Tipus de mosaic:
 	tile {number}	mosaic {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Els mosaics es numeren d’esquerra a dreta i, després, de dalt a baix; deixa l’interval buit per a tots els mosaics.
+	Tilt	Inclinació
 	Time (hhmmss)	Hora (hhmmss)
 	Tint	To
 	Tint Reduction	Reducció de to
@@ -4462,7 +4501,6 @@ digits	Malayalam	Malaiàlam
 	Update Links	Actualitza els enllaços
 	Update Modified Links	Actualitza els enllaços modificats
 	Update Selection	Actualitza la selecció
-	Updated {} image(s)	S’han actualitzat {} imatge(s)
 	UPPERCASE	MAJÚSCULES
 	URL:	URL:
 	Use 	Utilitza 
@@ -4780,6 +4818,7 @@ digits	Malayalam	Malaiàlam
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
 @msg	`preserve` must be an object	`preserve` ha de ser un objecte
+@msg	`globalAdjust` must be an object	`globalAdjust` ha de ser un objecte
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser cert o fals
 @msg	`stops` must be an array	`stops` ha de ser una matriu
@@ -4827,6 +4866,16 @@ digits	Malayalam	Malaiàlam
 @msg	`{to}` is not an available name	`{to}` no és un nom disponible
 @msg	`{what}` closes nothing	`{what}` no tanca res
 @msg	`{what}` closes something it didn't open	`{what}` tanca una cosa que no havia obert
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` és el nom d’un preajust de document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	no hi ha cap preajust d’exportació `{n}` (vegeu document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	no hi ha preajustos d’exportació desats per exportar (anomeneu els integrats a `names`)
+@msg	not an export presets file (format `{_1}`)	no és un fitxer de preajustos d’exportació (format `{_1}`)
+@msg	not an export presets file: {e}	no és un fitxer de preajustos d’exportació: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	una màscara que cobreix diverses capes entra com un grup de retall a cada capa que cobreix
+@msg	a graph's records don't end where they should: its art was read as it is	els registres d’un gràfic no acaben on haurien: la seva il·lustració s’ha llegit tal com és
+@msg	`{w}` takes no operands	`{w}` no admet operands
+@msg	a wraparound group is inside a compound path	un grup d’ajustament del text és dins d’un traçat compost
 @msg	a bitmap is empty	un mapa de bits és buit
 @msg	a bitmap is too large to read	un mapa de bits és massa gran per llegir-lo
 @msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	el nom d’un pinzell de cerres pot tenir com a màxim {max} caràcters: `{name}` en té {count}
@@ -4882,6 +4931,7 @@ digits	Malayalam	Malaiàlam
 @msg	an image of {w} × {h} pixels is shown at reduced size	una imatge de {w} × {h} píxels es mostra a mida reduïda
 @msg	an image of {w} × {h} pixels is too large to draw	una imatge de {w} × {h} píxels és massa gran per dibuixar-la
 @msg	an image VectorCraft can't read was left out	s’ha omès una imatge que VectorCraft no pot llegir
+@msg	graphs come in as plain art, without their data or settings	els gràfics s’importen com a il·lustració normal, sense les seves dades ni la seva configuració
 @msg	an image whose data is cut short was left out	s’ha omès una imatge les dades de la qual estan tallades
 @msg	an object can't be read	no es pot llegir un objecte
 @msg	an object in perspective would leave the edited grid	un objecte en perspectiva sortiria de la quadrícula editada
@@ -4964,6 +5014,7 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't copy to the system clipboard: {e}	No s’ha pogut copiar al porta-retalls del sistema: {e}
 @msg	Couldn't open {name}: {e}	No s’ha pogut obrir {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	No s’ha pogut enganxar del porta-retalls: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
@@ -4980,7 +5031,7 @@ digits	Malayalam	Malaiàlam
 @msg	Dimension point is outside the canvas	El punt de dimensió és fora del llenç
 @msg	Dimension size is outside its supported range	La mida de dimensió és fora del seu interval compatible
 @msg	direct-select anchor points to cut at (not the end points of open paths)	seleccioneu directament els punts d’ancoratge on tallar (no els punts finals dels traçats oberts)
-@msg	Discarded {_1} recovered document(s)	S’han descartat {_1} document(s) recuperat(s)
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	S’ha descartat {n} document recuperat|S’han descartat {n} documents recuperats
 @msg	divide into 1 to {MAX_PIECES} slices	divideix en 1 a {MAX_PIECES} talls
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
@@ -5058,7 +5109,12 @@ digits	Malayalam	Malaiàlam
 @msg	invalid stroke widths	amplades de traç no vàlides
 @msg	is not an image VectorCraft reads	no és una imatge que VectorCraft pugui llegir
 @msg	it decompresses to more than {_1} MB	es descomprimeix fins a més de {_1} MB
+@msg	it ends inside a group or compound path	acaba dins d’un grup o d’un traçat compost
 @msg	it ends inside a layer	acaba dins d’una capa
+@msg	it ends inside a multi-layer mask	acaba dins d’una màscara multicapa
+@msg	a multi-layer mask's operators are out of order	els operadors d’una màscara multicapa estan desordenats
+@msg	a multi-layer mask needs one clipping path	una màscara multicapa necessita un traçat de retall
+@msg	a group crosses a multi-layer mask	un grup travessa una màscara multicapa
 @msg	it has art outside its layers	té art fora de les seves capes
 @msg	it has more than one artboard	té més d’un tauler
 @msg	it has more than {MAX_NODES} objects	té més de {MAX_NODES} objectes
@@ -5090,6 +5146,8 @@ digits	Malayalam	Malaiàlam
 @msg	lang must be one of {_1}	lang ha de ser un de {_1}
 @msg	larger than 256 MB	més gran de 256 MB
 @msg	layers can't be wrap objects	les capes no poden ser objectes d’embolcall
+@msg	line {line}: value for `{var}` must be true or false	línia {line}: el valor de `{var}` ha de ser true o false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	línia {line}: el valor de `{var}` ocupa més de {MAX_GRAPH_CSV} bytes
 @msg	library panel `{given}` isn't missing its library	al panell de biblioteca `{given}` no li falta la biblioteca
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
@@ -5116,6 +5174,11 @@ digits	Malayalam	Malaiàlam
 @msg	move requires an existing destination panel	per moure cal un panell de destinació existent
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Els fitxers PSD multicanal no es poden llegir: deseu-los en mode RGB, CMYK o escala de grisos
 @msg	name is empty	el nom és buit
+@msg	an action is already recording	ja s’està enregistrant una acció
+@msg	no such function key	no existeix aquesta tecla de funció
+@msg	no such color	no existeix aquest color
+@msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows
+@msg	more than one action is named “{_1}”	més d’una acció es diu “{_1}”
 @msg	name the file	poseu un nom al fitxer
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
@@ -5201,8 +5264,18 @@ digits	Malayalam	Malaiàlam
 @msg	no selected slice in the image: select slices, or save all of them	no hi ha cap tall seleccionat a la imatge: seleccioneu talls o deseu-los tots
 @msg	no selection bounds	no hi ha límits de selecció
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies girades o reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
+@msg	Global Edit is off	L’edició global no està activa
+@msg	only an object of the Global Edit other than the one it started from can be left out	només es pot excloure un objecte de l’edició global que no sigui aquell amb què va començar
 @msg	no slice selected	no hi ha cap tall seleccionat
 @msg	no such action	no existeix aquesta acció
+@msg	no such action set	no existeix aquest conjunt d’accions
+@msg	the action sets changed; nothing was deleted	els conjunts d’accions han canviat; no s’ha suprimit res
+@msg	no action set to save	no hi ha cap conjunt d’accions per desar
+@msg	not an action set file	no és un fitxer de conjunt d’accions
+@msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
+@msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions
+@msg	the action set file needs a later version of VectorCraft	el fitxer de conjunt d’accions necessita una versió més recent del VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	una acció del fitxer de conjunt d’accions té més de 10.000 passos
 @msg	no such anchor	no existeix aquest punt d’ancoratge
 @msg	no such artboard	no existeix aquest tauler
 @msg	no such document	no existeix aquest document
@@ -5233,6 +5306,7 @@ digits	Malayalam	Malaiàlam
 @msg	no user library folder here	aquí no hi ha cap carpeta de biblioteca d’usuari
 @msg	no user workspace `{from}`	no hi ha l’espai de treball d’usuari `{from}`
 @msg	node {_1} is not text	el node {_1} no és text
+@msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat
 @msg	Non-finite dimension	Cota no finita
 @msg	not a blend	no és una fusió
 @msg	not a DXF drawing	no és un dibuix DXF
@@ -5250,8 +5324,10 @@ digits	Malayalam	Malaiàlam
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
 @msg	finish editing the pattern first	acabeu primer l’edició del motiu
+@msg	columns {first} and {column} both name the variable `{name}`	les columnes {first} i {column} anomenen totes dues la variable `{name}`
 @msg	nothing encoded	no s’ha codificat res
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no s’ha aplicat res del conjunt de dades {name}: cap objecte està vinculat a una variable per a la qual tingui un valor
+@msg	no bound object reports a value (locked objects and embedded images report none)	cap objecte vinculat no informa d’un valor (els objectes bloquejats i les imatges incrustades no n’informen cap)
 @msg	nothing selected	no hi ha res seleccionat
 @msg	nothing to align	no hi ha res per alinear
 @msg	nothing to distort	no hi ha res per distorsionar
@@ -5278,14 +5354,13 @@ digits	Malayalam	Malaiàlam
 @msg	onto must name a floating panel	onto ha de nomenar un panell flotant
 @msg	onto must name a panel floating in another group	onto ha de nomenar un panell que floti en un altre grup
 @msg	open a document with data sets	obre un document amb conjunts de dades
-@msg	Opened with {_1} note(s): {_2}	Obert amb {_1} nota(es): {_2}
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	S’ha obert amb {n} nota: {first}|S’ha obert amb {n} notes: {first}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
 @msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
 @msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	S’ha empaquetat {n} fitxer a {folder}|S’han empaquetat {n} fitxers a {folder}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	S’ha empaquetat {n} fitxer a {folder} ({note})|S’han empaquetat {n} fitxers a {folder} ({note})
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	S’ha empaquetat {n} fitxer {note}|S’han empaquetat {n} fitxers {note}
-@msg	Packaged {n} file(s){note}	Empaquetats {n} fitxer(s){note}
 @msg	Packaging {_1}	Empaquetant {_1}
 @msg	page size {w} × {h}	mida de pàgina {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	la pàgina {0} no existeix (el PDF en té {1})
@@ -5306,6 +5381,7 @@ digits	Malayalam	Malaiàlam
 @msg	Persistent libraries not found: {files}	No s’han trobat biblioteques persistents: {files}
 @msg	pick a colour, gradient or pattern to save as a swatch	tria un color, un degradat o un motiu per desar-lo com a mostra
 @msg	Placing {_1}	Col·locant {_1}
+@msg	Pasting	S’està enganxant
 @msg	plane must be left, right or ground	plane ha de ser left, right o ground
 @msg	plug-in ABI: {0}	ABI del complement: {0}
 @msg	plug-in exceeded its {0}	el complement ha superat el seu {0}
@@ -5345,12 +5421,14 @@ digits	Malayalam	Malaiàlam
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	S’ha copiat el CSS de {n} objecte|S’ha copiat el CSS de {n} objectes
 @msgplural	Downloaded {n} file|Downloaded {n} files	S’ha baixat {n} fitxer|S’han baixat {n} fitxers
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	S’ha exportat {n} fitxer a {folder}|S’han exportat {n} fitxers a {folder}
+@msg	All colors are within the CMYK gamut	Tots els colors són dins de la gamma CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} color és fora de la gamma CMYK|{n} colors són fora de la gamma CMYK
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
 @msg	Reset {_1}	Restableix {_1}
 @msg	resolutions must be between 1 and 2400 ppi	les resolucions han de ser entre 1 i 2400 ppi
-@msg	Restored {_1} recovered document(s): save them to keep them	Restaurats {_1} document(s) recuperat(s): desa’ls per conservar-los
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
 @msg	result would exceed the canvas (coordinates out of range)	el resultat excediria el llenç (coordenades fora de rang)
 @msg	Running “{name}”…	S’està executant «{name}»…
 @msg	Save for Web: the image is empty	Desa per a la web: la imatge és buida
@@ -5361,7 +5439,7 @@ digits	Malayalam	Malaiàlam
 @msg	Saved to User Defined: {_1}	Desat a User Defined: {_1}
 @msg	Saved {n} files beside {path}	S’han desat {n} fitxers al costat de {path}
 @msg	Saved {path}	Desat {path}
-@msg	Saved {path} with {_1} note(s): {first}	Desat {path} amb {_1} nota(es): {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	S’ha desat {path} amb {n} nota: {first}|S’ha desat {path} amb {n} notes: {first}
 @msg	Saving	S’està desant
 @msg	Saving recovery data for {_1}	S’estan desant les dades de recuperació de {_1}
 @msg	Saving {_1}	S’està desant {_1}
@@ -5468,7 +5546,9 @@ digits	Malayalam	Malaiàlam
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	no s’han llegit les capes del fitxer ({_1}): arriba com la seva pàgina, en una sola capa
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	no s’han llegit les capes del fitxer a partir de les seves dades d’edició ({_1}): provenen de la seva part PDF
 @msg	the file's preview header points outside the file	la capçalera de previsualització del fitxer apunta fora del fitxer
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no s’han llegit les variables ni els conjunts de dades del fitxer (variables: {variables}, conjunts de dades: {data_sets}): el panell Variables no els llista
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del fitxer s’ha llegit només en part (entrades omeses: {_1}): el panell Variables llista la resta
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no s’ha pogut llegir la biblioteca de variables del fitxer: el panell Variables no la llista
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipus desconegut no es pot vincular a objectes
 @msg	the files come to more than 1 GB: add fewer at a time	els fitxers sumen més d’1 GB: afegeix-ne menys alhora
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	El processador gràfic provat primer no ha pogut mostrar la finestra, així que VectorCraft s’ha iniciat de nou amb {summary}
 @msg	The graphics were lost and couldn't be restarted.	Els gràfics s’han perdut i no s’han pogut reiniciar.
@@ -5515,6 +5595,9 @@ digits	Malayalam	Malaiàlam
 @msg	the program runs, deletes or renames a file, which the reader can't do	el programa executa, suprimeix o reanomena un fitxer, cosa que el lector no pot fer
 @msg	the PSD file has an unknown colour mode ({m})	el fitxer PSD té un mode de color desconegut ({m})
 @msg	the PSD file is cut short	el fitxer PSD està truncat
+@msg	the Pixar file is cut short	el fitxer Pixar està truncat
+@msg	the Pixar file's header is damaged	la capçalera del fitxer Pixar està malmesa
+@msg	the Pixar file's image data is damaged	les dades d’imatge del fitxer Pixar estan malmeses
 @msg	the PSD file's header is damaged	la capçalera del fitxer PSD està malmesa
 @msg	the PSD file's image data can't be read: {e}	no es poden llegir les dades d’imatge del fitxer PSD: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	les dades d’imatge del fitxer PSD utilitzen una compressió desconeguda ({m})
@@ -5545,6 +5628,7 @@ digits	Malayalam	Malaiàlam
 @msg	there are no printer settings to open here	aquí no hi ha cap configuració d’impressora per obrir
 @msg	thickness must be from 0.01 to 5000 pt	el gruix ha de ser d’entre 0,01 i 5000 pt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	aquest fitxer s’ha desat sense compatibilitat amb PDF i les seves dades d’edició no es poden llegir ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	no s’ha pogut llegir la part PDF ({_1}): el fitxer s’ha obert a partir de les seves dades d’edició
 @msg	this file's PostScript couldn't be read ({why}): {what}	no s’ha pogut llegir el PostScript d’aquest fitxer ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	aquest format admet un sol tauler: exporta’n diversos com a PDF o amb document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	aquest és un dibuix DWG, que no es pot llegir: desa’l des de l’aplicació CAD com a DXF ASCII i obre’l
@@ -5601,7 +5685,12 @@ digits	Malayalam	Malaiàlam
 @msg	unsupported native docking operation	operació d’acoblament nadiua no compatible
 @msg	unsupported: {0}	no compatible: {0}
 @msg	variables are locked	les variables estan blocades
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	més de {MAX_CSV_ROWS} conjunts de dades: Importa conjunts de dades en llegeix com a màxim {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	més de {MAX_CSV_COLS} variables: Importa conjunts de dades en llegeix com a màxim {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	les variables que no són text s’han omès: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	un document nou no tornarà a llegir aquestes variables amb el seu tipus: {names}
+@msg	a new document refuses this file because of these variables: {names}	un document nou rebutja aquest fitxer a causa d'aquestes variables: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	la capçalera `{header}` de `{name}` es tornaria a llegir com la variable `{other}`: canvieu el nom d’una de les dues
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft no cerca a les carpetes d’altres aplicacions ni del sistema: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft no cerca a la carpeta Shared o Public d’Usuaris: {path}
 @msg	VectorCraft failed to start: {e}	VectorCraft no s’ha pogut iniciar: {e}
@@ -5676,6 +5765,7 @@ file-filter	Flattener presets	Preajustos de l’aplanador
 file-filter	PDF presets	Preajustos de PDF
 file-filter	PDF-compatible .ai	.ai compatible amb PDF
 file-filter	Print presets	Preajustos d’impressió
+file-filter	Export presets	Preajustos d’exportació
 file-filter	SVG Compressed	SVG comprimit
 file-filter	Swatch libraries	Biblioteques de mostres
 file-filter	Templates	Plantilles
@@ -5915,6 +6005,16 @@ anchor	Points:	Punts:
 	Case	Majúscules i minúscules
 @msg	{label} must be a number	{label} ha de ser un nombre
 @msg	{label} must be a number of at least 0.1	{label} ha de ser un nombre de com a mínim 0,1
+	Advanced Character Formats	Formats avançats de caràcters
+	Horizontal Scale	Escala horitzontal
+	Vertical Scale	Escala vertical
+@msg	{label} must be a number from {min} to {max}	{label} ha de ser un nombre de {min} a {max}
+	Character Color	Color del caràcter
+	OpenType Features	Funcions OpenType
+	Stylistic Sets	Jocs estilístics
+@msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
+@msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6159,3 +6259,20 @@ breakText	Glyphs	Glifs
 	Small to Large	De petit a gran
 	Large to Small	De gran a petit
 	Distribute Evenly	Distribueix uniformement
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Crea una llegenda de mostres
+	Create Swatch Legend…	Crea una llegenda de mostres…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Eines de text
+	Text Tweaker…	Ajustador de text…
+	Text Tweaker	Ajustador de text
+	Attribute:	Atribut:
+	From:	De:
+	To:	A:
+	Bow	Arc
+	Spike	Pic
+	Skip Spaces	Omet els espais
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La il·lustració és massa gran per copiar-la com a imatge: les altres aplicacions no en reben cap PNG

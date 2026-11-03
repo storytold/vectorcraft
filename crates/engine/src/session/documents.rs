@@ -79,6 +79,8 @@ impl Session {
             batch_steps: None,
             place_hand_off: None,
             queue_hand_off: None,
+            place_queue_roots: None,
+            image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
@@ -90,6 +92,8 @@ impl Session {
             liquify_stroke: None,
             plane_widget_press: false,
             pointer_held: false,
+            press_options: None,
+            press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
             font_search: None,
@@ -205,6 +209,7 @@ impl Session {
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
+        st.opened_as_tab = self.prefs.open_documents_as_tabs;
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
@@ -235,6 +240,7 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
         st.save_options = old.save_options.clone();

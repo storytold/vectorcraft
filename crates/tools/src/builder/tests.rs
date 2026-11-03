@@ -344,6 +344,26 @@ fn map_of(d: &Document, s: &Selection) -> BuilderMap {
 }
 
 #[test]
+fn shape_builder_keeps_a_line_under_an_edge_in_front_and_alt_click_there_takes_the_edge() {
+    // A line from (0, 50) to (200, 50), then a rectangle in front of it whose bottom edge lies
+    // along its left half.
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut s = Selection::default();
+    let line = PathData::new(vec![SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(200.0, 50.0)], false)]);
+    for (k, path) in [line, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0))].into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, Node::path(id, path, Appearance::default_art())).unwrap();
+        s.add(id);
+    }
+    let map = map_of(&d, &s);
+    let under = map.lines.iter().any(|(piece, b)| piece.key == 0 && b.x1 <= 100.5 && (b.y0 - 50.0).abs() < 1e-6 && b.width() > 99.0);
+    assert!(under, "the line keeps its piece under the rectangle's edge: {:?}", map.lines.iter().map(|(_, b)| b).collect::<Vec<_>>());
+    assert!(matches!(map.hit(Point::new(50.0, 51.0), Some(4.0)), Some(Hit::Edge(_))), "the rectangle in front is hit");
+    assert!(matches!(map.hit(Point::new(150.0, 51.0), Some(4.0)), Some(Hit::Line(_))));
+}
+
+#[test]
 fn shape_builder_erase_drag_across_an_overlap_narrower_than_twice_the_tolerance_touches_it() {
     let (d, s) = sliver_rects();
     let map = map_of(&d, &s);
@@ -693,6 +713,13 @@ fn hatch_stays_inside_region() {
     assert!(h.elements().len() > 10);
 }
 
+#[test]
+fn hatch_far_from_the_origin_ends() {
+    // At 1e17 a 4-point gap is below the coordinates' precision: adding it doesn't move the line.
+    let bp = shapes::rectangle(Rect::new(0.0, 1e17, 64.0, 1e17 + 64.0)).to_bezpath();
+    assert!(hatch(&bp, 4.0).elements().len() <= 2 * 402);
+}
+
 /// An empty hidden sources group for a Live Paint group made in a test.
 fn empty_sources(d: &mut Document) -> Arc<Node> {
     let mut g = Node::group(d.alloc_id(), vec![]);
@@ -863,6 +890,37 @@ fn bucket_options_set_the_highlight() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0)).len(), 1);
     t.set_option("highlight", &json!(true));
     assert!(highlight(&mut t).is_some());
+}
+
+#[test]
+fn bucket_highlights_an_edge_thinner_than_a_face() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let width = |t: &mut LivePaintBucketTool, x: f64, shift: bool| {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { shift, ..Default::default() }));
+        match t.overlays(&cx).as_slice() {
+            [Overlay::Path { width, .. }] => *width,
+            ov => panic!("{ov:?}"),
+        }
+    };
+    // The face at (75, 25) and, with Shift (Paint Strokes), the edge at x = 50.
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, true)), (4.0, 2.0));
+    t.set_option("width", &json!(9));
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, true)), (9.0, 4.5));
+    // With both on, the edge a click paints is drawn thin too.
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, false)), (9.0, 4.5));
+    // The Live Paint Selection tool outlines a face and an edge (Alt) at its one Width.
+    let mut sel = LivePaintSelectionTool::default();
+    for alt in [false, true] {
+        let x = if alt { 50.0 } else { 75.0 };
+        sel.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { alt, ..Default::default() }));
+        let ov = sel.overlays(&cx);
+        assert!(matches!(ov.as_slice(), [Overlay::Path { width: 4.0, .. }]), "{ov:?}");
+    }
 }
 
 #[test]

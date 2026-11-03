@@ -444,7 +444,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
         hyphen_run = if position.hyph && position.end > index { hyphen_run + 1 } else { 0 };
         pen.pending = 0.0;
         let geometry = prepare_line_geometry(cx, t, &paragraph, position, index);
-        let justification = justify_flow_line(cx.vertical, cx.text, &paragraph, &geometry);
+        let justification = justify_flow_line(cx, &paragraph, &geometry);
         emit_flow_line(cx, pen, &paragraph, &geometry, &justification);
         line_in_paragraph += 1;
         index = geometry.position.end;
@@ -618,7 +618,7 @@ fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -
     value
 }
 
-fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
+fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
     let para = paragraph.para;
     let sg = &paragraph.sg;
     let (held, hung) = (&line.held, &line.hung);
@@ -656,8 +656,8 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
     };
     // Insert Kashidas: the Arabic words of a horizontal line take its room on kashidas,
     // and the word spaces and gaps take what is left.
-    let kashidas = if justify && !vertical && room > line.render_width + EPS {
-        kashida::plan(text, sg, line.index..line.body, para.kashida, room - line.render_width)
+    let kashidas = if justify && !cx.vertical && room > line.render_width + EPS {
+        kashida::plan(cx.text, sg, line.index..line.body, para.kashida, room - line.render_width, |byte| cx.style_at(byte).kashidas)
     } else {
         Vec::new()
     };
@@ -670,7 +670,8 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
     // the same share of the em of the glyph before it, at most [`PUSH_IN_SQUEEZE`].
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
-        let ems: f64 = (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| squeeze_em(&sg[j], vertical)).sum();
+        let ems: f64 =
+            (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).map(|j| squeeze_em(&sg[j], cx.vertical)).sum();
         if ems > EPS {
             squeeze = ((room - width) / ems).max(-PUSH_IN_SQUEEZE);
         }

@@ -163,7 +163,6 @@
 	All Artwork Above	Весь рисунок выше
 	All Caps	Все прописные
 	All Categories	Все категории
-	All colours are within the CMYK gamut	Все цвета входят в цветовой охват CMYK
 	All on Active Artboard	Всё на активной монтажной области
 	All on Same Layers	Всё на тех же слоях
 	All printer's marks	Все типографские метки
@@ -607,7 +606,6 @@ font-technology	Variable	Вариативные
 	Convert to sRGB	Преобразовать в sRGB
 	Convert to Straight Lines	Преобразовать в прямые линии
 	Convert:	Преобразовать:
-	Copied the CSS of {rules} object(s)	Скопирован CSS для {rules} объекта(ов)
 	Copies:	Копии:
 	Copy	Копировать
 	Copy (make a transformed copy)	Копировать (создать преобразованную копию)
@@ -760,6 +758,7 @@ font-technology	Variable	Вариативные
 	Delete Tab	Удалить табуляцию
 	Delete the graphic style “{name}”?	Удалить графический стиль «{name}»?
 	Delete Action Sets	Удалить наборы действий
+	Duplicate Action or Action Set	Дублировать действие или набор действий
 	Delete the action set “{name}” and its actions?	Удалить набор действий «{name}» и его действия?
 	Delete the selected action sets and their actions?	Удалить выбранные наборы действий и их действия?
 	Delete Theme	Удалить тему
@@ -795,7 +794,6 @@ font-technology	Variable	Вариативные
 	Discard Empty Type	Отменить пустой текст
 	Discard Recovered Documents	Отменить восстановленные документы
 	Discard White Overprint in Output	Отменить наложение белого при выводе
-	Discarded {} recovered document(s)	Отменено восстановленных документов: {}
 	Discord	Discord
 	Discretionary Hyphen	Мягкий перенос
 	Discretionary Ligatures	Дискреционные лигатуры
@@ -851,13 +849,14 @@ font-technology	Variable	Вариативные
 	Double Right Quotation Marks	Двойные закрывающие кавычки
 	Double-click	Двойной щелчок
 	Double-click to edit the characters' paint	Дважды щёлкните, чтобы редактировать заливку символов
+	Click to edit	Щёлкните, чтобы редактировать
+	Double-click to edit	Дважды щёлкните, чтобы редактировать
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект
 	Download	Скачать
 	Download:	Скачивание:
 	Downloaded {what}	Скачано: {what}
-	Downloaded {} file(s)	Скачано файлов: {}
 	Drag	Перетащить
 	Drag a handle	Перетащите маркер
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Перетащите рисунок сюда или выделите его и нажмите +. Удерживайте Alt для одного ресурса из нескольких объектов.
@@ -966,8 +965,6 @@ font-technology	Variable	Вариативные
 	Embed page thumbnails	Внедрить миниатюры страниц
 	Embedded	Внедрено
 	Embedded Image	Внедрённое изображение
-	Embedded {n} image(s)	Внедрено изображений: {n}
-	Embedded {n} image(s); {missing} missing: relink them first	Внедрено изображений: {n}; отсутствует {missing}: сначала восстановите связи
 	Emulsion:	Эмульсия:
 	En Dash	Среднее тире
 	En Space	Полукруглая шпация
@@ -1042,6 +1039,16 @@ font-technology	Variable	Вариативные
 	Delete Export Preset	Удалить набор настроек экспорта
 	Export Presets	Наборы настроек экспорта
 	Save Export Preset	Сохранить набор настроек экспорта
+	Export Export Presets	Экспортировать наборы настроек экспорта
+	Export Preset…	Экспортировать набор…
+	Import Export Presets	Импортировать наборы настроек экспорта
+	Import Preset…	Импортировать набор…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` — имя набора из document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	нет набора настроек экспорта `{n}` (см. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	нет сохранённых наборов настроек экспорта для экспорта (встроенные укажите в `names`)
+@msg	not an export presets file (format `{_1}`)	не является файлом наборов настроек экспорта (формат `{_1}`)
+@msg	not an export presets file: {e}	не является файлом наборов настроек экспорта: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Экспортировать слой
 	Export Selection	Экспортировать выделение
 	All in One Folder	Всё в одну папку
@@ -1085,10 +1092,8 @@ font-technology	Variable	Вариативные
 	Export Transparency Flattener Presets	Экспортировать наборы объединения прозрачностей
 	Export {count} Selected	Экспортировать выбранные ({count})
 	Export:	Экспорт:
-	Exported {count} file(s) to {folder}	Экспортировано файлов: {count} в {folder}
 	Exported {path}	Экспортировано: {path}
 	Exported {what}	Экспортировано: {what}
-	Exported {what} with {} note(s): {first}	Экспортировано: {what} с примечаниями ({}) : {first}
 	Exporting {}	Экспорт {}
 	Export…	Экспорт…
 	Extrude & Bevel…	Выдавливание и фаска…
@@ -1216,6 +1221,7 @@ file-filter	Swatch libraries	Библиотеки образцов
 file-filter	Flattener presets	Наборы объединения
 file-filter	PDF presets	Наборы PDF
 file-filter	Print presets	Наборы печати
+file-filter	Export presets	Наборы настроек экспорта
 file-filter	SVG Compressed	Сжатый SVG
 file-filter	PDF-compatible .ai	.ai, совместимый с PDF
 file-filter	VectorCraft Template	Шаблон VectorCraft
@@ -1229,6 +1235,7 @@ file-filter	Templates	Шаблоны
 	Flip Row Order	Изменить порядок строк
 	Flip Vertical	Отразить по вертикали
 	Float in Window	Плавать в окне
+	Float All in Windows	Все плавающие в окнах
 	Focal Fill	Фокусная заливка
 	Focal Stroke	Фокусная обводка
 	Folder	Папка
@@ -1295,6 +1302,7 @@ file-filter	Templates	Шаблоны
 	Get Preferences	Получить настройки
 	Get Text Range	Получить диапазон текста
 	Global	Глобальный
+	Global Adjust	Глобальная настройка
 	Global Brush Dimensions	Глобальные размеры кисти
 	Global Process Color	Глобальный составной цвет
 	Global Process Color, CMYK	Глобальный составной цвет, CMYK
@@ -1391,6 +1399,10 @@ file-filter	Templates	Шаблоны
 	Hard Light	Жёсткий свет
 	Hard Mix	Жёсткое наложение
 	Harmony Rules:	Правила гармонии:
+	Segmented color wheel	Сегментированный цветовой круг
+	Show smooth color wheel	Показать плавный цветовой круг
+	Show segmented color wheel	Показать сегментированный цветовой круг
+	Show color bars	Показать цветовые полосы
 	Harmony Sets	Наборы гармонии
 	Height	Высота
 	Height:	Высота:
@@ -1727,6 +1739,8 @@ file-filter	Templates	Шаблоны
 	Large Thumbnail View	Крупные миниатюры
 	Large Thumbnails	Крупные миниатюры
 	Lasso Tool	Инструмент «Лассо»
+	Enclosing Lasso Tool	Инструмент «Охватывающее лассо»
+	Enclosing Lasso	Охватывающее лассо
 	Last Effect: {name}	Последний эффект: {name}
 	Last Effect: {}	Последний эффект: {}
 	Last Effect…	Последний эффект…
@@ -1878,6 +1892,7 @@ file-filter	Templates	Шаблоны
 	Manually	Вручную
 	Mark as trapped	Пометить как треппинг
 	Mark Older Files as [Converted] When Opened	Помечать старые файлы как [Преобразованные] при открытии
+	Use System Defaults for Edit Original	Использовать системные значения по умолчанию для «Редактировать оригинал»
 	Marker…	Маркер…
 	Marks	Метки
 	Marks and Bleed	Метки и вылет
@@ -1940,6 +1955,7 @@ file-filter	Templates	Шаблоны
 	Modify	Изменить
 	Mojikumi	Mojikumi
 	Insert Kashidas	Вставлять кашиды
+	Kashidas	Кашиды
 	Long	Длинные
 	Stylistic	Стилистические
 	Mojikumi Set	Набор mojikumi
@@ -2051,6 +2067,8 @@ file-filter	Templates	Шаблоны
 	Roundness:	Округлость:
 	Fixed	Фиксированный
 	Pressure	Нажим
+	Tilt	Наклон
+	Bearing	Азимут
 	Shape:	Форма:
 	Bristle Length:	Длина щетинок:
 	Bristle Density:	Плотность щетинок:
@@ -2113,6 +2131,10 @@ file-filter	Templates	Шаблоны
 	New Without Dialog	Создать без диалогового окна
 	New Workspace	Новая рабочая среда
 	New Workspace…	Новая рабочая среда…
+	New Toolbar…	Новая панель инструментов…
+	New Toolbar	Новая панель инструментов
+	Show Toolbar	Показать панель инструментов
+	List Toolbars	Список панелей инструментов
 	New {kind} Style…	Новый стиль {kind}…
 	New…	Создать…
 	Next	Далее
@@ -2258,7 +2280,6 @@ file-filter	Templates	Шаблоны
 	Open Recent Files	Открыть последние файлы
 	Open Swatch Library	Открыть библиотеку образцов
 	Open the URL in the web browser	Открыть URL в веб-браузере
-	Opened with {} note(s): {}	Открыто с примечаниями ({}) : {}
 	Open…	Открыть…
 	Optical	Оптический
 	Optical Margin Alignment	Оптическое выравнивание полей
@@ -2319,7 +2340,6 @@ file-filter	Templates	Шаблоны
 	Package collects a saved document with its linked files and fonts.	Упаковка собирает сохранённый документ с его связанными файлами и шрифтами.
 	Package created	Пакет создан
 @plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Упаковано файлов: {n} в {folder} {note}|Упаковано файлов: {n} в {folder} {note}|Упаковано файлов: {n} в {folder} {note}
-	Packaged {n} file(s){note}	Упаковано файлов: {n}{note}
 	Package…	Упаковать…
 	Page	Страница
 	Page information	Сведения о странице
@@ -2414,6 +2434,8 @@ diagnostics	ui	интерфейс
 	Plates	Пластины
 	Platform:	Платформа:
 	Play Current Selection	Воспроизвести текущее выделение
+	Save Actions…	Сохранить действия…
+	Load Actions…	Загрузить действия…
 	Plug-in Info	Сведения о модуле
 	Plug-ins	Модули
 	Plug-in…	Модуль…
@@ -2518,6 +2540,10 @@ digits	Telugu	Телугу
 digits	Kannada	Каннада
 digits	Malayalam	Малаялам
 	Proportional Lining	Пропорциональные цифры
+	Position:	Положение:
+	Default Position	Положение по умолчанию
+	Numerator	Числитель
+	Denominator	Знаменатель
 	Proportional Oldstyle	Пропорциональные старого стиля
 	Pucker & Bloat…	Сморщивание и раздувание…
 	Pucker Tool	Инструмент «Сморщивание»
@@ -2675,9 +2701,6 @@ digits	Malayalam	Малаялам
 	Relink	Восстановить связь
 	Relink Linked Files to the Document	Восстановить связи связанных файлов с документом
 	Relink to Folder…	Восстановить связь с папкой…
-	Relinked {n} image(s)	Восстановлена связь с изображениями: {n}
-	Relinked {n} image(s); not in that folder: {}	Восстановлена связь с изображениями: {n}; нет в этой папке: {}
-	Relinked {} image(s)	Восстановлена связь с изображениями: {}
 	Relink…	Восстановить связь…
 	Find Linked Files	Найти связанные файлы
 	Find Linked Files in Folder…	Найти связанные файлы в папке…
@@ -2723,6 +2746,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Заменить остов
 	Replace Symbol	Заменить символ
 	Replace With Font	Заменить шрифтом
+	Replace With Font From	Заменить шрифтом из
+	System	Система
 	Replaces the saved preset of that name.	Заменяет сохранённый набор с таким именем.
 	Replace…	Заменить…
 	Require a password to open the document	Требовать пароль для открытия документа
@@ -2759,7 +2784,6 @@ digits	Malayalam	Малаялам
 	Restore every preference to its default (applied on OK)	Восстановить все настройки по умолчанию (применяется при нажатии ОК)
 	Restore Recovered Documents	Восстановить восстановленные документы
 	Restored documents open unsaved: save them to keep them.	Восстановленные документы открываются несохранёнными: сохраните их, чтобы оставить.
-	Restored {} recovered document(s): save them to keep them	Восстановлено документов: {}: сохраните их, чтобы оставить
 	Restrict printing, editing and other tasks	Ограничить печать, редактирование и другие задачи
 	Reverse Front to Back	Обратный порядок спереди назад
 	Reverse Gradient	Обратить градиент
@@ -2819,11 +2843,13 @@ digits	Malayalam	Малаялам
 	Save a Copy	Сохранить копию
 	Save a Copy…	Сохранить копию…
 	Save As	Сохранить как
+	Save As Preset…	Сохранить как набор настроек…
 	Save as PDF…	Сохранить как PDF…
 	Save as preset:	Сохранить как набор:
 	Save as Template	Сохранить как шаблон
 	Save as Template…	Сохранить как шаблон…
 	Save As…	Сохранить как…
+	Save Changes	Сохранить изменения
 	Save changes to {name}	Сохранить изменения в {name}
 	Save color group to Swatch panel	Сохранить цветовую группу на панели «Образцы»
 	Save Colors as Swatches	Сохранить цвета как образцы
@@ -2927,7 +2953,6 @@ digits	Malayalam	Малаялам
 	Saved Views	Сохранённые виды
 	Saved {n} files beside {path}	Сохранено файлов: {n} рядом с {path}
 	Saved {path}	Сохранено: {path}
-	Saved {path} with {} note(s): {first}	Сохранено: {path} с примечаниями ({}) : {first}
 	Saves the current bars, toolbar and panel layout.	Сохраняет текущее расположение панелей, панели инструментов и панелей.
 	Save…	Сохранить…
 	Saving	Сохранение
@@ -3375,6 +3400,7 @@ digits	Malayalam	Малаялам
 	Graphic	Графика
 	Show all open documents	Показать все открытые документы
 	Symbol Instance	Экземпляр символа
+	Link Block Series	Серия связанных блоков
 	Symbol Libraries	Библиотеки символов
 	Symbol Screener Tool	Инструмент «Прозрачность символов»
 	Symbol Scruncher Tool	Инструмент «Сжатие символов»
@@ -3398,6 +3424,10 @@ digits	Malayalam	Малаялам
 	Target Contents	Содержимое объекта
 	Target:	Объект:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
+	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Up/Down:	Вверх/вниз:
+	Left/Right:	Влево/вправо:
 	Temperature	Температура
 	Temperature/Tint…	Температура/оттенок…
 	Template	Шаблон
@@ -3406,6 +3436,7 @@ digits	Malayalam	Малаялам
 	Templates…	Шаблоны…
 	Text Displayed in Cell:	Текст, отображаемый в ячейке:
 	Text Export Options	Параметры экспорта текста
+	Text Fill & Stroke Color	Цвет заливки и обводки текста
 	Text Fill Color	Цвет заливки текста
 	Text Import Options	Параметры импорта текста
 	Text Stroke Color	Цвет обводки текста
@@ -3579,7 +3610,6 @@ digits	Malayalam	Малаялам
 	Update Links	Обновить связи
 	Update Changed Links	Обновить измененные связи
 	Update Modified Links	Обновить изменённые связи
-	Updated {} image(s)	Обновлено изображений: {}
 	UPPERCASE	ПРОПИСНЫЕ
 	URL:	URL:
 	Use 	Использовать 
@@ -3991,14 +4021,12 @@ axis	Both	Оба
 @msg	No saved views (View → New View…)	Нет сохранённых видов (Просмотр → Новый вид…)
 @msg	Offset Path: select paths	Смещение контура: выделите контуры
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Смещение контура: после смещения от выделенных контуров ничего не остаётся (смещение внутрь больше самих фигур)
-@msg	Opened with {_1} note(s): {_2}	Открыто с примечаниями ({_1}) : {_2}
 @msg	Opened {url}	Открыто {url}
 @msg	Outline Stroke: no stroked paths selected	Обводка контура: не выделены контуры с обводкой
 @msg	PDF settings are not an object	параметры PDF не являются объектом
 @msg	PDF security settings are not an object	параметры безопасности PDF не являются объектом
 @msg	PDF writer error: {0}	ошибка записи PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файлов: {n} в {folder} ({note})
-@msg	Packaged {n} file(s){note}	Упаковано файлов: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Просмотр в браузере требует настольного приложения (web-версия скачивает файлы)
 @msg	Release Guides: no guides	Освобождение направляющих: нет направляющих
 @msg	Release: no layer to put the rectangle in	Освобождение: нет слоя для помещения прямоугольника
@@ -4032,6 +4060,7 @@ axis	Both	Оба
 @msg	`library` is a library id or name (see {list})	`library` — это идентификатор или имя библиотеки (см. {list})
 @msg	`mode` applies to freeform gradients	`mode` применяется к произвольным градиентам
 @msg	`preserve` must be an object	`preserve` должно быть объектом
+@msg	`globalAdjust` must be an object	`globalAdjust` должно быть объектом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` должно быть 1, 3 или 5
 @msg	`stops` must be an array	`stops` должно быть массивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` должно быть объектом параметров SVG (см. document.formats)
@@ -4205,6 +4234,8 @@ axis	Both	Оба
 @msg	join needs open paths	соединение требует открытых контуров
 @msg	lang must be one of {_1}	lang должен быть одним из: {_1}
 @msg	layers can't be wrap objects	слои не могут быть объектами обтекания
+@msg	line {line}: value for `{var}` must be true or false	строка {line}: значение `{var}` должно быть true или false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	строка {line}: значение `{var}` длиннее {MAX_GRAPH_CSV} байт
 @msg	missing `folder`	отсутствует `folder`
 @msg	missing `id` (see plugin.list)	отсутствует `id` (см. plugin.list)
 @msg	missing `name`	отсутствует `name`
@@ -4290,6 +4321,14 @@ axis	Both	Оба
 @msg	no selection bounds	у выделения нет границ
 @msg	no slice selected	фрагмент не выделен
 @msg	no such action	такого действия нет
+@msg	no such action set	такого набора действий нет
+@msg	the action sets changed; nothing was deleted	наборы действий изменились; ничего не удалено
+@msg	no action set to save	нет набора действий для сохранения
+@msg	not an action set file	это не файл набора действий
+@msg	the action set file is larger than 8 MiB	файл набора действий больше 8 MiB
+@msg	the action set file holds more than 1,000 actions	файл набора действий содержит более 1000 действий
+@msg	the action set file needs a later version of VectorCraft	для файла набора действий нужна более новая версия VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	в файле набора действий есть действие более чем из 10 000 шагов
 @msg	no such anchor	такой опорной точки нет
 @msg	no such artboard	такой монтажной области нет
 @msg	the artboard is locked	монтажная область заблокирована
@@ -4316,6 +4355,7 @@ axis	Both	Оба
 @msg	no user library folder here	здесь нет папки пользовательских библиотек
 @msg	no user workspace `{from}`	нет пользовательской рабочей среды `{from}`
 @msg	node {_1} is not text	узел {_1} не является текстом
+@msg	node {_1} is on a locked artboard	узел {_1} находится на заблокированной монтажной области
 @msg	not a DXF drawing	не является чертежом DXF
 @msg	not a VectorCraft file: {0}	не является файлом VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не является набором сочетаний клавиш VectorCraft (отсутствует `overrides`)
@@ -4520,7 +4560,12 @@ axis	Both	Оба
 @msg	unknown workspace (one of {_1})	неизвестная рабочая среда (одна из: {_1})
 @msg	unsupported: {0}	не поддерживается: {0}
 @msg	variables are locked	переменные заблокированы
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	больше {MAX_CSV_ROWS} наборов данных: «Импортировать наборы данных» читает не более {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	больше {MAX_CSV_COLS} переменных: «Импортировать наборы данных» читает не более {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	переменные, которые не являются текстовыми, пропущены: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	новый документ не прочитает эти переменные обратно с их типом: {names}
+@msg	a new document refuses this file because of these variables: {names}	новый документ отклоняет этот файл из-за этих переменных: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заголовок `{header}` для `{name}` будет прочитан как переменная `{other}`: переименуйте одну из них
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` и `options.{key}: {inner}` противоречат друг другу: укажите параметр только один раз
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файлы версии {0} не могут быть сжаты: только версия {COMPRESSED_SINCE} и новее открывают сжатые файлы
 @msg	width and height are at least 1 pixel	ширина и высота должны быть не менее 1 пикселя
@@ -4554,7 +4599,9 @@ axis	Both	Оба
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	Не удалось поместить {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не удалось вставить из буфера обмена: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Не удалось вставить: документ, в который выполнялась вставка, был закрыт
 @msg	Saved {path} with {_1} note(s): {first}	Сохранено: {path} с примечаниями ({_1}) : {first}
+@msg	Exported {what} with {_1} note(s): {first}	Экспортировано: {what} с примечаниями ({_1}) : {first}
 @msg	Exported {what}	Экспортировано: {what}
 @msg	Saved {n} files beside {path}	Сохранено файлов: {n} рядом с {path}
 @msg	Saving	Сохранение
@@ -4562,9 +4609,12 @@ axis	Both	Оба
 @msg	Exporting {_1}	Экспорт {_1}
 @msg	Packaging {_1}	Упаковка {_1}
 @msg	Placing {_1}	Размещение {_1}
+@msg	Pasting	Вставка
 @msg	Saving recovery data for {_1}	Сохранение данных восстановления для {_1}
-@msg	Discarded {_1} recovered document(s)	Отменено восстановленных документов: {_1}
-@msg	Restored {_1} recovered document(s): save them to keep them	Восстановлено документов: {_1}: сохраните их, чтобы оставить
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Открыто с {n} примечанием: {first}|Открыто с {n} примечаниями: {first}|Открыто с {n} примечаниями: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Сохранено: {path} с {n} примечанием: {first}|Сохранено: {path} с {n} примечаниями: {first}|Сохранено: {path} с {n} примечаниями: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Внедрено {n} изображение; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображения; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображений; отсутствует {missing}: сначала восстановите связи
 @msgplural	Embedded {n} image|Embedded {n} images	Внедрено {n} изображение|Внедрено {n} изображения|Внедрено {n} изображений
 @msgplural	Relinked {n} image|Relinked {n} images	Восстановлена связь с {n} изображением|Восстановлена связь с {n} изображениями|Восстановлена связь с {n} изображениями
@@ -4585,6 +4635,8 @@ axis	Both	Оба
 @msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Скопирован CSS {n} объекта|Скопирован CSS {n} объектов|Скопирован CSS {n} объектов
 @msgplural	Downloaded {n} file|Downloaded {n} files	Скачан {n} файл|Скачано {n} файла|Скачано {n} файлов
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Экспортирован {n} файл в {folder}|Экспортировано {n} файла в {folder}|Экспортировано {n} файлов в {folder}
+@msg	All colors are within the CMYK gamut	Все цвета входят в цветовой охват CMYK
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} цвет выходит за пределы цветового охвата CMYK|{n} цвета выходят за пределы цветового охвата CMYK|{n} цветов выходят за пределы цветового охвата CMYK
 @msg	Unembedded to {_1}	Извлечено в {_1}
 @msg	Reset {_1}	Сброшено: {_1}
 @msg	Sent to {_1}	Отправлено в {_1}
@@ -4610,8 +4662,17 @@ axis	Both	Оба
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	это не логотип из плоских цветов ({_1}% его сплошных областей совпадает с несколькими плоскими цветами), поэтому режим «Плоский логотип» превратил бы градиенты в пятна: используйте режим «Цвет»
 @msg	`{what}` closes nothing	`{what}` ничего не закрывает
 @msg	`{what}` closes something it didn't open	`{what}` закрывает то, что не открывал
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	маска, охватывающая несколько слоёв, переносится как обтравочная группа в каждый слой, который она охватывает
+@msg	a graph's records don't end where they should: its art was read as it is	записи диаграммы не заканчиваются там, где должны: её графика прочитана как есть
+@msg	`{w}` takes no operands	`{w}` не принимает операндов
+@msg	a wraparound group is inside a compound path	группа обтекания текстом находится внутри составного контура
 @msg	a path has too many points	в контуре слишком много точек
+@msg	it ends inside a group or compound path	они заканчиваются внутри группы или составного контура
 @msg	it ends inside a layer	они заканчиваются внутри слоя
+@msg	it ends inside a multi-layer mask	они заканчиваются внутри многослойной маски
+@msg	a multi-layer mask's operators are out of order	операторы многослойной маски идут в неправильном порядке
+@msg	a multi-layer mask needs one clipping path	многослойной маске нужен один контур обрезки
+@msg	a group crosses a multi-layer mask	группа пересекает многослойную маску
 @msg	it has art outside its layers	в них есть графика вне слоёв
 @msg	it has more than {MAX_NODES} objects	в них больше {MAX_NODES} объектов
 @msg	it has no layers	в них нет слоёв
@@ -4622,11 +4683,13 @@ axis	Both	Оба
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	объекты с несколькими заливками или обводками, эффектами или кистями импортированы в нарисованном виде ({_1}): их оформление пока нельзя редактировать
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиент «{name}» не определён в файле: вместо него используется сплошной цвет
 @msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено
+@msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в области в рамках, слишком низких для строки шрифта, которым он отображается, получил более высокие рамки ({_1}): иначе он не был бы виден
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	не удалось прочитать PDF-часть ({_1}): файл открыт из его данных для редактирования
 @msg	No fonts are missing in this document	В этом документе нет отсутствующих шрифтов
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft не ищет в папках других приложений и системы: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft не ищет в папках Shared и Public внутри Users: {path}
@@ -4701,6 +4764,9 @@ axis	Both	Оба
 @msg	the PCX file is cut short	файл PCX обрезан
 @msg	the PCX file's header is damaged	заголовок файла PCX повреждён
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файлы PCX с {bits}-битными пикселями в {planes} плоскостях не читаются
+@msg	the Pixar file is cut short	файл Pixar обрезан
+@msg	the Pixar file's header is damaged	заголовок файла Pixar повреждён
+@msg	the Pixar file's image data is damaged	данные изображения в файле Pixar повреждены
 @msg	the JPEG 2000 file can't be read	не удается прочитать файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 содержит неподдерживаемое цветовое пространство или содержимое JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
@@ -5070,6 +5136,11 @@ lighting	Light	Свет
 	Import Data Sets…	Импортировать наборы данных…
 	Export Data Sets…	Экспортировать наборы данных…
 	Load Variable Library…	Загрузить библиотеку переменных…
+	Save Variable Library…	Сохранить библиотеку переменных…
+@msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	набор данных `{name}` содержит управляющий символ, который не может храниться в библиотеке переменных
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набор данных `{name}` начинается или заканчивается пробелом, который не может храниться в библиотеке переменных
 	Make Graph Dynamic	Сделать диаграмму динамической
 	Batch…	Пакетная обработка…
 	Source Folder:	Исходная папка:
@@ -5080,8 +5151,10 @@ lighting	Light	Свет
 @msg	Batch: {count} processed, {failed} failed	Пакетная обработка: обработано {count}, с ошибкой {failed}
 @msg	choose a destination folder	выберите папку назначения
 @msg	choose a source folder	выберите исходную папку
+@msg	columns {first} and {column} both name the variable `{name}`	столбцы {first} и {column} указывают одну и ту же переменную `{name}`
 @msg	open a document with data sets	откройте документ с наборами данных
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	из набора данных {name} ничего не применено: ни один объект не привязан к переменной, для которой в нём есть значение
+@msg	no bound object reports a value (locked objects and embedded images report none)	ни один привязанный объект не сообщает значение (заблокированные объекты и внедрённые изображения не сообщают значений)
 @msg	the action has no steps	в действии нет шагов
 
 # User Interface › Accent Color
@@ -5109,6 +5182,11 @@ lighting	Light	Свет
 	Export Type:	Тип экспорта:
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
+@msg	an action is already recording	действие уже записывается
+@msg	no such function key	такой функциональной клавиши нет
+@msg	no such color	такого цвета нет
+@msg	{_1} cannot be used on Windows	Сочетание {_1} нельзя использовать в Windows
+@msg	more than one action is named “{_1}”	несколько действий называются «{_1}»
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
 	Smudge Stick…	Растушёвка…
 	Smudge Stick	Растушёвка
@@ -5191,7 +5269,9 @@ lighting	Light	Свет
 	Effect Gallery	Галерея эффектов
 	Filters	Фильтры
 	Select artwork to apply effects	Выберите графику, чтобы применить эффекты
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	переменные и наборы данных файла не прочитаны (переменных: {variables}, наборов данных: {data_sets}): панель «Переменные» их не показывает
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотека переменных файла прочитана только частично (пропущено записей: {_1}): панель «Переменные» показывает остальные
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не удалось прочитать библиотеку переменных файла: панель «Переменные» её не показывает
+@msg	a variable of unknown kind can't be bound to objects	переменную неизвестного вида нельзя связать с объектами
 # Select by Color (select.color)
 	Select by Color	Выделить по цвету
 	Move Anchor Point	Переместить опорную точку
@@ -5217,6 +5297,7 @@ lighting	Light	Свет
 	Ruby…	Руби…
 	Ruby	Руби
 	Geometric Guides	Геометрические направляющие
+	Geometric Patterns	Геометрические узоры
 	Ease In	Плавное начало
 	Ease Out	Плавное окончание
 	Ease In Out	Плавное начало и окончание
@@ -5276,17 +5357,30 @@ axis	Y Axis	Ось Y
 	New Set	Новый набор
 	Set Options…	Параметры набора…
 	Set Options	Параметры набора
+	Action Options…	Параметры действия…
+	Action Options	Параметры действия
+	Rename Action	Переименовать действие
+	New Action…	Новое действие…
+	New Action	Новое действие
+	Create New Action	Создать новое действие
+	Play Action	Воспроизвести действие
+	Action Set:	Набор действий:
+	Function Key:	Функциональная клавиша:
+	Record	Записать
 	Create New Set	Создать новый набор
 	Stop Global Edit	Завершить глобальное редактирование
 	Global Edit Options	Параметры глобального редактирования
+	Leave Out of Global Edit	Исключить из глобального редактирования
 	Match	Совпадение
 	On Artboards	На монтажных областях
 	All Artboards	Все монтажные области
 	Include Objects On Canvas	Включать объекты на холсте
-	Result(s): {count}	Результаты: {count}
+@plural	Result: {n}|Results: {n}	Результат: {n}|Результаты: {n}|Результаты: {n}
 @msg	select one object	выберите один объект
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальное редактирование работает с контурами, составными контурами, экземплярами символов и их группами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (повёрнутые или отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
+@msg	Global Edit is off	Глобальное редактирование выключено
+@msg	only an object of the Global Edit other than the one it started from can be left out	исключить из глобального редактирования можно только объект, отличный от того, с которого оно началось
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
 	Add to Symbols	Добавить в символы
 	Basic Shapes	Базовые фигуры
@@ -5904,6 +5998,16 @@ anchor	Points:	Точки:
 	Case	Регистр
 @msg	{label} must be a number	{label} должно быть числом
 @msg	{label} must be a number of at least 0.1	{label} должно быть числом не меньше 0,1
+	Advanced Character Formats	Дополнительные форматы символов
+	Horizontal Scale	Масштаб по горизонтали
+	Vertical Scale	Масштаб по вертикали
+@msg	{label} must be a number from {min} to {max}	{label} должно быть числом от {min} до {max}
+	Character Color	Цвет символов
+	OpenType Features	Функции OpenType
+	Stylistic Sets	Стилистические наборы
+@msg	features lists at most {max} tags	features содержит не более {max} тегов
+@msg	unknown OpenType feature `{t}`	неизвестная функция OpenType `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} должно быть числом больше 0 и не более {max}
 @msg	no character style `{name}`	Стиль символов `{name}` не найден
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6146,3 +6250,132 @@ breakText	Glyphs	Глифы
 	Small to Large	От меньшего к большему
 	Large to Small	От большего к меньшему
 	Distribute Evenly	Распределить равномерно
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Создать легенду образцов
+	Create Swatch Legend…	Создать легенду образцов…
+	HEX	HEX
+
+# The strings the report listed as missing for ru.
+	1 Layer	1 слой
+	4K UHD	4K UHD
+	8K UHD	8K UHD
+	A3	A3
+	A4	A4
+	A5	A5
+	A6	A6
+	Arrow Scale:	Масштаб стрелок:
+	Arrow Style:	Стиль стрелок:
+	Art and Bright Colors	Художественные и яркие цвета
+	Artboard Options: edit with the Artboard tool	Параметры монтажной области: измените их инструментом «Монтажная область»
+	Automate	Автоматизация
+	B4	B4
+	B5	B5
+	CRLF (Windows)	CRLF (Windows)
+	Check for Updates…	Проверить обновления…
+	Color Table (4 colors)	Таблица цветов (4 цвета)
+	Create PDF layers from top-level layers	Создавать PDF-слои из слоёв верхнего уровня
+	Current Colors (0)	Текущие цвета (0)
+	Differences from VectorCraft Default:	Отличия от значений VectorCraft по умолчанию:
+	Differences from [Default]:	Отличия от [По умолчанию]:
+	Dimension Lines	Размерные линии
+	Dimension Text	Размерный текст
+	Dot Gain 15%	Растискивание 15 %
+	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Перетащите сюда объекты, цвета и стили текста, чтобы использовать их в разных документах. Библиотеки хранятся на этом компьютере — учётная запись не нужна.
+	Expand 1 Selected	Разбить 1 объект
+	Extension Lines	Выносные линии
+	Extension:	Выносная линия:
+	Font Size:	Размер шрифта:
+	Graphic Styles (4)	Стили графики (4)
+	Gray Gamma 2.2	Gray Gamma 2.2
+	HDTV 1080p	HDTV 1080p
+	HDTV 720p	HDTV 720p
+	Hide Extension Lines	Скрыть выносные линии
+	Hide Units	Скрыть единицы
+	Invalid panel layout; restored the default dock	Недопустимая раскладка панелей; восстановлена стыковка по умолчанию
+	Japanese Double Postcard	Японская двойная открытка
+	Japanese Envelope #3	Японский конверт №3
+	Japanese Envelope #4	Японский конверт №4
+	Japanese Postcard	Японская открытка
+	Kaku #2	Каку №2
+	Kaku #3	Каку №3
+	LF (macOS, Linux)	LF (macOS, Linux)
+	Legal	Legal
+	Line Type:	Тип линии:
+	Line Weight:	Толщина линии:
+	Load Variable Library	Загрузить библиотеку переменных
+	PDF 1.7	PDF 1.7
+	PDF/X-1a:2001	PDF/X-1a:2001
+	PDF/X-3:2002	PDF/X-3:2002
+	PDF/X-4:2010	PDF/X-4:2010
+	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	Часть ArtCraft. MIT OR Apache-2.0. Шрифты: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Значки: Lucide (ISC) + VectorCraft.
+	Phone 375×812	Телефон 375×812
+	Photo Low Fidelity	Фото (низкое качество)
+	Preparing the image…	Подготовка изображения…
+	Print & Proof	Печать и цветопроба
+	Printing & Proofing	Печать и цветопроба
+	RECENT (1)	НЕДАВНИЕ (1)
+	RGB	RGB
+	Reset Automation	Сбросить «Автоматизация»
+	Reset Essentials Classic	Сбросить «Основные (классические)»
+	Reset Layout	Сбросить «Макет»
+	Reset Painting	Сбросить «Рисование»
+	Reset Printing and Proofing	Сбросить «Печать и цветопроба»
+	Reset Tracing	Сбросить «Трассировка»
+	Reset Typography	Сбросить «Типографика»
+	Reset Web	Сбросить «Веб»
+	Restricted Colors	Ограниченные цвета
+	Right-click an item to move it into this group.	Щёлкните объект правой кнопкой мыши, чтобы переместить его в эту группу.
+	SVG 1.1	SVG 1.1
+	Scale X	Масштаб X
+	Scale X:	Масштаб X:
+	Scale Y	Масштаб Y
+	Scale Y:	Масштаб Y:
+	Selected Styles Only (0)	Только выбранные стили (0)
+	Selected Swatches Only (0)	Только выбранные образцы (0)
+	Shear:	Наклон:
+	Simplified Chinese	Упрощённый китайский
+	Spot Colors (0)	Плашечные цвета (0)
+	Tablet 1024×768	Планшет 1024×768
+	Tabloid	Tabloid
+	Tracing the colors…	Трассировка цветов…
+	UTF-16 (Unicode)	UTF-16 (Unicode)
+	Units & Scale	Единицы и масштаб
+	VectorCraft Updates	Обновления VectorCraft
+	Video 1920×1080	Видео 1920×1080
+	Video 3840×2160	Видео 3840×2160
+	Web 1280×720	Веб 1280×720
+	WebP	WebP
+	Yonroku-ban	Ёнроку-бан
+	[High Quality Print]	[Высококачественная печать]
+	[High Resolution]	[Высокое разрешение]
+	[Low Resolution]	[Низкое разрешение]
+	[Medium Resolution]	[Среднее разрешение]
+	[PDF/X-1a:2001]	[PDF/X-1a:2001]
+	[PDF/X-3:2002]	[PDF/X-3:2002]
+	[PDF/X-4:2010]	[PDF/X-4:2010]
+	[Smallest File Size]	[Минимальный размер файла]
+	[VectorCraft Default]	[Значения VectorCraft по умолчанию]
+	sRGB IEC61966-2.1	sRGB IEC61966-2.1
+@id	file.close	Закрыть файл
+@id	pathfinder.add	Объединить
+@msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
+@msg	image '{key}' has no pixels and was left out	изображение '{key}' не содержит пикселов и было пропущено
+@msg	not an RTF file: it doesn't start with {\\rtf	это не файл RTF: он не начинается с {\\rtf
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	это файл PostScript (.ai, сохранённый в старом формате или без совместимости с PDF, либо EPS-файл), который пока нельзя открыть: сохраните его как PDF, .ai с совместимостью с PDF или SVG
+@msg	this kind of brush has no options dialog yet	у кистей этого типа пока нет диалога параметров
+digits	Hindi	Хинди
+font-script	Japanese	Японский
+shape	Open	Открытый
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Инструменты текста
+	Text Tweaker…	Настройка текста…
+	Text Tweaker	Настройка текста
+	Attribute:	Атрибут:
+	From:	От:
+	To:	До:
+	Bow	Дуга
+	Spike	Пик
+	Skip Spaces	Пропускать пробелы
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG

@@ -21,11 +21,15 @@ pub struct View {
     /// Size show it.
     #[serde(default)]
     pub artboard: usize,
+    /// View › Outline: the document's art is drawn as outlines. Each document has its own, and a
+    /// document opens in Preview.
+    #[serde(default)]
+    pub outline: bool,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0 }
+        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0, outline: false }
     }
 }
 
@@ -45,6 +49,7 @@ impl View {
             fitted: true,
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
             artboard: 0,
+            outline: false,
         })
     }
 }
@@ -232,7 +237,6 @@ pub struct ViewFlags {
     pub guides: bool,
     pub smart_guides: bool,
     pub bounding_box: bool,
-    pub outline: bool,
     pub pixel_preview: bool,
     pub snap_to_grid: bool,
     pub snap_to_point: bool,
@@ -271,7 +275,6 @@ impl Default for ViewFlags {
             guides: true,
             smart_guides: true,
             bounding_box: true,
-            outline: false,
             pixel_preview: false,
             snap_to_grid: false,
             snap_to_point: true,
@@ -308,6 +311,7 @@ impl Dialog {
             _ => d,
         }
     }
+    /// Field `k` as text: a string as it is, another value as JSON, empty when missing.
     pub fn str(&self, k: &str) -> String {
         match self.fields.get(k) {
             Some(Value::String(s)) => s.clone(),
@@ -315,6 +319,7 @@ impl Dialog {
             None => String::new(),
         }
     }
+    /// Field `k` as a bool; `false` when it is missing or not a bool.
     pub fn bool(&self, k: &str) -> bool {
         self.fields.get(k).and_then(Value::as_bool).unwrap_or(false)
     }
@@ -340,6 +345,15 @@ pub struct UiState {
     /// Icon panel currently popped out of the collapsed column (also `properties`, `layers` or
     /// `libraries` while the dock is collapsed).
     pub open_panel: Option<String>,
+    /// The panel a row's link opened as a popup (the Appearance panel's Stroke:, Character:,
+    /// Opacity:…): it shows beside the Appearance panel at the clicked row until a press outside
+    /// it, Escape, or the panel showing elsewhere puts it away
+    /// ([`crate::panels::appearance::row_popup`]).
+    #[serde(skip)]
+    pub transient_panel: Option<String>,
+    /// That popup's first text field is still to take the keyboard.
+    #[serde(skip)]
+    pub transient_focus: bool,
     pub control_bar: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
@@ -380,6 +394,13 @@ pub struct UiState {
     /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
     #[serde(skip)]
     pub tools_drawer: bool,
+    /// The toolbars made with New Toolbar, in the order they were made.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_toolbars: Vec<CustomToolbar>,
+    /// The toolbar made with New Toolbar that the open All Tools drawer edits (none: the Tools
+    /// panel's toolbar).
+    #[serde(skip)]
+    pub drawer_toolbar: Option<String>,
     /// Floating panel groups as files from before the canvas joined [`Self::docking`] saved
     /// them. Read only to convert those files ([`crate::layout_migration`]), never written.
     #[serde(default, skip_serializing)]
@@ -438,6 +459,19 @@ pub struct UiState {
     /// Presentation Mode came back on restart with no way out).
     #[serde(skip)]
     pub screen_mode: u8,
+    /// Window › Arrange › Tile: the open documents share the document area, one pane each, until
+    /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
+    #[serde(skip)]
+    pub tiled: bool,
+    /// Window › Arrange › Float in Window, Float All in Windows and Cascade: the documents in
+    /// floating windows of their own, out of the tab strip, until Consolidate All Windows. Not
+    /// saved, as `tiled` is not.
+    #[serde(skip)]
+    pub floating: Vec<crate::doc_windows::DocWindow>,
+    /// The document (its uid) the tab strip shows while the current document is in a floating
+    /// window: the tabbed document that was current last.
+    #[serde(skip)]
+    pub tab_document: Option<u64>,
     /// Draw Normal / Behind / Inside.
     pub draw_mode: u8,
     pub about: bool,
@@ -445,8 +479,10 @@ pub struct UiState {
     #[serde(default = "crate::panels::actions::default_sets")]
     pub action_sets: Vec<crate::panels::actions::ActionSet>,
     /// The current set of the Actions panel (its name clicked, one of its actions clicked, or made
-    /// with New Set): a recording goes into it and Set Options renames it. Not saved.
-    #[serde(skip)]
+    /// with New Set): a recording goes into it and Set Options renames it. Saved as an index into
+    /// [`UiState::action_sets`], so the same set is current after a restart
+    /// ([`crate::panels::actions::deserialize_current_set`]).
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::panels::actions::deserialize_current_set")]
     pub action_set: Option<usize>,
     /// The sets selected in the Actions panel, in index order: the current set and the sets a
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
@@ -455,6 +491,11 @@ pub struct UiState {
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
+    /// The id of the action New Action made for the recording in progress
+    /// ([`crate::panels::actions::Action::id`]): Stop gives it the recorded steps. None when Stop
+    /// adds a new action, as after Begin Recording.
+    #[serde(skip)]
+    pub recording_into: Option<u64>,
     /// Keyboard shortcut overrides: command id, `tool:<id>` or `panel:<id>` → chord ("" = none),
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
@@ -648,6 +689,44 @@ pub struct FloatingFlyout {
     pub pos: [f32; 2],
 }
 
+impl FloatingFlyout {
+    /// Keep strips of known tools, one per group (a hand-edited preferences file).
+    pub fn sanitize(strips: &mut Vec<FloatingFlyout>) {
+        let mut seen = std::collections::BTreeSet::new();
+        strips.retain_mut(|f| {
+            f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
+            f.tools.first().is_some_and(|k| seen.insert(k.clone()))
+        });
+    }
+}
+
+/// A toolbar made with Window › Toolbars › New Toolbar (`window.toolbar.new`): it floats on its
+/// own, filled with tools from the All Tools drawer, and is kept with the workspace it was made in.
+/// The groups torn off it are kept with it (`floating`), so the Tools panel's strips
+/// (`UiState::floating_flyouts`) hold none of them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CustomToolbar {
+    /// The name it is listed under in Window › Toolbars.
+    pub name: String,
+    /// Its slots, each a tool group (the first tool is the slot's default).
+    #[serde(default)]
+    pub slots: Vec<Vec<String>>,
+    /// It shows (Window › Toolbars › its name toggles it).
+    #[serde(default = "yes")]
+    pub shown: bool,
+    /// Top-left corner in screen points.
+    pub pos: [f32; 2],
+    /// The tool each slot of several tools shows, chosen last (keyed by the slot's first tool).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub slot_tool: std::collections::BTreeMap<String, String>,
+    /// Its tools show in two columns (the double arrow on its title bar toggles it).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub double: bool,
+    /// The groups torn off it, each floating as its own strip; they show while it does.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub floating: Vec<FloatingFlyout>,
+}
+
 /// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced
 /// toolbar) and its slots, each a tool group (the first tool is the slot's default).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -787,6 +866,8 @@ impl UiState {
         self.dialog = None;
         self.flyout = None;
         self.tools_drawer = false;
+        self.drawer_toolbar = None;
+        crate::custom_toolbars::sanitize(&mut self.custom_toolbars);
         self.palette_open = false;
         self.status.clear();
         self.about = false;
@@ -794,12 +875,7 @@ impl UiState {
         if self.group_tool.len() != vectorcraft_tools::TOOL_GROUPS.len() {
             self.group_tool = UiState::default().group_tool;
         }
-        // One strip per group, of known tools (a hand-edited preferences file).
-        let mut seen = std::collections::BTreeSet::new();
-        self.floating_flyouts.retain_mut(|f| {
-            f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
-            f.tools.first().is_some_and(|k| seen.insert(k.clone()))
-        });
+        FloatingFlyout::sanitize(&mut self.floating_flyouts);
         sanitize_toolbar_pos(&mut self.toolbar_pos);
         crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
         // `read_preferences` converted the file's older layouts already; this covers a state read
@@ -833,6 +909,7 @@ impl UiState {
 }
 
 impl Default for UiState {
+    /// The interface of a first start.
     fn default() -> Self {
         Self {
             legacy_language: None,
@@ -841,6 +918,8 @@ impl Default for UiState {
             dock_tab_order: Vec::new(),
             dock_collapsed: false,
             open_panel: None,
+            transient_panel: None,
+            transient_focus: false,
             control_bar: false,
             toolbar: true,
             toolbar_double: false,
@@ -854,6 +933,8 @@ impl Default for UiState {
             toolbar_edits: ToolbarEdits::default(),
             toolbar_show: ToolbarShow::default(),
             tools_drawer: false,
+            custom_toolbars: vec![],
+            drawer_toolbar: None,
             floating_panels: vec![],
             docking: None,
             docking_hidden: Default::default(),
@@ -876,12 +957,16 @@ impl Default for UiState {
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
+            tiled: false,
+            floating: Vec::new(),
+            tab_document: None,
             draw_mode: 0,
             about: false,
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
             action_sets_selected: vec![],
             recording: None,
+            recording_into: None,
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),

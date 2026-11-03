@@ -429,6 +429,29 @@ fn a_cut_out_edge_leaves_the_color_of_the_art_inside_it_alone() {
 }
 
 #[test]
+fn a_library_of_many_repeated_swatches_is_read_once_per_color() {
+    let img = Raster::from_fn(2, 1, |x, _| if x == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    // 200,000 swatches of 50,000 distinct colours: compared against those kept so far, billions of steps.
+    let swatches: Vec<[u8; 3]> = (0..200_000u32)
+        .map(|i| {
+            let c = i % 50_000;
+            [(c >> 16) as u8, (c >> 8) as u8, c as u8]
+        })
+        .collect();
+    let params = TraceParams { mode: Mode::Color, palette: Palette::DocumentLibrary, swatches, colors: 2, ..TraceParams::default() };
+    let start = std::time::Instant::now();
+    let q = quantize(&img, &params);
+    assert!(start.elapsed() < std::time::Duration::from_secs(30), "{:?}", start.elapsed());
+    assert_eq!(q.labels.len(), 2);
+}
+
+#[test]
+fn a_raster_whose_bytes_are_not_its_size_quantizes_to_nothing() {
+    let short = Raster { width: 60_000, height: 60_000, rgba: vec![0; 4] };
+    assert_eq!(quantize(&short, &TraceParams::default()), Quantized { labels: vec![], palette: vec![] });
+}
+
+#[test]
 fn a_semi_transparent_stripe_beside_a_cut_out_edge_keeps_its_own_color() {
     // Columns: transparent, a half-opaque gray edge (white blended with the background), a
     // semi-transparent yellow stripe, then opaque white. The gray chooses no color; the yellow,
