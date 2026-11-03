@@ -62,43 +62,32 @@ fn a_contour_point_caret_uses_its_unhinted_x_and_y() {
     assert_eq!(bad.face(LIGATURE_CARET_FAMILY, "Regular").unwrap().ligature_carets(gid, 1), None);
 }
 
-/// [`contour_caret_font`] with its `glyf` and `loca` replaced: the ligature is a composite of
-/// eight copies of a glyph that is itself eight copies of the next, 15 levels down to a glyph with
-/// no contours. Every other glyph is empty.
-fn composite_fan_caret_font() -> Vec<u8> {
+/// `count` glyph ids of [`contour_caret_font`] other than the ligature's.
+fn spare_gids(count: usize) -> Vec<u16> {
+    let ligature = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    (1..).filter(|g| *g != ligature).take(count).collect()
+}
+
+/// [`contour_caret_font`], whose caret is the ligature's point 0, with its `glyf` and `loca`
+/// replaced: each `(gid, data)` in `glyphs` gives that glyph's `glyf` data, and every other glyph
+/// is empty.
+fn glyf_caret_font(glyphs: &[(u16, Vec<u8>)]) -> Vec<u8> {
     use skrifa::raw::TableProvider;
     use write_fonts::FontBuilder;
     use write_fonts::types::Tag;
 
-    const FAN: usize = 8;
-    const LEVELS: usize = 15;
     let base = contour_caret_font(0);
     let font = skrifa::FontRef::new(&base).expect("test font parses");
-    let ligature = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
     let num_glyphs = font.maxp().expect("maxp reads").num_glyphs();
     let short_loca = font.head().expect("head reads").index_to_loc_format() == 0;
-    let levels: Vec<u16> = (1..num_glyphs).filter(|g| *g != ligature).take(LEVELS).collect();
-    let composite = |child: u16| {
-        let mut data = vec![0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
-        for i in 0..FAN {
-            // ARGS_ARE_XY_VALUES, plus MORE_COMPONENTS on all but the last; byte offsets of 0.
-            let flags: u16 = if i + 1 < FAN { 0x0022 } else { 0x0002 };
-            data.extend(flags.to_be_bytes());
-            data.extend(child.to_be_bytes());
-            data.extend([0, 0]);
-        }
-        data
-    };
     let mut glyf = Vec::new();
     let mut offsets = vec![0usize];
     for gid in 0..num_glyphs {
-        if gid == ligature {
-            glyf.extend(composite(levels[0]));
-        } else if let Some(level) = levels.iter().position(|g| *g == gid) {
-            match levels.get(level + 1) {
-                Some(child) => glyf.extend(composite(*child)),
-                // No contours, a zero bounding box and no instructions.
-                None => glyf.extend([0u8; 12]),
+        if let Some((_, data)) = glyphs.iter().find(|(g, _)| *g == gid) {
+            glyf.extend(data);
+            // Keep every offset even for the short `loca` format.
+            if glyf.len() % 2 == 1 {
+                glyf.push(0);
             }
         }
         offsets.push(glyf.len());
@@ -118,6 +107,70 @@ fn composite_fan_caret_font() -> Vec<u8> {
         }
     }
     builder.build()
+}
+
+/// [`glyf_caret_font`] whose ligature is a composite of eight copies of a glyph that is itself
+/// eight copies of the next, 15 levels down to a glyph with no contours.
+fn composite_fan_caret_font() -> Vec<u8> {
+    const FAN: usize = 8;
+    let ligature = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let levels = spare_gids(15);
+    let composite = |child: u16| {
+        let mut data = vec![0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+        for i in 0..FAN {
+            // ARGS_ARE_XY_VALUES, plus MORE_COMPONENTS on all but the last; byte offsets of 0.
+            let flags: u16 = if i + 1 < FAN { 0x0022 } else { 0x0002 };
+            data.extend(flags.to_be_bytes());
+            data.extend(child.to_be_bytes());
+            data.extend([0, 0]);
+        }
+        data
+    };
+    let mut glyphs = vec![(ligature, composite(levels[0]))];
+    for (level, gid) in levels.iter().enumerate() {
+        match levels.get(level + 1) {
+            Some(child) => glyphs.push((*gid, composite(*child))),
+            // No contours, a zero bounding box and no instructions.
+            None => glyphs.push((*gid, vec![0; 12])),
+        }
+    }
+    glyf_caret_font(&glyphs)
+}
+
+/// A contour-point caret on a composite's point uses the component offset the outline loader
+/// uses. The ligature is one component, a glyph with a single point at (50, 0), turned a quarter
+/// turn and scaled by 1.5 with a two-by-two matrix and placed at (100, 0). With
+/// SCALED_COMPONENT_OFFSET the offset's x scales by the length of the x basis, 1.5, so the point
+/// lands at x = 150; with UNSCALED_COMPONENT_OFFSET as well the offset stays (100, 0).
+#[test]
+fn a_contour_point_caret_on_a_composite_takes_its_scaled_offset() {
+    let gid = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let [leaf] = spare_gids(1)[..] else { panic!("one spare glyph") };
+    // One on-curve point at (50, 0) with word coordinates, and no instructions.
+    let mut point = vec![0, 1, 0, 0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 0x01];
+    point.extend(50i16.to_be_bytes());
+    point.extend(0i16.to_be_bytes());
+    let composite = |offset_flags: u16| {
+        // ARG_1_AND_2_ARE_WORDS, ARGS_ARE_XY_VALUES and WE_HAVE_A_TWO_BY_TWO.
+        let flags = 0x0083 | offset_flags;
+        let mut data = vec![0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+        data.extend(flags.to_be_bytes());
+        data.extend(leaf.to_be_bytes());
+        data.extend(100i16.to_be_bytes());
+        data.extend(0i16.to_be_bytes());
+        // xx = 0, yx = 1.5, xy = -1.5, yy = 0 in F2Dot14.
+        for f2dot14 in [0x0000u16, 0x6000, 0xa000, 0x0000] {
+            data.extend(f2dot14.to_be_bytes());
+        }
+        data
+    };
+    let caret = |offset_flags: u16| {
+        let db = db_with(Some(glyf_caret_font(&[(gid, composite(offset_flags)), (leaf, point.clone())])));
+        db.face(LIGATURE_CARET_FAMILY, "Regular").unwrap().ligature_carets(u32::from(gid), 1)
+    };
+    // SCALED_COMPONENT_OFFSET, then with UNSCALED_COMPONENT_OFFSET too.
+    assert_eq!(caret(0x0800), Some(vec![150.0]));
+    assert_eq!(caret(0x1800), Some(vec![100.0]));
 }
 
 /// A contour-point caret on a composite that expands to billions of glyphs with no points gives

@@ -42,8 +42,11 @@ fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize, visits
                 let (dx, dy) = match component.anchor {
                     Anchor::Offset { x, y } => {
                         let (x, y) = (f64::from(x), f64::from(y));
-                        if component.flags.contains(CompositeGlyphFlags::SCALED_COMPONENT_OFFSET) {
-                            (xx * x + xy * y, yx * x + yy * y)
+                        // Each axis of a scaled offset scales by the length of its basis vector, as
+                        // in skrifa's outline loader. UNSCALED_COMPONENT_OFFSET turns the scaling off.
+                        let offset_flags = CompositeGlyphFlags::SCALED_COMPONENT_OFFSET | CompositeGlyphFlags::UNSCALED_COMPONENT_OFFSET;
+                        if component.flags & offset_flags == CompositeGlyphFlags::SCALED_COMPONENT_OFFSET {
+                            (x * xx.hypot(xy), y * yx.hypot(yy))
                         } else {
                             (x, y)
                         }
