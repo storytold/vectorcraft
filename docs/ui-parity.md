@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; Transform previews typed values and reads the Appearance target; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -21,6 +21,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-26 | minor | Pencil Fidelity goes down to 0.01 pt (dialog, tool and engine; Smooth keeps 0.05) on a logarithmic slider across the Tool Options row, with hundredths in the field and key steps that fit the range (#3328); scores and estimates unchanged (estimated) |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
@@ -185,6 +186,7 @@ tools, never checked side by side) isn't captured row by row.
 | Transform tools: click sets the reference point (snaps to anchors/centres), Alt-click opens the dialog, Alt-release copies | done | with anchors selected with Direct Selection, the tools, the dialogs and Move transform those anchors alone, about the centre of their box by default (#1408; the default point and whole-object copies are our choices) |
 | Move, Rotate, Scale, Reflect and Shear dialogs: live Preview; Up/Down step angles and percentages by 1, Shift by 10 | done | #1412; Preview starts off (our choice: the public documentation gives no default), Move's as it was last confirmed; OK is one undo step and Transform Again repeats it |
 | Transform Again, Transform Each, Scale Strokes & Effects, Scale Corners | done | |
+| The Transform effect dialog previews valid typed scale, move, rotation, and Copies values while fields remain focused. Preview off defers the artwork change until OK; Cancel restores the original artwork. | done | `crates/ui-egui/src/panels/tests_appearance.rs` covers numeric input, sliders, artwork targets, preview, and undo. |
 | Move opens on the offset of the last move (a drag of the selection or Move) and with the Copy, Transform Objects and Preview it was last confirmed with, so Enter, Enter repeats a move or a copy | done | the public source: [an Adobe Community thread](https://community.adobe.com/questions-652/move-tool-771221) (the dialog shows the last move, drags included); that the checkboxes are kept, Preview among them, and that a nudge with the arrow keys is not a move here are our choices; Transform Patterns is General › Transform Pattern Tiles, which Move's OK sets; the offset is the session's (not kept between launches) |
 | Transform Each opens on the scale, move, rotate, reflect, Random, reference point, Transform Objects and Preview it was last confirmed with, and has a Copy button left of Cancel that transforms a copy of each object (no Copy checkbox) | done | #1732; the Copy button: [Scale multiple objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/scale-multiple-objects.html); the remembered values: a maintainer's call on [#1732](https://github.com/storytold/vectorcraft/issues/1732#issuecomment-6157505075), not the help page; Copy itself is never kept; Preview still starts off on first use (the owner's call) |
 | Transform Objects beside Transform Patterns in the Move, Rotate, Scale, Reflect and Shear dialogs and Transform Each; Reflect across an angle | done | #1448, #1460; off, only the pattern tiles transform; the checkboxes are always enabled (our choice); the link that keeps Transform Each's two scales equal is missing (not documented) |
