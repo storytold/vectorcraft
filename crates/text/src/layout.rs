@@ -285,21 +285,21 @@ impl Ctx<'_> {
             Some(ib) => Affine::translate((g.kern_shift - lead, -g.bshift)) * ib.xf,
             // Baseline shift moves the glyph across its line, and Character Rotation then turns it
             // about its shifted pen position, so the shift is across the line at any rotation.
-            // Right-to-left manual kerning moves that pen position along the line.
+            // Manual kerning and composition trim move that pen position along the line.
             None => {
-                Affine::translate((g.kern_shift, -g.bshift))
+                Affine::translate((g.kern_shift - lead, -g.bshift))
                     * Affine::rotate(-g.rotation.to_radians())
-                    * Affine::translate((g.dx - lead, g.dy))
+                    * Affine::translate((g.dx, g.dy))
                     * Affine::scale_non_uniform(g.sx, g.sy)
             }
         };
         // The turning point in font units, which later moves of the glyph's transform keep.
         let pivot = match local.determinant() {
-            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(g.kern_shift, -g.bshift),
+            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(g.kern_shift - lead, -g.bshift),
             _ => Point::ZERO,
         };
         let unturned = if g.inline.is_none() && g.rotation != 0.0 && g.sx != 0.0 && g.sy != 0.0 {
-            let placed = Affine::translate((g.dx - lead, g.dy)) * Affine::scale_non_uniform(g.sx, g.sy);
+            let placed = Affine::translate((g.dx, g.dy)) * Affine::scale_non_uniform(g.sx, g.sy);
             placed.inverse() * Affine::rotate(g.rotation.to_radians()) * placed
         } else {
             Affine::IDENTITY

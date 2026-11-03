@@ -147,7 +147,7 @@ pub struct PositionedGlyph {
     /// its Character Rotation. The identity for a glyph without one.
     pub unturned: Affine,
     /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
-    /// position on the baseline moved by its baseline shift.
+    /// position after composition spacing adjustments, moved by its baseline shift.
     pub pivot: Point,
     /// A ligature (one glyph that alone stands for several characters, grapheme clusters, of the
     /// text): the caret stop between each two of them, in logical order, as the byte offset of the
