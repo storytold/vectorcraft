@@ -29,7 +29,7 @@ mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
-pub use symbol_nine_slice::{SYMBOL_NINE_SLICE, SymbolNineSlice};
+pub use symbol_nine_slice::{MAX_SLICE_GROWTH, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice, charge_symbol_art};
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
@@ -75,8 +75,8 @@ pub(crate) mod skip;
 
 pub use appearance::StrokeGradientMode;
 pub use appearance::{
-    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset, SavedProfile,
-    StrokeAlign, StrokeLayer, WidthProfile,
+    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset,
+    SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
 pub use compound_shape::ShapeMode;
@@ -106,6 +106,7 @@ pub use selection::{AnchorRef, SegmentRef, Selection};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
+pub use text::FontHeightReference;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
@@ -141,7 +142,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
-pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol};
+pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -221,6 +222,10 @@ pub struct Document {
     /// still read so files saved mid-edit by older versions load without the editing layer.
     #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
+    /// Symbol editing mode, while active. Never saved (see [`Document::without_edit_modes`]): the
+    /// symbol already holds the art of its editing layer.
+    #[serde(default, skip_serializing)]
+    pub symbol_edit: Option<SymbolEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.
     #[serde(default, skip_serializing_if = "skip::is_empty_map")]

@@ -60,6 +60,24 @@ fn digits_map_between_the_numeral_systems() {
     assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&farsi).unwrap()).unwrap(), farsi);
 }
 
+/// The font height reference is the em box by default and is saved only when it is another.
+#[test]
+fn font_height_reference_is_saved_only_when_not_the_em_box() {
+    let st = CharStyle::default();
+    assert_eq!(st.font_height_reference, FontHeightReference::EmBox);
+    assert!(serde_json::to_value(&st).unwrap().get("fontHeightReference").is_none());
+    for (r, key) in
+        [(FontHeightReference::CapHeight, "capHeight"), (FontHeightReference::XHeight, "xHeight"), (FontHeightReference::IcfBox, "icfBox")]
+    {
+        let set = CharStyle { font_height_reference: r, ..CharStyle::default() };
+        assert_eq!(serde_json::to_value(&set).unwrap()["fontHeightReference"], key);
+        assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&set).unwrap()).unwrap(), set);
+    }
+    // Styles written before the attribute existed read as the em box.
+    let old = serde_json::to_value(&st).unwrap();
+    assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().font_height_reference, FontHeightReference::EmBox);
+}
+
 /// Each Indic numeral system draws 0–9 (and the Arabic-Indic sets) as the ten digits of its
 /// script's block; every system saves under its id, which reads back, and other names are refused.
 #[test]

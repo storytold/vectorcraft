@@ -1,5 +1,5 @@
 use super::cursor::only_view_differs;
-use super::{Affine, CacheKey, Color32, Point, Pos2, Shape, VectorcraftApp, Xf, color_image, pos2, vec2};
+use super::{Affine, CacheKey, Color32, Point, Pos2, Shape, VectorcraftApp, Xf, color_image_owned, pos2, vec2};
 
 /// The fraction of the canvas's resolution, each way, that [`Fill`] is rendered at.
 const FILL_SCALE: f64 = 0.25;
@@ -83,7 +83,8 @@ pub(super) fn fill_uncovered(
     let opts = vectorcraft_render::RenderOptions { kept_images_only: true, image_mips: true, interacting: false, dragging: true, ..opts.clone() };
     let gaps = shown_frame(k, rect, xf).map_or_else(Vec::new, |shown| uncovered(shown, rect));
     if let Some(done) = done.filter(|d| usable(&d.key)) {
-        let color = color_image(&done.img);
+        let (fw, fh) = (done.img.width, done.img.height);
+        let color = color_image_owned(done.img);
         let tex = match app.canvas.fill.take() {
             Some(mut f) => {
                 f.tex.set(color, egui::TextureOptions::LINEAR);
@@ -92,7 +93,7 @@ pub(super) fn fill_uncovered(
             None => ctx.load_texture("canvas-fill", color, egui::TextureOptions::LINEAR),
         };
         let (_, _, view) = fill_view(&done.key);
-        app.canvas.fill = Some(Fill { key: done.key, view, size: (done.img.width, done.img.height), tex });
+        app.canvas.fill = Some(Fill { key: done.key, view, size: (fw, fh), tex });
     }
     let Some(worker) = app.canvas.fill_worker.as_mut().filter(|_| !gaps.is_empty()) else { return };
     if !app.canvas.fill.as_ref().is_some_and(|f| covers(&f.key)) && !worker.pending.as_ref().is_some_and(covers) {

@@ -1492,6 +1492,56 @@ fn c_and_f_during_an_arc_gesture_go_to_the_arc_tool() {
     assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{r}");
 }
 
+/// `press_key` with `f`, `v`, `x` and `c` while a rectangular or polar grid is being dragged goes
+/// to the grid tool, and the release draws one grid. With nothing dragged, V is a shortcut again.
+#[test]
+fn f_v_x_and_c_during_a_grid_gesture_go_to_the_grid_tool() {
+    let count = |s: &mut Server, id: u64| {
+        let r = call(s, id, "inspect_document", json!({"depth": 0}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["layers"][0]["childCount"].as_u64().unwrap()
+    };
+    for tool in ["rectangularGrid", "polarGrid"] {
+        let mut s = server();
+        let before = count(&mut s, 1);
+        let begin = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]);
+        let r = call(&mut s, 2, "pointer_gesture", json!({"tool": tool, "events": begin}));
+        assert_eq!(r["isError"], false, "{r}");
+        for (id, key) in [(3, "f"), (4, "v"), (5, "x"), (6, "c")] {
+            let r = call(&mut s, id, "press_key", json!({"key": key}));
+            assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool} {key}: {r}");
+        }
+        let r = call(&mut s, 7, "pointer_gesture", json!({"tool": tool, "events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert_eq!(r["isError"], false, "{r}");
+        assert_eq!(count(&mut s, 8), before + 1, "{tool}");
+        let r = call(&mut s, 9, "press_key", json!({"key": "v"}));
+        assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool}: {r}");
+    }
+}
+
+/// Grid letters with Shift reach the grid tool during a drag; with Ctrl, Cmd or Alt they do not.
+#[test]
+fn shifted_grid_letters_during_a_drag_go_to_the_grid_tool() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "pointer_gesture",
+        json!({"tool": "polarGrid", "events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, key, mods, tool) in [
+        (2, "v", json!({"shift": true}), true),
+        (3, "f", json!({"ctrl": true}), false),
+        (4, "x", json!({"cmd": true}), false),
+        (5, "c", json!({"cmd": true}), false),
+        (6, "v", json!({"alt": true}), false),
+    ] {
+        let r = call(&mut s, id, "press_key", json!({"key": key, "mods": mods}));
+        let handled = serde_json::from_str::<Value>(&text_of(&r)).ok().is_some_and(|v| v["handledBy"] == "tool");
+        assert_eq!(handled, tool, "{key} {mods}: {r}");
+    }
+}
+
 /// A click on one of two selected objects makes it the key object: `pointer_gesture` replies
 /// with it as `key` and `inspect_document` lists it, and a click on the key again lets it go.
 #[test]

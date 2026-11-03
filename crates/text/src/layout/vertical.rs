@@ -20,10 +20,11 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 ///
 /// Manual (Character panel menu › Tate-chu-yoko): any characters marked `tateChuYoko`, including
 /// one character, letters and numbers longer than three digits. Marked characters are taken
-/// before the automatic digit rule.
+/// before the automatic digit rule. A marked block moves by the Tate-chu-yoko Settings Up/Down
+/// and Left/Right of its first character; an automatic block does not move.
 /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
-pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, bool)) {
-    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).1).collect();
+pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyle) {
+    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).marked).collect();
     let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
     let mut i = 0;
     while i < g.len() {
@@ -32,8 +33,8 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, b
             while manual.get(end).copied().unwrap_or(false) {
                 end += 1;
             }
-            let em = style(&g[i]).0;
-            place_tcy_block(&mut g[i..end], em);
+            let first = style(&g[i]);
+            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right));
             i = end;
             continue;
         }
@@ -46,21 +47,31 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, b
             end += 1;
         }
         if (2..=3).contains(&(end - i)) {
-            let em = style(&g[i]).0;
-            place_tcy_block(&mut g[i..end], em);
+            let em = style(&g[i]).size;
+            place_tcy_block(&mut g[i..end], em, (0.0, 0.0));
         }
         i = end;
     }
 }
 
-/// Lay `g` across one em of the column. The first glyph takes the em; the rest share its cell.
-fn place_tcy_block(g: &mut [SGlyph], em: f64) {
+/// What [`tate_chu_yoko`] reads from a glyph's character style: its size, whether it is marked
+/// Tate-chu-yoko, and its Tate-chu-yoko Settings Up/Down and Left/Right in points.
+pub(super) struct TcyStyle {
+    pub size: f64,
+    pub marked: bool,
+    pub up: f64,
+    pub right: f64,
+}
+
+/// Lay `g` across one em of the column, moved by `(up, right)` points. The first glyph takes the
+/// em; the rest share its cell.
+fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64)) {
     let width: f64 = g.iter().map(|gl| gl.adv).sum();
     let squeeze = if width > em && width > 0.0 { em / width } else { 1.0 };
     let mut ink = 0.0;
     for (k, gl) in g.iter_mut().enumerate() {
         let adv = gl.adv;
-        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze });
+        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up, right });
         gl.adv = if k == 0 { em } else { 0.0 };
         ink += adv;
     }
@@ -218,6 +229,12 @@ pub(super) const QUARTER_TURN: Affine = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0
 /// their side when the font has none (Unicode's Vertical_Orientation Tr).
 /// Fullwidth !/? instead keep the nominal glyph upright (Tu fallback, UAX #50 §3.1):
 /// <https://www.unicode.org/reports/tr50/#vo>.
+///
+/// Standard Vertical Roman Alignment (Character panel menu): a marked Latin letter, digit or other
+/// character outside the classes above stands upright instead of lying on its side, except spaces
+/// and control characters (they keep their width down the column) and the glyphs of a
+/// tate-chu-yoko block, which stays across the column.
+/// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
 pub(super) fn stands_upright(g: &SGlyph) -> bool {
     let c = g.ch as u32;
     let upright = matches!(c,
@@ -230,7 +247,7 @@ pub(super) fn stands_upright(g: &SGlyph) -> bool {
         | 0xE000..=0xFAFF | 0xFE10..=0xFE1F | 0xFE30..=0xFE4F | 0xFE50..=0xFE6F | 0xFF00..=0xFFE7
         | 0x1F000..=0x1FAFF | 0x20000..=0x3FFFF);
     if !upright {
-        return false;
+        return g.vertical_roman && g.tcy.is_none() && g.inline.is_none() && !g.ch.is_whitespace() && !g.ch.is_control();
     }
     let needs_vertical_form = matches!(c,
         0x3001 | 0x3002 | 0x3008..=0x3011 | 0x3013..=0x301F | 0x3030 | 0x30A0 | 0x30FC

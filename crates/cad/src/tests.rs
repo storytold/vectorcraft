@@ -906,6 +906,23 @@ fn text_outside_ascii_is_escaped_before_2007() {
     assert_eq!(text(DxfVersion::R2018), "Größe");
 }
 
+/// Type whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is 20 pt type, whose TEXT height is 14.
+#[test]
+fn a_font_height_reference_is_written_as_the_size_drawn() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut d = text_doc("Plan A", 14.0);
+    let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.font_family = HEIGHT_FAMILY.into();
+        t.runs[0].style.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    }
+    let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    let e = entities(&editable);
+    assert!((all(&e[0], 40)[0] - 14.0).abs() < 1e-6, "{:?}", all(&e[0], 40));
+}
+
 #[test]
 fn images_link_png_or_jpeg_files() {
     let mut png = vec![];

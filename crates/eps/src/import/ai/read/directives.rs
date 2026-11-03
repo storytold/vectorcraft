@@ -1,5 +1,7 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{
+    FLIP, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED,
+};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -23,7 +25,7 @@ impl<'a> Reader<'a> {
 
     // ---- comments --------------------------------------------------------------------------
 
-    pub(super) fn comment(&mut self, c: &[u8]) -> Result<(), String> {
+    pub(super) fn comment(&mut self, c: &[u8], hidden: bool) -> Result<(), String> {
         let line = String::from_utf8_lossy(c);
         let line = line.trim_end();
         if let Some((len, hex)) = self.blend_record.as_mut() {
@@ -49,6 +51,36 @@ impl<'a> Reader<'a> {
             }
             return Ok(());
         }
+        // The header's comments (AI7 specification §2.1.1; DSC 3.0).
+        let more = self.custom_more.take();
+        if !self.header_done && self.frames.is_empty() {
+            let bytes = c.trim_ascii_end();
+            if let (Some(cmyk), Some(v)) = (more, bytes.strip_prefix(b"%+")) {
+                self.custom_color(v, cmyk);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%CMYKCustomColor:") {
+                self.custom_color(v, true);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%RGBCustomColor:") {
+                self.custom_color(v, false);
+                return Ok(());
+            }
+            if let Some(v) = bytes.strip_prefix(b"%For:") {
+                // `(username) (organization)`: the user who created the file.
+                if self.author.is_none() {
+                    self.author = ps_string(v).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+                }
+                return Ok(());
+            }
+            if bytes == b"%EndComments" {
+                self.header_done = true;
+            }
+        }
+        if self.note_comment(c) {
+            return Ok(());
+        }
         let m = marker(line);
         // A pattern's definition (one inside another's isn't read).
         if m == "BeginPattern" && self.pattern.is_none() {
@@ -56,9 +88,19 @@ impl<'a> Reader<'a> {
             self.define_pattern(section);
             return Ok(());
         }
+        if m == "BeginSymbol" {
+            let section = self.section("EndSymbol")?;
+            self.symbol_bounds(section);
+            return Ok(());
+        }
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
             self.styles = crate::import::ai::style::art_styles(section);
+            return Ok(());
+        }
+        if m == "BeginArtStyleList" {
+            let section = self.section("EndArtStyleList")?;
+            self.style_list = crate::import::ai::style::art_style_list(section);
             return Ok(());
         }
         if m == "BeginPalette" {
@@ -95,7 +137,10 @@ impl<'a> Reader<'a> {
             _ => {}
         }
         if line.starts_with("AI5_BeginLayer") {
-            return self.open(Kind::Layer(Box::default()), false);
+            self.multi_mask_layer_starts()?;
+            self.open(Kind::Layer(Box::default()), false)?;
+            self.multi_mask_go_on();
+            return Ok(());
         }
         if line.starts_with("AI5_BeginRaster") {
             self.raster = Some(Raster::default());
@@ -104,11 +149,32 @@ impl<'a> Reader<'a> {
                 return self.image_from(vals, &hex);
             }
         } else if line.starts_with("AI5_BeginPlace") {
-            self.place = Some(Place::default());
+            // One that is still open (no `~` ended it) isn't read.
+            let unseen = hidden || self.gs.hidden || !self.shown();
+            if let Some(open) = self.place.replace(Place { hidden: unseen, ..Place::default() }) {
+                self.unreadable("placed files", open.hidden);
+            }
         } else if line.starts_with("AI5_EndPlace") {
             // One that `~` didn't end isn't read.
-            if self.place.take().is_some() {
-                self.unreadable("placed files");
+            if self.place.is_some() {
+                self.end_place(hidden)?;
+            }
+        } else if m == "BeginPlacedRelativePath" {
+            let at = self.stack.len();
+            if let Some(p) = self.place.as_mut() {
+                p.folder_at = Some(at);
+            }
+        } else if m == "EndPlacedRelativePath" {
+            // The folder is the string between the markers, taken off the stack.
+            let base = self.frames.last().map_or(0, |f| f.base);
+            if let Some(at) = self.place.as_mut().and_then(|p| p.folder_at.take()).filter(|at| (base..=self.stack.len()).contains(at)) {
+                let vals = self.stack.split_off(at);
+                if let Some(p) = self.place.as_mut() {
+                    p.folder = vals
+                        .iter()
+                        .find_map(|v| if let V::Str(s) = v { Some(super::obj::text(s)) } else { None })
+                        .filter(|f| f.len() <= MAX_PLACED_FOLDER);
+                }
             }
         } else if self.frames.is_empty()
             && let Some(v) = line.strip_prefix("%HiResBoundingBox:")
@@ -133,7 +199,7 @@ impl<'a> Reader<'a> {
             self.ruler_units = Some(n);
         } else if let Some(v) = line.strip_prefix("AI5_ArtSize:") {
             self.art_size = two(v);
-        } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:") {
+        } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:").or_else(|| line.strip_prefix("%TemplateBox:")) {
             self.template_center = two(v);
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
@@ -150,6 +216,70 @@ impl<'a> Reader<'a> {
             self.color_model = Some(v.trim() == "2");
         }
         Ok(())
+    }
+
+    /// `%AI3_Note:` (or `%%Note:`) sets the note of the paths that follow, an empty one clearing it,
+    /// and `%AI5_NoteMore:` adds a line to it. The text is kept as written, up to [`MAX_NOTE`]
+    /// characters.
+    fn note_comment(&mut self, c: &[u8]) -> bool {
+        let (text, more) = if let Some(t) = c.strip_prefix(b"AI3_Note:").or_else(|| c.strip_prefix(b"%Note:")) {
+            (t, false)
+        } else if let Some(t) = c.strip_prefix(b"AI5_NoteMore:") {
+            (t, true)
+        } else {
+            return false;
+        };
+        // Only as much of the line as the note can keep is decoded; a UTF-8 character the cut
+        // splits is left out.
+        let mut head = text.get(..text.len().min(4 * MAX_NOTE)).unwrap_or(text);
+        if head.len() < text.len()
+            && let Err(e) = std::str::from_utf8(head)
+            && e.error_len().is_none()
+        {
+            head = head.get(..e.valid_up_to()).unwrap_or(head);
+        }
+        let text = super::obj::text(head);
+        match (&mut self.gs.note, more) {
+            (Some(note), true) => {
+                note.push('\n');
+                note.push_str(&text);
+            }
+            // A continuation with no note to continue.
+            (None, true) => return true,
+            (note, false) => *note = Some(text),
+        }
+        if let Some(note) = self.gs.note.as_mut()
+            && let Some((at, _)) = note.char_indices().nth(MAX_NOTE)
+        {
+            note.truncate(at);
+        }
+        true
+    }
+
+    /// A custom color of the header, `cyan magenta yellow black (name)` (`cmyk`) or
+    /// `red green blue (name)`, each component from 0 to 1. One written otherwise isn't kept.
+    fn custom_color(&mut self, v: &[u8], cmyk: bool) {
+        self.custom_more = Some(cmyk);
+        if self.custom_colors.len() >= MAX_CUSTOM_COLORS {
+            return;
+        }
+        let Some(open) = v.iter().position(|&b| b == b'(') else { return };
+        let (Some(head), Some(name)) = (v.get(..open), v.get(open..).and_then(ps_string)) else { return };
+        // One more than a color has, so that too many are seen.
+        let parts: Vec<Option<f32>> = head
+            .split(u8::is_ascii_whitespace)
+            .filter(|w| !w.is_empty())
+            .take(5)
+            .map(|w| std::str::from_utf8(w).ok()?.parse::<f32>().ok().filter(|n| (0.0..=1.0).contains(n)))
+            .collect();
+        let color = match parts.as_slice() {
+            [Some(c), Some(m), Some(y), Some(k)] if cmyk => vectorcraft_color::Color::cmyk(*c, *m, *y, *k),
+            [Some(r), Some(g), Some(b)] if !cmyk => vectorcraft_color::Color::rgb(*r, *g, *b),
+            _ => return,
+        };
+        if !name.trim().is_empty() && !self.custom_colors.iter().any(|n| n.name == name) {
+            self.custom_colors.push(super::Named { name, color, tint: 1.0, spot: true });
+        }
     }
 
     /// Skip to the comment with marker `end` (sections of the same kind nested in it count, and
@@ -185,13 +315,15 @@ impl<'a> Reader<'a> {
 
     /// A pattern's definition (`section`: what follows `%AI3_BeginPattern`), read by a reader of its
     /// own into a pattern swatch, its art in the pattern's space (y down). A definition it can't
-    /// read whole (an operator it doesn't know, type, unbalanced groups, no tile) isn't kept: art
+    /// read whole (an operator it doesn't know, type, a pattern it doesn't have, unbalanced groups,
+    /// no tile) isn't kept: art
     /// filled with it can't be read.
     fn define_pattern(&mut self, section: &[u8]) {
-        if self.pattern_tiles.len() >= MAX_PATTERNS {
+        if self.pattern_tiles.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
             return;
         }
         let mut sub = Reader::new(section);
+        sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
         // The gradients defined so far, lent (and those it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
@@ -200,7 +332,13 @@ impl<'a> Reader<'a> {
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
-        let whole = read.is_ok() && sub.unsupported.is_empty() && sub.unknown.is_empty() && sub.frames.len() == 1;
+        // Unread art in the definition, hidden or not, leaves the tile incomplete.
+        let whole = read.is_ok()
+            && sub.unsupported.is_empty()
+            && sub.unknown.is_empty()
+            && sub.unread.is_empty()
+            && sub.hidden_unread.is_empty()
+            && sub.frames.len() == 1;
         let (Some(head), Some(frame)) = (sub.pattern.take(), sub.frames.pop()) else { return };
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
@@ -224,6 +362,34 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Read a definition's box for an instance whose art must come from the page.
+    fn symbol_bounds(&mut self, section: &[u8]) {
+        if self.symbol_bounds.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
+            return;
+        }
+        let mut lex = super::Lexer::new(section);
+        let name = match lex.next_token().map(|t| t.tok) {
+            Some(Tok::Str(bytes)) => super::obj::text(&bytes),
+            _ => return,
+        };
+        let mut sub = Reader::new(section);
+        sub.subreader_depth = self.subreader_depth + 1;
+        sub.cropmarks = self.cropmarks;
+        sub.template = self.template;
+        sub.nodes = self.nodes;
+        let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
+        self.nodes = sub.nodes;
+        if read.is_err() || !sub.unsupported.is_empty() || !sub.unknown.is_empty() || sub.frames.len() != 1 {
+            return;
+        }
+        let Some(frame) = sub.frames.pop() else { return };
+        let bounds = frame.children.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds()));
+        let Some(bounds) = bounds.map(|b| sub.space().inverse().transform_rect_bbox(b)) else { return };
+        if sane(bounds) && bounds.area() > 0.0 {
+            self.symbol_bounds.insert(name, bounds);
+        }
+    }
+
     /// In a pattern's definition, the operands of its first operator start with its head,
     /// `(name) llx lly urx ury`: taken off them.
     pub(super) fn take_head(&mut self, mut vals: Vec<V>) -> Vec<V> {
@@ -235,5 +401,94 @@ impl<'a> Reader<'a> {
         head.name = name;
         head.tile = Some(Rect::new(*x0, *y0, *x1, *y1));
         vals.split_off(at + 5)
+    }
+}
+
+/// How many custom colors the header may define.
+pub(super) const MAX_CUSTOM_COLORS: usize = 1000;
+
+/// The longest string the header's comments may give, in bytes.
+const MAX_STRING: usize = 4096;
+
+/// The PostScript string `v` starts with (after spaces), its escapes read, when it ends on the line
+/// and holds at most [`MAX_STRING`] bytes.
+fn ps_string(v: &[u8]) -> Option<String> {
+    let mut bytes = v.trim_ascii_start().iter().copied().peekable();
+    if bytes.next()? != b'(' {
+        return None;
+    }
+    let (mut out, mut depth) = (Vec::new(), 0usize);
+    while let Some(b) = bytes.next() {
+        if out.len() > MAX_STRING {
+            return None;
+        }
+        match b {
+            b'\\' => match bytes.next()? {
+                b'n' => out.push(b'\n'),
+                b'r' => out.push(b'\r'),
+                b't' => out.push(b'\t'),
+                b'b' => out.push(8),
+                b'f' => out.push(12),
+                d @ b'0'..=b'7' => {
+                    let mut n = u32::from(d - b'0');
+                    for _ in 0..2 {
+                        match bytes.peek() {
+                            Some(&o @ b'0'..=b'7') => {
+                                n = n * 8 + u32::from(o - b'0');
+                                bytes.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    out.push((n & 0xff) as u8);
+                }
+                other => out.push(other),
+            },
+            b'(' => {
+                depth += 1;
+                out.push(b);
+            }
+            b')' => {
+                let Some(d) = depth.checked_sub(1) else { return Some(super::obj::text(&out)) };
+                depth = d;
+                out.push(b);
+            }
+            _ => out.push(b),
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn postscript_strings_read_their_escapes_and_end_on_the_line() {
+        assert_eq!(ps_string(b" (Ann \\(R\\) (x) \\101\\0618) (Org)").as_deref(), Some("Ann (R) (x) A18"));
+        assert_eq!(ps_string(b"(a\\nb\\\\)").as_deref(), Some("a\nb\\"));
+        assert_eq!(ps_string(b"(never ends \\)"), None);
+        assert_eq!(ps_string(b"(ends in a backslash\\"), None);
+        assert_eq!(ps_string(b"no string"), None);
+        let long = format!("({})", "x".repeat(MAX_STRING + 1));
+        assert_eq!(ps_string(long.as_bytes()), None);
+        let longest = format!("({})", "x".repeat(MAX_STRING));
+        assert_eq!(ps_string(longest.as_bytes()).map(|s| s.len()), Some(MAX_STRING));
+    }
+
+    #[test]
+    fn deeply_nested_symbol_definitions_stop_at_subreader_limit() {
+        let mut definition = String::from("(Outer) 0 Ae\n");
+        for i in 0..300 {
+            definition.push_str(&format!("%AI14_BeginSymbol\n(S{i}) 0 Ae\n"));
+        }
+        definition.push_str("0 0 m\n4 0 L\n4 4 L\n0 4 L\nf\n");
+        for _ in 0..300 {
+            definition.push_str("%AI10_EndSymbol\n0 0 m\n4 0 L\n4 4 L\n0 4 L\nf\n");
+        }
+        let mut reader = Reader::new(b"");
+        reader.subreader_depth = MAX_SUBREADERS;
+        reader.symbol_bounds(definition.as_bytes());
+        assert!(reader.symbol_bounds.is_empty());
     }
 }

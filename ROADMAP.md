@@ -9,7 +9,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Progress log row for the Document Tools add-on's New Symbols from Layers; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Progress log row for the Color Effects add-on's Find Nearest Swatch; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -129,6 +129,11 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
+- 2026-10-31: Pattern libraries: Window › Swatch Libraries › Patterns and the Swatches panel's library menu open Geometric Patterns, a built-in library of eleven pattern swatches (dots, stripes, checks, a grid and shapes); clicking one adds its pattern and swatch to the document, once, and applies it to the active fill or stroke (`swatch.library.add`).
+- 2026-11-01: Find Nearest Swatch joins the Color Effects add-on (Object › Plug-ins › Color Effects): for each colour of the selection, the closest swatches of the document, a built-in library or a library or colour book the user loaded, with their CIEDE2000 difference; Apply gives each colour its nearest swatch as one undo step, linking global and spot swatches and adding a library's to the document first, so a process colour becomes the closest spot colour (`addon.color.nearestSwatch`, `addon.color.applyNearestSwatch`, #4923).
+- 2026-11-01: Expand Dashes into Paths joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): each selected path's dashed stroke becomes separate open paths, one per dash, laid out exactly as the stroke draws them (pattern, offset, Align Dashes to Corners and Path Ends), each keeping the stroke with the dashes off, so the gaps are real gaps for cutters and plotters, as one undo step (`addon.pathtools.expandDashes`, #4922).
+- 2026-11-01: Randomize Opacity joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): each selected object gets its own opacity at random between a minimum and a maximum percent, with a seed that repeats the result, as one undo step (`addon.arrange.randomizeOpacity`, #4925).
+- 2026-11-01: Sort Objects joins the Arrange Tools add-on (Object › Plug-ins › Arrange Tools): the selected objects are sorted by width, height, area, position, opacity or stacking order (small to large, large to small or at random) and take another of those in that order, trading their values or stepping them evenly, as one undo step (`addon.arrange.sort`, #4917).
 - 2026-11-01: New Symbols from Layers joins the Document Tools add-on (Object › Plug-ins › Document Tools): one symbol of each top-level layer's art (the layers highlighted in the Layers panel when two or more are, else every layer), named after the layer, made as New Symbol makes one; Convert Layers to Symbols also puts an instance of each in place of its layer's art. Empty layers are skipped and reported; one undo step. A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Document Tools, a built-in add-on (Object › Plug-ins › Document Tools), starts with Save a Timestamped Copy: a copy of the document named `<name>_YYYY-MM-DD_HH-MM` (UTC; `-2`, `-3`… when that name is taken) goes next to it, or into a folder picked for a document never saved, written as File › Save a Copy writes it, so the document keeps its path, title and modified state. Off on the web, which has no clock. A VectorCraft addition: headline numbers unchanged.
 - 2026-11-01: Divide into Dashes joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): the selected paths, or only their direct-selected segments, are cut into separate open paths of a dash length measured along the curve, with an optional gap (left empty, or kept as pieces), each keeping the path's appearance; Fit to Corners and Ends stretches or squeezes the lengths so every run starts and ends on a dash. A dialog with Preview, one undo step, at most 100000 pieces. A VectorCraft addition: headline numbers unchanged.
@@ -145,6 +150,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 - 2026-10-22: Effect › Sketch › Conté Crayon: a black crayon in the dark areas and a white one in the light areas, on mid-grey paper whose texture (Brick, Burlap, Canvas, Sandstone; Scaling, Relief, Light Direction, Invert) breaks the strokes, with Foreground Level and Background Level; an original approximation, defaults unverified. Every Photoshop-style filter is now in (57/57); the Effect Gallery remains (4–6 h).
 - 2026-10-22: Ruby (ふりがな) for live text: `type.ruby` sets or removes a reading over a byte range of the selected type — above it in horizontal type, right of the column in vertical type (or below/left), start/centre/end aligned, at 1–100% of the base size (default half), overhanging or squeezed to the base width. It is saved in the native file, laid out with its line growing (following lines move on), drawn on the canvas, and written in SVG and PDF as outlines where ruby is present. UI panel and type on a path are next. Headline numbers unchanged.
 - 2026-10-22: PDF accessibility: titled exports set `/ViewerPreferences << /DisplayDocTitle true >>`, so viewers show the document title rather than the file name and title checks can pass (#3646). Headline numbers unchanged.
+- 2026-10-22: Pen tilt, bearing and barrel rotation (part of #764): Calligraphic and Scatter brushes take Tilt, Bearing and Rotation beside Pressure, the Paintbrush records them along each stroke, and the app reads a pen's tilt and an Art Pen's barrel rotation from XInput2 on Linux under X11 and XWayland and from AppKit's tablet events on macOS. Headline numbers unchanged.
 
 - 2026-10-14: Document fonts register every explicitly supplied craft-fonts family after the existing Japanese, Arabic and Thai prefix; optional empty input remains supported. Headline scores and estimates are unchanged.
 
@@ -208,6 +214,10 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Progress log row for the Color Effects add-on's Find Nearest Swatch (#4923); headline numbers unchanged. |
+| 2026-11-01 | minor | Progress log row for the Path Precision Tools add-on's Expand Dashes into Paths (#4922); headline numbers unchanged. |
+| 2026-11-01 | minor | Progress log row for the Arrange Tools add-on's Randomize Opacity (#4925); headline numbers unchanged. |
+| 2026-11-01 | minor | Progress log row for the Arrange Tools add-on's Sort Objects (#4917); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Document Tools add-on's New Symbols from Layers (#4927); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Document Tools add-on's Save a Timestamped Copy (#4926); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for Divide into Dashes (Path Precision Tools add-on, #4950); headline numbers unchanged. |

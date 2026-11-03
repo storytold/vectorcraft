@@ -112,6 +112,28 @@ fn redefining_the_symbol_keeps_the_changes_whose_objects_remain() {
 }
 
 #[test]
+fn replace_symbol_drops_the_changes_made_for_the_old_symbol() {
+    let mut s = session();
+    // "Other": two blue squares in the same places, the instance taken off the canvas.
+    let (a, b) = (square(&mut s, 10.0), square(&mut s, 60.0));
+    let first = id(&s.execute("symbol.new", &json!({"name": "Other", "ids": [a.0, b.0], "type": "dynamic"})).unwrap());
+    s.execute("edit.clear", &json!({"ids": [first.0]})).unwrap();
+    let inst = pair(&mut s, "dynamic");
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [1], "fill": "#ff0000"})).unwrap();
+    // The same symbol: nothing changes.
+    s.execute("symbol.replace", &json!({"name": "Pair", "ids": [inst.0]})).unwrap();
+    assert_eq!(overrides(&s, inst), 1);
+    assert_eq!(pixel(&s, 80, 30), RED);
+    s.execute("symbol.replace", &json!({"name": "Other", "ids": [inst.0]})).unwrap();
+    assert_eq!(overrides(&s, inst), 0, "the change named an object of Pair's art");
+    assert_eq!(pixel(&s, 80, 30), BLUE, "Other's art draws as the symbol has it");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(matches!(&node(&s, inst).kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Pair"));
+    assert_eq!(overrides(&s, inst), 1);
+    assert_eq!(pixel(&s, 80, 30), RED);
+}
+
+#[test]
 fn reset_and_static_drop_the_changes_and_undo_brings_them_back() {
     let mut s = session();
     let inst = pair(&mut s, "dynamic");
@@ -144,8 +166,14 @@ fn break_link_bakes_the_changes_and_edit_symbol_shows_the_symbols_own_art() {
     };
     let art = NodeId(s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap()["ids"][0].as_u64().unwrap());
     assert_eq!(fills(&s, art), ["#0000ff", "#ff0000"]);
-    let art = NodeId(s.execute("symbol.edit", &json!({"ids": [other.0]})).unwrap()["ids"][0].as_u64().unwrap());
-    assert_eq!(fills(&s, art), ["#0000ff", "#0000ff"], "the symbol's art, without this instance's changes");
+    // Symbol editing mode shows the symbol's art, without this instance's changes.
+    s.execute("symbol.edit", &json!({"ids": [other.0]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let parts: Vec<String> =
+        st.doc.node(layer).unwrap().children().unwrap().iter().map(|c| c.appearance.fill_paint().color().unwrap().to_hex()).collect();
+    assert_eq!(parts, ["#0000ff", "#0000ff"], "the symbol's art, without this instance's changes");
+    assert_eq!(overrides(&s, other), 1, "the instance keeps its changes");
 }
 
 #[test]

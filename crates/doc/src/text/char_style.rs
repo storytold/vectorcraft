@@ -104,10 +104,33 @@ pub struct CharStyle {
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
     #[serde(default, rename = "tateChuYoko", skip_serializing_if = "crate::skip::is_default")]
     pub tate_chu_yoko: bool,
+    /// Tate-chu-yoko Settings › Up/Down (Character panel menu, East Asian options), in points: a
+    /// block of marked characters in vertical type moves up by a positive value and down by a
+    /// negative one. The block takes the value of its first character; automatic digit blocks and
+    /// horizontal type do not move. Saved only when not 0.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "tcyUpDown", skip_serializing_if = "crate::skip::is_default")]
+    pub tcy_up_down: f64,
+    /// Tate-chu-yoko Settings › Left/Right, in points: a block of marked characters in vertical type
+    /// moves right by a positive value and left by a negative one, as [`Self::tcy_up_down`] does.
+    #[serde(default, rename = "tcyLeftRight", skip_serializing_if = "crate::skip::is_default")]
+    pub tcy_left_right: f64,
+    /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): in vertical
+    /// type the half-width characters among these (Latin letters, digits and other characters that
+    /// would lie on their side) stand upright one below the other instead of being rotated
+    /// individually. Spaces and tate-chu-yoko blocks do not change, and horizontal type keeps the
+    /// mark and does not change.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "standardVerticalRoman", skip_serializing_if = "crate::skip::is_default")]
+    pub standard_vertical_roman: bool,
     /// Digits (Character panel menu, Middle Eastern options): the numeral system the digits of
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub digits: Digits,
+    /// Font height reference (Character panel menu › Show Font Height Options): the height of the
+    /// font that [`Self::size`] measures, the em box by default.
+    #[serde(default, rename = "fontHeightReference", skip_serializing_if = "crate::skip::is_default")]
+    pub font_height_reference: FontHeightReference,
     /// No Break (Character panel menu): these characters are not broken across lines, including
     /// at a space or a hyphenation point inside the run. A run longer than the line stays together
     /// and can overflow it.
@@ -120,6 +143,21 @@ pub struct CharStyle {
     /// document's language (Document Setup). Saved only when set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+}
+
+/// What a character's font size measures ([`CharStyle::font_height_reference`]): the em square
+/// of the font, the height of its capitals or of its lowercase letters (the cap height and x
+/// height of its OS/2 table), or its ideographic character face (ICF, OpenType's `icfb` and
+/// `icft` baselines). Layout sets the characters at the em size at which the chosen height equals
+/// the font size; with a font that has no such value, the size measures the em box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FontHeightReference {
+    #[default]
+    EmBox,
+    CapHeight,
+    XHeight,
+    IcfBox,
 }
 
 /// The numeral system digits are drawn in ([`CharStyle::digits`]): as typed, or every digit of
@@ -369,8 +407,12 @@ impl Default for CharStyle {
             char_direction: None,
             proportional_metrics: false,
             tate_chu_yoko: false,
+            tcy_up_down: 0.0,
+            tcy_left_right: 0.0,
+            standard_vertical_roman: false,
             small_caps: None,
             digits: Digits::Default,
+            font_height_reference: FontHeightReference::EmBox,
             no_break: false,
             language: None,
         }
@@ -385,7 +427,8 @@ impl CharStyle {
     /// or scale of 0 or less becomes the default new type takes (12 pt, 100%), a negative leading
     /// becomes Auto, and a value past [`crate::MAX_COORD`] (a baseline shift past it either way)
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
-    /// baseline shift that is not a number becomes 0.
+    /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
+    /// offsets are kept as the baseline shift is.
     pub fn keep_dimensions_in_range(&mut self) {
         let default = Self::default();
         let within = |v: f64, or: f64| if v > 0.0 { v.min(crate::MAX_COORD) } else { or };
@@ -393,7 +436,10 @@ impl CharStyle {
         self.h_scale = within(self.h_scale, default.h_scale);
         self.v_scale = within(self.v_scale, default.v_scale);
         self.leading = self.leading.filter(|l| *l >= 0.0).map(|l| l.min(crate::MAX_COORD));
-        self.baseline_shift = if self.baseline_shift.is_nan() { 0.0 } else { self.baseline_shift.clamp(-crate::MAX_COORD, crate::MAX_COORD) };
+        let shift = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(-crate::MAX_COORD, crate::MAX_COORD) };
+        self.baseline_shift = shift(self.baseline_shift);
+        self.tcy_up_down = shift(self.tcy_up_down);
+        self.tcy_left_right = shift(self.tcy_left_right);
     }
     /// Do the characters draw a stroke (a paint and a positive weight)?
     pub fn has_stroke(&self) -> bool {

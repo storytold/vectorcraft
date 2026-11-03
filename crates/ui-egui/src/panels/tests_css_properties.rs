@@ -143,6 +143,6 @@ fn export_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
     let r = app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
     assert_eq!(r["warnings"], json!([WARNING]));
-    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 1 note(s): {WARNING}"));
+    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 1 note: {WARNING}"));
     assert_eq!(log.borrow().len(), 3, "the sheet and the image's picture are still written");
 }

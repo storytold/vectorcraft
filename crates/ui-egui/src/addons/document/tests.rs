@@ -82,3 +82,44 @@ fn new_symbols_from_layers_and_convert_layers_to_symbols() {
             .all(|l| matches!(l.children().unwrap()[..], [ref one] if matches!(one.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })))
     );
 }
+
+/// #4920: Export All Open Documents as PDF asks for a folder and writes one PDF per open document,
+/// named after each, without replacing a file there, and leaves every document as it was.
+#[test]
+fn export_all_open_documents_writes_each_to_the_folder_picked() {
+    let dir = folder("export-all");
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("document.save", json!({"path": dir.join("card.vectorcraft")})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100, "name": "card"})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let untitled = app.session.doc().unwrap().doc.title.clone();
+    let out = dir.join("out");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join(format!("{untitled}.pdf")), b"keep").unwrap();
+    let picked = out.to_string_lossy().into_owned();
+    app.services.pick_folder = Some(Box::new(move || Some(picked.clone())));
+    let active = app.session.active_index();
+    click(&mut app, "Export All Open Documents as PDF");
+    let mut names = files(&out);
+    names.sort();
+    let mut want = vec!["card.pdf".to_string(), "card-2.pdf".into(), format!("{untitled}.pdf"), format!("{untitled}-2.pdf")];
+    want.sort();
+    assert_eq!(names, want, "one per document, the taken names numbered");
+    assert_eq!(std::fs::read(out.join(format!("{untitled}.pdf"))).unwrap(), b"keep", "no file is replaced");
+    assert!(std::fs::read(out.join("card.pdf")).unwrap().starts_with(b"%PDF"));
+    assert_eq!(app.session.active_index(), active, "the active document stays active");
+    assert!(
+        app.session.documents().iter().all(|d| d.path.as_ref().is_none_or(|p| p.ends_with("card.vectorcraft"))),
+        "no document takes a copy's path"
+    );
+    assert!(app.ui.status.starts_with("Exported 3 documents"), "{}", app.ui.status);
+    // Cancelled: nothing written.
+    app.services.pick_folder = Some(Box::new(|| None));
+    assert_eq!(app.run(super::EXPORT_ALL, json!({})).unwrap_err(), "cancelled");
+    assert_eq!(files(&out).len(), 4);
+    // The engine command refuses a missing folder and an unknown format.
+    assert!(app.session.execute(super::EXPORT_ALL, &json!({})).is_err());
+    assert!(app.session.execute(super::EXPORT_ALL, &json!({"folder": out, "format": "doc"})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}

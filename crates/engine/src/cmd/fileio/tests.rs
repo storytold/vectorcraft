@@ -366,20 +366,21 @@ fn templates_open_untitled() {
 #[test]
 fn open_exts_cover_every_readable_format() {
     for f in FORMATS.iter().filter(|f| f.read) {
-        for e in f.extensions {
+        for e in read_extensions(f) {
             assert!(OPEN_EXTS.contains(e), "OPEN_EXTS lacks .{e} ({})", f.label);
         }
     }
     for e in OPEN_EXTS {
-        assert!(format(e).is_some_and(|f| f.read), ".{e} in OPEN_EXTS is no readable format");
+        assert!(readable_format(e).is_some(), ".{e} in OPEN_EXTS is no readable format");
     }
     let filters: Vec<_> = open_filters().collect();
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        9 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF and print presets, shortcut sets, scripts, plug-ins"
+        10 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF, print and export presets, shortcut sets, scripts, plug-ins"
     );
+    assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }
