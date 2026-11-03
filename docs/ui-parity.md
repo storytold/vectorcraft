@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; Transform previews typed values and reads the Appearance target; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -287,6 +287,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Pathfinder panel: a group selected alone counts its nested shapes, so an expanded stroked object keeps the Shape Modes enabled | done | #1642 (#1635) |
 | Selected Grid Repeat shows row, column and corner handles and spacing sliders; bounding-box handles take priority where they meet | done | #2691, `tools/src/repeat_grid.rs`; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-grid-repeat-options.html); drags preview and commit `object.repeat.options` as one undo step, Escape cancels; Radial Repeat has no handles yet |
 | Grid Repeat Options (Object › Repeat › Options…) has a Preview checkbox: the repeat on the canvas follows the fields while the dialog is open, Cancel puts the original back without a history step, OK keeps the previewed values as one undo step | done | #2651; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-grid-repeat-options.html) lists the Preview option for the grid options only, so Radial and Mirror Repeat Options have none; `dialogs/command.rs` tests |
+| Type on a Path Options (Type › Type on a Path › Type on a Path Options…, or a double-click on the Type on a Path tools) has a Preview checkbox, off when it opens: the selected type on a path follows Effect, Flip, Align to Path and Spacing while the dialog is open, Cancel puts it back without a history step, OK keeps the previewed values as one undo step | done | #5360; the [public page](https://helpx.adobe.com/illustrator/using/creating-type-path.html) lists the dialog's options, and public tutorials of the dialog show its Preview checkbox; `tests/pathtype.rs` |
 | Selected Mirror Repeat shows a prominent axis with move and rotation handles; bounding-box handles take priority over the axis line | done | #2877, `tools/src/mirror.rs`; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-mirror-repeat-options.html) |
 | Object › Expand on radial, grid and mirror repeats makes groups of their instances | done | #1765 (#1756) |
 | Object › Expand… is dimmed while the selection has appearance attributes (effects, several fills or strokes, a fill or stroke with its own transparency or effects, a brush); its tooltip and the status bar say to use Object › Expand Appearance first, which leaves a stroked line with Zig Zag a stroked zig-zag line that Expand then outlines | done | #3089; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html); `dialogs/expand.rs` tests, engine `tests_objexpand`. `object.expand` (agents, scripts) still bakes effects in one step |
@@ -407,6 +408,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
 | 2026-11-03 | minor | Symbol editing draws and drags 9-slice guides on the canvas (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
 | 2026-11-01 | minor | A double-click on a Repeat with the Selection tool enters isolation mode on it, where its source art (type included: a double-click there edits the text) is edited and every copy follows (#5054); scores and estimates unchanged |
