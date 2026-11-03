@@ -93,7 +93,12 @@ thread_local! {
 /// makes "changed" a pointer comparison). Deleted frames' text flows into the remaining ones; a
 /// frame that is now point type leaves its thread with the text it holds.
 pub(crate) fn reflow(before: &Document, doc: &mut Document) {
-    let threads = std::mem::take(&mut doc.text_threads);
+    // A frame is in one thread, once: a file that lists it again (in its thread or another) would
+    // copy its text into the story each time, and write the grown story back for the next thread
+    // to copy again. Only its first place counts.
+    let mut seen = std::collections::HashSet::new();
+    let threads: Vec<Vec<NodeId>> =
+        std::mem::take(&mut doc.text_threads).into_iter().map(|t| t.into_iter().filter(|id| seen.insert(*id)).collect()).collect();
     let mut kept = vec![];
     for thread in threads {
         let changed = thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
