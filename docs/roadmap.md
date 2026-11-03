@@ -1,10 +1,12 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (M5: supersampled exports avoid redundant opaque knockout layers; File formats: `.ai`/EPS import fidelity from a user's file audit; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **QoL update (2026-11-02):** Selection-tool marquees offer Touching (default), Fully Enclosed and Drag Direction in Preferences › Selection & Anchor Display. Drag Direction uses screen left/right, including rotated views, retaining its last rule within three horizontal screen pixels of the press. E reverses the rule for the current drag. A solid enclosed outline or dashed touching outline and a translated label show the active rule. The selection region remains aligned to the document axes. This is a VectorCraft addition; scores and estimates are unchanged.
+
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-02 · **Change:** minor (Selection QoL: marquee modes and visible feedback, #5313; scores and estimates unchanged; previously: M5: supersampled exports avoid redundant opaque knockout layers; File formats: `.ai`/EPS import fidelity from a user's file audit; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-30.
+**Feature evidence last updated:** 2026-11-02.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -19,6 +21,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; scores and estimates unchanged. |
 | 2026-10-30 | minor | Raster effects: bounded length fields in effect dialogs clamp on commit and reject invalid inputs visibly (#4638); estimates unchanged. |
@@ -141,6 +144,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-10-30 | patch | M5: opaque solid-fill knockout paths avoid redundant erase/add layers in hard-edge frames and supersampled raster export; exact-pixel regression coverage retains analytical-AA rounding and translucent knockout behavior; scores and estimates unchanged |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; scores and estimates unchanged. |

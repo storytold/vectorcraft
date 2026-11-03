@@ -1,10 +1,12 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Color Effects add-on: Find Nearest Swatch, #4923; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **QoL update (2026-11-02):** Selection-tool marquees offer Touching (default), Fully Enclosed and Drag Direction in Preferences › Selection & Anchor Display. Drag Direction uses screen left/right, including rotated views, retaining its last rule within three horizontal screen pixels of the press. E reverses the rule for the current drag. A solid enclosed outline or dashed touching outline and a translated label show the active rule. The selection region remains aligned to the document axes. This is a VectorCraft addition; scores and estimates are unchanged.
+
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-02 · **Change:** minor (Selection QoL: marquee modes and visible feedback, #5313; scores and estimates unchanged; previously: Color Effects add-on: Find Nearest Swatch, #4923; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-22.
+**Feature evidence last updated:** 2026-11-02.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -19,6 +21,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-02 | minor | Legacy `.ai` saves (version 7) write type with rotated characters as outlines that keep each character's rotation, with a warning unless `outlineText` is on (#5186); scores unchanged. |
 | 2026-10-31 | minor | Object › Path › Smooth smooths a path along its length before refitting it, so Auto-Smooth takes a shaky line to one smooth curve instead of leaving its jags, and with anchor points direct-selected it smooths only that section; scores unchanged. |
 | 2026-10-31 | minor | New Document: More Settings has the Save Preset button beside the name too, saving its settings (artboard layout included) as a preset (#4893); scores unchanged. |
@@ -1526,6 +1529,7 @@ A double-click on a Repeat (Radial, Grid or Mirror) with the Selection tool ente
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-01 | minor | Repeat: a double-click isolates it to edit its source art, text included (#5054); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Live Corners: Up/Down while dragging a corner widget step the corner kind (#2898); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Shortcuts for Effect menu items (#3296); evidence added; scores unchanged. |

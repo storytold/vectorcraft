@@ -48,6 +48,8 @@ pub struct Prefs {
     pub paste_offset: f64,
     // Selection & Anchor Display
     pub selection_tolerance: f64,
+    /// Selection-tool marquee: touching (default), enclosed, or screen drag direction.
+    pub marquee_selection: String,
     pub object_selection_by_path_only: bool,
     pub snap_to_point_tolerance: f64,
     pub ctrl_click_selects_behind: bool,
@@ -344,6 +346,7 @@ impl Default for Prefs {
             trackpad_rotate_view: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
+            marquee_selection: "touching".into(),
             object_selection_by_path_only: false,
             snap_to_point_tolerance: 2.0,
             ctrl_click_selects_behind: true,

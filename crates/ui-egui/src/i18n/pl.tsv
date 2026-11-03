@@ -152,6 +152,11 @@
 	Ungroup	Rozgrupuj
 	Lock	Zablokuj
 	Selection	Zaznaczenie
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Zaznaczanie prostokątne
+	Touching	Dotknięte
+	Fully Enclosed	Całkowicie wewnątrz
+	Drag Direction	Kierunek przeciągania
 	All Artwork Above	Całą kompozycję powyżej
 	Other Layers	Pozostałe warstwy
 	Unlock All	Odblokuj wszystko
