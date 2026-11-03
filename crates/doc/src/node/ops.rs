@@ -185,8 +185,13 @@ impl Node {
         match &self.kind {
             NodeKind::Path { path, .. } => Some(path.to_bezpath()),
             NodeKind::Compound { children, .. } => {
-                let mut bp = vectorcraft_geom::BezPath::new();
-                children.iter().filter_map(|c| c.path_data()).for_each(|pd| bp.extend(pd.to_bezpath()));
+                // Sized up front: grown by doubling, the path of a compound path of hundreds of
+                // thousands of anchors is copied into ever larger buffers, up to tens of MB, on
+                // every call.
+                let subpaths = || children.iter().filter_map(|c| c.path_data()).flat_map(|pd| &pd.subpaths);
+                let elements = subpaths().filter(|sp| !sp.anchors.is_empty()).map(|sp| 1 + sp.segment_count() + usize::from(sp.closed)).sum();
+                let mut bp = vectorcraft_geom::BezPath::from_vec(Vec::with_capacity(elements));
+                subpaths().for_each(|sp| sp.to_bezpath_into(&mut bp));
                 Some(bp)
             }
             _ => None,
