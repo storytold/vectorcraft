@@ -358,8 +358,10 @@ fn copy_leaves_out_the_png_of_art_too_large_to_scale_down() {
     let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 1_000_000, "height": 1_000_000}))["id"].clone();
     run(&mut s, "select.set", json!({"ids": [id]}));
     run(&mut s, "edit.copy", json!({}));
-    assert!(s.clipboard.flavour_types(false, false).contains(&PNG));
-    assert!(s.clipboard.flavours(false, false).iter().all(|f| f.mime != PNG));
+    assert!(!s.clipboard.flavour_types(false, false).contains(&PNG), "not offered either");
+    let (flavours, notes) = s.clipboard.flavours_with_warnings(false, false);
+    assert!(flavours.iter().all(|f| f.mime != PNG));
+    assert!(notes.iter().any(|n| n.contains("too large to copy as a picture")), "{notes:?}");
     // Art that fits at that scale still gets its PNG, at most 4096 pixels a side.
     let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 200_000, "height": 100}))["id"].clone();
     run(&mut s, "select.set", json!({"ids": [id]}));

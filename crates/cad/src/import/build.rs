@@ -43,6 +43,7 @@ const NESTED: &str = "blocks nested more than 8 deep, or inside themselves, are 
 const XREFS: &str = "blocks referencing other drawings (external references) are left out";
 const TOO_MANY: &str = "the drawing has more than 2,000,000 objects: the rest are left out";
 const TOO_MANY_POINTS: &str = "the drawing has more than 4,000,000 path points: the rest are left out";
+const TOO_MUCH_BLOCK_WORK: &str = "the drawing's blocks take too much work to place: the rest are left out";
 const TOO_MANY_DASHES: &str = "the drawing has more dashed lines than can be kept: the rest are drawn solid";
 const TOO_MUCH_TEXT: &str = "the drawing has more than 64 MB of text and block names: the rest are left out";
 
@@ -499,6 +500,9 @@ impl<'d, 'a> Build<'d, 'a> {
         super::curve::bounds(&bp)?;
         let paint = Paint::solid(rgb_color(self.rgb(p, inh)));
         let scale = map.determinant().abs().sqrt();
+        let path = PathData::from_bezpath(&bp);
+        // A compound path's loops each keep a copy of its appearance, beside its own.
+        let copies = if path.subpaths.len() > 1 { path.subpaths.len() + 1 } else { 1 };
         let appearance = if fill {
             Appearance::basic(paint, Paint::None, 0.0)
         } else {
@@ -514,7 +518,7 @@ impl<'d, 'a> Build<'d, 'a> {
             if let Some(AppearanceItem::Stroke(s)) = ap.items.last_mut()
                 && let Some((dash, dots)) = self.dash(&self.linetype(p, inh), p, scale)
             {
-                match self.dash_values.checked_add(dash.pattern.len()).filter(|n| *n <= MAX_DASH_VALUES) {
+                match dash.pattern.len().checked_mul(copies).and_then(|v| self.dash_values.checked_add(v)).filter(|n| *n <= MAX_DASH_VALUES) {
                     Some(n) => {
                         self.dash_values = n;
                         s.dash = Some(dash);
@@ -528,7 +532,6 @@ impl<'d, 'a> Build<'d, 'a> {
             ap
         };
         let rule = if fill { FillRule::EvenOdd } else { FillRule::NonZero };
-        let path = PathData::from_bezpath(&bp);
         let kind = |path: PathData| NodeKind::Path { path, rule, live: None, clipping: false, guide: false };
         let mut n = if path.subpaths.len() > 1 {
             // Several loops (a hatch with islands) paint as one compound path. Each loop is an
@@ -630,7 +633,7 @@ impl<'d, 'a> Build<'d, 'a> {
     /// The art of block `name` drawn by `map`, as one object.
     fn art(&mut self, name: &str, map: Affine, inh: &Inherit, depth: u32) -> Option<Node> {
         if self.visits >= MAX_VISITS {
-            self.warn(TOO_MANY);
+            self.warn(TOO_MUCH_BLOCK_WORK);
             return None;
         }
         let items = self.block(name);
@@ -638,7 +641,7 @@ impl<'d, 'a> Build<'d, 'a> {
         // makes nothing, so the node budget doesn't bound it).
         self.visits = self.visits.saturating_add(1 + items.as_ref().map_or(0, |i| i.len()));
         if self.visits > MAX_VISITS {
-            self.warn(TOO_MANY);
+            self.warn(TOO_MUCH_BLOCK_WORK);
             return None;
         }
         let items = items?;
@@ -671,12 +674,16 @@ impl<'d, 'a> Build<'d, 'a> {
         let base = self.d.blocks.get(name).map_or(Point::ZERO, |b| b.base);
         let map = self.symbol_map * Affine::translate(-base.to_vec2());
         let art = self.art(name, map, &key.1, depth);
-        let made = art.map(|art| {
+        let made = art.and_then(|art| {
             let label = self.d.blocks.get(name).map_or(name, |b| b.name.as_str());
+            // The symbol keeps its name: text, as its instances' copies of it are.
+            if !self.charge_text(label.len()) {
+                return None;
+            }
             let symbol = unique(label, &mut self.next_suffix, &self.symbol_names);
             self.symbol_names.insert(symbol.clone());
             self.doc.symbols.push(Symbol { dynamic: false, name: symbol.clone(), art: Arc::new(art) });
-            symbol
+            Some(symbol)
         });
         self.symbols.insert(key, made.clone());
         made
