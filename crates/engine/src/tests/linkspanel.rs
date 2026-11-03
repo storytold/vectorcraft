@@ -278,6 +278,24 @@ fn link_info_has_the_file_and_placement_details() {
     assert_eq!((i["status"].as_str(), i["linked"].as_bool(), i["fileName"].as_str()), (Some("embedded"), Some(false), None));
 }
 
+/// Link Info reads within the opener's roots for an unconfined caller, and never past a confined
+/// caller's own roots.
+#[test]
+fn link_info_stays_within_the_asking_callers_roots() {
+    let dir = Folder::new("info-roots");
+    let other = Folder::new("info-other");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let roots = |p: &std::path::Path| crate::file_access::AutomationRoots::new(&[p], &[]).unwrap().unwrap();
+    s.active_mut().unwrap().opened_by = Some(roots(&dir.0));
+    assert_eq!(run(&mut s, "links.info", json!({"id": id.0}))["status"], "ok");
+    let narrow = roots(&other.0);
+    let i = crate::file_access::confine(Some(&narrow), || run(&mut s, "links.info", json!({"id": id.0})));
+    assert_ne!(i["status"], "ok", "{i}");
+}
+
 /// A 600×300 pt image at the centre of the artboard, its placement options set to `options`,
 /// relinked to a 300×100 px file → the image's id and session.
 fn relinked(name: &str, options: Value) -> (Session, NodeId, Folder) {

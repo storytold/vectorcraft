@@ -69,6 +69,9 @@ impl Session {
         }
         let Some(st) = self.active() else { return };
         let (uid, files, doc_path) = (st.uid, crate::cmd::links::linked_groups(&st.doc), st.path.clone());
+        // A confined caller's roots, else what the caller that opened the document may read (the
+        // desktop frame is unconfined).
+        let opened_by = st.opened_by.clone();
         if files.is_empty() {
             return;
         }
@@ -76,7 +79,11 @@ impl Session {
         let out = slot.clone();
         let scope = crate::file_access::ScopeHandle::capture();
         let spawned = std::thread::Builder::new().name("link-watch".into()).spawn(move || {
-            let stamps = scope.run(|| files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect());
+            let stamps = scope.run(|| {
+                crate::file_access::confine(crate::file_access::current().or(opened_by).as_ref(), || {
+                    files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect()
+                })
+            });
             *out.lock().unwrap_or_else(PoisonError::into_inner) = Some((uid, stamps));
         });
         if spawned.is_ok() {
@@ -141,7 +148,8 @@ impl Session {
         let mode = if update { "automatically" } else { self.prefs.update_links.as_str() };
         match mode {
             "automatically" => {
-                let r = self.execute("links.update", &json!({"ids": ids}))?;
+                let roots = crate::file_access::current().or_else(|| self.active().and_then(|d| d.opened_by.clone()));
+                let r = crate::file_access::confine(roots.as_ref(), || self.execute("links.update", &json!({"ids": ids})))?;
                 // Not readable yet (still being written): the next look tries again.
                 let unread: BTreeSet<u64> = r["missing"].as_array().map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
                 for (path, ids) in &changed {
