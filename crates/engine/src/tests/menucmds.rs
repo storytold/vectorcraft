@@ -1948,6 +1948,62 @@ fn select_same_font_size_and_fill() {
     assert!(s.execute("select.same.fontSize", &json!({})).is_err());
 }
 
+/// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
+/// both match the first character of the selected type: the same fill with another stroke, or the
+/// same stroke with another fill, is left out, and in type with several runs one run has to match
+/// both.
+#[test]
+fn select_same_text_fill_and_stroke_color_needs_both_to_match() {
+    let mut s = session();
+    let typed = |s: &mut Session, y: f64, fill: &str, stroke: &str| {
+        let id = id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type"})).unwrap());
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let (red, blue, green) = ("#ff0000", "#0000ff", "#00ff00");
+    let a = typed(&mut s, 20.0, red, blue);
+    let both = typed(&mut s, 60.0, red, blue);
+    let same_fill = typed(&mut s, 100.0, red, green);
+    let same_stroke = typed(&mut s, 140.0, green, blue);
+    // Mixed runs: "ty" matches both; the other runs do not.
+    let mixed = typed(&mut s, 180.0, green, green);
+    s.execute("text.setRangeStyle", &json!({"id": mixed.0, "start": 0, "end": 2, "fill": red, "stroke": blue})).unwrap();
+    // Mixed runs where one run has the fill and another the stroke: no run matches both.
+    let split = typed(&mut s, 220.0, green, green);
+    s.execute("text.setRangeStyle", &json!({"id": split.0, "start": 0, "end": 2, "fill": red})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": split.0, "start": 2, "end": 4, "stroke": blue})).unwrap();
+    let r = rect(&mut s, 300.0, 0.0, 5.0, 5.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "color": red})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("select.same.textFillAndStrokeColor", &json!({})).unwrap()["count"], 3);
+    assert_eq!(selected(&s), vec![a, both, mixed]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "selecting adds no undo step");
+    // The single-attribute commands take the type that matches one of the two.
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("select.same.textFillColor", &json!({})).unwrap()["count"], 5);
+    assert_eq!(selected(&s), vec![a, both, same_fill, mixed, split]);
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("select.same.textStrokeColor", &json!({})).unwrap()["count"], 5);
+    assert_eq!(selected(&s), vec![a, both, same_stroke, mixed, split]);
+    // With no type selected the command reports it.
+    sel(&mut s, &[r]);
+    assert!(s.execute("select.same.textFillAndStrokeColor", &json!({})).is_err());
+}
+
+#[test]
+fn select_same_character_colors_ignore_empty_text() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 20, "text": "a"})).unwrap());
+    let b = id_of(&s.execute("text.create", &json!({"x": 0, "y": 40, "text": "b"})).unwrap());
+    let empty = id_of(&s.execute("text.create", &json!({"x": 0, "y": 60, "text": ""})).unwrap());
+    for cmd in ["select.same.textFillColor", "select.same.textStrokeColor", "select.same.textFillAndStrokeColor"] {
+        sel(&mut s, &[a]);
+        s.execute(cmd, &json!({})).unwrap();
+        assert_eq!(selected(&s), vec![a, b], "{cmd}: empty object {empty:?}");
+    }
+}
+
 #[test]
 fn select_same_link_block_series_selects_the_frames_of_a_thread() {
     let mut s = session();

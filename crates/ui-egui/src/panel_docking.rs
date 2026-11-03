@@ -1177,8 +1177,9 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
-/// window loses it, as a click elsewhere in one window would take it.
-fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
+/// window loses it, as a click elsewhere in one window would take it. A floating document's OS
+/// window forwards its keys here too ([`crate::doc_windows`]).
+pub(crate) fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
     if events.is_empty() {
         return;
     }

@@ -40,6 +40,24 @@ fn thread_flows_reflows_on_edit_and_survives_delete() {
     assert_eq!(s.doc().unwrap().doc.text_threads.len(), 1);
 }
 
+/// A file that lists a frame more than once, in its own thread or in another, flows the story
+/// through each frame once: repeated places would copy its text again and again.
+#[test]
+fn frames_listed_twice_flow_the_story_once() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let (fa, fb) = (NodeId(a), NodeId(b));
+    d.text_threads = vec![vec![fa, fb, fa, fb, fa], vec![fb, fa], vec![fa, fb]];
+    reflow(&Document::new(1.0, 1.0), &mut d);
+    assert_eq!(d.text_threads, vec![vec![fa, fb]]);
+    let plain = |id: NodeId| match &d.node(id).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text(),
+        _ => panic!("not text"),
+    };
+    assert_eq!(format!("{}{}", plain(fa), plain(fb)), TEXT.repeat(4));
+}
+
 #[test]
 fn edits_copy_only_the_stories_of_threads_whose_frames_changed() {
     let (mut s, a, b) = setup();

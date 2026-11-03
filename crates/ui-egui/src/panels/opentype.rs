@@ -20,12 +20,12 @@ enum Flag {
 /// A checkbox row: label and the feature it toggles.
 type Toggle = (&'static str, Flag);
 
-const FIGURES: [&str; 5] = ["Default Figure", "Tabular Lining", "Proportional Lining", "Proportional Oldstyle", "Tabular Oldstyle"];
+pub(crate) const FIGURES: [&str; 5] = ["Default Figure", "Tabular Lining", "Proportional Lining", "Proportional Oldstyle", "Tabular Oldstyle"];
 
-const POSITIONS: [&str; 5] = ["Default Position", "Superscript", "Subscript", "Numerator", "Denominator"];
+pub(crate) const POSITIONS: [&str; 5] = ["Default Position", "Superscript", "Subscript", "Numerator", "Denominator"];
 
 /// The features the Position menu's entries after Default Position turn on, in menu order.
-const POSITION_TAGS: [&str; 4] = ["sups", "subs", "numr", "dnom"];
+pub(crate) const POSITION_TAGS: [&str; 4] = ["sups", "subs", "numr", "dnom"];
 
 /// The bit of [`OtFeatures::extra`] that turns `tag` on (0 for a tag outside [`EXTRA_FEATURES`]).
 fn extra_bit(tag: &str) -> u32 {
@@ -51,7 +51,7 @@ impl Flag {
 
 /// The Figure menu entry `f` shows: Default Figure, Tabular Lining, Proportional Lining
 /// (`pnum` and `lnum`), Proportional Oldstyle or Tabular Oldstyle.
-fn figure(f: &OtFeatures) -> usize {
+pub(crate) fn figure(f: &OtFeatures) -> usize {
     let proportional_lining = extra_bit("pnum") | extra_bit("lnum");
     match (f.tabular_figures, f.oldstyle_figures) {
         (false, false) if f.extra & proportional_lining == proportional_lining => 2,
@@ -81,7 +81,7 @@ fn set_figure(f: &mut OtFeatures, i: usize) {
 /// The Position menu entry `f` shows: Superscript (`sups`), Subscript (`subs`), Numerator
 /// (`numr`) or Denominator (`dnom`) when `f` turns that one on, Default Position when it turns
 /// none of them on, and `None` when it turns on more than one.
-fn position(f: &OtFeatures) -> Option<usize> {
+pub(crate) fn position(f: &OtFeatures) -> Option<usize> {
     let mut on = POSITION_TAGS.iter().enumerate().filter(|(_, t)| f.extra & extra_bit(t) != 0).map(|(i, _)| i + 1);
     match (on.next(), on.next()) {
         (None, _) => Some(0),

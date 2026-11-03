@@ -15,6 +15,13 @@ const DOCUMENT_KIND: &[u8; 4] = b"nsrP";
 
 /// A save appends one table; real files have one to a few hundred.
 const MAX_TABLES: usize = 4096;
+/// Allocation records read over the whole table chain. Each save lists every entry again, so a
+/// document with a few hundred saves of a few thousand entries stays far below; tables whose
+/// record regions overlap (or a table chain of thousands of huge tables) can't multiply the work.
+const MAX_INDEX_RECORDS: usize = 1 << 22;
+/// Bytes of entry names kept by the index (after lossy UTF-8 decoding, which can triple a name).
+/// Real names (`doc.dat`, `d/12`) are a few bytes each.
+const MAX_INDEX_NAME_BYTES: usize = 16 << 20;
 /// zstd window ceiling: real documents use a few MiB; this stops a header from reserving gigabytes.
 const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 
@@ -75,6 +82,9 @@ pub struct Archive<'a> {
     pub revisions: usize,
     extracted: usize,
     limits: Limits,
+    /// Entries whose extraction failed after their size was charged: asked again, they fail
+    /// again without being decompressed again.
+    failed: HashMap<String, Error>,
 }
 
 pub(crate) struct Cursor<'a> {
@@ -157,7 +167,15 @@ pub fn header(bytes: &[u8]) -> Result<Header, Error> {
 
 impl<'a> Archive<'a> {
     pub fn open(bytes: &'a [u8], limits: Limits) -> Result<Self, Error> {
+        Self::open_within(bytes, limits, MAX_INDEX_RECORDS, MAX_INDEX_NAME_BYTES)
+    }
+
+    /// [`Archive::open`] reading at most `max_records` allocation records and keeping at most
+    /// `max_name_bytes` bytes of entry names, both over the whole table chain.
+    pub(crate) fn open_within(bytes: &'a [u8], limits: Limits, max_records: usize, max_name_bytes: usize) -> Result<Self, Error> {
         let header = header(bytes)?;
+        let mut records_left = max_records;
+        let mut name_bytes_left = max_name_bytes;
         // Newest record per id: (table date, table index, record).
         let mut latest: HashMap<u32, (u64, usize, Option<Entry>)> = HashMap::new();
         let mut names: HashMap<u32, String> = HashMap::new();
@@ -189,6 +207,7 @@ impl<'a> Archive<'a> {
             let dirs = c.u16()?;
             c.take(1)?;
             for _ in 0..files {
+                records_left = records_left.checked_sub(1).ok_or(Error::Limit("too many archive entries"))?;
                 let id = c.u32()?;
                 let flag = c.u8()?;
                 let mut record = None;
@@ -224,8 +243,13 @@ impl<'a> Archive<'a> {
                 }
                 if flag == 0 {
                     let len = usize::from(c.u16()?);
-                    let name = String::from_utf8_lossy(c.take(len)?).into_owned();
-                    names.entry(id).or_insert(name);
+                    let raw = c.take(len)?;
+                    // Only the first name of an id is kept: later ones are not even decoded.
+                    if let std::collections::hash_map::Entry::Vacant(slot) = names.entry(id) {
+                        let name = String::from_utf8_lossy(raw);
+                        name_bytes_left = name_bytes_left.checked_sub(name.len()).ok_or(Error::Limit("archive entry names too long"))?;
+                        slot.insert(name.into_owned());
+                    }
                 }
                 // Equal dates: the first table in the chain (the newest) wins, as in afread.
                 let replace = latest.get(&id).is_none_or(|(d, _, _)| date > *d);
@@ -234,6 +258,7 @@ impl<'a> Archive<'a> {
                 }
             }
             for _ in 0..dirs {
+                records_left = records_left.checked_sub(1).ok_or(Error::Limit("too many archive entries"))?;
                 let len = usize::from(c.u16()?);
                 c.take(10)?;
                 c.take(len)?;
@@ -241,12 +266,12 @@ impl<'a> Archive<'a> {
         }
         let mut entries = HashMap::new();
         for (id, (_, _, record)) in latest {
-            if let (Some(mut e), Some(name)) = (record, names.get(&id)) {
-                e.name = name.clone();
+            if let (Some(mut e), Some(name)) = (record, names.remove(&id)) {
+                e.name = name;
                 entries.insert(e.name.clone(), e);
             }
         }
-        Ok(Self { bytes, header, entries, revisions: tables, extracted: 0, limits })
+        Ok(Self { bytes, header, entries, revisions: tables, extracted: 0, limits, failed: HashMap::new() })
     }
 
     pub fn entry(&self, name: &str) -> Option<&Entry> {
@@ -279,7 +304,10 @@ impl<'a> Archive<'a> {
     }
 
     pub fn read(&mut self, name: &str) -> Result<Vec<u8>, Error> {
-        let e = self.entries.get(name).ok_or(Error::Malformed("missing archive entry"))?.clone();
+        if let Some(e) = self.failed.get(name) {
+            return Err(*e);
+        }
+        let e = self.entries.get(name).ok_or(Error::Malformed("missing archive entry"))?;
         let size = usize::try_from(e.size).map_err(|_| Error::Limit("archive entry too large"))?;
         if size > self.limits.max_entry {
             return Err(Error::Limit("archive entry too large"));
@@ -288,28 +316,39 @@ impl<'a> Archive<'a> {
         if total > self.limits.max_total {
             return Err(Error::Limit("document too large"));
         }
-        let mut c = Cursor::new(self.bytes, offset(e.offset)?);
-        if c.take(4)? != b"#Fil" {
-            return Err(Error::Malformed("archive entry has no data block"));
-        }
-        let method = e.compression & 3;
-        let stored_len = if matches!(method, 1 | 2) { e.compressed } else { e.size };
-        let data = c.take(offset(stored_len)?)?;
-        let mut out = match method {
-            1 => inflate(data, size)?,
-            2 => unzstd(data, size)?,
-            _ => data.to_vec(),
-        };
-        if out.len() != size {
-            return Err(Error::Malformed("archive entry size mismatch"));
-        }
-        unpredict(&mut out, e.compression)?;
-        if crc32fast::hash(&out) != e.crc {
-            return Err(Error::Malformed("archive entry checksum mismatch"));
-        }
+        // Charged before the work, and kept when it fails: an entry that fails its checksum
+        // can't be decompressed over and over for free.
         self.extracted = total;
-        Ok(out)
+        let result = extract(self.bytes, e, size);
+        if let Err(err) = result {
+            self.failed.insert(name.to_owned(), err);
+        }
+        result
     }
+}
+
+/// Decompress entry `e` of `bytes` (declared `size` bytes), undo its predictor and check its CRC.
+fn extract(bytes: &[u8], e: &Entry, size: usize) -> Result<Vec<u8>, Error> {
+    let mut c = Cursor::new(bytes, offset(e.offset)?);
+    if c.take(4)? != b"#Fil" {
+        return Err(Error::Malformed("archive entry has no data block"));
+    }
+    let method = e.compression & 3;
+    let stored_len = if matches!(method, 1 | 2) { e.compressed } else { e.size };
+    let data = c.take(offset(stored_len)?)?;
+    let mut out = match method {
+        1 => inflate(data, size)?,
+        2 => unzstd(data, size)?,
+        _ => data.to_vec(),
+    };
+    if out.len() != size {
+        return Err(Error::Malformed("archive entry size mismatch"));
+    }
+    unpredict(&mut out, e.compression)?;
+    if crc32fast::hash(&out) != e.crc {
+        return Err(Error::Malformed("archive entry checksum mismatch"));
+    }
+    Ok(out)
 }
 
 /// Read at most `size + 1` bytes so a stream that decodes past its declared size is caught

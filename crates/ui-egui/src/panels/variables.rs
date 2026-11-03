@@ -173,6 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 VariableKind::Visibility => "eye",
                 VariableKind::Image => "image",
                 VariableKind::Graph => "chart-column",
+                VariableKind::Unknown => "square-dashed",
             };
             ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
             // The object a variable drives is named beside it, as the reference panel does.
@@ -428,23 +429,24 @@ mod tests {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
         let t = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "x"})).unwrap()["id"].as_u64().unwrap();
-        app.run("dataset.import", json!({"csv": "name,Name\nA,Ann\nB,Bob\n"})).unwrap();
+        app.run("dataset.import", json!({"csv": "Name\nAnn\nBob\n"})).unwrap();
+        let (a, b) = ("Data Set 1", "Data Set 2");
         let message = |row: &str| format!("nothing in data set {row} was applied: no object is bound to a variable it has a value for");
-        app.run("dataset.select", json!({"name": "A"})).unwrap();
-        assert_eq!(app.ui.status, message("A"));
+        app.run("dataset.select", json!({"name": a})).unwrap();
+        assert_eq!(app.ui.status, message(a));
         app.run("dataset.next", json!({})).unwrap();
-        assert_eq!(app.ui.status, message("B"));
+        assert_eq!(app.ui.status, message(b));
         app.run("dataset.prev", json!({})).unwrap();
-        assert_eq!(app.ui.status, message("A"));
+        assert_eq!(app.ui.status, message(a));
 
         app.run("variable.bind", json!({"variable": "Name", "ids": [t]})).unwrap();
-        app.run("dataset.select", json!({"name": "B"})).unwrap();
+        app.run("dataset.select", json!({"name": b})).unwrap();
         assert_eq!(app.ui.status, "");
         // Stepping to a data set that applies clears the message as well.
         for step in ["dataset.next", "dataset.prev"] {
             app.run("variable.unbind", json!({"variable": "Name", "ids": [t]})).unwrap();
-            app.run("dataset.select", json!({"name": "A"})).unwrap();
-            assert_eq!(app.ui.status, message("A"));
+            app.run("dataset.select", json!({"name": a})).unwrap();
+            assert_eq!(app.ui.status, message(a));
             app.run("variable.bind", json!({"variable": "Name", "ids": [t]})).unwrap();
             app.run(step, json!({})).unwrap();
             assert_eq!(app.ui.status, "", "{step}");
@@ -539,6 +541,24 @@ mod tests {
             assert!(!shown.contains("refuses") && shown.contains("`%Rate`"), "{}: {shown}", l.code());
             let shown = message(l, &refused);
             assert!(!shown.contains("would read back") && shown.contains("`#Tag`") && shown.contains("`Tag`"), "{}: {shown}", l.code());
+        }
+    }
+
+    /// The notes of a `.ai` whose variable library was read in part, or couldn't be read, are
+    /// translated in every language that translated the note they replace.
+    #[test]
+    fn the_notes_of_an_ai_variable_library_are_translated() {
+        use crate::i18n::{Lang, message};
+        let partly = "the file's variable library was partly read (entries skipped: 7): the Variables panel lists the rest";
+        let unread = "the file's variable library couldn't be read: the Variables panel doesn't list it";
+        let codes = [
+            "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv", "tr",
+            "uk", "vi", "zh-hans", "zh-hant",
+        ];
+        for l in codes.iter().map(|c| Lang::from_code(c).expect("registered")) {
+            let shown = message(l, partly);
+            assert!(shown != partly && shown.contains('7'), "{}: {shown}", l.code());
+            assert_ne!(message(l, unread), unread, "{}", l.code());
         }
     }
 

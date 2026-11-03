@@ -1150,6 +1150,7 @@ font-technology	Variable	Μεταβλητές
 	Flip Row Order	Αντιστροφή σειράς γραμμών
 	Flip Vertical	Κατακόρυφη αναστροφή
 	Float in Window	Μετατροπή σε ανεξάρτητο παράθυρο
+	Float All in Windows	Μετατροπή όλων σε ανεξάρτητα παράθυρα
 	Focal Fill	Εστιακό γέμισμα
 	Focal Stroke	Εστιακό περίγραμμα
 	Folder	Φάκελος
@@ -1310,6 +1311,10 @@ font-technology	Variable	Μεταβλητές
 	Hard Light	Έντονο φως
 	Hard Mix	Έντονη ανάμειξη
 	Harmony Rules:	Κανόνες χρωματικής αρμονίας:
+	Segmented color wheel	Τμηματοποιημένος χρωματικός τροχός
+	Show smooth color wheel	Εμφάνιση ομαλού χρωματικού τροχού
+	Show segmented color wheel	Εμφάνιση τμηματοποιημένου χρωματικού τροχού
+	Show color bars	Εμφάνιση χρωματικών ράβδων
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
 	Height:	Ύψος:
@@ -3258,6 +3263,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replace Spine	Αντικατάσταση κεντρικής καμπύλης
 	Replace Symbol	Αντικατάσταση συμβόλου
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
+	Replace With Font From	Αντικατάσταση με γραμματοσειρά από
+	System	Σύστημα
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
 	Reset Bounding Box	Επαναφορά πλαισίου οριοθέτησης
@@ -3727,6 +3734,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Templates Folder	Φάκελος προτύπων
 	Text Displayed in Cell:	Κείμενο που εμφανίζεται στο κελί:
 	Text Export Options	Επιλογές εξαγωγής κειμένου
+	Text Fill & Stroke Color	Χρώμα γεμίσματος και περιγράμματος κειμένου
 	Text Fill Color	Χρώμα γεμίσματος κειμένου
 	Text Import Options	Επιλογές εισαγωγής κειμένου
 	Text Stroke Color	Χρώμα περιγράμματος κειμένου
@@ -4670,6 +4678,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the PCX file is cut short	το αρχείο PCX είναι περικομμένο
 @msg	the PCX file's header is damaged	η κεφαλίδα του αρχείου PCX είναι κατεστραμμένη
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	τα αρχεία PCX με εικονοστοιχεία {bits} bit σε {planes} επίπεδα δεν διαβάζονται
+@msg	the Pixar file is cut short	το αρχείο Pixar είναι περικομμένο
+@msg	the Pixar file's header is damaged	η κεφαλίδα του αρχείου Pixar είναι κατεστραμμένη
+@msg	the Pixar file's image data is damaged	τα δεδομένα εικόνας του αρχείου Pixar είναι κατεστραμμένα
 @msg	the JPEG 2000 file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	το αρχείο JPEG 2000 έχει μη υποστηριζόμενο χρωματικό χώρο ή περιεχόμενο JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
@@ -5587,7 +5598,9 @@ effect	Points	Σημεία
 	Effect Gallery	Συλλογή εφέ
 	Filters	Φίλτρα
 	Select artwork to apply effects	Επιλέξτε γραφικά για να εφαρμόσετε εφέ
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	η βιβλιοθήκη μεταβλητών του αρχείου διαβάστηκε μόνο εν μέρει (καταχωρίσεις που παραλείφθηκαν: {_1}): ο πίνακας Μεταβλητές εμφανίζει τις υπόλοιπες
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	δεν ήταν δυνατή η ανάγνωση της βιβλιοθήκης μεταβλητών του αρχείου: ο πίνακας Μεταβλητές δεν την εμφανίζει
+@msg	a variable of unknown kind can't be bound to objects	μια μεταβλητή άγνωστου είδους δεν μπορεί να συνδεθεί με αντικείμενα
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
 	Move Anchor Point	Μετακίνηση σημείου αγκύρωσης
@@ -5677,6 +5690,7 @@ axis	Y Axis	Άξονας Y
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
+	Leave Out of Global Edit	Εξαίρεση από την καθολική επεξεργασία
 	Match	Αντιστοίχιση
 	On Artboards	Σε πίνακες σχεδίασης
 	All Artboards	Όλοι οι πίνακες σχεδίασης
@@ -5685,6 +5699,8 @@ axis	Y Axis	Άξονας Y
 @msg	select one object	επιλέξτε ένα αντικείμενο
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές, παρουσίες συμβόλων και ομάδες τους
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
+@msg	Global Edit is off	Η καθολική επεξεργασία δεν είναι ενεργή
+@msg	only an object of the Global Edit other than the one it started from can be left out	μπορεί να εξαιρεθεί μόνο ένα αντικείμενο της καθολικής επεξεργασίας εκτός από εκείνο με το οποίο ξεκίνησε
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
 	Add to Symbols	Προσθήκη στα σύμβολα
 	Basic Shapes	Βασικά σχήματα
@@ -5940,6 +5956,11 @@ anchor	Points:	Σημεία:
 	Horizontal Scale	Οριζόντια κλίμακα
 	Vertical Scale	Κατακόρυφη κλίμακα
 @msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+	Character Color	Χρώμα χαρακτήρων
+	OpenType Features	Χαρακτηριστικά OpenType
+	Stylistic Sets	Στιλιστικά σύνολα
+@msg	features lists at most {max} tags	Το features περιέχει έως {max} ετικέτες
+@msg	unknown OpenType feature `{t}`	άγνωστο χαρακτηριστικό OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}
 @msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 

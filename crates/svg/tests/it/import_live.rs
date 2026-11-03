@@ -20,6 +20,23 @@ fn open(body: &str) -> (Document, Vec<String>) {
     import_with_report(&svg(body)).unwrap()
 }
 
+#[test]
+fn decoded_id_selectors_do_not_recolor_bare_ellipses() {
+    for selector in ["circle&#91;id]", "ellipse&#x5b;id]", "circle[id]", "ellipse[id]", "circle[ id ]", r"ellipse[\69 d]"] {
+        let source = svg(&format!(
+            "<style>{selector} {{ fill: red }}</style><circle cx=\"40\" cy=\"50\" r=\"20\"/><ellipse cx=\"100\" cy=\"50\" rx=\"20\" ry=\"10\"/><circle id=\"c\" cx=\"40\" cy=\"100\" r=\"8\"/><ellipse id=\"e\" cx=\"100\" cy=\"100\" rx=\"12\" ry=\"8\"/>"
+        ));
+        let doc = import(&source).unwrap();
+        let actual = render_artboard(&doc);
+        let expected = resvg_render(&source, 200, 120);
+        assert_eq!((actual.width, actual.height), (expected.width, expected.height));
+        for (x, y) in [(40, 50), (100, 50), (40, 100), (100, 100)] {
+            let at = 4 * (y * actual.width + x) as usize;
+            assert_eq!(&actual.rgba[at..at + 4], &expected.rgba[at..at + 4], "{selector}: ({x}, {y})");
+        }
+    }
+}
+
 /// All non-layer nodes in paint order.
 fn art(d: &Document) -> Vec<&Node> {
     let mut v = Vec::new();

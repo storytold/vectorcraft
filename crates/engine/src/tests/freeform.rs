@@ -331,3 +331,29 @@ fn type_objects_keep_points_in_text_space() {
     assert!(close(f.points[i].at, Point::new(90.0, 150.0)), "back in document coordinates: {:?}", f.points[i].at);
     assert_eq!(f.points[i].color, Color::rgb(1.0, 0.0, 1.0));
 }
+
+/// A dropped press (a long touch, a canceled touch) of the Gradient tool that dragged a selected
+/// point out of the object, and out and back in, keeps the point and its selection.
+#[test]
+fn a_dropped_drag_of_a_point_keeps_it_selected() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, id) = freeform_rect();
+    let v = ViewInfo::default();
+    s.select_tool("gradient", v).unwrap();
+    let count = points(&s, id).points.len();
+    assert!(count > 1, "a point can be dragged out");
+    let at = s.proxy_freeform(false).unwrap().0.points[0].at;
+    for back in [false, true] {
+        run(&mut s, "paint.freeform.selectPoint", json!({"index": 0}));
+        s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 400.0, 400.0), v).unwrap();
+        assert_eq!(s.selected_freeform_point(), None, "the removal the drag previews deselects the point");
+        if back {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, at.x + 5.0, at.y + 5.0), v).unwrap();
+        }
+        s.drop_tool_press(v).unwrap();
+        assert!(!s.tool_busy(), "the tool is at rest");
+        assert_eq!(points(&s, id).points.len(), count, "back inside: {back}");
+        assert_eq!(s.selected_freeform_point(), Some(0), "back inside: {back}");
+    }
+}

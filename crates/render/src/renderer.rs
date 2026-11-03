@@ -172,9 +172,11 @@ impl Renderer {
     /// so the nodes they hold go with them).
     fn end_frame(&mut self) {
         let g = self.stamp;
-        if self.geom.len() > 1024 {
-            self.geom.retain(|_, e| g - e.stamp <= 3);
-        }
+        // Swept however few the entries: each keeps its node alive, and an object dragged or
+        // edited makes a new node (with its layer) in every frame. Kept until there were 1,024 of
+        // them, a drag left up to that many old copies of the object alive, each with all its
+        // members (and, for a compound path, its assembled path).
+        self.geom.retain(|_, e| g - e.stamp <= 3);
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
         }

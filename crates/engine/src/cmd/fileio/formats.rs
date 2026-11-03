@@ -494,6 +494,8 @@ pub const FORMATS: &[Format] = &[
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
     // ZSoft PCX images, read by `pcxread` and stored as PNG; exports don't write them.
     reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
+    // Pixar picture files, read by `pxrread` and stored as PNG; exports don't write them.
+    reader("pxr", "Pixar", &["pxr"], "image/x-pixar", true),
     // JP2 and raw codestreams are decoded to PNG; JPX composition is not supported.
     reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
 ];
@@ -523,6 +525,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "icb",
     "vst",
     "pcx",
+    "pxr",
     "jpf",
     "jpx",
     "jp2",
@@ -546,11 +549,11 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX or JPEG 2000 type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar or JPEG 2000 type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
 pub const UNASSOCIATED_EXTS: &[&str] =
-    &["psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc"];
+    &["psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -606,6 +609,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "icb",
     "vst",
     "pcx",
+    "pxr",
     "jpf",
     "jpx",
     "jp2",

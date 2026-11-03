@@ -161,6 +161,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         foreign: found.foreign,
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
+        ellipses: found.ellipses,
         screen: k,
         converted_nodes: 1,
         max_nodes,
@@ -318,6 +319,8 @@ struct Importer {
     sublayers: HashSet<String>,
     /// The groups made of them, made sublayers where they sit in a layer ([`promote_sublayers`]).
     sublayer_groups: HashSet<NodeId>,
+    /// Ids of the `<circle>` and `<ellipse>` elements ([`prepass`]).
+    ellipses: HashSet<String>,
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,

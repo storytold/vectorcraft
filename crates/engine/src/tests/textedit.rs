@@ -139,6 +139,59 @@ fn feature_changes_keep_each_runs_other_features() {
     assert_eq!(features(&s), [vec!["smcp", "numr", "liga", "dnom"], vec!["swsh", "numr", "liga", "dnom"], vec!["-onum", "swsh", "dnom"]]);
 }
 
+/// `text.setStyle {stroke, strokeWidth}` sets the character stroke of all the text or of a range, as
+/// `text.setRangeStyle` does, and a call with `fill` and `stroke` sets both in one undo step.
+#[test]
+fn set_style_sets_the_character_stroke() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let id = text(&mut s, "Hello world");
+    let paints =
+        |s: &Session| obj(s, id).runs.iter().map(|r| (r.style.fill.color(), r.style.stroke.color(), r.style.stroke_width)).collect::<Vec<_>>();
+    let red = Some(Color::rgb8(255, 0, 0));
+    let blue = Some(Color::rgb8(0, 0, 255));
+    let fill = obj(&s, id).runs[0].style.fill.color();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#ff0000", "strokeWidth": 2})).unwrap();
+    assert_eq!(paints(&s), [(fill, red, 2.0)], "all the text");
+    s.execute("text.setStyle", &json!({"ids": [id.0], "start": 6, "end": 11, "stroke": "#0000ff"})).unwrap();
+    assert_eq!(paints(&s), [(fill, red, 2.0), (fill, blue, 2.0)], "a range");
+    let before = paints(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "fill": "#0000ff", "stroke": "none", "strokeWidth": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert!(
+        obj(&s, id).runs.iter().all(|r| r.style.fill.color() == blue && r.style.stroke == Paint::None && r.style.stroke_width == 0.0),
+        "{:?}",
+        paints(&s)
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paints(&s), before, "undo restores the fill and the stroke");
+    let e = s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "nope"})).unwrap_err().to_string();
+    assert!(e.contains("bad stroke colour"), "{e}");
+    assert!(s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": "x"})).is_err(), "strokeWidth must be a number");
+    // The weight is in document points, as stroke.set gives it: type scaled 200% keeps half of it in text space.
+    s.execute("object.scale", &json!({"ids": [id.0], "sx": 200, "sy": 200})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": 2})).unwrap();
+    assert!(obj(&s, id).runs.iter().all(|r| (r.style.stroke_width - 1.0).abs() < 1e-9), "{:?}", paints(&s));
+}
+
+/// `text.setStyle {stroke}` without `strokeWidth` gives type with no stroke weight 1 pt, as
+/// `paint.setStroke` does, and keeps a weight the type already has.
+#[test]
+fn set_style_stroke_without_a_weight_draws_1_pt() {
+    use vectorcraft_color::Color;
+    let mut s = session();
+    let id = text(&mut s, "Hello");
+    assert_eq!(obj(&s, id).runs[0].style.stroke_width, 0.0);
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#ff0000"})).unwrap();
+    let st = &obj(&s, id).runs[0].style;
+    assert_eq!((st.stroke.color(), st.stroke_width), (Some(Color::rgb8(255, 0, 0)), 1.0));
+    assert!(st.has_stroke());
+    s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": 3})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#0000ff"})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.stroke_width, 3.0, "an existing weight is kept");
+}
+
 #[test]
 fn optical_command_manual_pair_undo_redo_and_native_reopen() {
     let mut s = session();
@@ -1202,6 +1255,28 @@ fn type_tool_selection_replace_and_delete() {
     key(&mut s, ToolKey::End, Mods::default());
     key(&mut s, ToolKey::Backspace, Mods { alt: true, ..Default::default() });
     assert_eq!(obj(&s, id).plain_text(), " ");
+}
+
+/// A Type tool click inside a ligature (Source Serif 4's fi) puts the caret between its
+/// characters, and Shift+Right from there selects the i alone.
+#[test]
+fn type_tool_click_reaches_the_inside_of_a_ligature() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "fin", "size": 40, "font": "Source Serif 4"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let g = lay.glyphs.iter().find(|g| g.len == 2).expect("f + i is one glyph");
+    let (_, f) = g.carets[0];
+    let p = t.xf * (g.origin + vectorcraft_geom::Vec2::new(g.advance * f + 0.2, -10.0));
+    click(&mut s, p.x, p.y);
+    assert_eq!(s.tool_options()["caret"], json!(1), "between the f and the i");
+    key(&mut s, ToolKey::Right, Mods { shift: true, ..Default::default() });
+    assert_eq!((s.tool_options()["start"].as_u64(), s.tool_options()["end"].as_u64()), (Some(1), Some(2)));
+    s.tool_text("I", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "fIn");
 }
 
 #[test]
