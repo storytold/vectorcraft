@@ -177,6 +177,43 @@ impl Encoding {
     }
 }
 
+/// The unit of the `width` and `height` an export writes (SVG Options → Units, off Responsive).
+/// The `viewBox` stays in user units (points) whatever is chosen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SizeUnit {
+    /// Bare numbers, CSS pixels at one per point (72 per inch).
+    #[default]
+    #[serde(rename = "px")]
+    Px,
+    #[serde(rename = "pt")]
+    Pt,
+    #[serde(rename = "mm")]
+    Mm,
+    #[serde(rename = "cm")]
+    Cm,
+    #[serde(rename = "in")]
+    In,
+}
+
+impl SizeUnit {
+    /// This unit's size in points, and the suffix a length in it carries (`px` is written bare).
+    fn per_point(self) -> (f64, &'static str) {
+        match self {
+            Self::Px => (1.0, ""),
+            Self::Pt => (1.0, "pt"),
+            Self::Mm => (25.4 / 72.0, "mm"),
+            Self::Cm => (2.54 / 72.0, "cm"),
+            Self::In => (1.0 / 72.0, "in"),
+        }
+    }
+
+    /// `points` as a length in this unit, rounded to `decimals` places, e.g. `70.556mm`.
+    pub fn length(self, points: f64, decimals: u8) -> String {
+        let (scale, suffix) = self.per_point();
+        format!("{}{suffix}", fmt_num(points * scale, decimals))
+    }
+}
+
 /// The SVG profile written (SVG Options → SVG Profile).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Profile {
@@ -223,6 +260,9 @@ pub struct ExportOptions {
     pub minify: bool,
     /// Omit `width`/`height` so the SVG scales to its container.
     pub responsive: bool,
+    /// The unit `width` and `height` are written in (ignored when `responsive`). `px`, the
+    /// default, writes bare numbers.
+    pub units: SizeUnit,
     /// Fonts → Convert to Outlines: text becomes paths (portable, no font needed to view it).
     pub outline_text: bool,
     /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
@@ -256,6 +296,7 @@ impl Default for ExportOptions {
             images: ImageMode::Embed,
             minify: false,
             responsive: false,
+            units: SizeUnit::Px,
             outline_text: false,
             preserve_editing: false,
             metadata: false,

@@ -162,7 +162,9 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
     }
     if !opts.responsive {
-        out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        // The viewBox stays in user units (points); the unit only scales the drawn size.
+        let (width, height) = (opts.units.length(rect.width(), opts.decimals), opts.units.length(rect.height(), opts.decimals));
+        out.push_str(&format!(" width=\"{width}\" height=\"{height}\""));
     }
     out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();

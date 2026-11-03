@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (SVG export writes width and height in mm, cm, in or pt, #4462; scores and estimates unchanged; previously: new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -317,6 +317,9 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   such stubs into one vertex (within 4× the sweep's tolerance up and down its frame and 1/16 of the 0.01 pt precision
   along it, bounded by each cluster's extent so a run of tiny level segments keeps its length); regression tests
   in `crates/pathops/src/planar.rs`. Estimate unchanged.
+- **Done (2026-11-03):** SVG export writes `width` and `height` in the unit SVG Options › Units (`units`) names: `px`
+  (bare numbers, as before), `pt`, `mm`, `cm` or `in`, with the `viewBox` in points, so laser and plotter software reads
+  the physical size (#4462); an unknown unit is an error. Estimate unchanged.
 - **Missing:** SVG units reverting to points (#864). Shape Builder regions (#937, closed), PDF text placement
   (#722, above), the bezier drag preview (#834, #3065, #3729) and deleting an interior anchor of an open path (above)
   are done.
@@ -732,6 +735,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | SVG Options has a Units choice (Pixels, Points, Millimeters, Centimeters, Inches) for the `width` and `height` an export writes, so laser and plotter software read the physical size (#4462; the `units` option, Pixels still bare numbers as before); scores and estimates unchanged |
 | 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
 | 2026-11-02 | minor | G15: hit testing culls paths and compound paths by their control points' box and tests a compound path's outline and fill against only its members near the click; the same objects are hit. Estimate unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |
