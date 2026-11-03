@@ -92,6 +92,8 @@ impl Session {
             liquify_stroke: None,
             plane_widget_press: false,
             pointer_held: false,
+            press_options: None,
+            press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
             font_search: None,

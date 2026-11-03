@@ -189,6 +189,9 @@ pub struct TypeTool {
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
+    /// The caret and anchor from before a press in type, kept until its release; a dropped press
+    /// puts them back.
+    before_press: Option<(usize, usize)>,
     /// Click counting for double/triple click (position of the last click, count).
     clicks: (Option<Point>, u8),
     /// Styled copy of the last copied range (pasting the same plain text keeps its styles).
