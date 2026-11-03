@@ -736,8 +736,11 @@ fn nonzero_shapes_keep_the_middle_a_same_way_contour_encloses() {
 #[test]
 fn inflate_over_bounds_of_subnormal_size_makes_no_grid() {
     let (p, _) = shape(&square(0.0, 0.0, 10.0));
-    let tiny = Rect::new(0.0, 0.0, 5e-324, 5e-324);
-    assert_eq!(inflate(&p, FillRule::EvenOdd, tiny, Inflate::default(), front()).unwrap().len(), 0);
+    // 5e-324 divides to a zero cell; 1e-307 is a normal size whose cell (size / 48) is subnormal.
+    for size in [5e-324, 1e-307] {
+        let tiny = Rect::new(0.0, 0.0, size, size);
+        assert_eq!(inflate(&p, FillRule::EvenOdd, tiny, Inflate::default(), front()).unwrap().len(), 0, "{size}");
+    }
 }
 
 #[test]
