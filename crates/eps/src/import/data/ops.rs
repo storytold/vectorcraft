@@ -97,7 +97,7 @@ impl Interp<'_> {
                 let n = match &*f.borrow() {
                     Stream::Current => self.lex.rest().len(),
                     Stream::Buf { data, pos, .. } => data.len().saturating_sub(*pos),
-                    Stream::Pending(_) => 0,
+                    Stream::Pending { .. } => 0,
                 };
                 self.push(Obj::Int(n as i64))?;
             }
@@ -189,7 +189,7 @@ impl Interp<'_> {
                 *pos += rest.len() - lex.data().len();
                 (o, lex.immediate)
             }
-            Stream::Pending(_) => (None, false),
+            Stream::Pending { .. } => (None, false),
         })
     }
 
@@ -210,7 +210,7 @@ impl Interp<'_> {
                 *pos = end;
                 data.get(start..end).unwrap_or_default().to_vec()
             }
-            Stream::Pending(_) => vec![],
+            Stream::Pending { .. } => vec![],
         })
     }
 
@@ -229,7 +229,7 @@ impl Interp<'_> {
                     *pos += 1;
                 }
             }
-            Stream::Pending(_) => {}
+            Stream::Pending { .. } => {}
         }
     }
 
@@ -284,28 +284,28 @@ impl Interp<'_> {
         let spec = Filter { name, sub, predictor, fax };
         let stream = match self.pop()? {
             Obj::File { stream: f, .. } => {
-                // A filter over the file being run reads it, as one over the program's own file
-                // does, from where the program is when the filter is first read.
+                // A filter over the program's own file or the file being run waits until it is
+                // first read, and keeps which of them it reads, wherever the program runs by then.
                 let running = self.running.last().is_some_and(|r| Rc::ptr_eq(r, &f));
                 match &*f.borrow() {
                     Stream::Buf { data, pos, .. } if !running => self.alloc(data.len().saturating_sub(*pos))?,
                     _ => {}
                 }
-                let chain = match &*f.borrow() {
-                    Stream::Current => Some(vec![]),
-                    Stream::Buf { .. } if running => Some(vec![]),
-                    Stream::Pending(c) => Some(c.clone()),
+                let pending = match &*f.borrow() {
+                    Stream::Current => Some((vec![], None)),
+                    Stream::Buf { .. } if running => Some((vec![], Some(f.clone()))),
+                    Stream::Pending { chain, from } => Some((chain.clone(), from.clone())),
                     Stream::Buf { .. } => None,
                 };
-                match chain {
-                    Some(mut c) => {
+                match pending {
+                    Some((mut chain, from)) => {
                         // The new filter reads a pending one's data: it has none left of its own
                         // (`flushfile` on it skips nothing more).
-                        if !c.is_empty() {
+                        if !chain.is_empty() {
                             *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
                         }
-                        c.push(spec);
-                        Stream::Pending(c)
+                        chain.push(spec);
+                        Stream::Pending { chain, from }
                     }
                     None => {
                         let mut b = f.borrow_mut();
@@ -348,18 +348,18 @@ impl Interp<'_> {
         })
     }
 
-    /// Decode the filters a file waits to run over the program's data, from where it is now: the
-    /// file being run, or the program's own file.
+    /// Decode the filters a file waits to run over the data the program reads, from where it is
+    /// now in the file they were made over: a file being run, or the program's own file.
     pub(in super::super) fn materialize(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
-        let chain = match &*f.borrow() {
-            Stream::Pending(c) => c.clone(),
+        let (chain, from) = match &*f.borrow() {
+            Stream::Pending { chain, from } => (chain.clone(), from.clone()),
             _ => return Ok(()),
         };
         let mut buf: Option<(Vec<u8>, Option<u8>)> = None;
         for spec in &chain {
             buf = Some(match buf.take() {
                 None => {
-                    let (data, rgb) = match self.running.last() {
+                    let (data, rgb) = match &from {
                         Some(r) => {
                             let mut b = r.borrow_mut();
                             let Stream::Buf { data, pos, .. } = &mut *b else { return io("filter") };

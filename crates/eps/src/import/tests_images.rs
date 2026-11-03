@@ -106,6 +106,31 @@ fn image_data_comes_from_the_file_being_run() {
     );
 }
 
+/// A filter waits until it is first read, then reads the file it was made over, wherever the
+/// program runs by then: one over the program's own file, read in a file being run, and one over
+/// a file being run, read in a file that one runs.
+#[test]
+fn filters_read_the_file_they_were_made_over() {
+    super::tests::check(
+        "/f currentfile /ASCIIHexDecode filter def\n\
+         currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         /s f 3 string readstring pop def\n\
+         endstream\n\
+         616263>\n\
+         s (abc) eq",
+    );
+    super::tests::check(
+        "currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         /g currentfile /ASCIIHexDecode filter def\n\
+         currentfile 0 (endinner) /SubFileDecode filter cvx exec\n\
+         /t g 3 string readstring pop def\n\
+         endinner\n\
+         78797A>\n\
+         endstream\n\
+         t (xyz) eq",
+    );
+}
+
 /// CMYK samples keep their ink amounts in a CMYK TIFF: in the operand and dictionary forms, from
 /// hex and binary data, from one source or one a component, at 4, 8 and 16 bits, read through
 /// the Decode array. Gray and RGB images stay PNGs.
