@@ -357,18 +357,39 @@ fn open_file_with(app: &str, path: &str) -> Result<(), String> {
         c.arg(path);
         c
     };
-    // macOS: `open` returns once Launch Services has the request, so waiting for it is brief and
-    // reports an app it can't open (a folder named `.app` that isn't a bundle). Elsewhere the
-    // editor itself runs: waiting would last until it closes.
+    // macOS: `open` returns once Launch Services has the request, so a short wait reports an app
+    // it can't open (a folder named `.app` that isn't a bundle). The wait is capped so a stalled
+    // `open` never holds the window: past it, the launch is left to run. Elsewhere the editor
+    // itself runs: waiting would last until it closes.
     #[cfg(target_os = "macos")]
     {
-        let out = c.output().map_err(|e| format!("can't open {path} in {}: {e}", app.display()))?;
-        if out.status.success() {
-            return Ok(());
+        const WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+        let fail = |why: String| format!("can't open {path} in {}: {why}", app.display());
+        let mut child = c.stderr(std::process::Stdio::piped()).spawn().map_err(|e| fail(e.to_string()))?;
+        let started = std::time::Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) if status.success() => return Ok(()),
+                Ok(Some(status)) => {
+                    let mut why = String::new();
+                    if let Some(mut err) = child.stderr.take() {
+                        // Best effort: without its message the exit status says why.
+                        let _ = std::io::Read::read_to_string(&mut err, &mut why);
+                    }
+                    let why = why.trim().to_string();
+                    return Err(fail(if why.is_empty() { status.to_string() } else { why }));
+                }
+                Ok(None) if started.elapsed() < WAIT => std::thread::sleep(std::time::Duration::from_millis(20)),
+                Ok(None) => {
+                    // Reaped off the UI thread once it ends.
+                    std::thread::spawn(move || {
+                        let _ = child.wait();
+                    });
+                    return Ok(());
+                }
+                Err(e) => return Err(fail(e.to_string())),
+            }
         }
-        let why = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        let why = if why.is_empty() { out.status.to_string() } else { why };
-        Err(format!("can't open {path} in {}: {why}", app.display()))
     }
     #[cfg(not(target_os = "macos"))]
     c.spawn().map(|_| ()).map_err(|e| format!("can't open {path} in {}: {e}", app.display()))
