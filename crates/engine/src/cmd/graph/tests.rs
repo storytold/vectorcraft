@@ -1304,6 +1304,10 @@ fn graph_designs_are_saved_pasted_and_deleted() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(series_parts(&s, id, 0).iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })));
     assert!(s.execute("graph.design", &json!({"delete": "Nope"})).is_err());
+    // A name listed many times deletes once (its graphs regenerate once).
+    s.execute("graph.design", &json!({"delete": vec!["Pill"; 1000]})).unwrap();
+    assert!(s.doc().unwrap().doc.graph_designs.is_empty());
+    assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
 }
 
 #[test]

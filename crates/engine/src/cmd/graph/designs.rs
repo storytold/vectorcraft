@@ -145,6 +145,8 @@ pub(super) fn design(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "id": id.0 }));
     }
     if let Some(names) = names_param(p, "delete", C)? {
+        // Each name once: a repeated one would regenerate the graphs using it again.
+        let names: std::collections::BTreeSet<String> = names.into_iter().collect();
         if let Some(n) = names.iter().find(|n| !taken(s, n)) {
             return Err(bad(C, format!("no design named `{n}`")));
         }
