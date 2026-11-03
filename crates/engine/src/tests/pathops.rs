@@ -1293,3 +1293,18 @@ fn pathfinder_journal_entries_replay_with_the_options_they_used() {
     // Options given as params are checked as object.pathfinder.options checks them.
     assert!(s.execute("object.pathfinder.divide", &json!({"precision": 20})).is_err());
 }
+
+/// A single group containing multiple overlapping paths is accepted by Crop.
+#[test]
+fn crop_operates_on_a_single_selected_group_of_paths() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.len(), 1);
+    let out = s.execute("object.pathfinder.crop", &json!({})).unwrap();
+    let cropped_ids = ids(&out);
+    assert!(!cropped_ids.is_empty());
+}

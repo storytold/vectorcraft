@@ -109,8 +109,11 @@ impl Renderer {
         }
         ctx.set_transform(f.view * xf);
         let closed = effects::stroke::is_closed(bp);
-        // Keep hairlines visible when zoomed far out (at least ~1 device pixel).
-        let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5 / xf.determinant().abs().sqrt().max(1e-9));
+        // Keep hairlines visible when zoomed far out (at least ~1 device pixel). A width profile
+        // multiplies the weight, so it is the profile's widest point that is kept visible: raising
+        // the weight further would swell the whole stroke while the view zooms out (#995).
+        let widest = st.profile.as_ref().map_or(1.0, |p| p.widest().max(1e-3));
+        let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5 / xf.determinant().abs().sqrt().max(1e-9) / widest);
         let inside = st.align == StrokeAlign::Inside && closed;
         if inside {
             ctx.set_fill_rule(fill_rule(rule));

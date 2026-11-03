@@ -41,8 +41,10 @@ fn rendered_rasters_become_the_same_egui_images() {
     assert!(img.pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0 && p[3] != 255), "partly covered pixels");
     let egui = egui::ColorImage::from_rgba_premultiplied([97, 61], &img.pixels);
     assert_eq!(color_image(&img), egui);
+    assert_eq!(color_image_owned(img), egui);
     let short = vectorcraft_render::Rendered { width: 3, height: 2, pixels: vec![255; 5] };
     assert_eq!(color_image(&short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
+    assert_eq!(color_image_owned(short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
 }
 
 /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of
@@ -73,6 +75,26 @@ fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
         assert_eq!(cursor_icon(c), egui::CursorIcon::Crosshair, "{c:?}");
         assert_eq!(cursor_icon(c), cursor_icon(c.precise()), "{c:?}");
     }
+}
+
+/// A change to Caps Lock or to Use Precise Cursors through `app.run` (the host, the control channel,
+/// MCP) refreshes the pointer over the canvas without the pointer moving.
+#[test]
+fn command_cursor_settings_refresh_hover_cursor_while_view_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.session.select_tool("pen", vectorcraft_engine::ViewInfo::default()).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let mods = Mods::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+
+    app.run("view.capsLock", json!({"on": true})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+    app.run("view.capsLock", json!({"on": false})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+    app.run("prefs.set", json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
 }
 
 /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
@@ -506,6 +528,26 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
     out.textures_delta.clear();
 }
 
+#[test]
+fn bucket_modifier_only_hover_updates_the_visible_cursor() {
+    use egui::{Event, Modifiers};
+    use vectorcraft_tools::Cursor;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("livePaintBucket");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let at = app.canvas_rect.unwrap().center();
+    let shown = |app: &mut VectorcraftApp, events| {
+        frame(app, &ctx, events);
+        app.canvas.hover_cursor.map(|(_, _, cursor)| cursor)
+    };
+    assert_eq!(shown(&mut app, vec![Event::PointerMoved(at)]), Some(Cursor::LivePaintBucket));
+    assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::ALT)]), Some(Cursor::Eyedropper));
+    assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
+}
+
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
 /// panel stopped drawing while the button was held, so a later press on the canvas does not
 /// show the source image.
@@ -580,7 +622,7 @@ fn a_click_activates_its_artboard_and_paste_in_place_goes_onto_it() {
     let view = app.view_info();
     let at = boards[2].center();
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
     let ids: Vec<vectorcraft_doc::NodeId> = app.run("edit.pasteInPlace", json!({})).unwrap()["ids"]
@@ -613,7 +655,7 @@ fn a_shift_click_activates_its_artboard_and_align_to_artboard_aligns_to_it() {
     let view = app.view_info();
     let shift = Mods { shift: true, ..Default::default() };
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
     assert_eq!(app.session.active().unwrap().selection.objects, ids, "the selection stays");
@@ -668,7 +710,7 @@ fn the_active_artboard_is_outlined_in_black() {
     let view = app.view_info();
     let shift = Mods { shift: true, ..Default::default() };
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.session.tool_options()["selected"], json!([2, 1]));
     assert_eq!(edges(&mut app), active(2), "Artboard 3 is the active one of the two selected");
@@ -1062,6 +1104,53 @@ fn a_guide_dragged_out_of_a_ruler_shows_while_dragged() {
         assert!(shapes(&mut app, &ctx).iter().any(across), "real-time drawing {real_time}: the guide shows while dragged");
         frame(&mut app, &ctx, vec![button(at, false)]);
         assert_eq!(app.session.active().unwrap().doc.guides.len(), 1, "real-time drawing {real_time}: released, it is made");
+    }
+}
+
+/// With Preferences › Performance › Real-time Drawing and Editing off, the bounding box moves
+/// with a Selection-tool move drag while the object stays put until the release. With it on, the
+/// art moves and the box hides during the drag (#712).
+#[test]
+fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
+    for real_time in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        app.ui.view.smart_guides = false;
+        app.ui.view.snap_to_point = false;
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let is_handle = |s: &Shape| matches!(s, Shape::Rect(r) if (r.rect.width() - 6.0).abs() < 1.0 && (r.rect.height() - 6.0).abs() < 1.0 && r.fill == Color32::WHITE);
+        let handles = |app: &mut VectorcraftApp| {
+            shapes(app, &ctx).iter().filter(|s| is_handle(s)).map(|s| s.visual_bounding_rect().center()).collect::<Vec<_>>()
+        };
+        let at_rest = handles(&mut app);
+        assert_eq!(at_rest.len(), 8, "real-time drawing {real_time}: the box's handles at rest");
+        let left = |app: &VectorcraftApp| app.session.active().unwrap().doc.art_bounds().unwrap().x0;
+        let start = left(&app);
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 130.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 230.0), view).unwrap();
+        let during = handles(&mut app);
+        if real_time {
+            assert!(during.is_empty(), "the box hides while the art moves: {during:?}");
+            assert_eq!(left(&app), start + 100.0, "the art moves with the pointer");
+        } else {
+            assert_eq!(during.len(), 8, "the box shows during the drag");
+            let corner = xf.to_screen(Point::new(200.0, 200.0));
+            assert!(during.iter().any(|c| c.distance(corner) < 0.5), "the box's corner is at the dragged position: {during:?}");
+            assert!(!during.iter().any(|c| c.distance(xf.to_screen(Point::new(100.0, 100.0))) < 0.5), "not at the start");
+            assert_eq!(left(&app), start, "the object waits for the release");
+        }
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 230.0), view).unwrap();
+        assert_eq!(left(&app), start + 100.0, "real-time drawing {real_time}: moved on release");
+        assert_eq!(handles(&mut app).len(), 8, "real-time drawing {real_time}: the box at rest again");
     }
 }
 
@@ -1975,7 +2064,7 @@ fn undecodable_images_are_marked_and_reported_once() {
     app.status("");
     frame(&mut app, &ctx, vec![]);
     assert!(app.canvas.shown.as_ref().is_some_and(|(_, o)| o.mark_undecoded_images), "the canvas marks them");
-    assert_eq!(app.ui.status, "2 image(s) couldn't be decoded and show as crossed boxes");
+    assert_eq!(app.ui.status, "2 images couldn't be decoded and show as crossed boxes");
     app.status("");
     app.session.doc_mut().unwrap().revision += 1;
     frame(&mut app, &ctx, vec![]);
@@ -2548,7 +2637,7 @@ fn pan_fills_the_area_the_last_frame_leaves() {
     assert!(app.canvas.fill_worker.as_ref().unwrap().pending.is_none(), "the late fill was taken");
     // A pan with Outline turned on: the frame shown's options are not the ones asked for, and
     // no fill is asked for.
-    app.ui.view.outline = true;
+    app.view_mut().unwrap().outline = true;
     app.view_mut().unwrap().center = Point::new(400.0, 150.0);
     frame(&mut app);
     assert!(jobs.try_iter().last().is_some_and(|j| j.key.outline), "the outline frame is on the worker");
@@ -2919,6 +3008,50 @@ fn mirror_axis_tracks_selection_options_and_view_without_editing_art() {
 }
 
 #[test]
+fn egui_backtick_drag_uses_key_state_at_release() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Dots", "width": 20, "height": 20})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "swatch": "Dots"})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let from = xf.to_screen(Point::new(125.0, 125.0));
+    let to = xf.to_screen(Point::new(145.0, 125.0));
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let key = |pressed| Event::Key { key: egui::Key::Backtick, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    let node = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let before = node(&app);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![key(true), Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    let after = node(&app);
+    assert_eq!(after.geometric_bounds(), before.geometric_bounds(), "backtick release keeps geometry still");
+    let vectorcraft_color::Paint::Pattern { xf, .. } = after.appearance.fill_paint() else { panic!("pattern fill expected") };
+    assert!((xf.as_coeffs()[4] - 20.0).abs() < 0.001, "egui backtick reaches the active tool");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(node(&app), before, "one Undo restores the pattern transform");
+    frame(&mut app, &ctx, vec![key(false)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![key(true), Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![key(false)]);
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    let ordinary = node(&app);
+    assert!(
+        (ordinary.geometric_bounds().unwrap().x0 - before.geometric_bounds().unwrap().x0 - 20.0).abs() < 0.001,
+        "key released before mouse up commits an ordinary move"
+    );
+}
+
+#[test]
 fn mirror_axis_drag_uses_canvas_coordinates_in_a_zoomed_rotated_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
@@ -3024,6 +3157,65 @@ fn grid_repeat_handles_set_rows_and_spacing_in_one_undo_step_each() {
     assert_eq!(grid(&app).2, 18.0);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!((grid(&app).0, grid(&app).2), (5, 10.0), "the spacing's own undo step");
+}
+
+/// While a symbol with 9-slice guides is edited, the canvas draws its four guides dotted across
+/// its art, with ruler guides hidden too, and none once the mode ends. Dragging the left guide in
+/// a zoomed view moves that guide alone, as one undo step.
+#[test]
+fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.view_mut().unwrap().zoom = 1.5;
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The dots drawn along the guide from document point `a` to `b`.
+    let dots = |app: &mut VectorcraftApp, a: Point, b: Point| {
+        let (a, b) = (xf.to_screen(a), xf.to_screen(b));
+        let on = |q: Pos2| {
+            let (d, len) = (b - a, (b - a).length());
+            let t = (q - a).dot(d) / (len * len);
+            (-0.01..=1.01).contains(&t) && (a + d * t).distance(q) < 0.01
+        };
+        shapes(app, &ctx).into_iter().filter(|s| matches!(s, Shape::LineSegment { points: [p, q], .. } if on(*p) && on(*q))).count()
+    };
+    let guides = [
+        (Point::new(125.0, 100.0), Point::new(125.0, 200.0)),
+        (Point::new(100.0, 125.0), Point::new(200.0, 125.0)),
+        (Point::new(175.0, 100.0), Point::new(175.0, 200.0)),
+        (Point::new(100.0, 175.0), Point::new(200.0, 175.0)),
+    ];
+    assert_eq!(dots(&mut app, guides[0].0, guides[0].1), 0, "not while the instance is only selected");
+    app.run("symbol.edit", json!({})).unwrap();
+    app.ui.view.guides = false;
+    for (a, b) in guides {
+        assert!(dots(&mut app, a, b) > 10, "a dotted guide from {a:?} to {b:?}");
+    }
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let from = xf.to_screen(Point::new(125.0, 150.0));
+    let to = xf.to_screen(Point::new(110.0, 160.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    for k in 1..=4 {
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+    }
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    let guides_now = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbol_nine_slice("Box").unwrap();
+    let g = guides_now(&app);
+    assert!((g.left - 0.1).abs() < 1e-3 && (g.top, g.right, g.bottom) == (0.25, 0.25, 0.25), "{g:?}");
+    assert!(app.session.active().unwrap().doc.symbol_edit.is_some(), "still editing the symbol");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(guides_now(&app).left, 0.25, "one undo step");
+    app.run("edit.redo", json!({})).unwrap();
+    assert!((guides_now(&app).left - 0.1).abs() < 1e-3);
+    app.run("symbol.exitEditing", json!({})).unwrap();
+    assert_eq!(dots(&mut app, Point::new(110.0, 100.0), Point::new(110.0, 200.0)), 0, "none outside the mode");
 }
 
 #[test]
@@ -3437,7 +3629,7 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
 /// another document, or when the device pixels a point changed.
 #[test]
 fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
-    let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0 };
+    let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false };
     let mut v = view;
     let rest = scroll_by(&mut v, 1, 1.0, vec2(0.4, -0.3), ScrollRest::default());
     assert_eq!(v.center, view.center, "less than half a pixel does not move the view");
@@ -3681,6 +3873,64 @@ fn show_live_paint_gaps_draws_the_selected_groups_gaps_in_their_preview_color() 
     assert!(!serde_json::from_value::<crate::UiState>(saved).unwrap().view.live_paint_gaps);
 }
 
+/// #3797: View › Outline is a setting of each document's view. A document opened or made after
+/// another was put in Outline opens in Preview, where a click inside its fill picks it, and each
+/// document keeps its own setting.
+#[test]
+fn outline_is_per_document_and_new_documents_start_in_preview() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 100, "height": 100})).unwrap();
+    app.sync_views();
+    let inside = Point::new(70.0, 70.0);
+    let picks_fill = |app: &VectorcraftApp| super::outline::hit_at(app, inside, 1.0).is_some();
+    assert!(picks_fill(&app), "Preview picks the fill");
+    app.run("view.outline", json!({})).unwrap();
+    assert!(app.outline_view() && app.view_info().outline);
+    assert!(!picks_fill(&app), "Outline picks only the path");
+    // An SVG opened now opens in Preview, its fill drawn and picked.
+    let svg =
+        br##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect x="20" y="20" width="100" height="100" fill="#ff0000"/></svg>"##;
+    crate::io::open_bytes(&mut app, "b.svg", svg, None).unwrap();
+    assert_eq!(app.session.active_index(), Some(1));
+    assert!(!app.outline_view() && !app.view_info().outline, "the opened document is in Preview");
+    assert!(picks_fill(&app));
+    assert_eq!(crate::menus::dynamic_label(&app, "view.outline", "Outline"), "Outline");
+    assert_eq!(crate::menus::checked(&app, "view.outline", &json!({})), Some(false));
+    // A new document opens in Preview too.
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    assert!(!app.outline_view());
+    // The first document is still in Outline.
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(app.outline_view() && !picks_fill(&app));
+    assert_eq!(crate::menus::dynamic_label(&app, "view.outline", "Outline"), "Preview");
+    assert_eq!(crate::menus::checked(&app, "view.outline", &json!({})), Some(true));
+    // Without a document there is nothing to put in Outline.
+    while !app.session.documents().is_empty() {
+        app.session.execute("file.close", &json!({})).unwrap();
+    }
+    app.sync_views();
+    assert!(!app.outline_view() && !crate::menus::enabled(&app, "view.outline"));
+    assert!(app.run("view.outline", json!({})).is_err());
+}
+
+/// #3797: a preferences file saved while View › Outline was an interface setting still loads, with
+/// its other view settings, and its Outline value does not put a document in Outline.
+#[test]
+fn old_outline_preference_loads_but_does_not_restore_outline() {
+    let mut saved = serde_json::to_value(crate::UiState::default()).unwrap();
+    assert!(saved["view"].get("outline").is_none(), "Outline is not saved with the interface");
+    saved["view"]["outline"] = json!(true);
+    saved["view"]["rulers"] = json!(true);
+    let ui = serde_json::from_value::<crate::UiState>(saved).unwrap().sanitized();
+    assert!(ui.view.rulers, "the other view settings load");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui = ui;
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.sync_views();
+    assert!(!app.outline_view(), "a new document is in Preview");
+}
+
 /// #511: a star shows a widget in each of its ten corners with Direct Selection (none with
 /// the Selection tool: it isn't a live shape); View → Hide Corner Widget hides them.
 #[test]
@@ -3744,6 +3994,69 @@ fn a_selected_ellipse_shows_its_pie_widgets() {
     app.select_tool("selection");
     app.run("view.boundingBox", json!({})).unwrap();
     assert_eq!(widgets(&mut app), 0, "no bounding box, no widgets");
+}
+
+/// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
+/// Path tools.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_rotate_all_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap();
+    let ctx = egui::Context::default();
+    let widgets = |app: &mut VectorcraftApp| {
+        let r = vectorcraft_tools::objects_on_path::ROTATE_ALL_RADIUS_PX;
+        shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill == Color32::WHITE)).count()
+    };
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+}
+
+/// A selected Objects on Path group of two or more objects shows its Space widget, a white square
+/// beyond its last object, with the Selection and Objects on Path tools.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_space_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = id(app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap());
+    let ctx = egui::Context::default();
+    let widgets = |app: &mut VectorcraftApp| {
+        let side = 2.0 * vectorcraft_tools::objects_on_path::SPACE_HALF_PX;
+        shapes(app, &ctx)
+            .iter()
+            .filter(|s| matches!(s, Shape::Rect(r) if r.rect.width() == side && r.rect.height() == side && r.fill == Color32::WHITE))
+            .count()
+    };
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+    // With one object on the path there is no space to set.
+    app.run("edit.clear", json!({"ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "one object");
 }
 
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
@@ -6054,6 +6367,88 @@ fn tool_drag_moved_without_pointer_delta() {
     assert!(moved, "a new document position runs even when egui reports no delta");
 }
 
+/// #4711: Shift pressed and released while a corner handle is held still scales proportionally and
+/// then freely again at once, without waiting for the pointer to move.
+#[test]
+fn a_modifier_changed_mid_scale_applies_with_the_pointer_held_still() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let with = |app: &mut VectorcraftApp, mut events: Vec<Event>, modifiers: Modifiers| {
+        events.insert(0, Event::ModifiersChanged(modifiers));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let height =
+        |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().height();
+    let corner = xf.to_screen(Point::new(200.0, 150.0));
+    let to = xf.to_screen(Point::new(300.0, 150.0));
+    with(&mut app, vec![Event::PointerMoved(corner)], Modifiers::NONE);
+    with(&mut app, vec![button(corner, true)], Modifiers::NONE);
+    with(&mut app, vec![Event::PointerMoved(to)], Modifiers::NONE);
+    assert!((height(&app) - 50.0).abs() < 1e-6, "a free scale keeps the height: {}", height(&app));
+    with(&mut app, vec![], Modifiers::SHIFT);
+    assert!((height(&app) - 100.0).abs() < 1e-6, "Shift scales proportionally at once: {}", height(&app));
+    with(&mut app, vec![], Modifiers::NONE);
+    assert!((height(&app) - 50.0).abs() < 1e-6, "releasing Shift frees it at once: {}", height(&app));
+    with(&mut app, vec![button(to, false)], Modifiers::NONE);
+    assert!(app.session.active().unwrap().interaction.is_none(), "committed");
+}
+
+/// Backtick switches a moved Selection drag's live preview while the pointer stays still.
+#[test]
+fn backtick_changed_mid_selection_drag_applies_with_the_pointer_held_still() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Dots", "width": 20, "height": 20})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "swatch": "Dots"})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let from = xf.to_screen(Point::new(125.0, 125.0));
+    let to = xf.to_screen(Point::new(145.0, 125.0));
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let key = |pressed| Event::Key { key: egui::Key::Backtick, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    let node = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let pattern_x = |node: &vectorcraft_doc::Node| {
+        let vectorcraft_color::Paint::Pattern { xf, .. } = node.appearance.fill_paint() else { panic!("pattern fill expected") };
+        xf.as_coeffs()[4]
+    };
+    let before = node(&app);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+    let moved = node(&app);
+    assert!((moved.geometric_bounds().unwrap().x0 - before.geometric_bounds().unwrap().x0 - 20.0).abs() < 0.001);
+    frame(&mut app, &ctx, vec![key(true)]);
+    let pattern_only = node(&app);
+    assert_eq!(pattern_only.geometric_bounds(), before.geometric_bounds(), "Backtick restores geometry in the live preview");
+    assert!((pattern_x(&pattern_only) - pattern_x(&before) - 20.0).abs() < 0.001, "Backtick moves the pattern in the live preview");
+    frame(&mut app, &ctx, vec![key(false)]);
+    let ordinary = node(&app);
+    assert_eq!(ordinary.geometric_bounds(), moved.geometric_bounds(), "releasing Backtick restores the ordinary move in the live preview");
+    assert!((pattern_x(&ordinary) - pattern_x(&before)).abs() < 0.001, "the ordinary move restores the pattern matrix");
+    frame(&mut app, &ctx, vec![button(to, false)]);
+}
+
 /// #834 review: a press held still is not a drag. Before the press has dragged, the first held
 /// frame without a delta at the press's own position sends nothing, so a click stays a click;
 /// the first move after it does.
@@ -6155,6 +6550,148 @@ fn a_bezier_drag_preview_follows_the_pointer_back_into_the_window_and_to_the_rel
     assert!(app.session.active().unwrap().interaction.is_none(), "committed");
 }
 
+/// A drag ends where its button went up. Pointer moves that come after the release in the same
+/// frame are hover: they do not stretch a Rectangle drag, add to a Pencil stroke or move dragged
+/// art.
+#[test]
+fn a_drag_ends_where_the_button_went_up_in_its_frame() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let last_bounds = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap()
+    };
+    let center = app.canvas_rect.unwrap().center();
+    let far = center + vec2(150.0, 100.0);
+
+    app.select_tool("rectangle");
+    let a = center - vec2(100.0, 60.0);
+    let end = a + vec2(80.0, 50.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(40.0, 20.0))]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(end), button(end, false), Event::PointerMoved(far)]);
+    let r = last_bounds(&app);
+    let want = xf.to_doc(end);
+    assert!((r.x1 - want.x).abs() < 1e-3 && (r.y1 - want.y).abs() < 1e-3, "the rectangle ends at the release: {r:?}, {want:?}");
+
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("pencil");
+    let a = center - vec2(100.0, 0.0);
+    let end = a + vec2(120.0, 0.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    for x in [20.0, 40.0, 60.0] {
+        frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(x, 0.0))]);
+    }
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(90.0, 0.0)), Event::PointerMoved(end), button(end, false), Event::PointerMoved(far)]);
+    let r = last_bounds(&app);
+    let (left, right) = (xf.to_doc(a), xf.to_doc(end));
+    assert!((r.x0 - left.x).abs() < 1.0 && (r.x1 - right.x).abs() < 1.0 && r.height() < 1.0, "the stroke ends at the release: {r:?}");
+
+    app.session.execute("shape.rectangle", &json!({"x": 250, "y": 40, "width": 60, "height": 40})).unwrap();
+    app.session.execute("paint.setFill", &json!({"color": "#3366cc"})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("selection");
+    let before = Rect::new(250.0, 40.0, 310.0, 80.0);
+    let grab = xf.to_screen(Point::new(280.0, 60.0));
+    let to = grab + vec2(30.0, 40.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(grab)]);
+    frame(&mut app, &ctx, vec![button(grab, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(grab + vec2(10.0, 10.0))]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to), button(to, false), Event::PointerMoved(far)]);
+    let moved = last_bounds(&app);
+    let d = xf.to_doc(to) - xf.to_doc(grab);
+    assert!((moved.x0 - before.x0 - d.x).abs() < 1e-3 && (moved.y0 - before.y0 - d.y).abs() < 1e-3, "the art moves to the release: {moved:?}, {d:?}");
+    assert!(app.session.active().unwrap().interaction.is_none(), "committed");
+}
+
+/// The moves that come after the button-up in the release's frame are hover: a stroke built from
+/// the drag's samples does not take them.
+#[test]
+fn moves_after_the_button_up_do_not_join_the_stroke() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let center = app.canvas_rect.unwrap().center();
+    app.select_tool("pencil");
+    let a = center - vec2(100.0, 0.0);
+    let end = a + vec2(120.0, 0.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    for x in [20.0, 40.0, 60.0] {
+        frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(x, 0.0))]);
+    }
+    let hover = [end + vec2(30.0, 100.0), end + vec2(60.0, 120.0), end + vec2(90.0, 140.0)];
+    let mut events = vec![Event::PointerMoved(a + vec2(90.0, 0.0)), Event::PointerMoved(end), button(end, false)];
+    events.extend(hover.map(Event::PointerMoved));
+    frame(&mut app, &ctx, events);
+    let st = app.session.active().unwrap();
+    let r = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    let (left, right) = (xf.to_doc(a), xf.to_doc(end));
+    assert!((r.x0 - left.x).abs() < 1.0 && (r.x1 - right.x).abs() < 1.0 && r.height() < 1.0, "the stroke stops at the release: {r:?}");
+}
+
+/// [`frame_moves`] with a release keeps the moves before the button-up, and the pose the feed kept
+/// for the last of them.
+#[test]
+fn frame_moves_stop_at_the_button_up() {
+    let ctx = egui::Context::default();
+    let (a, b, c, d) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(30.0, 40.0), pos2(40.0, 50.0));
+    let up = egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c), egui::Event::PointerMoved(d)];
+    let feed = StylusFeed::default();
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    let after = PenPose { tilt: Some([50.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, after), (0.8, after)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let release = Some(egui::PointerButton::Primary);
+    let mut out =
+        ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), release));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.4), Some(PenPose::default()))], "the moves after the button-up are left out");
+    assert_eq!(last, Some(at_b), "the pose is the last move's before the button-up");
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| moves = frame_moves(ui, None, None).0);
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, None, None), (b, None, None), (c, None, None)], "without a release every move counts");
+}
+
+/// A button-up away from the last move before it keeps that move: the release takes only its own
+/// position, and the pose is still the last move's.
+#[test]
+fn frame_moves_keep_the_last_move_when_the_button_went_up_elsewhere() {
+    let ctx = egui::Context::default();
+    let (a, b, up_at, c) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(25.0, 35.0), pos2(30.0, 40.0));
+    let up = egui::Event::PointerButton { pos: up_at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c)];
+    let feed = StylusFeed::default();
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, PenPose::default())] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let release = Some(egui::PointerButton::Primary);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), release));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.4), Some(PenPose::default())), (b, Some(0.6), Some(at_b))], "the move before the button-up is kept");
+    assert_eq!(last, Some(at_b), "the pose is the last move's before the button-up");
+}
+
 #[test]
 fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let ctx = egui::Context::default();
@@ -6163,29 +6700,37 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let c = pos2(30.0, 40.0);
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
     let mut mouse = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
-    // A mouse keeps its moves too, without a pressure.
-    assert_eq!(mouse, [(a, None), (b, None)], "the last move follows the normal pointer path");
-    // A macOS pen: the feed kept a pressure for each move, the last for the last.
+    // A mouse keeps its moves too, without a pressure or a pose.
+    assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
+    // A macOS pen: the feed kept a pressure and a pose for each move, the last for the last.
     let feed = StylusFeed::default();
-    for p in [0.9, 0.3, 0.0, 0.5] {
-        feed.set_move(crate::stylus::PenSample { pressure: p, eraser: false });
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
-    let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
+    let (mut samples, mut last) = (vec![], None);
+    let mut out =
+        ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed), None));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, Some(0.3)), (b, None)], "paired from the end; a lift's 0 is no pressure");
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
+    assert_eq!(
+        samples,
+        [(a, Some(0.3), Some(leaning)), (b, None, Some(PenPose::default()))],
+        "paired from the end, each with its own pose; a lift's 0 is no pressure"
+    );
+    assert_eq!(last, Some(leaning), "the last move's pose comes with the moves");
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed), None));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, None), (b, None)], "the moves were taken: a mouse's moves again");
+    assert_eq!(samples, [(a, None, None), (b, None, None)], "the moves were taken: a mouse's moves again");
+    assert_eq!(last, None);
     let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
     let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, Some(0.2)), (b, Some(0.8))], "the last sample follows the normal pointer path");
+    assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
     let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     assert!(samples.len() <= 64, "a stalled frame stays bounded");
 }
@@ -6213,8 +6758,39 @@ fn long_touch_drops_a_tool_press_without_committing_art() {
     tick(&mut app, 1.5, vec![]);
     assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Gesture)), "long touch drops the tool drag");
     assert!(app.session.active().unwrap().interaction.is_none());
+    assert!(app.ui.dialog.is_none(), "the dropped press is not a click that opens the size dialog");
     tick(&mut app, 1.6, pen(egui::TouchPhase::End, pos, 0.5));
     assert!(app.session.active().unwrap().doc.art_bounds().is_none(), "releasing cannot commit the cancelled press");
+}
+
+/// A canceled touch drops the tool's drag: the options the drag changed (the Polygon tool's
+/// sides) are put back and not stored, and nothing is drawn.
+#[test]
+fn a_canceled_touch_drops_the_drag_without_keeping_its_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.touch_gestures = true;
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    app.select_tool("polygon");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let start = xf.to_screen(Point::new(200.0, 200.0));
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Start, start, 0.5));
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Move, start + vec2(60.0, 40.0), 0.5));
+    assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)));
+    assert!(app.session.active().unwrap().interaction.is_some(), "the drag previews the polygon");
+    let view = app.view_info();
+    assert_eq!(app.session.tool_options()["sides"], json!(6));
+    app.session.tool_key(vectorcraft_tools::ToolKey::Up, Mods::default(), view).unwrap();
+    assert_eq!(app.session.tool_options()["sides"], json!(7));
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Cancel, start + vec2(60.0, 40.0), 0.5));
+    assert!(!app.session.tool_busy(), "the tool is at rest");
+    let st = app.session.active().unwrap();
+    assert!(st.interaction.is_none() && st.doc.art_bounds().is_none(), "nothing is drawn");
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options()["sides"], json!(6), "the tool has its sides from before the press");
+    let stored = app.session.prefs.tool_settings.get("polygon").and_then(|o| o.get("sides"));
+    assert_eq!(stored, None, "the dropped drag's sides are not stored");
 }
 
 /// #2826: a second finger drops a move waiting over a panel, so its interaction doesn't
@@ -6396,7 +6972,7 @@ fn pen_app() -> (VectorcraftApp, StylusFeed, egui::Context) {
 
 /// The pen turned to its eraser end, with `pressure`.
 fn eraser_end(pressure: f32) -> Option<crate::stylus::PenSample> {
-    Some(crate::stylus::PenSample { pressure, eraser: true })
+    Some(crate::stylus::PenSample { pressure, eraser: true, ..Default::default() })
 }
 
 /// #764: turning the pen to its eraser end selects the Eraser, and turning it back to the tip
@@ -6575,6 +7151,131 @@ fn the_tip_brings_back_the_perspective_grid_tool_without_showing_the_grid() {
     assert!(!visible(&app), "the grid stays hidden");
 }
 
+/// #764: the pen's tilt and barrel rotation in the host's feed reach the Paintbrush's points,
+/// the tilt turned onto the page when the view is rotated; a mouse's points carry neither.
+#[test]
+fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    // A stroke at `y`, one frame per sample, with the pen held as `pose` (`None`: a mouse); the
+    // tilt x, tilt y and rotation of each of its points.
+    let stroke = |app: &mut VectorcraftApp, y: f64, pose: Option<PenPose>| -> Vec<[Option<f64>; 3]> {
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let mut at = Pos2::ZERO;
+        for (i, x) in [360.0, 400.0, 440.0].into_iter().enumerate() {
+            match pose {
+                Some(pose) => feed.set_sample(Some(crate::stylus::PenSample { pressure: 0.5, pose, ..Default::default() })),
+                None => feed.set(None),
+            }
+            at = xf.to_screen(Point::new(x, y));
+            let mut events = vec![egui::Event::PointerMoved(at)];
+            if i == 0 {
+                events.push(button(at, true));
+            }
+            frame(app, &ctx, events);
+        }
+        frame(app, &ctx, vec![button(at, false)]);
+        let (cmd, p) = app.session.journal.last().unwrap().clone();
+        assert_eq!(cmd, "path.freehand");
+        p["points"].as_array().unwrap().iter().map(|s| [3, 4, 5].map(|i| s.get(i).and_then(serde_json::Value::as_f64))).collect()
+    };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0) };
+    let points = stroke(&mut app, 260.0, Some(leaning));
+    assert!(!points.is_empty() && points.iter().all(|p| *p == [Some(30.0), Some(0.0), Some(45.0)]), "{points:?}");
+    // With the view rotated 90° clockwise, a pen leaning to the right of the screen leans up the
+    // page; the barrel's rotation stays as it was.
+    app.run("view.rotate", json!({"angle": 90})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let points = stroke(&mut app, 340.0, Some(leaning));
+    let up = |p: &[Option<f64>; 3]| matches!(*p, [Some(x), Some(y), Some(r)] if x.abs() < 0.01 && (y + 30.0).abs() < 0.01 && r == 45.0);
+    assert!(!points.is_empty() && points.iter().all(up), "{points:?}");
+    let points = stroke(&mut app, 300.0, None);
+    assert!(!points.is_empty() && points.iter().all(|p| *p == [None; 3]), "a mouse: {points:?}");
+}
+
+/// The moves that come in the frame of the release reach the Paintbrush before it lifts, each
+/// with the tilt the host's feed kept for that move.
+#[test]
+fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let moved = |tilt: f32| {
+        feed.set_move(crate::stylus::PenSample {
+            pressure: 0.5,
+            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) },
+            ..Default::default()
+        })
+    };
+    moved(10.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
+    moved(20.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(340.0))]);
+    for tilt in [30.0, 40.0, 50.0] {
+        moved(tilt);
+    }
+    frame(
+        &mut app,
+        &ctx,
+        vec![
+            egui::Event::PointerMoved(at(380.0)),
+            egui::Event::PointerMoved(at(420.0)),
+            egui::Event::PointerMoved(at(460.0)),
+            button(at(460.0), false),
+        ],
+    );
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let tilts: Vec<f64> = p["points"].as_array().unwrap().iter().filter_map(|s| s.get(3).and_then(serde_json::Value::as_f64)).collect();
+    for tilt in [30.0, 40.0] {
+        assert!(tilts.iter().any(|t| (t - tilt).abs() < 0.01), "{tilt}: {tilts:?}");
+    }
+}
+
+/// The last move of a frame reaches the Paintbrush with the tilt the host's feed kept for that
+/// move, not with a later pen sample that came without a move.
+#[test]
+fn the_last_move_of_a_frame_keeps_its_own_tilt() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let sample =
+        |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
+    feed.set_move(sample(10.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
+    feed.set_move(sample(20.0));
+    feed.set_move(sample(30.0));
+    // A pen sample with no pointer move of its own, after the frame's last move.
+    feed.set_sample(Some(sample(70.0)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(340.0)), egui::Event::PointerMoved(at(380.0))]);
+    frame(&mut app, &ctx, vec![button(at(380.0), false)]);
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let points: Vec<(f64, f64)> = p["points"].as_array().unwrap().iter().filter_map(|s| Some((s.get(0)?.as_f64()?, s.get(3)?.as_f64()?))).collect();
+    let last_move = points.iter().find(|(x, _)| (x - 380.0).abs() < 0.5);
+    assert!(last_move.is_some_and(|(_, t)| (t - 30.0).abs() < 0.01), "{points:?}");
+}
+
 /// #3328: every position a mouse reports within one frame reaches the Pencil, not only the
 /// frame's last one, so a fast stroke keeps the hand's movement.
 #[test]
@@ -6645,7 +7346,7 @@ fn only_the_freehand_tools_get_every_move_of_a_frame() {
     {
         app.select_tool(tool);
         let mut moves = vec![];
-        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app));
+        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app, false).0);
         out.textures_delta.clear();
         assert_eq!(moves.len(), if every { 19 } else { 0 }, "{tool}");
     }
@@ -6693,7 +7394,8 @@ fn the_task_bar_shows_a_stroke_chip_beside_fill() {
     let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let bar = task_bar_rect(&ctx).expect("the task bar shows");
-    // Right to left: the frame's margin, More Options, Lock, Recolor, then Stroke and Fill.
+    // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), Recolor,
+    // then Stroke and Fill.
     let stroke_x = bar.right() - 8.0 - 3.0 * (30.0 + 6.0) - 13.0;
     let fill_x = stroke_x - 26.0 - 6.0;
     let blue = Color32::from_rgb(0x22, 0x44, 0xcc);
@@ -6750,7 +7452,8 @@ fn the_task_bar_chips_follow_the_proxies_and_show_swatches_anywhere() {
         out.textures_delta.clear();
         out.shapes
     };
-    // Right to left: the frame's margin, More Options, Lock, Recolor, then Stroke and Fill.
+    // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), Recolor,
+    // then Stroke and Fill.
     let stroke_x = |bar: egui::Rect| bar.right() - 8.0 - 3.0 * (30.0 + 6.0) - 13.0;
     let chip_with = |shapes: &[egui::epaint::ClippedShape], bar: egui::Rect, x: f32, color: Color32| {
         shapes.iter().any(|c| match &c.shape {
@@ -6802,7 +7505,7 @@ fn the_task_bar_recolors_coloured_art() {
         frame(app, &ctx, vec![]);
         frame(app, &ctx, vec![]);
         let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Right to left: the frame's margin, More Options, Lock, then Recolor.
+        // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), then Recolor.
         let at = pos2(bar.right() - 8.0 - 30.0 - 6.0 - 30.0 - 6.0 - 15.0, bar.center().y);
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
@@ -6823,15 +7526,18 @@ fn the_task_bar_recolors_coloured_art() {
     assert!(app.ui.dialog.is_none(), "no Recolor button without colours");
 }
 
-/// The Contextual Task Bar's Lock button is off in isolation mode, as Object › Lock › Selection
-/// is: a click locks nothing and shows no error. Outside isolation mode it locks the selection.
+/// The Contextual Task Bar's Lock button locks the selected member in isolation mode and the
+/// selected group outside isolation mode.
 #[test]
-fn the_task_bar_lock_button_is_off_in_isolation_mode() {
+fn the_task_bar_lock_button_locks_selected_art_in_isolation_mode() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let a = app.session.execute("shape.rectangle", &json!({"x": 150, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
-    let b = app.session.execute("shape.rectangle", &json!({"x": 210, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
-    app.session.execute("select.set", &json!({"ids": [a.clone(), b]})).unwrap();
+    // Plain paths: a basic shape shows its properties in Lock's place.
+    let square =
+        |x: f64| json!({"anchors": [{"x": x, "y": 130}, {"x": x + 40.0, "y": 130}, {"x": x + 40.0, "y": 170}, {"x": x, "y": 170}], "closed": true});
+    let a = app.session.execute("path.create", &square(150.0)).unwrap()["id"].clone();
+    let b = app.session.execute("path.create", &square(210.0)).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [a.clone(), b.clone()]})).unwrap();
     let g = app.session.execute("object.group", &json!({})).unwrap()["id"].clone();
     app.select_tool("selection");
     let ctx = egui::Context::default();
@@ -6852,7 +7558,8 @@ fn the_task_bar_lock_button_is_off_in_isolation_mode() {
     app.session.execute("object.isolate", &json!({"id": g.clone()})).unwrap();
     app.session.execute("select.set", &json!({"ids": [a.clone()]})).unwrap();
     click_lock(&mut app);
-    assert!(!locked(&app, &a), "nothing is locked in isolation mode");
+    assert!(locked(&app, &a), "the selected member is locked in isolation mode");
+    assert!(!locked(&app, &b), "the other member stays unlocked");
     assert_eq!(app.ui.status, "", "no error");
     app.session.execute("object.exitIsolation", &json!({})).unwrap();
     app.session.execute("select.set", &json!({"ids": [g.clone()]})).unwrap();
@@ -8037,4 +8744,118 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     app.select_tool("selection");
     app.run("view.artboards", json!({})).unwrap();
     assert_eq!(look(&mut app), (false, true));
+}
+
+/// Finished worker renders are uploaded whenever they are not older than what is currently
+/// displayed on screen. During continuous edit streams (drag previews, held arrow nudges, or
+/// command bursts) where the document revision advances every frame, intermediate worker frames
+/// are uploaded progressively to prevent the canvas from freezing. Obsolete frames older than what
+/// is already displayed are discarded.
+#[test]
+fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_frames() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw.clone(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    let doc = app.session.active().unwrap().doc.clone();
+    let initial_key = app.canvas.key.clone().expect("first frame initializes key");
+    let key_doc = initial_key.doc;
+
+    // Displayed canvas texture is initially at revision 2.
+    let mut displayed_key = initial_key.clone();
+    displayed_key.revision = 2;
+    app.canvas.key = Some(displayed_key);
+
+    let (worker, _jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+
+    // Worker completes revision 5 (intermediate frame from an edit stream).
+    // It is newer than displayed revision 2: it MUST be accepted and uploaded.
+    let mut rev5_key = initial_key.clone();
+    rev5_key.revision = 5;
+    let img5 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![200; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev5_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img5,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 1, "intermediate frame 5 is uploaded to texture");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "intermediate frame 5 is uploaded");
+    assert!(app.canvas.from_worker);
+
+    // Worker completes an older revision 3 (out of order). It is older than displayed 5, so discarded.
+    let mut rev3_key = initial_key.clone();
+    rev3_key.revision = 3;
+    let img3 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![150; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev3_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img3,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 0, "older out-of-order frame 3 emits NO texture upload delta, leaving displayed texture intact");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "older out-of-order frame 3 is discarded");
+
+    // Worker completes another intermediate revision 8. Newer than displayed 5, so uploaded.
+    let mut rev8_key = initial_key.clone();
+    rev8_key.revision = 8;
+    let img8 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![180; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev8_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img8,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 1, "newer frame 8 is uploaded to texture");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 8, "newer frame 8 is uploaded");
+
+    // Finally, the settling frame at revision 10 completes: it is accepted and uploaded.
+    let mut rev10_key = initial_key;
+    rev10_key.revision = 10;
+    let img10 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![255; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev10_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img10,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw, |ui| poll_worker(&mut app, ui, key_doc));
+    let set_count = out.textures_delta.set.len();
+    out.textures_delta.clear();
+    assert_eq!(set_count, 1, "settled frame 10 is uploaded to texture");
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }

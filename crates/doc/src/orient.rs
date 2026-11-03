@@ -200,7 +200,7 @@ mod tests {
     fn oriented_bounds_hug_a_rotated_symbol_instances_art() {
         let mut d = Document::new(500.0, 500.0);
         let bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 10.0)), Appearance::default_art());
-        d.symbols.push(crate::Symbol { name: "Bar".into(), art: std::sync::Arc::new(bar) });
+        d.symbols.push(crate::Symbol { dynamic: false, name: "Bar".into(), art: std::sync::Arc::new(bar) });
         let (l, id) = (d.layers[0].id, d.alloc_id());
         d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::translate((100.0, 100.0)) })).unwrap();
         let c = Point::new(120.0, 105.0);

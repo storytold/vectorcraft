@@ -241,6 +241,41 @@ fn isolate_and_knockout_flags_of_a_group_are_kept() {
     assert!(all(&d).iter().all(|n| !matches!(n.kind, NodeKind::Group { .. })));
 }
 
+#[test]
+fn knockout_groups_after_a_group_drawn_straight_keep_their_flag() {
+    // Two knockout groups (ISO 32000-1, 11.4.6.3), each of a full-opacity element and a 50% one,
+    // both elements groups of their own. A full-opacity element adds nothing as a group and is
+    // drawn straight onto its parent; the knockout group after it still knocks out.
+    let x = first_extra(1);
+    let ring = |at: usize| {
+        let res = format!("/ExtGState << /A << /ca 1 >> /B << /ca 0.5 >> >> /XObject << /E {} 0 R /F {} 0 R >>", at, at + 1);
+        stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /K true >> /Resources << {res} >>"),
+            "q /A gs /E Do Q q /B gs /F Do Q",
+        )
+    };
+    let element = |art: &str| stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency >>", art);
+    let d = open(&one_page(
+        "/X0 Do /X1 Do",
+        &format!("/XObject << /X0 {x} 0 R /X1 {} 0 R >>", x + 1),
+        &[
+            &ring(x + 2),
+            &ring(x + 4),
+            &element("0 0 1 rg 10 10 40 40 re f"),
+            &element("0 0 1 rg 20 20 20 20 re f"),
+            &element("0 0 1 rg 50 50 40 40 re f"),
+            &element("0 0 1 rg 60 60 20 20 re f"),
+        ],
+    ));
+    let groups: Vec<Node> = all(&d).into_iter().filter(|n| matches!(n.kind, NodeKind::Group { .. })).collect();
+    assert_eq!(groups.len(), 2, "{groups:?}");
+    for g in &groups {
+        assert_eq!(g.knockout, Knockout::On, "{g:?}");
+        let opacities: Vec<f32> = g.children().unwrap().iter().map(|c| c.opacity).collect();
+        assert_eq!(opacities, [1.0, 0.5]);
+    }
+}
+
 // ---------- tiling patterns ----------
 
 #[test]
@@ -369,6 +404,74 @@ fn font_names_resolve_to_available_families() {
     let _ = found;
     let (family, style, found) = f.resolve("MissingSansPro", Some(700), true);
     assert_eq!((family.as_str(), style.as_str(), found), ("Missing Sans Pro", "Bold Italic", false));
+}
+
+/// A family can hold hyphens (`Noto-Sans-Bold` is Noto Sans, Bold): the longest part of the name
+/// before a hyphen that names an available family is the family, the rest its style. Synthetic
+/// family names, so the host's fonts don't matter.
+#[test]
+fn hyphenated_font_names_resolve_to_the_longest_available_family() {
+    let f = crate::import_text::Families::of(&["Vctest", "Vctest Sans", "Vctest Sans CJK JP", "Vctest Mono"]);
+    let ok = |family: &str, style: &str| (family.to_string(), style.to_string(), true);
+    assert_eq!(f.resolve("HUHQIP+Vctest-Sans", None, false), ok("Vctest Sans", "Regular"));
+    assert_eq!(f.resolve("Vctest-Sans-Bold", None, false), ok("Vctest Sans", "Bold"));
+    assert_eq!(f.resolve("Vctest-Sans-Italic", None, false), ok("Vctest Sans", "Italic"));
+    assert_eq!(f.resolve("Vctest-Sans", Some(700), true), ok("Vctest Sans", "Bold Italic"));
+    assert_eq!(f.resolve("Vctest-Sans-CJK-JP", None, false), ok("Vctest Sans CJK JP", "Regular"));
+    // The family is there but not the style: the family, which then draws its closest style.
+    assert_eq!(f.resolve("Vctest-Mono-Bold", None, false), ok("Vctest Mono", "Bold"));
+    // A shorter family still takes the name when no longer one is available.
+    assert_eq!(f.resolve("Vctest-BoldOblique", None, false), ok("Vctest", "Bold Oblique"));
+    assert_eq!(f.resolve("Vctest,Bold", None, false), ok("Vctest", "Bold"));
+}
+
+/// A missing font's name is split only at a comma (`Arial,Bold`) or before the first part that is
+/// a style (`Family-BoldOblique`); otherwise the whole name is the family, so the missing font is
+/// reported as `Vcmissing Sans`, not `Vcmissing`.
+#[test]
+fn a_missing_font_is_split_only_before_a_style() {
+    let f = crate::import_text::Families::of(&[]);
+    let missing = |family: &str, style: &str| (family.to_string(), style.to_string(), false);
+    assert_eq!(f.resolve("Vcmissing-Sans", None, false), missing("Vcmissing Sans", "Regular"));
+    assert_eq!(f.resolve("Vcmissing-Sans-CJK-JP", None, false), missing("Vcmissing Sans CJK JP", "Regular"));
+    assert_eq!(f.resolve("Vcmissing-Sans-BoldOblique", None, false), missing("Vcmissing Sans", "Bold Oblique"));
+    assert_eq!(f.resolve("VcmissingPro-SemiboldIt", None, false), missing("Vcmissing Pro", "Semibold It"));
+    assert_eq!(f.resolve("VcmissingPSMT-XBold", None, false), missing("Vcmissing", "XBold"));
+    assert_eq!(f.resolve("Vcmissing-Bold-SC700", None, false), missing("Vcmissing", "Bold-SC 700"));
+    assert_eq!(f.resolve("Vcmissing-Regular-Regular", None, false), missing("Vcmissing", "Regular-Regular"));
+    assert_eq!(f.resolve("Vcmissing,Bold", None, false), missing("Vcmissing", "Bold"));
+    assert_eq!(f.resolve("-Vcmissing", None, false), missing("Vcmissing", "Regular"));
+    assert_eq!(f.resolve("Vcmissing-Roman", Some(700), false), missing("Vcmissing", "Bold"));
+    assert_eq!(f.resolve("Vcmissing-", None, true), missing("Vcmissing", "Italic"));
+    assert_eq!(f.resolve("-Bold", None, false), missing("", "Bold"));
+}
+
+/// A composite (Type 0) font's base name is its CIDFont's name, a hyphen and its CMap's
+/// (`SomeFont-Italic-Identity-H`, ISO 32000-1 §9.7.6.1): the font is noted by its CIDFont's name,
+/// the PostScript name of the font program (§9.7.4.1), so it is found among the installed fonts.
+#[test]
+fn a_composite_font_is_noted_by_its_cid_font_name() {
+    let noted = |font: &str| {
+        let resources = format!("/Font << /F1 {font} >>");
+        let bytes = one_page("BT /F1 24 Tf 10 30 Td <0001> Tj ET", &resources, &[]);
+        let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+        let mut fonts = crate::import_scan::FontNames::new();
+        let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+        crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
+        fonts.into_values().map(|f| f.name).collect::<Vec<_>>()
+    };
+    let type0 = |base: &str, enc: &str, descendant: &str| {
+        let info = "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>";
+        format!(
+            "<< /Type /Font /Subtype /Type0 /BaseFont /{base} /Encoding /{enc} /DescendantFonts [<< /Type /Font /Subtype /CIDFontType0 {descendant} {info} >>] >>"
+        )
+    };
+    assert_eq!(noted(&type0("MGZJFV+Vctest-Italic-Identity-H", "Identity-H", "/BaseFont /MGZJFV+Vctest-Italic")), ["MGZJFV+Vctest-Italic"]);
+    // No name in the descendant: the CMap's name comes off the end of the base name.
+    assert_eq!(noted(&type0("Vctest-Italic-UniJIS-UCS2-H", "UniJIS-UCS2-H", "")), ["Vctest-Italic"]);
+    // A base name without the CMap's is kept, as is a simple font's.
+    assert_eq!(noted(&type0("Vctest-Italic", "Identity-H", "")), ["Vctest-Italic"]);
+    assert_eq!(noted("<< /Type /Font /Subtype /Type1 /BaseFont /Vctest-Identity-H >>"), ["Vctest-Identity-H"]);
 }
 
 /// A value of the page's font dictionary that the reader can't parse (a name with a broken `#`

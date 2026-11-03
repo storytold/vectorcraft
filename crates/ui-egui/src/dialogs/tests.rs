@@ -1368,6 +1368,37 @@ fn artboard_options_x_and_y_count_from_the_ruler_origin_at_the_reference_point()
     assert!(has(&shown, "Width:") && !has(&shown, "X:") && !has(&shown, "Y:"), "{shown:?}");
 }
 
+/// Objects on Path Tool Options: a click on one of the nine Pivot points and a typed Rotate set the
+/// fields, Enter saves them as the tool's options, and the Reset button puts the center and 0 back.
+#[test]
+fn objects_on_path_tool_options_pivot_grid_rotate_field_and_reset() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "objectsOnPath"})).unwrap();
+    let mut f = Frames::new();
+    let bottom = f.control(&mut app, "Bottom", egui::accesskit::Role::RadioButton);
+    f.press(&mut app, bottom, true);
+    f.press(&mut app, bottom, false);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("pivot", -1.0), 7.0);
+    // The field is right of the 70 pt label column.
+    let shown = f.texts(&mut app);
+    let label = shown.iter().find(|(t, _)| t == "Rotate:").unwrap_or_else(|| panic!("no Rotate: in {shown:?}")).1;
+    let at = egui::pos2(label.left() + 70.0 + 30.0, label.center().y);
+    f.press(&mut app, at, true);
+    f.press(&mut app, at, false);
+    f.run(&mut app, vec![egui::Event::Text("45".into())]);
+    f.key(&mut app, egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(app.ui.dialog.is_none(), "Enter saves the dialog");
+    assert_eq!(app.session.tool_options_of("objectsOnPath"), json!({"pivot": 7, "rotate": 45.0}));
+    app.run("tool.options", json!({"tool": "objectsOnPath"})).unwrap();
+    let reset = f.button(&mut app, "Reset");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset keeps the dialog open");
+    assert_eq!((d.f64("pivot", -1.0), d.f64("rotate", -1.0)), (4.0, 0.0));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options_of("objectsOnPath"), json!({"pivot": 4, "rotate": 0.0}));
+}
+
 /// #1876: a new Width or Height in Artboard Options keeps the reference point where it was, as the
 /// Transform panel's does: about the center by default, so X and Y still read the same, and from
 /// the top-left corner with that reference point.
@@ -1898,6 +1929,63 @@ fn the_flattener_and_3d_sliders_step_with_the_arrow_keys() {
         assert_eq!(value(&app), (start + 10.0).ceil() - 1.0, "{label} from {start}");
         app.ui.dialog = None;
     }
+}
+
+/// The Blob Brush Tool Options' tip preview is the Angle slider for screen readers, with the Angle
+/// as its value. A click in it points the Angle at the pointer and gives it the focus, its arrow
+/// keys then step the Angle by one degree (ten with Shift) within -180° to 180°, Shift+Tab leaves
+/// it for the Roundness field and Tab comes back to it, and a drag still sets the Angle and gives
+/// it the focus.
+#[test]
+fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
+    use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, End, Home, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let angle = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open").f64("angle", f64::NAN);
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Angle");
+    assert_eq!((value, text.as_deref()), (Some(0.0), Some("0°")));
+    let center = f.control(&mut app, "Angle", egui::accesskit::Role::Slider);
+    let up_right = center + egui::vec2(20.0, -20.0);
+    f.press(&mut app, up_right, true);
+    f.press(&mut app, up_right, false);
+    assert_eq!(angle(&app), 45.0, "the click points the Angle up to the right");
+    let mut seen = vec![];
+    for (key, mods, want) in [
+        (ArrowRight, M::NONE, 46.0),
+        (ArrowUp, M::NONE, 47.0),
+        (ArrowLeft, M::NONE, 46.0),
+        (ArrowDown, M::NONE, 45.0),
+        (ArrowRight, M::SHIFT, 55.0),
+        (End, M::NONE, 180.0),
+        (ArrowRight, M::NONE, 180.0),
+        (Home, M::NONE, -180.0),
+        (ArrowLeft, M::SHIFT, -180.0),
+        (ArrowRight, M::NONE, -179.0),
+    ] {
+        f.key(&mut app, key, mods);
+        seen.push((key, mods.shift, angle(&app)));
+        assert_eq!(angle(&app), want, "{seen:?}");
+    }
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Angle");
+    assert_eq!((value, text.as_deref()), (Some(-179.0), Some("-179°")));
+    f.key(&mut app, Tab, M::SHIFT);
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(angle(&app), -179.0, "the Roundness field has the focus");
+    // Tab goes from the Roundness field to the scrub area on its label, then to the preview.
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(angle(&app), -178.0, "Tab comes back to the preview");
+    f.key(&mut app, Tab, M::SHIFT);
+    f.drag(&mut app, center + egui::vec2(20.0, 0.0), egui::vec2(0.0, 20.0));
+    assert_eq!(angle(&app), -45.0, "the drag ends down to the right");
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
 }
 
 #[test]

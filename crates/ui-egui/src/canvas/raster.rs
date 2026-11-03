@@ -14,6 +14,20 @@ pub(crate) fn color_image(img: &vectorcraft_render::Rendered) -> egui::ColorImag
     }
 }
 
+/// Convert an owned [`vectorcraft_render::Rendered`] raster directly into an [`egui::ColorImage`].
+/// Reuses the raster's heap allocation in place via zero-copy buffer casting when size and
+/// alignment permit, eliminating redundant multi-megabyte allocations on texture upload.
+pub(crate) fn color_image_owned(img: vectorcraft_render::Rendered) -> egui::ColorImage {
+    let size = [img.width as usize, img.height as usize];
+    let expected = size[0].saturating_mul(size[1]).saturating_mul(4);
+    if expected == img.pixels.len() {
+        let pixels: Vec<egui::Color32> = bytemuck::allocation::try_cast_vec(img.pixels).unwrap_or_else(|(_, v)| bytemuck::cast_slice(&v).to_vec());
+        egui::ColorImage::new(size, pixels)
+    } else {
+        egui::ColorImage::new(size, vec![egui::Color32::TRANSPARENT; size[0].saturating_mul(size[1])])
+    }
+}
+
 /// The pixels of the `w`×`h` frame through `view` to render again for `doc`, when only the document
 /// changed, or placed documents' bitmaps were made, since the frame shown (its key `key` but for
 /// the revision and [`CacheKey::placed`], and its render options `opts`), which this thread
@@ -68,9 +82,10 @@ fn in_steps(a: u32, b: u32, n: u32) -> (u32, u32) {
     (a, a + len)
 }
 
-/// Upload the art's raster; Pixel Preview's document pixels keep hard edges when magnified.
-pub(super) fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: &vectorcraft_render::Rendered, pixel: bool) {
-    let color = color_image(img);
+/// Upload the art's raster directly into the canvas texture without reallocating or copying pixels;
+/// Pixel Preview's document pixels keep hard edges when magnified.
+pub(super) fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: vectorcraft_render::Rendered, pixel: bool) {
+    let color = color_image_owned(img);
     let options = if pixel { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
     match &mut app.canvas.texture {
         Some(tex) => tex.set(color, options),

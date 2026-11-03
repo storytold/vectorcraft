@@ -247,5 +247,5 @@ pub fn presets() -> Vec<(&'static str, TraceParams)> {
 /// Gradients stay an option to turn on. Flat Logo, a preset of our own, has none.
 pub fn enhanced_preset(name: &str) -> Option<TraceParams> {
     let p = preset(name).filter(|p| p.mode != Mode::Logo)?;
-    Some(TraceParams { auto_grouping: true, shapes: !name.eq_ignore_ascii_case("High Fidelity Photo"), ..p })
+    Some(TraceParams { auto_grouping: true, shapes: p != preset("High Fidelity Photo")?, ..p })
 }

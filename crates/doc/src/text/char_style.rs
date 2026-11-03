@@ -25,9 +25,12 @@ pub struct CharStyle {
     /// Tracking in 1/1000 em.
     #[serde(default)]
     pub tracking: f64,
-    /// Kerning: None = Auto (metrics), Some(v) = manual in 1/1000 em.
+    /// Manual pair spacing in 1/1000 em; None uses the automatic mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kerning: Option<f64>,
+    /// Use glyph shapes for automatic pair spacing; false uses font metrics.
+    #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
+    pub optical_kerning: bool,
     #[serde(default)]
     pub baseline_shift: f64,
     #[serde(default = "hundred")]
@@ -90,6 +93,10 @@ pub struct CharStyle {
     /// them.
     #[serde(default, rename = "charDirection", skip_serializing_if = "Option::is_none")]
     pub char_direction: Option<ParaDirection>,
+    /// Character panel menu › Kashidas: whether these characters may receive a kashida when
+    /// their paragraph is justified with Insert Kashidas. On by default, including old documents.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    pub kashidas: bool,
     /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
     /// font's own proportional widths, OpenType `palt` (#966); in vertical type upright glyphs take
     /// its proportional heights, `vpal`.
@@ -101,21 +108,66 @@ pub struct CharStyle {
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
     #[serde(default, rename = "tateChuYoko", skip_serializing_if = "crate::skip::is_default")]
     pub tate_chu_yoko: bool,
+    /// Tate-chu-yoko Settings › Up/Down (Character panel menu, East Asian options), in points: a
+    /// block of marked characters in vertical type moves up by a positive value and down by a
+    /// negative one. The block takes the value of its first character; automatic digit blocks and
+    /// horizontal type do not move. Saved only when not 0.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "tcyUpDown", skip_serializing_if = "crate::skip::is_default")]
+    pub tcy_up_down: f64,
+    /// Tate-chu-yoko Settings › Left/Right, in points: a block of marked characters in vertical type
+    /// moves right by a positive value and left by a negative one, as [`Self::tcy_up_down`] does.
+    #[serde(default, rename = "tcyLeftRight", skip_serializing_if = "crate::skip::is_default")]
+    pub tcy_left_right: f64,
+    /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): in vertical
+    /// type the half-width characters among these (Latin letters, digits and other characters that
+    /// would lie on their side) stand upright one below the other instead of being rotated
+    /// individually. Spaces and tate-chu-yoko blocks do not change, and horizontal type keeps the
+    /// mark and does not change.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "standardVerticalRoman", skip_serializing_if = "crate::skip::is_default")]
+    pub standard_vertical_roman: bool,
     /// Digits (Character panel menu, Middle Eastern options): the numeral system the digits of
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub digits: Digits,
+    /// Font height reference (Character panel menu › Show Font Height Options): the height of the
+    /// font that [`Self::size`] measures, the em box by default.
+    #[serde(default, rename = "fontHeightReference", skip_serializing_if = "crate::skip::is_default")]
+    pub font_height_reference: FontHeightReference,
     /// No Break (Character panel menu): these characters are not broken across lines, including
     /// at a space or a hyphenation point inside the run. A run longer than the line stays together
     /// and can overflow it.
     /// <https://helpx.adobe.com/illustrator/using/hyphenation-line-breaks.html>
     #[serde(default, rename = "noBreak", skip_serializing_if = "crate::skip::is_default")]
     pub no_break: bool,
+    /// Language (Character panel): the BCP 47 tag of one of [`crate::setup::LANGUAGES`] these
+    /// characters are shaped in, so that the font uses that language's forms (OpenType `locl`).
+    /// `None`: the default language, English: USA, shaped without a language. New type takes the
+    /// document's language (Document Setup). Saved only when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+}
+
+/// What a character's font size measures ([`CharStyle::font_height_reference`]): the em square
+/// of the font, the height of its capitals or of its lowercase letters (the cap height and x
+/// height of its OS/2 table), or its ideographic character face (ICF, OpenType's `icfb` and
+/// `icft` baselines). Layout sets the characters at the em size at which the chosen height equals
+/// the font size; with a font that has no such value, the size measures the em box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FontHeightReference {
+    #[default]
+    EmBox,
+    CapHeight,
+    XHeight,
+    IcfBox,
 }
 
 /// The numeral system digits are drawn in ([`CharStyle::digits`]): as typed, or every digit of
-/// the Western, Arabic-Indic and Eastern Arabic-Indic sets drawn in one of them. The text keeps
-/// the digits that were typed; only the glyphs change (like All Caps).
+/// the Western, Arabic-Indic and Eastern Arabic-Indic sets drawn in one of them or in the digits
+/// of an Indic script. The text keeps the digits that were typed; only the glyphs change (like
+/// All Caps).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Digits {
@@ -128,9 +180,68 @@ pub enum Digits {
     Hindi,
     /// Eastern Arabic-Indic digits ۰–۹ (U+06F0–U+06F9), used in Persian and Urdu.
     Farsi,
+    /// Devanagari digits ०–९ (U+0966–U+096F), used in Hindi, Marathi, Nepali and Sanskrit.
+    Devanagari,
+    /// Bengali digits ০–৯ (U+09E6–U+09EF), used in Bengali and Assamese.
+    Bengali,
+    /// Gurmukhi digits ੦–੯ (U+0A66–U+0A6F), used in Punjabi.
+    Gurmukhi,
+    /// Gujarati digits ૦–૯ (U+0AE6–U+0AEF).
+    Gujarati,
+    /// Odia digits ୦–୯ (U+0B66–U+0B6F).
+    Odia,
+    /// Tamil digits ௦–௯ (U+0BE6–U+0BEF).
+    Tamil,
+    /// Telugu digits ౦–౯ (U+0C66–U+0C6F).
+    Telugu,
+    /// Kannada digits ೦–೯ (U+0CE6–U+0CEF).
+    Kannada,
+    /// Malayalam digits ൦–൯ (U+0D66–U+0D6F).
+    Malayalam,
 }
 
 impl Digits {
+    /// Every numeral system, in menu order.
+    pub const ALL: [Digits; 13] = [
+        Digits::Default,
+        Digits::Arabic,
+        Digits::Hindi,
+        Digits::Farsi,
+        Digits::Devanagari,
+        Digits::Bengali,
+        Digits::Gurmukhi,
+        Digits::Gujarati,
+        Digits::Odia,
+        Digits::Tamil,
+        Digits::Telugu,
+        Digits::Kannada,
+        Digits::Malayalam,
+    ];
+
+    /// The name files and commands give this numeral system (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            Digits::Default => "default",
+            Digits::Arabic => "arabic",
+            Digits::Hindi => "hindi",
+            Digits::Farsi => "farsi",
+            Digits::Devanagari => "devanagari",
+            Digits::Bengali => "bengali",
+            Digits::Gurmukhi => "gurmukhi",
+            Digits::Gujarati => "gujarati",
+            Digits::Odia => "odia",
+            Digits::Tamil => "tamil",
+            Digits::Telugu => "telugu",
+            Digits::Kannada => "kannada",
+            Digits::Malayalam => "malayalam",
+        }
+    }
+
+    /// The numeral system [`Digits::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<Digits> {
+        Digits::ALL.into_iter().find(|d| d.id() == id)
+    }
+
     /// The digit `c` is drawn as in this numeral system: the same digit in the chosen set, or `c`
     /// itself when `c` isn't a digit of the Western, Arabic-Indic or Eastern Arabic-Indic set.
     pub fn map(self, c: char) -> char {
@@ -145,6 +256,15 @@ impl Digits {
             Digits::Arabic => '0' as u32,
             Digits::Hindi => 0x660,
             Digits::Farsi => 0x6F0,
+            Digits::Devanagari => 0x966,
+            Digits::Bengali => 0x9E6,
+            Digits::Gurmukhi => 0xA66,
+            Digits::Gujarati => 0xAE6,
+            Digits::Odia => 0xB66,
+            Digits::Tamil => 0xBE6,
+            Digits::Telugu => 0xC66,
+            Digits::Kannada => 0xCE6,
+            Digits::Malayalam => 0xD66,
         };
         char::from_u32(base + value).unwrap_or(c)
     }
@@ -266,6 +386,7 @@ impl Default for CharStyle {
             leading: None,
             tracking: 0.0,
             kerning: None,
+            optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,
             v_scale: 100.0,
@@ -288,11 +409,17 @@ impl Default for CharStyle {
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
             char_direction: None,
+            kashidas: true,
             proportional_metrics: false,
             tate_chu_yoko: false,
+            tcy_up_down: 0.0,
+            tcy_left_right: 0.0,
+            standard_vertical_roman: false,
             small_caps: None,
             digits: Digits::Default,
+            font_height_reference: FontHeightReference::EmBox,
             no_break: false,
+            language: None,
         }
     }
 }
@@ -305,7 +432,8 @@ impl CharStyle {
     /// or scale of 0 or less becomes the default new type takes (12 pt, 100%), a negative leading
     /// becomes Auto, and a value past [`crate::MAX_COORD`] (a baseline shift past it either way)
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
-    /// baseline shift that is not a number becomes 0.
+    /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
+    /// offsets are kept as the baseline shift is.
     pub fn keep_dimensions_in_range(&mut self) {
         let default = Self::default();
         let within = |v: f64, or: f64| if v > 0.0 { v.min(crate::MAX_COORD) } else { or };
@@ -313,7 +441,10 @@ impl CharStyle {
         self.h_scale = within(self.h_scale, default.h_scale);
         self.v_scale = within(self.v_scale, default.v_scale);
         self.leading = self.leading.filter(|l| *l >= 0.0).map(|l| l.min(crate::MAX_COORD));
-        self.baseline_shift = if self.baseline_shift.is_nan() { 0.0 } else { self.baseline_shift.clamp(-crate::MAX_COORD, crate::MAX_COORD) };
+        let shift = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(-crate::MAX_COORD, crate::MAX_COORD) };
+        self.baseline_shift = shift(self.baseline_shift);
+        self.tcy_up_down = shift(self.tcy_up_down);
+        self.tcy_left_right = shift(self.tcy_left_right);
     }
     /// Do the characters draw a stroke (a paint and a positive weight)?
     pub fn has_stroke(&self) -> bool {

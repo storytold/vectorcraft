@@ -15,7 +15,8 @@ pub struct Catalog {
     plurals: HashMap<String, Vec<String>>,
     /// status and error messages without placeholders (`@msg`): English → translation
     messages: HashMap<String, String>,
-    /// status and error messages with `{name}` placeholders (`@msg`), most specific first
+    /// status and error messages with `{name}` placeholders (`@msg`, and each English form of a
+    /// `@msgplural` row), most specific first
     templates: Vec<Template>,
 }
 
@@ -26,14 +27,18 @@ enum Piece {
     Hole(String),
 }
 
-/// A message template (`Couldn't open {name}: {e}`) and its translation.
+/// A message template (`Couldn't open {name}: {e}`) and its translation: one form for `@msg`,
+/// the plural forms for `@msgplural`.
 #[derive(Debug)]
 struct Template {
     pieces: Vec<Piece>,
     /// Bytes of literal text: a template with more of it is the more specific match.
     literal: usize,
-    translation: String,
+    forms: Vec<String>,
 }
+
+/// The placeholder values of a matched message template: placeholder name and value.
+pub type Captures<'p, 'a> = Vec<(&'p str, &'a str)>;
 
 /// Messages longer than this are shown as they are (template matching backtracks).
 const MAX_MESSAGE_LEN: usize = 2000;
@@ -41,7 +46,7 @@ const MAX_MESSAGE_LEN: usize = 2000;
 impl Template {
     /// `None` for a template that can't be matched reliably: no literal text, or two placeholders
     /// in a row (where one ends and the next begins is unknowable).
-    fn parse(source: &str, translation: String) -> Option<Template> {
+    fn parse(source: &str, forms: Vec<String>) -> Option<Template> {
         let mut pieces = Vec::new();
         let mut rest = source;
         while let Some(a) = rest.find('{') {
@@ -59,7 +64,7 @@ impl Template {
             pieces.push(Piece::Text(rest.to_string()));
         }
         let literal = pieces.iter().map(|p| if let Piece::Text(t) = p { t.len() } else { 0 }).sum();
-        (literal > 0).then_some(Template { pieces, literal, translation })
+        (literal > 0).then_some(Template { pieces, literal, forms })
     }
 
     /// The placeholder values if `s` is an instance of this template.
@@ -162,10 +167,14 @@ impl Catalog {
                 }
                 "@msg" => {
                     if src.contains('{') {
-                        c.templates.extend(Template::parse(&src, tr));
+                        c.templates.extend(Template::parse(&src, vec![tr]));
                     } else {
                         c.messages.insert(src, tr);
                     }
+                }
+                "@msgplural" => {
+                    let forms: Vec<String> = tr.split('|').map(str::to_string).collect();
+                    c.templates.extend(src.split('|').filter_map(|english| Template::parse(english, forms.clone())));
                 }
                 _ => {
                     c.contextual.insert(format!("{ctx}\u{1}{src}"), tr);
@@ -189,17 +198,25 @@ impl Catalog {
         self.ids.get(id).map(String::as_str)
     }
 
+    /// [`Catalog::message_forms`] with the first form of the translation.
+    #[cfg(test)]
+    pub fn message<'a>(&self, s: &'a str) -> Option<(&str, Captures<'_, 'a>)> {
+        self.message_forms(s).and_then(|(forms, caps)| Some((forms.first()?.as_str(), caps)))
+    }
+
     /// A status or error message: an exact `@msg` entry, else the first template it is an instance
     /// of, with the placeholder values filled in. The values are returned for the caller to
-    /// translate (a reason after `…: {e}` is often a message of its own).
-    pub fn message<'a>(&self, s: &'a str) -> Option<(&str, Vec<(&str, &'a str)>)> {
+    /// translate (a reason after `…: {e}` is often a message of its own). The translation has one
+    /// form for an `@msg` row and the plural forms of a `@msgplural` row, of which the caller picks
+    /// one by the `{n}` value.
+    pub fn message_forms<'a>(&self, s: &'a str) -> Option<(&[String], Captures<'_, 'a>)> {
         if let Some(tr) = self.messages.get(s) {
-            return Some((tr.as_str(), Vec::new()));
+            return Some((std::slice::from_ref(tr), Vec::new()));
         }
         if s.len() > MAX_MESSAGE_LEN {
             return None;
         }
-        self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.translation.as_str(), caps)))
+        self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.forms.as_slice(), caps)))
     }
 
     /// The plural form `index` of the message whose English forms are `one|other`.

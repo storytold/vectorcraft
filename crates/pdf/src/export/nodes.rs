@@ -1,4 +1,4 @@
-use super::exporter::{address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
+use super::exporter::{UNDECODED, address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
 use super::{
     Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32, Paint, Path, Rect,
     Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
@@ -7,7 +7,7 @@ use super::{
 impl Exporter<'_> {
     /// Opacity mask → luminosity soft mask. Outside the art the backdrop is black (clip) or white;
     /// invert is a white Difference rect on top (luminance is linear, so luma(1 − c) = 1 − luma(c)).
-    fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> krilla::mask::Mask {
+    fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> Option<krilla::mask::Mask> {
         let mut sb = s.stream_builder();
         let mut ms = sb.surface();
         // An opaque backdrop when it matters: white outside the art (no clip), or black for the
@@ -19,15 +19,21 @@ impl Exporter<'_> {
         // and has no inks to overprint.
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
+        let incomplete = self.image_left_out.unwrap_or(false);
+        self.image_left_out = image_left_out.map(|outer| outer || incomplete);
         (self.knockout, self.overprint) = (knockout, overprint);
+        if incomplete {
+            return None;
+        }
         if m.invert {
             ms.push_blend_mode(krilla::blend::BlendMode::Difference);
             cover(&mut ms, page, 255, 1.0);
             ms.pop();
         }
         ms.finish();
-        krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
+        Some(krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity))
     }
 
     /// The children of a group, as the elements of a knockout group when it is one.
@@ -96,7 +102,8 @@ impl Exporter<'_> {
         {
             // A PDF layer: hidden layers and sublayers are written too (their group is off).
             let enclosing = std::mem::replace(&mut self.in_layer, address(n));
-            crate::forms::form(s, Mark::Layer(i), |s| self.node(s, n, page, true));
+            let paper = self.paper;
+            crate::forms::layer_form(s, i, paper, |s| self.node(s, n, page, true));
             self.in_layer = enclosing;
             return;
         }
@@ -143,7 +150,13 @@ impl Exporter<'_> {
         if let Some(m) = mask
             && alpha.is_none()
         {
-            let mask = self.soft_mask(s, m, page);
+            let Some(mask) = self.soft_mask(s, m, page) else {
+                self.knockout = enclosing;
+                for _ in 0..pushes {
+                    s.pop();
+                }
+                return;
+            };
             s.push_mask(mask);
             pushes += 1;
         }
@@ -182,20 +195,56 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => {
-                let colorized = n.extras().colorize.as_deref().and_then(|p| self.colorized_image(im, p, !n.extras().pixelated));
-                self.image(s, im, colorized.or(alpha), n.extras().pixelated)
-            }
+            NodeKind::Image(im) => match n.extras().colorize.as_deref() {
+                Some(p @ Paint::Solid { .. }) => {
+                    if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
+                        if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
+                            self.image(s, im, Some(colorized), n.extras().pixelated);
+                        } else {
+                            self.image_left_out = self.image_left_out.map(|_| true);
+                            self.warn(UNDECODED);
+                        }
+                    } else if self.image_left_out.is_some() {
+                        self.image_left_out = Some(true);
+                        self.warn(super::exporter::UNWRITABLE_IMAGE);
+                    }
+                }
+                _ => self.image(s, im, alpha, n.extras().pixelated),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
                 // instances multiply.
-                let sym = self.doc.symbols.iter().find(|x| &x.name == symbol);
-                let total = sym.map_or(0, |sym| self.symbol_nodes.saturating_add(sym.art.count() as u64));
-                if let Some(sym) = sym.filter(|_| total <= vectorcraft_doc::MAX_SYMBOL_NODES) {
-                    self.symbol_nodes = total;
-                    let mut art = (*sym.art).clone();
-                    art.transform(*xf, false);
-                    self.node(s, &art, page, true);
+                // Placing through 9-slice guides needs room for the most objects it can make
+                // (`NineSliceMap::most_placed`), and the objects it makes count.
+                // A dynamic symbol's instance shows its own appearance changes.
+                let doc = self.doc;
+                if let Some(sym) = doc.symbols.iter().find(|x| &x.name == symbol) {
+                    let changed;
+                    let art: &Node = if n.extras().symbol_overrides.is_empty() {
+                        &sym.art
+                    } else {
+                        changed = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                        &changed
+                    };
+                    let count = art.count() as u64;
+                    let map = doc.symbol_slice_map(symbol, *xf);
+                    let most = map.map_or(count, |m| m.most_placed(art, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let art = match map {
+                            Some(m) => m.place(art, doc),
+                            None => {
+                                let mut a = art.clone();
+                                a.transform(*xf, false);
+                                a
+                            }
+                        };
+                        // As `most_placed`, placed art counts its opacity-mask art.
+                        let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
+                        (art, count)
+                    });
+                    if let Some(art) = placed {
+                        self.node(s, &art, page, true);
+                    }
                 }
             }
             // A gradient mesh is a smooth patch shading where it can be written as one.
@@ -324,11 +373,12 @@ impl Exporter<'_> {
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
-    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`])?
+    /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
+    /// inks ([`Self::perceptual_spot`])?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
-            Paint::Gradient(g) => g.draws_as_pixels(fill),
+            Paint::Gradient(g) => g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill),
             _ => false,
         }
     }

@@ -140,7 +140,6 @@
 	All Artwork Above	Gesamte Grafik darüber
 	All Caps	Großbuchstaben
 	All Categories	Alle Kategorien
-	All colours are within the CMYK gamut	Alle Farben liegen im CMYK-Farbumfang
 	All on Active Artboard	Alles auf der aktiven Zeichenfläche
 	All on Same Layers	Alles auf denselben Ebenen
 	All printer's marks	Alle Druckermarken
@@ -192,7 +191,7 @@ font-technology	Variable	Variabel
 	Apply Paragraph Style	Absatzformat anwenden
 	Apply SVG Filter…	SVG-Filter anwenden…
 	Apply to All	Auf alle anwenden
-	Apply to All ({count} more missing)	Auf alle anwenden ({count} weitere fehlen)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Auf alle anwenden ({n} weitere fehlt)|Auf alle anwenden ({n} weitere fehlen)
 	Arc	Bogen
 	Arc Lower…	Bogen unten…
 	Arc Tool	Bogen-Werkzeug
@@ -487,7 +486,7 @@ font-technology	Variable	Variabel
 	Collect in New Layer	In neuer Ebene sammeln
 	Collect Links in a Separate Folder	Verknüpfungen in separatem Ordner sammeln
 	Color	Farbe
-	Color (,)	Farbe (,)
+	Color (, or Shift+,)	Farbe (, oder Shift+,)
 	Color Adjustments	Farbkorrekturen
 	Color bars	Farbkontrollstreifen
 	Color blindness – Deuteranopia-type	Farbenblindheit – Deuteranopie
@@ -587,7 +586,6 @@ font-technology	Variable	Variabel
 	Convert to sRGB	In sRGB konvertieren
 	Convert to Straight Lines	In gerade Linien umwandeln
 	Convert:	Konvertieren:
-	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
 	Copies:	Kopien:
 	Copy	Kopieren
 	Copy (make a transformed copy)	Kopieren (transformierte Kopie erstellen)
@@ -642,6 +640,13 @@ font-technology	Variable	Variabel
 	Create Report	Bericht erstellen
 	Create Slice	Slice erstellen
 	Create Sub-folders	Unterordner erstellen
+	Clear Selection	Auswahl aufheben
+	Export PDFs As:	PDFs exportieren als:
+	Single File	Einzelne Datei
+	Multiple Files	Mehrere Dateien
+	Format Presets	Formatvorgaben
+	Grid View	Rasteransicht
+	Selected: {n}, Total number of files to export: {m}	Ausgewählt: {n}, Gesamtzahl der zu exportierenden Dateien: {m}
 	Create Text	Text erstellen
 	Create Trim Marks	Schnittmarken erstellen
 	Created	Erstellt
@@ -722,11 +727,23 @@ font-technology	Variable	Variabel
 	Delete Stop	Farbstopp löschen
 	Delete Swatch	Farbfeld löschen
 	Delete Symbol	Symbol löschen
+	Delete the selected symbol?	Ausgewähltes Symbol löschen?
+	Delete the selected symbols?	Ausgewählte Symbole löschen?
+	No unused symbols	Keine nicht verwendeten Symbole
+	Delete Symbols	Symbole löschen
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Mindestens eines der Symbole wird verwendet und kann erst gelöscht werden, wenn seine Instanzen umgewandelt oder gelöscht wurden.
+	Expand Instances	Instanzen umwandeln
+	Delete Instances	Instanzen löschen
+	Yes	Ja
+	No	Nein
 	Delete Tab	Tabulator löschen
 	Delete the graphic style “{name}”?	Grafikstil „{name}“ löschen?
+	Delete Action Sets	Aktionssätze löschen
+	Duplicate Action or Action Set	Aktion oder Aktionssatz duplizieren
+	Delete the action set “{name}” and its actions?	Aktionssatz „{name}“ und seine Aktionen löschen?
+	Delete the selected action sets and their actions?	Ausgewählte Aktionssätze und ihre Aktionen löschen?
 	Delete Theme	Thema löschen
 	Delete theme	Thema löschen
-	Delete these {count} swatches and groups?	Diese {count} Farbfelder und Gruppen löschen?
 	Delete these {n} graphic styles?	Diese {n} Grafikstile löschen?
 	Delete this saved preset	Diese gespeicherte Vorgabe löschen
 	Delete this {n} graphic style?	Diesen {n} Grafikstil löschen?
@@ -758,7 +775,6 @@ font-technology	Variable	Variabel
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
-	Discarded {} recovered document(s)	{} wiederhergestellte(s) Dokument(e) verworfen
 	Discord	Discord
 	Discretionary Hyphen	Bedingter Trennstrich
 	Discretionary Ligatures	Bedingte Ligaturen
@@ -814,13 +830,14 @@ font-technology	Variable	Variabel
 	Double Right Quotation Marks	Doppelte schließende Anführungszeichen
 	Double-click	Doppelklicken
 	Double-click to edit the characters' paint	Doppelklicken, um die Farbe der Zeichen zu bearbeiten
+	Click to edit	Klicken, um zu bearbeiten
+	Double-click to edit	Doppelklicken, um zu bearbeiten
 	Double-click to insert	Doppelklicken zum Einfügen
 	Double-click to rename	Doppelklicken zum Umbenennen
 	Double-click to target the contents	Doppelklicken, um den Inhalt als Ziel auszuwählen
 	Download	Herunterladen
 	Download:	Download:
 	Downloaded {what}	{what} heruntergeladen
-	Downloaded {} file(s)	{} Datei(en) heruntergeladen
 	Drag	Ziehen
 	Drag a handle	An einem Griff ziehen
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Ziehen Sie Grafiken hierher oder wählen Sie sie aus und klicken Sie auf +. Halten Sie Alt gedrückt, um mehrere Objekte als ein Asset hinzuzufügen.
@@ -886,9 +903,10 @@ font-technology	Variable	Variabel
 	Edit Selection	Auswahl bearbeiten
 	Edit Selection…	Auswahl bearbeiten…
 	Edit Symbol	Symbol bearbeiten
+	Exit Symbol Editing Mode	Symbolbearbeitungsmodus beenden
 	Edit Text	Text bearbeiten
 	Edit the applied effect, or add another one?	Den angewendeten Effekt bearbeiten oder einen weiteren hinzufügen?
-	Edit the selected point's colour in the Color panel	Die Farbe des ausgewählten Punkts im Bedienfeld „Farbe“ bearbeiten
+	Edit the point	Punkt bearbeiten
 	Edit the stop	Farbstopp bearbeiten
 	Edit Theme	Thema bearbeiten
 	Edit theme	Thema bearbeiten
@@ -920,8 +938,6 @@ font-technology	Variable	Variabel
 	Embed page thumbnails	Seitenminiaturen einbetten
 	Embedded	Eingebettet
 	Embedded Image	Eingebettetes Bild
-	Embedded {n} image(s)	{n} Bild(er) eingebettet
-	Embedded {n} image(s); {missing} missing: relink them first	{n} Bild(er) eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
 	Emulsion:	Schichtseite:
 	En Dash	Halbgeviertstrich
 	En Space	Halbgeviert-Leerzeichen
@@ -996,6 +1012,16 @@ font-technology	Variable	Variabel
 	Delete Export Preset	Exportvorgabe löschen
 	Export Presets	Exportvorgaben
 	Save Export Preset	Exportvorgabe speichern
+	Export Export Presets	Exportvorgaben exportieren
+	Export Preset…	Vorgabe exportieren…
+	Import Export Presets	Exportvorgaben importieren
+	Import Preset…	Vorgabe importieren…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` ist der Name einer Vorgabe aus document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	keine Exportvorgabe `{n}` (siehe document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	keine gespeicherten Exportvorgaben zum Exportieren (integrierte in `names` angeben)
+@msg	not an export presets file (format `{_1}`)	keine Exportvorgabendatei (Format `{_1}`)
+@msg	not an export presets file: {e}	keine Exportvorgabendatei: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Ebene exportieren
 	Export Selection	Auswahl exportieren
 	All in One Folder	Alles in einem Ordner
@@ -1039,10 +1065,8 @@ font-technology	Variable	Variabel
 	Export Transparency Flattener Presets	Vorgaben für Transparenzreduzierung exportieren
 	Export {count} Selected	{count} ausgewählte exportieren
 	Export:	Exportieren:
-	Exported {count} file(s) to {folder}	{count} Datei(en) nach {folder} exportiert
 	Exported {path}	{path} exportiert
 	Exported {what}	{what} exportiert
-	Exported {what} with {} note(s): {first}	{what} mit {} Hinweis(en) exportiert: {first}
 	Exporting {}	{} wird exportiert
 	Export…	Exportieren…
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
@@ -1170,6 +1194,7 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert
 file-filter	PDF-compatible .ai	PDF-kompatible .ai
 file-filter	VectorCraft Template	VectorCraft-Vorlage
@@ -1183,6 +1208,7 @@ file-filter	Templates	Vorlagen
 	Flip Row Order	Zeilenreihenfolge umkehren
 	Flip Vertical	Vertikal spiegeln
 	Float in Window	In eigenem Fenster anzeigen
+	Float All in Windows	Alle in eigenen Fenstern anzeigen
 	Focal Fill	Fläche im Fokus
 	Focal Stroke	Kontur im Fokus
 	Folder	Ordner
@@ -1236,6 +1262,9 @@ file-filter	Templates	Vorlagen
 	Hide Live Paint Gaps	Lücken beim interaktiven Malen ausblenden
 	Select Fills	Flächen auswählen
 	Select Strokes	Konturen auswählen
+	Paint Fills	Flächen malen
+	Paint Strokes	Konturen malen
+	Highlight	Hervorheben
 	Gaussian Blur…	Gaußscher Weichzeichner…
 	General	Allgemein
 	General › Placement › X	Allgemein › Platzierung › X
@@ -1246,6 +1275,7 @@ file-filter	Templates	Vorlagen
 	Get Preferences	Voreinstellungen abrufen
 	Get Text Range	Textbereich abrufen
 	Global	Global
+	Global Adjust	Globale Anpassung
 	Global Brush Dimensions	Globale Pinselabmessungen
 	Global Process Color	Globale Prozessfarbe
 	Global Process Color, CMYK	Globale Prozessfarbe, CMYK
@@ -1260,7 +1290,7 @@ file-filter	Templates	Vorlagen
 	GPL palettes keep solid colours only, as RGB.	GPL-Paletten enthalten nur einfarbige Farben, als RGB.
 	GPU Performance	GPU-Leistung
 	Gradient	Verlauf
-	Gradient (.)	Verlauf (.)
+	Gradient (. or Shift+.)	Verlauf (. oder Shift+.)
 	Gradient across stroke	Verlauf quer zur Kontur
 	Gradient along stroke	Verlauf entlang der Kontur
 	Gradient and Mesh Resolution:	Auflösung für Verläufe und Gitter:
@@ -1342,6 +1372,10 @@ file-filter	Templates	Vorlagen
 	Hard Light	Hartes Licht
 	Hard Mix	Hart mischen
 	Harmony Rules:	Harmonieregeln:
+	Segmented color wheel	Segmentierter Farbkreis
+	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
+	Show segmented color wheel	Segmentierten Farbkreis anzeigen
+	Show color bars	Farbbalken anzeigen
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
 	Height:	Höhe:
@@ -1447,6 +1481,8 @@ file-filter	Templates	Vorlagen
 	Objects on Path	Objekte auf Pfad
 	Attach	Anhängen
 	Objects on Path Options	Optionen für Objekte auf Pfad
+	Pivot:	Drehpunkt:
+	Rotate:	Drehung:
 	Objects on Path Tool	Objekte-auf-Pfad-Werkzeug
 	Attach Objects on Path	Objekte an Pfad anhängen
 	Expand Objects on Path	Objekte auf Pfad umwandeln
@@ -1550,6 +1586,7 @@ file-filter	Templates	Vorlagen
 	In Tangent Handles	Eingehende Tangentengriffe
 	In the selected objects	In den ausgewählten Objekten
 	Inches	Zoll
+	Include Artboard Fill	Zeichenflächenfüllung einschließen
 	Include Blacks with CMY:	Schwarz mit CMY einschließen:
 	Include Bleed	Anschnitt einschließen
 	Include Cmy Blacks	CMY-Schwarz einschließen
@@ -1613,7 +1650,7 @@ file-filter	Templates	Vorlagen
 	Keep the pasted color as a new swatch with a numbered name.	Die eingefügte Farbe als neues Farbfeld mit nummeriertem Namen behalten.
 	Keep this row's colors (exclude)	Farben dieser Zeile beibehalten (ausschließen)
 	Keep:	Beibehalten:
-	Kerning (0 = Auto)	Kerning (0 = Auto)
+	Kerning	Kerning
 	Keyboard Increment	Schritte per Tastatur
 	Keyboard Shortcut Conflicts	Konflikte bei Tastaturbefehlen
 	Keyboard Shortcut Set	Tastaturbefehlssatz
@@ -1673,6 +1710,8 @@ file-filter	Templates	Vorlagen
 	Large Thumbnail View	Große Miniaturansicht
 	Large Thumbnails	Große Miniaturen
 	Lasso Tool	Lasso-Werkzeug
+	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
+	Enclosing Lasso	Umschließendes Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -1824,6 +1863,7 @@ file-filter	Templates	Vorlagen
 	Manually	Manuell
 	Mark as trapped	Als überfüllt kennzeichnen
 	Mark Older Files as [Converted] When Opened	Ältere Dateien beim Öffnen als [Konvertiert] kennzeichnen
+	Use System Defaults for Edit Original	Systemstandards für „Original bearbeiten“ verwenden
 	Marker…	Markierung…
 	Marks	Marken
 	Marks and Bleed	Marken und Anschnitt
@@ -1886,6 +1926,7 @@ file-filter	Templates	Vorlagen
 	Modify	Ändern
 	Mojikumi	Mojikumi
 	Insert Kashidas	Kashidas einfügen
+	Kashidas	Kashidas
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
@@ -1951,6 +1992,8 @@ file-filter	Templates	Vorlagen
 	Roundness:	Rundheit:
 	Fixed	Fest
 	Pressure	Druck
+	Tilt	Neigung
+	Bearing	Richtung
 	Shape:	Form:
 	Bristle Length:	Borstenlänge:
 	Bristle Density:	Borstendichte:
@@ -2013,6 +2056,10 @@ file-filter	Templates	Vorlagen
 	New Without Dialog	Neu ohne Dialogfeld
 	New Workspace	Neuer Arbeitsbereich
 	New Workspace…	Neuer Arbeitsbereich…
+	New Toolbar…	Neue Werkzeugleiste…
+	New Toolbar	Neue Werkzeugleiste
+	Show Toolbar	Werkzeugleiste einblenden
+	List Toolbars	Werkzeugleisten auflisten
 	New {kind} Style…	Neues {kind}format…
 	New…	Neu…
 	Next	Weiter
@@ -2158,8 +2205,8 @@ file-filter	Templates	Vorlagen
 	Open Recent Files	Zuletzt geöffnete Dateien
 	Open Swatch Library	Farbfeldbibliothek öffnen
 	Open the URL in the web browser	Die URL im Webbrowser öffnen
-	Opened with {} note(s): {}	Mit {} Hinweis(en) geöffnet: {}
 	Open…	Öffnen…
+	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
@@ -2217,8 +2264,7 @@ file-filter	Templates	Vorlagen
 	Package	Verpacken
 	Package collects a saved document with its linked files and fonts.	„Verpacken“ sammelt ein gespeichertes Dokument mit seinen verknüpften Dateien und Schriften.
 	Package created	Paket erstellt
-	Packaged {n} file(s) in {folder} {note}	{n} Datei(en) in {folder} verpackt{note}
-	Packaged {n} file(s){note}	{n} Datei(en) verpackt{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} Datei in {folder} verpackt {note}|{n} Dateien in {folder} verpackt {note}
 	Package…	Verpacken…
 	Page	Seite
 	Page information	Seiteninformationen
@@ -2313,6 +2359,8 @@ diagnostics	ui	Oberfläche
 	Plates	Platten
 	Platform:	Plattform:
 	Play Current Selection	Aktuelle Auswahl abspielen
+	Save Actions…	Aktionen speichern…
+	Load Actions…	Aktionen laden…
 	Plug-in Info	Plug-in-Informationen
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -2407,6 +2455,20 @@ mark-style	Japanese	Japanisch
 	Arabic	Arabisch
 	Hindi	Hindi
 	Farsi	Farsi
+digits	Devanagari	Devanagari
+digits	Bengali	Bengalisch
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gujarati
+digits	Odia	Oriya
+digits	Tamil	Tamil
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malayalam
+	Proportional Lining	Proportionale Versalziffern
+	Position:	Position:
+	Default Position	Standardposition
+	Numerator	Zähler
+	Denominator	Nenner
 	Proportional Oldstyle	Proportionale Mediävalziffern
 	Pucker & Bloat…	Zusammenziehen und aufblasen…
 	Pucker Tool	Zusammenziehen-Werkzeug
@@ -2541,9 +2603,11 @@ mark-style	Japanese	Japanisch
 	Stop	Stoppen
 	Searching…	Suche läuft…
 	Not found	Nicht gefunden
-	{folders} folder(s) and {files} file(s) searched	{folders} Ordner und {files} Datei(en) durchsucht
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} Ordner übersprungen, etwa Ordner anderer Apps und des Systems sowie versteckte Ordner
-	{count} folder(s) or file(s) couldn't be read	{count} Ordner oder Datei(en) konnten nicht gelesen werden
+	{folders} and {files} searched	{folders} und {files} durchsucht
+@plural	{n} folder|{n} folders	{n} Ordner|{n} Ordner
+@plural	{n} file|{n} files	{n} Datei|{n} Dateien
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	{n} Ordner übersprungen, etwa Ordner anderer Apps und des Systems sowie versteckte Ordner|{n} Ordner übersprungen, etwa Ordner anderer Apps und des Systems sowie versteckte Ordner
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} Ordner oder Datei konnte nicht gelesen werden|{n} Ordner oder Dateien konnten nicht gelesen werden
 	The search stopped at its limit: search a smaller folder.	Die Suche hat ihr Limit erreicht: Durchsuchen Sie einen kleineren Ordner.
 	Copy only fonts you own or are licensed to install.	Kopieren Sie nur Schriften, die Ihnen gehören oder für deren Installation Sie eine Lizenz haben.
 	VectorCraft copies the fonts to {folder}.	VectorCraft kopiert die Schriften nach {folder}.
@@ -2562,9 +2626,6 @@ mark-style	Japanese	Japanisch
 	Relink	Neu verknüpfen
 	Relink Linked Files to the Document	Verknüpfte Dateien neu mit dem Dokument verknüpfen
 	Relink to Folder…	Mit Ordner neu verknüpfen…
-	Relinked {n} image(s)	{n} Bild(er) neu verknüpft
-	Relinked {n} image(s); not in that folder: {}	{n} Bild(er) neu verknüpft; nicht in diesem Ordner: {}
-	Relinked {} image(s)	{} Bild(er) neu verknüpft
 	Relink…	Neu verknüpfen…
 	Find Linked Files	Verknüpfte Dateien suchen
 	Find Linked Files in Folder…	Verknüpfte Dateien in Ordner suchen…
@@ -2610,6 +2671,8 @@ mark-style	Japanese	Japanisch
 	Replace Spine	Achse ersetzen
 	Replace Symbol	Symbol ersetzen
 	Replace With Font	Durch Schrift ersetzen
+	Replace With Font From	Ersetzende Schrift aus
+	System	System
 	Replaces the saved preset of that name.	Ersetzt die gespeicherte Vorgabe dieses Namens.
 	Replace…	Ersetzen…
 	Require a password to open the document	Kennwort zum Öffnen des Dokuments verlangen
@@ -2646,7 +2709,6 @@ mark-style	Japanese	Japanisch
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
 	Restored documents open unsaved: save them to keep them.	Wiederhergestellte Dokumente werden ungespeichert geöffnet: Speichern Sie sie, um sie zu behalten.
-	Restored {} recovered document(s): save them to keep them	{} wiederhergestellte(s) Dokument(e) geöffnet: Speichern Sie sie, um sie zu behalten
 	Restrict printing, editing and other tasks	Drucken, Bearbeiten und andere Aufgaben einschränken
 	Reverse Front to Back	Von vorne nach hinten umkehren
 	Reverse Gradient	Verlauf umkehren
@@ -2706,11 +2768,13 @@ mark-style	Japanese	Japanisch
 	Save a Copy	Kopie speichern
 	Save a Copy…	Kopie speichern…
 	Save As	Speichern unter
+	Save As Preset…	Als Vorgabe speichern…
 	Save as PDF…	Als PDF speichern…
 	Save as preset:	Als Vorgabe speichern:
 	Save as Template	Als Vorlage speichern
 	Save as Template…	Als Vorlage speichern…
 	Save As…	Speichern unter…
+	Save Changes	Änderungen speichern
 	Save changes to {name}	Änderungen an {name} speichern
 	Save color group to Swatch panel	Farbgruppe im Bedienfeld „Farbfelder“ speichern
 	Save Colors as Swatches	Farben als Farbfelder speichern
@@ -2814,7 +2878,6 @@ mark-style	Japanese	Japanisch
 	Saved Views	Gespeicherte Ansichten
 	Saved {n} files beside {path}	{n} Dateien neben {path} gespeichert
 	Saved {path}	{path} gespeichert
-	Saved {path} with {} note(s): {first}	{path} mit {} Hinweis(en) gespeichert: {first}
 	Saves the current bars, toolbar and panel layout.	Speichert das aktuelle Layout von Leisten, Werkzeugleiste und Bedienfeldern.
 	Save…	Speichern…
 	Saving	Wird gespeichert
@@ -2945,6 +3008,7 @@ mark-style	Japanese	Japanisch
 	Shape Mode	Formmodus
 	Shape Modes:	Formmodi:
 	Shape Properties:	Formeigenschaften:
+	Shape Properties	Formeigenschaften
 	Shaper Tool	Shaper-Werkzeug
 	Shapes	Formen
 	Shear	Verbiegen
@@ -3210,6 +3274,7 @@ effect	Points	Punkte
 	Swap Fill and Stroke (Shift+X)	Fläche und Kontur vertauschen (Shift+X)
 	Swap start and end arrowheads	Pfeilspitzen an Anfang und Ende vertauschen
 	Swap the selected object for the file, keeping its place and transform	Das ausgewählte Objekt durch die Datei ersetzen; Position und Transformation bleiben erhalten
+	Stylistic Alternates	Stilistische Varianten
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
 	Swatch Conflicts	Farbfeldkonflikte
@@ -3244,6 +3309,7 @@ effect	Points	Punkte
 	Graphic	Grafik
 	Show all open documents	Alle geöffneten Dokumente anzeigen
 	Symbol Instance	Symbolinstanz
+	Link Block Series	Reihe verketteter Blöcke
 	Symbol Libraries	Symbol-Bibliotheken
 	Symbol Screener Tool	Symbol-transparent-gestalten-Werkzeug
 	Symbol Scruncher Tool	Symbol-stauchen-Werkzeug
@@ -3262,10 +3328,15 @@ effect	Points	Punkte
 	Tabs	Tabulatoren
 	Tabular Lining	Tabellarische Versalziffern
 	Tabular Oldstyle	Tabellarische Mediävalziffern
+	Titling Alternates	Titelschriftvarianten
 	Target	Ziel
 	Target Contents	Inhalt als Ziel auswählen
 	Target:	Ziel:
 	Tate-chu-yoko	Tate-chu-yoko
+	Tate-chu-yoko Settings…	Tate-chu-yoko-Einstellungen…
+	Tate-chu-yoko Settings	Tate-chu-yoko-Einstellungen
+	Up/Down:	Oben/Unten:
+	Left/Right:	Links/Rechts:
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/Farbstich…
 	Template	Vorlage
@@ -3274,6 +3345,7 @@ effect	Points	Punkte
 	Templates…	Vorlagen…
 	Text Displayed in Cell:	In der Zelle angezeigter Text:
 	Text Export Options	Textexportoptionen
+	Text Fill & Stroke Color	Flächen- und Konturfarbe des Texts
 	Text Fill Color	Flächenfarbe des Texts
 	Text Import Options	Textimportoptionen
 	Text Stroke Color	Konturfarbe des Texts
@@ -3446,7 +3518,6 @@ effect	Points	Punkte
 	Update Link	Verknüpfung aktualisieren
 	Update Links	Verknüpfungen aktualisieren
 	Update Modified Links	Geänderte Verknüpfungen aktualisieren
-	Updated {} image(s)	{} Bild(er) aktualisiert
 	UPPERCASE	GROSSBUCHSTABEN
 	URL:	URL:
 	Use 	Über 
@@ -3577,12 +3648,12 @@ effect	Points	Punkte
 	Zoom Tool	Zoom-Werkzeug
 	Zoom with Mouse Wheel	Mit Mausrad zoomen
 	Scrub Numeric Fields by Dragging	Zahlenfelder durch Ziehen ändern
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} Datei(en) in {folder} {note}. Paketordner anzeigen?
-	{count} linked file(s) not found	{count} verknüpfte Datei(en) nicht gefunden
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} Datei in {folder} {note}. Paketordner anzeigen?|{n} Dateien in {folder} {note}. Paketordner anzeigen?
+@plural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
 	fonts not copied: {fonts}	nicht kopierte Schriften: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} verknüpfte(s) Bild(er) wurde(n) seit dem Speichern dieses Dokuments geändert. Die neuen Versionen anzeigen?
-	{count} more rules: Export writes every one.	{count} weitere Regeln: Der Export schreibt alle.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} unbenannte Objekte ausgelassen: Benennen Sie sie oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} verknüpftes Bild wurde seit dem Speichern dieses Dokuments geändert. Die neue Version anzeigen?|{n} verknüpfte Bilder wurden seit dem Speichern dieses Dokuments geändert. Die neuen Versionen anzeigen?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} weitere Regel: Der Export schreibt sie.|{n} weitere Regeln: Der Export schreibt alle.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} unbenanntes Objekt ausgelassen: Benennen Sie es oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.|{n} unbenannte Objekte ausgelassen: Benennen Sie sie oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.
 	{effect} is already applied	{effect} ist bereits angewendet
 	{format} Options	{format}-Optionen
 	{kind} Gradient	Verlauf ({kind})
@@ -3605,6 +3676,8 @@ imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} Element|{n} Elemente
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Farbtabelle ({n} Farbe)|Farbtabelle ({n} Farben)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Diesen {n} Grafikstil löschen?|Diese {n} Grafikstile löschen?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Diesen {n} Pinsel löschen?|Diese {n} Pinsel löschen?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	{n} Farbfeld oder Gruppe löschen?|Diese {n} Farbfelder und Gruppen löschen?
 @plural	{n} Layer|{n} Layers	{n} Ebene|{n} Ebenen
 @plural	{n} Object|{n} Objects	{n} Objekt|{n} Objekte
 @plural	{n} area highlighted|{n} areas highlighted	{n} Bereich hervorgehoben|{n} Bereiche hervorgehoben
@@ -3748,6 +3821,7 @@ theme	Appearance	Erscheinungsbild
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
 @msg	select some type first	wählen Sie zuerst Text aus
+@msg	kerning must be a number, "auto", or "optical"	Kerning muss eine Zahl, „auto“ oder „optical“ sein
 @msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
 @msg	the selection has no gradient stroke	die Auswahl hat keinen Konturverlauf
 @msg	the selection has no pattern fill	die Auswahl hat kein Flächenmuster
@@ -3778,12 +3852,12 @@ theme	Appearance	Erscheinungsbild
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	die Ebenen der Datei wurden nicht gelesen ({_1}): sie wird als ihre Seite in einer Ebene geöffnet
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	die Ebenen der Datei wurden nicht aus ihren Bearbeitungsdaten gelesen ({_1}): sie stammen aus ihrem PDF-Teil
 @msg	`to` must be "corner" or "smooth"	`to` muss "corner" oder "smooth" sein
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` muss "emBox", "capHeight", "xHeight" oder "icfBox" sein
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-Dateien sind RGB oder Graustufen: colorModel rgb oder gray
 @msg	Blend colors: select at least three objects with filled colours	Farben angleichen: Wählen Sie mindestens drei Objekte mit Flächenfarbe aus
 @msg	Combine Slices: the slices have no bounds	Slices kombinieren: Die Slices haben keine Begrenzung
 @msg	Convert to Artboards: selection has no area	In Zeichenflächen umwandeln: Die Auswahl hat keine Fläche
 @msg	Convert to Shape: no rectangles or ellipses selected	In Form umwandeln: keine Rechtecke oder Ellipsen ausgewählt
-@msg	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
 @msg	Copied the script report	Skriptbericht kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
 @msg	Couldn't copy to the system clipboard: {e}	In die Systemzwischenablage konnte nicht kopiert werden: {e}
@@ -3800,13 +3874,11 @@ theme	Appearance	Erscheinungsbild
 @msg	direct-select anchor points to cut at (not the end points of open paths)	wählen Sie mit der Direktauswahl die Ankerpunkte aus, an denen geschnitten werden soll (nicht die Endpunkte offener Pfade)
 @msg	Divide Objects Below: select a path	Darunterliegende Objekte aufteilen: Wählen Sie einen Pfad aus
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
-@msg	Downloaded {_1} file(s)	{_1} Datei(en) heruntergeladen
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
 @msg	Expand: no brush strokes selected	Umwandeln: keine Pinselkonturen ausgewählt
 @msg	Expand: no gradient fills	Umwandeln: keine Verlaufsflächen
 @msg	Expand: nothing to expand	Umwandeln: nichts umzuwandeln
-@msg	Exported {count} file(s) to {folder}	{count} Datei(en) nach {folder} exportiert
 @msg	Exported {path}	{path} exportiert
 @msg	Flatten Transparency: select objects to flatten	Transparenz reduzieren: Wählen Sie die zu reduzierenden Objekte aus
 @msg	Flatten Transparency: {e}	Transparenz reduzieren: {e}
@@ -3823,14 +3895,12 @@ theme	Appearance	Erscheinungsbild
 @msg	No saved views (View → New View…)	Keine gespeicherten Ansichten (Ansicht → Neue Ansicht…)
 @msg	Offset Path: select paths	Pfad verschieben: Wählen Sie Pfade aus
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Pfad verschieben: Der Versatz lässt von den ausgewählten Pfaden nichts übrig (ein Versatz nach innen, der größer ist als die Formen)
-@msg	Opened with {_1} note(s): {_2}	Mit {_1} Hinweis(en) geöffnet: {_2}
 @msg	Opened {url}	{url} geöffnet
 @msg	Outline Stroke: no stroked paths selected	Konturlinie: keine Pfade mit Kontur ausgewählt
 @msg	PDF settings are not an object	die PDF-Einstellungen sind kein Objekt
 @msg	PDF security settings are not an object	die PDF-Sicherheitseinstellungen sind kein Objekt
 @msg	PDF writer error: {0}	Fehler beim Schreiben der PDF-Datei: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	{n} Datei(en) in {folder} verpackt{note}
-@msg	Packaged {n} file(s){note}	{n} Datei(en) verpackt{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} Datei in {folder} verpackt ({note})|{n} Dateien in {folder} verpackt ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
 @msg	Release Guides: no guides	Hilfslinien zurückwandeln: keine Hilfslinien
 @msg	Release: no layer to put the rectangle in	Zurückwandeln: keine Ebene, die das Rechteck aufnehmen könnte
@@ -3864,6 +3934,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
 @msg	`preserve` must be an object	`preserve` muss ein Objekt sein
+@msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
@@ -3988,6 +4059,7 @@ theme	Appearance	Erscheinungsbild
 @msg	cannot split an open path at its end point	ein offener Pfad kann nicht an seinem Endpunkt geteilt werden
 @msg	closing needs three anchors	zum Schließen sind drei Ankerpunkte nötig
 @msg	check an asset to export	markieren Sie ein Asset für den Export
+@msg	check an artboard to export	markieren Sie eine Zeichenfläche für den Export
 @msg	check a layer to export	wählen Sie eine Ebene für den Export
 @msg	select the art to export first	wählen Sie zuerst das zu exportierende Bildmaterial aus
 @msg	choice must be "merge" or "add", not `{choice}`	choice muss "merge" oder "add" sein, nicht `{choice}`
@@ -4036,6 +4108,8 @@ theme	Appearance	Erscheinungsbild
 @msg	join needs open paths	zum Zusammenfügen sind offene Pfade nötig
 @msg	lang must be one of {_1}	lang muss einer der folgenden Werte sein: {_1}
 @msg	layers can't be wrap objects	Ebenen können keine Umflussobjekte sein
+@msg	line {line}: value for `{var}` must be true or false	Zeile {line}: der Wert für `{var}` muss true oder false sein
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	Zeile {line}: der Wert für `{var}` ist länger als {MAX_GRAPH_CSV} Byte
 @msg	missing `folder`	`folder` fehlt
 @msg	missing `id` (see plugin.list)	`id` fehlt (siehe plugin.list)
 @msg	missing `name`	`name` fehlt
@@ -4078,6 +4152,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no document	kein Dokument
 @msg	no document open	kein Dokument geöffnet
 @msg	no effect applied yet	noch kein Effekt angewendet
+@msg	no Pathfinder operation applied yet	noch keine Pathfinder-Operation angewendet
 @msg	no effect at index {k}	kein Effekt bei Index {k}
 @msg	no end record	kein Endeintrag
 @msg	no file manager here	hier gibt es keinen Dateimanager
@@ -4121,6 +4196,14 @@ theme	Appearance	Erscheinungsbild
 @msg	no selection bounds	keine Auswahlbegrenzung
 @msg	no slice selected	kein Slice ausgewählt
 @msg	no such action	keine solche Aktion
+@msg	no such action set	kein solcher Aktionssatz
+@msg	the action sets changed; nothing was deleted	die Aktionssätze haben sich geändert; nichts wurde gelöscht
+@msg	no action set to save	kein Aktionssatz zum Speichern
+@msg	not an action set file	keine Aktionssatzdatei
+@msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
+@msg	the action set file holds more than 1,000 actions	die Aktionssatzdatei enthält mehr als 1.000 Aktionen
+@msg	the action set file needs a later version of VectorCraft	die Aktionssatzdatei erfordert eine neuere Version von VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	eine Aktion in der Aktionssatzdatei hat mehr als 10.000 Schritte
 @msg	no such anchor	kein solcher Ankerpunkt
 @msg	no such artboard	keine solche Zeichenfläche
 @msg	the artboard is locked	die Zeichenfläche ist gesperrt
@@ -4130,6 +4213,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no such perspective grid preset	keine solche Vorgabe für Perspektivenraster
 @msg	no such recent file	keine solche zuletzt geöffnete Datei
 @msg	no such recent font	keine solche zuletzt verwendete Schrift
+@msg	some text is hidden or locked, so its font wasn't replaced	einige Texte sind ausgeblendet oder gesperrt, daher wurde ihre Schrift nicht ersetzt
 @msg	no such saved selection	keine solche gespeicherte Auswahl
 @msg	no such segment	kein solches Segment
 @msg	no such spine point	kein solcher Achsenpunkt
@@ -4146,6 +4230,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no user library folder here	hier gibt es keinen Ordner für Benutzerbibliotheken
 @msg	no user workspace `{from}`	kein Benutzerarbeitsbereich `{from}`
 @msg	node {_1} is not text	Knoten {_1} ist kein Text
+@msg	node {_1} is on a locked artboard	Knoten {_1} liegt auf einer gesperrten Zeichenfläche
 @msg	not a DXF drawing	keine DXF-Zeichnung
 @msg	not a VectorCraft file: {0}	keine VectorCraft-Datei: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	kein VectorCraft-Tastaturbefehlssatz (`overrides` fehlt)
@@ -4224,6 +4309,8 @@ theme	Appearance	Erscheinungsbild
 @msg	a clipping path can't be attached to a path	ein Schnittpfad kann nicht an einen Pfad angehängt werden
 @msg	select a stroke with a variable width	wählen Sie eine Kontur mit variabler Breite aus
 @msg	select a symbol instance	wählen Sie eine Symbolinstanz aus
+@msg	select instances of one symbol	wählen Sie Instanzen eines einzigen Symbols aus
+@msg	a symbol can't hold an instance of itself	ein Symbol kann keine Instanz von sich selbst enthalten
 @msg	select an Image Trace object	wählen Sie ein Bildnachzeichner-Objekt aus
 @msg	could not decode image: {0}	das Bild konnte nicht dekodiert werden: {0}
 @msg	image is empty	das Bild ist leer
@@ -4348,7 +4435,12 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown workspace (one of {_1})	unbekannter Arbeitsbereich (einer von {_1})
 @msg	unsupported: {0}	nicht unterstützt: {0}
 @msg	variables are locked	die Variablen sind gesperrt
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	mehr als {MAX_CSV_ROWS} Datensätze: „Datensätze importieren“ liest höchstens {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	mehr als {MAX_CSV_COLS} Variablen: „Datensätze importieren“ liest höchstens {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	die Variablen, die kein Text sind, wurden ausgelassen: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	ein neues Dokument liest diese Variablen nicht mit ihrer Art zurück: {names}
+@msg	a new document refuses this file because of these variables: {names}	ein neues Dokument lehnt diese Datei wegen dieser Variablen ab: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	die Kopfzeile `{header}` für `{name}` würde als die Variable `{other}` gelesen: Benennen Sie eine der beiden um
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` und `options.{key}: {inner}` widersprechen sich: Option nur einmal angeben
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	Dateien der Version {0} können nicht komprimiert werden: Erst Version {COMPRESSED_SINCE} und neuer öffnen komprimierte Dateien
 @msg	width and height are at least 1 pixel	Breite und Höhe betragen mindestens 1 Pixel
@@ -4364,9 +4456,6 @@ theme	Appearance	Erscheinungsbild
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` ist {size} Byte groß (Grenze {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} wird bereits von {_2} verwendet
 @msg	{_1} is reserved by the system	{_1} ist vom System reserviert
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} verknüpfte Datei(en) können hier nicht gelesen werden: Ihre Vorschauen werden angezeigt
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} Bild(er) konnten nicht dekodiert werden und werden als durchgekreuzte Rahmen angezeigt
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
 @msg	{_1}: not saved, so not closed	{_1}: nicht gespeichert, daher nicht geschlossen
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-Bit-Bitmaps können nicht gelesen werden
 @msg	{command} didn't create an object	{command} hat kein Objekt erstellt
@@ -4385,6 +4474,7 @@ theme	Appearance	Erscheinungsbild
 @msg	{status} ({e})	{status} ({e})
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}
 @msg	Couldn't paste from the clipboard: {e}	Aus der Zwischenablage konnte nicht eingefügt werden: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde geschlossen
 @msg	Saved {path} with {_1} note(s): {first}	{path} mit {_1} Hinweis(en) gespeichert: {first}
 @msg	Exported {what} with {_1} note(s): {first}	{what} mit {_1} Hinweis(en) exportiert: {first}
 @msg	Exported {what}	{what} exportiert
@@ -4394,15 +4484,34 @@ theme	Appearance	Erscheinungsbild
 @msg	Exporting {_1}	{_1} wird exportiert
 @msg	Packaging {_1}	{_1} wird verpackt
 @msg	Placing {_1}	{_1} wird platziert
+@msg	Pasting	Wird eingefügt
 @msg	Saving recovery data for {_1}	Wiederherstellungsdaten für {_1} werden gespeichert
-@msg	Discarded {_1} recovered document(s)	{_1} wiederhergestellte(s) Dokument(e) verworfen
-@msg	Restored {_1} recovered document(s): save them to keep them	{_1} wiederhergestellte(s) Dokument(e) geöffnet: Speichern Sie sie, um sie zu behalten
-@msg	Embedded {n} image(s); {missing} missing: relink them first	{n} Bild(er) eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
-@msg	Embedded {n} image(s)	{n} Bild(er) eingebettet
-@msg	Relinked {_1} image(s)	{_1} Bild(er) neu verknüpft
-@msg	Relinked {n} image(s)	{n} Bild(er) neu verknüpft
-@msg	Relinked {n} image(s); not in that folder: {_1}	{n} Bild(er) neu verknüpft; nicht in diesem Ordner: {_1}
-@msg	Updated {_1} image(s)	{_1} Bild(er) aktualisiert
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Mit {n} Hinweis geöffnet: {first}|Mit {n} Hinweisen geöffnet: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} mit {n} Hinweis gespeichert: {first}|{path} mit {n} Hinweisen gespeichert: {first}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} Bild eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu|{n} Bilder eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
+@msgplural	Embedded {n} image|Embedded {n} images	{n} Bild eingebettet|{n} Bilder eingebettet
+@msgplural	Relinked {n} image|Relinked {n} images	{n} Bild neu verknüpft|{n} Bilder neu verknüpft
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} Bild neu verknüpft; nicht in diesem Ordner: {names}|{n} Bilder neu verknüpft; nicht in diesem Ordner: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} Bild neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}|{n} Bilder neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} Bild aktualisiert|{n} Bilder aktualisiert
+@msgplural	Replaced {n} image|Replaced {n} images	{n} Bild ersetzt|{n} Bilder ersetzt
+@msgplural	Broke {n} link|Broke {n} links	{n} Verknüpfung aufgehoben|{n} Verknüpfungen aufgehoben
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} Verknüpfung aufgehoben; {missing} können nicht gelesen werden: Verknüpfen oder aktualisieren Sie sie zuerst|{n} Verknüpfungen aufgehoben; {missing} können nicht gelesen werden: Verknüpfen oder aktualisieren Sie sie zuerst
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} verknüpfte Datei kann hier nicht gelesen werden: Ihre Vorschau wird angezeigt|{n} verknüpfte Dateien können hier nicht gelesen werden: Ihre Vorschauen werden angezeigt
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} Bild konnte nicht dekodiert werden und wird als durchgekreuzter Rahmen angezeigt|{n} Bilder konnten nicht dekodiert werden und werden als durchgekreuzte Rahmen angezeigt
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} verknüpftes Bild wurde auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neue Version|{n} verknüpfte Bilder wurden auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} auf dem Datenträger geänderte verknüpfte Datei aktualisiert|{n} auf dem Datenträger geänderte verknüpfte Dateien aktualisiert
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} mit {n} Hinweis exportiert: {first}|{what} mit {n} Hinweisen exportiert: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} Schriftdatei liegt jetzt in {folder}|{n} Schriftdateien liegen jetzt in {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei liegt jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}|{n} Schriftdateien liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} Schrift ist hier nicht verfügbar: Ihr Text wird in einer anderen Schrift angezeigt|{n} Schriften sind hier nicht verfügbar: Ihr Text wird in einer anderen Schrift angezeigt
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS von {n} Objekt kopiert|CSS von {n} Objekten kopiert
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} Datei heruntergeladen|{n} Dateien heruntergeladen
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} Datei nach {folder} exportiert|{n} Dateien nach {folder} exportiert
+@msg	All colors are within the CMYK gamut	Alle Farben liegen im CMYK-Farbumfang
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} Farbe liegt außerhalb des CMYK-Farbumfangs|{n} Farben liegen außerhalb des CMYK-Farbumfangs
 @msg	Unembedded to {_1}	Einbettung aufgehoben, gespeichert unter {_1}
 @msg	Reset {_1}	{_1} zurückgesetzt
 @msg	Sent to {_1}	An {_1} gesendet
@@ -4428,8 +4537,17 @@ theme	Appearance	Erscheinungsbild
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	dies ist kein Logo aus flächigen Farben ({_1} % seiner einfarbigen Bereiche entsprechen wenigen flächigen Farben), daher würde der Modus „Flaches Logo“ seine Verläufe in Flecken zerlegen: Verwenden Sie stattdessen den Modus „Farbe“
 @msg	`{what}` closes nothing	`{what}` schließt nichts
 @msg	`{what}` closes something it didn't open	`{what}` schließt etwas, das es nicht geöffnet hat
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	eine Maske über mehrere Ebenen wird in jeder Ebene, die sie abdeckt, zu einer Schnittgruppe
+@msg	a graph's records don't end where they should: its art was read as it is	die Datensätze eines Diagramms enden nicht dort, wo sie sollten: seine Grafik wurde so gelesen, wie sie ist
+@msg	`{w}` takes no operands	`{w}` nimmt keine Operanden
+@msg	a wraparound group is inside a compound path	eine Textumfluss-Gruppe liegt in einem zusammengesetzten Pfad
 @msg	a path has too many points	ein Pfad hat zu viele Punkte
+@msg	it ends inside a group or compound path	es endet innerhalb einer Gruppe oder eines zusammengesetzten Pfads
 @msg	it ends inside a layer	es endet innerhalb einer Ebene
+@msg	it ends inside a multi-layer mask	es endet innerhalb einer ebenenübergreifenden Maske
+@msg	a multi-layer mask's operators are out of order	die Operatoren einer ebenenübergreifenden Maske stehen in falscher Reihenfolge
+@msg	a multi-layer mask needs one clipping path	eine ebenenübergreifende Maske braucht genau einen Schnittpfad
+@msg	a group crosses a multi-layer mask	eine Gruppe überschneidet eine ebenenübergreifende Maske
 @msg	it has art outside its layers	es enthält Grafik außerhalb seiner Ebenen
 @msg	it has more than {MAX_NODES} objects	es enthält mehr als {MAX_NODES} Objekte
 @msg	it has no layers	es enthält keine Ebenen
@@ -4440,11 +4558,13 @@ theme	Appearance	Erscheinungsbild
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
 @msg	an image VectorCraft can't read was left out	ein Bild, das VectorCraft nicht lesen kann, wurde ausgelassen
+@msg	graphs come in as plain art, without their data or settings	Diagramme werden als einfache Grafik übernommen, ohne ihre Daten und Einstellungen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	der PDF-Teil konnte nicht gelesen werden ({_1}): die Datei wurde aus ihren Bearbeitungsdaten geöffnet
 @msg	No fonts are missing in this document	In diesem Dokument fehlen keine Schriften
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	VectorCraft durchsucht keine Ordner anderer Apps oder des Systems: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	VectorCraft durchsucht nicht den Ordner „Shared“ oder „Public“ unter „Users“: {path}
@@ -4454,9 +4574,6 @@ theme	Appearance	Erscheinungsbild
 @msg	every search thread stopped on an internal error (please report this bug)	alle Such-Threads wurden mit einem internen Fehler beendet (bitte melden Sie diesen Fehler)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	der Schriftenordner von VectorCraft ist hier nicht festgelegt: Die Desktop-App und vectorcraft-cli legen ihn fest
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
-@msg	{n} font file(s) are now in {folder}	{n} Schriftdatei(en) liegen jetzt in {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei(en) liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} Schrift(en) sind hier nicht verfügbar: Ihr Text wird in einer anderen Schrift angezeigt
 @msg	not a file	keine Datei
 @msg	not a font file	keine Schriftdatei
 @msg	that document is no longer open	dieses Dokument ist nicht mehr geöffnet
@@ -4465,7 +4582,6 @@ theme	Appearance	Erscheinungsbild
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} Bild(er) neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -4506,6 +4622,13 @@ theme	Appearance	Erscheinungsbild
 	Insert Inline Symbol	Inline-Symbol einfügen
 	ICF Top/Right	ICF oben/rechts
 	ICF Bottom/Left	ICF unten/links
+	Show Font Height Options	Optionen für Schrifthöhe einblenden
+	Hide Font Height Options	Optionen für Schrifthöhe ausblenden
+	Set Font Height Reference	Bezugsgröße der Schrifthöhe festlegen
+	Em Box	Geviert
+	Cap Height	Versalhöhe
+	x-Height	x-Höhe
+	ICF Box	ICF-Rahmen
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
@@ -4560,8 +4683,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Imported library {name}	Bibliothek {name} importiert
 # Linked files changed on disk.
 	Update Changed Links	Geänderte Verknüpfungen aktualisieren
-	{count} linked image(s) changed on disk. Show the new versions?	{count} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert. Neue Versionen anzeigen?
-@msg	Updated {_1} linked file(s) changed on disk	{_1} auf dem Datenträger geänderte verknüpfte Datei(en) aktualisiert
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} verknüpftes Bild wurde auf dem Datenträger geändert. Neue Version anzeigen?|{n} verknüpfte Bilder wurden auf dem Datenträger geändert. Neue Versionen anzeigen?
 # Window: the system's title bar (Windows, Linux).
 	System Title Bar	Systemtitelleiste
 # Brush Options: Scatter, Art and Pattern brushes.
@@ -4620,6 +4742,11 @@ theme	Appearance	Erscheinungsbild
 @msg	the PCX file is cut short	die PCX-Datei ist unvollständig
 @msg	the PCX file's header is damaged	der Dateikopf der PCX-Datei ist beschädigt
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-Dateien mit {bits}-Bit-Pixeln in {planes} Ebenen können nicht gelesen werden
+@msg	the Pixar file is cut short	die Pixar-Datei ist unvollständig
+@msg	the Pixar file's header is damaged	der Dateikopf der Pixar-Datei ist beschädigt
+@msg	the Pixar file's image data is damaged	die Bilddaten der Pixar-Datei sind beschädigt
+@msg	the JPEG 2000 file can't be read	die JPEG-2000-Datei kann nicht gelesen werden
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	die JPEG-2000-Datei enthält einen nicht unterstützten Farbraum oder JPX-Inhalt
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
@@ -4975,6 +5102,11 @@ effect	Soft	Weich
 	Import Data Sets…	Datensätze importieren…
 	Export Data Sets…	Datensätze exportieren…
 	Load Variable Library…	Variablenbibliothek laden…
+	Save Variable Library…	Variablenbibliothek speichern…
+@msg	a variable library holds text variables, and the document has none	eine Variablenbibliothek enthält Textvariablen, und das Dokument hat keine
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	die Variable `{name}` kann nicht in einer Variablenbibliothek gespeichert werden: Benennen Sie sie so um, dass sie mit einem Buchstaben oder `_` beginnt, ohne Leerzeichen oder andere Symbole als `-`, `_` und `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	der Datensatz `{name}` enthält ein Steuerzeichen, das eine Variablenbibliothek nicht enthalten kann
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	der Datensatz `{name}` beginnt oder endet mit Leerraum, den eine Variablenbibliothek nicht enthalten kann
 	Make Graph Dynamic	Diagramm dynamisch machen
 	Batch…	Stapelverarbeitung…
 	Source Folder:	Quellordner:
@@ -4985,8 +5117,10 @@ effect	Soft	Weich
 @msg	Batch: {count} processed, {failed} failed	Stapelverarbeitung: {count} verarbeitet, {failed} fehlgeschlagen
 @msg	choose a destination folder	wählen Sie einen Zielordner
 @msg	choose a source folder	wählen Sie einen Quellordner
+@msg	columns {first} and {column} both name the variable `{name}`	die Spalten {first} und {column} nennen beide die Variable `{name}`
 @msg	open a document with data sets	öffnen Sie ein Dokument mit Datensätzen
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
+@msg	no bound object reports a value (locked objects and embedded images report none)	kein gebundenes Objekt liefert einen Wert (gesperrte Objekte und eingebettete Bilder liefern keinen)
 @msg	the action has no steps	die Aktion hat keine Schritte
 
 # User Interface › Accent Color
@@ -5014,6 +5148,11 @@ effect	Soft	Weich
 	Export Type:	Exporttyp:
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
+@msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	no such function key	keine solche Funktionstaste
+@msg	no such color	keine solche Farbe
+@msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
+@msg	more than one action is named “{_1}”	mehr als eine Aktion heißt „{_1}“
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
 	Smudge Stick…	Wischstift…
 	Smudge Stick	Wischstift
@@ -5097,7 +5236,9 @@ effect	Soft	Weich
 	Effect Gallery	Effekt-Galerie
 	Filters	Filter
 	Select artwork to apply effects	Wählen Sie Grafik aus, um Effekte anzuwenden
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	die Variablen und Datensätze der Datei wurden nicht gelesen (Variablen: {variables}, Datensätze: {data_sets}): Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	die Variablenbibliothek der Datei wurde nur teilweise gelesen (übersprungene Einträge: {_1}): Das Bedienfeld „Variablen“ listet den Rest auf
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	die Variablenbibliothek der Datei konnte nicht gelesen werden: Das Bedienfeld „Variablen“ listet sie nicht auf
+@msg	a variable of unknown kind can't be bound to objects	eine Variable unbekannter Art kann nicht an Objekte gebunden werden
 # Select by Color (select.color)
 	Select by Color	Nach Farbe auswählen
 	Move Anchor Point	Ankerpunkt verschieben
@@ -5123,6 +5264,7 @@ effect	Soft	Weich
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
+	Geometric Patterns	Geometrische Muster
 	Ease In	Langsam starten
 	Ease Out	Langsam enden
 	Ease In Out	Langsam starten und enden
@@ -5150,13 +5292,13 @@ effect	Soft	Weich
 	Slope:	Steigung:
 axis	X Axis	X-Achse
 axis	Y Axis	Y-Achse
-@msg	Packaged {n} file(s) in {folder}	{n} Datei(en) in {folder} verpackt
-@msg	Packaged {n} file(s) {note}	{n} Datei(en) verpackt {note}
-@msg	Packaged {n} file(s)	{n} Datei(en) verpackt
-	Packaged {n} file(s)	{n} Datei(en) verpackt
-	Packaged {n} file(s) in {folder}	{n} Datei(en) in {folder} verpackt
-	Packaged {n} file(s) {note}	{n} Datei(en) verpackt {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} Datei(en) in {folder}. Paketordner anzeigen?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} Datei in {folder} verpackt|{n} Dateien in {folder} verpackt
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} Datei verpackt {note}|{n} Dateien verpackt {note}
+@msgplural	Packaged {n} file|Packaged {n} files	{n} Datei verpackt|{n} Dateien verpackt
+@plural	Packaged {n} file|Packaged {n} files	{n} Datei verpackt|{n} Dateien verpackt
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} Datei in {folder} verpackt|{n} Dateien in {folder} verpackt
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} Datei verpackt {note}|{n} Dateien verpackt {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} Datei in {folder}. Paketordner anzeigen?|{n} Dateien in {folder}. Paketordner anzeigen?
 	Clockwise	Im Uhrzeigersinn
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Feines Rauschen verbirgt Streifen in der Verlaufsfläche
@@ -5182,17 +5324,30 @@ axis	Y Axis	Y-Achse
 	New Set	Neuer Satz
 	Set Options…	Satzoptionen…
 	Set Options	Satzoptionen
+	Action Options…	Aktionsoptionen…
+	Action Options	Aktionsoptionen
+	Rename Action	Aktion umbenennen
+	New Action…	Neue Aktion…
+	New Action	Neue Aktion
+	Create New Action	Neue Aktion erstellen
+	Play Action	Aktion abspielen
+	Action Set:	Aktionssatz:
+	Function Key:	Funktionstaste:
+	Record	Aufzeichnen
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung
+	Leave Out of Global Edit	Von globaler Bearbeitung ausschließen
 	Match	Übereinstimmung
 	On Artboards	Auf Zeichenflächen
 	All Artboards	Alle Zeichenflächen
 	Include Objects On Canvas	Objekte auf der Leinwand einschließen
-	Result(s): {count}	Ergebnis(se): {count}
+@plural	Result: {n}|Results: {n}	Ergebnis: {n}|Ergebnisse: {n}
 @msg	select one object	wählen Sie ein Objekt aus
-@msg	Global Edit works on paths, compound paths and symbol instances	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden und Symbolinstanzen
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
+@msg	Global Edit is off	Globale Bearbeitung ist nicht aktiv
+@msg	only an object of the Global Edit other than the one it started from can be left out	nur ein Objekt der globalen Bearbeitung außer dem, mit dem sie begonnen hat, kann ausgeschlossen werden
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
 	Add to Symbols	Zu Symbolen hinzufügen
 	Basic Shapes	Grundformen
@@ -5440,3 +5595,280 @@ anchor	Points:	Punkte:
 	CMYK Images	CMYK-Bilder
 	Grayscale Images	Graustufenbilder
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` muss spotColors, colorEffects, rgbImages, cmykImages oder grayImages sein
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Punktfarbe aus Grafik
+	Basic Character Formats	Grundlegende Zeichenformate
+	Case	Großschreibung
+@msg	{label} must be a number	{label} muss eine Zahl sein
+@msg	{label} must be a number of at least 0.1	{label} muss eine Zahl von mindestens 0,1 sein
+	Advanced Character Formats	Erweiterte Zeichenformate
+	Horizontal Scale	Horizontale Skalierung
+	Vertical Scale	Vertikale Skalierung
+@msg	{label} must be a number from {min} to {max}	{label} muss eine Zahl von {min} bis {max} sein
+	Character Color	Zeichenfarbe
+	OpenType Features	OpenType-Funktionen
+	Stylistic Sets	Stilsätze
+@msg	features lists at most {max} tags	features enthält höchstens {max} Tags
+@msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
+@msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Duplex…
+	Duotone	Duplex
+	Print Ink Fixes…	Druckfarbkorrekturen…
+	Print Ink Fixes	Druckfarbkorrekturen
+	Inks	Druckfarben
+	Tone 1	Druckfarbe 1
+	Tone 2	Druckfarbe 2
+	Tone 3	Druckfarbe 3
+	Tone 4	Druckfarbe 4
+	Curve	Kurve
+	Reset to Linear	Auf linear zurücksetzen
+	Reset to Inverse	Auf umgekehrt zurücksetzen
+	Skip Objects with Spot Colors	Objekte mit Volltonfarben auslassen
+	Ink Limit	Farbauftragsgrenze
+	Exclude Pure Black	Reines Schwarz ausnehmen
+	Remove White Overprint	Überdrucken von Weiß entfernen
+	Overprint Black	Schwarz überdrucken
+	Text Only	Nur Text
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geben Sie `inkLimit`, `removeWhiteOverprint` oder `overprintBlack` an
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Druckfarbkorrekturen wirken in CMYK-Dokumenten: Wählen Sie zuerst Datei › Dokumentfarbmodus › CMYK-Farbe
+@msg	`{key}` must be 0..{max}	`{key}` muss 0..{max} sein
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Ähnlichstes Farbfeld suchen…
+	Find Nearest Swatch	Ähnlichstes Farbfeld suchen
+	Apply Nearest Swatch	Ähnlichstes Farbfeld anwenden
+	Select objects to find the swatches nearest their colors.	Wählen Sie Objekte aus, um die Farbfelder zu finden, die ihren Farben am nächsten kommen.
+@msg	select objects or give `color`	wählen Sie Objekte aus oder geben Sie `color` an
+@msg	`color` is not a colour	`color` ist keine Farbe
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Ecken-Werkzeug
+	Slide Anchor Along Path	Ankerpunkt entlang des Pfads verschieben
+	Set Corners	Ecken festlegen
+	Remove Corners	Ecken entfernen
+	Corners selected: {count}	Ausgewählte Ecken: {count}
+	Apply to Selected Anchors	Auf ausgewählte Ankerpunkte anwenden
+@msg	`radius` must be from 0 to 1000000 pt	`radius` muss von 0 bis 1000000 pt sein
+@msg	`t` must be a number from -0.98 to 0.98	`t` muss eine Zahl von -0.98 bis 0.98 sein
+@msg	choose anchors where two sides meet at an angle: only those take a corner	Ankerpunkte wählen, an denen zwei Seiten im Winkel aufeinandertreffen: nur diese können eine Ecke bekommen
+@msg	give `anchor`, the index of the anchor to slide	`anchor` angeben, den Index des zu verschiebenden Ankerpunkts
+@msg	that anchor can't slide: an end of an open path has nowhere to go	dieser Ankerpunkt lässt sich nicht verschieben: das Ende eines offenen Pfads kann nirgendwohin
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Gemeinsame-Kante-Werkzeug
+	Merge Shared Edge	Gemeinsame Kante zusammenfügen
+	Keep Shared Points Together	Gemeinsame Punkte zusammenhalten
+	Shared Edges	Gemeinsame Kanten
+	Coincidence:	Übereinstimmung:
+@msg	`a` and `b` must be two different paths	`a` und `b` müssen zwei verschiedene Pfade sein
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` muss von 0.25 bis 200 pt sein
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` muss von 0 bis 3 pt sein
+@msg	`follow` must be "average", "a" or "b"	`follow` muss "average", "a" oder "b" sein
+@msg	the paths have nothing to merge there	die Pfade haben hier nichts zusammenzufügen
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Text aufteilen
+	Combine Point Text	Punkttext zusammenfügen
+	Join Point Text	Punkttext verbinden
+	Remove Breaks	Umbrüche entfernen
+	Split Text at Cursor	Text an der Einfügemarke teilen
+	Set Alignment, Keep Position	Ausrichtung festlegen, Position beibehalten
+	Reset Text Transform	Texttransformation zurücksetzen
+	Replace Missing Fonts…	Fehlende Schriften ersetzen…
+	Replace Missing Fonts	Fehlende Schriften ersetzen
+	Remove Line Breaks	Zeilenumbrüche entfernen
+	Remove Paragraph Breaks	Absatzumbrüche entfernen
+	Break Text into Lines	Text in Zeilen aufteilen
+	Break Text into Paragraphs	Text in Absätze aufteilen
+	Break Text into Words	Text in Wörter aufteilen
+	Break Text into Glyphs	Text in Glyphen aufteilen
+	Reset Text Transform and Scale	Texttransformation und Skalierung zurücksetzen
+	Set Alignment, Keep Position:	Ausrichtung festlegen, Position beibehalten:
+	Break Text into:	Text aufteilen in:
+	Split at Cursor	An Einfügemarke teilen
+	Reset Transform	Transformation zurücksetzen
+	Shift-click: break into paragraphs	Shift-Klick: in Absätze aufteilen
+	Alt-click: reset the horizontal scale too	Alt-Klick: auch die horizontale Skalierung zurücksetzen
+breakText	Lines	Zeilen
+breakText	Words	Wörter
+breakText	Glyphs	Glyphen
+@msg	Click in type with a Type tool to split it	Klicken Sie mit einem Text-Werkzeug in Text, um ihn zu teilen
+@msg	Too many type objects to change at once	Zu viele Textobjekte, um sie auf einmal zu ändern
+@msg	Too many pieces to make at once	Zu viele Teile, um sie auf einmal zu erstellen
+@msg	Select horizontal point or area type whose text fits	Wählen Sie horizontalen Punkt- oder Flächentext aus, dessen Text hineinpasst
+@msg	Nothing to split at the cursor	An der Einfügemarke gibt es nichts zu teilen
+@msg	Select two or more one-line point type objects on one baseline to combine	Wählen Sie zwei oder mehr einzeilige Punkttextobjekte auf einer Grundlinie aus, um sie zusammenzufügen
+@msg	Select two or more one-line point type objects to join	Wählen Sie zwei oder mehr einzeilige Punkttextobjekte aus, um sie zu verbinden
+@msg	No line breaks to remove	Keine Zeilenumbrüche zu entfernen
+@msg	No paragraph breaks to remove	Keine Absatzumbrüche zu entfernen
+@msg	Too many breaks to remove at once	Zu viele Umbrüche, um sie auf einmal zu entfernen
+@msg	Select point type	Wählen Sie Punkttext aus
+@msg	The point type is aligned that way already	Der Punkttext ist bereits so ausgerichtet
+@msg	The point type has no transform to reset	Der Punkttext hat keine Transformation zum Zurücksetzen
+@msg	No fonts are missing	Es fehlen keine Schriften
+@msg	the replacement font is not available	die Ersatzschrift ist nicht verfügbar
+@msg	missing `align`	`align` fehlt
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` muss lines, paragraphs, words oder glyphs sein, nicht {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` muss "line" oder "paragraph" sein, nicht {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` muss "left", "center" oder "right" sein, nicht {other}
+	File + Number	Datei + Nummer
+	File + Data Set Name	Datei + Datensatzname
+	Data Set Name	Datensatzname
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` muss `fileNumber`, `fileDataSetName` oder `dataSetName` sein
+@msg	no free data set file name in destination folder	Kein freier Dateiname für den Datensatz im Zielordner
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Pfadeffekte
+	Reverse Direction	Richtung umkehren
+	Align to Corners and Ends	An Ecken und Enden ausrichten
+	Count	Anzahl
+	Max Count	Höchstanzahl
+	Start Length	Startlänge
+	Start Percent	Start in Prozent
+	Start Shape	Startform
+	End Length	Endlänge
+	End Percent	Ende in Prozent
+	End Shape	Endform
+	By Count	Nach Anzahl
+	By Distance	Nach Abstand
+	Both	Beide
+	Shorter Than Length	Kürzer als Länge
+	Anchors	Ankerpunkte
+	Dashes to Geometry	Striche in Geometrie
+	Dashes to Geometry…	Striche in Geometrie…
+	Add Anchors	Ankerpunkte hinzufügen
+	Add Anchors…	Ankerpunkte hinzufügen…
+	Smooth Anchors	Ankerpunkte glätten
+	Smooth Anchors…	Ankerpunkte glätten…
+	Simplify Anchors	Ankerpunkte vereinfachen
+	Simplify Anchors…	Ankerpunkte vereinfachen…
+	Split at Anchors	An Ankerpunkten teilen
+	Split at Anchors…	An Ankerpunkten teilen…
+	Extend Path…	Pfad verlängern…
+	Close Path…	Pfad schließen…
+	Retract Handles…	Griffe einziehen…
+	Dash 1	Strich 1
+	Gap 1	Lücke 1
+	Dash 2	Strich 2
+	Gap 2	Lücke 2
+	Dash 3	Strich 3
+	Gap 3	Lücke 3
+	Dash 4	Strich 4
+	Gap 4	Lücke 4
+	Dash 5	Strich 5
+	Gap 5	Lücke 5
+
+@msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+
+@msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
+@msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel
+@msg	no pattern named `{choice}`	kein Muster mit dem Namen `{choice}`
+	Delete the selected brushes?	Ausgewählte Pinsel löschen?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
+	Remove Strokes	Konturen entfernen
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Anordnungswerkzeuge
+	Arrange in Grid…	In Raster anordnen…
+	Arrange in Grid	In Raster anordnen
+	Swap Objects	Objekte vertauschen
+	Swap Objects and Sizes	Objekte und Größen vertauschen
+	Replace with Top Object…	Durch oberstes Objekt ersetzen…
+	Replace with Top Object	Durch oberstes Objekt ersetzen
+	Set Size of Each…	Größe einzeln festlegen…
+	Set Size of Each	Größe einzeln festlegen
+@msg	select exactly two objects	wählen Sie genau zwei Objekte aus
+@msg	give `width` or `height`	geben Sie `width` oder `height` an
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Überlappende Objekte gruppieren
+@msg	too many objects selected (at most 20000)	zu viele Objekte ausgewählt (höchstens 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	In Striche aufteilen…
+	Divide into Dashes	In Striche aufteilen
+	Dash:	Strich:
+	Gap:	Abstand:
+	Fit to Corners and Ends	An Ecken und Enden anpassen
+	Remove Gaps	Lücken entfernen
+@msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
+@msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Striche in Pfade umwandeln
+@msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Dokumentwerkzeuge
+	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
+@msg	there is no clock here	hier gibt es keine Uhr
+@msg	there is no clock here: give `time` (Unix seconds)	hier gibt es keine Uhr: geben Sie `time` an (Unix-Sekunden)
+@msg	the document has never been saved: give `folder`	das Dokument wurde nie gespeichert: geben Sie `folder` an
+@msg	every numbered name for the copy is taken	alle nummerierten Namen für die Kopie sind vergeben
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Neue Symbole aus Ebenen
+	Convert Layers to Symbols	Ebenen in Symbole umwandeln
+@msg	{id} is no top-level layer	{id} ist keine Ebene der obersten Stufe
+	Marathi	Marathi
+	Gujarati	Gujarati
+	Bengali	Bengalisch
+	Punjabi	Punjabi
+	Tamil	Tamil
+	Telugu	Telugu
+	Kannada	Kannada
+	Malayalam	Malayalam
+	Odia	Oriya
+	Urdu	Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} und neuer (Version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Alle geöffneten Dokumente als PDF exportieren
+	Export All Open Documents as SVG	Alle geöffneten Dokumente als SVG exportieren
+@msgplural	Exported {n} document|Exported {n} documents	{n} Dokument exportiert|{n} Dokumente exportiert
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} Dokument exportiert; {title} wurde nicht geschrieben: {error}|{n} Dokumente exportiert; {title} wurde nicht geschrieben: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Symboltyp:
+	Dynamic Symbol	Dynamisches Symbol
+	Static Symbol	Statisches Symbol
+	Symbol Instance Appearance	Aussehen der Symbolinstanz
+	Reset Symbol Instance	Symbolinstanz zurücksetzen
+@msg	type must be static or dynamic, not {v}	type muss static oder dynamic sein, nicht {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` ist ein statisches Symbol: Stellen Sie zuerst den Symboltyp auf „Dynamisch“ ein
+@msg	path must be a list of child indices	path muss eine Liste von Kindindizes sein
+@msg	no object at path {shown} in the symbol's art	kein Objekt am Pfad {shown} in der Grafik des Symbols
+@msg	give fill, stroke, opacity and/or blend	geben Sie fill, stroke, opacity und/oder blend an
+@msg	pass newName, registration, exportType, nineSlice and/or type	geben Sie newName, registration, exportType, nineSlice und/oder type an
+	Text Flow	Textfluss
+	By Rows	Nach Zeilen
+	By Columns	Nach Spalten
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Zufällige Deckkraft…
+	Randomize Opacity	Zufällige Deckkraft
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Startwert:
+@msg	`min` is greater than `max`	`min` ist größer als `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Objekte sortieren…
+	Sort Objects	Objekte sortieren
+	Sort By:	Sortieren nach:
+	Apply To:	Anwenden auf:
+	Area	Fläche
+	X Position	X-Position
+	Y Position	Y-Position
+	Stacking Order	Stapelreihenfolge
+	Small to Large	Von klein nach groß
+	Large to Small	Von groß nach klein
+	Distribute Evenly	Gleichmäßig verteilen
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	Farbfeldlegende erstellen
+	Create Swatch Legend…	Farbfeldlegende erstellen…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textwerkzeuge
+	Text Tweaker…	Text-Tweaker…
+	Text Tweaker	Text-Tweaker
+	Attribute:	Attribut:
+	From:	Von:
+	To:	Bis:
+	Bow	Bogen
+	Spike	Spitze
+	Skip Spaces	Leerzeichen überspringen
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon

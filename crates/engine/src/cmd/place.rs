@@ -20,6 +20,8 @@
 //! - An RTF file becomes area type with its character and paragraph formatting ([`rtf`]).
 //! - A Word document (`.docx`) becomes area type with the character and paragraph formatting its
 //!   styles and direct formatting give ([`docx`]).
+//! - A Word 97-2003 document (`.doc`) becomes area type the same way, its main text read from its
+//!   compound file, with a warning for each kind of content left out ([`doc`]).
 //! - A VectorCraft document placed from a file with Link (the default) becomes a placed document:
 //!   one locked object showing the artboard `page`, linked to the file and read again when it
 //!   changes ([`document`]); without Link, an editable copy of its art.
@@ -30,10 +32,11 @@
 //! `place` tool) with several files, which emits one `file.place` per click or drag.
 
 pub(crate) mod adopt;
+mod doc;
 pub(crate) mod document;
 pub(crate) mod docx;
 mod rtf;
-mod text;
+pub(super) mod text;
 
 use std::sync::Arc;
 
@@ -169,6 +172,15 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
         }
         return Ok(Loaded { name, format: &docx::FORMAT, art: Art::Text(story), natural: TEXT_FRAME, warnings: vec![], link: None, board: None });
     }
+    // A Word 97-2003 document is recognized by its name or by its compound file's WordDocument
+    // stream.
+    if doc::is_doc(src.name, &src.bytes) {
+        let (story, warnings) = doc::import(&src.bytes, cmd)?;
+        if story.plain_text().trim().is_empty() {
+            return Err(bad(cmd, format!("`{name}` has no text to place")));
+        }
+        return Ok(Loaded { name, format: &doc::FORMAT, art: Art::Text(story), natural: TEXT_FRAME, warnings, link: None, board: None });
+    }
     let format = fileio::detect(src.name, &src.bytes)
         .ok_or_else(|| bad(cmd, format!("can't place `{name}`: not a format VectorCraft reads (see document.formats)")))?;
     let page = match p.get("page") {
@@ -258,7 +270,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
         (art_of(layer_art(&layers)), frame)
     } else {
         let n = doc.artboards.len();
-        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} page(s)")))?;
+        let pages = if n == 1 { "page" } else { "pages" };
+        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} {pages}")))?;
         // An EPS file's art is whatever lies on the artboard.
         (on_artboard(&symbols, &layers, board), crop.then_some(board))
     };
@@ -271,7 +284,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
 /// one) as art to place: clipped to the box `opts.crop` names, or (`bounding`) the bounds of its
 /// art; read with `opts.password`. Only the page placed is read. A .ai saved without PDF
 /// compatibility is read from its editing data, as it opens, and placed as an EPS is: the art on
-/// artboard `page`, its linked images found from its folder.
+/// artboard `page`, its linked images found from its folder. So is page 1 of a .ai or PDF whose
+/// PDF part can't be read.
 pub(crate) fn pdf_art(
     src: &str,
     bytes: &[u8],
@@ -293,8 +307,7 @@ pub(crate) fn pdf_art(
     {
         read = Err(e);
     }
-    let (mut doc, warnings, alone) =
-        fileio::page_or_editing_data(src, bytes, o.password.as_deref(), read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
+    let (mut doc, warnings, alone) = fileio::page_or_editing_data(src, bytes, &o, index, read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
     if alone {
         // Linked images show their files, found from its folder.
         super::links::resolve(&mut doc, path, false, false);
@@ -306,7 +319,8 @@ pub(crate) fn pdf_art(
     // whatever lies on the artboard.
     let index = if alone { index } else { 0 };
     let n = doc.artboards.len();
-    let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} page(s)")))?;
+    let pages = if n == 1 { "page" } else { "pages" };
+    let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} {pages}")))?;
     let pages = if alone { &layers[..] } else { layers.get(index..=index).unwrap_or_default() };
     let nodes = on_artboard(&symbols, pages, board);
     let clip = (!bounding).then_some(board);

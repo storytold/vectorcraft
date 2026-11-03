@@ -29,7 +29,7 @@ use super::edit::{outermost, selected_roots};
 use super::paint::paint_from;
 use super::pathops::{Beside, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_value, f64_or, finite_numbers, has_doc, id_param, ids_param,
+    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_value, f64_or, finite_numbers, has_doc, id_param, named_ids,
     number_or, point_param, str_param, switch_or,
 };
 
@@ -220,7 +220,7 @@ fn has_multi_or_ids(s: &Session) -> std::result::Result<(), String> {
 }
 
 fn root_ids(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    let ids = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let ids = match named_ids(p)? {
         Some(v) => v,
         None => selected_roots(s)?,
     };

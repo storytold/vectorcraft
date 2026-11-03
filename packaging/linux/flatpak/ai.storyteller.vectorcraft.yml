@@ -17,6 +17,7 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: vectorcraft
 finish-args:
+  - --filesystem=xdg-data/ArtCraft/versions:ro
   # Keep identical to ai.storyteller.vectorcraft.bundle.yml (the release bundle); comments there.
   - --share=ipc
   - --socket=wayland

@@ -182,11 +182,14 @@ fn any_hardware(kinds: &[DeviceType]) -> bool {
     kinds.iter().any(|k| *k != DeviceType::Cpu)
 }
 
-/// The largest texture side to ask the device for, which bounds the window's surface: the
-/// adapter's own limit when it is above eframe's `default` (8192 px), so a window larger than
-/// that keeps its surface (#1459). Never below `default`, which is what was asked for before.
-pub fn surface_limit(default: u32, adapter: u32) -> u32 {
-    default.max(adapter)
+/// The limits to ask the device for: what eframe `asked` for, lowered to what the `adapter` offers
+/// wherever it offers less, so a GPU short of one of them still gets a device (#2105). The texture
+/// side, which bounds the window's surface, is the adapter's own, above eframe's 8192 px when the
+/// adapter allows more, so a window larger than that keeps its surface (#1459).
+pub fn device_limits(asked: wgpu::Limits, adapter: &wgpu::Limits) -> wgpu::Limits {
+    let mut limits = asked.or_worse_values_from(adapter);
+    limits.max_texture_dimension_2d = adapter.max_texture_dimension_2d;
+    limits
 }
 
 /// One adapter, as [`adapter_order`] sees it.

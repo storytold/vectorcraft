@@ -69,7 +69,6 @@ pub(super) struct Saved {
     pub(super) blend: BlendMode,
     pub(super) mask: Option<Arc<MaskSpec>>,
     pub(super) page: Rect,
-    pub(super) pending: bool,
 }
 
 pub(super) struct Builder<'p> {
@@ -129,7 +128,6 @@ pub(super) struct Builder<'p> {
     /// The page as walked by [`scan_page`], and how far the interpreter is through it.
     pub(super) scan: Scan,
     pub(super) tag_at: usize,
-    pub(super) group_at: usize,
     /// The fills and strokes of paths drawn so far ([`Scan::paints`]).
     pub(super) paint_at: usize,
     pub(super) aligned: bool,
@@ -138,10 +136,9 @@ pub(super) struct Builder<'p> {
     /// Some groups are hidden or don't print: art in marked content whose group can't be told
     /// (once the scan and the interpreter part) is [`UNSORTED`] rather than the page's.
     pub(super) unsure: bool,
-    /// The marked-content sequences open: the group each marks.
-    pub(super) marked: Vec<Option<usize>>,
-    /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
-    pub(super) pending: bool,
+    /// The marked-content sequences open: the group each marks, and the innermost group marked
+    /// at or around it (kept per level, so art drawn deep in sequences finds its group at once).
+    pub(super) marked: Vec<(Option<usize>, Option<usize>)>,
     pub(super) nested: u32,
     /// Reading an alpha soft mask's art: images are read white with their own alpha, so the
     /// mask's luminance is their alpha, as whitened vector art's is (cairo, and so Inkscape,

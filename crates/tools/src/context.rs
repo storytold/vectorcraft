@@ -253,6 +253,12 @@ pub struct ToolContext<'a> {
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
     pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
+    /// General › Use Precise Cursors, or Caps Lock while it is on: the drawing tools' pointers are
+    /// crosshairs ([`crate::Cursor::precise`]), and the Blob Brush and the Eraser show no tip outline.
+    pub precise_cursors: bool,
+    /// The objects of the Global Edit in progress (Select › Start Global Edit), the one it started
+    /// from first, each with its transform; empty while Global Edit is off.
+    pub global_edit: &'a [(NodeId, vectorcraft_geom::Affine)],
 }
 
 impl ToolContext<'_> {

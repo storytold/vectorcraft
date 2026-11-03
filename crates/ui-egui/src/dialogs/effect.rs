@@ -106,10 +106,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The effects of the first selected object that `item` (an index or null) addresses.
+/// The function reads effects at `item` (an index or null) from the targeted node or first selected object.
 fn target_effects(app: &VectorcraftApp, item: &Value) -> Vec<vectorcraft_doc::Effect> {
     let Some(st) = app.session.active() else { return vec![] };
-    let node = st.selection.objects.first().and_then(|id| st.doc.node(*id));
+    let node = st.selection.subjects().first().and_then(|id| st.doc.node(*id));
     node.and_then(|n| n.appearance.effects_at(item.as_u64().map(|i| i as usize))).cloned().unwrap_or_default()
 }
 
@@ -163,6 +163,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         Some(plugin) => form::schema_fields(app, ui, d, plugin.manifest()),
         // The Color Effects add-on's take the plain form of their parameters.
         None if vectorcraft_effects::is_adjustment(&id) && !vectorcraft_effects::addons::color::is_color_effect(&id) => adjust_fields(ui, d),
+        None if id == vectorcraft_effects::addons::halftone::HALFTONE => {
+            super::halftone::screen_fields(ui, d);
+            values_changed(d)
+        }
+        None if id == vectorcraft_effects::addons::duotone::DUOTONE => {
+            super::duotone::fields(app, ui, d);
+            values_changed(d)
+        }
         None if id == GLASS => glass_fields(app, ui, d, GLASS),
         None if id == TEXTURIZER => glass_fields(app, ui, d, TEXTURIZER),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
@@ -286,7 +294,7 @@ fn texturizer_textures(loaded: bool) -> form::Choices {
 /// it and picked in the Texture menu.
 fn load_texture(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     use vectorcraft_engine::cmd::fileio;
-    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, f.extensions)));
+    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, fileio::read_extensions(f))));
     let path = crate::picks::open(app, &crate::FilePick { filters, ..Default::default() }).ok_or("cancelled")?;
     // The button is off where files can't be read.
     let Some(read) = app.services.read.as_ref() else { return Ok(()) };
@@ -321,7 +329,7 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
         ("stylize.dropShadow", "shade") => Some(SHADES),
         ("path.offsetPath", "joins") => Some(&[("Miter", "miter"), ("Round", "round"), ("Bevel", "bevel")]),
         ("distort.roughen" | "distort.zigZag", "points") => Some(&[("Smooth", "smooth"), ("Corner", "corner")]),
-        _ => None,
+        _ => crate::addons::pathtools::effect_choices(effect, key),
     }
 }
 
@@ -450,7 +458,10 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.fields.contains_key("points") {
         ui.horizontal(|ui| {
             ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
-            curve_graph(ui, d);
+            let mut pts = vectorcraft_effects::curve_points(d.fields.get("points"));
+            if curve_graph(ui, &mut pts, 255.0) {
+                d.fields.insert("points".into(), json!(points_text(&pts, 255.0)));
+            }
         });
     }
     for (key, label, width) in [("points", tl!("Points"), 220.0), ("color", tl!("Color"), 120.0)] {
@@ -539,7 +550,7 @@ fn scribble_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Uni
 /// last previewed.
 fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
     ui.horizontal_top(|ui| {
-        ui.vertical(|ui| transform_each::sections(ui, d, unit));
+        ui.vertical(|ui| transform_each::sections(ui, d, unit, true));
         ui.add_space(16.0);
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Options"));
@@ -549,7 +560,7 @@ fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
             form::check(ui, d, "strokes", tl!("Scale Strokes & Effects"));
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, tl!("Copies:"));
-                if let Some(n) = widgets::range_field(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
+                if let Some(n) = widgets::range_field_live(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
                     d.fields.insert("copies".into(), json!(n));
                 }
             });
@@ -710,15 +721,15 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
     values_changed(d)
 }
 
-/// Curves' graph of its `points` (input across, output up, 0..255): drag a point to move it
-/// between its neighbours, press on the graph away from the points to add one there, drag one
-/// off the graph to remove it (two always stay).
-fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
+/// A curve's graph of its points `pts` (0..1 each; input across, output up), as Curves and
+/// Duotone's tones edit them on a scale of 0..`max`: drag a point to move it between its
+/// neighbours, press on the graph away from the points to add one there, drag one off the graph
+/// to remove it (two always stay). Returns whether the points changed.
+pub(super) fn curve_graph(ui: &mut egui::Ui, pts: &mut Vec<(f32, f32)>, max: f32) -> bool {
     const SIZE: f32 = 200.0;
     /// How near (screen points) a press must be to take a point.
     const GRAB: f32 = 8.0;
     let t = Tokens::get(ui.ctx());
-    let mut pts = vectorcraft_effects::curve_points(d.fields.get("points"));
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(SIZE, SIZE), egui::Sense::click_and_drag());
     let screen = |(x, y): (f32, f32)| egui::pos2(rect.left() + x * SIZE, rect.bottom() - y * SIZE);
     let unit = |p: egui::Pos2| (((p.x - rect.left()) / SIZE).clamp(0.0, 1.0), ((rect.bottom() - p.y) / SIZE).clamp(0.0, 1.0));
@@ -748,7 +759,7 @@ fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
             pts.remove(i.min(pts.len() - 1));
             grabbed = None;
         } else {
-            let step = 1.0 / 255.0;
+            let step = 1.0 / max;
             let lo = if i == 0 { 0.0 } else { pts.get(i - 1).map_or(0.0, |a| a.0 + step) };
             let hi = pts.get(i + 1).map_or(1.0, |a| a.0 - step);
             let (x, y) = unit(p);
@@ -772,17 +783,19 @@ fn curve_graph(ui: &mut egui::Ui, d: &mut Dialog) {
         painter.line_segment([screen((0.0, f)), screen((1.0, f))], faint);
     }
     painter.line_segment([screen((0.0, 0.0)), screen((1.0, 1.0))], faint);
-    let curve: Vec<egui::Pos2> = (0..=64).map(|k| k as f32 / 64.0).map(|x| screen((x, vectorcraft_effects::curve_at(&pts, x)))).collect();
+    let curve: Vec<egui::Pos2> = (0..=64).map(|k| k as f32 / 64.0).map(|x| screen((x, vectorcraft_effects::curve_at(pts.as_slice(), x)))).collect();
     painter.add(egui::Shape::line(curve, egui::Stroke::new(1.5, t.text)));
     for (i, q) in pts.iter().enumerate() {
         let fill = if Some(i) == grabbed { t.accent } else { t.panel };
         painter.circle(screen(*q), 4.0, fill, egui::Stroke::new(1.5, t.text));
     }
     painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    if changed {
-        let text: Vec<String> = pts.iter().map(|(x, y)| format!("{},{}", (x * 255.0).round(), (y * 255.0).round())).collect();
-        d.fields.insert("points".into(), json!(text.join(" ")));
-    }
+    changed
+}
+
+/// Curve points `pts` (0..1) as the `"x,y x,y …"` text of a curve on a scale of 0..`max`.
+pub(super) fn points_text(pts: &[(f32, f32)], max: f32) -> String {
+    pts.iter().map(|(x, y)| format!("{},{}", (x * max).round(), (y * max).round())).collect::<Vec<_>>().join(" ")
 }
 
 /// What OK runs: `effect.setParams` on the edited effect (`__index`), else `effect.apply` of the

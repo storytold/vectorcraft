@@ -112,7 +112,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Anchor Points",
             [],
             None,
-            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
+            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths, every point of a selected blend's spine) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
             has_selection,
             convert_anchors
         ),
@@ -1001,8 +1001,21 @@ pub(super) fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
 }
 
 fn average(s: &mut Session, p: &Value) -> Result<Value> {
-    let t = anchor_targets(s)?;
-    let d0 = &s.doc()?.doc;
+    let st = s.doc()?;
+    let t: AnchorTargets = if st.selection.anchors.is_empty() {
+        let editable = st.doc.editable();
+        paths_in(&st.doc, &st.selection.objects)
+            .into_iter()
+            .filter(|id| editable(*id))
+            .filter_map(|id| {
+                let pd = st.doc.node(id)?.path_data()?;
+                Some((id, pd.anchors().map(|(s, a, _)| (s, a)).collect()))
+            })
+            .collect()
+    } else {
+        anchor_targets(s)?
+    };
+    let d0 = &st.doc;
     let pts: Vec<Point> = t
         .iter()
         .flat_map(|(id, v)| v.iter().filter_map(move |(si, ai)| d0.node(*id)?.path_data()?.subpaths.get(*si)?.anchors.get(*ai).map(|a| a.p)))
@@ -1123,7 +1136,11 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "`to` must be \"corner\" or \"smooth\"")),
     };
     let t = anchor_targets(s)?;
-    if t.is_empty() {
+    // A selected blend converts every point of its spine, as a path selected whole does.
+    let st = s.doc()?;
+    let blends: Vec<NodeId> =
+        st.selection.objects.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }))).collect();
+    if t.is_empty() && blends.is_empty() {
         return Err(bad(C, "select paths or anchor points"));
     }
     s.edit("Convert Anchor Points", |d, _| {
@@ -1136,6 +1153,24 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 } else if let Some(a) = sp.anchors.get_mut(ai) {
                     a.retract();
                 }
+            }
+        }
+        for id in &blends {
+            let Some(NodeKind::Blend { children, spec }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let Some((mut path, anchors)) = vectorcraft_doc::live::pin_spine(children, spec) else { continue };
+            let pinned = path.clone();
+            let Some(sp) = path.subpaths.first_mut() else { continue };
+            for ai in 0..sp.anchors.len() {
+                if smooth {
+                    sp.smooth_anchor(ai);
+                } else if let Some(a) = sp.anchors.get_mut(ai) {
+                    a.retract();
+                }
+            }
+            // A spine the conversion leaves as it was stays as the blend has it.
+            if path != pinned {
+                spec.key_anchors = anchors.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();
+                spec.spine = Some(path);
             }
         }
         Ok(())

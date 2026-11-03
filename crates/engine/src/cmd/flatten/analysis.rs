@@ -51,7 +51,7 @@ impl Scratch {
 }
 
 /// Type as outlines painted like it ([`effects::outline_text`]), keeping its transparency.
-pub(super) fn outlined_text(n: &Node) -> Option<Node> {
+pub(crate) fn outlined_text(n: &Node) -> Option<Node> {
     effects::outline_text(n).map(|g| Node { knockout: Knockout::Off, ..carry(n, g) })
 }
 
@@ -112,8 +112,16 @@ pub(super) fn reach(n: &Node) -> Option<Rect> {
     Some(b.inflate(fx + 1.0, fx + 1.0))
 }
 
-/// Indices of `bounds` grouped by overlap (transitively), each group in index order.
-pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Vec<Vec<usize>> {
+/// Indices of `bounds` grouped by overlap (transitively), each group in index order. Boxes that
+/// only touch overlap; a box with a coordinate that isn't finite overlaps none.
+///
+/// A sweep left to right keeps the boxes still open at the current left edge in a tree by their
+/// tops that knows the lowest bottom below each of its branches, so each box meets only the open
+/// boxes it overlaps, not every open one (many objects stacked in a column, sharing their
+/// horizontal extent, would otherwise compare every pair). An open box inside a later box of
+/// its group, ending no further right, is closed early: whatever overlaps it overlaps that box.
+/// Fails only when cancelled ([`vectorcraft_doc::cancel`]).
+pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Result<Vec<Vec<usize>>, vectorcraft_doc::cancel::Cancelled> {
     fn find(p: &mut [usize], mut i: usize) -> usize {
         while p[i] != i {
             p[i] = p[p[i]];
@@ -122,19 +130,75 @@ pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Vec<Vec<usize>> {
         i
     }
     let mut parent: Vec<usize> = (0..bounds.len()).collect();
-    let mut order: Vec<(usize, Rect)> = bounds.iter().enumerate().filter_map(|(i, b)| b.map(|b| (i, b))).collect();
-    order.sort_by(|a, b| a.1.x0.total_cmp(&b.1.x0));
-    // Sweep left to right, comparing each box with those still open at its left edge.
-    let mut open: Vec<(usize, Rect)> = vec![];
-    for (i, b) in order {
-        open.retain(|(_, o)| o.x1 >= b.x0);
-        for (j, o) in &open {
-            if o.y0 <= b.y1 && b.y0 <= o.y1 {
-                let (a, c) = (find(&mut parent, i), find(&mut parent, *j));
-                parent[a.max(c)] = a.min(c);
+    let finite = |b: &Rect| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()) && b.x0 <= b.x1 && b.y0 <= b.y1;
+    let boxes: Vec<(usize, Rect)> = bounds.iter().enumerate().filter_map(|(i, b)| b.filter(finite).map(|b| (i, b))).collect();
+    let n = boxes.len();
+    // Each box's place in the tree: by top (then index).
+    let mut by_top: Vec<usize> = (0..n).collect();
+    by_top.sort_by(|&a, &b| boxes[a].1.y0.total_cmp(&boxes[b].1.y0).then(a.cmp(&b)));
+    let tops: Vec<f64> = by_top.iter().map(|&k| boxes[k].1.y0).collect();
+    let mut leaf = vec![0usize; n];
+    for (pos, &k) in by_top.iter().enumerate() {
+        leaf[k] = pos;
+    }
+    // The lowest bottom of the open boxes below each node (−∞: none open).
+    let size = n.next_power_of_two().max(1);
+    let mut low = vec![f64::NEG_INFINITY; 2 * size];
+    let set = |low: &mut [f64], pos: usize, v: f64| {
+        let mut i = pos + size;
+        low[i] = v;
+        while i > 1 {
+            i /= 2;
+            low[i] = low[2 * i].max(low[2 * i + 1]);
+        }
+    };
+    let mut by_left: Vec<usize> = (0..n).collect();
+    by_left.sort_by(|&a, &b| boxes[a].1.x0.total_cmp(&boxes[b].1.x0));
+    let mut by_right: Vec<usize> = (0..n).collect();
+    by_right.sort_by(|&a, &b| boxes[a].1.x1.total_cmp(&boxes[b].1.x1));
+    let mut closing = 0;
+    let mut stack: Vec<(usize, usize, usize)> = vec![];
+    let mut met = vec![];
+    let mut work = 0usize;
+    for &k in &by_left {
+        let b = boxes[k].1;
+        // Close the boxes that end left of this one.
+        while let Some(&c) = by_right.get(closing)
+            && boxes[c].1.x1 < b.x0
+        {
+            set(&mut low, leaf[c], f64::NEG_INFINITY);
+            closing += 1;
+        }
+        // The open boxes with their top at most this bottom and their bottom at least this top.
+        let below = tops.partition_point(|t| *t <= b.y1);
+        met.clear();
+        stack.clear();
+        stack.push((1, 0, size));
+        while let Some((node, lo, hi)) = stack.pop() {
+            work += 1;
+            if work.is_multiple_of(4096) {
+                vectorcraft_doc::cancel::check()?;
+            }
+            if lo >= below || low[node] < b.y0 {
+                continue;
+            }
+            if hi - lo == 1 {
+                met.push(by_top[lo]);
+                continue;
+            }
+            let mid = (lo + hi) / 2;
+            stack.push((2 * node + 1, mid, hi));
+            stack.push((2 * node, lo, mid));
+        }
+        for &o in &met {
+            let (a, c) = (find(&mut parent, boxes[k].0), find(&mut parent, boxes[o].0));
+            parent[a.max(c)] = a.min(c);
+            let ob = boxes[o].1;
+            if ob.x1 <= b.x1 && b.y0 <= ob.y0 && ob.y1 <= b.y1 {
+                set(&mut low, leaf[o], f64::NEG_INFINITY);
             }
         }
-        open.push((i, b));
+        set(&mut low, leaf[k], b.y1);
     }
     let mut groups: Vec<Vec<usize>> = vec![];
     let mut slot: Vec<Option<usize>> = vec![None; bounds.len()];
@@ -148,5 +212,84 @@ pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Vec<Vec<usize>> {
             }
         }
     }
-    groups
+    Ok(groups)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What [`overlapping`] gives, comparing every pair.
+    fn every_pair(bounds: &[Option<Rect>]) -> Vec<Vec<usize>> {
+        let n = bounds.len();
+        let mut group: Vec<usize> = (0..n).collect();
+        let hit = |a: &Rect, b: &Rect| a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+        loop {
+            let mut changed = false;
+            for i in 0..n {
+                for j in 0..n {
+                    if let (Some(a), Some(b)) = (bounds[i], bounds[j])
+                        && hit(&a, &b)
+                        && group[j] < group[i]
+                    {
+                        group[i] = group[j];
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        let mut out: Vec<Vec<usize>> = vec![];
+        let mut seen = std::collections::HashMap::new();
+        for (i, &root) in group.iter().enumerate() {
+            let g = *seen.entry(root).or_insert_with(|| {
+                out.push(vec![]);
+                out.len() - 1
+            });
+            out[g].push(i);
+        }
+        out
+    }
+
+    /// Boxes of many sizes, nested, touching and apart, group as comparing every pair groups them.
+    #[test]
+    fn groups_match_comparing_every_pair() {
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut next = |m: f64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 1000) as f64 / 1000.0 * m
+        };
+        for round in 0..40 {
+            let n = 5 + round * 4;
+            let bounds: Vec<Option<Rect>> = (0..n)
+                .map(|i| {
+                    if i % 11 == 3 {
+                        return None;
+                    }
+                    let (x, y) = (next(100.0).round(), next(100.0).round());
+                    Some(Rect::new(x, y, x + next(30.0).round(), y + next(30.0).round()))
+                })
+                .collect();
+            assert_eq!(overlapping(&bounds).unwrap(), every_pair(&bounds), "round {round}");
+        }
+    }
+
+    /// A column of many boxes sharing their horizontal extent: each one meets only its
+    /// neighbours, so they group (here, touching in pairs) without comparing every pair.
+    #[test]
+    fn a_tall_column_groups_by_its_neighbours() {
+        let n = 200_000;
+        let bounds: Vec<Option<Rect>> =
+            (0..n).map(|i| Some(Rect::new(0.0, 3.0 * f64::from(i), 100.0, 3.0 * f64::from(i) + if i % 2 == 0 { 3.0 } else { 1.0 }))).collect();
+        let groups = overlapping(&bounds).unwrap();
+        assert_eq!(groups.len(), n as usize / 2);
+        assert!(groups.iter().enumerate().all(|(g, ids)| ids == &[2 * g, 2 * g + 1]));
+        // Boxes that aren't finite overlap nothing.
+        let odd = [Some(Rect::new(0.0, 0.0, 10.0, 10.0)), Some(Rect::new(f64::NAN, 0.0, 10.0, 10.0)), Some(Rect::new(5.0, 5.0, 20.0, 20.0))];
+        assert_eq!(overlapping(&odd).unwrap(), vec![vec![0, 2], vec![1]]);
+    }
 }

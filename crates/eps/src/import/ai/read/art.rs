@@ -1,18 +1,19 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::types::{
-    FLIP, IMAGE_TOO_LARGE, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, Place,
+    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
+    NON_NATIVE_ART_UNREAD, Place,
 };
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node, NodeId,
-    NodeKind, Obj, OpacityMask, Paint, PathData, Point, Reader, Rect, StrokeLayer, V, ps,
+    Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
+    NodeId, NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
 
 impl<'a> Reader<'a> {
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
     pub(super) fn text_slot(&mut self, o: &Obj) -> Result<(), String> {
         if self.pattern.is_some() {
-            self.unreadable("type in a pattern");
+            self.unreadable("type in a pattern", false);
         }
         // `1 /FreeUndo`: the type in the drawn look of a text object that has an appearance. Its
         // story is one of another text document (`/AI11UndoFreeTextDocument`), which counts its
@@ -110,32 +111,45 @@ impl<'a> Reader<'a> {
             return Err("a path has too many points".into());
         }
         let current = self.path.elements().last().and_then(|e| e.end_point());
-        match w {
+        let kind = if w.starts_with(|c: char| c.is_ascii_lowercase()) { AnchorKind::Smooth } else { AnchorKind::Corner };
+        let added = match w {
             "m" => {
                 let Some(a) = p(2) else { return Ok(()) };
                 self.path.move_to(a);
+                return Ok(());
             }
-            _ if current.is_none() => {}
-            "l" | "L" => {
-                if let Some(a) = p(2) {
+            _ if current.is_none() => false,
+            "l" | "L" => match p(2) {
+                Some(a) => {
                     self.path.line_to(a);
+                    true
                 }
-            }
-            "c" | "C" => {
-                if let (Some(a), Some(b), Some(c)) = (p(6), p(4), p(2)) {
+                None => false,
+            },
+            "c" | "C" => match (p(6), p(4), p(2)) {
+                (Some(a), Some(b), Some(c)) => {
                     self.path.curve_to(a, b, c);
+                    true
                 }
-            }
-            "v" | "V" => {
-                if let (Some(cur), Some(b), Some(c)) = (current, p(4), p(2)) {
+                _ => false,
+            },
+            "v" | "V" => match (current, p(4), p(2)) {
+                (Some(cur), Some(b), Some(c)) => {
                     self.path.curve_to(cur, b, c);
+                    true
                 }
-            }
-            _ => {
-                if let (Some(a), Some(c)) = (p(4), p(2)) {
+                _ => false,
+            },
+            _ => match (p(4), p(2)) {
+                (Some(a), Some(c)) => {
                     self.path.curve_to(a, c, c);
+                    true
                 }
-            }
+                _ => false,
+            },
+        };
+        if added {
+            self.path_kinds.push(kind);
         }
         Ok(())
     }
@@ -143,6 +157,7 @@ impl<'a> Reader<'a> {
     /// A path left unpainted before a container opens.
     pub(crate) fn end_path_quietly(&mut self) {
         self.path = BezPath::new();
+        self.path_kinds.clear();
         self.points = 0;
         self.clip_next = false;
     }
@@ -150,6 +165,7 @@ impl<'a> Reader<'a> {
     /// Paint the current path (`op`), as a guide when `guide`.
     pub(super) fn paint(&mut self, op: &str, hidden: bool, guide: bool) -> Result<(), String> {
         let mut bp = std::mem::take(&mut self.path);
+        let kinds = std::mem::take(&mut self.path_kinds);
         self.points = 0;
         let clip = std::mem::take(&mut self.clip_next);
         if let Some(i) = self.instance.take() {
@@ -162,8 +178,12 @@ impl<'a> Reader<'a> {
         if op.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
             close(&mut bp);
         }
+        let line = match bp.elements() {
+            [PathEl::MoveTo(a), PathEl::LineTo(b)] => Some((*a, *b)),
+            _ => None,
+        };
         let to_doc = self.space();
-        let path = PathData::from_bezpath(&(to_doc * bp));
+        let path = path_data(&(to_doc * bp), &kinds);
         let gs = self.gs.clone();
         let (fill, stroke) = match op.to_ascii_lowercase().as_str() {
             "f" => (true, false),
@@ -171,6 +191,8 @@ impl<'a> Reader<'a> {
             "b" => (true, true),
             _ => (false, false),
         };
+        // A gradient instance's paint replaces the missing pattern.
+        let unread = (fill && self.pending_unread_fill && fill_paint.is_none()) || (stroke && self.pending_unread_stroke && stroke_paint.is_none());
         let mut items = Vec::new();
         if fill && !clip {
             items.push(AppearanceItem::Fill(FillLayer {
@@ -178,8 +200,9 @@ impl<'a> Reader<'a> {
                 ..FillLayer::new(fill_paint.clone().unwrap_or(gs.fill.clone()))
             }));
         }
-        if stroke && !clip {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.width);
+        // A clipping path keeps its stroke, which paints over the art it clips.
+        if stroke {
+            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
             st.cap = gs.cap;
             st.join = gs.join;
             st.miter_limit = gs.miter;
@@ -189,6 +212,19 @@ impl<'a> Reader<'a> {
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
+        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        if guide
+            && op == "N"
+            && !hidden
+            && !gs.hidden
+            && !clip
+            && self.pattern.is_none()
+            && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
+            && let Some((a, b)) = line
+            && [a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite())
+        {
+            self.ruler_guides.insert(node.id, (a, b));
+        }
         node.appearance = Appearance { items, ..Appearance::default() }.into();
         node.opacity = gs.opacity;
         node.blend = gs.blend;
@@ -212,7 +248,33 @@ impl<'a> Reader<'a> {
             .into();
             copy
         });
+        // The note and Show Center are the path's, not its painted copy's.
+        node.edit_attrs(|a| {
+            a.note = gs.note.clone().unwrap_or_default();
+            a.show_center = gs.show_center;
+        });
+        let unread_bounds = unread.then(|| node.visual_bounds()).flatten();
+        let unread_id = node.id;
         self.add(node, hidden)?;
+        if unread && self.pattern.is_some() {
+            // Art in a pattern's definition painted with a pattern it doesn't have: the tile can't be read.
+            self.unsupported.insert("pattern fills".into());
+        } else if unread && ((hidden && !self.in_mask()) || gs.hidden || !self.shown()) {
+            self.hidden_unread.insert("pattern fills".into());
+        } else if unread && self.in_mask() {
+            self.unreadable("pattern fills", false);
+        } else if unread {
+            match unread_bounds {
+                Some(b) if sane(b) && b.area() > 0.0 => {
+                    if !self.mark_unread("pattern fills".into()) {
+                        self.unread.push((unread_id, vec!["pattern fills".into()]));
+                    }
+                }
+                _ => {
+                    self.unsupported.insert("pattern fills".into());
+                }
+            }
+        }
         if let Some(copy) = copy {
             self.clip_fills.insert(copy.id);
             self.add(copy, hidden)?;
@@ -224,7 +286,7 @@ impl<'a> Reader<'a> {
     pub(super) fn end_mesh(&mut self) -> Result<(), String> {
         let Some((m, hidden)) = self.mesh.take() else { return Ok(()) };
         if m.unread || m.patches.is_empty() {
-            self.unreadable("gradient meshes it can't read");
+            self.unreadable("gradient meshes it can't read", hidden && self.pattern.is_none());
             return Ok(());
         }
         let gs = self.gs.clone();
@@ -235,7 +297,9 @@ impl<'a> Reader<'a> {
                 let mut node = self.new_node(NodeKind::Mesh(one), &gs);
                 node.opacity = gs.opacity;
                 node.blend = gs.blend;
-                return self.add(node, hidden);
+                self.add(node, hidden)?;
+                self.mesh_ended = true;
+                return Ok(());
             }
             Err(crate::import::ai::mesh::NotOne::Unjoined) => {
                 self.warn("a gradient mesh whose patches don't join up comes in as a group of its patches")
@@ -249,17 +313,28 @@ impl<'a> Reader<'a> {
         };
         node.opacity = gs.opacity;
         node.blend = gs.blend;
-        self.add(node, hidden)
+        self.add(node, hidden)?;
+        self.mesh_ended = true;
+        Ok(())
     }
 
-    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
+    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state. A clipping path
+    /// takes the stroke itself, not the painted copy of its fill.
     pub(super) fn stroke_last(&mut self) {
         let gs = self.gs.clone();
-        let Some(n) = self.last_object() else { return };
-        if !matches!(n.kind, NodeKind::Path { clipping: false, .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
+        if !self.after_object {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.width);
+        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
+        let Some(mut at) = kids.len().checked_sub(1) else { return };
+        if kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) && at > 0 {
+            at -= 1;
+        }
+        let Some(n) = kids.get_mut(at) else { return };
+        if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            return;
+        }
+        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
         st.cap = gs.cap;
         st.join = gs.join;
         st.miter_limit = gs.miter;
@@ -457,10 +532,45 @@ impl<'a> Reader<'a> {
     /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
     /// without a preview, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
-        let Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)) }) = self.place.take().filter(|p| !p.path.is_empty())
-        else {
-            self.unreadable("placed files");
-            return Ok(());
+        let (m, b, path, png, w, h, folder) = match self.place.take() {
+            Some(Place { broken: true, .. }) => {
+                self.unreadable("placed files", hidden);
+                return Ok(());
+            }
+            Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)), folder, .. }) if !path.is_empty() => {
+                (m, b, path, png, w, h, folder)
+            }
+            other => {
+                let boxed = other.as_ref().and_then(|p| Some((p.matrix?, p.bounds?))).filter(|(_, b)| sane(*b) && b.area() > 0.0);
+                let mut have_bounds = false;
+                if self.shown()
+                    && !self.gs.hidden
+                    && !hidden
+                    && let Some((m, b)) = boxed
+                {
+                    let centre = self.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
+                    let origin = centre.map_or(b.origin(), |(x, y)| Point::new(CANVAS_CENTRE - x, CANVAS_CENTRE + y));
+                    let box_at_canvas = Rect::new(origin.x, origin.y, origin.x + b.width(), origin.y + b.height());
+                    let bounds = (self.space() * m).transform_rect_bbox(box_at_canvas);
+                    have_bounds = sane(bounds) && bounds.area() > 0.0;
+                    if have_bounds {
+                        let placeholder_id = self.unread_box("placed files", bounds, hidden)?;
+                        if let Some(placeholder_id) = placeholder_id.filter(|_| self.unread_elsewhere.len() < MAX_PLACED_ELSEWHERE) {
+                            let corner = (self.space() * m).transform_rect_bbox(b);
+                            if sane(corner) && corner.area() > 0.0 && corner != bounds {
+                                self.unread_elsewhere.push((placeholder_id, corner));
+                            }
+                        }
+                        return Ok(());
+                    }
+                }
+                if self.shown() && !self.gs.hidden && !hidden && !have_bounds {
+                    self.unsupported.insert("placed files".into());
+                } else {
+                    self.unreadable("placed files", hidden);
+                }
+                return Ok(());
+            }
         };
         // The file's pixels (y down) start at the canvas point of art space's origin (the box's own
         // corner when the file doesn't say where the canvas is); the preview's are spread over them.
@@ -477,7 +587,7 @@ impl<'a> Reader<'a> {
             .filter(|a| a.as_coeffs().iter().all(|v| v.is_finite()));
         let xf = self.space() * m * over_file;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
-            self.unreadable("placed files");
+            self.unreadable("placed files", hidden);
             return Ok(());
         }
         // The preview is all the document has of the file: what a missing link shows.
@@ -491,10 +601,9 @@ impl<'a> Reader<'a> {
         {
             self.placed_elsewhere.push((NodeId(self.doc.peek_next_id()), shift));
         }
-        self.add_image(
-            ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None },
-            hidden,
-        )
+        let mut link = LinkInfo::new(path);
+        link.relative = folder.and_then(|f| relative_path(&f, link.name()));
+        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)
     }
 
     pub(super) fn warn(&mut self, w: &str) {
@@ -504,15 +613,64 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// `bp` as a path whose anchors take the kinds in `kinds`, one for each segment of `bp` in order,
+/// for the anchor the segment ends on. A closed subpath's last segment ends on its first anchor
+/// when it returns to the start point, and that anchor takes its kind. Anchors no segment ends on
+/// (a subpath's start) keep the kind [`PathData::from_bezpath`] gives them, and so does a subpath
+/// whose anchors don't match its segments.
+pub(super) fn path_data(bp: &BezPath, kinds: &[AnchorKind]) -> PathData {
+    let mut path = PathData::from_bezpath(bp);
+    // Each subpath's anchors as `from_bezpath` starts them: one for its start, one for each segment.
+    let mut subpaths: Vec<Vec<Option<AnchorKind>>> = Vec::new();
+    let mut kinds = kinds.iter().copied();
+    let mut open = false;
+    for el in bp.elements() {
+        match el {
+            PathEl::MoveTo(_) => {
+                subpaths.push(vec![None]);
+                open = true;
+            }
+            PathEl::ClosePath => open = false,
+            _ => {
+                let kind = kinds.next();
+                match subpaths.last_mut() {
+                    Some(s) if open => s.push(kind),
+                    _ => {
+                        subpaths.push(vec![None, kind]);
+                        open = true;
+                    }
+                }
+            }
+        }
+    }
+    if subpaths.len() != path.subpaths.len() {
+        return path;
+    }
+    for (sp, mut set) in path.subpaths.iter_mut().zip(subpaths) {
+        // The closing anchor merged into the first: its kind goes to the first.
+        if sp.closed
+            && set.len() == sp.anchors.len() + 1
+            && let Some(last) = set.pop()
+            && let Some(first) = set.first_mut()
+        {
+            *first = last;
+        }
+        if set.len() != sp.anchors.len() {
+            continue;
+        }
+        for (a, kind) in sp.anchors.iter_mut().zip(set) {
+            if let Some(kind) = kind {
+                a.kind = kind;
+            }
+        }
+    }
+    path
+}
+
 /// The name of the XML node `o` (its `xmlnode-nodename`) without a namespace prefix (`v:`).
 pub(super) fn element_name(o: &Obj) -> Option<String> {
     let name = o.text("xmlnode-nodename")?;
     Some(name.rsplit(':').next().unwrap_or(&name).to_string())
-}
-
-/// The child nodes named `name` (see [`element_name`]) of the XML node `o`.
-pub(super) fn elements<'o>(o: &'o Obj, name: &'o str) -> impl Iterator<Item = &'o Obj> {
-    o.obj("xmlnode-children").into_iter().flat_map(Obj::items).filter(move |c| c.ty == "XMLNode" && element_name(c).as_deref() == Some(name))
 }
 
 /// A placed file's preview as a PNG, with its size: `w h rowBytes 32 n ` (each number followed by
@@ -549,6 +707,18 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     Some((png, width, height))
 }
 
+/// A placed file's path relative to the document's folder (`/` separators): its relative `folder`
+/// (`src/`, `..\art`) followed by its file `name`. `None` when the folder is empty, absolute, or
+/// holds control characters, or when there is no name.
+pub(super) fn relative_path(folder: &str, name: &str) -> Option<String> {
+    let folder = folder.replace('\\', "/");
+    let absolute = folder.starts_with('/') || folder.as_bytes().get(1) == Some(&b':') || folder.contains("://");
+    if folder.is_empty() || absolute || name.is_empty() || folder.chars().chain(name.chars()).any(char::is_control) {
+        return None;
+    }
+    Some(format!("{}/{name}", folder.trim_end_matches('/')))
+}
+
 pub(super) fn sane(r: Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_SIDE)
 }
@@ -577,7 +747,7 @@ fn cmyk_rgb([c, m, y, k]: [u8; 4]) -> [u8; 3] {
 }
 
 /// `a`, `a and b`, `a, b and c`.
-pub(super) fn join_and(items: &[&str]) -> String {
+pub(crate) fn join_and(items: &[&str]) -> String {
     match items {
         [] => String::new(),
         [one] => (*one).to_string(),

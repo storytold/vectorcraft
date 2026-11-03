@@ -6,6 +6,7 @@
 //! gradients, images and text (via `vectorcraft-text` glyph outlines).
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod brush_fx;
 mod changed;
 mod dither;
@@ -146,6 +147,8 @@ pub struct Renderer {
     /// The picture [`Self::flatten`] started the current context again from, with 8-bit
     /// compositing: [`Self::finish`] renders the context over it.
     picture: Option<Arc<Pixmap>>,
+    /// Whether an image failed to draw while opacity-mask art is being drawn.
+    image_left_out: Option<bool>,
     /// Pixels of the groups being drawn offscreen (contexts and backdrop copies), and the most
     /// they may hold (set from the frame when the first opens, see [`Self::group`]); both reset
     /// at the start of every frame.
@@ -224,6 +227,6 @@ pub(crate) use text_geom::is_opentype_alternate;
 #[cfg(test)]
 use text_geom::text_geom;
 pub(crate) use threads::single_threaded_context;
-pub use threads::{default_threads, set_default_threads};
+pub use threads::{default_threads, set_default_threads, set_usable_cores};
 #[cfg(test)]
 mod tests;

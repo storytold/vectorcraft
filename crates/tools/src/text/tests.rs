@@ -604,6 +604,41 @@ fn a_drag_across_type_not_being_edited_selects_its_text() {
 }
 
 #[test]
+fn a_dropped_press_keeps_the_type_in_editing() {
+    let (d, id, mut tool) = editing("Hello world");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let t = TypeTool::text(&c, id).unwrap().clone();
+    let lay = vectorcraft_text::layout(FontDb::global(), &t);
+    let pt = |i: usize| {
+        let (a, b) = vectorcraft_text::caret_position(&lay, i);
+        t.xf * a.midpoint(b)
+    };
+    let (at, to) = (pt(3), pt(7));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x + 0.1, to.y));
+    assert!(tool.busy());
+    assert_eq!(tool.sel(), (3, 7));
+    // The press is dropped: the caret and selection are as they were before it.
+    let out = tool.drop_press(&c);
+    assert!(!out.iter().any(|a| matches!(a, Action::SwitchTool(_))));
+    assert!(!tool.busy());
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (0, 0)));
+    // The dropped press does not count toward a double or triple click.
+    assert_eq!(tool.clicks, (None, 0));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y));
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (0, 0)));
+    // A Shift-press that extends the selection, dropped, leaves the caret where a click put it.
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y));
+    assert_eq!(tool.sel(), (3, 3));
+    tool.pointer(&c, &PointerEvent { mods: SHIFT, ..PointerEvent::new(PointerKind::Down, to.x + 0.1, to.y) });
+    assert_eq!(tool.sel(), (3, 7));
+    tool.drop_press(&c);
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (3, 3)));
+}
+
+#[test]
 fn select_all_and_styled_paste() {
     let (d, _, mut tool) = editing("abc");
     tool.set_option("selectAll", &json!(true));
@@ -807,13 +842,90 @@ fn the_pointer_shows_the_type_tool_shift_or_alt_switches_to() {
     assert_eq!(cursor("verticalType", away, SHIFT), Cursor::Text);
     assert_eq!(cursor("verticalAreaType", away, SHIFT), Cursor::Text);
     assert_eq!(cursor("areaType", on_line, Mods::default()), Cursor::Text, "no frame for area type");
-    assert_eq!(cursor("areaType", on_line, ALT), Cursor::Crosshair, "a baseline for type on a path");
+    assert_eq!(cursor("areaType", on_line, ALT), Cursor::TypeOnPath, "a baseline for type on a path");
     assert_eq!(cursor("typeOnPath", on_line, ALT), Cursor::Text);
     let mut tool = TypeTool::new("type");
     tool.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y).with_mods(SHIFT));
     assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::TypeVertical, "the press keeps the tool it acts as");
     tool.pointer(&c, &PointerEvent::new(PointerKind::Up, away.x, away.y));
     assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::Text);
+}
+
+/// The plain Type tools make type in or along a path clicked on its outline: area type inside a
+/// closed path (Alt held or not: type along a closed path is Type on a Path's) and type on a path
+/// along an open one. A click away from paths still makes point type, a drag still draws a frame
+/// (even from a path's outline), and a click on existing type edits it. The pointer says which.
+#[test]
+fn the_type_tool_makes_type_in_or_along_a_clicked_path() {
+    let (mut d, rect, line) = doc_with_rect_and_line();
+    let (sel, p) = (Selection::default(), paint());
+    let (on_line, on_rect, away) = ((250.0, 400.0), (100.0, 150.0), (450.0, 450.0));
+    for id in ["type", "verticalType"] {
+        let vertical = id == "verticalType";
+        let c = cx(&d, &sel, &p);
+        for (at, mods, path, mode, cursor) in [
+            (on_rect, Mods::default(), rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
+            (on_line, Mods::default(), line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+            (on_rect, ALT, rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
+            (on_line, ALT, line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+        ] {
+            assert_eq!(TypeTool::new(id).cursor(&c, Point::new(at.0, at.1), mods), cursor, "{id} {at:?} {mods:?}");
+            let mut tool = TypeTool::new(id);
+            let acts = gesture(&mut tool, &c, at, None, mods, Mods::default());
+            let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{id} {at:?} {mods:?}: {acts:?}"));
+            assert_eq!(cmd, "text.createInPath", "{id} {at:?} {mods:?}");
+            assert_eq!(
+                (&params["path"], &params["mode"], &params["vertical"]),
+                (&json!(path.0), &json!(mode), &json!(vertical)),
+                "{id} {at:?} {mods:?}"
+            );
+            assert_eq!(tool.id(), id, "the tool chosen stays");
+        }
+        // Shift switches the direction over a path too.
+        let acts = gesture(&mut TypeTool::new(id), &c, on_rect, None, SHIFT, Mods::default());
+        assert_eq!(made(&acts).map(|(_, p)| (p["mode"].clone(), p["vertical"].clone())), Some((json!("area"), json!(!vertical))));
+        // Away from paths: point type.
+        assert_eq!(
+            TypeTool::new(id).cursor(&c, Point::new(away.0, away.1), Mods::default()),
+            if vertical { Cursor::TypeVertical } else { Cursor::Text }
+        );
+        let acts = gesture(&mut TypeTool::new(id), &c, away, None, Mods::default(), Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!((cmd, params.get("area")), ("text.create", None), "{id}: point type");
+        // A drag from the rectangle's outline draws a frame.
+        let acts = gesture(&mut TypeTool::new(id), &c, on_rect, Some((200.0, 250.0)), Mods::default(), Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!((cmd, &params["area"]), ("text.create", &json!({"width": 100.0, "height": 100.0})), "{id}: drag");
+    }
+    // A click on existing type over the rectangle's outline edits the type.
+    let l = d.layers[0].id;
+    let tid = d.alloc_id();
+    let t = TextObject::point(Point::new(95.0, 155.0), "Hello", Default::default());
+    d.insert(Some(l), 2, Node::new(tid, NodeKind::Text(Box::new(t)))).unwrap();
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("type");
+    let acts = gesture(&mut tool, &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert!(made(&acts).is_none(), "{acts:?}");
+    assert_eq!(tool.editing, Some(tid));
+}
+
+/// A guide is no path to set type in or along while guides are hidden or locked: the click makes
+/// point type, as it does on the selection tools' terms.
+#[test]
+fn the_type_tool_leaves_hidden_or_locked_guides_alone() {
+    let (mut d, rect, _) = doc_with_rect_and_line();
+    if let Some(NodeKind::Path { guide, .. }) = d.node_mut(rect).map(|n| &mut n.kind) {
+        *guide = true;
+    }
+    let (sel, p) = (Selection::default(), paint());
+    let mut c = cx(&d, &sel, &p);
+    c.guides = false;
+    assert_eq!(TypeTool::new("type").cursor(&c, Point::new(100.0, 150.0), Mods::default()), Cursor::Text);
+    let acts = gesture(&mut TypeTool::new("type"), &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.create"), "{acts:?}");
+    c.guides = true;
+    let acts = gesture(&mut TypeTool::new("type"), &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.createInPath"), "{acts:?}");
 }
 
 /// While type is being edited, Shift and Alt switch no tool: a frame dragged out is the tool
@@ -896,6 +1008,65 @@ fn marked_text_is_underlined_with_the_converting_clause_thick() {
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "曲雅楽演奏会");
     assert!(!tool.composing());
+}
+
+#[test]
+fn spacing_arrows_follow_each_text_objects_orientation() {
+    let cases = [
+        (ToolKey::Down, ALT, "kerning", 1.0),
+        (ToolKey::Up, ALT, "kerning", -1.0),
+        (ToolKey::Left, ALT, "leading", 1.0),
+        (ToolKey::Right, ALT, "leading", -1.0),
+        (ToolKey::Right, SHIFT_ALT, "baselineShift", 1.0),
+        (ToolKey::Left, SHIFT_ALT, "baselineShift", -1.0),
+        (ToolKey::Down, SHIFT_ALT, "kerning", 1.0),
+        (ToolKey::Up, SHIFT_ALT, "kerning", -1.0),
+        (ToolKey::Down, Mods { cmd: true, ..ALT }, "kerning", 5.0),
+        (ToolKey::Up, Mods { cmd: true, ..ALT }, "kerning", -5.0),
+    ];
+    for kind in 0..3 {
+        for selected in [false, true] {
+            let (mut d, id, mut tool) = editing("abcd");
+            let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+            t.vertical = true;
+            let path = vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1));
+            t.kind = match kind {
+                1 => TextKind::Area { frame: path },
+                2 => TextKind::OnPath { path, start: 0.0, end: None },
+                _ => TextKind::Point,
+            };
+            tool.caret = 2;
+            tool.anchor = if selected { 1 } else { 2 };
+            for (key_code, mods, caret_attribute, by) in cases {
+                let before = (tool.anchor, tool.caret);
+                let actions = key(&mut tool, &d, key_code, mods);
+                let step = actions
+                    .iter()
+                    .find_map(|action| match action {
+                        Action::Exec(command, params) if command == "type.step" => Some(params),
+                        _ => None,
+                    })
+                    .expect("spacing command");
+                assert_eq!(
+                    step["attribute"],
+                    if selected && caret_attribute == "kerning" { "tracking" } else { caret_attribute },
+                    "kind {kind}, selected {selected}"
+                );
+                assert_eq!(step["by"], by);
+                assert_eq!((tool.anchor, tool.caret), before);
+            }
+        }
+    }
+    let (mut d, id, mut tool) = editing("abcd");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    t.vertical = true;
+    key(&mut tool, &d, ToolKey::Down, SHIFT);
+    assert_eq!((tool.anchor, tool.caret), (0, 1));
+    let (d, _, mut tool) = editing("abcd");
+    let actions = key(&mut tool, &d, ToolKey::Right, ALT);
+    assert!(actions.iter().any(
+        |action| matches!(action, Action::Exec(command, params) if command == "type.step" && params["attribute"] == "kerning" && params["by"] == 1.0)
+    ));
 }
 
 #[test]

@@ -77,12 +77,35 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(node(&s, id).appearance.effects.len(), 0, "{effect}: back to the plain rectangle");
     }
-    // Type has no outline to extrude.
+}
+
+/// #4715: type extrudes as its glyph outlines, painted with its characters' colour, and stays
+/// type: editing its text reshapes the solid.
+#[test]
+fn type_extrudes_as_its_glyphs_and_stays_editable() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-    let t = s.execute("text.create", &json!({"x": 50, "y": 50, "text": "3D"})).unwrap();
-    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [t["id"]], "item": null})).unwrap_err();
-    assert!(err.to_string().contains("requires a path"), "{err}");
+    let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": "3D", "size": 72})).unwrap();
+    let id = NodeId(t["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#cc2200"})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Text(_)), "still type");
+    let art = effects::solid_art(&n).expect("a solid of the glyphs");
+    let mut faces = 0;
+    let mut tinted = false;
+    art.walk(&mut |c| {
+        if c.path_data().is_some() {
+            faces += 1;
+            // Shaded from the characters' red: red stays the strongest channel.
+            if let Some([r, g, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+                tinted |= r > g && r > b;
+            }
+        }
+    });
+    assert!(faces > 2 && tinted, "{faces} faces, tinted {tinted}");
+    s.execute("text.setText", &json!({"ids": [id.0], "text": "3DD"})).unwrap();
+    assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "the solid follows the edited text");
 }
 
 /// Scripts from before the Perspective angle give `perspective` as a 0–100 % strength: it is
@@ -406,6 +429,7 @@ fn pathfinder_effect_on_a_group_with_type_cuts_the_glyphs_out() {
     assert!((left - (10_000.0 - glyph_area)).abs() < 0.5, "{left} left of the square for a glyph area of {glyph_area}");
 }
 
+/// A Pathfinder effect on a group renders live and expands to its result.
 #[test]
 fn pathfinder_effect_on_a_group_renders_live_and_expands() {
     let (mut s, a) = session_with_rect();
@@ -425,6 +449,7 @@ fn pathfinder_effect_on_a_group_renders_live_and_expands() {
     assert_eq!(ch.len(), 1);
     assert!((ch[0].geometric_bounds().unwrap().width() - 50.0).abs() < 1e-6);
 }
+/// Expand Appearance on a Transform effect with copies gives each copy its own gradient.
 #[test]
 fn expand_appearance_gives_each_copy_of_a_transform_its_own_gradient() {
     use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
@@ -447,4 +472,68 @@ fn expand_appearance_gives_each_copy_of_a_transform_its_own_gradient() {
         }
     });
     assert_eq!(boxes, vec![100.0; 3], "three squares, each with its own gradient");
+}
+
+/// The object's own effect ids, in order.
+fn object_effects(s: &Session, id: NodeId) -> Vec<String> {
+    node(s, id).appearance.effects.iter().map(|e| e.id.clone()).collect()
+}
+
+/// A rectangle with Drop Shadow, Outer Glow and Twist on the object.
+fn three_effects() -> (Session, NodeId) {
+    let (mut s, id) = session_with_rect();
+    for e in ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"] {
+        s.execute("effect.apply", &json!({"effect": e, "ids": [id.0], "item": null})).unwrap();
+    }
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+    (s, id)
+}
+
+/// `effect.remove` with `indices` removes several effects in one undo step.
+#[test]
+fn remove_takes_several_effects_in_one_undo_step() {
+    let (mut s, id) = three_effects();
+    s.execute("effect.remove", &json!({"indices": [2, 0], "ids": [id.0], "item": null})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.outerGlow"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+    // An index past the list fails and changes nothing; so does an empty list.
+    for bad in [json!([0, 3]), json!([]), json!(["x"])] {
+        assert!(s.execute("effect.remove", &json!({"indices": bad, "ids": [id.0], "item": null})).is_err(), "{bad}");
+        assert_eq!(object_effects(&s, id).len(), 3, "{bad}");
+    }
+}
+
+/// `effect.duplicate` with `indices` puts each copy right after its original.
+#[test]
+fn duplicate_takes_several_effects_each_copy_after_its_original() {
+    let (mut s, id) = three_effects();
+    s.execute("effect.duplicate", &json!({"indices": [0, 2], "ids": [id.0], "item": null})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.dropShadow", "stylize.outerGlow", "distort.twist", "distort.twist"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_effects(&s, id).len(), 3);
+    assert!(s.execute("effect.duplicate", &json!({"indices": [1, 5], "ids": [id.0], "item": null})).is_err());
+    assert_eq!(object_effects(&s, id).len(), 3);
+}
+
+/// `effect.move` with several `from` lands them together, in their order.
+#[test]
+fn move_takes_several_effects_that_land_together_in_order() {
+    // [Shadow, Glow, Twist]: Shadow and Twist moved to the end of the list land as one block.
+    let (mut s, id) = three_effects();
+    let r = s.execute("effect.move", &json!({"from": [0, 2], "to": 1, "ids": [id.0], "fromItem": null})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.outerGlow", "stylize.dropShadow", "distort.twist"]);
+    assert_eq!(r["index"], json!(1), "where the first of them landed");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+    // Into the stroke's list (item 1), copying: the object keeps its effects.
+    s.execute("effect.move", &json!({"from": [1, 2], "to": 0, "fromItem": null, "toItem": 1, "copy": true, "ids": [id.0]})).unwrap();
+    let n = node(&s, id);
+    let on_stroke: Vec<_> = n.appearance.items[1].effects().iter().map(|e| e.id.clone()).collect();
+    assert_eq!(on_stroke, ["stylize.outerGlow", "distort.twist"]);
+    assert_eq!(object_effects(&s, id).len(), 3);
+    // A bad index fails and changes nothing.
+    let before = node(&s, id).appearance;
+    assert!(s.execute("effect.move", &json!({"from": [0, 9], "to": 0, "fromItem": null, "ids": [id.0]})).is_err());
+    assert_eq!(node(&s, id).appearance, before);
 }

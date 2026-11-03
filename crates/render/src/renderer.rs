@@ -61,6 +61,7 @@ impl Renderer {
             blends: PtrMap::default(),
             clip_paths: vec![],
             picture: None,
+            image_left_out: None,
             offscreen_live: 0,
             offscreen_budget: 0,
             symbol_nodes: 0,
@@ -120,7 +121,12 @@ impl Renderer {
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
-            let pixels = self.mask_values(&frame, m, w, h).into_iter().flat_map(|v| [v, v, v, 255]).collect();
+            let pixels = self
+                .mask_values(&frame, m, w, h)
+                .unwrap_or_else(|| vec![0; w as usize * h as usize])
+                .into_iter()
+                .flat_map(|v| [v, v, v, 255])
+                .collect();
             self.end_frame();
             self.stats.symbol_art = symbols.art_measured();
             self.stats.micros = now().saturating_sub(start);
@@ -166,9 +172,11 @@ impl Renderer {
     /// so the nodes they hold go with them).
     fn end_frame(&mut self) {
         let g = self.stamp;
-        if self.geom.len() > 1024 {
-            self.geom.retain(|_, e| g - e.stamp <= 3);
-        }
+        // Swept however few the entries: each keeps its node alive, and an object dragged or
+        // edited makes a new node (with its layer) in every frame. Kept until there were 1,024 of
+        // them, a drag left up to that many old copies of the object alive, each with all its
+        // members (and, for a compound path, its assembled path).
+        self.geom.retain(|_, e| g - e.stamp <= 3);
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
         }
@@ -341,9 +349,10 @@ impl Renderer {
         self.check_plugins();
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
-        let s = (size as f64 - 2.0) / b.width().max(b.height()).max(1e-6);
-        let view = Affine::translate((size as f64 / 2.0, size as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let w = size.clamp(1, MAX_CONTEXT_SIDE) as u16;
+        // A 1-pixel margin on each side, unless the thumbnail is too small to keep one.
+        let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
+        let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let mut ctx = single_threaded_context(w, w);
         if let Some(bg) = background {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
@@ -355,9 +364,9 @@ impl Renderer {
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
-        self.draw_node(&mut ctx, &frame, n, true);
+        self.draw_forced_arc(&mut ctx, &frame, &Arc::new(n.clone()));
         let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
         self.end_frame();
-        Some(Rendered { width: size, height: size, pixels: pm.data_as_u8_slice().to_vec() })
+        Some(Rendered { width: w as u32, height: w as u32, pixels: pm.data_as_u8_slice().to_vec() })
     }
 }

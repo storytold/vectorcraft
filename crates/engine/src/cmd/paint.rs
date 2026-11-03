@@ -303,7 +303,7 @@ pub(crate) fn check_keep_model(p: &Value, cmd: &str) -> Result<()> {
 
 /// The model RGB colours given in `p` are stored in: the document's in a CMYK document (`None` in
 /// an RGB one, or with `keepModel`).
-fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
+pub(super) fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
     let mode = s.active()?.doc.color_mode;
     (mode != vectorcraft_doc::ColorMode::Rgb && !bool_or(p, "keepModel", false)).then(|| mode.model())
 }
@@ -681,6 +681,11 @@ pub(super) fn check_colorized_kept(was_ok: bool, d: &Document) -> std::result::R
     if was_ok { check_colorized(d) } else { Ok(()) }
 }
 
+/// Is `e` the refusal of [`check_colorized`]?
+pub(super) fn is_colorize_refusal(e: &EngineError) -> bool {
+    e.to_string().contains(PROCESS_ON_TRANSPARENCY)
+}
+
 /// Is `c` black or white (white, or black alone at 100%)?
 fn black_or_white(c: &Color) -> bool {
     let (none, full) = (|v: f32| v <= 0.0, |v: f32| v >= 1.0);
@@ -692,8 +697,8 @@ fn black_or_white(c: &Color) -> bool {
     }
 }
 
-/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's or Direct
-/// Selection's) on the gradient meshes among `ids`, in range, each mesh with its points.
+/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's, Direct
+/// Selection's or the Lasso's) on the gradient meshes among `ids`, in range, each mesh with its points.
 fn picked_mesh_points(s: &Session, ids: &[NodeId]) -> Vec<(NodeId, Vec<usize>)> {
     let o = s.tool_options();
     let (Some(picked), Ok(st)) = (o.get("meshPoints").and_then(Value::as_array), s.doc()) else { return vec![] };
@@ -835,7 +840,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             })?;
             (json!({ "changed": changed }), Some(index))
         }
-        // The proxy's colours only: images and pattern tiles stay as they are.
+        // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
             (super::colorcmds::recolor(s, &q, label, f)?, None)

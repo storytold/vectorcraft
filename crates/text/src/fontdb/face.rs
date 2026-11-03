@@ -239,6 +239,72 @@ impl FontFace {
             .map(|a| a as f64)
             .unwrap_or(self.upem * 0.5)
     }
+    /// The coordinates of the carets inside ligature glyph `gid`, in font units, in the order the
+    /// font lists them: the font's ligature caret list (`GDEF` `LigCaretList`,
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/gdef>), one between each two
+    /// characters the glyph stands for, each an x in horizontal text and a y (up from the baseline)
+    /// in vertical text. A coordinate with a variation index (format 3 in a variable font) takes its
+    /// delta from the `GDEF` item variation store at the face's location; a device table's
+    /// adjustments for pixel sizes are not applied. `None` when the font lists no carets for the
+    /// glyph, lists a number other than `count`, gives one by a contour point, or gives one a
+    /// variation index whose delta can't be read.
+    fn ligature_caret_coordinates(&self, gid: u32, count: usize) -> Option<Vec<f64>> {
+        use skrifa::raw::TableProvider;
+        use skrifa::raw::tables::gdef::CaretValue;
+        use skrifa::raw::tables::layout::DeviceOrVariationIndex;
+        use skrifa::raw::tables::variations::DeltaSetIndex;
+        let font = self.skrifa()?;
+        let gdef = font.gdef().ok()?;
+        let list = gdef.lig_caret_list()?.ok()?;
+        let index = list.coverage().ok()?.get(GlyphId::new(gid))?;
+        let glyph = list.lig_glyphs().get(usize::from(index)).ok()?;
+        if usize::from(glyph.caret_count()) != count {
+            return None;
+        }
+        let carets = glyph
+            .caret_values()
+            .iter()
+            .map(|c| match c.ok()? {
+                CaretValue::Format1(v) => Some(f64::from(v.coordinate())),
+                CaretValue::Format3(v) => {
+                    let coordinate = f64::from(v.coordinate());
+                    if v.device_offset().is_null() {
+                        return Some(coordinate);
+                    }
+                    match v.device().ok()? {
+                        DeviceOrVariationIndex::Device(_) => Some(coordinate),
+                        DeviceOrVariationIndex::VariationIndex(ix) => {
+                            let store = gdef.item_var_store()?.ok()?;
+                            let index = DeltaSetIndex { outer: ix.delta_set_outer_index(), inner: ix.delta_set_inner_index() };
+                            Some(coordinate + store.compute_delta(index, self.location.coords()).ok()?.to_f64())
+                        }
+                    }
+                }
+                CaretValue::Format2(_) => None,
+            })
+            .collect::<Option<Vec<f64>>>()?;
+        (!carets.is_empty()).then_some(carets)
+    }
+    /// The caret positions inside ligature glyph `gid` set across, in font units from its left
+    /// edge, left to right: the x coordinates of the font's ligature caret list. `None` when the
+    /// font lists no carets for the glyph, lists a number other than `count`, gives one by a contour
+    /// point, or gives positions that are not increasing inside the glyph's advance.
+    pub fn ligature_carets(&self, gid: u32, count: usize) -> Option<Vec<f64>> {
+        let carets = self.ligature_caret_coordinates(gid, count)?;
+        let advance = self.advance(gid);
+        let inside = carets.iter().all(|x| *x > 0.0 && *x < advance) && carets.windows(2).all(|w| w[0] < w[1]);
+        inside.then_some(carets)
+    }
+    /// The caret positions inside ligature glyph `gid` standing upright in vertical type, in font
+    /// units down from the top of its cell, top to bottom: the y coordinates of the font's ligature
+    /// caret list, for a cell `cell` long whose top is `top` above the baseline. `None` when the
+    /// font lists no carets for the glyph, lists a number other than `count`, gives one by a contour
+    /// point, or gives positions that are not increasing inside the cell.
+    pub fn vertical_ligature_carets(&self, gid: u32, count: usize, top: f64, cell: f64) -> Option<Vec<f64>> {
+        let carets = self.ligature_caret_coordinates(gid, count)?;
+        let inside = carets.iter().all(|y| *y < top && *y > top - cell) && carets.windows(2).all(|w| w[0] < w[1]);
+        inside.then(|| carets.iter().rev().map(|y| top - y).collect())
+    }
     /// Glyph `gid` set upright in vertical type, from the font's vertical metrics: (its advance down
     /// the column, the height above the baseline of its vertical origin, the top of its cell), in
     /// font units. The origin is the `VORG` table's, else the glyph's top plus its top side bearing.
@@ -277,6 +343,26 @@ impl FontFace {
     /// <https://learn.microsoft.com/en-us/typography/opentype/spec/baselinetags>
     pub fn icf_margins(&self) -> IcfMargins {
         *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
+    }
+
+    /// The height of the face that a font size measures with `reference`, in ems: 1 for the em
+    /// box; the cap height or x height of its OS/2 table; the height of its ideographic character
+    /// face ([`Self::icf_margins`]), or across a `vertical` line its width. None for a face whose
+    /// font has no such value (an OS/2 table without the heights, no ICF), or one outside 0.1 to
+    /// 2 ems.
+    pub fn font_height(&self, reference: vectorcraft_doc::FontHeightReference, vertical: bool) -> Option<f64> {
+        use vectorcraft_doc::FontHeightReference as R;
+        let units = |v: Option<f32>| v.map(f64::from).map(|v| v / self.upem);
+        let h = match reference {
+            R::EmBox => Some(1.0),
+            R::CapHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).cap_height),
+            R::XHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).x_height),
+            R::IcfBox => {
+                let m = self.icf_margins();
+                (m != IcfMargins::default()).then_some(if vertical { 1.0 - m.left - m.right } else { 1.0 - m.top - m.bottom })
+            }
+        };
+        h.filter(|h| (0.1..=2.0).contains(h))
     }
 
     /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else
