@@ -32,6 +32,60 @@
 @msg	{key} must be [x, y] with finite coordinates	{key} უნდა იყოს [x, y] სასრული კოორდინატებით
 @msg	ids must contain 1–10000 object ids	ids უნდა შეიცავდეს 1–10000 ობიექტის იდენტიფიკატორს
 
+	1 Layer	შრე: 1
+	Art and Bright Colors	მხატვრული და კაშკაშა ფერები
+	Automate	ავტომატიზაცია
+	Color Table (4 colors)	ფერების ცხრილი (ფერი: 4)
+	Current Colors (0)	მიმდინარე ფერები (0)
+	Differences from VectorCraft Default:	განსხვავებები VectorCraft-ის ნაგულისხმევთან:
+	Differences from [Default]:	განსხვავებები [ნაგულისხმევი]-თან:
+	Dot Gain 15%	Dot Gain 15%
+	Expand 1 Selected	1 მონიშნული ობიექტის გაშლა
+	Graphic Styles (4)	გრაფიკული სტილები (4)
+	Gray Gamma 2.2	Gray Gamma 2.2
+	Kaku #2	Kaku #2
+	Kaku #3	Kaku #3
+	PDF/X-1a:2001	PDF/X-1a:2001
+	PDF/X-3:2002	PDF/X-3:2002
+	PDF/X-4:2010	PDF/X-4:2010
+	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft-ის ნაწილი. MIT OR Apache-2.0. შრიფტები: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). ხატულები: Lucide (ISC) + VectorCraft.
+	Phone 375×812	ტელეფონი 375×812
+	Photo Low Fidelity	დაბალი სიზუსტის ფოტო
+	Print & Proof	ბეჭდვა და კორექტურა
+	Printing & Proofing	ბეჭდვა და კორექტურა
+	RECENT (1)	ბოლოდროინდელი (1)
+	Reset Automation	Automation-ის ჩამოყრა
+	Reset Essentials Classic	Essentials Classic-ის ჩამოყრა
+	Reset Layout	Layout-ის ჩამოყრა
+	Reset Painting	Painting-ის ჩამოყრა
+	Reset Printing and Proofing	Printing and Proofing-ის ჩამოყრა
+	Reset Tracing	Tracing-ის ჩამოყრა
+	Reset Typography	Typography-ის ჩამოყრა
+	Reset Web	Web-ის ჩამოყრა
+	Restricted Colors	შეზღუდული ფერები
+	Right-click an item to move it into this group.	ამ ჯგუფში გადასატანად დაწკაპეთ ელემენტზე მარჯვენა ღილაკით.
+	Scale X	მასშტაბი X
+	Scale X:	მასშტაბი X:
+	Scale Y	მასშტაბი Y
+	Scale Y:	მასშტაბი Y:
+	Selected Styles Only (0)	მხოლოდ მონიშნული სტილები (0)
+	Selected Swatches Only (0)	მხოლოდ მონიშნული ფერის ნიმუშები (0)
+	Simplified Chinese	გამარტივებული ჩინური
+	Spot Colors (0)	სპოტ-ფერები (0)
+	Tablet 1024×768	პლანშეტი 1024×768
+	Video 1920×1080	ვიდეო 1920×1080
+	Video 3840×2160	ვიდეო 3840×2160
+	Web 1280×720	ვები 1280×720
+	Yonroku-ban	Yonroku-ban
+	[High Resolution]	[მაღალი გარჩევადობა]
+	[Low Resolution]	[დაბალი გარჩევადობა]
+	[Medium Resolution]	[საშუალო გარჩევადობა]
+	[PDF/X-1a:2001]	[PDF/X-1a:2001]
+	[PDF/X-3:2002]	[PDF/X-3:2002]
+	[PDF/X-4:2010]	[PDF/X-4:2010]
+	[VectorCraft Default]	[VectorCraft-ის ნაგულისხმევი]
+@id	file.close	ფაილის დახურვა
+@msg	give corners of the path: anchors between two straight sides	მიუთითეთ ტრაექტორიის კუთხეები: საყრდენი წერტილები ორ სწორ გვერდს შორის
 	File	ფაილი
 	New…	ახალი…
 	New Without Dialog	ახალი დიალოგის გარეშე
@@ -6270,6 +6324,22 @@ breakText	Glyphs	გლიფები
 	Create Swatch Legend	ფერის ნიმუშების ლეგენდის შექმნა
 	Create Swatch Legend…	ფერის ნიმუშების ლეგენდის შექმნა…
 	HEX	HEX
+	Check for Updates…	განახლებების შემოწმება…
+	VectorCraft Updates	VectorCraft-ის განახლებები
+	Preparing the image…	გამოსახულების მომზადება…
+	Tracing the colors…	ფერების ვექტორიზაცია…
+	Invalid panel layout; restored the default dock	პანელების განლაგება არასწორია; აღდგენილია ნაგულისხმევი დოკი
+	Include All Subdirectories	ყველა ქვესაქაღალდის ჩართვა
+	Save and Close	შენახვა და დახურვა
+	Load Variable Library	ცვლადების ბიბლიოთეკის ჩატვირთვა
+shape	Open	ღია
+font-script	Japanese	იაპონური
+	Japanese Postcard	იაპონური ღია ბარათი
+	Japanese Double Postcard	იაპონური ორმაგი ღია ბარათი
+	Japanese Envelope #3	იაპონური კონვერტი #3
+	Japanese Envelope #4	იაპონური კონვერტი #4
+@msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
 	Text Tweaker…	ტექსტის მორგება…
