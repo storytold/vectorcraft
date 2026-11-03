@@ -31,6 +31,7 @@ pub mod pathtype;
 pub mod pen;
 pub mod pie;
 pub mod place;
+pub mod plugin_tool;
 pub mod printtiling;
 pub mod repeat_grid;
 pub mod rulerguide;
@@ -285,6 +286,10 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
+        other if other.starts_with(vectorcraft_plugins::PREFIX) => match plugin_tool::PluginTool::new(other) {
+            Some(t) => Box::new(t),
+            None => Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection"))),
+        },
         other => symbolism::create(other)
             .or_else(|| builder::create(other))
             .or_else(|| draw2::create(other))

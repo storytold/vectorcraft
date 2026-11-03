@@ -6534,7 +6534,9 @@ dependencies = [
  "vectorcraft-effects",
  "vectorcraft-geom",
  "vectorcraft-pathops",
+ "vectorcraft-plugins",
  "vectorcraft-text",
+ "wat",
 ]
 
 [[package]]
