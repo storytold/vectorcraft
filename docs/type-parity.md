@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Character-menu Kashidas switch; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -55,7 +55,8 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Thai, Lao, Khmer, Myanmar: shaping (marks, reordering), lines broken between words, word-by-word caret and double-click | done | words found by ICU4X's line segmenter: dictionaries on the desktop, LSTM models on the web |
 | Middle Eastern: bidirectional layout, Paragraph Direction | done | |
 | Middle Eastern and Indic: digit types (Character panel menu › Digits: Default, Arabic, Hindi, Farsi; Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam) | done | `text.setFormat` / `text.setRangeStyle {digits}` (`"devanagari"`, `"bengali"`, `"gurmukhi"`, `"gujarati"`, `"odia"`, `"tamil"`, `"telugu"`, `"kannada"`, `"malayalam"` added, #4942); the text keeps the typed digits, the glyphs and SVG export follow the style; carried by character styles. Not yet: `.ai` export of the setting; Indic digits typed as such stay as typed under another system. Evidence: `text::tests::indic_digits_map_to_their_scripts_block`, `tests::bidi::indic_digits_draw_the_scripts_own_digits`, `typecmd::area_tests::indic_digits_round_trip_through_the_commands_and_the_file` |
-| Middle Eastern: Character Direction, kashidas, Middle Eastern composers, split caret | missing | |
+| Middle Eastern: Kashidas | done | Paragraph Insert Kashidas sets the length for justified Arabic area type; Character-menu Kashidas allows or excludes selected characters, on by default. A kashida is inserted only between two allowed joined characters. The character switch is retained in character styles and the native file; the length is retained in paragraph styles and the native file. [Public help](https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/justify-text-using-kashida-and-hyphenation.html). |
+| Middle Eastern: Middle Eastern composers, split caret | missing | Character Direction is done; editable bidirectional SVG text remains incomplete. |
 | CJK: input methods (marked text, candidate window) | done | |
 | CJK: kinsoku (Hard, Soft, None), Line-end Punctuation Half Width, tate-chu-yoko (auto) | done / partial | custom kinsoku sets, the Mojikumi Settings dialog and the other mojikumi sets missing |
 | CJK: Proportional Metrics (`palt` in horizontal type, `vpal` in vertical type) | done | #966 |
@@ -76,6 +77,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Character-menu Kashidas controls selected characters separately from the paragraph's Insert Kashidas length. Existing text allows Kashidas by default; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox: the type follows the fields while it is on, Cancel restores it, OK is one undo step (#5360, as public tutorials of the dialog show); scores and estimates unchanged. |
 | 2026-11-02 | minor | The wheel over Character, Properties and Control font-family fields changes selected text, one undo step per notch (#5253); scores and estimates unchanged. |
 | 2026-11-01 | minor | The Type and Vertical Type tools make area type in a clicked closed path and type on a path along a clicked open one, with their own pointers; each type tool has its own icon; scores unchanged (estimated) |

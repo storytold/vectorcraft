@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -361,6 +361,7 @@ pub(crate) struct CharChange {
     small_caps: Option<Option<f64>>,
     char_align: Option<vectorcraft_doc::CharAlign>,
     char_direction: Option<Option<vectorcraft_doc::ParaDirection>>,
+    kashidas: Option<bool>,
     proportional_metrics: Option<bool>,
     tate_chu_yoko: Option<bool>,
     /// Tate-chu-yoko Settings › Up/Down and Left/Right, in points.
@@ -600,7 +601,11 @@ impl CharChange {
     /// `setup` gives the superscript, subscript and small caps proportions.
     pub(crate) fn parse(p: &Value, cmd: &str, setup: &vectorcraft_doc::DocSetup) -> Result<Self> {
         check_numbers(p, &["size", "tracking", "baselineShift", "hScale", "vScale", "rotation", "strokeWidth"], cmd)?;
-        check_switches(p, &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "standardVerticalRoman", "noBreak"], cmd)?;
+        check_switches(
+            p,
+            &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "standardVerticalRoman", "noBreak", "kashidas"],
+            cmd,
+        )?;
         let num = |k: &str| p.get(k).and_then(Value::as_f64);
         let (position, small_caps) = super::docsetup::script_params(p, setup, cmd)?;
         let flag = |k: &str| p.get(k).and_then(Value::as_bool);
@@ -645,6 +650,7 @@ impl CharChange {
             small_caps,
             char_align: char_align_param(p, cmd)?,
             char_direction: char_direction_param(p, cmd)?,
+            kashidas: flag("kashidas"),
             proportional_metrics: flag("proportionalMetrics"),
             tate_chu_yoko: flag("tateChuYoko"),
             tcy_up_down: tcy_offset_param(p, "tcyUpDown", cmd)?,
@@ -696,6 +702,7 @@ impl CharChange {
             && self.small_caps.is_none()
             && self.char_align.is_none()
             && self.char_direction.is_none()
+            && self.kashidas.is_none()
             && self.proportional_metrics.is_none()
             && self.tate_chu_yoko.is_none()
             && self.tcy_up_down.is_none()
@@ -748,6 +755,9 @@ impl CharChange {
         }
         if let Some(v) = self.char_direction {
             st.char_direction = v;
+        }
+        if let Some(v) = self.kashidas {
+            st.kashidas = v;
         }
         if let Some(v) = self.proportional_metrics {
             st.proportional_metrics = v;

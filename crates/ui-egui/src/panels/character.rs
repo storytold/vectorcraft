@@ -1237,6 +1237,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
         });
+        // A mixed selection is unchecked; choosing it enables kashidas for the whole range.
+        let kashidas = shared(app, |s| s.kashidas) == Some(true);
+        let selected_characters = text_editing(app).is_none_or(|(_, start, end)| end > start);
+        if menu_item(ui, tl!("Kashidas"), has && selected_characters, kashidas) {
+            format(app, json!({"kashidas": !kashidas}));
+        }
         ui.separator();
     }
     // No Break: the selected characters stay on one line.
@@ -1290,7 +1296,7 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
-/// the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
@@ -1302,7 +1308,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
             "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
-            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
+            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );
