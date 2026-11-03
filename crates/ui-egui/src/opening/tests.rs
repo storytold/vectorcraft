@@ -310,3 +310,25 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file opened under automation roots is installed under them too: the open keeps the scope it
+/// started in, not the desktop's access of the frame it finishes in.
+#[test]
+fn a_file_opened_under_automation_roots_finishes_under_them() {
+    use vectorcraft_engine::file_access;
+    let dir = scope_dir();
+    let roots = file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    file_access::confine(roots.as_ref(), || {
+        start(&mut app, "/art/Scoped.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false))
+    })
+    .unwrap();
+    let scope = app.opening.pending[0].scope.clone();
+    assert!(scope.run(file_access::current).is_some(), "the roots go with the open");
+}
+
+fn scope_dir() -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-scope-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}

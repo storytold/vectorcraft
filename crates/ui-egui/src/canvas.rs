@@ -654,7 +654,15 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;
         }
-        (Some(worker), true, None) => worker.submit(crate::render_worker::Job { key: key.clone(), doc: doc.clone(), w, h, view, opts }),
+        (Some(worker), true, None) => worker.submit(crate::render_worker::Job {
+            key: key.clone(),
+            doc: doc.clone(),
+            w,
+            h,
+            view,
+            opts,
+            scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        }),
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);
