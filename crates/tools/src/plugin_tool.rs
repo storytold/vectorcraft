@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_plugins::{Kind, Plugin, registry, tool};
 
 use crate::guides::GuideStyle;
-use crate::{Action, Cursor, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 const MAX_ACTIONS: usize = 64;
 const MAX_GUIDES: usize = 64;
@@ -100,6 +100,17 @@ impl PluginTool {
         }
         Ok(out)
     }
+
+    fn cancel_gesture(&mut self) -> Vec<Action> {
+        if !std::mem::take(&mut self.pressed) {
+            return vec![];
+        }
+        self.state = Value::Null;
+        self.circles.clear();
+        self.guides.clear();
+        self.last_error = None;
+        vec![Action::Cancel]
+    }
 }
 
 impl Tool for PluginTool {
@@ -124,6 +135,14 @@ impl Tool for PluginTool {
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         self.guides.clone()
+    }
+
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: crate::Mods) -> Vec<Action> {
+        if key == ToolKey::Escape { self.cancel_gesture() } else { vec![] }
+    }
+
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.cancel_gesture()
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: vectorcraft_geom::Point, _m: crate::Mods) -> Cursor {
@@ -193,7 +212,7 @@ fn parse_guide(v: &Value, style: GuideStyle) -> Result<Option<Overlay>, String> 
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use crate::{Action, PointerEvent, PointerKind, Tool};
+    use crate::{Action, PointerEvent, PointerKind, Tool, ToolKey};
     use vectorcraft_doc::Selection;
     use vectorcraft_plugins::{Limits, Plugin, registry, wat as tpl};
 
@@ -286,5 +305,27 @@ mod tests {
             assert!(t.last_error().is_some(), "{id}");
             registry::remove(id.trim_start_matches("plugin."));
         }
+    }
+
+    #[test]
+    fn escape_and_switching_away_cancel_an_active_tool_gesture() {
+        let id = install(
+            "test.tool.cancel",
+            r#"{"state":{"pressed":true},"actions":[{"type":"begin","label":"Move"},{"type":"preview","command":"object.transform","params":{"matrix":[1,0,0,1,1,0]}}]}"#,
+        );
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = PluginTool::new(&id).unwrap();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 20.0, 10.0));
+        assert!(t.busy());
+        assert_eq!(t.key(&cx, ToolKey::Escape, Default::default()), vec![Action::Cancel]);
+        assert!(!t.busy());
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 20.0, 10.0));
+        assert_eq!(t.deactivate(&cx), vec![Action::Cancel]);
+        assert!(!t.busy());
+        registry::remove("test.tool.cancel");
     }
 }
