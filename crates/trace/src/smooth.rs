@@ -195,8 +195,11 @@ mod tests {
         let weights = weight_table();
         for p in 0..=255u8 {
             for q in 0..=255u8 {
-                let src = [p, p, p, 255, q, q, q, 255];
-                assert_eq!(pass(&src, 2, 1, true, &weights), reference(&src, 2, 1, true), "{p} {q}");
+                // Grey, and a mixed pair, along a row (2x1) and along a column (1x2).
+                for src in [[p, p, p, 255, q, q, q, 255], [p, q, p ^ q, 255, q, p, q ^ 0x5a, 255]] {
+                    assert_eq!(pass(&src, 2, 1, true, &weights), reference(&src, 2, 1, true), "{p} {q}");
+                    assert_eq!(pass(&src, 1, 2, false, &weights), reference(&src, 1, 2, false), "{p} {q}");
+                }
             }
         }
     }
@@ -207,6 +210,13 @@ mod tests {
             [0.0, 0.499_999_999_999_999_94, 0.5, 0.500_000_000_000_000_1, 1.499_999_999_999_999_8, 1.5, 127.5, 254.5, 254.999_999_999_999_97, 255.0]
         {
             assert_eq!(level(v), v.round() as u8, "{v}");
+        }
+        // Values a hair either side of every half, where a wrong rounding would show.
+        for k in 0..255 {
+            let half = f64::from(k) + 0.5;
+            for v in [half, f64::from_bits(half.to_bits() - 1), f64::from_bits(half.to_bits() + 1)] {
+                assert_eq!(level(v), v.round() as u8, "{v}");
+            }
         }
         for i in 0..=255 * 4096u32 {
             let v = f64::from(i) / 4096.0;
