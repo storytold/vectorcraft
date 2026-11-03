@@ -47,7 +47,9 @@ A panel plug-in answers each event of its panel with `plugin.panel.event`. It is
 last event, the panel's field values and the selected paths and compound paths, and returns what the panel shows, what
 it keeps and commands to run ([Output](#output)). Each event runs a fresh instance, as every run does: the host keeps
 the panel's `state` (at most 4 MiB of JSON, not saved) and hands it back with the next event, and forgets it when the
-plug-in is removed.
+plug-in is removed. Undo and Redo leave the `state` as it is, and send the plug-in no event of their own (one that asks
+for selection events is sent one when they change the selection): a panel that keeps where it is in the document, such
+as the data set it applied last, no longer matches the document after an undo.
 
 The commands are the host's own, as MCP and scripts run them (`shape.rectangle`, `object.group`, `select.all`…). They
 run as one `command.batch`: one undo step, and when one fails, all of them are rolled back and the panel keeps what it
