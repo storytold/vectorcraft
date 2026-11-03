@@ -396,9 +396,18 @@ crates/plugins/example/build.sh      # cargo build --release --target wasm32-unk
 ```
 
 The script also refreshes `crates/plugins/tests/fixtures/desaturate.wasm`, the test fixture built from that source.
-The crate is not a workspace member. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
-WAT…), as long as the module has no imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as long as it never
-touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text, which the tests
+The crate is not a workspace member.
+
+[`crates/plugins/example-panel`](../crates/plugins/example-panel) is a complete [panel](#panels), **CSV Rows**: its
+file field hands it a CSV file, which it imports as the document's data sets (`dataset.import`); it places a text
+frame bound to a variable for each of the file's columns (`text.create`, `variable.bind`) and steps the document
+through the rows (`dataset.next`, `dataset.prev`), one undo step per click. It keeps only the file's name and its
+columns in its `state`: the document keeps the rows and which one is applied, so an undo can't leave the panel out of
+step. `crates/plugins/example-panel/build.sh` builds it, File › Open of the `.wasm` installs it, and **Window ›
+Plug-ins › CSV Rows** shows its panel. It is not a workspace member either.
+
+Any language that targets core WebAssembly works (C, Zig, AssemblyScript, WAT…), as long as the module has no imports:
+in Rust, `std` on `wasm32-unknown-unknown` is fine as long as it never touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text, which the tests
 build their plug-ins from; `wat::echo_exporter` is an exporter whose file is its input or its parameters (with a
 base64 encoder written out in WebAssembly text), which the tests read back what the host hands a plug-in with, and
 `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows in a
