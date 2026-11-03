@@ -29,7 +29,10 @@ impl Interp<'_> {
     pub fn data_op(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
-            CurrentFile => self.push(Obj::File { stream: Rc::new(RefCell::new(Stream::Current)), exec: false })?,
+            CurrentFile => {
+                let stream = self.running.last().cloned().unwrap_or_else(|| Rc::new(RefCell::new(Stream::Current)));
+                self.push(Obj::File { stream, exec: false })?;
+            }
             Filter => self.filter()?,
             ReadHexString | ReadString => {
                 let s = self.pop_str()?;
@@ -163,18 +166,7 @@ impl Interp<'_> {
                 self.push(o)?;
             }
             Obj::File { stream: f, .. } => {
-                self.materialize(&f)?;
-                let (o, immediate) = match &mut *f.borrow_mut() {
-                    Stream::Current => (self.lex.next()?, self.lex.immediate),
-                    Stream::Buf { data, pos, .. } => {
-                        let rest = data.get(*pos..).unwrap_or_default();
-                        let mut lex = Lexer::new(rest);
-                        let o = lex.next()?;
-                        *pos += rest.len() - lex.data().len();
-                        (o, lex.immediate)
-                    }
-                    Stream::Pending(_) => (None, false),
-                };
+                let (o, immediate) = self.next_in(&f)?;
                 let Some(o) = o else { return self.push(Obj::Bool(false)) };
                 let o = self.scanned(o, immediate)?;
                 self.push(o)?;
@@ -182,6 +174,23 @@ impl Interp<'_> {
             _ => return ps_err("typecheck", "token"),
         }
         self.push(Obj::Bool(true))
+    }
+
+    /// The next object in file `f` (`token`, and a file being run), read with the whitespace
+    /// after it, and whether it has `//name`s in it.
+    pub(in super::super) fn next_in(&mut self, f: &Rc<RefCell<Stream>>) -> Res<(Option<Obj>, bool)> {
+        self.materialize(f)?;
+        Ok(match &mut *f.borrow_mut() {
+            Stream::Current => (self.lex.next()?, self.lex.immediate),
+            Stream::Buf { data, pos, .. } => {
+                let rest = data.get(*pos..).unwrap_or_default();
+                let mut lex = Lexer::new(rest);
+                let o = lex.next()?;
+                *pos += rest.len() - lex.data().len();
+                (o, lex.immediate)
+            }
+            Stream::Pending(_) => (None, false),
+        })
     }
 
     /// Up to `n` bytes of file `f`.
@@ -275,11 +284,16 @@ impl Interp<'_> {
         let spec = Filter { name, sub, predictor, fax };
         let stream = match self.pop()? {
             Obj::File { stream: f, .. } => {
-                if let Stream::Buf { data, pos, .. } = &*f.borrow() {
-                    self.alloc(data.len().saturating_sub(*pos))?;
+                // A filter over the file being run reads it, as one over the program's own file
+                // does, from where the program is when the filter is first read.
+                let running = self.running.last().is_some_and(|r| Rc::ptr_eq(r, &f));
+                match &*f.borrow() {
+                    Stream::Buf { data, pos, .. } if !running => self.alloc(data.len().saturating_sub(*pos))?,
+                    _ => {}
                 }
                 let chain = match &*f.borrow() {
                     Stream::Current => Some(vec![]),
+                    Stream::Buf { .. } if running => Some(vec![]),
                     Stream::Pending(c) => Some(c.clone()),
                     Stream::Buf { .. } => None,
                 };
@@ -325,15 +339,6 @@ impl Interp<'_> {
         self.push(Obj::File { stream, exec: false })
     }
 
-    /// The data an executable file runs as a program: what is left of it. `None` for the
-    /// program's own file, which is being run already.
-    pub(in super::super) fn program_of(&mut self, f: &Rc<RefCell<Stream>>) -> Res<Option<Vec<u8>>> {
-        if matches!(&*f.borrow(), Stream::Current) {
-            return Ok(None);
-        }
-        self.read(f, MAX_DATA).map(Some)
-    }
-
     /// The decoded data left in file `f`, without reading it (a shading's or function's data).
     pub(in super::super) fn peek_all(&mut self, f: &Rc<RefCell<Stream>>) -> Res<Vec<u8>> {
         self.materialize(f)?;
@@ -343,8 +348,9 @@ impl Interp<'_> {
         })
     }
 
-    /// Decode the filters a file waits to run over the program's data, from where it is now.
-    fn materialize(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+    /// Decode the filters a file waits to run over the program's data, from where it is now: the
+    /// file being run, or the program's own file.
+    pub(in super::super) fn materialize(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
         let chain = match &*f.borrow() {
             Stream::Pending(c) => c.clone(),
             _ => return Ok(()),
@@ -353,10 +359,21 @@ impl Interp<'_> {
         for spec in &chain {
             buf = Some(match buf.take() {
                 None => {
-                    let raw = self.lex.data();
-                    let (data, used, rgb) = decode(spec, raw)?;
+                    let (data, rgb) = match self.running.last() {
+                        Some(r) => {
+                            let mut b = r.borrow_mut();
+                            let Stream::Buf { data, pos, .. } = &mut *b else { return io("filter") };
+                            let (out, used, rgb) = decode(spec, data.get(*pos..).unwrap_or_default())?;
+                            *pos = pos.saturating_add(used);
+                            (out, rgb)
+                        }
+                        None => {
+                            let (out, used, rgb) = decode(spec, self.lex.data())?;
+                            self.lex.advance(used);
+                            (out, rgb)
+                        }
+                    };
                     self.charge_decoded(data.len())?;
-                    self.lex.advance(used);
                     (data, rgb)
                 }
                 Some((prev, was)) => {
