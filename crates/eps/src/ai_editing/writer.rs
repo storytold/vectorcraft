@@ -249,20 +249,38 @@ impl<'a> Writer<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
                 self.line("u");
-                if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
+                let doc = self.doc;
+                if let Some(sym) = doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && self.take_symbol(&sym.art)
                 {
                     // Stained by the instance's fill, as the canvas draws it.
                     let stained = vectorcraft_brush::instance_art(&sym.art, n);
-                    // Through the symbol's 9-slice guides when it has them, as the canvas draws it.
-                    if let Some(mut art) = self.doc.place_symbol_art(symbol, &stained, *xf) {
+                    // Through the symbol's 9-slice guides when it has them, as the canvas draws it;
+                    // placing through them needs room for the most objects it can make, and the
+                    // objects it makes count.
+                    let map = doc.symbol_slice_map(symbol, *xf);
+                    let most = map.map_or(stained.count() as u64, |m| m.most_placed(&stained, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let art = match map {
+                            Some(m) => m.place(&stained, doc),
+                            None => {
+                                let mut a = stained.clone();
+                                a.transform(*xf, false);
+                                a
+                            }
+                        };
+                        let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
+                        (art, count)
+                    });
+                    if let Some(mut art) = placed {
                         art.visible = true;
                         art.locked = false;
                         art.name = None;
                         self.nest += 1;
                         self.node(&art);
                         self.nest -= 1;
+                    } else {
+                        self.warn(SYMBOL_LIMIT);
                     }
                 }
                 self.line("U");
